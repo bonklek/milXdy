@@ -134,6 +134,7 @@ input[type="checkbox"] {
 }
 
 .auth-box,
+.update-status,
 .field,
 .login-form {
   display: grid;
@@ -145,6 +146,57 @@ input[type="checkbox"] {
   border: 1px solid #d8dee6;
   border-radius: 8px;
   background: #fff;
+}
+
+.update-status {
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.update-status[data-state="available"] {
+  border-color: #a45100;
+}
+
+.update-status strong {
+  display: block;
+  font-size: 13px;
+}
+
+.update-status small {
+  display: block;
+  color: #65717f;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.update-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.icon-button {
+  width: 34px;
+  min-height: 34px;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  background: #fff;
+  color: #17202a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.update-link {
+  display: inline-grid;
+  place-items: center;
+  padding: 0 10px;
+  text-decoration: none;
 }
 
 .auth-box strong {

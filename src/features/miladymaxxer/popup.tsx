@@ -1340,6 +1340,125 @@ function formatRelativeTime(date: Date): string {
   return "just now";
 }
 
+type LegacyImportState = {
+  stats: DetectionStats;
+  matchedAccounts: MatchedAccountMap;
+  collectedAvatars: CollectedAvatarMap;
+};
+
+async function importLegacyMiladyData(file: File, current: LegacyImportState): Promise<LegacyImportState> {
+  const raw = JSON.parse(await file.text()) as unknown;
+  const root = objectRecord(raw);
+  const storageRoot = objectRecord(root.storage);
+  const source = Object.keys(storageRoot).length > 0 ? storageRoot : root;
+  const importedStats = normalizeStats(root.stats ?? source.stats ?? root.detectionStats ?? source.detectionStats);
+  const importedAccounts = normalizeMatchedAccounts(
+    root.matchedAccounts ?? source.matchedAccounts ?? root.accounts ?? source.accounts,
+  );
+  const importedAvatars = normalizeCollectedAvatars(
+    root.collectedAvatars ?? source.collectedAvatars ?? root.avatars ?? source.avatars,
+  );
+
+  return {
+    stats: mergeStats(current.stats, importedStats),
+    matchedAccounts: mergeMatchedAccounts(current.matchedAccounts, importedAccounts),
+    collectedAvatars: mergeCollectedAvatars(current.collectedAvatars, importedAvatars),
+  };
+}
+
+function mergeStats(current: DetectionStats, imported: DetectionStats): DetectionStats {
+  return {
+    tweetsScanned: Math.max(current.tweetsScanned, imported.tweetsScanned),
+    avatarsChecked: Math.max(current.avatarsChecked, imported.avatarsChecked),
+    cacheHits: Math.max(current.cacheHits, imported.cacheHits),
+    postsMatched: Math.max(current.postsMatched, imported.postsMatched),
+    modelMatches: Math.max(current.modelMatches, imported.modelMatches),
+    errors: Math.max(current.errors, imported.errors),
+    lastMatchAt: latestDateString(current.lastMatchAt, imported.lastMatchAt),
+  };
+}
+
+function mergeMatchedAccounts(current: MatchedAccountMap, imported: MatchedAccountMap): MatchedAccountMap {
+  const merged: MatchedAccountMap = { ...current };
+  for (const [handle, account] of Object.entries(imported)) {
+    const existing = merged[handle];
+    if (!existing) {
+      merged[handle] = account;
+      continue;
+    }
+    merged[handle] = {
+      ...existing,
+      displayName: existing.displayName || account.displayName,
+      postsMatched: Math.max(existing.postsMatched, account.postsMatched),
+      postsLiked: Math.max(existing.postsLiked, account.postsLiked),
+      lastMatchedAt: latestDateString(existing.lastMatchedAt, account.lastMatchedAt),
+      lastDetectionScore: maxNullableNumber(existing.lastDetectionScore, account.lastDetectionScore),
+      caught: existing.caught || account.caught,
+      caughtAt: latestDateString(existing.caughtAt, account.caughtAt),
+      verificationStatus: existing.verificationStatus === "verified" || account.verificationStatus !== "verified"
+        ? existing.verificationStatus
+        : account.verificationStatus,
+    };
+  }
+  return merged;
+}
+
+function mergeCollectedAvatars(current: CollectedAvatarMap, imported: CollectedAvatarMap): CollectedAvatarMap {
+  const merged: CollectedAvatarMap = { ...current };
+  for (const [url, avatar] of Object.entries(imported)) {
+    const existing = merged[url];
+    if (!existing) {
+      merged[url] = avatar;
+      continue;
+    }
+    merged[url] = {
+      ...existing,
+      originalUrl: existing.originalUrl || avatar.originalUrl,
+      handles: mergeStringLists(existing.handles, avatar.handles),
+      displayNames: mergeStringLists(existing.displayNames, avatar.displayNames),
+      sourceSurfaces: mergeStringLists(existing.sourceSurfaces, avatar.sourceSurfaces),
+      seenCount: Math.max(existing.seenCount, avatar.seenCount),
+      firstSeenAt: earliestDateString(existing.firstSeenAt, avatar.firstSeenAt) || existing.firstSeenAt,
+      lastSeenAt: latestDateString(existing.lastSeenAt, avatar.lastSeenAt) || existing.lastSeenAt,
+      exampleProfileUrl: existing.exampleProfileUrl || avatar.exampleProfileUrl,
+      exampleNotificationUrl: existing.exampleNotificationUrl || avatar.exampleNotificationUrl,
+      exampleTweetUrl: existing.exampleTweetUrl || avatar.exampleTweetUrl,
+      heuristicMatch: existing.heuristicMatch ?? avatar.heuristicMatch,
+      heuristicSource: existing.heuristicSource ?? avatar.heuristicSource,
+      heuristicScore: maxNullableNumber(existing.heuristicScore, avatar.heuristicScore),
+      heuristicTokenId: existing.heuristicTokenId ?? avatar.heuristicTokenId,
+      whitelisted: existing.whitelisted || avatar.whitelisted,
+    };
+  }
+  return merged;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function mergeStringLists(left: string[], right: string[]): string[] {
+  return Array.from(new Set([...left, ...right])).sort((a, b) => a.localeCompare(b));
+}
+
+function maxNullableNumber(left: number | null, right: number | null): number | null {
+  if (left === null) return right;
+  if (right === null) return left;
+  return Math.max(left, right);
+}
+
+function latestDateString(left: string | null, right: string | null): string | null {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) >= Date.parse(right) ? left : right;
+}
+
+function earliestDateString(left: string | null, right: string | null): string | null {
+  if (!left) return right;
+  if (!right) return left;
+  return Date.parse(left) <= Date.parse(right) ? left : right;
+}
+
 function compareAccounts(left: MatchedAccount, right: MatchedAccount): number {
   if (right.postsMatched !== left.postsMatched) {
     return right.postsMatched - left.postsMatched;
