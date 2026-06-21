@@ -1,0 +1,23 @@
+{
+  "architecture": "mobilenet_v3_small",
+  "channels": 3,
+  "classNames": [
+    "not_milady",
+    "milady"
+  ],
+  "generatedAt": "2026-03-28T15:11:27.183031+00:00",
+  "inputSize": 128,
+  "mean": [
+    0.485,
+    0.456,
+    0.406
+  ],
+  "positiveIndex": 1,
+  "runId": "20260328T144735Z",
+  "std": [
+    0.229,
+    0.224,
+    0.225
+  ],
+  "threshold": 0.6571835279464722
+}
