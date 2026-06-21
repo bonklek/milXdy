@@ -22,7 +22,7 @@
         <button class="tab" type="button" data-panel="postreader">Reader</button>
         <button class="tab" type="button" data-panel="remistats">RemiStats</button>
         <button class="tab" type="button" data-panel="miladymaxxer">Maxxer</button>
-        <button class="tab" type="button" data-panel="bextol">beXtol</button>
+        <button class="tab" type="button" data-panel="bextol">Beetol Game</button>
         <button class="tab" type="button" data-panel="diagnostics">Diag</button>
       </nav>
 
@@ -47,9 +47,22 @@
         <label class="setting"><span><strong>Remilia Wiki links</strong><small>Link known wiki concepts inside posts.</small></span><input type="checkbox" data-control="wiki.enabled"></label>
         <label class="setting"><span><strong>Wiki previews</strong><small>Fetch previews only on hover.</small></span><input type="checkbox" data-control="wiki.previewsEnabled"></label>
         <label class="setting"><span><strong>Debug mode</strong><small>Expose extra matching diagnostics.</small></span><input type="checkbox" data-control="wiki.debugMode"></label>
-        <label class="field"><span>Max links per post</span><input type="number" min="1" max="12" step="1" data-control="wiki.maxLinksPerPost"></label>
+        <div class="field checkbox-counter">
+          <span>Max links per post</span>
+          <div>
+            <input type="checkbox" data-control="wiki.maxLinksPerPostEnabled" aria-label="Enable max links per post">
+            <input type="number" min="1" max="12" step="1" data-control="wiki.maxLinksPerPost">
+          </div>
+        </div>
         <label class="field"><span>Max low-confidence links</span><input type="number" min="0" max="12" step="1" data-control="wiki.maxLowConfidenceLinksPerPost"></label>
         <label class="field"><span>Link color</span><input type="color" data-control="wiki.linkColor"></label>
+        <section class="settings-list" aria-labelledby="wikiLaterTitle">
+          <div class="settings-list-header">
+            <strong id="wikiLaterTitle">Link later</strong>
+            <small>Saved selections from the context menu.</small>
+          </div>
+          <div class="settings-list-items" id="wikiLaterItems"></div>
+        </section>
       </section>
 
       <section class="panel" data-panel="postreader">
@@ -91,6 +104,7 @@
         <label class="setting"><span><strong>Tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
         <label class="setting"><span><strong>Sounds</strong><small>Play RemiStats sound effects.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
         <label class="field"><span>Sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
+        <a class="repo-link" href="https://github.com/erc1337-Coffee/remistats_extension" target="_blank" rel="noreferrer">Original RemiStats repository</a>
       </section>
 
       <section class="panel" data-panel="miladymaxxer">
@@ -101,11 +115,12 @@
         <label class="field"><span>Card theme</span><select data-control="milady.cardTheme"><option value="full">Full</option><option value="no-premium">No premium</option><option value="silver-only">Silver only</option><option value="off">Off</option></select></label>
         <label class="field tall"><span>Whitelist handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.whitelistHandles"></textarea></label>
         <label class="field tall"><span>Manual Milady handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.miladyListHandles"></textarea></label>
+        <a class="repo-link" href="https://github.com/remiliacorp/miladymaxxer" target="_blank" rel="noreferrer">Original Miladymaxxer repository</a>
       </section>
 
       <section class="panel" data-panel="bextol">
-        <label class="setting"><span><strong>beXtol Hunter panel</strong><small>Mount the hover panel on X/Twitter.</small></span><input type="checkbox" data-control="bextol.enabled"></label>
-        <div class="auth-box"><strong id="bextolStatus">Checking session...</strong><small>Sign in to remilia.net to use the hunter panel. Passwords are not stored.</small></div>
+        <label class="setting"><span><strong>Beetol Game panel</strong><small>Mount the hover panel on X/Twitter.</small></span><input type="checkbox" data-control="bextol.enabled"></label>
+        <div class="auth-box"><strong id="bextolStatus">Checking session...</strong><small>Sign in to remilia.net to use the Beetol Game panel. Passwords are not stored.</small></div>
         <form class="login-form" id="bextolLoginForm">
           <input id="bextolUsername" type="text" placeholder="remilia username" autocomplete="username">
           <input id="bextolPassword" type="password" placeholder="password" autocomplete="current-password">
@@ -115,6 +130,7 @@
         <label class="field"><span>Color</span><select id="bextolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
         <label class="field"><span>Mode</span><select id="bextolMode"><option value="dark">Dark</option><option value="light">Light</option></select></label>
         <p class="message" id="bextolMessage"></p>
+        <a class="repo-link" href="https://www.remilia.net" target="_blank" rel="noreferrer">Original Beetol Game page</a>
       </section>
 
       <section class="panel" data-panel="diagnostics">

@@ -10,6 +10,7 @@ type ControlBinding = {
 };
 
 const WIKI_SETTINGS_KEY = "remiliaWikiHyperlink.settings";
+const WIKI_LATER_KEY = "remiliaWikiHyperlink.laterItems";
 const UPDATE_STATUS_KEY = "milxdy.updateStatus";
 
 type UpdateStatus = {
@@ -21,11 +22,19 @@ type UpdateStatus = {
   error?: string;
 };
 
+type WikiLaterItem = {
+  id: string;
+  text: string;
+  pageUrl?: string;
+  createdAt: number;
+};
+
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
   "wiki.previewsEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "previewsEnabled", kind: "boolean", fallback: true },
   "wiki.debugMode": { area: "local", key: WIKI_SETTINGS_KEY, property: "debugMode", kind: "boolean", fallback: false },
+  "wiki.maxLinksPerPostEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLinksPerPostEnabled", kind: "boolean", fallback: false },
   "wiki.maxLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLinksPerPost", kind: "number", fallback: 4 },
   "wiki.maxLowConfidenceLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLowConfidenceLinksPerPost", kind: "number", fallback: 1 },
   "wiki.linkColor": { area: "local", key: WIKI_SETTINGS_KEY, property: "linkColor", kind: "string", fallback: "#ff4fbf" },
@@ -80,6 +89,9 @@ async function boot(): Promise<void> {
   setupTabs();
   setupUpdateStatus();
   await loadControls();
+  setupWikiMaxLinksControl();
+  await renderWikiLaterItems();
+  observeWikiLaterItems();
   await setupBextolPanel();
   await renderStatus();
 }
@@ -171,6 +183,112 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function cssEscape(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
+}
+
+function setupWikiMaxLinksControl(): void {
+  const enabled = document.querySelector<HTMLInputElement>('[data-control="wiki.maxLinksPerPostEnabled"]');
+  const count = document.querySelector<HTMLInputElement>('[data-control="wiki.maxLinksPerPost"]');
+  if (!enabled || !count) return;
+  const syncDisabled = () => {
+    count.disabled = !enabled.checked;
+    count.title = enabled.checked ? "" : "No maximum";
+  };
+  enabled.addEventListener("change", syncDisabled);
+  syncDisabled();
+}
+
+async function renderWikiLaterItems(): Promise<void> {
+  const root = document.getElementById("wikiLaterItems");
+  if (!root) return;
+  const stored = await chrome.storage.local.get(WIKI_LATER_KEY);
+  const items = normalizeWikiLaterItems(stored[WIKI_LATER_KEY]);
+  root.textContent = "";
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "settings-list-empty";
+    empty.textContent = "No saved entries.";
+    root.append(empty);
+    return;
+  }
+  for (const item of items) {
+    root.append(createWikiLaterRow(item, items));
+  }
+}
+
+function observeWikiLaterItems(): void {
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[WIKI_LATER_KEY]) {
+      void renderWikiLaterItems();
+    }
+  });
+}
+
+function createWikiLaterRow(item: WikiLaterItem, allItems: WikiLaterItem[]): HTMLElement {
+  const row = document.createElement("div");
+  row.className = "settings-list-row";
+
+  const main = document.createElement("div");
+  main.className = "settings-list-main";
+  const text = document.createElement("div");
+  text.className = "settings-list-text";
+  text.textContent = item.text;
+  text.title = item.text;
+
+  const meta = document.createElement("div");
+  meta.className = "settings-list-meta";
+  const savedAt = document.createElement("span");
+  savedAt.textContent = item.createdAt ? new Date(item.createdAt).toLocaleDateString() : "Saved";
+  meta.append(savedAt);
+  if (item.pageUrl) {
+    const link = document.createElement("a");
+    link.href = item.pageUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = shortUrl(item.pageUrl);
+    link.title = item.pageUrl;
+    meta.append(link);
+  }
+  main.append(text, meta);
+
+  const remove = document.createElement("button");
+  remove.type = "button";
+  remove.className = "settings-list-remove";
+  remove.textContent = "Remove";
+  remove.addEventListener("click", () => {
+    void removeWikiLaterItem(item.id, allItems);
+  });
+
+  row.append(main, remove);
+  return row;
+}
+
+async function removeWikiLaterItem(id: string, currentItems: WikiLaterItem[]): Promise<void> {
+  await chrome.storage.local.set({
+    [WIKI_LATER_KEY]: currentItems.filter((item) => item.id !== id),
+  });
+}
+
+function normalizeWikiLaterItems(value: unknown): WikiLaterItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object")
+    .map((item) => ({
+      id: typeof item.id === "string" && item.id ? item.id : `${item.createdAt || Date.now()}-${item.text || ""}`,
+      text: typeof item.text === "string" ? item.text : "",
+      pageUrl: typeof item.pageUrl === "string" ? item.pageUrl : undefined,
+      createdAt: typeof item.createdAt === "number" ? item.createdAt : 0,
+    }))
+    .filter((item) => item.text.trim().length > 0)
+    .sort((left, right) => right.createdAt - left.createdAt);
+}
+
+function shortUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    return `${url.hostname}${url.pathname}`;
+  } catch {
+    return value;
+  }
 }
 
 function setupUpdateStatus(): void {

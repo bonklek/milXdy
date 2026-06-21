@@ -22,6 +22,7 @@ export type Settings = {
   enabled: boolean;
   previewsEnabled: boolean;
   debugMode: boolean;
+  maxLinksPerPostEnabled: boolean;
   maxLinksPerPost: number;
   maxLowConfidenceLinksPerPost: number;
   linkColor: string;

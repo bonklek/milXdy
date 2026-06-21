@@ -243,6 +243,18 @@ input[type="checkbox"] {
   padding: 3px;
 }
 
+.checkbox-counter > div {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-counter input[type="checkbox"] {
+  width: 22px;
+  height: 22px;
+}
+
 .login-form button,
 .secondary-button {
   background: #17202a;
@@ -262,4 +274,108 @@ input[type="checkbox"] {
 
 .message[data-kind="warn"] {
   color: #a45100;
+}
+
+.repo-link {
+  display: block;
+  padding: 10px 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fff;
+  color: #17202a;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.repo-link:hover {
+  text-decoration: underline;
+}
+
+.settings-list {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.settings-list-header {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-list-header strong {
+  font-size: 13px;
+}
+
+.settings-list-header small {
+  color: #65717f;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.settings-list-items {
+  display: grid;
+  gap: 6px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.settings-list-empty {
+  margin: 0;
+  color: #65717f;
+  font-size: 12px;
+}
+
+.settings-list-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid #e3e8ee;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.settings-list-main {
+  min-width: 0;
+}
+
+.settings-list-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #17202a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.settings-list-meta {
+  display: flex;
+  gap: 7px;
+  min-width: 0;
+  color: #65717f;
+  font-size: 11px;
+}
+
+.settings-list-meta a {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.settings-list-remove {
+  min-height: 28px;
+  border: 1px solid #cfd6df;
+  border-radius: 6px;
+  background: #fff;
+  color: #17202a;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+  padding: 0 8px;
 }

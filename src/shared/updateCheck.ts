@@ -11,8 +11,7 @@ export const UPDATE_STATUS_KEY = "milxdy.updateStatus";
 export const UPDATE_ALARM_NAME = "milxdy.updateCheck";
 export const UPDATE_CHECK_INTERVAL_MINUTES = 360;
 
-// Set this to the public GitHub repository before publishing the beta.
-export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/OWNER/REPO/releases/latest";
+export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases/latest";
 
 type GitHubRelease = {
   tag_name?: string;
