@@ -58,6 +58,9 @@
         <label class="field"><span>Speech volume</span><input type="number" min="0" max="1" step="0.05" data-control="postreader.volume"></label>
         <label class="setting"><span><strong>Auto voice</strong><small>Choose a fitting installed voice automatically.</small></span><input type="checkbox" data-control="postreader.autoVoice"></label>
         <label class="field"><span>Voice URI</span><input type="text" placeholder="System default" data-control="postreader.voiceURI"></label>
+        <label class="field"><span>TTS engine</span><select data-control="postreader.ttsEngine"><option value="web-speech">Browser Web Speech</option><option value="custom-http">Custom HTTP endpoint</option></select></label>
+        <label class="field"><span>Custom endpoint</span><input type="url" placeholder="http://localhost:8787/speak" data-control="postreader.customTtsEndpoint"></label>
+        <label class="field"><span>Custom timing</span><select data-control="postreader.customTtsTimingMode"><option value="engine">Endpoint boundaries</option><option value="off">Audio only</option></select></label>
         <label class="setting"><span><strong>Autoplay next</strong><small>Continue after a post finishes.</small></span><input type="checkbox" data-control="postreader.autoplayNext"></label>
         <label class="field"><span>Autoplay mode</span><select data-control="postreader.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll</option></select></label>
         <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="postreader.skipPromotedPosts"></label>

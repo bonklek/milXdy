@@ -1,4 +1,5 @@
 import type { PostreaderSettings, SpeechState, SpeechStatus } from "./shared/types";
+import { createTtsEngine, type TtsEngine, type TtsSession } from "./ttsEngines";
 
 type Listener = (state: SpeechState) => void;
 type SpeechChunk = {
@@ -10,9 +11,12 @@ export type BoundarySupport = "supported" | "unsupported" | "unknown";
 export class SpeechController {
   private settings: PostreaderSettings;
   private listeners = new Set<Listener>();
-  private utterances: SpeechSynthesisUtterance[] = [];
+  private engine: TtsEngine;
+  private session: TtsSession | null = null;
   private chunks: SpeechChunk[] = [];
   private index = 0;
+  private generation = 0;
+  private activeHasSyncedBoundaries = true;
   private state: SpeechState = {
     status: "idle",
     title: "",
@@ -23,16 +27,18 @@ export class SpeechController {
     chunkStart: null,
     charIndex: null,
     charLength: null,
+    hasSyncedBoundaries: true,
   };
   private onEnded: (() => void) | null = null;
-  private suppressNextEnd = false;
 
   constructor(settings: PostreaderSettings) {
     this.settings = settings;
+    this.engine = createTtsEngine(settings);
   }
 
   setSettings(settings: PostreaderSettings): void {
     this.settings = settings;
+    this.engine = createTtsEngine(settings);
   }
 
   applySettings(settings: PostreaderSettings): void {
@@ -41,7 +47,10 @@ export class SpeechController {
       previous.speed !== settings.speed ||
       previous.volume !== settings.volume ||
       previous.voiceURI !== settings.voiceURI ||
-      previous.autoVoice !== settings.autoVoice
+      previous.autoVoice !== settings.autoVoice ||
+      previous.ttsEngine !== settings.ttsEngine ||
+      previous.customTtsEndpoint !== settings.customTtsEndpoint ||
+      previous.customTtsTimingMode !== settings.customTtsTimingMode
     ) && (this.state.status === "speaking" || this.state.status === "paused") && this.state.text;
 
     const wasPaused = this.state.status === "paused";
@@ -49,6 +58,7 @@ export class SpeechController {
     const title = this.state.title;
     const text = this.state.text;
     this.settings = settings;
+    this.engine = createTtsEngine(settings);
 
     if (!shouldRestart) return;
 
@@ -66,16 +76,15 @@ export class SpeechController {
   }
 
   getVoices(): SpeechSynthesisVoice[] {
-    if (!("speechSynthesis" in window)) return [];
-    return window.speechSynthesis.getVoices();
+    return this.engine.getVoices?.() ?? [];
   }
 
   getPreferredVoice(): SpeechSynthesisVoice | null {
-    return choosePreferredVoice(this.getVoices(), this.settings.voiceURI);
+    return this.engine.getPreferredVoice?.() ?? null;
   }
 
   async probeBoundarySupport(voice: SpeechSynthesisVoice): Promise<boolean> {
-    return probeVoiceBoundarySupport(voice);
+    return this.engine.probeBoundarySupport?.(voice) ?? false;
   }
 
   onComplete(callback: (() => void) | null): void {
@@ -83,25 +92,19 @@ export class SpeechController {
   }
 
   speak(text: string, title: string): void {
-    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) {
-      this.setState("error", title, text, "Speech synthesis is not available in this browser.");
-      return;
-    }
-
-    window.speechSynthesis.cancel();
+    this.stopActiveSession();
     this.index = 0;
     this.chunks = splitText(text);
-    this.utterances = this.chunks.map((chunk) => this.createUtterance(chunk, title, text));
-    if (this.utterances.length === 0) {
+    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
+    if (this.chunks.length === 0) {
       this.setState("idle", title, text, null);
       return;
     }
     this.setState("speaking", title, text, null);
-    window.speechSynthesis.speak(this.utterances[this.index]);
+    this.startCurrentChunk(title, text);
   }
 
   private restartFrom(text: string, title: string, charIndex: number, pauseAfterStart: boolean, exact = false): void {
-    if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return;
     const startAt = Math.max(0, Math.min(text.length, exact ? charIndex : findRestartBoundary(text, charIndex)));
     const remaining = text.slice(startAt).trimStart();
     if (!remaining) {
@@ -110,19 +113,12 @@ export class SpeechController {
       return;
     }
     const trimOffset = text.slice(startAt).length - remaining.length;
-    this.suppressNextEnd = true;
-    window.speechSynthesis.cancel();
+    this.stopActiveSession();
     this.index = 0;
     this.chunks = splitText(remaining, startAt + trimOffset);
-    this.utterances = this.chunks.map((chunk) => this.createUtterance(chunk, title, text));
+    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
     this.setState(pauseAfterStart ? "paused" : "speaking", title, text, null, startAt + trimOffset, null);
-    window.setTimeout(() => {
-      this.suppressNextEnd = false;
-      if (this.utterances[0]) {
-        window.speechSynthesis.speak(this.utterances[0]);
-        if (pauseAfterStart) window.speechSynthesis.pause();
-      }
-    }, 0);
+    this.startCurrentChunk(title, text, pauseAfterStart);
   }
 
   nextChunk(): void {
@@ -139,12 +135,11 @@ export class SpeechController {
   }
 
   pauseOrResume(): void {
-    if (!("speechSynthesis" in window)) return;
-    if (window.speechSynthesis.paused || this.state.status === "paused") {
-      window.speechSynthesis.resume();
+    if (this.state.status === "paused") {
+      this.session?.resume();
       this.setState("speaking", this.state.title, this.state.text, null);
-    } else if (window.speechSynthesis.speaking) {
-      window.speechSynthesis.pause();
+    } else if (this.state.status === "speaking") {
+      this.session?.pause();
       this.setState("paused", this.state.title, this.state.text, null);
     } else if (this.state.text) {
       this.speak(this.state.text, this.state.title || "Postreader");
@@ -152,67 +147,79 @@ export class SpeechController {
   }
 
   stop(): void {
-    this.suppressNextEnd = true;
-    this.utterances = [];
+    this.stopActiveSession();
     this.chunks = [];
     this.index = 0;
     this.setState("idle", "", "", null);
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-    }
-    window.setTimeout(() => {
-      this.suppressNextEnd = false;
-    }, 0);
   }
 
   private jumpChunk(direction: 1 | -1): void {
-    if (!("speechSynthesis" in window) || this.utterances.length === 0) return;
-    const nextIndex = Math.min(this.utterances.length - 1, Math.max(0, this.index + direction));
+    if (this.chunks.length === 0) return;
+    const nextIndex = Math.min(this.chunks.length - 1, Math.max(0, this.index + direction));
     if (nextIndex === this.index && direction > 0) {
       this.onEnded?.();
       return;
     }
-    this.suppressNextEnd = true;
-    window.speechSynthesis.cancel();
+    this.stopActiveSession();
     this.index = nextIndex;
     this.setState("speaking", this.state.title, this.state.text, null, this.chunks[this.index]?.offset ?? null, null);
-    window.setTimeout(() => {
-      this.suppressNextEnd = false;
-      window.speechSynthesis.speak(this.utterances[this.index]);
-    }, 0);
+    this.startCurrentChunk(this.state.title, this.state.text);
   }
 
-  private createUtterance(chunk: SpeechChunk, title: string, fullText: string): SpeechSynthesisUtterance {
-    const utterance = new SpeechSynthesisUtterance(chunk.text);
-    utterance.rate = this.settings.speed;
-    utterance.volume = this.settings.volume;
-    const voice = choosePreferredVoice(this.getVoices(), this.settings.voiceURI, this.settings.autoVoice);
-    if (voice) utterance.voice = voice;
-
-    utterance.onboundary = (event) => {
-      const charIndex = chunk.offset + event.charIndex;
-      const charLength = typeof event.charLength === "number" && event.charLength > 0 ? event.charLength : null;
-      this.setState("speaking", title, fullText, null, charIndex, charLength);
-    };
-
-    utterance.onend = () => {
-      if (this.suppressNextEnd) return;
-      this.index += 1;
-      if (this.index < this.utterances.length) {
-        this.setState("speaking", title, fullText, null);
-        window.speechSynthesis.speak(this.utterances[this.index]);
+  private startCurrentChunk(title: string, fullText: string, pauseAfterStart = false): void {
+    const chunk = this.chunks[this.index];
+    if (!chunk) return;
+    const generation = ++this.generation;
+    this.engine.speak({
+      text: chunk.text,
+      settings: this.settings,
+      onBoundary: (event) => {
+        if (generation !== this.generation) return;
+        const charIndex = chunk.offset + event.charIndex;
+        this.setState("speaking", title, fullText, null, charIndex, event.charLength);
+      },
+      onEnd: () => {
+        if (generation !== this.generation) return;
+        this.index += 1;
+        if (this.index < this.chunks.length) {
+          this.setState("speaking", title, fullText, null);
+          this.startCurrentChunk(title, fullText);
+          return;
+        }
+        this.setState("idle", title, fullText, null);
+        this.onEnded?.();
+      },
+      onError: (message) => {
+        if (generation !== this.generation) return;
+        this.setState("error", title, fullText, message);
+      },
+    }).then((session) => {
+      if (generation !== this.generation) {
+        session.stop();
         return;
       }
-      this.setState("idle", title, fullText, null);
-      this.onEnded?.();
-    };
+      this.session = session;
+      this.activeHasSyncedBoundaries = session.hasSyncedBoundaries;
+      this.setState(this.state.status, title, fullText, null, this.state.charIndex, this.state.charLength);
+      if (pauseAfterStart) {
+        session.pause();
+      }
+    }).catch((error) => {
+      if (generation !== this.generation) return;
+      const message = error instanceof Error ? error.message : "Speech playback failed.";
+      this.setState("error", title, fullText, message);
+    });
+  }
 
-    utterance.onerror = () => {
-      if (this.suppressNextEnd) return;
-      this.setState("error", title, fullText, "Speech playback failed.");
-    };
+  private stopActiveSession(): void {
+    this.generation += 1;
+    this.session?.stop();
+    this.session = null;
+    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
+  }
 
-    return utterance;
+  hasSyncedBoundaries(): boolean {
+    return this.activeHasSyncedBoundaries;
   }
 
   private setState(
@@ -228,81 +235,15 @@ export class SpeechController {
       title,
       text,
       error,
-      chunkIndex: this.utterances.length > 0 ? this.index + 1 : 0,
-      chunkCount: this.utterances.length,
+      chunkIndex: this.chunks.length > 0 ? this.index + 1 : 0,
+      chunkCount: this.chunks.length,
       chunkStart: this.chunks[this.index]?.offset ?? null,
       charIndex,
       charLength,
+      hasSyncedBoundaries: this.hasSyncedBoundaries(),
     };
     for (const listener of this.listeners) listener(this.state);
   }
-}
-
-export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice): Promise<boolean> {
-  if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return false;
-  return new Promise((resolve) => {
-    const utterance = new SpeechSynthesisUtterance("Postreader checks whether this voice reports steady word timing for smooth highlighting.");
-    utterance.voice = voice;
-    utterance.rate = 1.15;
-    utterance.volume = 0.05;
-    let wordLikeBoundaries = 0;
-    let lastCharIndex = -1;
-    let settled = false;
-    const hasEnoughBoundaries = () => wordLikeBoundaries >= 3;
-    const finish = (result: boolean) => {
-      if (settled) return;
-      settled = true;
-      window.clearTimeout(timeout);
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
-      resolve(result);
-    };
-    const timeout = window.setTimeout(() => finish(hasEnoughBoundaries()), 5000);
-    utterance.onboundary = (event) => {
-      if (typeof event.charIndex !== "number" || event.charIndex <= lastCharIndex) return;
-      lastCharIndex = event.charIndex;
-      const name = typeof event.name === "string" ? event.name.toLowerCase() : "";
-      if (!name || name === "word" || name === "sentence") {
-        wordLikeBoundaries += 1;
-      }
-    };
-    utterance.onend = () => finish(hasEnoughBoundaries());
-    utterance.onerror = () => finish(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.speak(utterance);
-  });
-}
-
-export function choosePreferredVoice(
-  voices: SpeechSynthesisVoice[],
-  selectedVoiceURI: string | null,
-  autoVoice = true,
-): SpeechSynthesisVoice | null {
-  if (selectedVoiceURI) {
-    const selected = voices.find((voice) => voice.voiceURI === selectedVoiceURI);
-    if (selected) return selected;
-  }
-  if (!autoVoice) return null;
-
-  const english = voices.filter((voice) => /^en[-_]/i.test(voice.lang) || /^en$/i.test(voice.lang));
-  const candidates = english.length > 0 ? english : voices;
-  const ranked = [
-    /Google US English/i,
-    /Google UK English Female/i,
-    /Google UK English/i,
-    /Microsoft Aria/i,
-    /Microsoft Jenny/i,
-    /Samantha/i,
-    /Alex/i,
-  ];
-
-  for (const pattern of ranked) {
-    const match = candidates.find((voice) => pattern.test(voice.name) || pattern.test(voice.voiceURI));
-    if (match) return match;
-  }
-
-  return candidates.find((voice) => voice.default) || candidates[0] || null;
 }
 
 function splitText(text: string, absoluteOffset = 0): SpeechChunk[] {

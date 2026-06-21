@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "./shared/defaults";
-import type { AutoplayMode, BodyHighlightMode, ButtonPlacement, FullQuoteDisplay, PlayerPosition, PostreaderSettings } from "./shared/types";
+import type { AutoplayMode, BodyHighlightMode, ButtonPlacement, CustomTtsTimingMode, FullQuoteDisplay, PlayerPosition, PostreaderSettings, TtsEngineChoice } from "./shared/types";
 import type { BoundarySupport } from "./speech";
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof PostreaderSettings>;
@@ -47,6 +47,9 @@ export function normalizeSettings(value: unknown): PostreaderSettings {
     volume: clampNumber(raw.volume, 0, 1, DEFAULT_SETTINGS.volume),
     voiceURI: typeof raw.voiceURI === "string" && raw.voiceURI.length > 0 ? raw.voiceURI : null,
     autoVoice: typeof raw.autoVoice === "boolean" ? raw.autoVoice : DEFAULT_SETTINGS.autoVoice,
+    ttsEngine: isTtsEngineChoice(raw.ttsEngine) ? raw.ttsEngine : DEFAULT_SETTINGS.ttsEngine,
+    customTtsEndpoint: typeof raw.customTtsEndpoint === "string" && raw.customTtsEndpoint.trim().length > 0 ? raw.customTtsEndpoint.trim() : null,
+    customTtsTimingMode: isCustomTtsTimingMode(raw.customTtsTimingMode) ? raw.customTtsTimingMode : DEFAULT_SETTINGS.customTtsTimingMode,
     autoplayNext: typeof raw.autoplayNext === "boolean" ? raw.autoplayNext : DEFAULT_SETTINGS.autoplayNext,
     autoplayMode: isAutoplayMode(raw.autoplayMode) ? raw.autoplayMode : DEFAULT_SETTINGS.autoplayMode,
     skipPromotedPosts: typeof raw.skipPromotedPosts === "boolean" ? raw.skipPromotedPosts : DEFAULT_SETTINGS.skipPromotedPosts,
@@ -80,6 +83,14 @@ function clampNumber(value: unknown, min: number, max: number, fallback: number)
 
 function isAutoplayMode(value: unknown): value is AutoplayMode {
   return value === "visible" || value === "autoscroll";
+}
+
+function isTtsEngineChoice(value: unknown): value is TtsEngineChoice {
+  return value === "web-speech" || value === "custom-http";
+}
+
+function isCustomTtsTimingMode(value: unknown): value is CustomTtsTimingMode {
+  return value === "off" || value === "engine";
 }
 
 function normalizeBodyHighlightMode(value: unknown, legacyValue: unknown): BodyHighlightMode {
