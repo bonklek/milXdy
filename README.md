@@ -1,44 +1,394 @@
 # milXdy
 
-An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.
+milXdy is a beta Manifest V3 browser extension for X/Twitter. It combines several Remilia-oriented tools into one unpacked-extension build, one settings popup, one content bootstrap, and one local install flow.
 
-milXdy is a beta Manifest V3 extension that brings several Remilia-oriented browser tools into one install pipeline, one manifest, one popup/settings menu, and one content bootstrap. It is intended for GitHub beta distribution and local unpacked-extension testing.
+This project is intended for GitHub beta distribution and local Chromium testing. It is not currently packaged through the Chrome Web Store, so users install it manually from source or from a release archive.
 
-## Included Sub-Extensions
+## Credits And Upstream Projects
 
-- **Remilia Wiki Hyperlink** links known Remilia Wiki concepts inside X/Twitter posts. Settings cover enablement, hover previews, debug mode, link limits, low-confidence link limits, and link color.
-- **Postreader / Tweet Reader** adds read-aloud controls to posts. Settings cover speech speed and volume, voice choice, autoplay behavior, promoted-post skipping, quote handling, hyperlink/link-preview/image text inclusion, OCR, highlights, player placement, button placement, handle reading, and keyboard shortcuts.
-- **RemiStats** shows RemiStats badges and hover details for users on X/Twitter. Settings cover badges, tooltips, sounds, and sound volume.
-- **Miladymaxxer** applies avatar-based Milady detection, effects, badges, sounds, and manual handle controls. By default, users with RemiStats beetle stats are also treated as worthy of maximization.
-- **beXtol Hunter** adds the Remilia beetle hunter panel for signed-in remilia.net users, including session status, panel color, theme mode, state refresh, and beetle actions.
+milXdy integrates and adapts code, assets, behavior, or concepts from these upstream projects:
 
-## Beta Install
+- **Miladymaxxer**: original repository `remiliacorp/miladymaxxer`.
+- **RemiStats Extension**: original repository `erc1337-Coffee/remistats_extension`.
 
-1. Run `npm install`.
-2. Run `npm run build`.
-3. Open Chrome or another Chromium browser to `chrome://extensions`.
-4. Enable Developer Mode.
-5. Choose **Load unpacked** and select the `dist` folder.
+The local source snapshots used during integration live under `_sources/` in development checkouts, but `_sources/` is intentionally ignored by Git and is not part of the distributed extension build. Preserve upstream license notices when publishing release archives or source snapshots.
 
-## Settings
+Other integrated or local feature areas include Remilia Wiki linking, Postreader/Tweet Reader, and Beetol Game. See `LICENSE` and the original upstream repositories for license details that apply to bundled or adapted code.
 
-Open the extension popup or options page to configure each sub-extension. The settings menu is organized into tabs:
+## Included Features
 
-- **Suite**: shared diagnostics.
-- **Wiki**: Remilia Wiki hyperlink behavior.
-- **Reader**: Postreader playback, extraction, OCR, display, and keyboard settings.
-- **RemiStats**: badge, tooltip, and sound settings.
-- **Maxxer**: Miladymaxxer mode, sounds, badges, RemiStats beetle-user inclusion, card theme, whitelist handles, and manual Milady handles.
-- **beXtol**: panel enablement, remilia.net login/logout, panel color, and panel theme.
-- **Diag**: beta counters for loaded bundles, scanner activity, cache hits, detection queue size, and wiki link counts.
+### Suite
+
+Shared extension controls and beta status:
+
+- Update status for GitHub beta releases.
+- Performance diagnostics toggle.
+- Diagnostics counters under the `Diag` tab.
+
+### Remilia Wiki Links
+
+Adds inline links to known Remilia Wiki concepts inside X/Twitter posts.
+
+- Optional hover previews.
+- Link count and low-confidence link limits.
+- Custom link color.
+- Debug mode for matching behavior.
+
+### Postreader
+
+Adds read-aloud controls for X/Twitter posts.
+
+- Web Speech playback controls.
+- Optional quote, hyperlink, link preview, image alt text, and OCR reading.
+- Autoplay modes.
+- Highlight modes.
+- Keyboard shortcuts.
+- Optional local/custom HTTP TTS endpoints, depending on the current build settings.
+
+### RemiStats
+
+Shows RemiStats badges and details for X/Twitter accounts.
+
+- Fetches public RemiStats data from `https://api.remistats.net`.
+- Shows score badges on supported X/Twitter account surfaces.
+- Optional hover tooltips.
+- Optional sound effects and sound volume control.
+
+### Miladymaxxer / Maxxer
+
+Runs local avatar classification and applies Milady-specific UI effects.
+
+- Bundled ONNX classifier runs locally through ONNX Runtime Web.
+- Supports normal Milady mode, debug mode, and off mode.
+- Tracks matched accounts, caught accounts, post-like XP, and collected avatar sightings.
+- Manual Milady list and whitelist controls.
+- Optional RemiStats beetle-user bridge.
+- Tiered card themes and level badges.
+- Legacy Miladymaxxer statistics import.
+
+### Beetol Game
+
+Adds the Remilia beetle hunter panel for signed-in `remilia.net` users.
+
+- Login/logout controls in the settings popup.
+- Panel color and dark/light mode settings.
+- Passwords are sent directly to `www.remilia.net` for login and are not stored by milXdy.
+
+## Install From Source
+
+Prerequisites:
+
+- Node.js 20 or newer is recommended.
+- Chrome, Brave, Edge, or another Chromium browser.
+- Git, if cloning the repository directly.
+
+Install:
+
+```powershell
+git clone https://github.com/bonklek/milXdy.git
+cd milXdy
+npm install
+npm run build
+```
+
+Load in Chromium:
+
+1. Open `chrome://extensions`.
+2. Enable **Developer mode**.
+3. Choose **Load unpacked**.
+4. Select the `dist` folder created by `npm run build`.
+5. Pin the extension if you want quick access to the popup.
+6. Open `https://x.com` or `https://twitter.com` and refresh existing tabs.
+
+After rebuilding from source, return to `chrome://extensions` and press the reload button on the milXdy extension card.
+
+## Install From A GitHub Release
+
+If a release archive is provided:
+
+1. Download the latest unpacked release archive from GitHub Releases.
+2. Unzip it into a permanent folder. Do not install from Downloads if you clean that folder often.
+3. Open `chrome://extensions`.
+4. Enable **Developer mode**.
+5. Choose **Load unpacked** and select the unzipped extension folder.
+6. Refresh X/Twitter tabs.
+
+Manual installs do not auto-update. The Suite tab checks the latest GitHub release and shows an update notice when the release tag is newer than the installed manifest version. To update, download or rebuild the latest release and reload the unpacked extension.
+
+## Update Check Setup For Maintainers
+
+Before a public beta release, set the GitHub repository endpoint in:
+
+- `src/shared/updateCheck.ts`
+
+The public beta endpoint should be:
+
+```ts
+export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases/latest";
+```
+
+Release tags should be semantic versions with an optional `v` prefix, such as `v0.1.1`. The manifest version in `public/manifest.json` is the installed version used for comparison.
+
+## Settings Menu Walkthrough
+
+Open the extension icon to access the settings popup. The same UI is also registered as the extension options page.
+
+### Suite
+
+- **Update status**: shows whether the installed build is current against the configured GitHub release endpoint. Use the refresh button to check immediately.
+- **Performance diagnostics**: stores lightweight counters in local extension storage. Leave off for normal use; enable when reporting performance or detection issues.
+
+### Wiki
+
+- **Remilia Wiki links**: enables/disables automatic wiki concept linking.
+- **Wiki previews**: fetches previews on hover.
+- **Debug mode**: exposes additional matching diagnostics.
+- **Max links per post**: caps wiki links per post.
+- **Max low-confidence links**: limits weaker matches.
+- **Link color**: controls inline wiki-link color.
+
+### Reader
+
+- **Postreader controls**: adds read-aloud buttons to posts.
+- **Speech speed / volume**: controls playback rate and output volume.
+- **Auto voice / Voice URI**: uses a suitable installed voice automatically or targets a specific voice.
+- **TTS engine**: uses browser Web Speech or a custom HTTP endpoint.
+- **Custom endpoint**: local HTTP TTS endpoint used when `Custom HTTP endpoint` is selected.
+- **Custom timing**: enables endpoint-provided word/character timing or treats custom audio as audio-only.
+- **Autoplay next / Autoplay mode**: continues reading visible posts or autoscrolls.
+- **Skip promoted posts**: avoids reading ads.
+- **End ding**: plays a short cue after each post.
+- **Include quote posts / Fetch full quotes / Full quote display**: controls quote-post reading and display.
+- **Include hyperlinks / Image alt text / Image OCR / Link previews**: controls extra content included in spoken text.
+- **Expand show-more**: opens truncated posts before reading.
+- **Active post highlight / Body highlight**: controls visual reading highlights.
+- **Player position / Read button placement**: controls where reader controls appear.
+- **Use handles**: reads handles instead of display names.
+- **Keyboard shortcuts**: sets next/previous/play/skip controls.
+
+### RemiStats
+
+- **RemiStats badges**: enables/disables score badges.
+- **Tooltips**: shows detailed RemiStats information on hover.
+- **Sounds**: enables/disables RemiStats sound effects.
+- **Sound volume**: controls RemiStats effect volume.
+
+### Maxxer
+
+- **Mode**:
+  - `Milady effects`: applies normal match effects.
+  - `Debug`: shows detection markers and scores.
+  - `Off`: disables Maxxer behavior.
+- **Sounds**: enables Maxxer interaction sounds.
+- **Level badge**: shows account/player level indicators.
+- **RemiStats beetle users**: treats accounts with RemiStats beetle stats as Maxxer matches.
+- **Card theme**:
+  - `Full`: all tier styling.
+  - `No premium`: reduced premium tier styling.
+  - `Silver only`: minimal silver styling.
+  - `Off`: disables card theme styling.
+- **Whitelist handles**: accounts exempted from normal scoring/XP behavior.
+- **Manual Milady handles**: accounts forced into the Milady list even when detection would not match them.
+
+### Beetol Game
+
+- **Beetol Game panel**: mounts the hover panel on X/Twitter.
+- **Session status**: shows whether the extension is signed in to `remilia.net`.
+- **Login form**: signs in through the remilia.net flow. 2FA is not supported by this popup flow.
+- **Color / Mode**: controls the hunter panel style.
+
+### Diag
+
+Shows beta counters for:
+
+- Loaded feature bundles.
+- Current Maxxer mode.
+- Maxxer matches.
+- Avatar checks and cache hits.
+- Shared scanner activity.
+- Detection queue state.
+- Wiki link counts.
+
+## Import Legacy Miladymaxxer Statistics
+
+milXdy can import a JSON export from the original Miladymaxxer storage model. The importer accepts these keys at the JSON root or under a `storage` object:
+
+- `stats`
+- `matchedAccounts`
+- `collectedAvatars`
+- `accounts`
+- `avatars`
+- `detectionStats`
+
+The import merges data with the current milXdy data. It does not erase existing milXdy stats.
+
+### Export From The Old Miladymaxxer Extension
+
+1. Keep the old Miladymaxxer extension installed.
+2. Open `chrome://extensions`.
+3. Enable **Developer mode**.
+4. Find the old Miladymaxxer extension.
+5. Click **service worker**, **background page**, or **Inspect views**, depending on the browser.
+6. In the DevTools console for that extension, run:
+
+```js
+chrome.storage.local.get(null, (local) => {
+  chrome.storage.sync.get(null, (sync) => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      source: "legacy-miladymaxxer",
+      storage: {
+        ...local,
+        ...sync,
+      },
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "legacy-miladymaxxer-storage.json";
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+});
+```
+
+If the download is blocked from the service worker console, run this fallback and copy the printed JSON into a local `.json` file:
+
+```js
+chrome.storage.local.get(null, (local) => {
+  chrome.storage.sync.get(null, (sync) => {
+    console.log(JSON.stringify({
+      exportedAt: new Date().toISOString(),
+      source: "legacy-miladymaxxer",
+      storage: { ...local, ...sync },
+    }, null, 2));
+  });
+});
+```
+
+### Import Into milXdy
+
+1. Open the milXdy extension popup.
+2. Go to **Maxxer** and confirm Maxxer is enabled.
+3. If your build exposes the dedicated Maxxer stats/accounts view, open **Stats**.
+4. Choose **Import legacy stats**.
+5. Select the JSON file exported from the old Miladymaxxer extension.
+6. Reopen the Maxxer stats/accounts view and verify counts and accounts appear.
+7. Refresh X/Twitter tabs.
+
+### Manual Import Fallback
+
+Use this if your build does not expose the **Import legacy stats** button.
+
+1. Open `chrome://extensions`.
+2. Find the milXdy extension.
+3. Click **service worker** or **Inspect views** for milXdy.
+4. Open the exported `legacy-miladymaxxer-storage.json` in a text editor.
+5. Copy the full JSON.
+6. In the milXdy extension DevTools console, run this with the copied JSON assigned to `legacyPayload`:
+
+```js
+const legacyPayload = /* paste legacy JSON here */;
+const source = legacyPayload.storage || legacyPayload;
+const localKeys = {};
+for (const key of ["stats", "matchedAccounts", "collectedAvatars", "playerStats"]) {
+  if (source[key]) localKeys[key] = source[key];
+}
+const syncKeys = {};
+for (const key of ["mode", "whitelistHandles", "miladyListHandles", "soundEnabled", "showLevelBadge", "cardTheme"]) {
+  if (source[key] !== undefined) syncKeys[key] = source[key];
+}
+chrome.storage.local.set(localKeys, () => {
+  chrome.storage.sync.set(syncKeys, () => {
+    console.log("Legacy Miladymaxxer data imported into milXdy.");
+  });
+});
+```
+
+Then reopen the milXdy popup and refresh X/Twitter tabs.
+
+If the imported file appears to do nothing, confirm the JSON includes at least one of `stats`, `matchedAccounts`, or `collectedAvatars` at the root or inside `storage`.
+
+## General Usage Guidelines
+
+- Refresh X/Twitter tabs after installing, updating, or changing major feature toggles.
+- Keep only the features you actively use enabled during beta testing.
+- Enable diagnostics only while debugging or preparing a report.
+- Use Maxxer debug mode when checking whether avatar detection is working.
+- Use RemiStats tooltips sparingly on long sessions if you are investigating performance.
+- Do not delete the folder used for **Load unpacked**. Chromium needs that folder to remain in place.
+- When manually updating, reload the extension from `chrome://extensions` and refresh X/Twitter tabs.
+
+## Privacy And Network Notes
+
+- The extension runs only on the hosts listed in `public/manifest.json`.
+- GitHub update checks call `https://api.github.com` when configured.
+- RemiStats calls `https://api.remistats.net` for public reputation data.
+- Remilia Wiki previews call `https://wiki.remilia.org`.
+- Beetol Game login and actions call `https://www.remilia.net`.
+- Postreader OCR and Miladymaxxer avatar inference run locally in the extension context.
+- Beetol Game access and refresh tokens are stored in local Chrome extension storage under namespaced keys.
+- Passwords entered in the Beetol Game login form are not stored by milXdy.
+
+## Development
+
+Install and verify:
+
+```powershell
+npm install
+npm run typecheck
+npm run build
+```
+
+Watch mode:
+
+```powershell
+npm run dev
+```
+
+The build emits:
+
+- `dist/content.js`
+- `dist/background.js`
+- `dist/popup.js`
+- `dist/features/wiki.js`
+- `dist/features/postreader.js`
+- `dist/features/remistats.js`
+- `dist/features/miladymaxxer.js`
+- `dist/features/bextol.js`
+- `dist/worker.js`
+
+Disabled feature bundles should not be downloaded or parsed on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.
+
+## Agent-Guided Setup
+
+For users who want another coding/browser agent to walk through setup, use:
+
+- `docs/AGENT_SETUP_GUIDE.md`
+
+That guide gives an agent exact commands, browser checks, migration steps, and completion criteria.
+
+## Troubleshooting
+
+- **Extension does not appear**: make sure `npm run build` completed and that you selected `dist`, not the repository root.
+- **Changes did not apply**: reload the extension on `chrome://extensions`, then refresh X/Twitter tabs.
+- **Update status fails**: confirm `src/shared/updateCheck.ts` points to a real public GitHub repository with releases.
+- **RemiStats badges missing**: confirm RemiStats is enabled and `https://api.remistats.net` is reachable.
+- **Maxxer seems inactive**: set mode to `Debug`, refresh X/Twitter, and check the `Diag` tab for loaded bundles and detection queue state.
+- **Legacy stats import failed**: validate the JSON file and confirm it contains legacy Miladymaxxer storage keys.
 
 ## Postreader Custom TTS
 
-Postreader can use the built-in browser Web Speech engine or a user-provided HTTP TTS endpoint. Configure this under Reader/Postreader playback settings.
+Postreader can use the built-in browser Web Speech engine or a user-provided HTTP TTS endpoint. Configure this under the Reader settings:
 
-Custom HTTP is intended for users who want to bring their own local TTS bridge, such as Piper, Kokoro, a native app, or another engine. milXdy does not ship those integrations; it only sends text chunks to the configured endpoint and plays the audio response.
+- **TTS engine**: choose `Browser Web Speech` or `Custom HTTP endpoint`.
+- **Custom endpoint**: URL such as `http://localhost:8787/speak`.
+- **Custom timing**: choose endpoint boundaries for synced highlighting or audio-only mode.
 
-The custom endpoint receives:
+Custom HTTP is intended for users who want to bring their own local TTS bridge, such as Piper, Kokoro, a native app, or another engine. milXdy does not ship those integrations; it sends text chunks to the configured endpoint and plays the audio response.
+
+The custom endpoint receives `POST` JSON:
 
 ```json
 {
@@ -49,7 +399,7 @@ The custom endpoint receives:
 }
 ```
 
-It should return either an `audioUrl` or base64 audio. `audioUrl` may point to the same local service, for example:
+It should return either an `audioUrl` or base64 audio. `audioUrl` may point to the same local service:
 
 ```json
 {
@@ -74,45 +424,16 @@ Timing rules:
 - `boundaries` are optional. Without them, custom TTS is audio-only.
 - `charIndex` and `charLength` are relative to the exact `text` chunk in the request, not the whole post.
 - `elapsedTime` is seconds from the start of the returned audio.
-- Word/smooth body highlighting is enabled only when custom timing is set to endpoint boundaries and at least one valid boundary is returned.
+- Word/smooth body highlighting is synced only when custom timing is set to endpoint boundaries and at least one valid boundary is returned.
 - Active-post highlighting still works for audio-only custom engines.
 
 Local service notes:
 
 - The manifest allows custom endpoints on `http://localhost/*` and `http://127.0.0.1/*`.
 - The endpoint must accept `POST` JSON.
-- If the service returns an `audioUrl`, that URL must be reachable by the page context and should provide a browser-playable audio type such as MP3, WAV, OGG, or WebM.
-- If CORS is enforced by the browser for the local service, allow the extension origin or use permissive local development headers.
-
-## Security And Privacy Notes
-
-- The extension runs only on `x.com`, `twitter.com`, localhost TTS endpoints, Remilia Wiki, RemiStats API, `pbs.twimg.com`, and `www.remilia.net` according to the manifest permissions.
-- beXtol login sends credentials directly to `www.remilia.net` through its OIDC password flow. Passwords are never stored by milXdy and the popup clears the password field after each login attempt.
-- beXtol access and refresh tokens are stored in local Chrome extension storage under namespaced keys: `bextol.accessToken` and `bextol.refreshToken`.
-- 2FA is not supported by the current beXtol password-grant flow.
-- Postreader OCR and Miladymaxxer avatar inference run locally in the browser extension context after their feature bundles are loaded.
-- RemiStats and the Miladymaxxer beetle-user bridge call `https://api.remistats.net`.
-- Build artifacts, vendored source clones, local agent metadata, logs, and dependency folders are excluded from Git by `.gitignore`.
-
-## Development
-
-```powershell
-npm.cmd install
-npm.cmd run build
-npm.cmd run typecheck
-```
-
-The build emits:
-
-- `dist/content.js`: small settings-aware bootstrap.
-- `dist/features/wiki.js`
-- `dist/features/postreader.js`
-- `dist/features/remistats.js`
-- `dist/features/miladymaxxer.js`
-- `dist/features/bextol.js`
-
-Disabled features should not download or parse their feature bundle on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.
+- If the service returns an `audioUrl`, that URL must be reachable by the extension and should provide a browser-playable audio type such as MP3, WAV, OGG, or WebM.
+- If CORS is enforced by the local service, allow the extension origin or use permissive local development headers.
 
 ## License
 
-VPL, inherited from bundled dependencies.
+VPL for this repository unless otherwise noted. Upstream and bundled dependencies may carry their own license terms; preserve attribution and notices for Miladymaxxer, RemiStats Extension, and other integrated source material.

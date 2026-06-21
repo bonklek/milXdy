@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "milXdy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
   "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications"],
   "host_permissions": [

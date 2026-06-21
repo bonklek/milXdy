@@ -11,6 +11,7 @@
     ['claimUBC', 'Claim Cheese', 'claim-cheese.png'],
     ['junkFaucet', 'Junk Faucet', 'junk-faucet.png'],
   ];
+  const TAB_ICON_URL = chrome.runtime.getURL('bextol/icons/hunt-beetle.png');
 
   const state = {
     enabled: true,
@@ -30,25 +31,26 @@
     },
     message: '',
     messageKind: '',
+    menuSoundArmed: false,
   };
 
   const root = document.createElement('div');
   root.id = 'bextol-hunter-root';
   root.innerHTML = `
     <div class="bextol-shell" aria-live="polite">
-      <button class="bextol-tab" type="button" title="beXtol Hunter">
+      <button class="bextol-tab" type="button" title="Beetol Game">
         <span class="bextol-icon">🪲</span>
         <span id="bextol-next">--</span>
       </button>
       <section class="bextol-panel">
         <div class="bextol-head">
           <div>
-            <div class="bextol-title">beXtol Hunter</div>
+            <div class="bextol-title">Beetol Game</div>
             <div id="bextol-user" class="bextol-subtitle">Checking session...</div>
           </div>
           <button id="bextol-refresh" class="bextol-icon-btn" type="button" title="Refresh">↻</button>
         </div>
-        <div id="bextol-signed-out" class="bextol-signed-out-msg">Open beXtol Hunter from the extensions bar to sign in.</div>
+        <div id="bextol-signed-out" class="bextol-signed-out-msg">Open Beetol Game from the extensions bar to sign in.</div>
         <div id="bextol-actions" class="bextol-actions"></div>
         <div class="bextol-footer">
           <span id="bextol-message"></span>
@@ -57,8 +59,13 @@
     </div>
   `;
   document.documentElement.appendChild(root);
+  root.querySelector('.bextol-icon').innerHTML = `<img src="${TAB_ICON_URL}" alt="">`;
+  root.querySelector('#bextol-refresh').textContent = String.fromCharCode(8635);
 
   const els = {
+    shell: root.querySelector('.bextol-shell'),
+    panel: root.querySelector('.bextol-panel'),
+    head: root.querySelector('.bextol-head'),
     next: root.querySelector('#bextol-next'),
     user: root.querySelector('#bextol-user'),
     signedOut: root.querySelector('#bextol-signed-out'),
@@ -69,6 +76,39 @@
 
   function send(message) {
     return chrome.runtime.sendMessage(message);
+  }
+
+  let audioContext = null;
+
+  function playTone(frequency, duration = 0.08, gain = 0.035) {
+    try {
+      const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContext) return;
+      audioContext ||= new AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const volume = audioContext.createGain();
+      oscillator.type = 'triangle';
+      oscillator.frequency.value = frequency;
+      volume.gain.setValueAtTime(0.0001, audioContext.currentTime);
+      volume.gain.exponentialRampToValueAtTime(gain, audioContext.currentTime + 0.01);
+      volume.gain.exponentialRampToValueAtTime(0.0001, audioContext.currentTime + duration);
+      oscillator.connect(volume);
+      volume.connect(audioContext.destination);
+      oscillator.start();
+      oscillator.stop(audioContext.currentTime + duration + 0.02);
+    } catch {
+      // Browsers may block hover-started audio until the user interacts with the page.
+    }
+  }
+
+  function playMenuSound() {
+    playTone(660, 0.07, 0.025);
+    setTimeout(() => playTone(880, 0.06, 0.018), 42);
+  }
+
+  function playActionSound() {
+    playTone(440, 0.05, 0.03);
+    setTimeout(() => playTone(740, 0.08, 0.022), 38);
   }
 
   function fmtMs(ms) {
@@ -133,6 +173,7 @@
     if (!state.enabled) return;
     root.classList.toggle('bextol-signed-out', !state.signedIn);
     root.classList.toggle('bextol-loading', state.loading);
+    els.head.hidden = !state.signedIn;
     els.signedOut.hidden = state.signedIn;
     els.actions.hidden = !state.signedIn;
 
@@ -243,10 +284,24 @@
   els.actions.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
     if (!button || state.loading) return;
+    playActionSound();
     runAction(button.dataset.action);
   });
 
-  els.refresh.addEventListener('click', () => refreshState());
+  els.refresh.addEventListener('click', () => {
+    playActionSound();
+    refreshState();
+  });
+
+  els.shell.addEventListener('pointerenter', () => {
+    if (state.menuSoundArmed) return;
+    state.menuSoundArmed = true;
+    playMenuSound();
+  });
+
+  els.shell.addEventListener('pointerleave', () => {
+    state.menuSoundArmed = false;
+  });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;

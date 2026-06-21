@@ -55,7 +55,7 @@ async function boot(): Promise<void> {
     if (!(container instanceof HTMLElement) || !container.isConnected) return;
     const signature = container.textContent || "";
     if (!signature.trim()) return;
-    const result = linkContainer(container, settings.maxLinksPerPost, settings.maxLowConfidenceLinksPerPost, signature);
+    const result = linkContainer(container, effectiveMaxLinksPerPost(), settings.maxLowConfidenceLinksPerPost, signature);
     perfStats.linksCreated += result.linked;
     if (result.linked > 0) scheduleStatsFlush();
   });
@@ -101,7 +101,7 @@ function processPendingTweets(): void {
 
 function processTweet(tweet: HTMLElement): void {
   const textContainers = Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT));
-  let remaining = settings.maxLinksPerPost;
+  let remaining = effectiveMaxLinksPerPost();
   let remainingLowConfidence = settings.maxLowConfidenceLinksPerPost;
 
   for (const container of textContainers) {
@@ -117,6 +117,10 @@ function processTweet(tweet: HTMLElement): void {
     remainingLowConfidence -= result.lowConfidenceLinked;
     perfStats.linksCreated += result.linked;
   }
+}
+
+function effectiveMaxLinksPerPost(): number {
+  return settings.maxLinksPerPostEnabled ? settings.maxLinksPerPost : Number.POSITIVE_INFINITY;
 }
 
 function linkContainer(container: HTMLElement, maxLinks: number, maxLowConfidenceLinks: number, containerText: string): { linked: number; lowConfidenceLinked: number } {

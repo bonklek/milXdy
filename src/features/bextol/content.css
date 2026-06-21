@@ -34,36 +34,55 @@
 
 .bextol-shell {
   position: relative;
-  width: 56px;
-  min-height: 36px;
+  width: 156px;
+  min-height: 42px;
 }
 
 .bextol-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 36px;
-  max-width: 170px;
-  padding: 5px 8px;
-  border: 1px solid rgba(250, 220, 130, 0.45);
+  gap: 8px;
+  width: fit-content;
+  max-width: 156px;
+  height: 42px;
+  padding: 5px 10px 5px 6px;
+  border: 1px solid rgba(250, 220, 130, 0.36);
   border-radius: 8px;
   background: var(--bextol-panel);
   color: var(--bextol-text);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
   cursor: default;
   font: 700 12px/1.1 inherit;
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 130ms ease, transform 130ms ease, filter 130ms ease;
+}
+
+.bextol-shell:hover .bextol-tab,
+.bextol-shell:focus-within .bextol-tab {
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.94);
+  filter: blur(1px);
 }
 
 .bextol-icon {
   display: grid;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   place-items: center;
   border-radius: 6px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.06);
   color: var(--bextol-text);
   font-weight: 900;
-  font-size: 18px;
+  overflow: hidden;
+}
+
+.bextol-icon img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.42));
 }
 
 #bextol-next {
@@ -74,31 +93,33 @@
   position: absolute;
   top: 0;
   left: 0;
-  width: 278px;
-  padding: 10px;
-  border: 0;
+  width: 292px;
+  padding: 8px;
+  border: 1px solid var(--bextol-border);
   border-radius: 8px;
-  background: transparent;
-  box-shadow: none;
+  background: var(--bextol-panel);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(-4px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transform: scale(0.96);
+  transform-origin: top left;
+  transition: opacity 130ms ease, transform 130ms ease;
 }
 
 .bextol-shell:hover .bextol-panel,
 .bextol-shell:focus-within .bextol-panel {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: scale(1);
 }
 
 .bextol-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 10px;
-  margin-bottom: 10px;
+  min-height: 28px;
+  margin-bottom: 8px;
 }
 
 .bextol-title {
@@ -138,6 +159,25 @@
   line-height: 16px;
 }
 
+.bextol-signed-out .bextol-panel {
+  width: 220px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.bextol-signed-out .bextol-signed-out-msg {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-color: rgba(250, 220, 130, 0.36);
+  border-radius: 8px;
+  background: var(--bextol-panel);
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.36);
+  color: var(--bextol-text);
+  font-weight: 700;
+}
+
 .bextol-action {
   width: 100%;
   border: 0;
@@ -151,25 +191,31 @@
 .bextol-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
 }
 
 .bextol-action {
   display: grid;
-  grid-template-rows: 42px 24px 16px;
+  grid-template-rows: 46px 24px 16px;
   align-items: center;
   justify-items: center;
   min-width: 0;
-  min-height: 88px;
+  min-height: 94px;
   padding: 7px 5px 6px;
   text-align: center;
   background: var(--bextol-button);
   border: 1px solid var(--bextol-border);
+  transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+}
+
+.bextol-action:hover {
+  border-color: color-mix(in srgb, var(--bextol-accent-strong) 62%, var(--bextol-border));
+  transform: translateY(-1px);
 }
 
 .bextol-action img {
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }

@@ -1,6 +1,6 @@
 {
   "name": "milxdy",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
