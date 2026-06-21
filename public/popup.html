@@ -27,6 +27,16 @@
       </nav>
 
       <section class="panel is-active" data-panel="suite">
+        <div class="update-status" id="updateStatus">
+          <div>
+            <strong id="updateStatusTitle">Checking for updates...</strong>
+            <small id="updateStatusDetail">Installed version is loading.</small>
+          </div>
+          <div class="update-actions">
+            <button class="icon-button" id="updateRefresh" type="button" title="Check for updates" aria-label="Check for updates">&#8635;</button>
+            <a class="secondary-button update-link" id="updateLink" href="#" target="_blank" rel="noreferrer" hidden>Release</a>
+          </div>
+        </div>
         <label class="setting">
           <span><strong>Performance diagnostics</strong><small>Store lightweight beta counters in local extension storage.</small></span>
           <input type="checkbox" data-control="diagnosticsEnabled">

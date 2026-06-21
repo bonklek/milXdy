@@ -500,8 +500,7 @@ function looksTruncated(text: string): boolean {
 }
 
 function isPrivacyExtensionWarning(text: string): boolean {
-  return /privacy|blocked|extension|tracking|cookies|javascript/i.test(text)
-    && /browser|content|warning|enable|prevented|blocked/i.test(text);
+  return /some privacy related extensions may cause issues on x\.com/i.test(text);
 }
 
 function extractServerRenderedTweetText(doc: Document): string | null {

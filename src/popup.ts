@@ -10,6 +10,16 @@ type ControlBinding = {
 };
 
 const WIKI_SETTINGS_KEY = "remiliaWikiHyperlink.settings";
+const UPDATE_STATUS_KEY = "milxdy.updateStatus";
+
+type UpdateStatus = {
+  checkedAt: number;
+  currentVersion: string;
+  latestVersion: string | null;
+  latestUrl: string | null;
+  updateAvailable: boolean;
+  error?: string;
+};
 
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
@@ -65,6 +75,7 @@ void boot();
 
 async function boot(): Promise<void> {
   setupTabs();
+  setupUpdateStatus();
   await loadControls();
   await setupBextolPanel();
   await renderStatus();
@@ -157,6 +168,79 @@ function objectValue(value: unknown): Record<string, unknown> {
 
 function cssEscape(value: string): string {
   return value.replace(/["\\]/g, "\\$&");
+}
+
+function setupUpdateStatus(): void {
+  const refresh = document.getElementById("updateRefresh") as HTMLButtonElement | null;
+  void renderUpdateStatus();
+  refresh?.addEventListener("click", () => {
+    refresh.disabled = true;
+    void chrome.runtime.sendMessage({ type: "milxdy:checkUpdate" })
+      .then((status) => renderUpdateStatus(isUpdateStatus(status) ? status : undefined))
+      .finally(() => {
+        refresh.disabled = false;
+      });
+  });
+}
+
+async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
+  const root = document.getElementById("updateStatus");
+  const title = document.getElementById("updateStatusTitle");
+  const detail = document.getElementById("updateStatusDetail");
+  const link = document.getElementById("updateLink") as HTMLAnchorElement | null;
+  if (!root || !title || !detail || !link) return;
+
+  const installedVersion = chrome.runtime.getManifest().version;
+  const stored = status ? { [UPDATE_STATUS_KEY]: status } : await chrome.storage.local.get(UPDATE_STATUS_KEY);
+  const updateStatus = isUpdateStatus(stored[UPDATE_STATUS_KEY]) ? stored[UPDATE_STATUS_KEY] : null;
+  delete root.dataset.state;
+  link.hidden = true;
+  link.removeAttribute("href");
+
+  if (!updateStatus) {
+    title.textContent = "Checking for updates...";
+    detail.textContent = `Installed v${installedVersion}.`;
+    return;
+  }
+
+  if (updateStatus.updateAvailable && updateStatus.latestVersion) {
+    root.dataset.state = "available";
+    title.textContent = `Update available: v${updateStatus.latestVersion}`;
+    detail.textContent = `Installed v${updateStatus.currentVersion}. Download the latest GitHub release and reload the unpacked extension.`;
+    if (updateStatus.latestUrl) {
+      link.href = updateStatus.latestUrl;
+      link.hidden = false;
+    }
+    return;
+  }
+
+  if (updateStatus.error) {
+    root.dataset.state = "error";
+    title.textContent = "Update check failed";
+    detail.textContent = `${updateStatus.error}. Installed v${installedVersion}.`;
+    return;
+  }
+
+  title.textContent = "milXdy is up to date";
+  detail.textContent = `Installed v${updateStatus.currentVersion}. Last checked ${formatCheckedAt(updateStatus.checkedAt)}.`;
+}
+
+function isUpdateStatus(value: unknown): value is UpdateStatus {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.checkedAt === "number"
+    && typeof record.currentVersion === "string"
+    && typeof record.updateAvailable === "boolean";
+}
+
+function formatCheckedAt(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "recently";
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(value));
 }
 
 async function renderStatus(): Promise<void> {
