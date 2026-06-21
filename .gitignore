@@ -1,0 +1,8 @@
+node_modules/
+dist/
+_sources/
+.agents/
+.codex/
+*.log
+*.tmp
+*.map

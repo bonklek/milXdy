@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>milXdy</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main class="app">
+      <header class="topbar">
+        <img src="icons/icon48.png" alt="" width="32" height="32">
+        <div>
+          <h1>milXdy</h1>
+          <p>Integrated X/Twitter enhancer</p>
+        </div>
+      </header>
+
+      <nav class="tabs" aria-label="Feature settings">
+        <button class="tab is-active" type="button" data-panel="suite">Suite</button>
+        <button class="tab" type="button" data-panel="wiki">Wiki</button>
+        <button class="tab" type="button" data-panel="postreader">Reader</button>
+        <button class="tab" type="button" data-panel="remistats">RemiStats</button>
+        <button class="tab" type="button" data-panel="miladymaxxer">Maxxer</button>
+        <button class="tab" type="button" data-panel="bextol">beXtol</button>
+        <button class="tab" type="button" data-panel="diagnostics">Diag</button>
+      </nav>
+
+      <section class="panel is-active" data-panel="suite">
+        <label class="setting">
+          <span><strong>Performance diagnostics</strong><small>Store lightweight beta counters in local extension storage.</small></span>
+          <input type="checkbox" data-control="diagnosticsEnabled">
+        </label>
+      </section>
+
+      <section class="panel" data-panel="wiki">
+        <label class="setting"><span><strong>Remilia Wiki links</strong><small>Link known wiki concepts inside posts.</small></span><input type="checkbox" data-control="wiki.enabled"></label>
+        <label class="setting"><span><strong>Wiki previews</strong><small>Fetch previews only on hover.</small></span><input type="checkbox" data-control="wiki.previewsEnabled"></label>
+        <label class="setting"><span><strong>Debug mode</strong><small>Expose extra matching diagnostics.</small></span><input type="checkbox" data-control="wiki.debugMode"></label>
+        <label class="field"><span>Max links per post</span><input type="number" min="1" max="12" step="1" data-control="wiki.maxLinksPerPost"></label>
+        <label class="field"><span>Max low-confidence links</span><input type="number" min="0" max="12" step="1" data-control="wiki.maxLowConfidenceLinksPerPost"></label>
+        <label class="field"><span>Link color</span><input type="color" data-control="wiki.linkColor"></label>
+      </section>
+
+      <section class="panel" data-panel="postreader">
+        <label class="setting"><span><strong>Postreader controls</strong><small>Add read-aloud buttons to posts.</small></span><input type="checkbox" data-control="postreader.enabled"></label>
+        <label class="field"><span>Speech speed</span><input type="number" min="0.5" max="10" step="0.1" data-control="postreader.speed"></label>
+        <label class="field"><span>Speech volume</span><input type="number" min="0" max="1" step="0.05" data-control="postreader.volume"></label>
+        <label class="setting"><span><strong>Auto voice</strong><small>Choose a fitting installed voice automatically.</small></span><input type="checkbox" data-control="postreader.autoVoice"></label>
+        <label class="field"><span>Voice URI</span><input type="text" placeholder="System default" data-control="postreader.voiceURI"></label>
+        <label class="setting"><span><strong>Autoplay next</strong><small>Continue after a post finishes.</small></span><input type="checkbox" data-control="postreader.autoplayNext"></label>
+        <label class="field"><span>Autoplay mode</span><select data-control="postreader.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll</option></select></label>
+        <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="postreader.skipPromotedPosts"></label>
+        <label class="setting"><span><strong>End ding</strong><small>Play a short cue after each post.</small></span><input type="checkbox" data-control="postreader.endOfTweetDing"></label>
+        <label class="setting"><span><strong>Include quote posts</strong><small>Read quoted post text.</small></span><input type="checkbox" data-control="postreader.includeQuotes"></label>
+        <label class="setting"><span><strong>Fetch full quotes</strong><small>Fetch quote content when X hides it.</small></span><input type="checkbox" data-control="postreader.fetchFullQuotes"></label>
+        <label class="field"><span>Full quote display</span><select data-control="postreader.fullQuoteDisplay"><option value="scroll">Scroll</option><option value="expand">Expand</option><option value="hidden">Hidden</option></select></label>
+        <label class="setting"><span><strong>Include hyperlinks</strong><small>Read link text and URLs.</small></span><input type="checkbox" data-control="postreader.includeHyperlinks"></label>
+        <label class="setting"><span><strong>Image alt text</strong><small>Read available alt text.</small></span><input type="checkbox" data-control="postreader.includeImageAltText"></label>
+        <label class="setting"><span><strong>Image OCR</strong><small>Run OCR only after playback starts.</small></span><input type="checkbox" data-control="postreader.includeImageOcr"></label>
+        <label class="setting"><span><strong>Link previews</strong><small>Include preview card titles and descriptions.</small></span><input type="checkbox" data-control="postreader.includeLinkPreviews"></label>
+        <label class="setting"><span><strong>Expand show-more</strong><small>Open truncated posts before reading.</small></span><input type="checkbox" data-control="postreader.expandShowMore"></label>
+        <label class="setting"><span><strong>Active post highlight</strong><small>Highlight the post currently being read.</small></span><input type="checkbox" data-control="postreader.activeTweetHighlight"></label>
+        <label class="field"><span>Body highlight</span><select data-control="postreader.bodyHighlightMode"><option value="smooth">Smooth</option><option value="word">Word</option><option value="off">Off</option></select></label>
+        <label class="field"><span>Player position</span><select data-control="postreader.playerPosition"><option value="top-right">Top right</option><option value="top-left">Top left</option><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option></select></label>
+        <label class="field"><span>Read button placement</span><select data-control="postreader.buttonPlacement"><option value="auto">Auto</option><option value="actions">Actions</option><option value="top">Top</option></select></label>
+        <label class="setting"><span><strong>Use handles</strong><small>Read handles instead of display names.</small></span><input type="checkbox" data-control="postreader.useHandles"></label>
+        <label class="field"><span>Next post key</span><input type="text" data-control="postreader.keyNextTweet"></label>
+        <label class="field"><span>Previous post key</span><input type="text" data-control="postreader.keyPreviousTweet"></label>
+        <label class="field"><span>Next chunk key</span><input type="text" data-control="postreader.keyNextChunk"></label>
+        <label class="field"><span>Previous chunk key</span><input type="text" data-control="postreader.keyPreviousChunk"></label>
+        <label class="field"><span>Skip OCR key</span><input type="text" data-control="postreader.keySkipOcr"></label>
+        <label class="field"><span>Play/pause key</span><input type="text" data-control="postreader.keyPlayPause"></label>
+      </section>
+
+      <section class="panel" data-panel="remistats">
+        <label class="setting"><span><strong>RemiStats badges</strong><small>Show score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
+        <label class="setting"><span><strong>Tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
+        <label class="setting"><span><strong>Sounds</strong><small>Play RemiStats sound effects.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
+        <label class="field"><span>Sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
+      </section>
+
+      <section class="panel" data-panel="miladymaxxer">
+        <label class="field"><span>Mode</span><select data-control="milady.mode"><option value="milady">Milady effects</option><option value="debug">Debug</option><option value="off">Off</option></select></label>
+        <label class="setting"><span><strong>Sounds</strong><small>Play interaction sounds.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
+        <label class="setting"><span><strong>Level badge</strong><small>Show maxxer level badge.</small></span><input type="checkbox" data-control="milady.showLevelBadge"></label>
+        <label class="setting"><span><strong>RemiStats beetle users</strong><small>Treat users with beetle stats as worthy of maximization.</small></span><input type="checkbox" data-control="milady.includeRemiStatsBeetles"></label>
+        <label class="field"><span>Card theme</span><select data-control="milady.cardTheme"><option value="full">Full</option><option value="no-premium">No premium</option><option value="silver-only">Silver only</option><option value="off">Off</option></select></label>
+        <label class="field tall"><span>Whitelist handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.whitelistHandles"></textarea></label>
+        <label class="field tall"><span>Manual Milady handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.miladyListHandles"></textarea></label>
+      </section>
+
+      <section class="panel" data-panel="bextol">
+        <label class="setting"><span><strong>beXtol Hunter panel</strong><small>Mount the hover panel on X/Twitter.</small></span><input type="checkbox" data-control="bextol.enabled"></label>
+        <div class="auth-box"><strong id="bextolStatus">Checking session...</strong><small>Sign in to remilia.net to use the hunter panel. Passwords are not stored.</small></div>
+        <form class="login-form" id="bextolLoginForm">
+          <input id="bextolUsername" type="text" placeholder="remilia username" autocomplete="username">
+          <input id="bextolPassword" type="password" placeholder="password" autocomplete="current-password">
+          <button type="submit">Log in</button>
+        </form>
+        <button class="secondary-button" id="bextolLogout" type="button" hidden>Log out</button>
+        <label class="field"><span>Color</span><select id="bextolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
+        <label class="field"><span>Mode</span><select id="bextolMode"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        <p class="message" id="bextolMessage"></p>
+      </section>
+
+      <section class="panel" data-panel="diagnostics">
+        <div class="status-grid" id="statusGrid"></div>
+      </section>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>

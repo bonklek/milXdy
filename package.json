@@ -1,0 +1,27 @@
+{
+  "name": "milxdy",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
+  "license": "VPL",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "dev": "node scripts/build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tesseract.js-data/eng": "^1.0.0",
+    "onnxruntime-web": "^1.24.3",
+    "solid-js": "^1.9.12",
+    "tesseract.js": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.1.29",
+    "@types/node": "^24.10.1",
+    "esbuild": "^0.27.0",
+    "typescript": "^5.9.3",
+    "vite": "^8.0.3",
+    "vitest": "^4.1.2"
+  }
+}

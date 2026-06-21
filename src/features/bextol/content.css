@@ -1,0 +1,226 @@
+#bextol-hunter-root {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  z-index: 2147483647;
+  color-scheme: dark;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --bextol-accent: #e53d30;
+  --bextol-accent-strong: #23784b;
+  --bextol-text: #fff4cf;
+  --bextol-muted: #b7b0a1;
+  --bextol-panel: rgba(10, 11, 14, 0.96);
+  --bextol-button: #26282e;
+  --bextol-border: rgba(255, 255, 255, 0.16);
+}
+
+#bextol-hunter-root[data-color="green"] { --bextol-accent: #23784b; --bextol-accent-strong: #2f8f5c; }
+#bextol-hunter-root[data-color="gold"] { --bextol-accent: #ba7d18; --bextol-accent-strong: #d49422; }
+#bextol-hunter-root[data-color="blue"] { --bextol-accent: #2d6cdf; --bextol-accent-strong: #397df2; }
+#bextol-hunter-root[data-color="purple"] { --bextol-accent: #8151d9; --bextol-accent-strong: #9565ef; }
+
+#bextol-hunter-root[data-mode="light"] {
+  color-scheme: light;
+  --bextol-text: #281e10;
+  --bextol-muted: #675c4c;
+  --bextol-panel: rgba(255, 249, 235, 0.96);
+  --bextol-button: rgba(255, 255, 255, 0.9);
+  --bextol-border: rgba(39, 31, 18, 0.18);
+}
+
+#bextol-hunter-root * {
+  box-sizing: border-box;
+}
+
+.bextol-shell {
+  position: relative;
+  width: 56px;
+  min-height: 36px;
+}
+
+.bextol-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  max-width: 170px;
+  padding: 5px 8px;
+  border: 1px solid rgba(250, 220, 130, 0.45);
+  border-radius: 8px;
+  background: var(--bextol-panel);
+  color: var(--bextol-text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.32);
+  cursor: default;
+  font: 700 12px/1.1 inherit;
+}
+
+.bextol-icon {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--bextol-text);
+  font-weight: 900;
+  font-size: 18px;
+}
+
+#bextol-next {
+  white-space: nowrap;
+}
+
+.bextol-panel {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 278px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.bextol-shell:hover .bextol-panel,
+.bextol-shell:focus-within .bextol-panel {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.bextol-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.bextol-title {
+  color: var(--bextol-text);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.bextol-subtitle,
+.bextol-footer {
+  color: var(--bextol-muted);
+  font-size: 11px;
+}
+
+.bextol-icon-btn,
+.bextol-footer button {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #f5ead0;
+  cursor: pointer;
+}
+
+.bextol-icon-btn {
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+}
+
+.bextol-signed-out-msg {
+  border: 1px solid var(--bextol-border);
+  border-radius: 6px;
+  background: var(--bextol-panel);
+  color: var(--bextol-muted);
+  padding: 9px;
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bextol-action {
+  width: 100%;
+  border: 0;
+  border-radius: 6px;
+  background: var(--bextol-accent);
+  color: var(--bextol-text);
+  font: 800 12px/1 inherit;
+  cursor: pointer;
+}
+
+.bextol-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bextol-action {
+  display: grid;
+  grid-template-rows: 42px 24px 16px;
+  align-items: center;
+  justify-items: center;
+  min-width: 0;
+  min-height: 88px;
+  padding: 7px 5px 6px;
+  text-align: center;
+  background: var(--bextol-button);
+  border: 1px solid var(--bextol-border);
+}
+
+.bextol-action img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+.bextol-action span {
+  width: 100%;
+  overflow: hidden;
+  color: var(--bextol-text);
+  font-size: 10px;
+  line-height: 12px;
+  text-overflow: ellipsis;
+}
+
+.bextol-action strong {
+  color: var(--bextol-muted);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 12px;
+}
+
+.bextol-action.is-ready {
+  background: var(--bextol-accent-strong);
+}
+
+.bextol-action:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.bextol-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 26px;
+  margin-top: 9px;
+}
+
+#bextol-message {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#bextol-message.bextol-warn {
+  color: #ffbd66;
+}
+
+.bextol-footer button {
+  flex: 0 0 auto;
+  padding: 5px 7px;
+  font-size: 11px;
+}

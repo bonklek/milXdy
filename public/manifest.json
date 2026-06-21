@@ -1,0 +1,66 @@
+{
+  "manifest_version": 3,
+  "name": "milXdy",
+  "version": "0.1.0",
+  "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
+  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications"],
+  "host_permissions": [
+    "https://api.github.com/*",
+    "https://x.com/*",
+    "https://twitter.com/*",
+    "https://pbs.twimg.com/*",
+    "https://wiki.remilia.org/*",
+    "https://api.remistats.net/*",
+    "https://www.remilia.net/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "ocr/*",
+        "ocr/core/*",
+        "ocr/lang/*",
+        "remistats/*",
+        "bextol/*",
+        "miladymaxxer/*",
+        "features/*.js",
+        "milady-logo.png",
+        "worker.js",
+        "ort/*",
+        "generated/*",
+        "models/*"
+      ],
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://wiki.remilia.org/*"]
+    }
+  ],
+  "options_page": "popup.html",
+  "action": {
+    "default_title": "milXdy",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
