@@ -741,7 +741,7 @@ function markActiveButton(tweet: HTMLElement): void {
   }
 }
 
-function updateHighlight(state: { status: string; chunkIndex: number; chunkStart: number | null; charIndex: number | null; charLength: number | null }): void {
+function updateHighlight(state: { status: string; chunkIndex: number; chunkStart: number | null; charIndex: number | null; charLength: number | null; hasSyncedBoundaries: boolean }): void {
   if (state.status === "idle") {
     clearBodyHighlight();
     clearActiveTweets();
@@ -759,6 +759,10 @@ function updateHighlight(state: { status: string; chunkIndex: number; chunkStart
     currentTweet.dataset.postreaderActiveBackground = String(settings.activeTweetHighlight);
   }
   if (!currentTweet || settings.bodyHighlightMode === "off") return;
+  if (!state.hasSyncedBoundaries) {
+    clearHighlightVisuals();
+    return;
+  }
   if (currentHighlightTargets.length === 0) {
     return;
   }

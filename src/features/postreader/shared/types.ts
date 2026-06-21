@@ -3,6 +3,8 @@ export type BodyHighlightMode = "off" | "word" | "smooth";
 export type ButtonPlacement = "auto" | "top" | "actions";
 export type FullQuoteDisplay = "hidden" | "expand" | "scroll";
 export type PlayerPosition = "top-right" | "bottom-right" | "top-left" | "bottom-left";
+export type TtsEngineChoice = "web-speech" | "custom-http";
+export type CustomTtsTimingMode = "off" | "engine";
 
 export type PostreaderSettings = {
   enabled: boolean;
@@ -10,6 +12,9 @@ export type PostreaderSettings = {
   volume: number;
   voiceURI: string | null;
   autoVoice: boolean;
+  ttsEngine: TtsEngineChoice;
+  customTtsEndpoint: string | null;
+  customTtsTimingMode: CustomTtsTimingMode;
   autoplayNext: boolean;
   autoplayMode: AutoplayMode;
   skipPromotedPosts: boolean;
@@ -64,4 +69,5 @@ export type SpeechState = {
   chunkStart: number | null;
   charIndex: number | null;
   charLength: number | null;
+  hasSyncedBoundaries: boolean;
 };

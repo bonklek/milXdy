@@ -9,6 +9,8 @@
     "https://x.com/*",
     "https://twitter.com/*",
     "https://pbs.twimg.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
     "https://wiki.remilia.org/*",
     "https://api.remistats.net/*",
     "https://www.remilia.net/*"

@@ -181,6 +181,25 @@ export class MiniPlayer {
     const voiceHint = document.createElement("div");
     voiceHint.className = "postreader-hint";
     voiceHint.textContent = selectedVoice ? `Default: ${selectedVoice.name}` : "Default: system voice";
+    const engine = selectInput("Engine", this.settings.ttsEngine, [
+      ["web-speech", "Browser Web Speech"],
+      ["custom-http", "Custom HTTP endpoint"],
+    ], (value) => this.update({ ttsEngine: value as PostreaderSettings["ttsEngine"] }));
+    const customEndpoint = document.createElement("label");
+    customEndpoint.textContent = "Custom endpoint";
+    const customEndpointInput = document.createElement("input");
+    customEndpointInput.type = "url";
+    customEndpointInput.placeholder = "http://localhost:8787/speak";
+    customEndpointInput.value = this.settings.customTtsEndpoint || "";
+    customEndpointInput.addEventListener("change", () => this.update({ customTtsEndpoint: customEndpointInput.value.trim() || null }));
+    customEndpoint.append(customEndpointInput);
+    const customTiming = selectInput("Custom timing", this.settings.customTtsTimingMode, [
+      ["engine", "Use endpoint boundaries"],
+      ["off", "Audio only"],
+    ], (value) => this.update({ customTtsTimingMode: value as PostreaderSettings["customTtsTimingMode"] }));
+    const customHint = document.createElement("div");
+    customHint.className = "postreader-hint";
+    customHint.textContent = "Endpoint response: audioUrl or audioBase64, optional boundaries with charIndex and elapsedTime.";
     const probeButton = document.createElement("button");
     probeButton.type = "button";
     probeButton.className = "postreader-secondary";
@@ -247,7 +266,13 @@ export class MiniPlayer {
     const keyPlayPause = keybindInput("Play / pause", this.settings.keyPlayPause, (value) => this.update({ keyPlayPause: value }));
 
     if (this.activePage === "playback") {
-      this.settingsPanel.append(voiceLabel, voiceHint, probeButton, speedLabel, volumeLabel, keyPlayPause, keySkipOcr, keyNextChunk, keyPreviousChunk);
+      this.settingsPanel.append(engine);
+      if (this.settings.ttsEngine === "custom-http") {
+        this.settingsPanel.append(customEndpoint, customTiming, customHint);
+      } else {
+        this.settingsPanel.append(voiceLabel, voiceHint, probeButton);
+      }
+      this.settingsPanel.append(speedLabel, volumeLabel, keyPlayPause, keySkipOcr, keyNextChunk, keyPreviousChunk);
     } else if (this.activePage === "navigation") {
       this.settingsPanel.append(autoplay, autoscroll, endDing, skipPromoted, keyNextTweet, keyPreviousTweet);
     } else if (this.activePage === "reading") {
