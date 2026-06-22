@@ -3,6 +3,7 @@ dist/
 _sources/
 .agents/
 .codex/
+ideas/
 *.log
 *.tmp
 *.map
