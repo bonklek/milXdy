@@ -11,7 +11,17 @@ type ControlBinding = {
 
 const WIKI_SETTINGS_KEY = "remiliaWikiHyperlink.settings";
 const WIKI_LATER_KEY = "remiliaWikiHyperlink.laterItems";
+const WIKI_API = "https://wiki.remilia.org/api.php";
+const WIKI_PRELOAD_TEMPLATE = "Template:New page preload";
+const WIKI_AI_HELP_ZIP = "wiki-helper/remilia-wiki-article-writer.zip";
+const WIKITOOL_LATEST_RELEASE_API = "https://api.github.com/repos/remiliacorporation/remilia-wikitool/releases/latest";
+const WIKITOOL_RELEASES_URL = "https://github.com/remiliacorporation/remilia-wikitool/releases/latest";
 const UPDATE_STATUS_KEY = "milxdy.updateStatus";
+const LEGACY_BEETOL_PREFIX = "bex" + "tol";
+const GITHUB_ISSUES_NEW_URL = "https://github.com/bonklek/milXdy/issues/new";
+const X_FEEDBACK_REPLY_URL = "https://twitter.com/intent/tweet";
+const X_FEEDBACK_POST_ID = "2069113443664220227";
+const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/login";
 
 type UpdateStatus = {
   checkedAt: number;
@@ -28,6 +38,23 @@ type WikiLaterItem = {
   pageUrl?: string;
   createdAt: number;
 };
+
+type WikiSearchResult = {
+  title: string;
+  wordcount?: number;
+};
+
+type GitHubRelease = {
+  html_url?: string;
+  assets?: GitHubReleaseAsset[];
+};
+
+type GitHubReleaseAsset = {
+  name?: string;
+  browser_download_url?: string;
+};
+
+let activeWikiLaterSearchId: string | null = null;
 
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
@@ -73,6 +100,10 @@ const bindings: Record<string, ControlBinding> = {
   "remistats.showTooltips": { area: "sync", key: "showTooltips", kind: "boolean", fallback: true },
   "remistats.soundsEnabled": { area: "sync", key: "soundsEnabled", kind: "boolean", fallback: true },
   "remistats.soundVolume": { area: "sync", key: "soundVolume", kind: "number", fallback: 0.6 },
+  "remistats.icons.enabled": { area: "sync", key: "milxdy.remistats.icons.enabled", kind: "boolean", fallback: true },
+  "remistats.icons.score": { area: "sync", key: "milxdy.remistats.icons.score", kind: "boolean", fallback: true },
+  "remistats.icons.beetle": { area: "sync", key: "milxdy.remistats.icons.beetle", kind: "boolean", fallback: true },
+  "remistats.icons.poke": { area: "sync", key: "milxdy.remistats.icons.poke", kind: "boolean", fallback: true },
   "milady.mode": { area: "sync", key: "mode", kind: "string", fallback: "milady" },
   "milady.soundEnabled": { area: "sync", key: "soundEnabled", kind: "boolean", fallback: true },
   "milady.showLevelBadge": { area: "sync", key: "showLevelBadge", kind: "boolean", fallback: true },
@@ -80,7 +111,7 @@ const bindings: Record<string, ControlBinding> = {
   "milady.cardTheme": { area: "sync", key: "cardTheme", kind: "string", fallback: "full" },
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
-  "bextol.enabled": { area: "local", key: "milxdy.bextol.enabled", kind: "boolean", fallback: true },
+  "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
 };
 
 void boot();
@@ -88,12 +119,60 @@ void boot();
 async function boot(): Promise<void> {
   setupTabs();
   setupUpdateStatus();
+  await migrateBeetolSettings();
   await loadControls();
   setupWikiMaxLinksControl();
+  setupWikiPreloadTemplateAction();
+  setupWikiAiHelp();
+  setupRemiStatsIconControls();
+  setupReportActions();
   await renderWikiLaterItems();
   observeWikiLaterItems();
-  await setupBextolPanel();
+  await setupBeetolPanel();
   await renderStatus();
+}
+
+function setupRemiStatsIconControls(): void {
+  const enabled = document.querySelector<HTMLInputElement>('[data-control="remistats.icons.enabled"]');
+  const children = Array.from(document.querySelectorAll<HTMLInputElement>(
+    '[data-control="remistats.icons.score"], [data-control="remistats.icons.beetle"], [data-control="remistats.icons.poke"]',
+  ));
+  if (!enabled || children.length === 0) return;
+  const syncDisabled = () => {
+    for (const child of children) {
+      child.disabled = !enabled.checked;
+      child.title = enabled.checked ? "" : "RemiStats icons are disabled";
+    }
+  };
+  enabled.addEventListener("change", syncDisabled);
+  syncDisabled();
+}
+
+async function migrateBeetolSettings(): Promise<void> {
+  const legacy = {
+    enabled: `milxdy.${LEGACY_BEETOL_PREFIX}.enabled`,
+    color: `${LEGACY_BEETOL_PREFIX}Color`,
+    mode: `${LEGACY_BEETOL_PREFIX}Mode`,
+  };
+  const current = await chrome.storage.local.get([
+    "milxdy.remistats.beetol.enabled",
+    "beetolColor",
+    "beetolMode",
+    legacy.enabled,
+    legacy.color,
+    legacy.mode,
+  ]);
+  const next: Record<string, unknown> = {};
+  if (current["milxdy.remistats.beetol.enabled"] === undefined && current[legacy.enabled] !== undefined) {
+    next["milxdy.remistats.beetol.enabled"] = current[legacy.enabled];
+  }
+  if (current.beetolColor === undefined && typeof current[legacy.color] === "string") {
+    next.beetolColor = current[legacy.color];
+  }
+  if (current.beetolMode === undefined && typeof current[legacy.mode] === "string") {
+    next.beetolMode = current[legacy.mode];
+  }
+  if (Object.keys(next).length) await chrome.storage.local.set(next);
 }
 
 function setupTabs(): void {
@@ -226,6 +305,7 @@ function observeWikiLaterItems(): void {
 function createWikiLaterRow(item: WikiLaterItem, allItems: WikiLaterItem[]): HTMLElement {
   const row = document.createElement("div");
   row.className = "settings-list-row";
+  row.dataset.expanded = String(activeWikiLaterSearchId === item.id);
 
   const main = document.createElement("div");
   main.className = "settings-list-main";
@@ -250,6 +330,24 @@ function createWikiLaterRow(item: WikiLaterItem, allItems: WikiLaterItem[]): HTM
   }
   main.append(text, meta);
 
+  const actions = document.createElement("div");
+  actions.className = "settings-list-actions";
+
+  const newPage = document.createElement("button");
+  newPage.type = "button";
+  newPage.className = "settings-list-action";
+  newPage.textContent = "New page";
+  newPage.addEventListener("click", () => openWikiNewPage(item));
+
+  const addExisting = document.createElement("button");
+  addExisting.type = "button";
+  addExisting.className = "settings-list-action";
+  addExisting.textContent = activeWikiLaterSearchId === item.id ? "Hide search" : "Add to page";
+  addExisting.addEventListener("click", () => {
+    activeWikiLaterSearchId = activeWikiLaterSearchId === item.id ? null : item.id;
+    void renderWikiLaterItems();
+  });
+
   const remove = document.createElement("button");
   remove.type = "button";
   remove.className = "settings-list-remove";
@@ -258,8 +356,213 @@ function createWikiLaterRow(item: WikiLaterItem, allItems: WikiLaterItem[]): HTM
     void removeWikiLaterItem(item.id, allItems);
   });
 
-  row.append(main, remove);
+  actions.append(newPage, addExisting, remove);
+  row.append(main, actions);
+
+  if (activeWikiLaterSearchId === item.id) {
+    const search = createWikiLaterSearch(item);
+    row.append(search);
+    void runWikiLaterSearch(item, search);
+  }
   return row;
+}
+
+function setupWikiPreloadTemplateAction(): void {
+  const button = document.getElementById("wikiPreloadTemplate") as HTMLButtonElement | null;
+  button?.addEventListener("click", () => {
+    openWikiEditorUrl(wikiEditUrl(WIKI_PRELOAD_TEMPLATE));
+  });
+}
+
+function setupWikiAiHelp(): void {
+  const open = document.getElementById("wikiAiHelp") as HTMLButtonElement | null;
+  const dialog = document.getElementById("wikiAiHelpDialog");
+  const close = document.getElementById("wikiAiHelpClose") as HTMLButtonElement | null;
+  const download = document.getElementById("wikiAiHelpDownload") as HTMLButtonElement | null;
+  const wikitoolDownload = document.getElementById("wikiWikitoolDownload") as HTMLButtonElement | null;
+  const wikitoolRelease = document.getElementById("wikiWikitoolRelease") as HTMLButtonElement | null;
+  const copy = document.getElementById("wikiAiHelpCopy") as HTMLButtonElement | null;
+  const message = document.getElementById("wikiAiHelpMessage");
+  if (!open || !dialog || !close || !download || !wikitoolDownload || !wikitoolRelease || !copy || !message) return;
+
+  const showDialog = () => {
+    dialog.hidden = false;
+    message.textContent = "Downloaded remilia-wiki-article-writer.zip.";
+  };
+
+  open.addEventListener("click", () => {
+    downloadWikiAiHelpZip();
+    showDialog();
+  });
+  download.addEventListener("click", () => {
+    downloadWikiAiHelpZip();
+    message.textContent = "Downloaded again.";
+  });
+  wikitoolDownload.addEventListener("click", () => {
+    wikitoolDownload.disabled = true;
+    message.textContent = "Finding the latest Wikitool release...";
+    void downloadLatestWikitool().then((downloaded) => {
+      message.textContent = downloaded
+        ? "Opened the matching Wikitool release asset."
+        : "Opened the Wikitool release page.";
+    }).catch(() => {
+      openExternalUrl(WIKITOOL_RELEASES_URL);
+      message.textContent = "Opened the Wikitool release page.";
+    }).finally(() => {
+      wikitoolDownload.disabled = false;
+    });
+  });
+  wikitoolRelease.addEventListener("click", () => {
+    openExternalUrl(WIKITOOL_RELEASES_URL);
+    message.textContent = "Opened the Wikitool release page.";
+  });
+  copy.addEventListener("click", () => {
+    void navigator.clipboard.writeText(wikiAiHelpPrompt()).then(() => {
+      message.textContent = "Prompt copied.";
+    }).catch(() => {
+      message.textContent = "Copy failed. You can still use the downloaded skill zip.";
+    });
+  });
+  close.addEventListener("click", () => {
+    dialog.hidden = true;
+  });
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.hidden = true;
+  });
+}
+
+function downloadWikiAiHelpZip(): void {
+  const link = document.createElement("a");
+  link.href = chrome.runtime.getURL(WIKI_AI_HELP_ZIP);
+  link.download = "remilia-wiki-article-writer.zip";
+  link.rel = "noopener noreferrer";
+  link.click();
+}
+
+async function downloadLatestWikitool(): Promise<boolean> {
+  const response = await fetch(WIKITOOL_LATEST_RELEASE_API);
+  if (!response.ok) {
+    openExternalUrl(WIKITOOL_RELEASES_URL);
+    return false;
+  }
+  const release = await response.json() as GitHubRelease;
+  const asset = chooseWikitoolAsset(release.assets ?? []);
+  if (!asset?.browser_download_url) {
+    openExternalUrl(release.html_url || WIKITOOL_RELEASES_URL);
+    return false;
+  }
+  openExternalUrl(asset.browser_download_url);
+  return true;
+}
+
+function chooseWikitoolAsset(assets: GitHubReleaseAsset[]): GitHubReleaseAsset | null {
+  const platform = navigator.platform.toLowerCase();
+  const userAgent = navigator.userAgent.toLowerCase();
+  const isArm = /arm|aarch64/.test(platform) || /arm|aarch64/.test(userAgent);
+  const candidates = assets.filter((asset) => /\.zip$/i.test(asset.name || ""));
+  const preferred = platform.includes("win")
+    ? ["windows", "x86_64"]
+    : platform.includes("mac")
+      ? ["macos", isArm ? "arm64" : "x86_64"]
+      : ["linux", "x86_64"];
+  return candidates.find((asset) => {
+    const name = (asset.name || "").toLowerCase();
+    return preferred.every((part) => name.includes(part));
+  }) || candidates[0] || null;
+}
+
+function openExternalUrl(url: string): void {
+  void chrome.tabs.create({ url });
+}
+
+function wikiAiHelpPrompt(): string {
+  return [
+    "Help me draft a Remilia Wiki article.",
+    "If I provide the Remilia Wikitool release or AI pack, use its AGENTS.md, codex_skills, and writing_context guidance first.",
+    "If Wikitool is available locally, start with `wikitool workflow session-refresh` and `wikitool knowledge article-start \"<Topic>\" --intent new --view brief --format json`, then interview me before drafting.",
+    "If local tools are not available, use the attached remilia-wiki-article-writer skill as a chat-only fallback.",
+    "Interview me for the necessary facts, dates, influences, related pages, and sources. Finish with ready-to-paste MediaWiki wikitext and a short list of unresolved citation gaps.",
+  ].join("\n");
+}
+
+function createWikiLaterSearch(item: WikiLaterItem): HTMLElement {
+  const root = document.createElement("div");
+  root.className = "wiki-later-search";
+  root.dataset.status = "loading";
+  root.textContent = `Searching for "${item.text}"...`;
+  return root;
+}
+
+async function runWikiLaterSearch(item: WikiLaterItem, root: HTMLElement): Promise<void> {
+  const results = await searchWikiPages(item.text).catch(() => []);
+  if (!root.isConnected || activeWikiLaterSearchId !== item.id) return;
+  root.textContent = "";
+  delete root.dataset.status;
+  if (results.length === 0) {
+    root.dataset.status = "empty";
+    root.textContent = "No matching pages found.";
+    return;
+  }
+  for (const result of results) {
+    const row = document.createElement("div");
+    row.className = "wiki-later-search-row";
+    const label = document.createElement("span");
+    label.textContent = result.wordcount ? `${result.title} (${result.wordcount} words)` : result.title;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "settings-list-action";
+    button.textContent = "Add section";
+    button.addEventListener("click", () => openWikiSectionEditor(item, result.title));
+    row.append(label, button);
+    root.append(row);
+  }
+}
+
+async function searchWikiPages(query: string): Promise<WikiSearchResult[]> {
+  const url = new URL(WIKI_API);
+  url.searchParams.set("action", "query");
+  url.searchParams.set("format", "json");
+  url.searchParams.set("origin", "*");
+  url.searchParams.set("list", "search");
+  url.searchParams.set("srlimit", "5");
+  url.searchParams.set("srsearch", query);
+  const response = await fetch(url);
+  if (!response.ok) return [];
+  const data = await response.json() as { query?: { search?: WikiSearchResult[] } };
+  return data.query?.search ?? [];
+}
+
+function openWikiNewPage(item: WikiLaterItem): void {
+  const url = wikiEditUrl(titleFromLaterText(item.text));
+  url.searchParams.set("preload", WIKI_PRELOAD_TEMPLATE);
+  openWikiEditorUrl(url);
+}
+
+function openWikiSectionEditor(item: WikiLaterItem, pageTitle: string): void {
+  const url = wikiEditUrl(pageTitle);
+  url.searchParams.set("section", "new");
+  url.searchParams.set("preload", WIKI_PRELOAD_TEMPLATE);
+  url.searchParams.set("preloadtitle", item.text);
+  openWikiEditorUrl(url);
+}
+
+function wikiEditUrl(title: string): URL {
+  const url = new URL("https://wiki.remilia.org/index.php");
+  url.searchParams.set("title", title);
+  url.searchParams.set("action", "edit");
+  return url;
+}
+
+function titleFromLaterText(text: string): string {
+  const clean = text.replace(/\s+/g, " ").trim();
+  return clean
+    .split(" ")
+    .map((part) => part ? `${part[0].toUpperCase()}${part.slice(1)}` : "")
+    .join(" ");
+}
+
+function openWikiEditorUrl(url: URL): void {
+  void chrome.tabs.create({ url: url.toString() });
 }
 
 async function removeWikiLaterItem(id: string, currentItems: WikiLaterItem[]): Promise<void> {
@@ -404,6 +707,95 @@ async function renderStatus(): Promise<void> {
   }
 }
 
+function setupReportActions(): void {
+  const message = document.getElementById("reportMessage");
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-report-kind][data-report-target]"));
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      const kind = button.dataset.reportKind === "feature" ? "feature" : "bug";
+      const target = button.dataset.reportTarget;
+      const template = reportTemplate(kind);
+      if (target === "github") {
+        openExternalUrl(githubIssueUrl(kind, template));
+        if (message) message.textContent = "Opened GitHub issue form.";
+        return;
+      }
+      if (target === "x") {
+        openExternalUrl(xReplyUrl(template.x));
+        if (message) message.textContent = "Opened X reply composer.";
+        return;
+      }
+      void navigator.clipboard.writeText(template.full).then(() => {
+        if (message) message.textContent = "Template copied.";
+      }).catch(() => {
+        if (message) message.textContent = "Copy failed. Open GitHub or X and paste the fields manually.";
+      });
+    });
+  }
+}
+
+function reportTemplate(kind: "bug" | "feature"): { title: string; full: string; x: string } {
+  const version = chrome.runtime.getManifest().version;
+  if (kind === "feature") {
+    return {
+      title: "[Feature]: ",
+      full: [
+        "### Feature request",
+        "",
+        `milXdy version: ${version}`,
+        "Feature area:",
+        "Use case:",
+        "Requested behavior:",
+        "Notes/screenshots:",
+      ].join("\n"),
+      x: [
+        "milXdy feature request",
+        `v${version}`,
+        "Feature:",
+        "Why:",
+        "Expected:",
+      ].join("\n"),
+    };
+  }
+  return {
+    title: "[Bug]: ",
+    full: [
+      "### Bug report",
+      "",
+      `milXdy version: ${version}`,
+      "Browser:",
+      "Feature area:",
+      "What happened:",
+      "Expected:",
+      "Steps to reproduce:",
+      "Console errors/screenshots:",
+    ].join("\n"),
+    x: [
+      "milXdy bug report",
+      `v${version}`,
+      "Feature:",
+      "Issue:",
+      "Steps:",
+      "Expected:",
+    ].join("\n"),
+  };
+}
+
+function githubIssueUrl(kind: "bug" | "feature", template: { title: string; full: string }): string {
+  const url = new URL(GITHUB_ISSUES_NEW_URL);
+  url.searchParams.set("title", template.title);
+  url.searchParams.set("body", template.full);
+  url.searchParams.set("labels", kind === "bug" ? "bug" : "enhancement");
+  return url.toString();
+}
+
+function xReplyUrl(template: string): string {
+  const url = new URL(X_FEEDBACK_REPLY_URL);
+  url.searchParams.set("in_reply_to", X_FEEDBACK_POST_ID);
+  url.searchParams.set("text", template);
+  return url.toString();
+}
+
 function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -414,21 +806,23 @@ function escapeHtml(value: string): string {
   })[char] ?? char);
 }
 
-async function setupBextolPanel(): Promise<void> {
-  const status = document.getElementById("bextolStatus");
-  const form = document.getElementById("bextolLoginForm") as HTMLFormElement | null;
-  const username = document.getElementById("bextolUsername") as HTMLInputElement | null;
-  const password = document.getElementById("bextolPassword") as HTMLInputElement | null;
-  const logout = document.getElementById("bextolLogout") as HTMLButtonElement | null;
-  const color = document.getElementById("bextolColor") as HTMLSelectElement | null;
-  const mode = document.getElementById("bextolMode") as HTMLSelectElement | null;
-  const message = document.getElementById("bextolMessage");
+async function setupBeetolPanel(): Promise<void> {
+  const status = document.getElementById("beetolStatus");
+  const form = document.getElementById("beetolLoginForm") as HTMLFormElement | null;
+  const username = document.getElementById("beetolUsername") as HTMLInputElement | null;
+  const password = document.getElementById("beetolPassword") as HTMLInputElement | null;
+  const logout = document.getElementById("beetolLogout") as HTMLButtonElement | null;
+  const openSso = document.getElementById("beetolOpenSso") as HTMLButtonElement | null;
+  const retrySession = document.getElementById("beetolRetrySession") as HTMLButtonElement | null;
+  const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
+  const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
+  const message = document.getElementById("beetolMessage");
 
-  if (!status || !form || !username || !password || !logout || !color || !mode || !message) return;
+  if (!status || !form || !username || !password || !logout || !openSso || !retrySession || !color || !mode || !message) return;
 
-  const settings = await chrome.storage.local.get(["bextolColor", "bextolMode"]);
-  color.value = typeof settings.bextolColor === "string" ? settings.bextolColor : "red";
-  mode.value = typeof settings.bextolMode === "string" ? settings.bextolMode : "dark";
+  const settings = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
+  color.value = typeof settings.beetolColor === "string" ? settings.beetolColor : "red";
+  mode.value = typeof settings.beetolMode === "string" ? settings.beetolMode : "dark";
 
   const setMessage = (text: string, kind = "") => {
     message.textContent = text;
@@ -436,20 +830,22 @@ async function setupBextolPanel(): Promise<void> {
     else delete message.dataset.kind;
   };
 
-  const renderAuth = (signedIn: boolean) => {
-    status.textContent = signedIn ? "Signed in to remilia.net" : "Not signed in";
+  const renderAuth = (signedIn: boolean, method = "") => {
+    status.textContent = signedIn
+      ? `Signed in to remilia.net${method === "session" ? " via browser session" : ""}`
+      : "Not signed in";
     form.hidden = signedIn;
     logout.hidden = !signedIn;
   };
 
-  const auth = await chrome.runtime.sendMessage({ type: "bextol:authStatus" }).catch(() => null);
-  renderAuth(Boolean(auth?.signedIn));
+  const auth = await chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null);
+  renderAuth(Boolean(auth?.signedIn), typeof auth?.method === "string" ? auth.method : "");
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
     setMessage("Logging in...");
     void chrome.runtime.sendMessage({
-      type: "bextol:login",
+      type: "beetol:login",
       username: username.value,
       password: password.value,
     }).then((response) => {
@@ -457,7 +853,10 @@ async function setupBextolPanel(): Promise<void> {
       if (!response?.ok) {
         const description = String(response?.description || "");
         const has2fa = /otp|mfa|two.factor|authenticat|not fully set up/i.test(description);
-        setMessage(has2fa ? "2FA is not supported by this flow." : "Login failed.", "warn");
+        setMessage(has2fa
+          ? "2FA requires RemiliaNET SSO. Open SSO, finish login, then retry session."
+          : "Login failed.",
+        "warn");
         renderAuth(false);
         return;
       }
@@ -466,18 +865,38 @@ async function setupBextolPanel(): Promise<void> {
     });
   });
 
+  openSso.addEventListener("click", () => {
+    openExternalUrl(REMILIA_NET_LOGIN_URL);
+    setMessage("Finish RemiliaNET login in the opened tab, then click Retry session.");
+  });
+
+  retrySession.addEventListener("click", () => {
+    retrySession.disabled = true;
+    setMessage("Checking browser session...");
+    void chrome.runtime.sendMessage({ type: "beetol:sessionStatus" }).then((response) => {
+      const signedIn = Boolean(response?.signedIn);
+      renderAuth(signedIn, signedIn ? "session" : "");
+      setMessage(signedIn
+        ? "Browser session detected. If actions fail, RemiliaNET requires token login for this API."
+        : "No browser session detected. Complete RemiliaNET SSO first.",
+      signedIn ? "" : "warn");
+    }).finally(() => {
+      retrySession.disabled = false;
+    });
+  });
+
   logout.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ type: "bextol:logout" }).then(() => {
+    void chrome.runtime.sendMessage({ type: "beetol:logout" }).then(() => {
       setMessage("Logged out.");
       renderAuth(false);
     });
   });
 
   color.addEventListener("change", () => {
-    void chrome.storage.local.set({ bextolColor: color.value });
+    void chrome.storage.local.set({ beetolColor: color.value });
   });
   mode.addEventListener("change", () => {
-    void chrome.storage.local.set({ bextolMode: mode.value });
+    void chrome.storage.local.set({ beetolMode: mode.value });
   });
 }
 

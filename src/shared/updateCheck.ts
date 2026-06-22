@@ -11,11 +11,14 @@ export const UPDATE_STATUS_KEY = "milxdy.updateStatus";
 export const UPDATE_ALARM_NAME = "milxdy.updateCheck";
 export const UPDATE_CHECK_INTERVAL_MINUTES = 360;
 
-export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases/latest";
+export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases?per_page=20";
 
 type GitHubRelease = {
   tag_name?: string;
   html_url?: string;
+  draft?: boolean;
+  prerelease?: boolean;
+  published_at?: string;
 };
 
 export async function checkForUpdate(): Promise<UpdateStatus> {
@@ -33,10 +36,21 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       throw new Error(`GitHub returned HTTP ${response.status}`);
     }
 
-    const release = await response.json() as GitHubRelease;
+    const releases = await response.json() as GitHubRelease[];
+    if (!Array.isArray(releases)) {
+      throw new Error("GitHub returned an unexpected releases response");
+    }
+
+    const release = releases
+      .filter((candidate) => candidate.prerelease === true && candidate.draft !== true)
+      .sort((left, right) => dateValue(right.published_at) - dateValue(left.published_at))[0];
+    if (!release) {
+      throw new Error("GitHub did not return a published prerelease");
+    }
+
     const latestVersion = normalizeVersion(release.tag_name);
     if (!latestVersion) {
-      throw new Error("Latest release did not include a version tag");
+      throw new Error("Latest prerelease did not include a version tag");
     }
 
     return {
@@ -77,4 +91,10 @@ export function normalizeVersion(value: unknown): string | null {
 
 function parseVersion(value: string): number[] {
   return value.split(".").map((part) => Number.parseInt(part, 10)).filter(Number.isFinite);
+}
+
+function dateValue(value: unknown): number {
+  if (typeof value !== "string") return 0;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : 0;
 }

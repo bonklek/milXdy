@@ -40,19 +40,26 @@ Adds read-aloud controls for X/Twitter posts.
 
 - Web Speech playback controls.
 - Optional quote, hyperlink, link preview, image alt text, and OCR reading.
+- Image alt/OCR text is read before the post text that captions the image.
 - Autoplay modes.
 - Highlight modes.
 - Keyboard shortcuts.
 - Optional local/custom HTTP TTS endpoints, depending on the current build settings.
 
-### RemiStats
+### RemiNet Connector
 
-Shows RemiStats badges and details for X/Twitter accounts.
+Shows RemiStats badges and RemiNet actions for X/Twitter accounts.
 
 - Fetches public RemiStats data from `https://api.remistats.net`.
 - Shows score badges on supported X/Twitter account surfaces.
+- Score, beetle-count, and poke icons can be enabled independently. All three icons are on by default.
 - Optional hover tooltips.
 - Optional sound effects and sound volume control.
+- Adds the Remilia Beetol Game hunter panel for signed-in `remilia.net` users.
+- Poke buttons use the same `remilia.net` session as Beetol hunts and target the matched RemiStats username, falling back to the visible X/Twitter handle when needed.
+- Login/logout controls in the settings popup.
+- Panel color and dark/light mode settings.
+- Passwords are sent directly to `www.remilia.net` for login and are not stored by milXdy.
 
 ### Miladymaxxer / Maxxer
 
@@ -65,14 +72,6 @@ Runs local avatar classification and applies Milady-specific UI effects.
 - Optional RemiStats beetle-user bridge.
 - Tiered card themes and level badges.
 - Legacy Miladymaxxer statistics import.
-
-### Beetol Game
-
-Adds the Remilia beetle hunter panel for signed-in `remilia.net` users.
-
-- Login/logout controls in the settings popup.
-- Panel color and dark/light mode settings.
-- Passwords are sent directly to `www.remilia.net` for login and are not stored by milXdy.
 
 ## Install From Source
 
@@ -100,7 +99,7 @@ Load in Chromium:
 5. Pin the extension if you want quick access to the popup.
 6. Open `https://x.com` or `https://twitter.com` and refresh existing tabs.
 
-After rebuilding from source, return to `chrome://extensions` and press the reload button on the milXdy extension card.
+After rebuilding from source, return to `chrome://extensions`, press the reload button on the milXdy extension card, and refresh open X/Twitter tabs. Existing content scripts and injected CSS stay loaded in already-open pages until those tabs refresh.
 
 ## Install From A GitHub Release
 
@@ -159,19 +158,27 @@ Open the extension icon to access the settings popup. The same UI is also regist
 - **Skip promoted posts**: avoids reading ads.
 - **End ding**: plays a short cue after each post.
 - **Include quote posts / Fetch full quotes / Full quote display**: controls quote-post reading and display.
-- **Include hyperlinks / Image alt text / Image OCR / Link previews**: controls extra content included in spoken text.
+- **Include hyperlinks / Image alt text / Image OCR / Link previews**: controls extra content included in spoken text. Image alt/OCR text is read before the parent caption text when present.
 - **Expand show-more**: opens truncated posts before reading.
 - **Active post highlight / Body highlight**: controls visual reading highlights.
 - **Player position / Read button placement**: controls where reader controls appear.
 - **Use handles**: reads handles instead of display names.
-- **Keyboard shortcuts**: sets next/previous/play/skip controls.
+- **Keyboard shortcuts**: sets next/previous/play/skip controls. Next paragraph keeps paragraph-jump behavior; Skip OCR cancels pending OCR or skips active image text; Next post skips active image text to the parent caption before advancing posts.
 
-### RemiStats
+### RemiNet Connector
 
-- **RemiStats badges**: enables/disables score badges.
+- **RemiNet connector badges**: enables/disables score badges.
 - **Tooltips**: shows detailed RemiStats information on hover.
 - **Sounds**: enables/disables RemiStats sound effects.
 - **Sound volume**: controls RemiStats effect volume.
+- **RemiNet connector icons**: enables/disables the score, beetle-count, and poke icon controls as a group.
+- **Score icon / Beetle icon / Poke icon**: controls the three badge/action icons individually. Each is enabled by default.
+- **Show Beetol hunt panel**: mounts the hover panel on X/Twitter and uses the same login as RemiNet pokes.
+- **Session status**: shows whether the extension is signed in to `remilia.net`.
+- **Login form**: signs in through the remilia.net password flow. Use **Username or email** plus password.
+- **Open RemiliaNET SSO**: opens the normal RemiliaNET login page for accounts that require 2FA.
+- **Retry session**: checks whether the browser RemiliaNET session can be used by the extension after SSO login.
+- **Beetol color / Beetol mode**: controls the hunter panel style.
 
 ### Maxxer
 
@@ -190,13 +197,6 @@ Open the extension icon to access the settings popup. The same UI is also regist
 - **Whitelist handles**: accounts exempted from normal scoring/XP behavior.
 - **Manual Milady handles**: accounts forced into the Milady list even when detection would not match them.
 
-### Beetol Game
-
-- **Beetol Game panel**: mounts the hover panel on X/Twitter.
-- **Session status**: shows whether the extension is signed in to `remilia.net`.
-- **Login form**: signs in through the remilia.net flow. 2FA is not supported by this popup flow.
-- **Color / Mode**: controls the hunter panel style.
-
 ### Diag
 
 Shows beta counters for:
@@ -208,6 +208,12 @@ Shows beta counters for:
 - Shared scanner activity.
 - Detection queue state.
 - Wiki link counts.
+
+The Diag tab also includes beta feedback actions:
+
+- **Bug via GitHub** and **Feature via GitHub** open prefilled GitHub issue forms.
+- **Bug via X** and **Feature via X** open a prefilled reply to the public feedback post.
+- **Copy bug template** and **Copy feature template** copy the same short templates if a browser blocks prefilled forms.
 
 ## Import Legacy Miladymaxxer Statistics
 
@@ -330,6 +336,7 @@ If the imported file appears to do nothing, confirm the JSON includes at least o
 - Postreader OCR and Miladymaxxer avatar inference run locally in the extension context.
 - Beetol Game access and refresh tokens are stored in local Chrome extension storage under namespaced keys.
 - Passwords entered in the Beetol Game login form are not stored by milXdy.
+- Accounts with RemiliaNET 2FA cannot complete the password-grant popup login. Use **Open RemiliaNET SSO**, finish login in the RemiliaNET tab, then return and use **Retry session**. If RemiliaNET does not allow its beetle APIs through browser session cookies, those accounts will need a future OAuth authorization-code/PKCE integration from RemiliaNET rather than the password flow.
 
 ## Development
 
@@ -356,8 +363,10 @@ The build emits:
 - `dist/features/postreader.js`
 - `dist/features/remistats.js`
 - `dist/features/miladymaxxer.js`
-- `dist/features/bextol.js`
+- `dist/features/beetol.js`
 - `dist/worker.js`
+- `dist/ocr.html`
+- `dist/ocrHost.js`
 
 Disabled feature bundles should not be downloaded or parsed on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.
 
@@ -374,9 +383,12 @@ That guide gives an agent exact commands, browser checks, migration steps, and c
 - **Extension does not appear**: make sure `npm run build` completed and that you selected `dist`, not the repository root.
 - **Changes did not apply**: reload the extension on `chrome://extensions`, then refresh X/Twitter tabs.
 - **Update status fails**: confirm `src/shared/updateCheck.ts` points to a real public GitHub repository with releases.
-- **RemiStats badges missing**: confirm RemiStats is enabled and `https://api.remistats.net` is reachable.
+- **RemiNet connector badges missing**: confirm RemiNet connector badges are enabled and `https://api.remistats.net` is reachable.
+- **Poke icon missing**: confirm **RemiNet connector icons** and **Poke icon** are enabled, reload the extension from `chrome://extensions`, then refresh the affected X/Twitter tab.
 - **Maxxer seems inactive**: set mode to `Debug`, refresh X/Twitter, and check the `Diag` tab for loaded bundles and detection queue state.
 - **Legacy stats import failed**: validate the JSON file and confirm it contains legacy Miladymaxxer storage keys.
+- **Postreader OCR stuck at 5%**: rebuild and reload the unpacked extension, then confirm `dist/ocr.html` and `dist/ocrHost.js` exist. The 5% stage means the hidden OCR host page is loading.
+- **Postreader OCR is intermittent**: OCR runs locally through Tesseract and can miss stylized, low-resolution, or low-contrast image text. The reader reports whether OCR found characters before playback starts.
 
 ## Postreader Custom TTS
 
@@ -437,3 +449,15 @@ Local service notes:
 ## License
 
 VPL for this repository unless otherwise noted. Upstream and bundled dependencies may carry their own license terms; preserve attribution and notices for Miladymaxxer, RemiStats Extension, and other integrated source material.
+
+```text
+VIRAL PUBLIC LICENSE
+Copyleft (ɔ) All Rights Reversed
+
+This WORK is hereby relinquished of all associated ownership, attribution and copy rights, and redistribution or use of any kind, with or without modification, is permitted without restriction subject to the following conditions:
+
+1. Redistributions of this WORK, or ANY work that makes use of ANY of the contents of this WORK by ANY kind of copying, dependency, linkage, or ANY other possible form of DERIVATION or COMBINATION, must retain the ENTIRETY of this license.
+2. No further restrictions of ANY kind may be applied.
+
+Fully permissive, viral software license. The VPL is designed to achieve and extend the GPL's strong copyleft without the burden of its obligations and restrictions. The VPL's sole restriction is its own viral continuity, allowing it to effectively and permanently infect any work it touches with absolute permissiveness.
+```

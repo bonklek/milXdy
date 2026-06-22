@@ -115,7 +115,7 @@ Then ask them to open the milXdy popup and check:
 - **Suite**: diagnostics can be toggled.
 - **Diag**: loaded bundles eventually lists enabled feature bundles after visiting X/Twitter.
 - **Maxxer**: mode is not `Off` if they want Maxxer.
-- **RemiStats**: badges are enabled if they want RemiStats.
+- **RemiNet connector**: badges and requested icons are enabled if they want RemiStats surfaces or RemiNet actions.
 
 For a deeper check, ask the user to enable **Suite > Performance diagnostics**, refresh X/Twitter, scroll briefly, then open **Diag** and confirm counters change.
 
@@ -126,9 +126,8 @@ For most beta users:
 - Suite: diagnostics off unless debugging.
 - Wiki: links on, previews on.
 - Reader: controls on, Browser Web Speech unless the user has a local TTS service, OCR off unless needed.
-- RemiStats: badges on, tooltips on, sounds by preference.
+- RemiNet connector: badges on, score/beetle/poke icons on, tooltips on, sounds by preference, Beetol panel off unless the user intends to use the hunter panel.
 - Maxxer: mode `Milady effects`, sounds by preference, level badge on, RemiStats beetle users on.
-- beXtol: leave off unless the user intends to use the hunter panel.
 
 If performance is poor:
 
@@ -304,10 +303,12 @@ Use the checks relevant to the user's enabled features.
 - Start playback and confirm speech begins.
 - Test pause/play and next/previous shortcuts if configured.
 
-### RemiStats
+### RemiNet Connector
 
 - Confirm badges appear beside supported account surfaces.
+- Confirm the enabled score, beetle, and poke icons appear as configured.
 - Hover a badge if tooltips are enabled.
+- Sign in from the RemiNet connector settings if testing pokes or the Beetol Game panel.
 - If badges do not appear, check network access to `https://api.remistats.net`.
 
 ### Maxxer
@@ -317,12 +318,19 @@ Use the checks relevant to the user's enabled features.
 - Confirm debug markers or scores appear on processed account surfaces.
 - Return to `Milady effects` after verification.
 
-### beXtol
+### Beetol Game
 
-- Enable beXtol Hunter panel.
+- Enable Beetol Game panel inside RemiNet connector settings.
 - Log in from the popup if needed.
 - Confirm the panel mounts on X/Twitter.
-- If 2FA is required, explain that this popup login flow does not support it.
+- If 2FA is required, use **Open RemiliaNET SSO**, have the user finish login in the RemiliaNET tab, then click **Retry session** in the popup. Explain that this only works if RemiliaNET allows the beetle APIs to use the browser session; otherwise the extension needs a future RemiliaNET OAuth authorization-code/PKCE flow because the password-grant popup flow cannot complete 2FA.
+
+### Feedback Reporting
+
+- Open the **Diag** tab.
+- Use **Bug via GitHub** or **Feature via GitHub** for full reports.
+- Use **Bug via X** or **Feature via X** for short public replies to the feedback post.
+- If a popup blocker or X/GitHub form prevents prefilling, use **Copy bug template** or **Copy feature template** and paste manually.
 
 ## Troubleshooting Script
 

@@ -1,7 +1,7 @@
 import "./features/wiki/background";
 import "./features/postreader/background";
 import "./features/miladymaxxer/background";
-import "./features/bextol/background.js";
+import "./features/beetol/background.js";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,

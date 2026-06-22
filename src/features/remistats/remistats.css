@@ -15,6 +15,64 @@
   transform: scale(1.05);
 }
 
+html[data-reminet-icons-enabled="false"] [data-reminet-icon],
+html[data-reminet-icon-score="false"] [data-reminet-icon="score"],
+html[data-reminet-icon-beetle="false"] [data-reminet-icon="beetle"],
+html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
+  display: none !important;
+}
+
+.reminet-poke-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin: 0 0 0 2px;
+  padding: 0;
+  border: 1px solid rgba(83, 100, 113, 0.35);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #0f1419;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1;
+  vertical-align: middle;
+  flex: 0 0 auto;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+}
+
+.reminet-poke-button:hover {
+  transform: translateY(-1px) scale(1.08);
+  background: rgba(15, 20, 25, 0.08);
+  border-color: rgba(15, 20, 25, 0.42);
+}
+
+.reminet-poke-button:disabled {
+  cursor: default;
+}
+
+.reminet-poke-button[data-reminet-poke-state="loading"] {
+  opacity: 0.7;
+}
+
+.reminet-poke-button[data-reminet-poke-state="success"] {
+  background: #dff8e6;
+  border-color: #57c879;
+}
+
+.reminet-poke-button[data-reminet-poke-state="error"],
+.reminet-poke-button[data-reminet-poke-state="cooldown"] {
+  background: #ffe4e4;
+  border-color: #e35d5d;
+}
+
+.reminet-poke-button--standalone {
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
 .reminet-badge-content {
   display: inline-flex;
   align-items: center;
@@ -87,6 +145,24 @@
 }
 
 [data-theme="dark"] .reminet-label {
+  color: #e7e9ea;
+}
+
+@media (prefers-color-scheme: dark) {
+  .reminet-poke-button {
+    background: rgba(15, 20, 25, 0.72);
+    border-color: rgba(231, 233, 234, 0.32);
+    color: #e7e9ea;
+  }
+
+  .reminet-poke-button:hover {
+    background: rgba(231, 233, 234, 0.12);
+  }
+}
+
+[data-theme="dark"] .reminet-poke-button {
+  background: rgba(15, 20, 25, 0.72);
+  border-color: rgba(231, 233, 234, 0.32);
   color: #e7e9ea;
 }
 

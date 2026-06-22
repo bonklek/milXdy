@@ -20,9 +20,8 @@
         <button class="tab is-active" type="button" data-panel="suite">Suite</button>
         <button class="tab" type="button" data-panel="wiki">Wiki</button>
         <button class="tab" type="button" data-panel="postreader">Reader</button>
-        <button class="tab" type="button" data-panel="remistats">RemiStats</button>
+        <button class="tab" type="button" data-panel="remistats">RemiNet connector</button>
         <button class="tab" type="button" data-panel="miladymaxxer">Maxxer</button>
-        <button class="tab" type="button" data-panel="bextol">Beetol Game</button>
         <button class="tab" type="button" data-panel="diagnostics">Diag</button>
       </nav>
 
@@ -58,8 +57,14 @@
         <label class="field"><span>Link color</span><input type="color" data-control="wiki.linkColor"></label>
         <section class="settings-list" aria-labelledby="wikiLaterTitle">
           <div class="settings-list-header">
-            <strong id="wikiLaterTitle">Link later</strong>
-            <small>Saved selections from the context menu.</small>
+            <div class="settings-list-header-row">
+              <strong id="wikiLaterTitle">Link later</strong>
+              <div class="settings-list-header-actions">
+                <button class="settings-list-action" id="wikiAiHelp" type="button">Get Help with AI</button>
+                <button class="settings-list-action" id="wikiPreloadTemplate" type="button">Template</button>
+              </div>
+            </div>
+            <small>Saved selections can open templated new pages or become sections on existing pages.</small>
           </div>
           <div class="settings-list-items" id="wikiLaterItems"></div>
         </section>
@@ -100,11 +105,31 @@
       </section>
 
       <section class="panel" data-panel="remistats">
-        <label class="setting"><span><strong>RemiStats badges</strong><small>Show score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
+        <label class="setting"><span><strong>RemiNet connector badges</strong><small>Show score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
         <label class="setting"><span><strong>Tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
         <label class="setting"><span><strong>Sounds</strong><small>Play RemiStats sound effects.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
         <label class="field"><span>Sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
+        <label class="setting"><span><strong>RemiNet connector icons</strong><small>Show icon buttons and metric icons next to badges.</small></span><input type="checkbox" data-control="remistats.icons.enabled"></label>
+        <label class="setting"><span><strong>Score icon</strong><small>Show the star score group.</small></span><input type="checkbox" data-control="remistats.icons.score"></label>
+        <label class="setting"><span><strong>Beetle icon</strong><small>Show the beetle count group.</small></span><input type="checkbox" data-control="remistats.icons.beetle"></label>
+        <label class="setting"><span><strong>Poke icon</strong><small>Show the remilia.net poke button.</small></span><input type="checkbox" data-control="remistats.icons.poke"></label>
+        <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. The login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
+        <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small>Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.</small></div>
+        <form class="login-form" id="beetolLoginForm">
+          <input id="beetolUsername" type="text" placeholder="Username or email" autocomplete="username">
+          <input id="beetolPassword" type="password" placeholder="password" autocomplete="current-password">
+          <button type="submit">Log in</button>
+        </form>
+        <div class="inline-actions">
+          <button class="secondary-button" id="beetolOpenSso" type="button">Open RemiliaNET SSO</button>
+          <button class="secondary-button" id="beetolRetrySession" type="button">Retry session</button>
+        </div>
+        <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
+        <label class="field"><span>Beetol color</span><select id="beetolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
+        <label class="field"><span>Beetol mode</span><select id="beetolMode"><option value="dark">Dark</option><option value="light">Light</option></select></label>
+        <p class="message" id="beetolMessage"></p>
         <a class="repo-link" href="https://github.com/erc1337-Coffee/remistats_extension" target="_blank" rel="noreferrer">Original RemiStats repository</a>
+        <a class="repo-link" href="https://www.remilia.net" target="_blank" rel="noreferrer">Original Beetol Game page</a>
       </section>
 
       <section class="panel" data-panel="miladymaxxer">
@@ -118,25 +143,42 @@
         <a class="repo-link" href="https://github.com/remiliacorp/miladymaxxer" target="_blank" rel="noreferrer">Original Miladymaxxer repository</a>
       </section>
 
-      <section class="panel" data-panel="bextol">
-        <label class="setting"><span><strong>Beetol Game panel</strong><small>Mount the hover panel on X/Twitter.</small></span><input type="checkbox" data-control="bextol.enabled"></label>
-        <div class="auth-box"><strong id="bextolStatus">Checking session...</strong><small>Sign in to remilia.net to use the Beetol Game panel. Passwords are not stored.</small></div>
-        <form class="login-form" id="bextolLoginForm">
-          <input id="bextolUsername" type="text" placeholder="remilia username" autocomplete="username">
-          <input id="bextolPassword" type="password" placeholder="password" autocomplete="current-password">
-          <button type="submit">Log in</button>
-        </form>
-        <button class="secondary-button" id="bextolLogout" type="button" hidden>Log out</button>
-        <label class="field"><span>Color</span><select id="bextolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
-        <label class="field"><span>Mode</span><select id="bextolMode"><option value="dark">Dark</option><option value="light">Light</option></select></label>
-        <p class="message" id="bextolMessage"></p>
-        <a class="repo-link" href="https://www.remilia.net" target="_blank" rel="noreferrer">Original Beetol Game page</a>
-      </section>
-
       <section class="panel" data-panel="diagnostics">
+        <section class="report-box" aria-labelledby="reportTitle">
+          <div>
+            <strong id="reportTitle">Report feedback</strong>
+            <small>Open a prefilled GitHub issue or reply on X. Copy is available if the browser blocks prefills.</small>
+          </div>
+          <div class="report-grid">
+            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="github">Bug via GitHub</button>
+            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="x">Bug via X</button>
+            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="github">Feature via GitHub</button>
+            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="x">Feature via X</button>
+            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="copy">Copy bug template</button>
+            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="copy">Copy feature template</button>
+          </div>
+          <p class="message" id="reportMessage"></p>
+        </section>
         <div class="status-grid" id="statusGrid"></div>
       </section>
     </main>
+    <div class="modal-backdrop" id="wikiAiHelpDialog" hidden>
+      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="wikiAiHelpTitle">
+        <div class="modal-header">
+          <strong id="wikiAiHelpTitle">AI article helper</strong>
+          <button class="icon-button" id="wikiAiHelpClose" type="button" aria-label="Close">x</button>
+        </div>
+        <p>Give the downloaded zip to your AI assistant. If it cannot read zip files, unzip it and upload or paste <strong>SKILL.md</strong> plus the files in <strong>references</strong>.</p>
+        <p>For the strongest workflow, download Remilia Wikitool too. It gives capable local agents wiki search, article-start briefs, linting, review, and guarded sync commands.</p>
+        <div class="modal-actions">
+          <button class="secondary-button" id="wikiAiHelpDownload" type="button">Download again</button>
+          <button class="secondary-button" id="wikiWikitoolDownload" type="button">Download Wikitool</button>
+          <button class="secondary-button" id="wikiWikitoolRelease" type="button">Release page</button>
+          <button class="secondary-button" id="wikiAiHelpCopy" type="button">Copy prompt</button>
+        </div>
+        <p class="message" id="wikiAiHelpMessage"></p>
+      </section>
+    </div>
     <script src="popup.js"></script>
   </body>
 </html>
