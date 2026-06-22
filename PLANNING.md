@@ -10,7 +10,7 @@ Initial inputs:
 - Local: `tweet-reader` / `postreader`
 - Remote: `erc1337-Coffee/remistats_extension`
 - Remote: `remiliacorp/miladymaxxer`
-- Local: `beXtol-hunter`
+- Local: `Beetol-hunter`
 
 The current target is a GitHub-distributed beta for testers, not Chrome Web Store submission. Store-review constraints are therefore secondary, but user trust, install clarity, permissions hygiene, and predictable update behavior still matter.
 
@@ -110,10 +110,13 @@ Guidance:
 - Do not fetch image blobs or run OCR until the user explicitly starts reading a post with OCR enabled.
 - Cache OCR results by normalized image URL.
 - Allow OCR cancellation and make skip controls visible in the mini-player.
+- Keep the OCR host page and bundle (`ocr.html`, `ocrHost.js`) as required build outputs; 5% OCR progress means the host page is still loading.
+- Read image alt/OCR text before the parent post text that captions it.
+- Keep paragraph navigation separate from OCR skipping: paragraph fast-forward jumps chunks, while the larger next action skips active image text to the parent caption when possible.
 - Keep body highlighting limited to the active post.
 - Avoid repeatedly restoring and retokenizing tweet HTML during normal timeline scrolling.
 
-### RemiStats
+### RemiNet Connector
 
 Primary costs:
 
@@ -158,7 +161,7 @@ Guidance:
 - Keep animations CSS-driven and avoid JavaScript animation loops except where strictly needed.
 - Make sounds opt-in or cheap to initialize; avoid repeatedly attaching sound handlers to the same nodes.
 
-### beXtol Hunter
+### Beetol Game
 
 Primary costs:
 
@@ -171,7 +174,7 @@ This feature is less DOM-scan-heavy than the other packages, but it still adds a
 Guidance:
 
 - Keep the panel self-contained under one root node.
-- Keep all styling scoped to `bextol-*`.
+- Keep all styling scoped to `beetol-*`.
 - Do not add page-wide scans for this feature.
 - Consider pausing the one-second render interval when the panel is not visible or when the document is hidden.
 - Keep auth and action requests in the background worker.
@@ -219,7 +222,7 @@ Feature modules should own:
 The consolidated beta now uses lazy content feature bootstrapping:
 
 - Disabled features are not imported on page load.
-- Feature CSS for RemiStats and beXtol is injected only when those features load.
+- Feature CSS for RemiStats and Beetol is injected only when those features load.
 - A feature that starts disabled can be imported later when toggled on.
 - Features that already have internal disable behavior still handle off-state changes after loading.
 
@@ -229,9 +232,9 @@ Current lazy gates:
 - Postreader: sync `enabled`
 - RemiStats: sync `milxdy.remistats.enabled`
 - Miladymaxxer: sync `mode !== "off"`
-- beXtol Hunter: local `milxdy.bextol.enabled`
+- Beetol Game: local `milxdy.remistats.beetol.enabled`
 
-beXtol Hunter also skips its one-second render tick and 60-second refresh while disabled or while the document is hidden.
+Beetol Game also skips its one-second render tick and 60-second refresh while disabled or while the document is hidden.
 
 Remaining larger opportunity: replace the separate content-script observers and full-page scan loops in Wiki, Postreader, RemiStats, and Miladymaxxer with one shared scanner. Lazy boot avoids disabled-feature cost, but enabled features still run their own observers today.
 

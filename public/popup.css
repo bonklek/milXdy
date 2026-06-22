@@ -135,6 +135,7 @@ input[type="checkbox"] {
 
 .auth-box,
 .update-status,
+.report-box,
 .field,
 .login-form {
   display: grid;
@@ -197,6 +198,33 @@ input[type="checkbox"] {
   place-items: center;
   padding: 0 10px;
   text-decoration: none;
+}
+
+.inline-actions,
+.report-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.report-box {
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.report-box strong {
+  display: block;
+  font-size: 13px;
+}
+
+.report-box small {
+  display: block;
+  color: #65717f;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .auth-box strong {
@@ -302,7 +330,21 @@ input[type="checkbox"] {
 
 .settings-list-header {
   display: grid;
-  gap: 2px;
+  gap: 5px;
+}
+
+.settings-list-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.settings-list-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
 }
 
 .settings-list-header strong {
@@ -339,6 +381,10 @@ input[type="checkbox"] {
   background: #f8fafc;
 }
 
+.settings-list-row[data-expanded="true"] {
+  align-items: start;
+}
+
 .settings-list-main {
   min-width: 0;
 }
@@ -368,6 +414,14 @@ input[type="checkbox"] {
   color: inherit;
 }
 
+.settings-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.settings-list-action,
 .settings-list-remove {
   min-height: 28px;
   border: 1px solid #cfd6df;
@@ -378,4 +432,77 @@ input[type="checkbox"] {
   font: inherit;
   font-size: 11px;
   padding: 0 8px;
+}
+
+.wiki-later-search {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 6px;
+  padding-top: 2px;
+  color: #65717f;
+  font-size: 11px;
+}
+
+.wiki-later-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.wiki-later-search-row span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(23, 32, 42, 0.38);
+  z-index: 20;
+}
+
+.modal-backdrop[hidden] {
+  display: none;
+}
+
+.modal {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 380px);
+  padding: 14px;
+  border: 1px solid #cfd6df;
+  border-radius: 8px;
+  background: #fff;
+  color: #17202a;
+  box-shadow: 0 18px 60px rgba(23, 32, 42, 0.22);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.modal-header strong {
+  font-size: 14px;
+}
+
+.modal p {
+  margin: 0;
+  color: #465260;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.modal-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
 }

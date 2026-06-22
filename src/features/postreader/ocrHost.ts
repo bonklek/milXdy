@@ -119,7 +119,13 @@ function filterOcrText(page: Tesseract.Page): string {
     });
 
   const text = normalizeText(accepted.map((block) => block.text).join(" "));
-  if (!isLikelyReadableOcr(text, accepted.flatMap((block) => block.validWords))) return "";
+  if (!isLikelyReadableOcr(text, accepted.flatMap((block) => block.validWords))) return fallbackOcrText(page);
+  return text;
+}
+
+function fallbackOcrText(page: Tesseract.Page): string {
+  const text = normalizeText(page.text || "");
+  if (!isLikelyReadableRawOcr(text)) return "";
   return text;
 }
 
@@ -150,6 +156,18 @@ function isLikelyReadableOcr(text: string, validWords: string[]): boolean {
   if (visible === 0 || letters / visible < 0.45) return false;
   const weird = (text.match(/[|{}[\]~^_=<>\\]/g) || []).length;
   return weird / visible < 0.12;
+}
+
+function isLikelyReadableRawOcr(text: string): boolean {
+  if (text.length < 2) return false;
+  const visible = (text.match(/[^\s]/g) || []).length;
+  if (visible === 0) return false;
+  const letters = (text.match(/\p{L}/gu) || []).length;
+  const digits = (text.match(/\p{N}/gu) || []).length;
+  if (letters + digits < 2) return false;
+  if ((letters + digits) / visible < 0.25) return false;
+  const weird = (text.match(/[|{}[\]~^_=<>\\]/g) || []).length;
+  return weird / visible < 0.35;
 }
 
 function isReadableWord(value: string): boolean {

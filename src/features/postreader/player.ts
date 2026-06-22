@@ -10,6 +10,7 @@ type PlayerActions = {
   onPrevious: () => void;
   onNextChunk: () => void;
   onPreviousChunk: () => void;
+  onSkipOcr: () => void;
   onSettingsChange: (settings: PostreaderSettings) => void;
   onBoundarySupportChange: (results: Record<string, BoundarySupport>) => void;
   getVoices: () => SpeechSynthesisVoice[];
@@ -83,7 +84,7 @@ export class MiniPlayer {
     skipOcr.type = "button";
     skipOcr.className = "postreader-secondary postreader-ocr-skip";
     skipOcr.textContent = "Skip OCR";
-    skipOcr.addEventListener("click", actions.onNextChunk);
+    skipOcr.addEventListener("click", actions.onSkipOcr);
     ocrDetails.append(this.ocrText, this.ocrBar);
     this.ocrStatus.append(ocrDetails, skipOcr);
 

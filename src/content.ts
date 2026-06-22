@@ -1,4 +1,5 @@
-type FeatureId = "wiki" | "postreader" | "remistats" | "miladymaxxer" | "bextol";
+type FeatureId = "wiki" | "postreader" | "remistats" | "miladymaxxer" | "beetol";
+const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 
 type FeatureDefinition = {
   id: FeatureId;
@@ -43,12 +44,13 @@ const features: FeatureDefinition[] = [
     script: "features/miladymaxxer.js",
   },
   {
-    id: "bextol",
+    id: "beetol",
     isEnabled: async () => {
-      const stored = await chrome.storage.local.get({ "milxdy.bextol.enabled": true });
-      return stored["milxdy.bextol.enabled"] !== false;
+      const legacyKey = `milxdy.${LEGACY_BEETOL_PREFIX}.enabled`;
+      const stored = await chrome.storage.local.get(["milxdy.remistats.beetol.enabled", legacyKey]);
+      return (stored["milxdy.remistats.beetol.enabled"] ?? stored[legacyKey] ?? true) !== false;
     },
-    script: "features/bextol.js",
+    script: "features/beetol.js",
   },
 ];
 
@@ -67,7 +69,7 @@ async function loadFeature(feature: FeatureDefinition): Promise<void> {
   if (loaded.has(feature.id)) return;
   loaded.add(feature.id);
   if (feature.id === "remistats") injectStylesheet("milxdy-remistats-styles", "remistats/remistats.css");
-  if (feature.id === "bextol") injectStylesheet("milxdy-bextol-styles", "bextol/content.css");
+  if (feature.id === "beetol") injectStylesheet("milxdy-beetol-styles", "beetol/content.css");
   await import(chrome.runtime.getURL(feature.script));
   void writeLoadedFeatureDiagnostics();
 }
@@ -92,7 +94,7 @@ function featureChanged(
   if (feature === "postreader") return area === "sync" && Boolean(changes.enabled);
   if (feature === "remistats") return area === "sync" && Boolean(changes["milxdy.remistats.enabled"]);
   if (feature === "miladymaxxer") return area === "sync" && Boolean(changes.mode);
-  if (feature === "bextol") return area === "local" && Boolean(changes["milxdy.bextol.enabled"]);
+  if (feature === "beetol") return area === "local" && Boolean(changes["milxdy.remistats.beetol.enabled"]);
   return false;
 }
 

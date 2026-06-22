@@ -41,13 +41,6 @@ export function formatReadablePost(post: ReadablePost, settings: PostreaderSetti
 
   if (settings.includeQuotes && post.quote) {
     segments.push(sentenceClause(`${post.quote.authorDisplayName} said "${post.quote.text}"`));
-    if (post.text) {
-      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName} with "${post.text}"`));
-    } else {
-      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName}`));
-    }
-  } else if (post.text) {
-    segments.push(sentenceClause(`${post.authorDisplayName} said "${post.text}"`));
   }
 
   for (const description of post.imageDescriptions) {
@@ -56,6 +49,16 @@ export function formatReadablePost(post: ReadablePost, settings: PostreaderSetti
 
   for (const [index, text] of post.imageTexts.entries()) {
     segments.push(`${imageTextPrefix(index, post.imageTexts.length)} "${text}"`);
+  }
+
+  if (settings.includeQuotes && post.quote) {
+    if (post.text) {
+      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName} with "${post.text}"`));
+    } else {
+      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName}`));
+    }
+  } else if (post.text) {
+    segments.push(sentenceClause(`${post.authorDisplayName} said "${post.text}"`));
   }
 
   for (const preview of post.linkPreviews) {

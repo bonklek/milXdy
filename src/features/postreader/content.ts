@@ -58,8 +58,9 @@ async function boot(): Promise<void> {
     },
     onNext: () => nextTweetOrQuotingText(),
     onPrevious: () => playAdjacent(-1),
-    onNextChunk: () => skipOcrOrNextChunk(),
+    onNextChunk: () => nextChunkAndResyncHighlight(),
     onPreviousChunk: () => previousChunkAndResyncHighlight(),
+    onSkipOcr: () => skipOcrLoadingOrActiveSpeech(),
     onSettingsChange: (next) => {
       settings = next;
       speech.applySettings(next);
@@ -193,16 +194,15 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   tweet.scrollIntoView({ block: "nearest", inline: "nearest" });
 }
 
-function skipOcrOrNextChunk(): void {
-  if (currentQuoteFetchAbort) {
-    currentQuoteFetchAbort.abort();
-    return;
-  }
+function skipOcrLoadingOrActiveSpeech(): void {
   if (currentOcrImageAbort) {
     currentOcrImageAbort.abort();
     return;
   }
   if (skipActiveOcrSpeechRange()) return;
+}
+
+function nextChunkAndResyncHighlight(): void {
   speech.nextChunk();
   resyncHighlightAfterSpeechJump();
 }
@@ -230,9 +230,12 @@ function skipActiveOcrSpeechRange(): boolean {
   if (currentIndex === null || currentOcrSpeechRanges.length === 0) return false;
   const activeIndex = currentOcrSpeechRanges.findIndex((range) => currentIndex >= range.start && currentIndex < range.end);
   if (activeIndex < 0) return false;
-  const nextRange = currentOcrSpeechRanges[activeIndex + 1];
-  const target = nextRange?.start ?? currentOcrSpeechRanges[activeIndex].end + 1;
+  const activeRange = currentOcrSpeechRanges[activeIndex];
+  const main = currentHighlightTargets.find((target) => target.kind === "main" && target.start >= activeRange.end);
+  const target = main?.start ?? activeRange.end + 1;
   speech.jumpToCharIndex(target);
+  resyncHighlightAfterSpeechJump();
+  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest" });
   return true;
 }
 
@@ -460,7 +463,15 @@ async function extractOcrTexts(tweet: HTMLElement): Promise<string[]> {
       }).finally(() => {
         if (currentOcrImageAbort === imageAbort) currentOcrImageAbort = null;
       });
-      if (text) texts.push(text);
+      if (text) {
+        texts.push(text);
+        player.updateOcrStatus({
+          imageIndex: index,
+          imageCount: images.length,
+          status: `OCR found ${text.length} characters`,
+          progress: 1,
+        });
+      }
     }
   } catch (error) {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
@@ -473,6 +484,8 @@ async function extractOcrTexts(tweet: HTMLElement): Promise<string[]> {
       currentOcrImageAbort = null;
       if (failureStatus) {
         showTransientOcrStatus(failureStatus);
+      } else if (!runAbort.signal.aborted && texts.length === 0) {
+        showTransientOcrStatus("OCR found no readable image text");
       } else {
         player.updateOcrStatus(null);
       }
@@ -549,7 +562,7 @@ function normalizeImageSrc(src: string): string {
   try {
     const url = new URL(src);
     if (url.hostname === "pbs.twimg.com" && url.pathname.startsWith("/media/")) {
-      url.searchParams.set("name", "large");
+      url.searchParams.set("name", "orig");
     }
     return url.toString();
   } catch {
@@ -587,6 +600,7 @@ function playAdjacent(direction: 1 | -1): void {
 }
 
 function nextTweetOrQuotingText(): void {
+  if (skipActiveOcrSpeechRange()) return;
   if (jumpFromQuoteToMainText()) return;
   playAdjacent(1);
 }
@@ -623,9 +637,9 @@ function handleKeydown(event: KeyboardEvent): void {
   const actions: Array<[string, () => void]> = [
     [settings.keyNextTweet, () => nextTweetOrQuotingText()],
     [settings.keyPreviousTweet, () => playAdjacent(-1)],
-    [settings.keyNextChunk, () => skipOcrOrNextChunk()],
+    [settings.keyNextChunk, () => nextChunkAndResyncHighlight()],
     [settings.keyPreviousChunk, () => previousChunkAndResyncHighlight()],
-    [settings.keySkipOcr, () => skipOcrOrNextChunk()],
+    [settings.keySkipOcr, () => skipOcrLoadingOrActiveSpeech()],
     [settings.keyPlayPause, () => speech.pauseOrResume()],
   ];
   const action = actions.find(([candidate]) => normalizeKeybind(candidate) === normalized)?.[1];

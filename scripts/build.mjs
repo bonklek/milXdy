@@ -12,11 +12,12 @@ await mkdir("dist/features", { recursive: true });
 await copyFile("public/manifest.json", "dist/manifest.json");
 await copyFile("public/popup.html", "dist/popup.html");
 await copyFile("public/popup.css", "dist/popup.css");
+await copyFile("public/ocr.html", "dist/ocr.html");
 if (existsSync("public/miladymaxxer/milady-logo.png")) {
   await copyFile("public/miladymaxxer/milady-logo.png", "dist/milady-logo.png");
 }
 
-for (const dir of ["icons", "remistats", "bextol", "miladymaxxer", "models", "generated"]) {
+for (const dir of ["icons", "remistats", "beetol", "miladymaxxer", "models", "generated", "wiki-helper"]) {
   if (existsSync(`public/${dir}`)) {
     await cp(`public/${dir}`, `dist/${dir}`, { recursive: true });
   }
@@ -24,8 +25,8 @@ for (const dir of ["icons", "remistats", "bextol", "miladymaxxer", "models", "ge
 if (existsSync("src/features/remistats/remistats.css")) {
   await copyFile("src/features/remistats/remistats.css", "dist/remistats/remistats.css");
 }
-if (existsSync("src/features/bextol/content.css")) {
-  await copyFile("src/features/bextol/content.css", "dist/bextol/content.css");
+if (existsSync("src/features/beetol/content.css")) {
+  await copyFile("src/features/beetol/content.css", "dist/beetol/content.css");
 }
 
 await mkdir("dist/ocr/core", { recursive: true });
@@ -99,7 +100,7 @@ await buildOrWatch({
     "features/postreader": source("src/entries/postreaderContent.ts"),
     "features/remistats": source("src/entries/remistatsContent.ts"),
     "features/miladymaxxer": source("src/entries/miladymaxxerContent.ts"),
-    "features/bextol": source("src/entries/bextolContent.ts"),
+    "features/beetol": source("src/entries/beetolContent.ts"),
   },
   outdir: "dist",
   format: "esm",
@@ -109,6 +110,7 @@ await buildOrWatch({
   ...common,
   entryPoints: {
     worker: source("src/features/miladymaxxer/worker.ts"),
+    ocrHost: source("src/features/postreader/ocrHost.ts"),
   },
   outdir: "dist",
   format: "iife",
@@ -125,14 +127,16 @@ if (!watch) {
     "dist/features/postreader.js",
     "dist/features/remistats.js",
     "dist/features/miladymaxxer.js",
-    "dist/features/bextol.js",
+    "dist/features/beetol.js",
+    "dist/ocr.html",
+    "dist/ocrHost.js",
   ];
   const missing = required.filter((file) => !existsSync(file));
   if (missing.length > 0) {
     throw new Error(`Missing split bundle output: ${missing.join(", ")}`);
   }
   const bootstrap = await readFile("dist/content.js", "utf8");
-  const forbiddenBootstrapNeedles = ["tesseract", "onnxruntime", "wiki-index.generated", "createScoreBadge", "mountBeXtolHunter"];
+  const forbiddenBootstrapNeedles = ["tesseract", "onnxruntime", "wiki-index.generated", "createScoreBadge", "mountBeetolGame"];
   const foundNeedles = forbiddenBootstrapNeedles.filter((needle) => bootstrap.toLowerCase().includes(needle.toLowerCase()));
   if (foundNeedles.length > 0) {
     throw new Error(`Content bootstrap contains feature implementation strings: ${foundNeedles.join(", ")}`);

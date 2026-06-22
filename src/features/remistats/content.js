@@ -128,6 +128,57 @@ let remistatsEnabled = true;
 let reminetDelegationInstalled = false;
 let activeTooltipBadge = null;
 let tooltipHideTimer = null;
+const pokeCooldowns = new Map();
+const DEFAULT_ICON_SETTINGS = {
+  enabled: true,
+  score: true,
+  beetle: true,
+  poke: true,
+};
+let iconSettings = { ...DEFAULT_ICON_SETTINGS };
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+async function loadIconSettings() {
+  const settings = await chrome.storage.sync.get({
+    'milxdy.remistats.icons.enabled': true,
+    'milxdy.remistats.icons.score': true,
+    'milxdy.remistats.icons.beetle': true,
+    'milxdy.remistats.icons.poke': true,
+  });
+  iconSettings = {
+    enabled: settings['milxdy.remistats.icons.enabled'] !== false,
+    score: settings['milxdy.remistats.icons.score'] !== false,
+    beetle: settings['milxdy.remistats.icons.beetle'] !== false,
+    poke: settings['milxdy.remistats.icons.poke'] !== false,
+  };
+  applyIconSettings();
+}
+
+function applyIconSettings() {
+  document.documentElement.dataset.reminetIconsEnabled = String(iconSettings.enabled);
+  document.documentElement.dataset.reminetIconScore = String(iconSettings.score);
+  document.documentElement.dataset.reminetIconBeetle = String(iconSettings.beetle);
+  document.documentElement.dataset.reminetIconPoke = String(iconSettings.poke);
+  patchExistingBadges();
+}
+
+function iconSettingChanged(changes) {
+  return Boolean(
+    changes['milxdy.remistats.icons.enabled']
+    || changes['milxdy.remistats.icons.score']
+    || changes['milxdy.remistats.icons.beetle']
+    || changes['milxdy.remistats.icons.poke']
+  );
+}
 
 // Process batch of usernames
 async function processBatch(usernames) {
@@ -166,7 +217,7 @@ async function processBatch(usernames) {
 
       if (data.user) {
         const user = data.user;
-        const userData = transformApiResponse(user);
+        const userData = transformApiResponse(user, requestedHandle);
         const normalized = (user.twitterHandle || requestedHandle).toLowerCase();
         scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
         results[normalized] = userData;
@@ -183,9 +234,18 @@ async function processBatch(usernames) {
 }
 
 // Transform API response to extension format
-function transformApiResponse(apiUser) {
+function transformApiResponse(apiUser, fallbackHandle = '') {
+  const remiliaUsername = cleanUsername(
+    apiUser.username
+    || apiUser.userHandle
+    || apiUser.handle
+    || apiUser.remiliaUsername
+    || apiUser.profile?.username
+    || fallbackHandle
+  );
   return {
-    username: apiUser.username,
+    username: remiliaUsername,
+    remiliaUsername,
     twitterHandle: apiUser.twitterHandle,
     displayName: apiUser.displayName,
     score: apiUser.socialCreditScore,
@@ -194,6 +254,10 @@ function transformApiResponse(apiUser) {
     pfpProject: apiUser.pfpProject,
     pfpId: apiUser.pfpId,
   };
+}
+
+function cleanUsername(value) {
+  return typeof value === 'string' ? value.replace(/^@/, '').trim() : '';
 }
 
 // Fetch user score with batching
@@ -243,11 +307,55 @@ async function fetchUserScore(username) {
   });
 }
 
+function createPokeButton(username, standalone = false) {
+  const clean = cleanUsername(username);
+  if (!clean) return null;
+
+  const button = document.createElement('button');
+  button.className = standalone
+    ? 'reminet-poke-button reminet-poke-button--standalone'
+    : 'reminet-poke-button';
+  button.type = 'button';
+  button.dataset.reminetPoke = 'true';
+  button.dataset.reminetIcon = 'poke';
+  button.dataset.reminetUsername = clean;
+  if (standalone) {
+    button.dataset.reminetStandalonePoke = 'true';
+  }
+  button.textContent = String.fromCodePoint(0x1FAF5);
+  button.title = `Poke ${clean} on remilia.net`;
+  button.setAttribute('aria-label', button.title);
+  return button;
+}
+
+function ensureStandalonePokeButton(badge, username) {
+  const clean = cleanUsername(username || badge.dataset.reminetUsername || profileUsernameFromUrl());
+  if (!clean || !badge.parentElement || badge.dataset.reminetCompact === 'true') return;
+
+  badge.dataset.reminetUsername = clean;
+  const next = badge.nextElementSibling;
+  if (next?.matches?.('[data-reminet-standalone-poke]')) {
+    next.dataset.reminetUsername = clean;
+    next.title = `Poke ${clean} on remilia.net`;
+    next.setAttribute('aria-label', next.title);
+    return;
+  }
+
+  const button = createPokeButton(clean, true);
+  if (button) {
+    badge.parentElement.insertBefore(button, badge.nextSibling);
+  }
+}
+
 // Create score badge element
-function createScoreBadge(scoreData) {
+function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
   badge.className = 'reminet-score-badge';
   badge.setAttribute('data-reminet-badge', 'true');
+  const remiliaUsername = scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle || '';
+  if (remiliaUsername) {
+    badge.dataset.reminetUsername = remiliaUsername;
+  }
   
   const beetleCount = scoreData.beetleCount || Math.floor(scoreData.score / 10);
   
@@ -257,16 +365,22 @@ function createScoreBadge(scoreData) {
   
   badge.innerHTML = `
     <div class="reminet-badge-content">
-      <div class="reminet-badge-group">
-        <img src="${starUrl}" class="reminet-star" alt="★" />
+      <div class="reminet-badge-group" data-reminet-icon="score">
+        <img src="${starUrl}" class="reminet-star" alt="" />
         <span class="reminet-label">${scoreData.score}</span>
       </div>
-      <div class="reminet-badge-group">
-        <img src="${beetleUrl}" class="reminet-beetle" alt="🪲" />
+      <div class="reminet-badge-group" data-reminet-icon="beetle">
+        <img src="${beetleUrl}" class="reminet-beetle" alt="" />
         <span class="reminet-label">${beetleCount}</span>
       </div>
     </div>
   `;
+
+  if (options.includePokeInside !== false) {
+    const inlinePoke = createPokeButton(remiliaUsername);
+    const content = badge.querySelector('.reminet-badge-content');
+    if (inlinePoke && content) content.appendChild(inlinePoke);
+  }
   
   // Calculate progress percentages
   const scorePercent = Math.min(100, (scoreData.score / maxScore) * 100);
@@ -279,11 +393,11 @@ function createScoreBadge(scoreData) {
   
   const pfpInfo = scoreData.pfpProject ? `${scoreData.pfpProject} #${scoreData.pfpId}` : '';
   
-  badge.dataset.reminetProfileUrl = `https://remilia.net/~${scoreData.username}`;
+  badge.dataset.reminetProfileUrl = remiliaUsername ? `https://remilia.net/~${remiliaUsername}` : '';
   badge.dataset.reminetTooltipHtml = `
     <div class="reminet-tooltip-header">
-      <span class="reminet-tooltip-displayname">${scoreData.displayName || scoreData.username}</span>
-      <span class="reminet-tooltip-handle">@${scoreData.twitterHandle || scoreData.username}</span>
+      <span class="reminet-tooltip-displayname">${scoreData.displayName || remiliaUsername}</span>
+      <span class="reminet-tooltip-handle">@${scoreData.twitterHandle || remiliaUsername}</span>
     </div>
     ${pfpInfo ? `<div class="reminet-tooltip-pfp">
       ${pfpImageUrl ? `<img src="${pfpImageUrl}" alt="${pfpInfo}" class="pfp-image" onerror="this.style.display='none';" />` : ''}
@@ -340,6 +454,14 @@ function installRemiStatsDelegation() {
   }, true);
 
   document.addEventListener('click', (event) => {
+    const pokeButton = event.target.closest?.('[data-reminet-poke]');
+    if (pokeButton) {
+      event.stopPropagation();
+      event.preventDefault();
+      void handlePokeClick(pokeButton);
+      return;
+    }
+
     const badge = event.target.closest?.('[data-reminet-badge]');
     if (!badge) return;
     const profileUrl = badge.dataset.reminetProfileUrl;
@@ -354,6 +476,65 @@ function installRemiStatsDelegation() {
     positionSharedTooltip(activeTooltipBadge);
     scheduleHideSharedTooltip(300);
   }, { passive: true, capture: true });
+}
+
+async function handlePokeClick(button) {
+  const badge = button.closest('[data-reminet-badge]');
+  const username = cleanUsername(button.dataset.reminetUsername || badge?.dataset.reminetUsername || profileUsernameFromUrl());
+  if (!username || button.disabled) return;
+
+  const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
+  if (cooldownUntil > Date.now()) {
+    setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
+    window.setTimeout(() => setPokeButtonState(button, 'idle', `Poke ${username} on remilia.net`), 1400);
+    return;
+  }
+
+  setPokeButtonState(button, 'loading', `Poking ${username}...`);
+  const response = await safeRuntimeMessage({ type: 'beetol:poke', username });
+  if (response?.ok) {
+    pokeCooldowns.set(username.toLowerCase(), Date.now() + 24 * 60 * 60 * 1000);
+    setPokeButtonState(button, 'success', `Poked ${username}`);
+    return;
+  }
+
+  if (response?.authRequired) {
+    setPokeButtonState(button, 'error', 'Sign in to remilia.net to poke');
+    return;
+  }
+
+  const message = response?.data?.error || response?.data?.message || response?.error || `Could not poke ${username}`;
+  setPokeButtonState(button, 'error', message);
+}
+
+function setPokeButtonState(button, state, label) {
+  button.dataset.reminetPokeState = state;
+  button.title = label;
+  button.setAttribute('aria-label', label);
+  button.disabled = state === 'loading' || state === 'success';
+}
+
+function patchExistingBadges() {
+  for (const badge of document.querySelectorAll('[data-reminet-badge]:not([data-reminet-compact])')) {
+    const username = badge.dataset.reminetUsername || profileUsernameFromUrl();
+    if (badge.hasAttribute('data-profile-badge')) {
+      ensureStandalonePokeButton(badge, username);
+      continue;
+    }
+    if (badge.querySelector('[data-reminet-poke]')) continue;
+    const content = badge.querySelector('.reminet-badge-content');
+    if (!username || !content) continue;
+    badge.dataset.reminetUsername = username;
+    const button = createPokeButton(username);
+    if (!button) continue;
+    content.appendChild(button);
+  }
+}
+
+function profileUsernameFromUrl() {
+  const match = location.pathname.match(/^\/([^\/\?]+)/);
+  if (!match || ROUTE_BLOCKLIST.has(match[1])) return '';
+  return cleanUsername(match[1]);
 }
 
 function getSharedTooltip() {
@@ -537,7 +718,7 @@ async function insertProfileBadge() {
     }
 
     userNameSection.removeAttribute('data-reminet-processing');
-    const badge = createScoreBadge(scoreData);
+    const badge = createScoreBadge(scoreData, { includePokeInside: false });
     badge.style.marginLeft = '8px';
     badge.style.display = 'inline-flex';
     badge.style.verticalAlign = 'middle';
@@ -551,6 +732,7 @@ async function insertProfileBadge() {
       // Fallback: append to the username section
       userNameSection.appendChild(badge);
     }
+    ensureStandalonePokeButton(badge, scoreData.remiliaUsername || username);
   } catch (error) {
     console.error('Error inserting profile badge:', error);
     userNameSection.removeAttribute('data-reminet-processing');
@@ -575,7 +757,8 @@ function createCompactBadge(scoreData) {
   badge.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    window.open(`https://remilia.net/~${scoreData.username}`, '_blank');
+    const remiliaUsername = scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle;
+    if (remiliaUsername) window.open(`https://remilia.net/~${remiliaUsername}`, '_blank');
   });
 
   return badge;
@@ -665,7 +848,10 @@ async function processSurfaceElement(element) {
 }
 
 function init() {
-  chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }).then((settings) => {
+  Promise.all([
+    chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
+    loadIconSettings(),
+  ]).then(([settings]) => {
     remistatsEnabled = settings['milxdy.remistats.enabled'] !== false;
     if (remistatsEnabled) {
       scheduleTwitterScan();
@@ -677,14 +863,23 @@ function init() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area !== 'sync' || !changes['milxdy.remistats.enabled']) return;
-    remistatsEnabled = changes['milxdy.remistats.enabled'].newValue !== false;
-    if (remistatsEnabled) {
-      scheduleTwitterScan();
-      insertProfileBadge();
-      processGroupChatAvatars();
-    } else {
-      clearRemiStatsBadges();
+    if (area !== 'sync') return;
+    if (changes['milxdy.remistats.enabled']) {
+      remistatsEnabled = changes['milxdy.remistats.enabled'].newValue !== false;
+      if (remistatsEnabled) {
+        scheduleTwitterScan();
+        insertProfileBadge();
+        processGroupChatAvatars();
+      } else {
+        clearRemiStatsBadges();
+      }
+      return;
+    }
+    if (iconSettingChanged(changes)) {
+      void loadIconSettings().then(() => {
+        if (!remistatsEnabled) return;
+        processUserElements();
+      });
     }
   });
 
@@ -710,7 +905,7 @@ function init() {
 }
 
 function clearRemiStatsBadges() {
-  for (const node of document.querySelectorAll('[data-reminet-badge], [data-reminet-tooltip]')) {
+  for (const node of document.querySelectorAll('[data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
     node.remove();
   }
   for (const node of document.querySelectorAll('[data-reminet-processing]')) {

@@ -32,11 +32,13 @@
     {
       "resources": [
         "icons/*",
+        "ocr.html",
+        "ocrHost.js",
         "ocr/*",
         "ocr/core/*",
         "ocr/lang/*",
         "remistats/*",
-        "bextol/*",
+        "beetol/*",
         "miladymaxxer/*",
         "features/*.js",
         "milady-logo.png",
