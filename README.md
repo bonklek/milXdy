@@ -101,6 +101,8 @@ Load in Chromium:
 
 After rebuilding from source, return to `chrome://extensions`, press the reload button on the milXdy extension card, and refresh open X/Twitter tabs. Existing content scripts and injected CSS stay loaded in already-open pages until those tabs refresh.
 
+Extension settings and Beetol Game token login are stored in Chrome extension storage and should survive reloads, browser restarts, rebuilds, and normal manual updates as long as the same unpacked extension install is reloaded from the same stable folder. Removing the extension, loading a different folder as a new unpacked extension, or clearing extension site data can clear that storage.
+
 ## Install From A GitHub Release
 
 If a release archive is provided:
@@ -113,6 +115,8 @@ If a release archive is provided:
 6. Refresh X/Twitter tabs.
 
 Manual installs do not auto-update. The Suite tab checks the latest GitHub release and shows an update notice when the release tag is newer than the installed manifest version. To update, download or rebuild the latest release and reload the unpacked extension.
+
+For release-archive installs, keep the unzipped folder stable and replace its contents in place before pressing reload. Loading a freshly unzipped folder as a second unpacked extension can create a different extension identity and lose local settings or login tokens.
 
 ## Update Check Setup For Maintainers
 
@@ -335,7 +339,9 @@ If the imported file appears to do nothing, confirm the JSON includes at least o
 - Beetol Game login and actions call `https://www.remilia.net`.
 - Postreader OCR and Miladymaxxer avatar inference run locally in the extension context.
 - Beetol Game access and refresh tokens are stored in local Chrome extension storage under namespaced keys.
+- Stored Beetol Game tokens persist across extension service-worker restarts, browser restarts, extension reloads, and ordinary updates that keep the same extension identity. The extension refreshes access tokens from the stored refresh token when possible.
 - Passwords entered in the Beetol Game login form are not stored by milXdy.
+- Browser-session SSO depends on RemiliaNET cookies in the user's browser profile. Those cookies are controlled by the browser and RemiliaNET, not by milXdy, and may expire independently of extension storage.
 - Accounts with RemiliaNET 2FA cannot complete the password-grant popup login. Use **Open RemiliaNET SSO**, finish login in the RemiliaNET tab, then return and use **Retry session**. If RemiliaNET does not allow its beetle APIs through browser session cookies, those accounts will need a future OAuth authorization-code/PKCE integration from RemiliaNET rather than the password flow.
 
 ## Development

@@ -322,6 +322,8 @@ Use the checks relevant to the user's enabled features.
 
 - Enable Beetol Game panel inside RemiNet connector settings.
 - Log in from the popup if needed.
+- Confirm a token login remains signed in after pressing reload on the extension card. Beetol access and refresh tokens live in Chrome extension local storage and should survive reloads, browser restarts, and updates that keep the same extension identity.
+- For unpacked beta installs, keep the extension folder stable and replace files in place during updates. Removing the extension or loading a different folder as a new unpacked extension can clear local settings and Beetol tokens.
 - Confirm the panel mounts on X/Twitter.
 - If 2FA is required, use **Open RemiliaNET SSO**, have the user finish login in the RemiliaNET tab, then click **Retry session** in the popup. Explain that this only works if RemiliaNET allows the beetle APIs to use the browser session; otherwise the extension needs a future RemiliaNET OAuth authorization-code/PKCE flow because the password-grant popup flow cannot complete 2FA.
 

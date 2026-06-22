@@ -245,8 +245,12 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message?.type === 'beetol:authStatus') {
         await migrateAuth();
-        const stored = await getStored([ACCESS_TOKEN_KEY]);
+        const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
         if (stored[ACCESS_TOKEN_KEY]) {
+          sendResponse({ ok: true, signedIn: true, method: 'token' });
+          return;
+        }
+        if (stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
           sendResponse({ ok: true, signedIn: true, method: 'token' });
           return;
         }
