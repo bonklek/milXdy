@@ -1,10 +1,24 @@
 const BASE_URL = 'https://www.remilia.net';
 const OIDC_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`;
+const AUTH_COOKIE_NAME = 'authToken';
+const AUTH_COOKIE_TTL_SECONDS = 900;
+const POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const ACCESS_TOKEN_KEY = 'beetol.accessToken';
 const REFRESH_TOKEN_KEY = 'beetol.refreshToken';
+const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY];
 const LEGACY_PREFIX = 'bex' + 'tol';
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
+const MESSAGE_TYPES = new Set([
+  'beetol:login',
+  'beetol:logout',
+  'beetol:authStatus',
+  'beetol:sessionStatus',
+  'beetol:getState',
+  'beetol:action',
+  'beetol:crunchJunk',
+  'beetol:poke',
+]);
 const KNOWN_ITEM_KEYS = new Set([
   'green', 'purple', 'ladybug', 'cucumber', 'monarch', 'pond', 'giraffe_weevil', 'pillbug',
   'imperial_tortoise', 'christmas', 'skull', 'bumblebee', 'golden_tiger', 'blue_longicorn',
@@ -47,7 +61,34 @@ async function migrateAuth() {
 }
 
 async function clearAuth() {
+  await clearAuthCookie();
   return chrome.storage.local.remove(TOKEN_KEYS);
+}
+
+async function setAuthCookie(accessToken) {
+  if (!accessToken || !chrome.cookies?.set) return;
+  try {
+    await chrome.cookies.set({
+      url: BASE_URL,
+      name: AUTH_COOKIE_NAME,
+      value: accessToken,
+      path: '/',
+      secure: true,
+      sameSite: 'no_restriction',
+      expirationDate: Math.floor(Date.now() / 1000) + AUTH_COOKIE_TTL_SECONDS,
+    });
+  } catch (error) {
+    console.warn('Failed to set RemiliaNET auth cookie', error);
+  }
+}
+
+async function clearAuthCookie() {
+  if (!chrome.cookies?.remove) return;
+  try {
+    await chrome.cookies.remove({ url: BASE_URL, name: AUTH_COOKIE_NAME });
+  } catch (error) {
+    console.warn('Failed to clear RemiliaNET auth cookie', error);
+  }
 }
 
 async function oidc(params) {
@@ -65,6 +106,7 @@ async function oidc(params) {
     };
   }
   if (!data.access_token) return { ok: false, error: 'NO_ACCESS_TOKEN' };
+  await setAuthCookie(data.access_token);
   await setStored({
     [ACCESS_TOKEN_KEY]: data.access_token,
     [REFRESH_TOKEN_KEY]: data.refresh_token || null,
@@ -86,28 +128,50 @@ async function remiliaFetch(method, path, body, retry = true) {
   const stored = await getStored([ACCESS_TOKEN_KEY]);
   const accessToken = stored[ACCESS_TOKEN_KEY];
   if (!accessToken) return { ok: false, authRequired: true };
+  await setAuthCookie(accessToken);
 
+  const result = await remiliaRequest(method, path, body, {
+    credentials: 'include',
+    authMethod: 'cookie',
+  });
+
+  if ((result.status === 401 || result.status === 403) && retry) {
+    if (await refreshAccessToken()) return remiliaFetch(method, path, body, false);
+    await clearAuth();
+    return { ok: false, authRequired: true, status: result.status, data: result.data, authMethod: result.authMethod };
+  }
+
+  return result;
+}
+
+async function remiliaRequest(method, path, body, options = {}) {
+  const headers = {
+    Accept: 'application/json',
+    ...(body == null ? {} : { 'Content-Type': 'application/json' }),
+    ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
+  };
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
-    headers: {
-      Accept: 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-      ...(body == null ? {} : { 'Content-Type': 'application/json' }),
-    },
+    credentials: options.credentials || 'omit',
+    headers,
     body: body == null ? undefined : JSON.stringify(body),
   });
 
-  if ((response.status === 401 || response.status === 403) && retry) {
-    if (await refreshAccessToken()) return remiliaFetch(method, path, body, false);
-    await clearAuth();
-    return { ok: false, authRequired: true };
-  }
-
-  const data = await response.json().catch(() => null);
+  const data = await readResponseBody(response);
   if (!response.ok) {
-    return { ok: false, status: response.status, data };
+    return { ok: false, status: response.status, data, authMethod: options.authMethod };
   }
-  return { ok: true, data };
+  return { ok: true, status: response.status, data, authMethod: options.authMethod };
+}
+
+async function readResponseBody(response) {
+  const text = await response.text().catch(() => '');
+  if (!text) return null;
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { message: text };
+  }
 }
 
 async function remiliaSessionFetch(method, path, body) {
@@ -129,7 +193,11 @@ async function remiliaSessionFetch(method, path, body) {
 
 async function remiliaAuthedFetch(method, path, body, retry = true) {
   const tokenResult = await remiliaFetch(method, path, body, retry);
-  if (tokenResult.ok || !tokenResult.authRequired) return tokenResult;
+  if (tokenResult.ok) return tokenResult;
+  if (!tokenResult.authRequired) {
+    const sessionResult = await remiliaSessionFetch(method, path, body);
+    return sessionResult.ok ? sessionResult : tokenResult;
+  }
   return remiliaSessionFetch(method, path, body);
 }
 
@@ -223,10 +291,215 @@ async function crunchJunk() {
 async function pokeUser(username) {
   const cleanUsername = String(username || '').replace(/^@/, '').trim();
   if (!cleanUsername) return { ok: false, error: 'MISSING_USERNAME' };
-  return remiliaAuthedFetch('POST', '/api/pokeUser', { username: cleanUsername });
+  const result = await remiliaPokeFetch(cleanUsername);
+  if (!result.ok) return result;
+
+  const data = result.data || {};
+  const responseCooldownMs = extractCooldownMs(data);
+  if (data.success === false || data.ok === false) {
+    return {
+      ok: false,
+      status: result.status,
+      data,
+      cooldownMs: responseCooldownMs,
+      error: data.message || data.error || 'POKE_REJECTED',
+    };
+  }
+
+  return {
+    ...result,
+    cooldownMs: responseCooldownMs || POKE_COOLDOWN_MS,
+  };
+}
+
+async function remiliaPokeFetch(username) {
+  await migrateAuth();
+  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
+  let accessToken = stored[ACCESS_TOKEN_KEY];
+  if (!accessToken && stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
+    accessToken = (await getStored([ACCESS_TOKEN_KEY]))[ACCESS_TOKEN_KEY];
+  }
+  if (!accessToken) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
+
+  await setAuthCookie(accessToken);
+  const before = await remiliaRequest('GET', `/api/profile/~${encodeURIComponent(username)}`, null, {
+    credentials: 'include',
+    authMethod: 'profile-before-cookie',
+  });
+
+  const attempts = [
+    { authMethod: 'cookie', credentials: 'include' },
+    { authMethod: 'bearer', credentials: 'omit', accessToken },
+    { authMethod: 'cookie+bearer', credentials: 'include', accessToken },
+  ];
+  const results = [];
+  for (const attempt of attempts) {
+    const result = await remiliaRequest('POST', '/api/pokeUser', { username }, attempt);
+    results.push(summarizeRequestResult(result));
+    if (result.ok && result.data?.success !== false && result.data?.ok !== false) {
+      const verified = await verifyPokeResult(username, before, result, attempt.authMethod, results);
+      await storePokeDiagnostic(verified);
+      return verified.ok ? verified : result;
+    }
+    if (result.status && result.status !== 401 && result.status !== 403) {
+      await storePokeDiagnostic({ ok: false, username, before: summarizeProfile(before), attempts: results });
+      return result;
+    }
+  }
+
+  const fallback = {
+    ok: false,
+    authRequired: results.some(result => result.status === 401 || result.status === 403),
+    error: 'POKE_AUTH_FAILED',
+    username,
+    before: summarizeProfile(before),
+    attempts: results,
+  };
+  await storePokeDiagnostic(fallback);
+  return fallback;
+}
+
+async function verifyPokeResult(username, before, pokeResult, authMethod, attempts) {
+  const after = await remiliaRequest('GET', `/api/profile/~${encodeURIComponent(username)}`, null, {
+    credentials: 'include',
+    authMethod: 'profile-after-cookie',
+  });
+  const beforeProfile = summarizeProfile(before);
+  const afterProfile = summarizeProfile(after);
+  const beforePokes = Number(before?.data?.user?.pokes);
+  const afterPokes = Number(after?.data?.user?.pokes);
+  const cooldownMs = extractCooldownMs(pokeResult.data) || extractCooldownMs(after.data?.viewerContext) || POKE_COOLDOWN_MS;
+  const verified = pokeResult.data?.success === true
+    || after.data?.viewerContext?.canPoke === false && Number(after.data?.viewerContext?.pokeCooldownSeconds) > 0
+    || Number.isFinite(beforePokes) && Number.isFinite(afterPokes) && afterPokes > beforePokes;
+
+  return {
+    ...pokeResult,
+    ok: Boolean(verified),
+    error: verified ? undefined : 'POKE_NOT_VERIFIED',
+    cooldownMs: verified ? cooldownMs : 0,
+    username,
+    authMethod,
+    before: beforeProfile,
+    after: afterProfile,
+    attempts,
+  };
+}
+
+function summarizeRequestResult(result) {
+  return {
+    ok: Boolean(result?.ok),
+    status: result?.status || 0,
+    authMethod: result?.authMethod || '',
+    success: result?.data?.success,
+    message: result?.data?.message || result?.data?.error || '',
+  };
+}
+
+function summarizeProfile(result) {
+  return {
+    ok: Boolean(result?.ok),
+    status: result?.status || 0,
+    authMethod: result?.authMethod || '',
+    username: result?.data?.user?.username || '',
+    pokes: result?.data?.user?.pokes,
+    canPoke: result?.data?.viewerContext?.canPoke,
+    pokeCooldownSeconds: result?.data?.viewerContext?.pokeCooldownSeconds,
+    isAuthenticated: result?.data?.isAuthenticated,
+  };
+}
+
+async function storePokeDiagnostic(diagnostic) {
+  await setStored({
+    [LAST_POKE_DIAGNOSTIC_KEY]: {
+      ...diagnostic,
+      updatedAt: Date.now(),
+    },
+  });
+}
+
+function extractCooldownMs(data) {
+  const nested = data?.data || {};
+  const values = [
+    data?.cooldownMs,
+    data?.cooldown,
+    data?.cooldownRemaining,
+    data?.cooldownRemainingMs,
+    data?.remainingMs,
+    data?.remaining,
+    data?.retryAfterMs,
+    data?.retryAfter,
+    data?.nextPokeInMs,
+    data?.nextPokeIn,
+    data?.pokeCooldownMs,
+    data?.pokeCooldown,
+    data?.pokeCooldownSeconds,
+    nested?.cooldownMs,
+    nested?.cooldown,
+    nested?.cooldownRemaining,
+    nested?.cooldownRemainingMs,
+    nested?.remainingMs,
+    nested?.remaining,
+    nested?.retryAfterMs,
+    nested?.retryAfter,
+    nested?.nextPokeInMs,
+    nested?.nextPokeIn,
+    nested?.pokeCooldownMs,
+    nested?.pokeCooldown,
+    nested?.pokeCooldownSeconds,
+  ];
+
+  for (const value of values) {
+    const ms = normalizeCooldownMs(value);
+    if (ms > 0) return ms;
+  }
+
+  const untilValues = [
+    data?.cooldownUntil,
+    data?.nextPokeAt,
+    data?.pokeAvailableAt,
+    data?.availableAt,
+    nested?.cooldownUntil,
+    nested?.nextPokeAt,
+    nested?.pokeAvailableAt,
+    nested?.availableAt,
+  ];
+  for (const value of untilValues) {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp) && timestamp > Date.now()) {
+      return timestamp - Date.now();
+    }
+  }
+
+  return 0;
+}
+
+function normalizeCooldownMs(value) {
+  if (value == null || value === false) return 0;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return value < 1000 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
+    const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
+    if (match && match[0].trim()) {
+      const days = Number(match[1] || 0);
+      const hours = Number(match[2] || 0);
+      const minutes = Number(match[3] || 0);
+      const seconds = Number(match[4] || 0);
+      return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+    }
+  }
+  return 0;
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!MESSAGE_TYPES.has(message?.type)) return false;
+
   (async () => {
     try {
       if (message?.type === 'beetol:login') {
@@ -247,11 +520,23 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         await migrateAuth();
         const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
         if (stored[ACCESS_TOKEN_KEY]) {
-          sendResponse({ ok: true, signedIn: true, method: 'token' });
+          const whoami = await remiliaFetch('GET', '/api/profile/whoami');
+          sendResponse({
+            ok: true,
+            signedIn: Boolean(whoami.ok),
+            method: whoami.ok ? 'token' : null,
+            user: whoami.ok ? whoami.data : null,
+          });
           return;
         }
         if (stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
-          sendResponse({ ok: true, signedIn: true, method: 'token' });
+          const whoami = await remiliaFetch('GET', '/api/profile/whoami');
+          sendResponse({
+            ok: true,
+            signedIn: Boolean(whoami.ok),
+            method: whoami.ok ? 'token' : null,
+            user: whoami.ok ? whoami.data : null,
+          });
           return;
         }
         const session = await remiliaSessionFetch('GET', '/api/beetle/user');
@@ -279,7 +564,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         sendResponse(await pokeUser(message.username));
         return;
       }
-      sendResponse({ ok: false, error: 'UNKNOWN_MESSAGE' });
+      sendResponse({ ok: false, error: 'UNKNOWN_BEETOL_MESSAGE' });
     } catch (error) {
       sendResponse({ ok: false, error: error?.message || String(error) });
     }

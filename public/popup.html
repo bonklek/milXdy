@@ -46,6 +46,7 @@
         <label class="setting"><span><strong>Remilia Wiki links</strong><small>Link known wiki concepts inside posts.</small></span><input type="checkbox" data-control="wiki.enabled"></label>
         <label class="setting"><span><strong>Wiki previews</strong><small>Fetch previews only on hover.</small></span><input type="checkbox" data-control="wiki.previewsEnabled"></label>
         <label class="setting"><span><strong>Debug mode</strong><small>Expose extra matching diagnostics.</small></span><input type="checkbox" data-control="wiki.debugMode"></label>
+        <label class="field"><span><strong>Grok workflow</strong></span><select data-control="wiki.grokWorkflowMode"><option value="one-shot">One-shot draft</option><option value="socratic">Socratic research</option></select></label>
         <div class="field checkbox-counter">
           <span>Max links per post</span>
           <div>
@@ -64,7 +65,7 @@
                 <button class="settings-list-action" id="wikiPreloadTemplate" type="button">Template</button>
               </div>
             </div>
-            <small>Saved selections can open templated new pages or become sections on existing pages.</small>
+            <small>Saved selections can open templated pages. On X, right-click posts or profiles for Grok wiki prompts. Socratic mode opens Grok fullscreen and runs staged research prompts.</small>
           </div>
           <div class="settings-list-items" id="wikiLaterItems"></div>
         </section>
@@ -114,7 +115,7 @@
         <label class="setting"><span><strong>Beetle icon</strong><small>Show the beetle count group.</small></span><input type="checkbox" data-control="remistats.icons.beetle"></label>
         <label class="setting"><span><strong>Poke icon</strong><small>Show the remilia.net poke button.</small></span><input type="checkbox" data-control="remistats.icons.poke"></label>
         <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. The login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
-        <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small>Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.</small></div>
+        <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.</small></div>
         <form class="login-form" id="beetolLoginForm">
           <input id="beetolUsername" type="text" placeholder="Username or email" autocomplete="username">
           <input id="beetolPassword" type="password" placeholder="password" autocomplete="current-password">
@@ -125,6 +126,7 @@
           <button class="secondary-button" id="beetolRetrySession" type="button">Retry session</button>
         </div>
         <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
+        <div class="auth-diagnostic" id="beetolPokeDiagnostic" hidden></div>
         <label class="field"><span>Beetol color</span><select id="beetolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
         <label class="field"><span>Beetol mode</span><select id="beetolMode"><option value="dark">Dark</option><option value="light">Light</option></select></label>
         <p class="message" id="beetolMessage"></p>
@@ -145,17 +147,16 @@
 
       <section class="panel" data-panel="diagnostics">
         <section class="report-box" aria-labelledby="reportTitle">
-          <div>
-            <strong id="reportTitle">Report feedback</strong>
-            <small>Open a prefilled GitHub issue or reply on X. Copy is available if the browser blocks prefills.</small>
+          <div class="report-header">
+            <div>
+              <strong id="reportTitle">🐞 Report bug</strong>
+              <small>Send a bug report to the collector tweet or open a GitHub issue.</small>
+            </div>
+            <label class="report-assist"><input id="reportLlmAssist" type="checkbox"> LLM assisted</label>
           </div>
           <div class="report-grid">
-            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="github">Bug via GitHub</button>
-            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="x">Bug via X</button>
-            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="github">Feature via GitHub</button>
-            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="x">Feature via X</button>
-            <button class="secondary-button" type="button" data-report-kind="bug" data-report-target="copy">Copy bug template</button>
-            <button class="secondary-button" type="button" data-report-kind="feature" data-report-target="copy">Copy feature template</button>
+            <button class="secondary-button" type="button" data-report-target="x">Report via X</button>
+            <button class="secondary-button" type="button" data-report-target="github">Report via GitHub</button>
           </div>
           <p class="message" id="reportMessage"></p>
         </section>

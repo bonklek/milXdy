@@ -51,6 +51,7 @@ async function persist(): Promise<void> {
     enabled: enabled?.checked ?? DEFAULT_SETTINGS.enabled,
     previewsEnabled: previews?.checked ?? DEFAULT_SETTINGS.previewsEnabled,
     debugMode: debugMode?.checked ?? DEFAULT_SETTINGS.debugMode,
+    grokWorkflowMode: DEFAULT_SETTINGS.grokWorkflowMode,
     maxLinksPerPostEnabled: maxLinksEnabled?.checked ?? DEFAULT_SETTINGS.maxLinksPerPostEnabled,
     maxLinksPerPost: Number(maxLinks?.value || DEFAULT_SETTINGS.maxLinksPerPost),
     maxLowConfidenceLinksPerPost: Number(maxLowConfidenceLinks?.value ?? DEFAULT_SETTINGS.maxLowConfidenceLinksPerPost),

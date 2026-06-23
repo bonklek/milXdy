@@ -19,9 +19,11 @@ const WIKITOOL_RELEASES_URL = "https://github.com/remiliacorporation/remilia-wik
 const UPDATE_STATUS_KEY = "milxdy.updateStatus";
 const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 const GITHUB_ISSUES_NEW_URL = "https://github.com/bonklek/milXdy/issues/new";
-const X_FEEDBACK_REPLY_URL = "https://twitter.com/intent/tweet";
+const X_FEEDBACK_REPLY_URL = "https://x.com/intent/tweet";
 const X_FEEDBACK_POST_ID = "2069113443664220227";
+const X_FEEDBACK_COLLECTOR_URL = `https://x.com/MiladyBonkle/status/${X_FEEDBACK_POST_ID}`;
 const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/login";
+const LAST_POKE_DIAGNOSTIC_KEY = "milxdy.remistats.lastPokeDiagnostic";
 
 type UpdateStatus = {
   checkedAt: number;
@@ -61,6 +63,7 @@ const bindings: Record<string, ControlBinding> = {
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
   "wiki.previewsEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "previewsEnabled", kind: "boolean", fallback: true },
   "wiki.debugMode": { area: "local", key: WIKI_SETTINGS_KEY, property: "debugMode", kind: "boolean", fallback: false },
+  "wiki.grokWorkflowMode": { area: "local", key: WIKI_SETTINGS_KEY, property: "grokWorkflowMode", kind: "string", fallback: "one-shot" },
   "wiki.maxLinksPerPostEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLinksPerPostEnabled", kind: "boolean", fallback: false },
   "wiki.maxLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLinksPerPost", kind: "number", fallback: 4 },
   "wiki.maxLowConfidenceLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLowConfidenceLinksPerPost", kind: "number", fallback: 1 },
@@ -471,8 +474,8 @@ function chooseWikitoolAsset(assets: GitHubReleaseAsset[]): GitHubReleaseAsset |
   }) || candidates[0] || null;
 }
 
-function openExternalUrl(url: string): void {
-  void chrome.tabs.create({ url });
+function openExternalUrl(url: string): Promise<chrome.tabs.Tab> {
+  return chrome.tabs.create({ url });
 }
 
 function wikiAiHelpPrompt(): string {
@@ -709,54 +712,38 @@ async function renderStatus(): Promise<void> {
 
 function setupReportActions(): void {
   const message = document.getElementById("reportMessage");
-  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-report-kind][data-report-target]"));
+  const llmAssist = document.getElementById("reportLlmAssist") as HTMLInputElement | null;
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-report-target]"));
   for (const button of buttons) {
     button.addEventListener("click", () => {
-      const kind = button.dataset.reportKind === "feature" ? "feature" : "bug";
-      const target = button.dataset.reportTarget;
-      const template = reportTemplate(kind);
+      const target = button.dataset.reportTarget === "github" ? "github" : "x";
+      const template = bugReportTemplate();
+      if (llmAssist?.checked) {
+        void navigator.clipboard.writeText(llmBugReportPrompt(target, template)).then(() => {
+          void openExternalUrl(target === "github" ? GITHUB_ISSUES_NEW_URL : xReplyUrl(""))
+            .then(() => showLlmPromptCopiedNotification(target))
+            .catch(() => showLlmPromptCopiedNotification(target));
+          if (message) {
+            message.textContent = `LLM prompt copied. Paste it into a chat window, then use the opened ${target === "github" ? "GitHub issue" : "X reply"} when your report is ready.`;
+          }
+        }).catch(() => {
+          if (message) message.textContent = "Copy failed. Disable LLM assisted to open a prefilled report instead.";
+        });
+        return;
+      }
       if (target === "github") {
-        openExternalUrl(githubIssueUrl(kind, template));
+        openExternalUrl(githubIssueUrl(template));
         if (message) message.textContent = "Opened GitHub issue form.";
         return;
       }
-      if (target === "x") {
-        openExternalUrl(xReplyUrl(template.x));
-        if (message) message.textContent = "Opened X reply composer.";
-        return;
-      }
-      void navigator.clipboard.writeText(template.full).then(() => {
-        if (message) message.textContent = "Template copied.";
-      }).catch(() => {
-        if (message) message.textContent = "Copy failed. Open GitHub or X and paste the fields manually.";
-      });
+      openExternalUrl(xReplyUrl(template.x));
+      if (message) message.textContent = "Opened X reply composer.";
     });
   }
 }
 
-function reportTemplate(kind: "bug" | "feature"): { title: string; full: string; x: string } {
+function bugReportTemplate(): { title: string; full: string; x: string } {
   const version = chrome.runtime.getManifest().version;
-  if (kind === "feature") {
-    return {
-      title: "[Feature]: ",
-      full: [
-        "### Feature request",
-        "",
-        `milXdy version: ${version}`,
-        "Feature area:",
-        "Use case:",
-        "Requested behavior:",
-        "Notes/screenshots:",
-      ].join("\n"),
-      x: [
-        "milXdy feature request",
-        `v${version}`,
-        "Feature:",
-        "Why:",
-        "Expected:",
-      ].join("\n"),
-    };
-  }
   return {
     title: "[Bug]: ",
     full: [
@@ -771,7 +758,7 @@ function reportTemplate(kind: "bug" | "feature"): { title: string; full: string;
       "Console errors/screenshots:",
     ].join("\n"),
     x: [
-      "milXdy bug report",
+      "🐞 milXdy bug report",
       `v${version}`,
       "Feature:",
       "Issue:",
@@ -781,11 +768,60 @@ function reportTemplate(kind: "bug" | "feature"): { title: string; full: string;
   };
 }
 
-function githubIssueUrl(kind: "bug" | "feature", template: { title: string; full: string }): string {
+function llmBugReportPrompt(target: "github" | "x", template: { title: string; full: string; x: string }): string {
+  const version = chrome.runtime.getManifest().version;
+  const targetInstructions = target === "github"
+    ? [
+      "Final destination: GitHub issue.",
+      "Output a clear issue title and a Markdown body that follows the template below.",
+      "Prefer concise sections, reproduction steps, expected behavior, actual behavior, environment, suspected area, screenshots/logs, and impact.",
+      "If information is missing, ask targeted questions before drafting. Do not invent facts.",
+    ]
+    : [
+      "Final destination: X reply to the milXdy bug collector tweet.",
+      `Collector tweet: ${X_FEEDBACK_COLLECTOR_URL}`,
+      "Respect X character limits. First try to produce one reply under 240 characters that includes feature area, symptom, and reproduction cue.",
+      "If the bug needs more detail, output a short reply plus a second expanded note. If you can generate images, offer to create a screenshot-style summary card so the report can fit despite character limits.",
+      "Ask targeted questions before drafting. Do not invent facts.",
+    ];
+
+  return [
+    "Help me create a high-quality milXdy bug report through a short Socratic interview.",
+    "",
+    `milXdy version: ${version}`,
+    ...targetInstructions,
+    "",
+    "Interview flow:",
+    "1. Ask only the most relevant questions needed to make the report actionable.",
+    "2. Prioritize exact page or feature, what the user clicked or saw, expected vs actual behavior, repeatability, browser/extension version, console errors, screenshots, and whether reloading X or the extension changes anything.",
+    "3. If the user is unsure, help them gather evidence with simple steps, such as checking the Diag tab values or copying visible error text.",
+    "4. When enough detail is available, output only the final report text for the selected destination.",
+    "",
+    "Quality bar:",
+    "- Make it reproducible.",
+    "- Keep speculation separate from observed facts.",
+    "- Include privacy reminders before asking for screenshots or logs.",
+    "- Keep the user's tone intact while making the report concise.",
+    "",
+    "Template:",
+    target === "github" ? template.full : template.x,
+  ].join("\n");
+}
+
+function showLlmPromptCopiedNotification(target: "github" | "x"): void {
+  chrome.notifications.create(`milxdy-llm-bug-report-${Date.now()}`, {
+    type: "basic",
+    iconUrl: chrome.runtime.getURL("icons/icon128.png"),
+    title: "LLM prompt copied",
+    message: `Paste it into your LLM chat, answer its questions, then use the opened ${target === "github" ? "GitHub issue" : "X reply"} for the final bug report.`,
+  });
+}
+
+function githubIssueUrl(template: { title: string; full: string }): string {
   const url = new URL(GITHUB_ISSUES_NEW_URL);
   url.searchParams.set("title", template.title);
   url.searchParams.set("body", template.full);
-  url.searchParams.set("labels", kind === "bug" ? "bug" : "enhancement");
+  url.searchParams.set("labels", "bug");
   return url.toString();
 }
 
@@ -808,17 +844,19 @@ function escapeHtml(value: string): string {
 
 async function setupBeetolPanel(): Promise<void> {
   const status = document.getElementById("beetolStatus");
+  const authDetail = document.getElementById("beetolAuthDetail");
   const form = document.getElementById("beetolLoginForm") as HTMLFormElement | null;
   const username = document.getElementById("beetolUsername") as HTMLInputElement | null;
   const password = document.getElementById("beetolPassword") as HTMLInputElement | null;
   const logout = document.getElementById("beetolLogout") as HTMLButtonElement | null;
   const openSso = document.getElementById("beetolOpenSso") as HTMLButtonElement | null;
   const retrySession = document.getElementById("beetolRetrySession") as HTMLButtonElement | null;
+  const pokeDiagnostic = document.getElementById("beetolPokeDiagnostic");
   const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
   const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
   const message = document.getElementById("beetolMessage");
 
-  if (!status || !form || !username || !password || !logout || !openSso || !retrySession || !color || !mode || !message) return;
+  if (!status || !authDetail || !form || !username || !password || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
 
   const settings = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
   color.value = typeof settings.beetolColor === "string" ? settings.beetolColor : "red";
@@ -831,15 +869,22 @@ async function setupBeetolPanel(): Promise<void> {
   };
 
   const renderAuth = (signedIn: boolean, method = "") => {
+    status.parentElement?.toggleAttribute("data-signed-in", signedIn);
     status.textContent = signedIn
-      ? `Signed in to remilia.net${method === "session" ? " via browser session" : ""}`
+      ? `Signed in to RemiNet${method === "session" ? " via browser session" : ""}`
       : "Not signed in";
+    authDetail.textContent = signedIn
+      ? "The RemiNet connector login is active. This account powers Beetol hunts and X poke actions."
+      : "Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.";
     form.hidden = signedIn;
     logout.hidden = !signedIn;
+    openSso.hidden = signedIn;
+    retrySession.hidden = signedIn;
   };
 
   const auth = await chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null);
   renderAuth(Boolean(auth?.signedIn), typeof auth?.method === "string" ? auth.method : "");
+  await renderPokeDiagnostic(pokeDiagnostic);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -898,6 +943,52 @@ async function setupBeetolPanel(): Promise<void> {
   mode.addEventListener("change", () => {
     void chrome.storage.local.set({ beetolMode: mode.value });
   });
+}
+
+async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
+  const stored = await chrome.storage.local.get(LAST_POKE_DIAGNOSTIC_KEY);
+  const diagnostic = objectValue(stored[LAST_POKE_DIAGNOSTIC_KEY]);
+  if (!Object.keys(diagnostic).length) {
+    root.hidden = true;
+    return;
+  }
+  const attempts = Array.isArray(diagnostic.attempts)
+    ? diagnostic.attempts.map((attempt) => objectValue(attempt))
+    : [];
+  const updatedAt = typeof diagnostic.updatedAt === "number"
+    ? formatCheckedAt(diagnostic.updatedAt)
+    : "unknown";
+  root.hidden = false;
+  root.textContent = [
+    `Last poke: ${diagnostic.ok ? "ok" : "failed"} (${updatedAt})`,
+    `Target: ${String(diagnostic.username || "")}`,
+    `Error: ${String(diagnostic.error || "")}`,
+    `Before: ${compactDiagnosticProfile(objectValue(diagnostic.before))}`,
+    `After: ${compactDiagnosticProfile(objectValue(diagnostic.after))}`,
+    `Attempts: ${attempts.map(compactDiagnosticAttempt).join(" | ") || "none"}`,
+  ].join("\n");
+}
+
+function compactDiagnosticProfile(profile: Record<string, unknown>): string {
+  if (!Object.keys(profile).length) return "none";
+  return [
+    `status=${String(profile.status ?? "")}`,
+    `auth=${String(profile.isAuthenticated ?? "")}`,
+    `user=${String(profile.username ?? "")}`,
+    `pokes=${String(profile.pokes ?? "")}`,
+    `canPoke=${String(profile.canPoke ?? "")}`,
+    `cooldown=${String(profile.pokeCooldownSeconds ?? "")}`,
+  ].join(" ");
+}
+
+function compactDiagnosticAttempt(attempt: Record<string, unknown>): string {
+  return [
+    String(attempt.authMethod || "unknown"),
+    `status=${String(attempt.status ?? "")}`,
+    `ok=${String(attempt.ok ?? "")}`,
+    `success=${String(attempt.success ?? "")}`,
+    String(attempt.message || ""),
+  ].filter(Boolean).join(" ");
 }
 
 export {};

@@ -296,6 +296,11 @@ Use the checks relevant to the user's enabled features.
 - Open a post likely to contain Remilia Wiki concepts.
 - Confirm inline links appear.
 - Hover a link if previews are enabled.
+- Right-click a post, profile, or selected text on X/Twitter and confirm **Create Wiki entry with Grok** has submenu options for a post-seeded prompt, a generic article prompt, and a profile article prompt.
+- Choose one submenu item and confirm the native Grok actions panel opens, the prompt is seeded or copied, and the Remilia Wiki shortcut appears in the top-right. On profile pages, the profile prompt should use X's **Profile Summary** Grok button.
+- Set **Wiki > Grok workflow** to **Socratic research** and confirm Grok's **Open conversation** button is clicked before staged prompts are submitted.
+- Confirm the prompt asks for a commit-summary line and a clean fenced `mediawiki` block without Grok render artifacts.
+- Drag the shortcut and confirm it appears on the left, avoids overlap with the Beetol hunter widget, snaps to a viewport edge, lets the page title be edited, closes with `x`, and opens a templated new Remilia Wiki edit page after clicking.
 
 ### Reader
 
@@ -330,9 +335,9 @@ Use the checks relevant to the user's enabled features.
 ### Feedback Reporting
 
 - Open the **Diag** tab.
-- Use **Bug via GitHub** or **Feature via GitHub** for full reports.
-- Use **Bug via X** or **Feature via X** for short public replies to the feedback post.
-- If a popup blocker or X/GitHub form prevents prefilling, use **Copy bug template** or **Copy feature template** and paste manually.
+- Use **Report via GitHub** for full bug reports.
+- Use **Report via X** for short public replies to the feedback post.
+- Enable **LLM assisted** and click either destination to copy the Socratic bug-report prompt, then paste it into a chat model and use the resulting report text.
 
 ## Troubleshooting Script
 
