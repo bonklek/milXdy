@@ -3,6 +3,8 @@ import { createId, loadDenyTerms, loadLaterItems, loadLocalAliases, saveDenyTerm
 const MENU_ADD_ALIAS = "remilia-add-alias";
 const MENU_LINK_LATER = "remilia-link-later";
 const MENU_CREATE_WITH_GROK = "remilia-create-wiki-with-grok";
+const MENU_GROK_POST_SEED = "remilia-create-wiki-with-grok-post-seed";
+const MENU_GROK_GENERIC = "remilia-create-wiki-with-grok-generic";
 const MENU_DENY = "remilia-deny-term";
 const MENU_DENY_LINK_TEXT = "remilia-deny-link-text";
 const MENU_DENY_LINK_TARGET = "remilia-deny-link-target";
@@ -24,6 +26,27 @@ chrome.runtime.onInstalled.addListener(() => {
       id: MENU_CREATE_WITH_GROK,
       title: "Create Wiki entry with Grok",
       contexts: ["selection", "page", "link"],
+      documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
+    });
+    chrome.contextMenus.create({
+      id: MENU_GROK_POST_SEED,
+      parentId: MENU_CREATE_WITH_GROK,
+      title: "Use this post as a jumping off point",
+      contexts: ["selection", "page", "link"],
+      documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
+    });
+    chrome.contextMenus.create({
+      id: MENU_GROK_GENERIC,
+      parentId: MENU_CREATE_WITH_GROK,
+      title: "Create a generic article prompt",
+      contexts: ["selection", "page", "link"],
+      documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
+    });
+    chrome.contextMenus.create({
+      id: "remilia-create-wiki-with-grok-profile",
+      parentId: MENU_CREATE_WITH_GROK,
+      title: "Create a profile article prompt",
+      contexts: ["page", "selection", "link"],
       documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
     });
     chrome.contextMenus.create({
@@ -51,8 +74,12 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 
   if (info.menuItemId === MENU_LINK_LATER && text) {
     void addLater(text, tab?.url);
-  } else if (info.menuItemId === MENU_CREATE_WITH_GROK && tab?.id) {
-    void createWithGrok(tab.id, text, info.linkUrl || tab.url);
+  } else if (info.menuItemId === MENU_GROK_POST_SEED && tab?.id) {
+    void createWithGrok(tab.id, text, info.linkUrl || tab.url, "post-seed");
+  } else if (info.menuItemId === MENU_GROK_GENERIC && tab?.id) {
+    void createWithGrok(tab.id, text, info.linkUrl || tab.url, "generic");
+  } else if (info.menuItemId === "remilia-create-wiki-with-grok-profile" && tab?.id) {
+    void createWithGrok(tab.id, text, info.linkUrl || tab.url, "profile");
   } else if (info.menuItemId === MENU_DENY && text) {
     void addDeny(text);
   } else if (info.menuItemId === MENU_ADD_ALIAS && tab?.url && text) {
@@ -88,11 +115,12 @@ async function addAlias(label: string, url: string, title: string): Promise<void
   await saveLocalAliases(aliases.slice(0, 500));
 }
 
-async function createWithGrok(tabId: number, selectedText: string, sourceUrl?: string): Promise<void> {
+async function createWithGrok(tabId: number, selectedText: string, sourceUrl: string | undefined, mode: "post-seed" | "generic" | "profile"): Promise<void> {
   await chrome.tabs.sendMessage(tabId, {
     type: "remilia-wiki:createWithGrok",
     selectedText,
     sourceUrl,
+    mode,
   }).catch(() => undefined);
 }
 

@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS: Settings = {
   enabled: true,
   previewsEnabled: true,
   debugMode: false,
+  grokWorkflowMode: "one-shot",
   maxLinksPerPostEnabled: false,
   maxLinksPerPost: 4,
   maxLowConfidenceLinksPerPost: 1,
@@ -42,6 +43,7 @@ function normalizeSettings(value: Partial<Settings> | undefined): Settings {
     enabled: value?.enabled ?? DEFAULT_SETTINGS.enabled,
     previewsEnabled: value?.previewsEnabled ?? DEFAULT_SETTINGS.previewsEnabled,
     debugMode: value?.debugMode ?? DEFAULT_SETTINGS.debugMode,
+    grokWorkflowMode: value?.grokWorkflowMode === "socratic" ? "socratic" : DEFAULT_SETTINGS.grokWorkflowMode,
     maxLinksPerPostEnabled: value?.maxLinksPerPostEnabled ?? DEFAULT_SETTINGS.maxLinksPerPostEnabled,
     maxLinksPerPost: Number.isFinite(maxLinks) ? Math.min(12, Math.max(1, Math.round(maxLinks))) : DEFAULT_SETTINGS.maxLinksPerPost,
     maxLowConfidenceLinksPerPost: Number.isFinite(maxLowConfidenceLinks)

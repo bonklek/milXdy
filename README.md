@@ -56,7 +56,7 @@ Shows RemiStats badges and RemiNet actions for X/Twitter accounts.
 - Optional hover tooltips.
 - Optional sound effects and sound volume control.
 - Adds the Remilia Beetol Game hunter panel for signed-in `remilia.net` users.
-- Poke buttons use the same `remilia.net` session as Beetol hunts and target the matched RemiStats username, falling back to the visible X/Twitter handle when needed.
+- Poke buttons use the RemiNet connector login from settings, target the matched RemiStats username, shake while sending, and switch to a live cooldown timer when RemiliaNET returns one.
 - Login/logout controls in the settings popup.
 - Panel color and dark/light mode settings.
 - Passwords are sent directly to `www.remilia.net` for login and are not stored by milXdy.
@@ -130,7 +130,7 @@ The public beta endpoint should be:
 export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases/latest";
 ```
 
-Release tags should be semantic versions with an optional `v` prefix, such as `v0.1.1`. The manifest version in `public/manifest.json` is the installed version used for comparison.
+Release tags should be semantic versions with an optional `v` prefix, such as `v0.1.2`. The manifest version in `public/manifest.json` is the installed version used for comparison.
 
 ## Settings Menu Walkthrough
 
@@ -149,6 +149,10 @@ Open the extension icon to access the settings popup. The same UI is also regist
 - **Max links per post**: caps wiki links per post.
 - **Max low-confidence links**: limits weaker matches.
 - **Link color**: controls inline wiki-link color.
+- **Grok workflow**: chooses between **One-shot draft** and **Socratic research**. One-shot pastes a complete draft request. Socratic opens Grok's full conversation view, waits for Grok's initial response to settle, then sends staged Wikitool-inspired prompts for scouting, source discovery, article planning, and final clean MediaWiki drafting.
+- **Link later**: stores selected phrases for a templated new wiki page or a new section on an existing page.
+- **Create Wiki entry with Grok**: on X/Twitter, right-click a post, profile, or selection and choose **Use this post as a jumping off point**, **Create a generic article prompt**, or **Create a profile article prompt**. The extension opens the native Grok actions panel, seeds a Remilia Wiki research/drafting prompt, and shows a draggable Remilia Wiki shortcut for the inferred page title on the left side of the page. It avoids overlapping the Beetol hunter widget. Use the shortcut after vetting Grok's copy-pasteable MediaWiki output.
+- Grok prompts ask for a separate commit-summary line and tell Grok to remove render artifacts such as `[](grok_render_citation_card_json=...)` from the MediaWiki block.
 
 ### Reader
 
@@ -215,9 +219,9 @@ Shows beta counters for:
 
 The Diag tab also includes beta feedback actions:
 
-- **Bug via GitHub** and **Feature via GitHub** open prefilled GitHub issue forms.
-- **Bug via X** and **Feature via X** open a prefilled reply to the public feedback post.
-- **Copy bug template** and **Copy feature template** copy the same short templates if a browser blocks prefilled forms.
+- **Report via GitHub** opens a prefilled bug issue.
+- **Report via X** opens a short bug-report reply to the public feedback post.
+- **LLM assisted** copies a Socratic bug-report prompt, opens the selected destination, and shows a notification. Paste the prompt into a chat model, answer its questions, then use the final report text in GitHub or X.
 
 ## Import Legacy Miladymaxxer Statistics
 
@@ -336,13 +340,16 @@ If the imported file appears to do nothing, confirm the JSON includes at least o
 - GitHub update checks call `https://api.github.com` when configured.
 - RemiStats calls `https://api.remistats.net` for public reputation data.
 - Remilia Wiki previews call `https://wiki.remilia.org`.
+- Grok wiki prompts are pasted into X's native Grok interface from the current X/Twitter page. The extension also opens `https://wiki.remilia.org/index.php` when the post-Grok new-page shortcut is clicked.
 - Beetol Game login and actions call `https://www.remilia.net`.
 - Postreader OCR and Miladymaxxer avatar inference run locally in the extension context.
 - Beetol Game access and refresh tokens are stored in local Chrome extension storage under namespaced keys.
 - Stored Beetol Game tokens persist across extension service-worker restarts, browser restarts, extension reloads, and ordinary updates that keep the same extension identity. The extension refreshes access tokens from the stored refresh token when possible.
 - Passwords entered in the Beetol Game login form are not stored by milXdy.
 - Browser-session SSO depends on RemiliaNET cookies in the user's browser profile. Those cookies are controlled by the browser and RemiliaNET, not by milXdy, and may expire independently of extension storage.
+- RemiNet connector actions mirror RemiliaNET's own client by setting the short-lived `authToken` cookie from the RemiNet connector access token before API calls, then sending requests with cookies included. This is why the extension requests the browser `cookies` permission.
 - Accounts with RemiliaNET 2FA cannot complete the password-grant popup login. Use **Open RemiliaNET SSO**, finish login in the RemiliaNET tab, then return and use **Retry session**. If RemiliaNET does not allow its beetle APIs through browser session cookies, those accounts will need a future OAuth authorization-code/PKCE integration from RemiliaNET rather than the password flow.
+- The popup may show the last RemiNet poke diagnostic in the RemiNet connector tab. It is stored locally and is intended for beta debugging.
 
 ## Development
 
@@ -383,6 +390,14 @@ For users who want another coding/browser agent to walk through setup, use:
 - `docs/AGENT_SETUP_GUIDE.md`
 
 That guide gives an agent exact commands, browser checks, migration steps, and completion criteria.
+
+For a user-focused walkthrough, use:
+
+- `docs/USER_GUIDE.md`
+
+For maintainers reviewing whether feature changes are documented, use:
+
+- `docs/CHANGE_INVENTORY.md`
 
 ## Troubleshooting
 

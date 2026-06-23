@@ -2,6 +2,8 @@ import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twit
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
 
 // Content script for overlaying user scores on X.com.
+const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
+document.documentElement.dataset.milxdyReminetContentVersion = REMINET_CONTENT_VERSION;
 
 // Inject font into page
 const fontUrl = chrome.runtime.getURL('remistats/RemiliaMincho-Regular.otf');
@@ -129,6 +131,7 @@ let reminetDelegationInstalled = false;
 let activeTooltipBadge = null;
 let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
+const pokeCountdownTimers = new Map();
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -188,15 +191,6 @@ async function processBatch(usernames) {
   // observer tick. Without this, 404s (or unknown users) trigger an
   // infinite retry loop as the MutationObserver keeps firing.
   const requested = Array.from(usernames).map(u => u.toLowerCase());
-  const cacheNotFound = () => {
-    const now = Date.now();
-    for (const handle of requested) {
-      if (!scoreCache.has(handle)) {
-        scoreCache.set(handle, { data: null, timestamp: now });
-      }
-    }
-  };
-
   try {
     const responses = await Promise.all(requested.map(async (handle) => {
       const response = await safeRuntimeMessage({ type: 'remistats:getUser', handle });
@@ -205,8 +199,9 @@ async function processBatch(usernames) {
 
     for (const [requestedHandle, response] of responses) {
       if (!response?.ok) {
-        if (!scoreCache.has(requestedHandle)) {
+        if (response?.notFound || response?.status === 404) {
           scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+          results[requestedHandle] = null;
         }
         continue;
       }
@@ -221,6 +216,9 @@ async function processBatch(usernames) {
         const normalized = (user.twitterHandle || requestedHandle).toLowerCase();
         scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
         results[normalized] = userData;
+      } else {
+        scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+        results[requestedHandle] = null;
       }
     }
   } catch (error) {
@@ -229,7 +227,6 @@ async function processBatch(usernames) {
     }
   }
 
-  cacheNotFound();
   return results;
 }
 
@@ -325,6 +322,12 @@ function createPokeButton(username, standalone = false) {
   button.textContent = String.fromCodePoint(0x1FAF5);
   button.title = `Poke ${clean} on remilia.net`;
   button.setAttribute('aria-label', button.title);
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    void handlePokeClick(button);
+  }, true);
   return button;
 }
 
@@ -345,6 +348,20 @@ function ensureStandalonePokeButton(badge, username) {
   if (button) {
     badge.parentElement.insertBefore(button, badge.nextSibling);
   }
+}
+
+function createProfileBadgeGroup(badge, username) {
+  const group = document.createElement('span');
+  group.className = 'reminet-profile-badge-group';
+  group.dataset.reminetProfileBadgeGroup = 'true';
+  group.appendChild(badge);
+
+  const pokeButton = createPokeButton(username, true);
+  if (pokeButton) {
+    group.appendChild(pokeButton);
+  }
+
+  return group;
 }
 
 // Create score badge element
@@ -485,16 +502,24 @@ async function handlePokeClick(button) {
 
   const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
   if (cooldownUntil > Date.now()) {
-    setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
-    window.setTimeout(() => setPokeButtonState(button, 'idle', `Poke ${username} on remilia.net`), 1400);
+    startPokeCooldown(button, username, cooldownUntil - Date.now());
     return;
   }
 
+  button.dataset.reminetPokeShaking = 'true';
   setPokeButtonState(button, 'loading', `Poking ${username}...`);
   const response = await safeRuntimeMessage({ type: 'beetol:poke', username });
+  delete button.dataset.reminetPokeShaking;
+
   if (response?.ok) {
-    pokeCooldowns.set(username.toLowerCase(), Date.now() + 24 * 60 * 60 * 1000);
-    setPokeButtonState(button, 'success', `Poked ${username}`);
+    const cooldownMs = extractPokeCooldownMs(response) || 24 * 60 * 60 * 1000;
+    startPokeCooldown(button, username, cooldownMs);
+    return;
+  }
+
+  const cooldownMs = extractPokeCooldownMs(response);
+  if (cooldownMs > 0) {
+    startPokeCooldown(button, username, cooldownMs);
     return;
   }
 
@@ -503,22 +528,168 @@ async function handlePokeClick(button) {
     return;
   }
 
+  const details = [
+    response?.authMethod,
+    response?.status ? `HTTP ${response.status}` : '',
+  ].filter(Boolean).join(' ');
   const message = response?.data?.error || response?.data?.message || response?.error || `Could not poke ${username}`;
-  setPokeButtonState(button, 'error', message);
+  console.warn('RemiNet poke failed', { username, response });
+  setPokeButtonState(button, 'error', details ? `${message} (${details})` : message);
 }
 
 function setPokeButtonState(button, state, label) {
   button.dataset.reminetPokeState = state;
   button.title = label;
   button.setAttribute('aria-label', label);
-  button.disabled = state === 'loading' || state === 'success';
+  button.disabled = state === 'loading' || state === 'cooldown';
+  if (state !== 'cooldown') {
+    restorePokeButtonIcon(button);
+  }
+}
+
+function extractPokeCooldownMs(response) {
+  const data = response?.data || {};
+  const nested = data?.data || {};
+  const values = [
+    response?.cooldownMs,
+    data?.cooldownMs,
+    data?.cooldown,
+    data?.cooldownRemaining,
+    data?.cooldownRemainingMs,
+    data?.remainingMs,
+    data?.remaining,
+    data?.retryAfterMs,
+    data?.retryAfter,
+    data?.nextPokeInMs,
+    data?.nextPokeIn,
+    data?.pokeCooldownMs,
+    data?.pokeCooldown,
+    data?.pokeCooldownSeconds,
+    nested?.cooldownMs,
+    nested?.cooldown,
+    nested?.cooldownRemaining,
+    nested?.cooldownRemainingMs,
+    nested?.remainingMs,
+    nested?.remaining,
+    nested?.retryAfterMs,
+    nested?.retryAfter,
+    nested?.nextPokeInMs,
+    nested?.nextPokeIn,
+    nested?.pokeCooldownMs,
+    nested?.pokeCooldown,
+    nested?.pokeCooldownSeconds,
+  ];
+
+  for (const value of values) {
+    const ms = normalizeCooldownMs(value);
+    if (ms > 0) return ms;
+  }
+
+  const untilValues = [
+    response?.cooldownUntil,
+    data?.cooldownUntil,
+    data?.nextPokeAt,
+    data?.pokeAvailableAt,
+    data?.availableAt,
+    nested?.cooldownUntil,
+    nested?.nextPokeAt,
+    nested?.pokeAvailableAt,
+    nested?.availableAt,
+  ];
+  for (const value of untilValues) {
+    const timestamp = Date.parse(value);
+    if (Number.isFinite(timestamp) && timestamp > Date.now()) {
+      return timestamp - Date.now();
+    }
+  }
+
+  return 0;
+}
+
+function normalizeCooldownMs(value) {
+  if (value == null || value === false) return 0;
+  if (typeof value === 'number') {
+    if (!Number.isFinite(value) || value <= 0) return 0;
+    return value < 1000 ? value * 1000 : value;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) return 0;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
+    const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
+    if (match && match[0].trim()) {
+      const days = Number(match[1] || 0);
+      const hours = Number(match[2] || 0);
+      const minutes = Number(match[3] || 0);
+      const seconds = Number(match[4] || 0);
+      return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+    }
+  }
+  return 0;
+}
+
+function startPokeCooldown(button, username, cooldownMs) {
+  const normalizedMs = Math.max(1000, Number(cooldownMs) || 0);
+  const until = Date.now() + normalizedMs;
+  const key = username.toLowerCase();
+  pokeCooldowns.set(key, until);
+
+  clearPokeCountdown(button);
+  setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
+
+  const update = () => {
+    const remaining = until - Date.now();
+    if (remaining <= 0) {
+      clearPokeCountdown(button);
+      pokeCooldowns.delete(key);
+      setPokeButtonState(button, 'idle', `Poke ${username} on remilia.net`);
+      return;
+    }
+    const label = formatPokeCooldown(remaining);
+    button.textContent = label;
+    button.title = `Poke ${username} again in ${label}`;
+    button.setAttribute('aria-label', button.title);
+  };
+
+  update();
+  const timer = window.setInterval(update, 1000);
+  pokeCountdownTimers.set(button, timer);
+}
+
+function clearPokeCountdown(button) {
+  const timer = pokeCountdownTimers.get(button);
+  if (timer) window.clearInterval(timer);
+  pokeCountdownTimers.delete(button);
+}
+
+function restorePokeButtonIcon(button) {
+  clearPokeCountdown(button);
+  button.textContent = String.fromCodePoint(0x1FAF5);
+}
+
+function formatPokeCooldown(ms) {
+  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  if (hours > 0) return `${hours}h`;
+  if (minutes > 0) return `${minutes}m`;
+  return `${seconds}s`;
 }
 
 function patchExistingBadges() {
   for (const badge of document.querySelectorAll('[data-reminet-badge]:not([data-reminet-compact])')) {
     const username = badge.dataset.reminetUsername || profileUsernameFromUrl();
     if (badge.hasAttribute('data-profile-badge')) {
-      ensureStandalonePokeButton(badge, username);
+      if (badge.parentElement?.matches?.('[data-reminet-profile-badge-group]')) {
+        if (!badge.parentElement.querySelector('[data-reminet-poke]')) {
+          const button = createPokeButton(username, true);
+          if (button) badge.parentElement.appendChild(button);
+        }
+      } else {
+        ensureStandalonePokeButton(badge, username);
+      }
       continue;
     }
     if (badge.querySelector('[data-reminet-poke]')) continue;
@@ -663,10 +834,52 @@ async function insertProfileBadge() {
   if (!userNameSection) {
     return;
   }
+
+  // Extract username from URL or from the handle in the profile before
+  // deciding whether an existing badge is still valid. X reuses header DOM
+  // during SPA navigation, so stale profile badges can remain attached.
+  let username = null;
+
+  const urlMatch = window.location.pathname.match(/^\/([^\/\?]+)/);
+  if (urlMatch && urlMatch[1] && !ROUTE_BLOCKLIST.has(urlMatch[1])) {
+    username = cleanUsername(urlMatch[1]);
+  }
+
+  if (!username) {
+    const handleElement = userNameSection.querySelector('[href^="/"]');
+    if (handleElement) {
+      const href = handleElement.getAttribute('href');
+      const match = href.match(/^\/([^\/\?]+)/);
+      if (match && !ROUTE_BLOCKLIST.has(match[1])) {
+        username = cleanUsername(match[1]);
+      }
+    }
+  }
+
+  if (!username) {
+    userNameSection.removeAttribute('data-reminet-processing');
+    return;
+  }
   
   // Check if badge already exists in this specific location
-  if (userNameSection.querySelector('[data-reminet-badge]')) {
-    return;
+  const existingBadge = userNameSection.querySelector('[data-reminet-badge]:not([data-reminet-compact])');
+  if (existingBadge) {
+    const existingProfileUsername = cleanUsername(existingBadge.getAttribute('data-profile-badge'));
+    if (existingProfileUsername && existingProfileUsername.toLowerCase() !== username.toLowerCase()) {
+      const group = existingBadge.closest('[data-reminet-profile-badge-group]');
+      (group || existingBadge).remove();
+    } else {
+      const existingUsername = existingBadge.dataset.reminetUsername || username;
+      if (existingBadge.parentElement?.matches?.('[data-reminet-profile-badge-group]')) {
+        if (!existingBadge.parentElement.querySelector('[data-reminet-poke]')) {
+          const button = createPokeButton(existingUsername, true);
+          if (button) existingBadge.parentElement.appendChild(button);
+        }
+      } else {
+        ensureStandalonePokeButton(existingBadge, existingUsername);
+      }
+      return;
+    }
   }
   
   // Check if already processing
@@ -675,64 +888,44 @@ async function insertProfileBadge() {
   }
   userNameSection.setAttribute('data-reminet-processing', 'true');
   
-  // Extract username from URL or from the handle in the profile
-  let username = null;
-  
-  // Try to get from URL first
-  const urlMatch = window.location.pathname.match(/^\/([^\/\?]+)/);
-  if (urlMatch && urlMatch[1] && !['home', 'explore', 'notifications', 'messages', 'settings', 'i'].includes(urlMatch[1])) {
-    username = urlMatch[1];
-  }
-  
-  // Fallback: try to extract from the page
-  if (!username) {
-    const handleElement = userNameSection.querySelector('[href^="/"]');
-    if (handleElement) {
-      const href = handleElement.getAttribute('href');
-      const match = href.match(/^\/([^\/\?]+)/);
-      if (match) {
-        username = match[1];
-      }
-    }
-  }
-  
-  if (!username) {
-    userNameSection.removeAttribute('data-reminet-processing');
-    return;
-  }
-  
   // Create a unique key for this profile + location
   const profileKey = `${username}-${window.location.pathname}`;
   if (processedProfiles.has(profileKey)) {
     userNameSection.removeAttribute('data-reminet-processing');
     return;
   }
-  processedProfiles.add(profileKey);
-  
   try {
     const scoreData = await fetchUserScore(username);
+
+    if (scoreData === null) {
+      processedProfiles.add(profileKey);
+      userNameSection.removeAttribute('data-reminet-processing');
+      return;
+    }
 
     if (!scoreData) {
       userNameSection.removeAttribute('data-reminet-processing');
       return;
     }
 
+    processedProfiles.add(profileKey);
+
     userNameSection.removeAttribute('data-reminet-processing');
     const badge = createScoreBadge(scoreData, { includePokeInside: false });
-    badge.style.marginLeft = '8px';
+    badge.style.marginLeft = '0';
     badge.style.display = 'inline-flex';
     badge.style.verticalAlign = 'middle';
     badge.setAttribute('data-profile-badge', username);
+    const profileBadgeGroup = createProfileBadgeGroup(badge, scoreData.remiliaUsername || username);
     
     // Find the handle text (the @username part)
     const handleSpan = userNameSection.querySelector('span[style*="color"]');
     if (handleSpan && handleSpan.textContent.startsWith('@')) {
-      handleSpan.parentElement.appendChild(badge);
+      handleSpan.parentElement.appendChild(profileBadgeGroup);
     } else {
       // Fallback: append to the username section
-      userNameSection.appendChild(badge);
+      userNameSection.appendChild(profileBadgeGroup);
     }
-    ensureStandalonePokeButton(badge, scoreData.remiliaUsername || username);
   } catch (error) {
     console.error('Error inserting profile badge:', error);
     userNameSection.removeAttribute('data-reminet-processing');
@@ -905,7 +1098,7 @@ function init() {
 }
 
 function clearRemiStatsBadges() {
-  for (const node of document.querySelectorAll('[data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
+  for (const node of document.querySelectorAll('[data-reminet-profile-badge-group], [data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
     node.remove();
   }
   for (const node of document.querySelectorAll('[data-reminet-processing]')) {

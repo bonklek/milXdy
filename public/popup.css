@@ -149,6 +149,23 @@ input[type="checkbox"] {
   background: #fff;
 }
 
+.auth-box[data-signed-in] {
+  border-color: #2f8f58;
+  background: #effaf3;
+}
+
+.auth-diagnostic {
+  padding: 10px 12px;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  background: #fff;
+  color: #65717f;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
 .update-status {
   grid-template-columns: 1fr auto;
   align-items: center;
@@ -215,6 +232,13 @@ input[type="checkbox"] {
   background: #fff;
 }
 
+.report-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 .report-box strong {
   display: block;
   font-size: 13px;
@@ -225,6 +249,21 @@ input[type="checkbox"] {
   color: #65717f;
   font-size: 11px;
   line-height: 1.35;
+}
+
+.report-assist {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #465260;
+  font-size: 11px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.report-assist input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
 }
 
 .auth-box strong {
