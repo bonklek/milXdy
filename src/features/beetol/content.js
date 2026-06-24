@@ -11,12 +11,19 @@
     ['claimUBC', 'Claim Cheese', 'claim-cheese.png'],
     ['junkFaucet', 'Junk Faucet', 'junk-faucet.png'],
   ];
+  const TAB_COOLDOWN_KEYS = ['catchBeetle', 'beetleHunt'];
+  const FALLBACK_ACTION_COOLDOWNS = {
+    catchBeetle: 30 * 60 * 1000,
+    beetleHunt: 60 * 60 * 1000,
+  };
   const TAB_ICON_URL = chrome.runtime.getURL('beetol/icons/hunt-beetle.png');
   const POSITION_KEY = 'beetol.hunterPosition';
   const ENABLED_KEY = 'milxdy.remistats.beetol.enabled';
+  const SETTINGS_THEME_KEY = 'milxdy.settings.theme';
   const LEGACY_PREFIX = 'bex' + 'tol';
   const LEGACY_ENABLED_KEY = `milxdy.${LEGACY_PREFIX}.enabled`;
   const SNAP_MARGIN = 10;
+  const prefersDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
 
   const state = {
     enabled: true,
@@ -24,7 +31,8 @@
     loading: false,
     settings: {
       color: 'red',
-      mode: 'dark',
+      mode: 'settings',
+      settingsTheme: 'system',
     },
     user: null,
     fetchedAt: 0,
@@ -189,10 +197,19 @@
   function applySettings(settings = {}) {
     state.settings = {
       color: settings.beetolColor || state.settings.color || 'red',
-      mode: settings.beetolMode || state.settings.mode || 'dark',
+      mode: settings.beetolMode || state.settings.mode || 'settings',
+      settingsTheme: settings[SETTINGS_THEME_KEY] || state.settings.settingsTheme || 'system',
     };
     root.dataset.color = state.settings.color;
-    root.dataset.mode = state.settings.mode;
+    root.dataset.mode = resolvedPanelMode();
+  }
+
+  function resolvedPanelMode() {
+    if (state.settings.mode === 'light' || state.settings.mode === 'dark') return state.settings.mode;
+    if (state.settings.settingsTheme === 'light' || state.settings.settingsTheme === 'dark') {
+      return state.settings.settingsTheme;
+    }
+    return prefersDark?.matches ? 'dark' : 'light';
   }
 
   function mergeCooldowns(user) {
@@ -206,6 +223,17 @@
       claimUBC: user?.cooldowns?.claimUBC ?? keep('claimUBC'),
       junkFaucet: user?.cooldowns?.junkFaucet ?? keep('junkFaucet'),
     };
+  }
+
+  function ensureActionCooldown(action, cooldownMs = 0) {
+    const fallback = FALLBACK_ACTION_COOLDOWNS[action] || 0;
+    const nextCooldown = cooldownMs > 0 ? cooldownMs : fallback;
+    if (!nextCooldown) return;
+    const current = currentCooldowns()[action];
+    if (current === null || current <= 0) {
+      state.cooldowns[action] = nextCooldown;
+      state.fetchedAt = Date.now();
+    }
   }
 
   function render() {
@@ -231,10 +259,11 @@
       const name = state.user?.username || state.user?.name || state.user?.displayName || 'Signed in';
       els.user.textContent = name;
       const cds = currentCooldowns();
-      const ready = ACTIONS.filter(([key]) => cds[key] === 0);
-      if (ready.length) els.next.textContent = `${ready.length} ready`;
+      const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => cds[key]);
+      const ready = tabCooldowns.filter(value => value === 0);
+      if (ready.length) els.next.textContent = ready.length === 2 ? 'Both ready' : 'Ready';
       else {
-        const next = Object.values(cds).filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
+        const next = tabCooldowns.filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
         els.next.textContent = next ? fmtMs(next) : '--';
       }
 
@@ -244,13 +273,11 @@
         const disabled = state.loading ? ' disabled' : '';
         const iconUrl = chrome.runtime.getURL(`beetol/icons/${icon}`);
         const cooldownLabel = fmtMs(cd);
-        const displayLabel = key === 'beetleHunt' && cd > 0 ? cooldownLabel : label;
-        const displayStatus = key === 'beetleHunt' && cd > 0 ? 'Cooldown' : cooldownLabel;
         return `
           <button class="beetol-action${readyClass}" data-action="${key}" type="button" title="${label}" aria-label="${label}"${disabled}>
             <img src="${iconUrl}" alt="">
-            <span>${displayLabel}</span>
-            <strong>${key === 'beetleHunt' && cd === null ? 'Try once' : displayStatus}</strong>
+            <span>${label}</span>
+            <strong>${key === 'beetleHunt' && cd === null ? 'Try once' : cooldownLabel}</strong>
           </button>
         `;
       }).join('');
@@ -308,10 +335,11 @@
       return;
     }
     if (response.actionResult?.success === false) {
-      if (response.actionResult.cooldownMs > 0) {
-        state.cooldowns[action] = response.actionResult.cooldownMs;
+      const cooldownMs = response.cooldownMs || response.actionResult.cooldownMs || 0;
+      if (cooldownMs > 0) {
+        state.cooldowns[action] = cooldownMs;
         state.fetchedAt = Date.now();
-        setMessage(`${label} ready in ${fmtMs(response.actionResult.cooldownMs)}.`, 'warn');
+        setMessage(`${label} ready in ${fmtMs(cooldownMs)}.`, 'warn');
       } else {
         setMessage(response.actionResult.message || `${label} failed.`, 'warn');
       }
@@ -323,6 +351,7 @@
       state.user = response.user;
       mergeCooldowns(response.user);
     }
+    ensureActionCooldown(action, response.cooldownMs);
 
     const gained = (response.gained || []).map(({ key, diff }) => (
       diff > 1 ? `${itemName(key)} x${diff}` : itemName(key)
@@ -459,6 +488,7 @@
     applySettings({
       beetolColor: changes.beetolColor?.newValue,
       beetolMode: changes.beetolMode?.newValue,
+      [SETTINGS_THEME_KEY]: changes[SETTINGS_THEME_KEY]?.newValue,
     });
     if (changes['beetol.accessToken']) {
       state.signedIn = Boolean(changes['beetol.accessToken'].newValue);
@@ -472,6 +502,11 @@
     }
   });
 
+  prefersDark?.addEventListener?.('change', () => {
+    if (state.settings.mode !== 'settings' || state.settings.settingsTheme !== 'system') return;
+    root.dataset.mode = resolvedPanelMode();
+  });
+
   setInterval(() => {
     if (state.enabled && !document.hidden) render();
   }, 1000);
@@ -481,7 +516,8 @@
 
   chrome.storage.local.get({
     beetolColor: 'red',
-    beetolMode: 'dark',
+    beetolMode: 'settings',
+    [SETTINGS_THEME_KEY]: 'system',
     [ENABLED_KEY]: undefined,
     [LEGACY_ENABLED_KEY]: true,
     [POSITION_KEY]: null,

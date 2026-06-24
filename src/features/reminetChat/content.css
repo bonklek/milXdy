@@ -1,0 +1,688 @@
+@font-face {
+  font-family: "Milxdy Remilia Hei";
+  src: url("https://www.remilia.net/fonts/Hei.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Milxdy Remilia Menlo";
+  src: url("https://www.remilia.net/fonts/Menlo.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+#milxdy-reminet-chat-root {
+  --rn-accent: #626bb2;
+  --rn-link: #171f82;
+  --rn-surface-1: #fbfbfb;
+  --rn-surface-2: #e5e5e5;
+  --rn-surface-3: #d4d4d4;
+  --rn-border: #b4b4b4;
+  --rn-border-dark: #464a6c;
+  --rn-text: #19191d;
+  --rn-muted: rgba(0, 0, 0, 0.55);
+  --rn-highlight: #ffffff;
+  color-scheme: light;
+  box-sizing: border-box;
+  display: block;
+  flex: 0 0 auto;
+  order: -999;
+  position: sticky;
+  top: 8px;
+  z-index: 20;
+  width: 100%;
+  margin: 0 0 16px;
+  color: var(--rn-text);
+  font-family: "Milxdy Remilia Hei", "Milxdy Remilia Menlo", monospace;
+  letter-spacing: 0;
+}
+
+#milxdy-reminet-chat-root *,
+#milxdy-reminet-chat-root *::before,
+#milxdy-reminet-chat-root *::after {
+  box-sizing: border-box;
+}
+
+.milxdy-chat-card {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  max-height: calc(100vh - 16px);
+  overflow: hidden;
+  border: 1px solid var(--rn-border);
+  border-right: 3px solid #a3a3a3;
+  border-bottom: 4px solid #a3a3a3;
+  border-radius: 6px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0) 38px),
+    var(--rn-surface-1);
+  box-shadow:
+    inset 2px 2px 1px var(--rn-highlight),
+    0 5px 2.5px rgba(0, 0, 0, 0.15);
+}
+
+.milxdy-chat-card::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(0deg, rgba(98, 107, 178, 0.035), rgba(98, 107, 178, 0.035) 1px, transparent 1px, transparent 8px),
+    repeating-linear-gradient(90deg, rgba(98, 107, 178, 0.025), rgba(98, 107, 178, 0.025) 1px, transparent 1px, transparent 8px);
+  opacity: 0.68;
+}
+
+.milxdy-chat-card > * {
+  position: relative;
+  z-index: 1;
+}
+
+.milxdy-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 50px;
+  padding: 9px 10px 8px;
+  border-bottom: 1px solid var(--rn-border);
+  background: var(--rn-surface-3);
+  box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.52);
+}
+
+.milxdy-chat-header > div:first-child {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.milxdy-chat-header .milxdy-chat-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+}
+
+.milxdy-chat-header strong {
+  color: var(--rn-link);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 1px 1px 0 #ffffff;
+}
+
+.milxdy-chat-header span {
+  overflow: hidden;
+  color: var(--rn-muted);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 11px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.milxdy-chat-header span::before {
+  content: "";
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border: 1px solid var(--rn-border-dark);
+  background: #a8ffa8;
+  box-shadow: inset 1px 1px 0 #ffffff99;
+  vertical-align: -1px;
+}
+
+.milxdy-chat-header button,
+.milxdy-chat-composer button,
+.milxdy-chat-pending-attachment button,
+.milxdy-chat-poke,
+.milxdy-chat-x-link,
+.milxdy-chat-reactions button {
+  flex: 0 0 auto;
+  border: 1px solid var(--rn-border);
+  border-right: 3px solid #adadad;
+  border-bottom: 3px solid #adadad;
+  border-radius: 5px;
+  background: var(--rn-surface-3);
+  color: var(--rn-border-dark);
+  cursor: pointer;
+  font: 400 11px/1 "Milxdy Remilia Hei", monospace;
+  text-decoration: none;
+  text-transform: uppercase;
+  box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.5);
+}
+
+.milxdy-chat-header button {
+  min-height: 29px;
+  padding: 0 8px;
+}
+
+.milxdy-chat-header [data-role="minimize"] {
+  display: grid;
+  place-items: center;
+  min-width: 29px;
+  padding: 0;
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 15px;
+  line-height: 1;
+}
+
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-card {
+  grid-template-rows: auto;
+  max-height: none;
+}
+
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-header {
+  border-bottom: 0;
+}
+
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-messages,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-attachment-preview,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-error,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-composer {
+  display: none;
+}
+
+.milxdy-chat-header button:hover,
+.milxdy-chat-composer button:hover,
+.milxdy-chat-pending-attachment button:hover,
+.milxdy-chat-poke:hover,
+.milxdy-chat-x-link:hover,
+.milxdy-chat-reactions button:hover {
+  filter: brightness(0.98);
+  transform: translate(1px, 1px);
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
+.milxdy-chat-messages {
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-height: 220px;
+  max-height: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px 8px 9px;
+  background:
+    linear-gradient(180deg, rgba(216, 220, 240, 0.72), rgba(255, 255, 255, 0.87)),
+    var(--rn-surface-2);
+}
+
+.milxdy-chat-messages::-webkit-scrollbar {
+  width: 10px;
+}
+
+.milxdy-chat-messages::-webkit-scrollbar-track {
+  background: #d8d8d8;
+  border-left: 1px solid var(--rn-border);
+}
+
+.milxdy-chat-messages::-webkit-scrollbar-thumb {
+  background: var(--rn-accent);
+  border: 2px solid #d8d8d8;
+}
+
+.milxdy-chat-message-group {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 7px;
+  padding: 4px 3px;
+}
+
+.milxdy-chat-user-column {
+  display: grid;
+  align-content: start;
+  justify-items: center;
+}
+
+.milxdy-chat-avatar {
+  display: block;
+  width: 30px;
+  height: 30px;
+  overflow: hidden;
+  border: 1px solid var(--rn-border);
+  border-radius: 4px;
+  background: linear-gradient(135deg, #f0f0f0, #c9c9c9);
+  box-shadow: inset 1px 1px 0 #ffffff;
+}
+
+.milxdy-chat-avatar img {
+  width: 100%;
+  height: 100%;
+  image-rendering: auto;
+  object-fit: cover;
+}
+
+.milxdy-chat-x-link {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  padding: 0;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  background: #101010;
+  border-color: #101010;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: -1px;
+}
+
+.milxdy-chat-x-link:hover,
+.milxdy-chat-poke:hover {
+  transform: none;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+}
+
+.milxdy-chat-poke {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+  min-height: 14px;
+  padding: 0;
+  border-right-width: 1px;
+  border-bottom-width: 1px;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
+  font-size: 10px;
+  line-height: 1;
+  text-transform: none;
+  vertical-align: -2px;
+}
+
+.milxdy-chat-poke[data-poke-state="cooldown"] {
+  width: auto;
+  min-width: 24px;
+  height: 14px;
+  min-height: 14px;
+  padding: 0 4px;
+  background: #ffe4e4;
+  border-color: #e35d5d;
+  color: #6e2222;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+}
+
+.milxdy-chat-poke[data-poke-state="loading"] {
+  opacity: 0.7;
+}
+
+.milxdy-chat-poke[data-poke-state="error"] {
+  background: #ffe4e4;
+  border-color: #e35d5d;
+}
+
+.milxdy-chat-poke:disabled {
+  cursor: default;
+}
+
+.milxdy-chat-body {
+  min-width: 0;
+}
+
+.milxdy-chat-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  margin-bottom: 1px;
+}
+
+.milxdy-chat-meta a {
+  overflow: hidden;
+  max-width: 120px;
+  color: var(--rn-accent);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.15;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  text-shadow: 1px 1px 0 #ffffff;
+  white-space: nowrap;
+}
+
+.milxdy-chat-meta a:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.milxdy-chat-meta span,
+.milxdy-chat-meta time {
+  color: var(--rn-muted);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.milxdy-chat-meta span {
+  overflow: hidden;
+  max-width: 82px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.milxdy-chat-inline-actions {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  max-width: none;
+  height: 14px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+.milxdy-chat-stack {
+  display: grid;
+  gap: 2px;
+}
+
+.milxdy-chat-message {
+  min-width: 0;
+  padding: 0;
+}
+
+.milxdy-chat-message:hover .milxdy-chat-reactions {
+  opacity: 1;
+}
+
+.milxdy-chat-message:hover .milxdy-chat-reactions button {
+  display: inline-flex;
+}
+
+.milxdy-chat-text {
+  color: var(--rn-text);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 12px;
+  line-height: 1.34;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.milxdy-chat-text a {
+  color: var(--rn-link);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.milxdy-chat-media {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.milxdy-chat-media a,
+.milxdy-chat-media video {
+  display: block;
+  overflow: hidden;
+  min-height: 90px;
+  border: 1px solid var(--rn-border);
+  border-radius: 5px;
+  background: #ffffff;
+}
+
+.milxdy-chat-media img,
+.milxdy-chat-media video {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 180px;
+  object-fit: cover;
+}
+
+.milxdy-chat-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  margin-top: 2px;
+  min-height: 0;
+  opacity: 1;
+}
+
+.milxdy-chat-reactions button {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  min-height: 18px;
+  padding: 0 4px;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+  background: rgba(255, 255, 255, 0.7);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 10px;
+  text-transform: none;
+}
+
+.milxdy-chat-reactions button.has-reacts {
+  display: inline-flex;
+}
+
+.milxdy-chat-empty {
+  align-self: center;
+  justify-self: center;
+  max-width: 220px;
+  padding: 12px;
+  border: 1px dashed var(--rn-border);
+  background: rgba(255, 255, 255, 0.58);
+  color: var(--rn-muted);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.milxdy-chat-attachment-preview {
+  display: grid;
+  gap: 5px;
+  padding: 7px 10px 0;
+  border-top: 1px solid var(--rn-border);
+  background: var(--rn-surface-3);
+}
+
+.milxdy-chat-attachment-preview[hidden],
+.milxdy-chat-error[hidden] {
+  display: none;
+}
+
+.milxdy-chat-pending-attachment {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+}
+
+.milxdy-chat-pending-attachment img,
+.milxdy-chat-pending-attachment span {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  overflow: hidden;
+  border: 1px solid var(--rn-border);
+  border-radius: 4px;
+  background: #ffffff;
+  color: var(--rn-muted);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 9px;
+  object-fit: cover;
+}
+
+.milxdy-chat-pending-attachment strong {
+  overflow: hidden;
+  color: var(--rn-text);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 11px;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.milxdy-chat-pending-attachment button {
+  min-height: 24px;
+  padding: 0 6px;
+  font-size: 9px;
+}
+
+.milxdy-chat-error {
+  padding: 5px 10px 0;
+  background: var(--rn-surface-3);
+  color: #8a1b1b;
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.milxdy-chat-composer {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 9px 10px 10px;
+  border-top: 1px solid var(--rn-border);
+  background: var(--rn-surface-3);
+  box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.45);
+}
+
+.milxdy-chat-composer input {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--rn-border);
+  border-radius: 5px;
+  background: #ffffff;
+  color: var(--rn-text);
+  font: 12px/1 "Milxdy Remilia Menlo", monospace;
+  padding: 0 9px;
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+
+.milxdy-chat-composer input:focus {
+  border-color: var(--rn-accent);
+  outline: 1px solid rgba(98, 107, 178, 0.35);
+  outline-offset: 1px;
+}
+
+.milxdy-chat-composer button {
+  min-width: 58px;
+  height: 34px;
+  padding: 0 10px;
+  background: var(--rn-accent);
+  border-color: var(--rn-border-dark);
+  border-right-color: var(--rn-border-dark);
+  border-bottom-color: var(--rn-border-dark);
+  color: #ffffff;
+  text-shadow: 1px 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.milxdy-chat-composer [data-role="attach"] {
+  display: grid;
+  place-items: center;
+  min-width: 34px;
+  padding: 0;
+  font-size: 20px;
+  line-height: 0;
+}
+
+.milxdy-chat-composer button:disabled,
+.milxdy-chat-composer input:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] {
+  --rn-accent: #8f97e8;
+  --rn-link: #c6ccff;
+  --rn-surface-1: #171820;
+  --rn-surface-2: #20222d;
+  --rn-surface-3: #2b2d39;
+  --rn-border: #4c5064;
+  --rn-border-dark: #858cc9;
+  --rn-text: #f0f1f8;
+  --rn-muted: rgba(240, 241, 248, 0.62);
+  --rn-highlight: rgba(255, 255, 255, 0.12);
+  color-scheme: dark;
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-card {
+  border-right-color: #0d0e14;
+  border-bottom-color: #0a0b10;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0) 38px),
+    var(--rn-surface-1);
+  box-shadow:
+    inset 2px 2px 1px rgba(255, 255, 255, 0.08),
+    0 5px 2.5px rgba(0, 0, 0, 0.42);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-card::before {
+  background:
+    repeating-linear-gradient(0deg, rgba(143, 151, 232, 0.055), rgba(143, 151, 232, 0.055) 1px, transparent 1px, transparent 8px),
+    repeating-linear-gradient(90deg, rgba(143, 151, 232, 0.038), rgba(143, 151, 232, 0.038) 1px, transparent 1px, transparent 8px);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-header strong,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-meta a {
+  text-shadow: 1px 1px 0 #000000;
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-header span::before {
+  background: #63d46e;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.32);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-messages {
+  background:
+    linear-gradient(180deg, rgba(35, 38, 58, 0.9), rgba(23, 24, 32, 0.92)),
+    var(--rn-surface-2);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-avatar,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-media a,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-media video,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-pending-attachment img,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-pending-attachment span {
+  background: #11131a;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-composer input {
+  background: #101118;
+  color: var(--rn-text);
+  box-shadow: inset 0 2px 3px rgba(0, 0, 0, 0.45);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-header button,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-composer button,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-pending-attachment button,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button {
+  border-right-color: #151721;
+  border-bottom-color: #10121a;
+  box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.08);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button {
+  background: rgba(16, 17, 24, 0.82);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-empty {
+  background: rgba(16, 17, 24, 0.58);
+}
+
+@media (prefers-color-scheme: dark) {
+  #milxdy-reminet-chat-root[data-theme="dark"] {
+    color-scheme: dark;
+  }
+}

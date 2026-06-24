@@ -2,6 +2,7 @@ import "./features/wiki/background";
 import "./features/postreader/background";
 import "./features/miladymaxxer/background";
 import "./features/beetol/background.js";
+import "./features/reminetChat/background";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,

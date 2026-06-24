@@ -3,6 +3,8 @@ export type UpdateStatus = {
   currentVersion: string;
   latestVersion: string | null;
   latestUrl: string | null;
+  latestAssetUrl: string | null;
+  latestAssetName: string | null;
   updateAvailable: boolean;
   error?: string;
 };
@@ -19,6 +21,12 @@ type GitHubRelease = {
   draft?: boolean;
   prerelease?: boolean;
   published_at?: string;
+  assets?: GitHubReleaseAsset[];
+};
+
+type GitHubReleaseAsset = {
+  name?: string;
+  browser_download_url?: string;
 };
 
 export async function checkForUpdate(): Promise<UpdateStatus> {
@@ -58,6 +66,8 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       currentVersion,
       latestVersion,
       latestUrl: typeof release.html_url === "string" ? release.html_url : null,
+      latestAssetUrl: releaseAssetUrl(release),
+      latestAssetName: releaseAssetName(release),
       updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
     };
   } catch (error) {
@@ -66,6 +76,8 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       currentVersion,
       latestVersion: null,
       latestUrl: null,
+      latestAssetUrl: null,
+      latestAssetName: null,
       updateAvailable: false,
       error: error instanceof Error ? error.message : String(error),
     };
@@ -97,4 +109,22 @@ function dateValue(value: unknown): number {
   if (typeof value !== "string") return 0;
   const timestamp = Date.parse(value);
   return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function releaseAssetUrl(release: GitHubRelease): string | null {
+  const asset = chooseReleaseAsset(release);
+  return typeof asset?.browser_download_url === "string" ? asset.browser_download_url : null;
+}
+
+function releaseAssetName(release: GitHubRelease): string | null {
+  const asset = chooseReleaseAsset(release);
+  return typeof asset?.name === "string" ? asset.name : null;
+}
+
+function chooseReleaseAsset(release: GitHubRelease): GitHubReleaseAsset | null {
+  const assets = Array.isArray(release.assets) ? release.assets : [];
+  return assets.find((asset) => /milxdy.*\.zip$/i.test(asset.name || ""))
+    || assets.find((asset) => /\.zip$/i.test(asset.name || ""))
+    || assets[0]
+    || null;
 }

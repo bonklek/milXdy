@@ -15,6 +15,101 @@
   transform: scale(1.05);
 }
 
+html {
+  --reminet-poke-bg: rgba(229, 61, 48, 0.14);
+  --reminet-poke-border: rgba(229, 61, 48, 0.46);
+  --reminet-poke-color: #941f18;
+  --reminet-poke-hover-bg: rgba(229, 61, 48, 0.22);
+  --reminet-poke-hover-border: rgba(229, 61, 48, 0.68);
+}
+
+html[data-reminet-poke-color="green"] {
+  --reminet-poke-bg: rgba(35, 120, 75, 0.14);
+  --reminet-poke-border: rgba(35, 120, 75, 0.46);
+  --reminet-poke-color: #17643d;
+  --reminet-poke-hover-bg: rgba(35, 120, 75, 0.22);
+  --reminet-poke-hover-border: rgba(35, 120, 75, 0.68);
+}
+
+html[data-reminet-poke-color="gold"] {
+  --reminet-poke-bg: rgba(186, 125, 24, 0.16);
+  --reminet-poke-border: rgba(186, 125, 24, 0.5);
+  --reminet-poke-color: #7a4e0b;
+  --reminet-poke-hover-bg: rgba(186, 125, 24, 0.26);
+  --reminet-poke-hover-border: rgba(186, 125, 24, 0.72);
+}
+
+html[data-reminet-poke-color="blue"] {
+  --reminet-poke-bg: rgba(45, 108, 223, 0.14);
+  --reminet-poke-border: rgba(45, 108, 223, 0.46);
+  --reminet-poke-color: #1f55b2;
+  --reminet-poke-hover-bg: rgba(45, 108, 223, 0.22);
+  --reminet-poke-hover-border: rgba(45, 108, 223, 0.68);
+}
+
+html[data-reminet-poke-color="purple"] {
+  --reminet-poke-bg: rgba(129, 81, 217, 0.16);
+  --reminet-poke-border: rgba(129, 81, 217, 0.5);
+  --reminet-poke-color: #6336b8;
+  --reminet-poke-hover-bg: rgba(129, 81, 217, 0.25);
+  --reminet-poke-hover-border: rgba(129, 81, 217, 0.72);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-reminet-poke-mode="light"]) {
+    --reminet-poke-bg: rgba(229, 61, 48, 0.2);
+    --reminet-poke-border: rgba(255, 118, 107, 0.56);
+    --reminet-poke-color: #ffd2ce;
+    --reminet-poke-hover-bg: rgba(229, 61, 48, 0.3);
+    --reminet-poke-hover-border: rgba(255, 118, 107, 0.78);
+  }
+}
+
+html[data-theme="dark"],
+html[data-reminet-poke-mode="dark"] {
+  --reminet-poke-bg: rgba(229, 61, 48, 0.2);
+  --reminet-poke-border: rgba(255, 118, 107, 0.56);
+  --reminet-poke-color: #ffd2ce;
+  --reminet-poke-hover-bg: rgba(229, 61, 48, 0.3);
+  --reminet-poke-hover-border: rgba(255, 118, 107, 0.78);
+}
+
+html[data-theme="dark"][data-reminet-poke-color="green"],
+html[data-reminet-poke-mode="dark"][data-reminet-poke-color="green"] {
+  --reminet-poke-bg: rgba(47, 143, 92, 0.22);
+  --reminet-poke-border: rgba(91, 205, 142, 0.58);
+  --reminet-poke-color: #d6ffe6;
+  --reminet-poke-hover-bg: rgba(47, 143, 92, 0.32);
+  --reminet-poke-hover-border: rgba(91, 205, 142, 0.78);
+}
+
+html[data-theme="dark"][data-reminet-poke-color="gold"],
+html[data-reminet-poke-mode="dark"][data-reminet-poke-color="gold"] {
+  --reminet-poke-bg: rgba(212, 148, 34, 0.24);
+  --reminet-poke-border: rgba(245, 194, 93, 0.6);
+  --reminet-poke-color: #ffe8b5;
+  --reminet-poke-hover-bg: rgba(212, 148, 34, 0.34);
+  --reminet-poke-hover-border: rgba(245, 194, 93, 0.82);
+}
+
+html[data-theme="dark"][data-reminet-poke-color="blue"],
+html[data-reminet-poke-mode="dark"][data-reminet-poke-color="blue"] {
+  --reminet-poke-bg: rgba(57, 125, 242, 0.22);
+  --reminet-poke-border: rgba(130, 180, 255, 0.58);
+  --reminet-poke-color: #d8e8ff;
+  --reminet-poke-hover-bg: rgba(57, 125, 242, 0.32);
+  --reminet-poke-hover-border: rgba(130, 180, 255, 0.8);
+}
+
+html[data-theme="dark"][data-reminet-poke-color="purple"],
+html[data-reminet-poke-mode="dark"][data-reminet-poke-color="purple"] {
+  --reminet-poke-bg: rgba(149, 101, 239, 0.24);
+  --reminet-poke-border: rgba(190, 163, 255, 0.6);
+  --reminet-poke-color: #eadfff;
+  --reminet-poke-hover-bg: rgba(149, 101, 239, 0.34);
+  --reminet-poke-hover-border: rgba(190, 163, 255, 0.82);
+}
+
 html[data-reminet-icons-enabled="false"] [data-reminet-icon],
 html[data-reminet-icon-score="false"] [data-reminet-icon="score"],
 html[data-reminet-icon-beetle="false"] [data-reminet-icon="beetle"],
@@ -30,10 +125,10 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   height: 22px;
   margin: 0 0 0 2px;
   padding: 0;
-  border: 1px solid rgba(83, 100, 113, 0.35);
+  border: 1px solid var(--reminet-poke-border);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: #0f1419;
+  background: var(--reminet-poke-bg);
+  color: var(--reminet-poke-color);
   cursor: pointer;
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
   font-size: 15px;
@@ -45,8 +140,8 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
 
 .reminet-poke-button:hover {
   transform: translateY(-1px) scale(1.08);
-  background: rgba(15, 20, 25, 0.08);
-  border-color: rgba(15, 20, 25, 0.42);
+  background: var(--reminet-poke-hover-bg);
+  border-color: var(--reminet-poke-hover-border);
 }
 
 .reminet-poke-button:disabled {
@@ -95,6 +190,22 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   margin-left: 8px;
   vertical-align: middle;
   white-space: nowrap;
+}
+
+.reminet-incoming-poke-flag {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 7px;
+  border: 1px solid rgba(29, 155, 240, 0.38);
+  border-radius: 999px;
+  background: rgba(29, 155, 240, 0.1);
+  color: #0f5f99;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 @keyframes reminet-poke-shake {
@@ -192,20 +303,34 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
 
 @media (prefers-color-scheme: dark) {
   .reminet-poke-button {
-    background: rgba(15, 20, 25, 0.72);
-    border-color: rgba(231, 233, 234, 0.32);
-    color: #e7e9ea;
+    background: var(--reminet-poke-bg);
+    border-color: var(--reminet-poke-border);
+    color: var(--reminet-poke-color);
   }
 
   .reminet-poke-button:hover {
-    background: rgba(231, 233, 234, 0.12);
+    background: var(--reminet-poke-hover-bg);
   }
 }
 
 [data-theme="dark"] .reminet-poke-button {
-  background: rgba(15, 20, 25, 0.72);
-  border-color: rgba(231, 233, 234, 0.32);
-  color: #e7e9ea;
+  background: var(--reminet-poke-bg);
+  border-color: var(--reminet-poke-border);
+  color: var(--reminet-poke-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  .reminet-incoming-poke-flag {
+    background: rgba(29, 155, 240, 0.18);
+    border-color: rgba(142, 205, 248, 0.42);
+    color: #8ecdf8;
+  }
+}
+
+[data-theme="dark"] .reminet-incoming-poke-flag {
+  background: rgba(29, 155, 240, 0.18);
+  border-color: rgba(142, 205, 248, 0.42);
+  color: #8ecdf8;
 }
 
 /* Tooltip - positioned fixed to body for maximum z-index */

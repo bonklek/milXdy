@@ -1,4 +1,4 @@
-type FeatureId = "wiki" | "postreader" | "remistats" | "miladymaxxer" | "beetol";
+type FeatureId = "wiki" | "postreader" | "remistats" | "miladymaxxer" | "beetol" | "reminetChat";
 const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 
 type FeatureDefinition = {
@@ -52,6 +52,14 @@ const features: FeatureDefinition[] = [
     },
     script: "features/beetol.js",
   },
+  {
+    id: "reminetChat",
+    isEnabled: async () => {
+      const stored = await chrome.storage.local.get({ "milxdy.reminetChat.enabled": false });
+      return stored["milxdy.reminetChat.enabled"] === true;
+    },
+    script: "features/reminetChat.js",
+  },
 ];
 
 void bootFeatures();
@@ -70,6 +78,7 @@ async function loadFeature(feature: FeatureDefinition): Promise<void> {
   loaded.add(feature.id);
   if (feature.id === "remistats") injectStylesheet("milxdy-remistats-styles", "remistats/remistats.css");
   if (feature.id === "beetol") injectStylesheet("milxdy-beetol-styles", "beetol/content.css");
+  if (feature.id === "reminetChat") injectStylesheet("milxdy-reminet-chat-styles", "reminetChat/content.css");
   await import(chrome.runtime.getURL(feature.script));
   void writeLoadedFeatureDiagnostics();
 }
@@ -95,6 +104,7 @@ function featureChanged(
   if (feature === "remistats") return area === "sync" && Boolean(changes["milxdy.remistats.enabled"]);
   if (feature === "miladymaxxer") return area === "sync" && Boolean(changes.mode);
   if (feature === "beetol") return area === "local" && Boolean(changes["milxdy.remistats.beetol.enabled"]);
+  if (feature === "reminetChat") return area === "local" && Boolean(changes["milxdy.reminetChat.enabled"]);
   return false;
 }
 

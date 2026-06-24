@@ -1,5 +1,6 @@
 type Area = "local" | "sync";
 type ControlKind = "boolean" | "number" | "string" | "nullableString" | "handleList";
+type ThemeMode = "light" | "dark" | "system";
 
 type ControlBinding = {
   area: Area;
@@ -24,12 +25,15 @@ const X_FEEDBACK_POST_ID = "2069113443664220227";
 const X_FEEDBACK_COLLECTOR_URL = `https://x.com/MiladyBonkle/status/${X_FEEDBACK_POST_ID}`;
 const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/login";
 const LAST_POKE_DIAGNOSTIC_KEY = "milxdy.remistats.lastPokeDiagnostic";
+const SETTINGS_THEME_KEY = "milxdy.settings.theme";
 
 type UpdateStatus = {
   checkedAt: number;
   currentVersion: string;
   latestVersion: string | null;
   latestUrl: string | null;
+  latestAssetUrl?: string | null;
+  latestAssetName?: string | null;
   updateAvailable: boolean;
   error?: string;
 };
@@ -115,11 +119,13 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
+  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
 };
 
 void boot();
 
 async function boot(): Promise<void> {
+  await setupThemeControls();
   setupTabs();
   setupUpdateStatus();
   await migrateBeetolSettings();
@@ -133,6 +139,41 @@ async function boot(): Promise<void> {
   observeWikiLaterItems();
   await setupBeetolPanel();
   await renderStatus();
+}
+
+async function setupThemeControls(): Promise<void> {
+  const buttons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-theme-choice]"));
+  if (buttons.length === 0) return;
+  const stored = await chrome.storage.local.get(SETTINGS_THEME_KEY);
+  const initial = normalizeThemeMode(stored[SETTINGS_THEME_KEY]);
+  renderThemeChoice(buttons, initial);
+  applySettingsTheme(initial);
+  for (const button of buttons) {
+    button.addEventListener("click", () => {
+      const mode = normalizeThemeMode(button.dataset.themeChoice);
+      applySettingsTheme(mode);
+      renderThemeChoice(buttons, mode);
+      void chrome.storage.local.set({ [SETTINGS_THEME_KEY]: mode });
+    });
+  }
+}
+
+function normalizeThemeMode(value: unknown): ThemeMode {
+  return value === "light" || value === "dark" || value === "system" ? value : "system";
+}
+
+function applySettingsTheme(mode: ThemeMode): void {
+  if (mode === "system") {
+    document.documentElement.removeAttribute("data-theme");
+    return;
+  }
+  document.documentElement.dataset.theme = mode;
+}
+
+function renderThemeChoice(buttons: HTMLButtonElement[], active: ThemeMode): void {
+  for (const button of buttons) {
+    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === active));
+  }
 }
 
 function setupRemiStatsIconControls(): void {
@@ -599,6 +640,10 @@ function shortUrl(value: string): string {
 
 function setupUpdateStatus(): void {
   const refresh = document.getElementById("updateRefresh") as HTMLButtonElement | null;
+  const download = document.getElementById("updateDownload") as HTMLButtonElement | null;
+  const copySteps = document.getElementById("updateCopySteps") as HTMLButtonElement | null;
+  const reload = document.getElementById("updateReload") as HTMLButtonElement | null;
+  const message = document.getElementById("updateMessage");
   void renderUpdateStatus();
   refresh?.addEventListener("click", () => {
     refresh.disabled = true;
@@ -608,6 +653,31 @@ function setupUpdateStatus(): void {
         refresh.disabled = false;
       });
   });
+  download?.addEventListener("click", () => {
+    void currentUpdateStatus().then((status) => {
+      const url = status?.latestAssetUrl || status?.latestUrl;
+      if (!url) {
+        if (message) message.textContent = "No release download is available yet. Try refresh first.";
+        return;
+      }
+      openExternalUrl(url);
+      if (message) message.textContent = status?.latestAssetUrl ? "Opened the release zip download." : "Opened the release page.";
+    });
+  });
+  copySteps?.addEventListener("click", () => {
+    void currentUpdateStatus().then((status) => {
+      const steps = updateStepsText(status);
+      void navigator.clipboard.writeText(steps).then(() => {
+        if (message) message.textContent = "Update steps copied. Replace files in the same folder before using Reload.";
+      }).catch(() => {
+        if (message) message.textContent = "Copy failed. Use the README update steps.";
+      });
+    });
+  });
+  reload?.addEventListener("click", () => {
+    if (message) message.textContent = "Reloading extension. Refresh X/Twitter tabs after it comes back.";
+    window.setTimeout(() => chrome.runtime.reload(), 250);
+  });
 }
 
 async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
@@ -615,13 +685,19 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   const title = document.getElementById("updateStatusTitle");
   const detail = document.getElementById("updateStatusDetail");
   const link = document.getElementById("updateLink") as HTMLAnchorElement | null;
-  if (!root || !title || !detail || !link) return;
+  const download = document.getElementById("updateDownload") as HTMLButtonElement | null;
+  const copySteps = document.getElementById("updateCopySteps") as HTMLButtonElement | null;
+  const reload = document.getElementById("updateReload") as HTMLButtonElement | null;
+  if (!root || !title || !detail || !link || !download || !copySteps || !reload) return;
 
   const installedVersion = chrome.runtime.getManifest().version;
   const stored = status ? { [UPDATE_STATUS_KEY]: status } : await chrome.storage.local.get(UPDATE_STATUS_KEY);
   const updateStatus = isUpdateStatus(stored[UPDATE_STATUS_KEY]) ? stored[UPDATE_STATUS_KEY] : null;
   delete root.dataset.state;
   link.hidden = true;
+  download.hidden = true;
+  copySteps.hidden = true;
+  reload.hidden = true;
   link.removeAttribute("href");
 
   if (!updateStatus) {
@@ -633,7 +709,10 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   if (updateStatus.updateAvailable && updateStatus.latestVersion) {
     root.dataset.state = "available";
     title.textContent = `Update available: v${updateStatus.latestVersion}`;
-    detail.textContent = `Installed v${updateStatus.currentVersion}. Download the latest GitHub release and reload the unpacked extension.`;
+    detail.textContent = `Installed v${updateStatus.currentVersion}. Download, replace files in the same folder, then reload to preserve settings and stats.`;
+    download.hidden = false;
+    copySteps.hidden = false;
+    reload.hidden = false;
     if (updateStatus.latestUrl) {
       link.href = updateStatus.latestUrl;
       link.hidden = false;
@@ -650,6 +729,37 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
 
   title.textContent = "milXdy is up to date";
   detail.textContent = `Installed v${updateStatus.currentVersion}. Last checked ${formatCheckedAt(updateStatus.checkedAt)}.`;
+  copySteps.hidden = false;
+  reload.hidden = false;
+}
+
+async function currentUpdateStatus(): Promise<UpdateStatus | null> {
+  const stored = await chrome.storage.local.get(UPDATE_STATUS_KEY);
+  return isUpdateStatus(stored[UPDATE_STATUS_KEY]) ? stored[UPDATE_STATUS_KEY] : null;
+}
+
+function updateStepsText(status: UpdateStatus | null): string {
+  const installedVersion = chrome.runtime.getManifest().version;
+  const latest = status?.latestVersion ? `v${status.latestVersion}` : "the latest release";
+  const asset = status?.latestAssetName ? ` (${status.latestAssetName})` : "";
+  const releaseUrl = status?.latestUrl || "https://github.com/bonklek/milXdy/releases";
+  const downloadUrl = status?.latestAssetUrl || releaseUrl;
+  return [
+    `milXdy in-place update steps`,
+    "",
+    `Installed: v${status?.currentVersion || installedVersion}`,
+    `Target: ${latest}${asset}`,
+    "",
+    "1. Download the latest milXdy prerelease zip:",
+    downloadUrl,
+    "2. Unzip it over the same folder this unpacked extension already uses.",
+    "3. Do not remove milXdy from chrome://extensions.",
+    "4. Do not load a fresh folder as a second unpacked extension.",
+    "5. Return to the milXdy popup and click Reload, or press reload on the existing chrome://extensions card.",
+    "6. Refresh open X/Twitter tabs.",
+    "",
+    "Keeping the same loaded folder preserves Chrome extension storage, including Maxxer stats, settings, diagnostics, and RemiNet/Beetol login state.",
+  ].join("\n");
 }
 
 function isUpdateStatus(value: unknown): value is UpdateStatus {
@@ -657,6 +767,8 @@ function isUpdateStatus(value: unknown): value is UpdateStatus {
   const record = value as Record<string, unknown>;
   return typeof record.checkedAt === "number"
     && typeof record.currentVersion === "string"
+    && (typeof record.latestAssetUrl === "string" || record.latestAssetUrl == null)
+    && (typeof record.latestAssetName === "string" || record.latestAssetName == null)
     && typeof record.updateAvailable === "boolean";
 }
 
@@ -786,7 +898,7 @@ function llmBugReportPrompt(target: "github" | "x", template: { title: string; f
     ];
 
   return [
-    "Help me create a high-quality milXdy bug report through a short Socratic interview.",
+    "Help me create a high-quality milXdy bug report through a short interview.",
     "",
     `milXdy version: ${version}`,
     ...targetInstructions,
@@ -843,6 +955,7 @@ function escapeHtml(value: string): string {
 }
 
 async function setupBeetolPanel(): Promise<void> {
+  const session = document.getElementById("beetolSession");
   const status = document.getElementById("beetolStatus");
   const authDetail = document.getElementById("beetolAuthDetail");
   const form = document.getElementById("beetolLoginForm") as HTMLFormElement | null;
@@ -856,11 +969,11 @@ async function setupBeetolPanel(): Promise<void> {
   const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
   const message = document.getElementById("beetolMessage");
 
-  if (!status || !authDetail || !form || !username || !password || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
+  if (!session || !status || !authDetail || !form || !username || !password || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
 
   const settings = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
   color.value = typeof settings.beetolColor === "string" ? settings.beetolColor : "red";
-  mode.value = typeof settings.beetolMode === "string" ? settings.beetolMode : "dark";
+  mode.value = typeof settings.beetolMode === "string" ? settings.beetolMode : "settings";
 
   const setMessage = (text: string, kind = "") => {
     message.textContent = text;
@@ -869,22 +982,26 @@ async function setupBeetolPanel(): Promise<void> {
   };
 
   const renderAuth = (signedIn: boolean, method = "") => {
+    session.toggleAttribute("data-signed-in", signedIn);
     status.parentElement?.toggleAttribute("data-signed-in", signedIn);
     status.textContent = signedIn
-      ? `Signed in to RemiNet${method === "session" ? " via browser session" : ""}`
+      ? `Login active${method === "session" ? " via browser session" : ""}`
       : "Not signed in";
     authDetail.textContent = signedIn
-      ? "The RemiNet connector login is active. This account powers Beetol hunts and X poke actions."
+      ? ""
       : "Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.";
     form.hidden = signedIn;
     logout.hidden = !signedIn;
     openSso.hidden = signedIn;
     retrySession.hidden = signedIn;
+    if (signedIn) pokeDiagnostic.hidden = true;
   };
 
   const auth = await chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null);
-  renderAuth(Boolean(auth?.signedIn), typeof auth?.method === "string" ? auth.method : "");
-  await renderPokeDiagnostic(pokeDiagnostic);
+  const signedIn = Boolean(auth?.signedIn);
+  renderAuth(signedIn, typeof auth?.method === "string" ? auth.method : "");
+  if (signedIn) pokeDiagnostic.hidden = true;
+  else await renderPokeDiagnostic(pokeDiagnostic);
 
   form.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -922,7 +1039,7 @@ async function setupBeetolPanel(): Promise<void> {
       const signedIn = Boolean(response?.signedIn);
       renderAuth(signedIn, signedIn ? "session" : "");
       setMessage(signedIn
-        ? "Browser session detected. If actions fail, RemiliaNET requires token login for this API."
+        ? "Browser session detected. Some RemiliaNET actions may still require popup login."
         : "No browser session detected. Complete RemiliaNET SSO first.",
       signedIn ? "" : "warn");
     }).finally(() => {
@@ -952,9 +1069,6 @@ async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
     root.hidden = true;
     return;
   }
-  const attempts = Array.isArray(diagnostic.attempts)
-    ? diagnostic.attempts.map((attempt) => objectValue(attempt))
-    : [];
   const updatedAt = typeof diagnostic.updatedAt === "number"
     ? formatCheckedAt(diagnostic.updatedAt)
     : "unknown";
@@ -963,32 +1077,7 @@ async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
     `Last poke: ${diagnostic.ok ? "ok" : "failed"} (${updatedAt})`,
     `Target: ${String(diagnostic.username || "")}`,
     `Error: ${String(diagnostic.error || "")}`,
-    `Before: ${compactDiagnosticProfile(objectValue(diagnostic.before))}`,
-    `After: ${compactDiagnosticProfile(objectValue(diagnostic.after))}`,
-    `Attempts: ${attempts.map(compactDiagnosticAttempt).join(" | ") || "none"}`,
   ].join("\n");
-}
-
-function compactDiagnosticProfile(profile: Record<string, unknown>): string {
-  if (!Object.keys(profile).length) return "none";
-  return [
-    `status=${String(profile.status ?? "")}`,
-    `auth=${String(profile.isAuthenticated ?? "")}`,
-    `user=${String(profile.username ?? "")}`,
-    `pokes=${String(profile.pokes ?? "")}`,
-    `canPoke=${String(profile.canPoke ?? "")}`,
-    `cooldown=${String(profile.pokeCooldownSeconds ?? "")}`,
-  ].join(" ");
-}
-
-function compactDiagnosticAttempt(attempt: Record<string, unknown>): string {
-  return [
-    String(attempt.authMethod || "unknown"),
-    `status=${String(attempt.status ?? "")}`,
-    `ok=${String(attempt.ok ?? "")}`,
-    `success=${String(attempt.success ?? "")}`,
-    String(attempt.message || ""),
-  ].filter(Boolean).join(" ");
 }
 
 export {};
