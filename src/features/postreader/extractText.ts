@@ -52,10 +52,15 @@ export function formatReadablePost(post: ReadablePost, settings: PostreaderSetti
   }
 
   if (settings.includeQuotes && post.quote) {
+    const sameAuthor = sameDisplayName(post.authorDisplayName, post.quote.authorDisplayName);
     if (post.text) {
-      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName} with "${post.text}"`));
+      segments.push(sentenceClause(sameAuthor
+        ? `Then "${post.text}"`
+        : `${post.authorDisplayName} quoted ${post.quote.authorDisplayName} with "${post.text}"`));
     } else {
-      segments.push(sentenceClause(`${post.authorDisplayName} quoted ${post.quote.authorDisplayName}`));
+      segments.push(sentenceClause(sameAuthor
+        ? "Then quoted their own post"
+        : `${post.authorDisplayName} quoted ${post.quote.authorDisplayName}`));
     }
   } else if (post.text) {
     segments.push(sentenceClause(`${post.authorDisplayName} said "${post.text}"`));
@@ -70,6 +75,14 @@ export function formatReadablePost(post: ReadablePost, settings: PostreaderSetti
   }
 
   return segments.join(" ");
+}
+
+function sameDisplayName(left: string, right: string): boolean {
+  return normalizeDisplayName(left) === normalizeDisplayName(right);
+}
+
+function normalizeDisplayName(value: string): string {
+  return value.toLowerCase().replace(/\s+/g, " ").trim();
 }
 
 function imageTextPrefix(index: number, count: number): string {

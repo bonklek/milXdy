@@ -72,6 +72,10 @@ async function clearAuth() {
   return chrome.storage.local.remove(TOKEN_KEYS);
 }
 
+async function clearStoredAuth() {
+  return chrome.storage.local.remove(TOKEN_KEYS);
+}
+
 async function setAuthCookie(accessToken) {
   if (!accessToken || !chrome.cookies?.set) return;
   try {
@@ -96,6 +100,32 @@ async function clearAuthCookie() {
   } catch (error) {
     console.warn('Failed to clear RemiliaNET auth cookie', error);
   }
+}
+
+async function getAuthCookie() {
+  if (!chrome.cookies?.get) return '';
+  try {
+    const cookie = await chrome.cookies.get({ url: BASE_URL, name: AUTH_COOKIE_NAME });
+    return typeof cookie?.value === 'string' ? cookie.value : '';
+  } catch (error) {
+    console.warn('Failed to read RemiliaNET auth cookie', error);
+    return '';
+  }
+}
+
+async function adoptBrowserSession() {
+  const session = await remiliaSessionFetch('GET', '/api/beetle/user');
+  if (!session.ok) return { ok: false, session };
+
+  const cookieToken = await getAuthCookie();
+  if (cookieToken) {
+    await setStored({
+      [ACCESS_TOKEN_KEY]: cookieToken,
+      [REFRESH_TOKEN_KEY]: null,
+    });
+  }
+
+  return { ok: true, token: cookieToken, session };
 }
 
 async function oidc(params) {
@@ -133,7 +163,8 @@ async function refreshAccessToken() {
 async function remiliaFetch(method, path, body, retry = true) {
   await migrateAuth();
   const stored = await getStored([ACCESS_TOKEN_KEY]);
-  const accessToken = stored[ACCESS_TOKEN_KEY];
+  const adopted = await adoptBrowserSession();
+  const accessToken = adopted.token || stored[ACCESS_TOKEN_KEY];
   if (!accessToken) return { ok: false, authRequired: true };
   await setAuthCookie(accessToken);
 
@@ -144,7 +175,7 @@ async function remiliaFetch(method, path, body, retry = true) {
 
   if ((result.status === 401 || result.status === 403) && retry) {
     if (await refreshAccessToken()) return remiliaFetch(method, path, body, false);
-    await clearAuth();
+    await clearStoredAuth();
     return { ok: false, authRequired: true, status: result.status, data: result.data, authMethod: result.authMethod };
   }
 
@@ -462,13 +493,16 @@ function normalizeUsername(value) {
 async function remiliaPokeFetch(username) {
   await migrateAuth();
   const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
-  let accessToken = stored[ACCESS_TOKEN_KEY];
+  const adoptedSession = await adoptBrowserSession();
+  let accessToken = adoptedSession.token || stored[ACCESS_TOKEN_KEY];
   if (!accessToken && stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
     accessToken = (await getStored([ACCESS_TOKEN_KEY]))[ACCESS_TOKEN_KEY];
   }
-  if (!accessToken) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
+  if (!accessToken) {
+    if (!adoptedSession.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
+  }
 
-  await setAuthCookie(accessToken);
+  if (accessToken) await setAuthCookie(accessToken);
   const before = await remiliaRequest('GET', `/api/profile/~${encodeURIComponent(username)}`, null, {
     credentials: 'include',
     authMethod: 'profile-before-cookie',
@@ -476,8 +510,10 @@ async function remiliaPokeFetch(username) {
 
   const attempts = [
     { authMethod: 'cookie', credentials: 'include' },
-    { authMethod: 'bearer', credentials: 'omit', accessToken },
-    { authMethod: 'cookie+bearer', credentials: 'include', accessToken },
+    ...(accessToken ? [
+      { authMethod: 'bearer', credentials: 'omit', accessToken },
+      { authMethod: 'cookie+bearer', credentials: 'include', accessToken },
+    ] : []),
   ];
   const results = [];
   for (const attempt of attempts) {
@@ -665,6 +701,15 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       }
       if (message?.type === 'beetol:authStatus') {
         await migrateAuth();
+        const adopted = await adoptBrowserSession();
+        if (adopted.ok) {
+          sendResponse({
+            ok: true,
+            signedIn: true,
+            method: adopted.token ? 'sso' : 'session',
+          });
+          return;
+        }
         const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
         if (stored[ACCESS_TOKEN_KEY]) {
           const whoami = await remiliaFetch('GET', '/api/profile/whoami');
@@ -686,13 +731,20 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
           });
           return;
         }
-        const session = await remiliaSessionFetch('GET', '/api/beetle/user');
-        sendResponse({ ok: true, signedIn: Boolean(session.ok), method: session.ok ? 'session' : null });
+        sendResponse({
+          ok: true,
+          signedIn: false,
+          method: null,
+        });
         return;
       }
       if (message?.type === 'beetol:sessionStatus') {
-        const session = await remiliaSessionFetch('GET', '/api/beetle/user');
-        sendResponse({ ok: true, signedIn: Boolean(session.ok), method: session.ok ? 'session' : null });
+        const adopted = await adoptBrowserSession();
+        sendResponse({
+          ok: true,
+          signedIn: Boolean(adopted.ok),
+          method: adopted.ok ? (adopted.token ? 'sso' : 'session') : null,
+        });
         return;
       }
       if (message?.type === 'beetol:getState') {

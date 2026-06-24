@@ -8,7 +8,7 @@ This project is intended for GitHub beta distribution and local Chromium testing
 
 - **Remilia Wiki Links**: inline Remilia Wiki concept links, hover previews, Link Later, and Grok-assisted wiki drafting workflows.
 - **Postreader**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
-- **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
+- **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
 - **Beetol Game**: Beetol hunter panel and RemiliaNET login shared with RemiNet actions.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
 - **Diag**: beta diagnostics and bug-report actions for GitHub or X.

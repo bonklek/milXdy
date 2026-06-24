@@ -6,7 +6,8 @@
   align-items: center;
   margin-left: 6px;
   position: relative;
-  vertical-align: text-bottom;
+  vertical-align: middle;
+  line-height: 1;
   cursor: pointer;
   transition: transform 0.2s ease;
 }
@@ -239,6 +240,8 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   position: relative;
   overflow: hidden;
   vertical-align: middle;
+  min-height: 20px;
+  line-height: 1;
 }
 
 .reminet-badge-group {
@@ -311,6 +314,19 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   .reminet-poke-button:hover {
     background: var(--reminet-poke-hover-bg);
   }
+}
+
+.reminet-action-poke-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 38px;
+  height: 34px;
+  margin: 0 8px 0 0;
+}
+
+.reminet-action-poke-group .reminet-poke-button {
+  margin-left: 0;
 }
 
 [data-theme="dark"] .reminet-poke-button {

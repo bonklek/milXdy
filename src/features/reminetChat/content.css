@@ -25,19 +25,39 @@
   --rn-text: #19191d;
   --rn-muted: rgba(0, 0, 0, 0.55);
   --rn-highlight: #ffffff;
+  --rn-frame-height: 560px;
+  --rn-rail-top: 8px;
+  --rn-left-top: 8px;
   color-scheme: light;
   box-sizing: border-box;
   display: block;
   flex: 0 0 auto;
   order: -999;
   position: sticky;
-  top: 8px;
+  top: var(--rn-rail-top);
   z-index: 20;
   width: 100%;
   margin: 0 0 16px;
   color: var(--rn-text);
   font-family: "Milxdy Remilia Hei", "Milxdy Remilia Menlo", monospace;
   letter-spacing: 0;
+}
+
+#milxdy-reminet-chat-root[data-dragging="true"] {
+  user-select: none;
+}
+
+#milxdy-reminet-chat-root[data-dragging="true"] .milxdy-chat-header {
+  cursor: ns-resize;
+}
+
+#milxdy-reminet-chat-root[data-mount="left"] {
+  position: fixed;
+  top: var(--rn-left-top);
+  left: 16px;
+  z-index: 2147483645;
+  width: min(360px, calc(100vw - 32px));
+  margin: 0;
 }
 
 #milxdy-reminet-chat-root *,
@@ -50,7 +70,8 @@
   position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto auto auto;
-  max-height: calc(100vh - 16px);
+  height: var(--rn-frame-height);
+  max-height: var(--rn-frame-height);
   overflow: hidden;
   border: 1px solid var(--rn-border);
   border-right: 3px solid #a3a3a3;
@@ -90,6 +111,12 @@
   border-bottom: 1px solid var(--rn-border);
   background: var(--rn-surface-3);
   box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.52);
+  cursor: ns-resize;
+}
+
+.milxdy-chat-header button,
+.milxdy-chat-header a {
+  cursor: pointer;
 }
 
 .milxdy-chat-header > div:first-child {
@@ -171,8 +198,19 @@
   line-height: 1;
 }
 
+.milxdy-chat-header [data-role="side"] {
+  display: grid;
+  place-items: center;
+  min-width: 29px;
+  padding: 0;
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 14px;
+  line-height: 1;
+}
+
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-card {
   grid-template-rows: auto;
+  height: auto;
   max-height: none;
 }
 
@@ -183,7 +221,8 @@
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-messages,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-attachment-preview,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-error,
-#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-composer {
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-composer,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-resize-grip {
   display: none;
 }
 
@@ -614,6 +653,22 @@
   --rn-muted: rgba(240, 241, 248, 0.62);
   --rn-highlight: rgba(255, 255, 255, 0.12);
   color-scheme: dark;
+}
+
+.milxdy-chat-resize-grip {
+  position: absolute;
+  z-index: 3;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 10px;
+  border: 0;
+  background: transparent;
+  cursor: ns-resize;
+}
+
+.milxdy-chat-resize-grip::before {
+  content: none;
 }
 
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-card {

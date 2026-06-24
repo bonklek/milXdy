@@ -32,6 +32,10 @@
   box-sizing: border-box;
 }
 
+#beetol-hunter-root[data-photo-viewer="true"][data-snap-x="left"][data-snap-y="top"] {
+  transform: translateY(58px);
+}
+
 .beetol-shell {
   position: relative;
   width: 156px;

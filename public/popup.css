@@ -570,6 +570,89 @@ input[type="checkbox"] {
   font-weight: 700;
 }
 
+.visual-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.visual-preset-grid button {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.visual-preset-grid button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.visual-preset-grid strong {
+  font-size: 13px;
+  line-height: 1.1;
+}
+
+.visual-preset-grid small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.visual-toggle-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.appearance-search {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.appearance-subgroup {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--list-row-border);
+  border-radius: 7px;
+  background: var(--surface-muted);
+}
+
+.appearance-subgroup[hidden],
+.appearance-filter-hidden {
+  display: none !important;
+}
+
+.visual-delete-button {
+  align-self: end;
+  min-height: 56px;
+}
+
+.setting-group-nested {
+  display: grid;
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--surface);
+}
+
+.setting-group-nested summary {
+  color: var(--heading-muted);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .login-form input,
 .field select,
 .field input,

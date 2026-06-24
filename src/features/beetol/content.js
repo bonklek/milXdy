@@ -47,6 +47,7 @@
     menuSoundArmed: false,
     position: null,
     dragging: null,
+    photoViewerOpen: false,
   };
 
   const root = document.createElement('div');
@@ -162,6 +163,56 @@
   function playActionSound() {
     playTone(440, 0.05, 0.03);
     setTimeout(() => playTone(740, 0.08, 0.022), 38);
+  }
+
+  function playCrunchSound() {
+    try {
+      const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+      if (!AudioContext) return;
+      audioContext ||= new AudioContext();
+      audioContext.resume?.();
+      const start = audioContext.currentTime;
+
+      for (let i = 0; i < 7; i += 1) {
+        const duration = 0.035 + i * 0.006;
+        const buffer = audioContext.createBuffer(1, audioContext.sampleRate * duration, audioContext.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let j = 0; j < data.length; j += 1) {
+          data[j] = (Math.random() * 2 - 1) * (1 - j / data.length);
+        }
+        const source = audioContext.createBufferSource();
+        const filter = audioContext.createBiquadFilter();
+        const gain = audioContext.createGain();
+        filter.type = 'bandpass';
+        filter.frequency.value = 480 + Math.random() * 780;
+        filter.Q.value = 2.8;
+        gain.gain.setValueAtTime(0.0001, start + i * 0.055);
+        gain.gain.exponentialRampToValueAtTime(0.075, start + i * 0.055 + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.055 + duration);
+        source.buffer = buffer;
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(audioContext.destination);
+        source.start(start + i * 0.055);
+      }
+
+      [120, 95, 72].forEach((frequency, index) => {
+        const oscillator = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(frequency, start + index * 0.11);
+        oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.62, start + index * 0.11 + 0.09);
+        gain.gain.setValueAtTime(0.0001, start + index * 0.11);
+        gain.gain.exponentialRampToValueAtTime(0.035, start + index * 0.11 + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + index * 0.11 + 0.1);
+        oscillator.connect(gain);
+        gain.connect(audioContext.destination);
+        oscillator.start(start + index * 0.11);
+        oscillator.stop(start + index * 0.11 + 0.11);
+      });
+    } catch {
+      // Best-effort UI sound; audio may be blocked or unavailable.
+    }
   }
 
   function fmtMs(ms) {
@@ -384,6 +435,7 @@
       state.user = response.user;
       mergeCooldowns(response.user);
     }
+    if (response.made > 0) playCrunchSound();
     const skipped = response.skipped ? ` (${response.skipped} skipped)` : '';
     setMessage(`Crunch All Junk: made ${response.made}/${response.pairs} Junk Cube(s)${skipped}.`);
     render();
@@ -466,6 +518,26 @@
     applyPosition();
     savePosition();
   });
+
+  function isPhotoViewerOpen() {
+    if (location.pathname.includes('/photo/')) return true;
+    return Boolean(document.querySelector(
+      '[aria-modal="true"] [data-testid="tweetPhoto"], [aria-modal="true"] img[src*="twimg.com/media"]',
+    ));
+  }
+
+  function syncPhotoViewerOffset() {
+    const open = isPhotoViewerOpen();
+    if (state.photoViewerOpen === open) return;
+    state.photoViewerOpen = open;
+    root.dataset.photoViewer = String(open);
+  }
+
+  const photoViewerObserver = new MutationObserver(syncPhotoViewerOffset);
+  photoViewerObserver.observe(document.documentElement, { childList: true, subtree: true });
+  window.addEventListener('popstate', syncPhotoViewerOffset);
+  window.addEventListener('hashchange', syncPhotoViewerOffset);
+  window.setInterval(syncPhotoViewerOffset, 1000);
 
   els.shell.addEventListener('pointerenter', () => {
     if (state.menuSoundArmed) return;
