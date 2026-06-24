@@ -2,6 +2,20 @@ type Area = "local" | "sync";
 type ControlKind = "boolean" | "number" | "string" | "nullableString" | "handleList";
 type ThemeMode = "light" | "dark" | "system";
 
+import {
+  DEFAULT_RESKIN_PROFILE,
+  DEFAULT_VISUAL_THEME,
+  RESKIN_PROFILE_KEY,
+  VISUAL_CUSTOM_THEMES_KEY,
+  VISUAL_PRESETS,
+  VISUAL_THEME_KEY,
+  normalizeReskinProfile,
+  normalizeVisualTheme,
+  type ReskinProfile,
+  type SavedVisualTheme,
+  type VisualThemeSettings,
+} from "./shared/reskinProfile";
+
 type ControlBinding = {
   area: Area;
   key: string;
@@ -61,9 +75,13 @@ type GitHubReleaseAsset = {
 };
 
 let activeWikiLaterSearchId: string | null = null;
+let visualDraft: VisualThemeSettings = DEFAULT_VISUAL_THEME;
+let visualMode: ReskinProfile | "custom" = "moderate";
+let visualSelectedThemeId = "new";
 
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
+  reskinProfile: { area: "local", key: RESKIN_PROFILE_KEY, kind: "string", fallback: DEFAULT_RESKIN_PROFILE },
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
   "wiki.previewsEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "previewsEnabled", kind: "boolean", fallback: true },
   "wiki.debugMode": { area: "local", key: WIKI_SETTINGS_KEY, property: "debugMode", kind: "boolean", fallback: false },
@@ -130,6 +148,7 @@ async function boot(): Promise<void> {
   setupUpdateStatus();
   await migrateBeetolSettings();
   await loadControls();
+  await setupVisualSettings();
   setupWikiMaxLinksControl();
   setupWikiPreloadTemplateAction();
   setupWikiAiHelp();
@@ -190,6 +209,463 @@ function setupRemiStatsIconControls(): void {
   };
   enabled.addEventListener("change", syncDisabled);
   syncDisabled();
+}
+
+async function setupVisualSettings(): Promise<void> {
+  const presetButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-visual-preset]"));
+  const apply = document.getElementById("visualApply") as HTMLButtonElement | null;
+  const saveAs = document.getElementById("visualSaveAs") as HTMLButtonElement | null;
+  const deleteTheme = document.getElementById("visualDeleteTheme") as HTMLButtonElement | null;
+  const exportButton = document.getElementById("visualExport") as HTMLButtonElement | null;
+  const copyShareButton = document.getElementById("visualCopyShare") as HTMLButtonElement | null;
+  const importButton = document.getElementById("visualImport") as HTMLButtonElement | null;
+  const importShareButton = document.getElementById("visualImportShare") as HTMLButtonElement | null;
+  const importFile = document.getElementById("visualImportFile") as HTMLInputElement | null;
+  const themeSelect = document.getElementById("visualThemeSelect") as HTMLSelectElement | null;
+  if (!presetButtons.length || !apply || !saveAs || !deleteTheme || !exportButton || !copyShareButton || !importButton || !importShareButton || !importFile || !themeSelect) return;
+
+  const stored = await chrome.storage.local.get({
+    [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
+    [VISUAL_THEME_KEY]: DEFAULT_VISUAL_THEME,
+  });
+  visualDraft = normalizeVisualTheme(stored[VISUAL_THEME_KEY], normalizeReskinProfile(stored[RESKIN_PROFILE_KEY]));
+  visualMode = visualDraft.profile;
+  writeVisualEditor(visualDraft);
+  await renderVisualThemeSelect();
+  renderVisualPresetButtons();
+  setupAppearanceSearch();
+
+  for (const button of presetButtons) {
+    button.addEventListener("click", () => {
+      const choice = button.dataset.visualPreset;
+      if (choice === "custom") {
+        visualMode = "custom";
+      } else {
+        const profile = normalizeReskinProfile(choice);
+        visualMode = profile;
+        visualDraft = { ...VISUAL_PRESETS[profile] };
+        visualSelectedThemeId = "new";
+        themeSelect.value = "new";
+        writeVisualEditor(visualDraft);
+      }
+      renderVisualPresetButtons();
+    });
+  }
+
+  themeSelect.addEventListener("change", () => {
+    void loadSelectedVisualTheme(themeSelect.value);
+  });
+  for (const element of visualEditorElements()) {
+    element.addEventListener("change", () => {
+      visualDraft = readVisualEditor();
+      visualMode = "custom";
+      renderVisualPresetButtons();
+    });
+  }
+  apply.addEventListener("click", () => {
+    void applyVisualTheme(readVisualEditor(), "Applied visual theme.");
+  });
+  saveAs.addEventListener("click", () => {
+    void saveVisualThemeAs();
+  });
+  deleteTheme.addEventListener("click", () => {
+    void deleteSelectedVisualTheme();
+  });
+  exportButton.addEventListener("click", () => {
+    exportVisualTheme(readVisualEditor());
+  });
+  copyShareButton.addEventListener("click", () => {
+    void copyVisualThemeString(readVisualEditor());
+  });
+  importButton.addEventListener("click", () => importFile.click());
+  importShareButton.addEventListener("click", () => {
+    void importVisualThemeString(window.prompt("Paste milXdy appearance string") || "");
+  });
+  importFile.addEventListener("change", () => {
+    const file = importFile.files?.[0];
+    if (file) void importVisualTheme(file);
+    importFile.value = "";
+  });
+}
+
+async function renderVisualThemeSelect(): Promise<void> {
+  const select = document.getElementById("visualThemeSelect") as HTMLSelectElement | null;
+  const deleteButton = document.getElementById("visualDeleteTheme") as HTMLButtonElement | null;
+  if (!select) return;
+  const themes = await loadSavedVisualThemes();
+  select.textContent = "";
+  const empty = document.createElement("option");
+  empty.value = "new";
+  empty.textContent = themes.length ? "New" : "New";
+  select.append(empty);
+  for (const theme of themes) {
+    const option = document.createElement("option");
+    option.value = theme.id;
+    option.textContent = theme.name;
+    select.append(option);
+  }
+  select.value = themes.some((theme) => theme.id === visualSelectedThemeId) ? visualSelectedThemeId : "new";
+  if (deleteButton) {
+    deleteButton.disabled = select.value === "new";
+    deleteButton.title = deleteButton.disabled ? "Select a saved custom theme to delete" : "Delete selected custom theme";
+  }
+}
+
+async function loadSelectedVisualTheme(id: string): Promise<void> {
+  visualSelectedThemeId = id;
+  await renderVisualThemeSelect();
+  if (id === "new") {
+    visualMode = "custom";
+    renderVisualPresetButtons();
+    return;
+  }
+  const theme = (await loadSavedVisualThemes()).find((entry) => entry.id === id);
+  if (!theme) return;
+  visualDraft = normalizeVisualTheme(theme.settings);
+  visualMode = "custom";
+  setInputValue("visualThemeName", theme.name);
+  writeVisualEditor(visualDraft, false);
+  renderVisualPresetButtons();
+}
+
+async function deleteSelectedVisualTheme(): Promise<void> {
+  if (visualSelectedThemeId === "new") {
+    showVisualMessage("Select a saved custom theme to delete.", "warn");
+    return;
+  }
+  const themes = await loadSavedVisualThemes();
+  const selected = themes.find((theme) => theme.id === visualSelectedThemeId);
+  if (!selected) {
+    visualSelectedThemeId = "new";
+    await renderVisualThemeSelect();
+    showVisualMessage("Theme was already removed.", "warn");
+    return;
+  }
+  const next = themes.filter((theme) => theme.id !== visualSelectedThemeId);
+  await chrome.storage.local.set({ [VISUAL_CUSTOM_THEMES_KEY]: next });
+  visualSelectedThemeId = "new";
+  await renderVisualThemeSelect();
+  setInputValue("visualThemeName", "");
+  showVisualMessage(`Deleted "${selected.name}".`);
+}
+
+async function applyVisualTheme(settings: VisualThemeSettings, messageText: string): Promise<void> {
+  const theme = normalizeVisualTheme(settings);
+  visualDraft = theme;
+  await chrome.storage.local.set({
+    [RESKIN_PROFILE_KEY]: theme.profile,
+    [VISUAL_THEME_KEY]: theme,
+    "milxdy.reminetChat.enabled": theme.reminetChatOverlay,
+  });
+  showVisualMessage(messageText);
+  await refreshXTabs();
+}
+
+async function saveVisualThemeAs(): Promise<void> {
+  const nameInput = document.getElementById("visualThemeName") as HTMLInputElement | null;
+  const name = (nameInput?.value || "").trim() || "Custom visual theme";
+  const now = Date.now();
+  const themes = await loadSavedVisualThemes();
+  const existingIndex = visualSelectedThemeId === "new" ? -1 : themes.findIndex((theme) => theme.id === visualSelectedThemeId);
+  const settings = readVisualEditor();
+  const saved: SavedVisualTheme = {
+    id: existingIndex >= 0 ? themes[existingIndex].id : `visual-${now.toString(36)}`,
+    name,
+    createdAt: existingIndex >= 0 ? themes[existingIndex].createdAt : now,
+    updatedAt: now,
+    settings,
+  };
+  if (existingIndex >= 0) themes[existingIndex] = saved;
+  else themes.push(saved);
+  await chrome.storage.local.set({ [VISUAL_CUSTOM_THEMES_KEY]: themes });
+  visualSelectedThemeId = saved.id;
+  await renderVisualThemeSelect();
+  await applyVisualTheme(settings, `Saved and applied "${name}".`);
+}
+
+function exportVisualTheme(settings: VisualThemeSettings): void {
+  const name = (document.getElementById("visualThemeName") as HTMLInputElement | null)?.value.trim() || "milxdy-visual-theme";
+  const payload = {
+    kind: "milxdy.visualTheme",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    name,
+    settings: normalizeVisualTheme(settings),
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${slugify(name)}.milxdy-theme.json`;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  showVisualMessage("Exported theme file.");
+}
+
+async function copyVisualThemeString(settings: VisualThemeSettings): Promise<void> {
+  const name = (document.getElementById("visualThemeName") as HTMLInputElement | null)?.value.trim() || "milxdy-visual-theme";
+  const share = await encodeVisualThemeShareString(name, settings);
+  await navigator.clipboard.writeText(share);
+  showVisualMessage("Copied share string.");
+}
+
+async function importVisualThemeString(value: string): Promise<void> {
+  if (!value.trim()) return;
+  try {
+    const imported = await decodeVisualThemeShareString(value.trim());
+    writeVisualEditor(imported.settings);
+    setInputValue("visualThemeName", imported.name);
+    visualDraft = imported.settings;
+    visualMode = "custom";
+    visualSelectedThemeId = "new";
+    await renderVisualThemeSelect();
+    renderVisualPresetButtons();
+    showVisualMessage("Imported share string. Apply or save it.");
+  } catch {
+    showVisualMessage("Import failed. The share string is invalid.", "warn");
+  }
+}
+
+async function importVisualTheme(file: File): Promise<void> {
+  try {
+    const root = JSON.parse(await file.text()) as Record<string, unknown>;
+    const settings = normalizeVisualTheme(objectValue(root.settings).profile ? root.settings : root);
+    const name = typeof root.name === "string" && root.name.trim() ? root.name.trim() : file.name.replace(/\.json$/i, "");
+    writeVisualEditor(settings);
+    setInputValue("visualThemeName", name);
+    visualDraft = settings;
+    visualMode = "custom";
+    visualSelectedThemeId = "new";
+    await renderVisualThemeSelect();
+    renderVisualPresetButtons();
+    showVisualMessage("Imported theme. Apply or save it.");
+  } catch {
+    showVisualMessage("Import failed. Use a milXdy visual theme JSON file.", "warn");
+  }
+}
+
+async function loadSavedVisualThemes(): Promise<SavedVisualTheme[]> {
+  const stored = await chrome.storage.local.get(VISUAL_CUSTOM_THEMES_KEY);
+  const raw = stored[VISUAL_CUSTOM_THEMES_KEY];
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((entry): SavedVisualTheme[] => {
+    const record = objectValue(entry);
+    if (typeof record.id !== "string" || typeof record.name !== "string") return [];
+    return [{
+      id: record.id,
+      name: record.name,
+      createdAt: typeof record.createdAt === "number" ? record.createdAt : Date.now(),
+      updatedAt: typeof record.updatedAt === "number" ? record.updatedAt : Date.now(),
+      settings: normalizeVisualTheme(record.settings),
+    }];
+  }).sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function writeVisualEditor(settings: VisualThemeSettings, includeName = true): void {
+  const theme = normalizeVisualTheme(settings);
+  setSelectValue("visualProfile", theme.profile);
+  setSelectValue("visualTweetFont", theme.tweetFont);
+  setSelectValue("visualUiFont", theme.uiFont);
+  setSelectValue("visualPfpShape", theme.pfpShape);
+  setSelectValue("visualMaxxerIntensity", theme.maxxerIntensity);
+  setSelectValue("visualMaxxerSeparators", theme.maxxerSeparators);
+  setSelectValue("visualPokePlacement", theme.pokePlacement);
+  setChecked("visualBackgroundFade", theme.backgroundFade);
+  setChecked("visualSquareMedia", theme.squareMedia);
+  setChecked("visualPfpFeed", theme.pfpFeed);
+  setChecked("visualPfpNotifications", theme.pfpNotifications);
+  setChecked("visualPfpChat", theme.pfpChat);
+  setChecked("visualQuoteMediaGap", theme.quoteMediaGap);
+  setChecked("visualPostButtonClickly", theme.postButtonClickly);
+  setChecked("visualPostSound", theme.postSound);
+  setChecked("visualSidebarBevel", theme.sidebarBevel);
+  setChecked("visualSidebarSound", theme.sidebarSound);
+  setChecked("visualNewPostsPill", theme.newPostsPill);
+  setChecked("visualNewPostsSound", theme.newPostsSound);
+  setChecked("visualNotificationUnreadTint", theme.notificationUnreadTint);
+  setChecked("visualRemistatsBox", theme.remistatsBox);
+  setChecked("visualReminetChatOverlay", theme.reminetChatOverlay);
+  setChecked("visualMiladyOnly", theme.miladyOnly);
+  setChecked("visualDisableSelfTracking", theme.disableSelfTracking);
+  setChecked("visualMaxxerShimmer", theme.maxxerShimmer);
+  if (includeName) setInputValue("visualThemeName", "");
+}
+
+function readVisualEditor(): VisualThemeSettings {
+  return normalizeVisualTheme({
+    profile: selectValue("visualProfile"),
+    tweetFont: selectValue("visualTweetFont"),
+    uiFont: selectValue("visualUiFont"),
+    pfpShape: selectValue("visualPfpShape"),
+    maxxerIntensity: selectValue("visualMaxxerIntensity"),
+    maxxerSeparators: selectValue("visualMaxxerSeparators"),
+    pokePlacement: selectValue("visualPokePlacement"),
+    backgroundFade: checkedValue("visualBackgroundFade"),
+    squareMedia: checkedValue("visualSquareMedia"),
+    pfpFeed: checkedValue("visualPfpFeed"),
+    pfpNotifications: checkedValue("visualPfpNotifications"),
+    pfpChat: checkedValue("visualPfpChat"),
+    quoteMediaGap: checkedValue("visualQuoteMediaGap"),
+    postButtonClickly: checkedValue("visualPostButtonClickly"),
+    postSound: checkedValue("visualPostSound"),
+    sidebarBevel: checkedValue("visualSidebarBevel"),
+    sidebarSound: checkedValue("visualSidebarSound"),
+    newPostsPill: checkedValue("visualNewPostsPill"),
+    newPostsSound: checkedValue("visualNewPostsSound"),
+    notificationUnreadTint: checkedValue("visualNotificationUnreadTint"),
+    remistatsBox: checkedValue("visualRemistatsBox"),
+    reminetChatOverlay: checkedValue("visualReminetChatOverlay"),
+    miladyOnly: checkedValue("visualMiladyOnly"),
+    disableSelfTracking: checkedValue("visualDisableSelfTracking"),
+    maxxerShimmer: checkedValue("visualMaxxerShimmer"),
+  });
+}
+
+function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
+  return [
+    "visualThemeName",
+    "visualProfile",
+    "visualTweetFont",
+    "visualUiFont",
+    "visualPfpShape",
+    "visualMaxxerIntensity",
+    "visualMaxxerSeparators",
+    "visualPokePlacement",
+    "visualBackgroundFade",
+    "visualSquareMedia",
+    "visualPfpFeed",
+    "visualPfpNotifications",
+    "visualPfpChat",
+    "visualQuoteMediaGap",
+    "visualPostButtonClickly",
+    "visualPostSound",
+    "visualSidebarBevel",
+    "visualSidebarSound",
+    "visualNewPostsPill",
+    "visualNewPostsSound",
+    "visualNotificationUnreadTint",
+    "visualRemistatsBox",
+    "visualReminetChatOverlay",
+    "visualMiladyOnly",
+    "visualDisableSelfTracking",
+    "visualMaxxerShimmer",
+  ].flatMap((id) => {
+    const element = document.getElementById(id);
+    return element instanceof HTMLInputElement || element instanceof HTMLSelectElement ? [element] : [];
+  });
+}
+
+function renderVisualPresetButtons(): void {
+  for (const button of document.querySelectorAll<HTMLButtonElement>("[data-visual-preset]")) {
+    button.setAttribute("aria-pressed", String(button.dataset.visualPreset === visualMode));
+  }
+}
+
+function setupAppearanceSearch(): void {
+  const search = document.getElementById("appearanceSearch") as HTMLInputElement | null;
+  const panel = document.querySelector<HTMLElement>('section.panel[data-panel="visual"]');
+  if (!search || !panel) return;
+  const filter = () => {
+    const query = search.value.trim().toLowerCase();
+    for (const group of Array.from(panel.querySelectorAll<HTMLElement>(".setting-group, .appearance-subgroup, .resource-links"))) {
+      if (group.contains(search)) continue;
+      const groupText = (group.textContent || "").toLowerCase();
+      const groupMatches = !query || groupText.includes(query);
+      group.hidden = !groupMatches;
+      for (const item of Array.from(group.querySelectorAll<HTMLElement>(".setting, .field, .setting-group-nested, .inline-actions, .visual-preset-grid"))) {
+        const itemText = (item.textContent || "").toLowerCase();
+        item.classList.toggle("appearance-filter-hidden", Boolean(query) && !itemText.includes(query));
+      }
+    }
+  };
+  search.addEventListener("input", filter);
+  filter();
+}
+
+async function refreshXTabs(): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] }).catch(() => []);
+  await Promise.all(tabs.flatMap((tab) => typeof tab.id === "number" ? [chrome.tabs.reload(tab.id)] : []));
+}
+
+function showVisualMessage(text: string, kind = ""): void {
+  const message = document.getElementById("visualMessage");
+  if (!message) return;
+  message.textContent = text;
+  if (kind) message.dataset.kind = kind;
+  else delete message.dataset.kind;
+}
+
+function setSelectValue(id: string, value: string): void {
+  const element = document.getElementById(id) as HTMLSelectElement | null;
+  if (element) element.value = value;
+}
+
+function selectValue(id: string): string {
+  return (document.getElementById(id) as HTMLSelectElement | null)?.value || "";
+}
+
+function setInputValue(id: string, value: string): void {
+  const element = document.getElementById(id) as HTMLInputElement | null;
+  if (element) element.value = value;
+}
+
+function setChecked(id: string, value: boolean): void {
+  const element = document.getElementById(id) as HTMLInputElement | null;
+  if (element) element.checked = value;
+}
+
+function checkedValue(id: string): boolean {
+  return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+}
+
+function slugify(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "milxdy-visual-theme";
+}
+
+async function encodeVisualThemeShareString(name: string, settings: VisualThemeSettings): Promise<string> {
+  const payload = {
+    kind: "milxdy.visualTheme",
+    version: 1,
+    name,
+    settings: normalizeVisualTheme(settings),
+  };
+  const body = base64UrlEncode(JSON.stringify(payload));
+  const checksum = await sha256Base64Url(body);
+  return `milxdy-theme-v1.${body}.${checksum}`;
+}
+
+async function decodeVisualThemeShareString(value: string): Promise<{ name: string; settings: VisualThemeSettings }> {
+  const match = value.match(/^milxdy-theme-v1\.([A-Za-z0-9_-]+)\.([A-Za-z0-9_-]+)$/);
+  if (!match) throw new Error("bad format");
+  const [, body, checksum] = match;
+  if (await sha256Base64Url(body) !== checksum) throw new Error("bad checksum");
+  const payload = JSON.parse(base64UrlDecode(body)) as Record<string, unknown>;
+  if (payload.kind !== "milxdy.visualTheme") throw new Error("bad kind");
+  return {
+    name: typeof payload.name === "string" && payload.name.trim() ? payload.name.trim() : "Imported visual theme",
+    settings: normalizeVisualTheme(payload.settings),
+  };
+}
+
+function base64UrlEncode(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function base64UrlDecode(value: string): string {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  const binary = atob(base64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return new TextDecoder().decode(bytes);
+}
+
+async function sha256Base64Url(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  let binary = "";
+  for (const byte of new Uint8Array(digest)) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "").slice(0, 16);
 }
 
 async function migrateBeetolSettings(): Promise<void> {
@@ -794,6 +1270,7 @@ async function renderStatus(): Promise<void> {
       "milxdy.diagnostics.miladyDetection",
       "milxdy.diagnostics.loadedFeatures",
       "remiliaWikiHyperlink.performance",
+      RESKIN_PROFILE_KEY,
     ]),
     chrome.storage.sync.get(["mode"]),
   ]);
@@ -803,8 +1280,10 @@ async function renderStatus(): Promise<void> {
   const miladyDetection = objectValue(local["milxdy.diagnostics.miladyDetection"]);
   const loadedFeatures = objectValue(local["milxdy.diagnostics.loadedFeatures"]);
   const wikiPerformance = objectValue(local["remiliaWikiHyperlink.performance"]);
+  const profile = typeof local[RESKIN_PROFILE_KEY] === "string" ? local[RESKIN_PROFILE_KEY] : DEFAULT_RESKIN_PROFILE;
   statusGrid.innerHTML = "";
   for (const item of [
+    ["Reskin", profile],
     ["Loaded bundles", Array.isArray(loadedFeatures.features) ? loadedFeatures.features.join(", ") || "none" : "unknown"],
     ["Mode", typeof sync.mode === "string" ? sync.mode : "milady"],
     ["Maxxer matches", String(Object.keys(matchedAccounts).length)],

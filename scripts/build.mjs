@@ -17,7 +17,7 @@ if (existsSync("public/miladymaxxer/milady-logo.png")) {
   await copyFile("public/miladymaxxer/milady-logo.png", "dist/milady-logo.png");
 }
 
-for (const dir of ["icons", "remistats", "beetol", "miladymaxxer", "models", "generated", "wiki-helper"]) {
+for (const dir of ["icons", "remistats", "remilia-fonts", "beetol", "miladymaxxer", "models", "generated", "wiki-helper"]) {
   if (existsSync(`public/${dir}`)) {
     await cp(`public/${dir}`, `dist/${dir}`, { recursive: true });
   }
