@@ -12,13 +12,19 @@ For beta builds, keep the same extension folder on disk.
 4. Press reload on the milXdy extension card.
 5. Refresh open X/Twitter tabs.
 
-Do not remove the extension or load a second unpacked folder unless you intend to reset local extension settings. Chrome local extension storage, including Beetol Game tokens, is tied to the extension identity.
+Do not remove the extension or load a second unpacked folder unless you intend to reset local extension settings and RemiNet/Beetol login state.
+
+The Suite tab provides a guided version of this flow:
+
+- **Download** opens the latest GitHub prerelease zip when the update checker finds one.
+- **Steps** copies the safe in-place update checklist.
+- **Reload** calls Chrome's extension reload after you have replaced the files in the same folder.
 
 ## Suite
 
 Use the Suite tab for whole-extension controls.
 
-- **Update status** checks the configured GitHub release endpoint.
+- **Update status** checks the configured GitHub release endpoint and exposes guided update buttons when needed.
 - **Performance diagnostics** stores lightweight counters used by the Diag tab. Leave this off unless testing performance or preparing a bug report.
 
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
@@ -92,17 +98,31 @@ The poke button uses the RemiNet connector login. It shakes while sending a poke
 
 If the poke icon is missing, confirm **RemiNet connector icons** and **Poke icon** are enabled, then refresh the X/Twitter tab.
 
-During beta testing, the RemiNet connector tab may show the last poke diagnostic after a poke attempt. This local diagnostic summarizes the target, status, auth method attempts, and basic before/after poke state so bug reports are easier to reproduce.
+During beta testing, the RemiNet connector tab may show the last poke diagnostic after a poke attempt so bug reports are easier to reproduce.
+
+### Incoming pokes
+
+When RemiNet connector auth is available, milXdy can show a small incoming poke flag for accounts that recently poked you. This is based on recent RemiliaNET notifications inside the active poke window, so it is a current-activity hint rather than a full all-time poke history.
+
+### RemiNet Chat
+
+Enable **Show RemiliaNET chat on X home** to mount the RemiNet Chat sidebar on supported X/Twitter routes.
+
+- The chat uses the same RemiNet connector login as pokes and Beetol Game.
+- It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
+- It supports reactions, pokes, attachments, media previews, profile lookups, and minimized mode.
+- The setting is off by default while beta performance and auth behavior are validated.
+
+If the chat does not connect, confirm RemiNet login status first, then refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
 
 ## Beetol Game Login
 
 The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunter panel.
 
-- Use **Username or email** and password for normal RemiliaNET token login.
+- Use **Username or email** and password for normal RemiliaNET login.
 - Passwords are sent to RemiliaNET for login and are not stored by milXdy.
-- Access and refresh tokens are stored in Chrome extension local storage.
-- Token login should persist across browser restarts, extension reloads, service-worker restarts, and normal updates that keep the same extension identity.
-- The extension refreshes access tokens from the stored refresh token when possible.
+- RemiNet login state is stored in Chrome extension local storage.
+- Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
 
 For accounts with 2FA:
 
@@ -110,9 +130,9 @@ For accounts with 2FA:
 2. Finish login in the RemiliaNET tab.
 3. Return to milXdy and click **Retry session**.
 
-This browser-session fallback only works if RemiliaNET allows the relevant APIs to use the browser session. If it does not, those accounts need a future RemiliaNET OAuth authorization-code/PKCE flow.
+This browser-session fallback depends on RemiliaNET accepting the browser session for extension actions.
 
-milXdy requests the browser `cookies` permission because RemiliaNET actions mirror the RemiliaNET client by setting a short-lived `authToken` cookie from the RemiNet connector access token before API calls.
+milXdy requests the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
 
 ## Beetol Hunter Panel
 
@@ -138,7 +158,7 @@ Avatar inference runs locally in the extension context.
 
 ## Diag And Feedback
 
-Use the Diag tab when testing or reporting issues. It shows loaded feature bundles, Maxxer counters, scanner state, detection queue state, and wiki link counts.
+Use the Health tab when testing or reporting issues. It shows diagnostic information that can help reproduce bugs.
 
 Feedback actions:
 
@@ -146,16 +166,16 @@ Feedback actions:
 - **Report via X** opens a short bug-report reply to the public feedback post.
 - **LLM assisted** copies a Socratic bug-report prompt, opens the selected destination, and shows a notification. Paste the prompt into a chat model, answer its questions, then use the final report text in GitHub or X.
 
-For performance reports, enable **Performance diagnostics**, reproduce briefly, then include Diag values and the enabled feature list.
+For performance reports, enable **Performance diagnostics**, reproduce briefly, then include the Health tab details.
 
 ## Privacy And Persistence
 
 - RemiStats calls `https://api.remistats.net`.
 - Remilia Wiki previews call `https://wiki.remilia.org`.
 - Grok prompts are pasted into X's native Grok interface.
-- Beetol Game login and actions call `https://www.remilia.net`.
+- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - GitHub update checks call `https://api.github.com`.
 - Postreader OCR and Maxxer avatar inference run locally.
-- RemiNet connector actions use the browser `cookies` permission to set a short-lived RemiliaNET `authToken` cookie from the local access token before API calls.
+- RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
 
-Settings and tokens persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.
+Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.

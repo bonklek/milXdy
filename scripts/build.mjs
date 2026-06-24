@@ -28,6 +28,10 @@ if (existsSync("src/features/remistats/remistats.css")) {
 if (existsSync("src/features/beetol/content.css")) {
   await copyFile("src/features/beetol/content.css", "dist/beetol/content.css");
 }
+if (existsSync("src/features/reminetChat/content.css")) {
+  await mkdir("dist/reminetChat", { recursive: true });
+  await copyFile("src/features/reminetChat/content.css", "dist/reminetChat/content.css");
+}
 
 await mkdir("dist/ocr/core", { recursive: true });
 await mkdir("dist/ocr/lang", { recursive: true });
@@ -101,6 +105,7 @@ await buildOrWatch({
     "features/remistats": source("src/entries/remistatsContent.ts"),
     "features/miladymaxxer": source("src/entries/miladymaxxerContent.ts"),
     "features/beetol": source("src/entries/beetolContent.ts"),
+    "features/reminetChat": source("src/entries/reminetChatContent.ts"),
   },
   outdir: "dist",
   format: "esm",
@@ -128,6 +133,7 @@ if (!watch) {
     "dist/features/remistats.js",
     "dist/features/miladymaxxer.js",
     "dist/features/beetol.js",
+    "dist/features/reminetChat.js",
     "dist/ocr.html",
     "dist/ocrHost.js",
   ];

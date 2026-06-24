@@ -132,6 +132,9 @@ let activeTooltipBadge = null;
 let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
+const pokeEligibilityPending = new Set();
+const pokeEligibilityChecked = new Map();
+let incomingPokeCache = null;
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -139,6 +142,8 @@ const DEFAULT_ICON_SETTINGS = {
   poke: true,
 };
 let iconSettings = { ...DEFAULT_ICON_SETTINGS };
+const POKE_THEME_COLORS = new Set(['red', 'green', 'gold', 'blue', 'purple']);
+const POKE_THEME_MODES = new Set(['dark', 'light']);
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -148,6 +153,12 @@ function escapeHtml(value) {
     '"': '&quot;',
     "'": '&#39;',
   }[char]));
+}
+
+function cssEscape(value) {
+  return typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+    ? CSS.escape(value)
+    : String(value).replace(/["\\]/g, '\\$&');
 }
 
 async function loadIconSettings() {
@@ -164,6 +175,19 @@ async function loadIconSettings() {
     poke: settings['milxdy.remistats.icons.poke'] !== false,
   };
   applyIconSettings();
+}
+
+async function loadPokeThemeSettings() {
+  const settings = await chrome.storage.local.get({
+    beetolColor: 'red',
+    beetolMode: 'dark',
+  });
+  applyPokeThemeSettings(settings.beetolColor, settings.beetolMode);
+}
+
+function applyPokeThemeSettings(color, mode) {
+  document.documentElement.dataset.reminetPokeColor = POKE_THEME_COLORS.has(color) ? color : 'red';
+  document.documentElement.dataset.reminetPokeMode = POKE_THEME_MODES.has(mode) ? mode : 'dark';
 }
 
 function applyIconSettings() {
@@ -331,6 +355,32 @@ function createPokeButton(username, standalone = false) {
   return button;
 }
 
+function hydratePokeEligibility(button, username) {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  const key = clean.toLowerCase();
+  const cooldownUntil = pokeCooldowns.get(key) || 0;
+  if (cooldownUntil > Date.now()) {
+    startPokeCooldown(button, clean, cooldownUntil - Date.now());
+    return;
+  }
+  const checkedUntil = pokeEligibilityChecked.get(key) || 0;
+  if (checkedUntil > Date.now()) return;
+  if (pokeEligibilityPending.has(key)) return;
+  pokeEligibilityPending.add(key);
+  safeRuntimeMessage({ type: 'beetol:pokeEligibility', username: clean })
+    .then((response) => {
+      pokeEligibilityChecked.set(key, Date.now() + 60 * 1000);
+      const cooldownMs = extractPokeCooldownMs(response);
+      if (response?.ok && response.canPoke === false && cooldownMs > 0) {
+        startPokeCooldownForUsername(clean, cooldownMs);
+      }
+    })
+    .finally(() => {
+      pokeEligibilityPending.delete(key);
+    });
+}
+
 function ensureStandalonePokeButton(badge, username) {
   const clean = cleanUsername(username || badge.dataset.reminetUsername || profileUsernameFromUrl());
   if (!clean || !badge.parentElement || badge.dataset.reminetCompact === 'true') return;
@@ -351,16 +401,19 @@ function ensureStandalonePokeButton(badge, username) {
 }
 
 function createProfileBadgeGroup(badge, username) {
+  const clean = cleanUsername(username);
   const group = document.createElement('span');
   group.className = 'reminet-profile-badge-group';
   group.dataset.reminetProfileBadgeGroup = 'true';
+  if (clean) group.dataset.reminetUsername = clean;
   group.appendChild(badge);
 
-  const pokeButton = createPokeButton(username, true);
+  const pokeButton = createPokeButton(clean, true);
   if (pokeButton) {
     group.appendChild(pokeButton);
   }
 
+  void updateIncomingPokeFlag(group, clean);
   return group;
 }
 
@@ -397,6 +450,7 @@ function createScoreBadge(scoreData, options = {}) {
     const inlinePoke = createPokeButton(remiliaUsername);
     const content = badge.querySelector('.reminet-badge-content');
     if (inlinePoke && content) content.appendChild(inlinePoke);
+    if (content) void updateIncomingPokeFlag(content, remiliaUsername);
   }
   
   // Calculate progress percentages
@@ -657,6 +711,16 @@ function startPokeCooldown(button, username, cooldownMs) {
   pokeCountdownTimers.set(button, timer);
 }
 
+function startPokeCooldownForUsername(username, cooldownMs) {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
+  pokeCooldowns.set(clean.toLowerCase(), until);
+  for (const button of document.querySelectorAll(`[data-reminet-poke][data-reminet-username="${cssEscape(clean)}"]`)) {
+    startPokeCooldown(button, clean, until - Date.now());
+  }
+}
+
 function clearPokeCountdown(button) {
   const timer = pokeCountdownTimers.get(button);
   if (timer) window.clearInterval(timer);
@@ -678,6 +742,54 @@ function formatPokeCooldown(ms) {
   return `${seconds}s`;
 }
 
+async function updateIncomingPokeFlag(group, username) {
+  const clean = cleanUsername(username || group?.dataset?.reminetUsername);
+  if (!group || !clean) return;
+  group.dataset.reminetUsername = clean;
+
+  const currentFlag = group.querySelector('[data-reminet-incoming-poke]');
+  if (currentFlag && cleanUsername(currentFlag.dataset.reminetUsername).toLowerCase() !== clean.toLowerCase()) {
+    currentFlag.remove();
+  }
+
+  const pokers = await getIncomingPokeHandles();
+  if (!document.body.contains(group) || cleanUsername(group.dataset.reminetUsername).toLowerCase() !== clean.toLowerCase()) {
+    return;
+  }
+
+  const hasPokedYou = pokers.has(clean.toLowerCase());
+  const existingFlag = group.querySelector('[data-reminet-incoming-poke]');
+  if (!hasPokedYou) {
+    existingFlag?.remove();
+    return;
+  }
+
+  if (existingFlag) return;
+  const flag = document.createElement('span');
+  flag.className = 'reminet-incoming-poke-flag';
+  flag.dataset.reminetIncomingPoke = 'true';
+  flag.dataset.reminetUsername = clean;
+  flag.textContent = 'poked you!';
+  flag.title = `${clean} poked you on RemiliaNET`;
+  flag.setAttribute('aria-label', flag.title);
+  group.appendChild(flag);
+}
+
+async function getIncomingPokeHandles() {
+  if (incomingPokeCache && Date.now() - incomingPokeCache.fetchedAt < 60 * 1000) {
+    return incomingPokeCache.handles;
+  }
+
+  const response = await safeRuntimeMessage({ type: 'beetol:incomingPokes' });
+  const handles = new Set(
+    Array.isArray(response?.pokers)
+      ? response.pokers.map(handle => cleanUsername(handle).toLowerCase()).filter(Boolean)
+      : []
+  );
+  incomingPokeCache = { fetchedAt: Date.now(), handles };
+  return handles;
+}
+
 function patchExistingBadges() {
   for (const badge of document.querySelectorAll('[data-reminet-badge]:not([data-reminet-compact])')) {
     const username = badge.dataset.reminetUsername || profileUsernameFromUrl();
@@ -687,6 +799,7 @@ function patchExistingBadges() {
           const button = createPokeButton(username, true);
           if (button) badge.parentElement.appendChild(button);
         }
+        void updateIncomingPokeFlag(badge.parentElement, username);
       } else {
         ensureStandalonePokeButton(badge, username);
       }
@@ -875,6 +988,7 @@ async function insertProfileBadge() {
           const button = createPokeButton(existingUsername, true);
           if (button) existingBadge.parentElement.appendChild(button);
         }
+        void updateIncomingPokeFlag(existingBadge.parentElement, existingUsername);
       } else {
         ensureStandalonePokeButton(existingBadge, existingUsername);
       }
@@ -1044,6 +1158,7 @@ function init() {
   Promise.all([
     chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
     loadIconSettings(),
+    loadPokeThemeSettings(),
   ]).then(([settings]) => {
     remistatsEnabled = settings['milxdy.remistats.enabled'] !== false;
     if (remistatsEnabled) {
@@ -1056,6 +1171,10 @@ function init() {
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && (changes.beetolColor || changes.beetolMode)) {
+      applyPokeThemeSettings(changes.beetolColor?.newValue, changes.beetolMode?.newValue);
+      return;
+    }
     if (area !== 'sync') return;
     if (changes['milxdy.remistats.enabled']) {
       remistatsEnabled = changes['milxdy.remistats.enabled'].newValue !== false;
@@ -1090,6 +1209,7 @@ function init() {
     if (location.href !== lastProfileUrl) {
       lastProfileUrl = location.href;
       processedProfiles.clear();
+      incomingPokeCache = null;
       scheduleTwitterScan();
       window.setTimeout(insertProfileBadge, 350);
     }

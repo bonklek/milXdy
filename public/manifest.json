@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "milXdy",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
   "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies"],
   "host_permissions": [
@@ -13,7 +13,8 @@
     "http://127.0.0.1/*",
     "https://wiki.remilia.org/*",
     "https://api.remistats.net/*",
-    "https://www.remilia.net/*"
+    "https://www.remilia.net/*",
+    "wss://www.remilia.net/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -39,6 +40,7 @@
         "ocr/lang/*",
         "remistats/*",
         "beetol/*",
+        "reminetChat/*",
         "miladymaxxer/*",
         "features/*.js",
         "milady-logo.png",
