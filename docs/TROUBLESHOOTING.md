@@ -8,7 +8,7 @@
 - **RemiNet connector badges missing**: confirm RemiNet connector badges are enabled and `https://api.remistats.net` is reachable.
 - **Poke icon missing**: confirm **RemiNet connector icons** and **Poke icon** are enabled, reload the extension, then refresh the affected X/Twitter tab.
 - **RemiNet Chat does not appear**: enable **Show RemiliaNET chat on X home**, confirm RemiNet login status, then refresh the X/Twitter home timeline. The chat is off by default.
-- **RemiNet Chat does not connect**: use **Open RemiliaNET SSO** and **Retry session** if your RemiliaNET account uses 2FA, then reload the X/Twitter tab.
+- **RemiNet Chat does not connect**: if your RemiliaNET account uses 2FA, click **Open RemiliaNET SSO**, finish login and 2FA in the RemiliaNET tab, return to milXdy, then click **Retry session**. milXdy will reuse the RemiliaNET browser session for connector auth; reload the X/Twitter tab after the session is detected.
 - **Maxxer seems inactive**: set mode to `Debug`, refresh X/Twitter, and check the Health tab for diagnostic details.
 - **Legacy stats import failed**: validate the JSON file and confirm it contains legacy Miladymaxxer storage keys.
 - **Postreader OCR stuck at 5%**: rebuild and reload the unpacked extension, then confirm `dist/ocr.html` and `dist/ocrHost.js` exist. The 5% stage means the hidden OCR host page is loading.

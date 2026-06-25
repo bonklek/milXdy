@@ -37,4 +37,4 @@ Settings and login state persist only while Chrome keeps the same extension iden
 
 ## 2FA Limit
 
-Accounts with RemiliaNET 2FA may need **Open RemiliaNET SSO** and **Retry session** instead of the popup login form.
+Accounts with RemiliaNET 2FA should use **Open RemiliaNET SSO** and **Retry session** instead of the popup password login form. After the user finishes RemiliaNET login and 2FA in the browser tab, milXdy checks that browser session and may reuse the RemiliaNET `authToken` cookie for Beetol, RemiStats pokes, and RemiNet Chat connector requests.

@@ -25,6 +25,10 @@ The Suite tab provides a guided version of this flow:
 Use the Suite tab for whole-extension controls.
 
 - **Update status** checks the configured GitHub release endpoint and exposes guided update buttons when needed.
+- **Reskin profile** controls how strongly milXdy restyles X/Twitter and Milady Maxxer surfaces:
+  - **Max** makes X look like a Remilia/Milady client, with broad X chrome changes and the strongest Maxxer card/profile treatments.
+  - **Moderate** keeps X recognizable while adding visible Remilia/Milady panels, badges, marked-surface styling, and balanced Maxxer treatments.
+  - **Min** keeps X mostly original, with restrained milXdy controls and lightweight Maxxer markers.
 - **Performance diagnostics** stores lightweight counters used by the Diag tab. Leave this off unless testing performance or preparing a bug report.
 
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
@@ -94,7 +98,7 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 
 ### Pokes
 
-The poke button uses the RemiNet connector login. It shakes while sending a poke and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown.
+The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown.
 
 If the poke icon is missing, confirm **RemiNet connector icons** and **Poke icon** are enabled, then refresh the X/Twitter tab.
 
@@ -127,10 +131,10 @@ The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunt
 For accounts with 2FA:
 
 1. Click **Open RemiliaNET SSO**.
-2. Finish login in the RemiliaNET tab.
+2. Finish RemiliaNET login in the opened tab, including the 2FA step.
 3. Return to milXdy and click **Retry session**.
 
-This browser-session fallback depends on RemiliaNET accepting the browser session for extension actions.
+After **Retry session**, milXdy checks the RemiliaNET browser session and reuses the RemiliaNET `authToken` cookie for connector actions. This lets 2FA accounts use Beetol, RemiStats pokes, and RemiNet Chat without completing the popup password login flow.
 
 milXdy requests the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
 
@@ -149,6 +153,7 @@ The Maxxer tab controls Miladymaxxer behavior.
 - **Milady effects** applies the normal match experience.
 - **Debug** shows detection markers and scores.
 - **Off** disables Maxxer behavior.
+- The Suite tab's **Reskin profile** also changes Maxxer intensity: Max uses the richest card/profile treatment, Moderate keeps balanced static cards, and Min reduces matches to lighter markers.
 - **RemiStats beetle users** treats accounts with RemiStats beetle data as Maxxer matches.
 - **Card theme** controls tier styling.
 - **Whitelist handles** excludes accounts from normal scoring/XP behavior.

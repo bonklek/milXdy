@@ -4,6 +4,9 @@ const ROOT_ID = "milxdy-reminet-chat-root";
 const CHAT_ID = 1;
 const SOCKET_URL = "wss://www.remilia.net/api/ws";
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
+const SIDE_KEY = "milxdy.reminetChat.side";
+const HEIGHT_KEY = "milxdy.reminetChat.height";
+const TOP_KEY = "milxdy.reminetChat.top";
 const MAX_MESSAGES = 100;
 const REACTIONS = ["\u{1f639}", "\u{1f90d}", "\u{1f44d}", "\u{1faa2}"];
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -113,6 +116,9 @@ type ChatState = {
   composerError: string;
   minimized: boolean;
   theme: "light" | "dark" | "system";
+  side: "left" | "right";
+  frameHeight: number;
+  topOffset: number;
 };
 
 const state: ChatState = {
@@ -130,12 +136,16 @@ const state: ChatState = {
   composerError: "",
   minimized: false,
   theme: "system",
+  side: "right",
+  frameHeight: 560,
+  topOffset: 8,
 };
 
 void boot();
 
 function boot(): void {
   ensureRoot();
+  void loadLayoutSettings();
   void loadTheme();
   window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
   observeRouteAndLayout();
@@ -151,6 +161,7 @@ function observeRouteAndLayout(): void {
     layoutTimer = window.setTimeout(() => {
       layoutTimer = null;
       ensureRoot();
+      applyLayout();
     }, 300);
   };
   const observer = new MutationObserver((mutations) => {
@@ -209,7 +220,24 @@ function isChatRoute(): boolean {
   return location.pathname === "/"
     || location.pathname === "/home"
     || location.pathname === "/notifications"
-    || /^\/[^/]+\/status\/\d+/.test(location.pathname);
+    || /^\/[^/]+\/status\/\d+/.test(location.pathname)
+    || isProfileRoute();
+}
+
+function isProfileRoute(): boolean {
+  const match = location.pathname.match(/^\/([^/?#]+)\/?$/);
+  if (!match) return false;
+  return !new Set([
+    "compose",
+    "explore",
+    "home",
+    "i",
+    "jobs",
+    "messages",
+    "notifications",
+    "search",
+    "settings",
+  ]).has(match[1].toLowerCase());
 }
 
 function ensureRoot(): void {
@@ -223,7 +251,7 @@ function ensureRoot(): void {
     return;
   }
 
-  const rail = findRightRail();
+  const rail = findMountTarget();
   const existing = document.getElementById(ROOT_ID) as HTMLElement | null;
   if (!rail) {
     if (existing) existing.remove();
@@ -232,12 +260,22 @@ function ensureRoot(): void {
   }
 
   const root = existing || createRoot();
-  const changed = !existing || root.parentElement !== rail || root.dataset.mount !== "rail";
-  if (root.parentElement !== rail) rail.insertBefore(root, rail.firstChild);
-  root.dataset.mount = "rail";
+  const mount = state.side === "left" ? "left" : "rail";
+  const changed = !existing || root.parentElement !== rail || root.dataset.mount !== mount;
+  if (root.parentElement !== rail) {
+    if (state.side === "left") rail.appendChild(root);
+    else rail.insertBefore(root, rail.firstChild);
+  }
+  root.dataset.mount = mount;
   state.root = root;
   applyTheme();
+  applyLayout();
   if (changed) render();
+}
+
+function findMountTarget(): HTMLElement | null {
+  if (state.side === "left") return document.body;
+  return findRightRail();
 }
 
 function findRightRail(): HTMLElement | null {
@@ -258,7 +296,8 @@ function createRoot(): HTMLElement {
         </div>
         <div class="milxdy-chat-header-actions">
           <button type="button" data-role="refresh" title="Refresh chat">Refresh</button>
-          <button type="button" data-role="minimize" title="Minimize chat" aria-label="Minimize chat">_</button>
+          <button type="button" data-role="side" title="Move chat left" aria-label="Move chat left">&#9664;</button>
+          <button type="button" data-role="minimize" title="Minimize chat" aria-label="Minimize chat">-</button>
         </div>
       </header>
       <div class="milxdy-chat-messages" data-role="messages"></div>
@@ -270,6 +309,7 @@ function createRoot(): HTMLElement {
         <input data-role="input" type="text" maxlength="500" autocomplete="off" placeholder="Say something">
         <button data-role="send" type="submit">Send</button>
       </form>
+      <div class="milxdy-chat-resize-grip" data-role="resize" title="Drag to resize chat"></div>
     </div>
   `;
   root.querySelector<HTMLButtonElement>('[data-role="refresh"]')?.addEventListener("click", () => {
@@ -279,6 +319,15 @@ function createRoot(): HTMLElement {
     state.minimized = !state.minimized;
     render();
   });
+  root.querySelector<HTMLButtonElement>('[data-role="side"]')?.addEventListener("click", () => {
+    state.side = state.side === "right" ? "left" : "right";
+    state.topOffset = defaultTopOffset();
+    void chrome.storage.local.set({ [SIDE_KEY]: state.side, [TOP_KEY]: state.topOffset });
+    ensureRoot();
+    render();
+  });
+  root.querySelector<HTMLElement>('[data-role="resize"]')?.addEventListener("pointerdown", startResize);
+  root.querySelector<HTMLElement>(".milxdy-chat-header")?.addEventListener("pointerdown", startDrag);
   root.querySelector<HTMLFormElement>('[data-role="form"]')?.addEventListener("submit", (event) => {
     event.preventDefault();
     void submitMessage();
@@ -565,11 +614,18 @@ function render(): void {
   if (!messages || !send || !input || !attachments || !error) return;
 
   root.dataset.minimized = String(state.minimized);
+  root.dataset.side = state.side;
   const minimize = root.querySelector<HTMLButtonElement>('[data-role="minimize"]');
   if (minimize) {
-    minimize.textContent = state.minimized ? "+" : "_";
+    minimize.textContent = state.minimized ? "+" : "-";
     minimize.title = state.minimized ? "Expand chat" : "Minimize chat";
     minimize.setAttribute("aria-label", minimize.title);
+  }
+  const side = root.querySelector<HTMLButtonElement>('[data-role="side"]');
+  if (side) {
+    side.innerHTML = state.side === "right" ? "&#9664;" : "&#9654;";
+    side.title = state.side === "right" ? "Move chat left" : "Move chat right";
+    side.setAttribute("aria-label", side.title);
   }
 
   input.disabled = !state.signedIn;
@@ -610,6 +666,17 @@ async function loadTheme(): Promise<void> {
   applyTheme();
 }
 
+async function loadLayoutSettings(): Promise<void> {
+  const stored: Record<string, unknown> = await chrome.storage.local.get([SIDE_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
+  state.side = stored[SIDE_KEY] === "left" ? "left" : "right";
+  const height = Number(stored[HEIGHT_KEY]);
+  if (Number.isFinite(height)) state.frameHeight = clampFrameHeight(height);
+  const top = Number(stored[TOP_KEY]);
+  if (Number.isFinite(top)) state.topOffset = clampTopOffset(top, state.frameHeight);
+  applyLayout();
+  ensureRoot();
+}
+
 function normalizeThemeMode(value: unknown): "light" | "dark" | "system" {
   return value === "light" || value === "dark" || value === "system" ? value : "system";
 }
@@ -621,6 +688,107 @@ function applyTheme(): void {
     ? window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
     : state.theme;
   root.dataset.theme = mode;
+}
+
+function applyLayout(): void {
+  const root = state.root;
+  if (!root) return;
+  state.topOffset = clampTopOffset(state.topOffset, state.frameHeight);
+  if (state.side === "left") {
+    root.style.setProperty("--rn-left-top", `${state.topOffset}px`);
+  } else {
+    root.style.setProperty("--rn-rail-top", `${state.topOffset}px`);
+    root.style.removeProperty("--rn-left-top");
+  }
+  state.frameHeight = clampFrameHeight(state.frameHeight);
+  root.style.setProperty("--rn-frame-height", `${state.frameHeight}px`);
+}
+
+function leftDockTop(): number {
+  const beetol = document.getElementById("beetol-hunter-root");
+  if (!beetol) return 8;
+  const rect = beetol.getBoundingClientRect();
+  if (rect.width === 0 || rect.height === 0) return 8;
+  return Math.max(8, Math.min(window.innerHeight - 120, rect.bottom + 8));
+}
+
+function defaultTopOffset(): number {
+  if (state.side !== "left") return rightDockMinTop();
+  return leftDockTop();
+}
+
+function startDrag(event: PointerEvent): void {
+  if (event.button !== 0) return;
+  const target = event.target instanceof Element ? event.target : null;
+  if (target?.closest("button, a, input, textarea, select, [data-role='resize']")) return;
+  const root = state.root;
+  if (!root) return;
+  event.preventDefault();
+  const startY = event.clientY;
+  const startTop = state.topOffset;
+  const pointerId = event.pointerId;
+  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(pointerId);
+  root.dataset.dragging = "true";
+
+  const move = (moveEvent: PointerEvent) => {
+    state.topOffset = clampTopOffset(startTop + moveEvent.clientY - startY, state.frameHeight);
+    applyLayout();
+  };
+  const up = () => {
+    root.dataset.dragging = "false";
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    void chrome.storage.local.set({ [TOP_KEY]: state.topOffset });
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+function startResize(event: PointerEvent): void {
+  if (event.button !== 0 || state.minimized) return;
+  const root = state.root;
+  if (!root) return;
+  event.preventDefault();
+  const startY = event.clientY;
+  const startHeight = state.frameHeight;
+  const pointerId = event.pointerId;
+  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(pointerId);
+
+  const move = (moveEvent: PointerEvent) => {
+    state.frameHeight = clampFrameHeight(startHeight + moveEvent.clientY - startY);
+    applyLayout();
+  };
+  const up = () => {
+    window.removeEventListener("pointermove", move);
+    window.removeEventListener("pointerup", up);
+    window.removeEventListener("pointercancel", up);
+    void chrome.storage.local.set({ [HEIGHT_KEY]: state.frameHeight });
+  };
+  window.addEventListener("pointermove", move);
+  window.addEventListener("pointerup", up);
+  window.addEventListener("pointercancel", up);
+}
+
+function clampFrameHeight(value: number): number {
+  const top = clampTopOffset(state.topOffset || defaultTopOffset(), value);
+  const max = Math.max(260, window.innerHeight - top - 12);
+  return Math.max(260, Math.min(Math.floor(value), max));
+}
+
+function clampTopOffset(value: number, frameHeight = state.frameHeight): number {
+  const min = state.side === "right" ? rightDockMinTop() : 8;
+  const max = Math.max(min, window.innerHeight - Math.min(frameHeight, window.innerHeight - 16) - 8);
+  return Math.max(min, Math.min(Math.floor(value), max));
+}
+
+function rightDockMinTop(): number {
+  const search = document.querySelector<HTMLElement>('[data-testid="SearchBox_Search_Input"]');
+  const container = search?.closest<HTMLElement>('[role="search"], form, div');
+  const rect = (container || search)?.getBoundingClientRect();
+  if (!rect || rect.width === 0 || rect.height === 0) return 8;
+  return Math.max(8, Math.ceil(rect.bottom + 8));
 }
 
 function groupMessages(messages: ApiMessage[]): MessageGroup[] {

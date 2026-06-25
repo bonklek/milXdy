@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.4
+
+See [milXdy 0.1.4 release notes](docs/RELEASE_NOTES_0.1.4.md).
+
+Highlights:
+
+- Added the Appearance tab with Max, Medium, Minimal, and Custom visual presets.
+- Added custom visual theme editing, saved themes, import/export, and share strings.
+- Added bundled Remilia fonts and broad X/Twitter reskin controls.
+- Added PFP shape, media shape, button, sidebar, notification, and feed-refresh visual/sound controls.
+- Added RemiStats box and poke placement controls, RemiNet Chat overlay integration, and richer Maxxer visual intensity controls.
+- Added RemiNet poke sound and refreshed Beetol, RemiStats, RemiNet Chat, and Maxxer styling.
+- Clarified RemiliaNET 2FA browser-session retry documentation.
+
 ## 0.1.3
 
 See [milXdy 0.1.3 release notes](docs/RELEASE_NOTES_0.1.3.md).
@@ -9,6 +23,7 @@ Highlights:
 - Added guided in-place update controls in the Suite tab so beta testers can download, copy safe update steps, and reload the extension without losing local settings.
 - Added the optional RemiNet Chat sidebar on X home timelines, including RemiliaNET login reuse, reactions, pokes, attachments, media previews, and a minimized mode.
 - Added incoming RemiNet poke indicators sourced from recent RemiliaNET notifications.
+- Added a short RemiNet poke sound effect that follows the RemiStats sound setting.
 - Reorganized the popup into clearer tab sections with grouped settings for Suite, Wiki Links, Read Aloud, RemiNet, Milady Maxxer, and Health.
 - Improved RemiNet poke cooldown handling by checking profile eligibility before users click poke, then hydrating matching poke buttons with live cooldown state.
 - Cleaned up Beetol panel cooldown display so hunt/catch readiness is easier to read.
