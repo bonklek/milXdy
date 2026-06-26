@@ -26,7 +26,7 @@ npm install
 npm run build
 ```
 
-Then load the generated `dist` folder as an unpacked extension from `chrome://extensions`.
+Then load the generated `dist/chromium` folder as an unpacked extension from `chrome://extensions`.
 
 ## Safe Manual Updates
 
@@ -53,5 +53,5 @@ npm install
 npm run build
 ```
 
-Then reload the same existing milXdy extension card that points to the same `dist` folder.
+Then reload the same existing milXdy extension card that points to the same `dist/chromium` folder.
 

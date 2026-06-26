@@ -1,5 +1,6 @@
 import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
+import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -28,8 +29,21 @@ const CONFIG = {
   batchDelay: 100 // Delay before sending batch (ms)
 };
 
+const REMILIA_BASE_URL = 'https://www.remilia.net';
+const TROPHY_BANNER_WIDTH = 1500;
+const TROPHY_BANNER_HEIGHT = 500;
+const TROPHY_BANNER_CACHE_LIMIT = 50;
+const BANNERS_NFT_SUPPLY = 2000;
+const BANNERS_NFT_CONTRACT = '0x1352149Cd78D686043B504e7e7D96C5946b0C39c';
+const BANNER_MODES = ['original', 'shelf', 'nft'];
+const POKE_COOLDOWN_STORAGE_KEY = 'milxdy.remistats.pokeCooldowns';
+
 // Cache for user scores
 const scoreCache = new Map();
+const trophyBannerCache = new Map();
+const trophyBannerPending = new Map();
+let prefetchedBannersNft = null;
+let prefetchedBannersNftPending = null;
 
 // Batch fetching queue
 let batchQueue = new Set();
@@ -132,8 +146,6 @@ let activeTooltipBadge = null;
 let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
-const pokeEligibilityPending = new Set();
-const pokeEligibilityChecked = new Map();
 let incomingPokeCache = null;
 let visualTheme = {};
 const DEFAULT_ICON_SETTINGS = {
@@ -196,6 +208,7 @@ async function loadVisualThemeSettings() {
   visualTheme = settings['milxdy.settings.visualTheme'] || {};
   document.documentElement.dataset.milxdyVisualRemistatsBox = String(visualTheme.remistatsBox === true);
   document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement === 'actions' ? 'actions' : 'top';
+  document.documentElement.dataset.milxdyVisualIncomingPokeGold = String(visualTheme.incomingPokeGold !== false);
   patchExistingBadges();
 }
 
@@ -337,7 +350,7 @@ async function fetchUserScore(username) {
   });
 }
 
-function createPokeButton(username, standalone = false) {
+function createPokeButton(username, standalone = false, xHandle = '') {
   const clean = cleanUsername(username);
   if (!clean) return null;
 
@@ -349,10 +362,12 @@ function createPokeButton(username, standalone = false) {
   button.dataset.reminetPoke = 'true';
   button.dataset.reminetIcon = 'poke';
   button.dataset.reminetUsername = clean;
+  const cleanXHandle = cleanUsername(xHandle);
+  if (cleanXHandle) button.dataset.reminetXHandle = cleanXHandle;
   if (standalone) {
     button.dataset.reminetStandalonePoke = 'true';
   }
-  button.textContent = String.fromCodePoint(0x1FAF5);
+  restorePokeButtonIcon(button);
   button.title = `Poke ${clean} on remilia.net`;
   button.setAttribute('aria-label', button.title);
   button.addEventListener('click', (event) => {
@@ -361,33 +376,69 @@ function createPokeButton(username, standalone = false) {
     event.stopImmediatePropagation();
     void handlePokeClick(button);
   }, true);
+  applyKnownPokeCooldown(button, clean);
   return button;
 }
 
-function hydratePokeEligibility(button, username) {
+function applyKnownPokeCooldown(button, username) {
   const clean = cleanUsername(username);
   if (!clean) return;
   const key = clean.toLowerCase();
   const cooldownUntil = pokeCooldowns.get(key) || 0;
   if (cooldownUntil > Date.now()) {
     startPokeCooldown(button, clean, cooldownUntil - Date.now());
-    return;
   }
-  const checkedUntil = pokeEligibilityChecked.get(key) || 0;
-  if (checkedUntil > Date.now()) return;
-  if (pokeEligibilityPending.has(key)) return;
-  pokeEligibilityPending.add(key);
-  safeRuntimeMessage({ type: 'beetol:pokeEligibility', username: clean })
-    .then((response) => {
-      pokeEligibilityChecked.set(key, Date.now() + 60 * 1000);
-      const cooldownMs = extractPokeCooldownMs(response);
-      if (response?.ok && response.canPoke === false && cooldownMs > 0) {
-        startPokeCooldownForUsername(clean, cooldownMs);
-      }
-    })
-    .finally(() => {
-      pokeEligibilityPending.delete(key);
-    });
+}
+
+async function loadStoredPokeCooldowns() {
+  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
+  const records = stored[POKE_COOLDOWN_STORAGE_KEY];
+  if (!records || typeof records !== 'object') return;
+
+  const now = Date.now();
+  const next = {};
+  let changed = false;
+  for (const [rawUsername, rawUntil] of Object.entries(records)) {
+    const clean = cleanUsername(rawUsername);
+    const until = Number(rawUntil);
+    if (!clean || !Number.isFinite(until) || until <= now) {
+      changed = true;
+      continue;
+    }
+    const key = clean.toLowerCase();
+    pokeCooldowns.set(key, until);
+    next[key] = until;
+    if (key !== rawUsername || until !== rawUntil) changed = true;
+  }
+  if (changed) {
+    await chrome.storage.local.set({ [POKE_COOLDOWN_STORAGE_KEY]: next });
+  }
+}
+
+async function persistPokeCooldown(username, until) {
+  const key = cleanUsername(username).toLowerCase();
+  if (!key || !Number.isFinite(until)) return;
+  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
+  const records = stored[POKE_COOLDOWN_STORAGE_KEY] && typeof stored[POKE_COOLDOWN_STORAGE_KEY] === 'object'
+    ? stored[POKE_COOLDOWN_STORAGE_KEY]
+    : {};
+  await chrome.storage.local.set({
+    [POKE_COOLDOWN_STORAGE_KEY]: {
+      ...records,
+      [key]: until,
+    },
+  });
+}
+
+async function removeStoredPokeCooldown(username) {
+  const key = cleanUsername(username).toLowerCase();
+  if (!key) return;
+  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
+  const records = stored[POKE_COOLDOWN_STORAGE_KEY];
+  if (!records || typeof records !== 'object' || !(key in records)) return;
+  const next = { ...records };
+  delete next[key];
+  await chrome.storage.local.set({ [POKE_COOLDOWN_STORAGE_KEY]: next });
 }
 
 function ensureStandalonePokeButton(badge, username) {
@@ -426,14 +477,14 @@ function createProfileBadgeGroup(badge, username) {
   return group;
 }
 
-function createPokeCluster(username) {
+function createPokeCluster(username, xHandle = '') {
   const clean = cleanUsername(username);
   if (!clean) return null;
-  const group = document.createElement('span');
+  const group = document.createElement('div');
   group.className = 'reminet-action-poke-group';
   group.dataset.reminetActionPokeGroup = 'true';
   group.dataset.reminetUsername = clean;
-  const pokeButton = createPokeButton(clean, true);
+  const pokeButton = createPokeButton(clean, true, xHandle);
   if (pokeButton) group.appendChild(pokeButton);
   void updateIncomingPokeFlag(group, clean);
   return group;
@@ -589,6 +640,7 @@ async function handlePokeClick(button) {
   delete button.dataset.reminetPokeShaking;
 
   if (response?.ok) {
+    notifyMiladymaxxerPokeCredit(button, username);
     const cooldownMs = extractPokeCooldownMs(response) || 24 * 60 * 60 * 1000;
     startPokeCooldown(button, username, cooldownMs);
     return;
@@ -619,9 +671,35 @@ function setPokeButtonState(button, state, label) {
   button.title = label;
   button.setAttribute('aria-label', label);
   button.disabled = state === 'loading' || state === 'cooldown';
-  if (state !== 'cooldown') {
+  if (state === 'loading') {
+    button.textContent = String.fromCodePoint(0x1FAF5);
+  } else if (state !== 'cooldown') {
     restorePokeButtonIcon(button);
   }
+}
+
+function notifyMiladymaxxerPokeCredit(button, remiliaUsername) {
+  const xHandle = cleanUsername(button.dataset.reminetXHandle || findPokeXHandle(button));
+  if (!xHandle) return;
+  window.dispatchEvent(new CustomEvent('milxdy:remistats-poke-credit', {
+    detail: {
+      handle: xHandle,
+      remiliaUsername: cleanUsername(remiliaUsername),
+      source: 'reminet-poke',
+    },
+  }));
+}
+
+function findPokeXHandle(button) {
+  const tweet = button.closest('[data-testid="tweet"]');
+  const miladyHandle = tweet?.dataset?.miladymaxxerHandle;
+  if (miladyHandle) return miladyHandle;
+
+  const profileHandle = profileUsernameFromUrl();
+  if (profileHandle) return profileHandle;
+
+  const container = button.closest('[data-testid="UserCell"], [data-testid="tweet"]');
+  return container ? extractUsername(container) : '';
 }
 
 function extractPokeCooldownMs(response) {
@@ -711,6 +789,7 @@ function startPokeCooldown(button, username, cooldownMs) {
   const until = Date.now() + normalizedMs;
   const key = username.toLowerCase();
   pokeCooldowns.set(key, until);
+  void persistPokeCooldown(username, until);
 
   clearPokeCountdown(button);
   setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
@@ -720,6 +799,7 @@ function startPokeCooldown(button, username, cooldownMs) {
     if (remaining <= 0) {
       clearPokeCountdown(button);
       pokeCooldowns.delete(key);
+      void removeStoredPokeCooldown(username);
       setPokeButtonState(button, 'idle', `Poke ${username} on remilia.net`);
       return;
     }
@@ -739,8 +819,20 @@ function startPokeCooldownForUsername(username, cooldownMs) {
   if (!clean) return;
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
+  void persistPokeCooldown(clean, until);
   for (const button of document.querySelectorAll(`[data-reminet-poke][data-reminet-username="${cssEscape(clean)}"]`)) {
     startPokeCooldown(button, clean, until - Date.now());
+  }
+}
+
+function clearPokeCooldownForUsername(username) {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  pokeCooldowns.delete(clean.toLowerCase());
+  void removeStoredPokeCooldown(clean);
+  for (const button of document.querySelectorAll(`[data-reminet-poke][data-reminet-username="${cssEscape(clean)}"]`)) {
+    clearPokeCountdown(button);
+    setPokeButtonState(button, 'idle', `Poke ${clean} on remilia.net`);
   }
 }
 
@@ -752,7 +844,14 @@ function clearPokeCountdown(button) {
 
 function restorePokeButtonIcon(button) {
   clearPokeCountdown(button);
-  button.textContent = String.fromCodePoint(0x1FAF5);
+  button.textContent = '';
+  const icon = document.createElement('span');
+  icon.className = 'reminet-poke-outline-icon';
+  icon.setAttribute('aria-hidden', 'true');
+  const iconUrl = chrome.runtime.getURL('remistats/poke-outline.png');
+  icon.style.webkitMaskImage = `url("${iconUrl}")`;
+  icon.style.maskImage = `url("${iconUrl}")`;
+  button.appendChild(icon);
 }
 
 function formatPokeCooldown(ms) {
@@ -921,7 +1020,7 @@ function insertBadgeIntoElement(element, badge) {
 }
 
 // Insert badge into the DOM for tweets and user cells
-async function insertBadge(element) {
+async function insertBadge(element, usernameOverride = null) {
   if (element.closest('[data-testid="quoteTweet"]')) {
     return;
   }
@@ -938,7 +1037,7 @@ async function insertBadge(element) {
   }
   element.setAttribute('data-reminet-processing', 'true');
   
-  const username = extractUsername(element);
+  const username = cleanUsername(usernameOverride) || extractUsername(element);
   if (!username) {
     element.removeAttribute('data-reminet-processing');
     return;
@@ -959,7 +1058,7 @@ async function insertBadge(element) {
     
     insertBadgeIntoElement(element, badge);
     if (visualTheme.pokePlacement === 'actions') {
-      insertActionPoke(element, scoreData.remiliaUsername || username);
+      insertActionPoke(element, scoreData.remiliaUsername || username, username);
     }
   } catch (error) {
     console.error('Error inserting badge:', error);
@@ -967,12 +1066,12 @@ async function insertBadge(element) {
   }
 }
 
-function insertActionPoke(element, username) {
+function insertActionPoke(element, username, xHandle = '') {
   const clean = cleanUsername(username);
   if (!clean || element.querySelector('[data-reminet-action-poke-group]')) return;
   const actions = element.querySelector('[role="group"]');
   if (!actions) return;
-  const cluster = createPokeCluster(clean);
+  const cluster = createPokeCluster(clean, xHandle || extractUsername(element));
   if (!cluster) return;
   const like = actions.querySelector('[data-testid="like"], [data-testid="unlike"]');
   const likeSlot = like?.closest('[role="group"] > div') || like?.parentElement?.parentElement;
@@ -983,9 +1082,488 @@ function insertActionPoke(element, username) {
   }
 }
 
+function idle() {
+  return new Promise((resolve) => {
+    if (typeof window.requestIdleCallback === 'function') {
+      window.requestIdleCallback(resolve, { timeout: 1500 });
+    } else {
+      window.setTimeout(resolve, 250);
+    }
+  });
+}
+
+function remiliaUrl(path) {
+  return new URL(path, REMILIA_BASE_URL).href;
+}
+
+async function fetchTrophyProfile(remiliaUsername) {
+  const clean = cleanUsername(remiliaUsername);
+  if (!clean) return null;
+
+  const response = await fetch(`${REMILIA_BASE_URL}/api/profile/~${encodeURIComponent(clean)}`, {
+    credentials: 'omit',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) return null;
+
+  const data = await response.json().catch(() => null);
+  return data?.user || null;
+}
+
+function firstShelfRow(user) {
+  const shelves = Array.isArray(user?.trophyShelves) ? user.trophyShelves.slice(0, 5) : [];
+  const trophies = Array.isArray(user?.allTrophies) ? user.allTrophies : [];
+  const byId = new Map(trophies.map((trophy) => [String(trophy.id), trophy]));
+  return shelves
+    .filter(Boolean)
+    .map((id) => byId.get(String(id)))
+    .filter((trophy) => trophy?.icon);
+}
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.crossOrigin = 'anonymous';
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function preloadDisplayImage(src) {
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => resolve(image);
+    image.onerror = reject;
+    image.src = src;
+  });
+}
+
+function drawImageCover(ctx, image, x, y, width, height) {
+  const scale = Math.max(width / image.width, height / image.height);
+  const scaledWidth = image.width * scale;
+  const scaledHeight = image.height * scale;
+  ctx.drawImage(
+    image,
+    x + (width - scaledWidth) / 2,
+    y + (height - scaledHeight) / 2,
+    scaledWidth,
+    scaledHeight
+  );
+}
+
+function canvasToBlob(canvas) {
+  return new Promise((resolve) => {
+    canvas.toBlob(resolve, 'image/webp', 0.9);
+  });
+}
+
+function rememberTrophyBanner(username, url) {
+  const key = username.toLowerCase();
+  trophyBannerCache.set(key, { url, touchedAt: Date.now() });
+  if (trophyBannerCache.size <= TROPHY_BANNER_CACHE_LIMIT) return;
+
+  const [oldestKey, oldest] = Array.from(trophyBannerCache.entries())
+    .sort((a, b) => a[1].touchedAt - b[1].touchedAt)[0] || [];
+  if (!oldestKey) return;
+  if (oldest?.url) URL.revokeObjectURL(oldest.url);
+  trophyBannerCache.delete(oldestKey);
+}
+
+async function renderTrophyBanner(remiliaUsername) {
+  const clean = cleanUsername(remiliaUsername);
+  if (!clean) return null;
+
+  const key = clean.toLowerCase();
+  const cached = trophyBannerCache.get(key);
+  if (cached?.url) {
+    cached.touchedAt = Date.now();
+    return cached.url;
+  }
+
+  if (trophyBannerPending.has(key)) return trophyBannerPending.get(key);
+
+  const pending = (async () => {
+    const user = await fetchTrophyProfile(clean);
+    const row = firstShelfRow(user);
+    if (!row.length) return null;
+
+    const texture = await loadImage(`${REMILIA_BASE_URL}/api/beetle/trophy/~${encodeURIComponent(clean)}/shelf`);
+    const icons = await Promise.all(row.map((trophy) => loadImage(remiliaUrl(trophy.icon))));
+
+    const canvas = document.createElement('canvas');
+    canvas.width = TROPHY_BANNER_WIDTH;
+    canvas.height = TROPHY_BANNER_HEIGHT;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    drawImageCover(ctx, texture, 0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const shelfY = Math.round(canvas.height * 0.72);
+    const ledgeHeight = Math.round(canvas.height * 0.07);
+    ctx.fillStyle = 'rgba(38, 20, 8, 0.5)';
+    ctx.fillRect(0, shelfY, canvas.width, ledgeHeight);
+    ctx.fillStyle = 'rgba(255, 236, 188, 0.22)';
+    ctx.fillRect(0, shelfY, canvas.width, 4);
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    ctx.fillRect(0, shelfY + ledgeHeight - 5, canvas.width, 5);
+
+    const slotWidth = canvas.width / 5;
+    const iconSize = Math.round(canvas.height * 0.62);
+    const iconY = shelfY - iconSize + Math.round(canvas.height * 0.05);
+
+    for (let i = 0; i < icons.length; i += 1) {
+      const x = Math.round(i * slotWidth + (slotWidth - iconSize) / 2);
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
+      ctx.shadowBlur = 24;
+      ctx.shadowOffsetY = 13;
+      ctx.drawImage(icons[i], x, iconY, iconSize, iconSize);
+      ctx.restore();
+    }
+
+    const blob = await canvasToBlob(canvas);
+    if (!blob) return null;
+    const url = URL.createObjectURL(blob);
+    rememberTrophyBanner(clean, url);
+    return url;
+  })().finally(() => {
+    trophyBannerPending.delete(key);
+  });
+
+  trophyBannerPending.set(key, pending);
+  return pending;
+}
+
+function findProfileBannerRoot() {
+  const image = document.querySelector('main img[src*="/profile_banners/"], main img[src*="profile_banners"]');
+  if (!image) return null;
+
+  let root = image.parentElement;
+  for (let i = 0; i < 3 && root?.parentElement; i += 1) {
+    const rect = root.getBoundingClientRect();
+    const parentRect = root.parentElement.getBoundingClientRect();
+    if (parentRect.width >= rect.width && parentRect.height >= rect.height) {
+      root = root.parentElement;
+    }
+  }
+  return root || image.parentElement;
+}
+
+function clearTrophyBannerOverlay(root) {
+  clearBannerOverlay(root);
+}
+
+function randomBannersNft() {
+  const tokenId = Math.floor(Math.random() * BANNERS_NFT_SUPPLY) + 1;
+  return {
+    tokenId,
+    imageUrl: `https://miladymaker.net/banners/nft/${tokenId}.png`,
+    tokenUrl: `https://etherscan.io/nft/${BANNERS_NFT_CONTRACT}/${tokenId}`,
+  };
+}
+
+async function fetchBannerImageDataUrl(imageUrl) {
+  const response = await safeRuntimeMessage({ type: 'milxdy:fetchImageDataUrl', url: imageUrl });
+  return response?.ok && typeof response.dataUrl === 'string' ? response.dataUrl : imageUrl;
+}
+
+async function fetchBannersNftDisplay(nft) {
+  const displayUrl = await fetchBannerImageDataUrl(nft.imageUrl);
+  await preloadDisplayImage(displayUrl);
+  return { ...nft, displayUrl };
+}
+
+function prefetchRandomBannersNft() {
+  if (prefetchedBannersNft || prefetchedBannersNftPending) return;
+  prefetchedBannersNftPending = fetchBannersNftDisplay(randomBannersNft())
+    .then((nft) => {
+      prefetchedBannersNft = nft;
+      return nft;
+    })
+    .catch((error) => {
+      console.debug('RemiStats Banners NFT prefetch skipped:', error);
+      return null;
+    })
+    .finally(() => {
+      prefetchedBannersNftPending = null;
+    });
+}
+
+async function takePrefetchedBannersNft() {
+  const ready = prefetchedBannersNft;
+  if (ready) {
+    prefetchedBannersNft = null;
+    prefetchRandomBannersNft();
+    return ready;
+  }
+
+  if (prefetchedBannersNftPending) {
+    const pending = await prefetchedBannersNftPending;
+    if (pending) {
+      prefetchedBannersNft = null;
+      prefetchRandomBannersNft();
+      return pending;
+    }
+  }
+
+  const nft = await fetchBannersNftDisplay(randomBannersNft());
+  prefetchRandomBannersNft();
+  return nft;
+}
+
+function getBannerStage(root) {
+  let stage = root.querySelector(':scope > .milxdy-banner-stage');
+  if (stage) return stage;
+
+  stage = document.createElement('div');
+  stage.className = 'milxdy-banner-stage';
+  root.appendChild(stage);
+  return stage;
+}
+
+function clearBannerNftLabel(root) {
+  const label = root.querySelector(':scope > .milxdy-banner-nft-label');
+  if (label) label.remove();
+}
+
+function setBannerNftLabel(root, nft) {
+  clearBannerNftLabel(root);
+  if (!nft?.tokenId || !nft?.tokenUrl) return;
+
+  const link = document.createElement('a');
+  link.className = 'milxdy-banner-nft-label';
+  link.href = nft.tokenUrl;
+  link.target = '_blank';
+  link.rel = 'noreferrer';
+  link.textContent = `Banners NFT #${nft.tokenId}`;
+  link.addEventListener('click', (event) => {
+    event.stopPropagation();
+  });
+  root.appendChild(link);
+}
+
+function makeBannerPanel(type, url, role) {
+  const panel = document.createElement('div');
+  panel.className = `milxdy-banner-panel milxdy-banner-panel--${role}`;
+  panel.dataset.milxdyBannerOverlay = type;
+  panel.style.backgroundImage = `url("${url}")`;
+  return panel;
+}
+
+function originalBannerUrl(root) {
+  const image = root?.querySelector?.('img[src*="/profile_banners/"], img[src*="profile_banners"]')
+    || document.querySelector('main img[src*="/profile_banners/"], main img[src*="profile_banners"]');
+  return typeof image?.currentSrc === 'string' && image.currentSrc
+    ? image.currentSrc
+    : typeof image?.src === 'string'
+      ? image.src
+      : '';
+}
+
+function transitionBannerOverlay(root, type, url) {
+  const stage = getBannerStage(root);
+  let current = stage.querySelector(':scope > .milxdy-banner-panel--current');
+  if (!current) {
+    const originalUrl = originalBannerUrl(root);
+    if (originalUrl) {
+      current = makeBannerPanel('original', originalUrl, 'current');
+      stage.appendChild(current);
+    }
+  }
+  const next = makeBannerPanel(type, url, 'next');
+  stage.appendChild(next);
+
+  if (!current) {
+    delete root.dataset.milxdyBannerLoading;
+    next.classList.remove('milxdy-banner-panel--next');
+    next.classList.add('milxdy-banner-panel--current');
+    return Promise.resolve();
+  }
+
+  delete root.dataset.milxdyBannerLoading;
+  stage.dataset.spinning = 'true';
+  current.classList.add('milxdy-banner-panel--exit');
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      current.remove();
+      next.classList.remove('milxdy-banner-panel--next');
+      next.classList.remove('milxdy-banner-panel--enter');
+      next.classList.add('milxdy-banner-panel--current');
+      delete stage.dataset.spinning;
+      resolve();
+    };
+    next.addEventListener('transitionend', finish, { once: true });
+    window.setTimeout(finish, 900);
+    requestAnimationFrame(() => {
+      next.classList.add('milxdy-banner-panel--enter');
+    });
+  });
+}
+
+function clearBannerOverlay(root) {
+  const stage = root.querySelector(':scope > .milxdy-banner-stage');
+  if (stage) stage.remove();
+  clearBannerNftLabel(root);
+}
+
+function transitionBannerToOriginal(root) {
+  const stage = root.querySelector(':scope > .milxdy-banner-stage');
+  const current = stage?.querySelector(':scope > .milxdy-banner-panel--current');
+  clearBannerNftLabel(root);
+  if (!stage || !current) return Promise.resolve();
+
+  delete root.dataset.milxdyBannerLoading;
+  stage.dataset.spinning = 'true';
+  current.classList.add('milxdy-banner-panel--exit');
+
+  return new Promise((resolve) => {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      stage.remove();
+      resolve();
+    };
+    current.addEventListener('transitionend', finish, { once: true });
+    window.setTimeout(finish, 900);
+    requestAnimationFrame(() => {
+      current.style.transform = 'translateY(-100%)';
+    });
+  });
+}
+
+async function applyBannerMode(root, mode, remiliaUsername) {
+  root.dataset.milxdyBannerMode = mode;
+
+  if (mode === 'original') {
+    await transitionBannerToOriginal(root);
+    return true;
+  }
+
+  if (mode === 'shelf') {
+    const bannerUrl = await renderTrophyBanner(remiliaUsername);
+    if (!bannerUrl) return false;
+    await transitionBannerOverlay(root, 'shelf', bannerUrl);
+    clearBannerNftLabel(root);
+    root.dataset.milxdyTrophyBannerState = 'ready';
+    return true;
+  }
+
+  if (mode === 'nft') {
+    const nft = await takePrefetchedBannersNft();
+    await transitionBannerOverlay(root, 'nft', nft.displayUrl);
+    setBannerNftLabel(root, nft);
+    return true;
+  }
+
+  return false;
+}
+
+async function cycleProfileBanner(root) {
+  const remiliaUsername = cleanUsername(root.dataset.milxdyTrophyBannerUser);
+  if (!remiliaUsername || root.dataset.milxdyBannerCycling === 'true') return;
+
+  root.dataset.milxdyBannerCycling = 'true';
+  root.dataset.milxdyBannerLoading = 'true';
+  window.reminetSounds?.playSpin?.();
+
+  const current = root.dataset.milxdyBannerMode || 'shelf';
+  const startIndex = Math.max(0, BANNER_MODES.indexOf(current));
+
+  try {
+    for (let offset = 1; offset <= BANNER_MODES.length; offset += 1) {
+      const mode = BANNER_MODES[(startIndex + offset) % BANNER_MODES.length];
+      if (await applyBannerMode(root, mode, remiliaUsername)) {
+        const button = root.querySelector(':scope > .milxdy-banner-cycle-button');
+        if (button) button.title = `Banner mode: ${mode}. Click to cycle.`;
+        return;
+      }
+    }
+  } catch (error) {
+    console.debug('RemiStats banner cycle skipped:', error);
+  } finally {
+    delete root.dataset.milxdyBannerLoading;
+    delete root.dataset.milxdyBannerCycling;
+  }
+}
+
+function ensureBannerCycleButton(root) {
+  prefetchRandomBannersNft();
+  if (root.querySelector(':scope > .milxdy-banner-cycle-button')) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'milxdy-banner-cycle-button';
+  button.title = 'Cycle banner: original, trophy shelf, random Banners NFT';
+  button.setAttribute('aria-label', button.title);
+  button.innerHTML = `
+    <img class="milxdy-banner-lever milxdy-banner-lever--idle" src="${chrome.runtime.getURL('remistats/banner-lever-idle.png')}" alt="" />
+    <img class="milxdy-banner-lever milxdy-banner-lever--pulled" src="${chrome.runtime.getURL('remistats/banner-lever-pulled.png')}" alt="" />
+  `;
+  button.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    void cycleProfileBanner(root);
+  });
+  root.appendChild(button);
+}
+
+async function upgradeProfileTrophyBanner(remiliaUsername, profilePath) {
+  const clean = cleanUsername(remiliaUsername);
+  if (!clean) return;
+
+  await idle();
+
+  if (profilePath !== window.location.pathname) return;
+  const root = findProfileBannerRoot();
+  if (!root) return;
+
+  if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
+  root.style.overflow = 'hidden';
+  ensureBannerCycleButton(root);
+
+  const key = clean.toLowerCase();
+  if (root.dataset.milxdyTrophyBannerUser === key && root.dataset.milxdyTrophyBannerState === 'ready') return;
+  if (root.dataset.milxdyTrophyBannerUser === key && root.dataset.milxdyTrophyBannerState === 'loading') return;
+
+  if (root.dataset.milxdyTrophyBannerUser !== key) {
+    clearTrophyBannerOverlay(root);
+  }
+  root.dataset.milxdyTrophyBannerUser = key;
+  root.dataset.milxdyTrophyBannerState = 'loading';
+
+  try {
+    const bannerUrl = await renderTrophyBanner(clean);
+    if (!bannerUrl || profilePath !== window.location.pathname) {
+      root.dataset.milxdyTrophyBannerState = bannerUrl ? 'stale' : 'empty';
+      if (!bannerUrl) {
+        clearTrophyBannerOverlay(root);
+        root.dataset.milxdyBannerMode = 'original';
+      }
+      return;
+    }
+
+    await transitionBannerOverlay(root, 'shelf', bannerUrl);
+    clearBannerNftLabel(root);
+    root.dataset.milxdyBannerMode = 'shelf';
+    root.dataset.milxdyTrophyBannerState = 'ready';
+  } catch (error) {
+    root.dataset.milxdyTrophyBannerState = 'error';
+    console.debug('RemiStats trophy banner skipped:', error);
+  }
+}
+
 // Track which profiles have been processed
 const processedProfiles = new Set();
 let lastProfileUrl = location.href;
+let groupChatScanTimer = null;
 
 // Insert badge on profile pages
 async function insertProfileBadge() {
@@ -1036,6 +1614,7 @@ async function insertProfileBadge() {
       (group || existingBadge).remove();
     } else {
       const existingUsername = existingBadge.dataset.reminetUsername || username;
+      void upgradeProfileTrophyBanner(existingUsername, window.location.pathname);
       if (existingBadge.parentElement?.matches?.('[data-reminet-profile-badge-group]')) {
         if (!existingBadge.parentElement.querySelector('[data-reminet-poke]')) {
           const button = createPokeButton(existingUsername, true);
@@ -1078,6 +1657,7 @@ async function insertProfileBadge() {
     processedProfiles.add(profileKey);
 
     userNameSection.removeAttribute('data-reminet-processing');
+    void upgradeProfileTrophyBanner(scoreData.remiliaUsername || scoreData.username || username, window.location.pathname);
     const badge = createScoreBadge(scoreData, { includePokeInside: false });
     badge.style.marginLeft = '0';
     badge.style.display = 'inline-flex';
@@ -1138,49 +1718,54 @@ const processedMessageAvatars = new WeakSet();
 // slot (style="grid-area: avatar") to escape clipping.
 async function processGroupChatAvatars() {
   if (!isInGroupChat()) return;
+  const startedAt = performance.now();
 
-  const messageList = document.querySelector('[data-testid="dm-message-list"]')
-    || document.querySelector('[data-testid="dm-message-list-container"]');
-  if (!messageList) return;
+  try {
+    const messageList = document.querySelector('[data-testid="dm-message-list"]')
+      || document.querySelector('[data-testid="dm-message-list-container"]');
+    if (!messageList) return;
 
-  const links = messageList.querySelectorAll('a[href]');
+    const links = messageList.querySelectorAll('a[href]');
 
-  for (const link of links) {
-    if (processedMessageAvatars.has(link)) continue;
+    for (const link of links) {
+      if (processedMessageAvatars.has(link)) continue;
 
-    const href = link.getAttribute('href') || '';
-    // Match /handle, https://x.com/handle, https://twitter.com/handle.
-    // Reject anything with a second path segment (status urls, etc.).
-    const match = href.match(/^(?:https?:\/\/(?:twitter|x)\.com)?\/([^\/\?#]+)\/?$/);
-    if (!match) continue;
+      const href = link.getAttribute('href') || '';
+      // Match /handle, https://x.com/handle, https://twitter.com/handle.
+      // Reject anything with a second path segment (status urls, etc.).
+      const match = href.match(/^(?:https?:\/\/(?:twitter|x)\.com)?\/([^\/\?#]+)\/?$/);
+      if (!match) continue;
 
-    const username = match[1];
-    if (!username || ROUTE_BLOCKLIST.has(username)) continue;
+      const username = match[1];
+      if (!username || ROUTE_BLOCKLIST.has(username)) continue;
 
-    // Only badge the chat sender's avatar. Embedded post cards (shared
-    // tweets, link previews) also contain author avatar links but lack the
-    // grid-area: avatar wrapper. Reject anything inside such embeds.
-    const avatarSlot = link.closest('[style*="grid-area: avatar"]');
-    if (!avatarSlot) continue;
-    if (link.closest('article, [data-testid="tweet"], [data-testid="card.wrapper"]')) continue;
-    if (avatarSlot.querySelector('[data-reminet-compact]')) continue;
-
-    processedMessageAvatars.add(link);
-
-    try {
-      const scoreData = await fetchUserScore(username);
-      if (!scoreData) continue;
+      // Only badge the chat sender's avatar. Embedded post cards (shared
+      // tweets, link previews) also contain author avatar links but lack the
+      // grid-area: avatar wrapper. Reject anything inside such embeds.
+      const avatarSlot = link.closest('[style*="grid-area: avatar"]');
+      if (!avatarSlot) continue;
+      if (link.closest('article, [data-testid="tweet"], [data-testid="card.wrapper"]')) continue;
       if (avatarSlot.querySelector('[data-reminet-compact]')) continue;
 
-      if (getComputedStyle(avatarSlot).position === 'static') {
-        avatarSlot.style.position = 'relative';
-      }
-      avatarSlot.style.overflow = 'visible';
+      processedMessageAvatars.add(link);
 
-      avatarSlot.appendChild(createCompactBadge(scoreData));
-    } catch (error) {
-      console.error('RemiStats group avatar error:', error);
+      try {
+        const scoreData = await fetchUserScore(username);
+        if (!scoreData) continue;
+        if (avatarSlot.querySelector('[data-reminet-compact]')) continue;
+
+        if (getComputedStyle(avatarSlot).position === 'static') {
+          avatarSlot.style.position = 'relative';
+        }
+        avatarSlot.style.overflow = 'visible';
+
+        avatarSlot.appendChild(createCompactBadge(scoreData));
+      } catch (error) {
+        console.error('RemiStats group avatar error:', error);
+      }
     }
+  } finally {
+    recordFeatureTiming('remistats', 'groupChatAvatars', startedAt);
   }
 }
 
@@ -1200,16 +1785,31 @@ async function processUserElements() {
   await processGroupChatAvatars();
 }
 
-async function processSurfaceElement(element) {
+async function processSurfaceElement(element, username = null) {
   if (!remistatsEnabled) return;
   if (element.matches?.('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]')) {
-    await insertBadge(element);
+    const startedAt = performance.now();
+    try {
+      await insertBadge(element, username);
+    } finally {
+      recordFeatureTiming('remistats', 'insertBadge', startedAt);
+    }
   }
+}
+
+function scheduleGroupChatAvatars(delay = 250) {
+  if (!isInGroupChat()) return;
+  if (groupChatScanTimer) window.clearTimeout(groupChatScanTimer);
+  groupChatScanTimer = window.setTimeout(() => {
+    groupChatScanTimer = null;
+    void processGroupChatAvatars();
+  }, delay);
 }
 
 function init() {
   Promise.all([
     chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
+    loadStoredPokeCooldowns(),
     loadIconSettings(),
     loadPokeThemeSettings(),
     loadVisualThemeSettings(),
@@ -1218,7 +1818,7 @@ function init() {
     if (remistatsEnabled) {
       scheduleTwitterScan();
       insertProfileBadge();
-      processGroupChatAvatars();
+      scheduleGroupChatAvatars();
     } else {
       clearRemiStatsBadges();
     }
@@ -1239,7 +1839,7 @@ function init() {
       if (remistatsEnabled) {
         scheduleTwitterScan();
         insertProfileBadge();
-        processGroupChatAvatars();
+        scheduleGroupChatAvatars();
       } else {
         clearRemiStatsBadges();
       }
@@ -1255,10 +1855,13 @@ function init() {
 
   subscribeTwitterSurfaces((surface) => {
     if (surface.kind === 'tweet' || surface.kind === 'userCell') {
-      void processSurfaceElement(surface.element);
+      void processSurfaceElement(surface.element, surface.handle);
     }
     if (surface.kind === 'profile') {
       void insertProfileBadge();
+    }
+    if (surface.kind === 'directMessage') {
+      scheduleGroupChatAvatars();
     }
   });
 
@@ -1270,9 +1873,9 @@ function init() {
       incomingPokeCache = null;
       scheduleTwitterScan();
       window.setTimeout(insertProfileBadge, 350);
+      scheduleGroupChatAvatars(350);
     }
-    if (isInGroupChat()) void processGroupChatAvatars();
-  }, 1500);
+  }, 2500);
 }
 
 function clearRemiStatsBadges() {

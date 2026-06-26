@@ -5,6 +5,7 @@ import { loadSettings, observeSettings } from "./settings";
 import { injectStyles } from "./styles";
 import type { Settings, WikiMatch } from "./types";
 import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
+import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
 
 const TWEET = 'article[data-testid="tweet"]';
 const TWEET_TEXT = '[data-testid="tweetText"]';
@@ -877,8 +878,10 @@ function processPendingTweets(): void {
   pendingTweets.clear();
   for (const tweet of tweets) {
     if (!tweet.isConnected) continue;
+    const startedAt = performance.now();
     perfStats.tweetsScanned += 1;
     processTweet(tweet);
+    recordFeatureTiming("wiki", "processTweet", startedAt);
   }
   scheduleStatsFlush();
 }

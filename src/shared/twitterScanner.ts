@@ -5,6 +5,11 @@ export type TwitterSurfaceKind = "tweet" | "userCell" | "notification" | "direct
 export type TwitterSurface = {
   kind: TwitterSurfaceKind;
   element: HTMLElement;
+  handle: string | null;
+  avatarUrl: string | null;
+  textContainers: HTMLElement[];
+  statusUrl: string | null;
+  actionRow: HTMLElement | null;
 };
 
 type Listener = (surface: TwitterSurface) => void;
@@ -15,6 +20,11 @@ const NOTIFICATION = 'article[data-testid="notification"]';
 const DIRECT_MESSAGE = '[data-testid^="message-"]:not([data-testid^="message-text-"])';
 const PROFILE = '[data-testid="primaryColumn"] [data-testid="UserName"]';
 const ALL_SURFACES = [TWEET, USER_CELL, NOTIFICATION, DIRECT_MESSAGE, PROFILE].join(",");
+const ROUTE_BLOCKLIST = new Set([
+  "home", "explore", "notifications", "messages", "settings", "compose",
+  "search", "i", "tos", "privacy", "login", "signup", "logout", "about",
+  "jobs", "lists", "bookmarks", "communities", "topics", "verified-orgs-signup",
+]);
 
 const listeners = new Set<Listener>();
 const pending = new Map<HTMLElement, TwitterSurfaceKind>();
@@ -58,9 +68,13 @@ function ensureScanner(): void {
   });
   observer.observe(document.body, { childList: true, subtree: true });
   safetyTimer = window.setInterval(() => {
+    if (document.hidden) return;
     counters.safetyScans += 1;
     scheduleFullScan();
   }, 10000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) scheduleFullScan();
+  }, { passive: true });
 }
 
 function collectMutations(mutations: MutationRecord[]): void {
@@ -127,13 +141,58 @@ function flush(): void {
   for (const [element, kind] of surfaces) {
     if (!element.isConnected) continue;
     counters.surfacesEmitted += 1;
+    const surface = buildSurface(kind, element);
     for (const listener of Array.from(listeners)) {
-      listener({ kind, element });
+      listener(surface);
     }
   }
   counters.lastFlushMs = Math.round((performance.now() - startedAt) * 10) / 10;
   counters.updatedAt = Date.now();
   scheduleDiagnosticsWrite();
+}
+
+function buildSurface(kind: TwitterSurfaceKind, element: HTMLElement): TwitterSurface {
+  return {
+    kind,
+    element,
+    handle: extractHandle(kind, element),
+    avatarUrl: null,
+    textContainers: [],
+    statusUrl: null,
+    actionRow: null,
+  };
+}
+
+function extractHandle(kind: TwitterSurfaceKind, element: HTMLElement): string | null {
+  if (kind !== "tweet" && kind !== "userCell" && kind !== "profile") return null;
+  if (kind === "profile") return normalizeHandle(location.pathname.split("/")[1] ?? "");
+
+  const avatar = element.querySelector<HTMLElement>('[data-testid^="UserAvatar-Container-"]');
+  const testId = avatar?.getAttribute("data-testid");
+  const fromAvatar = testId?.replace("UserAvatar-Container-", "").trim();
+  if (fromAvatar && !ROUTE_BLOCKLIST.has(fromAvatar)) return normalizeHandle(fromAvatar);
+
+  let checked = 0;
+  for (const link of Array.from(element.querySelectorAll<HTMLAnchorElement>('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))) {
+    checked += 1;
+    if (checked > 8) break;
+    if (link.closest('[data-testid="quoteTweet"]')) continue;
+    const handle = normalizeHandle(link.getAttribute("href"));
+    if (handle) return handle;
+  }
+
+  const labelLink = element.querySelector<HTMLAnchorElement>('a[aria-label*="@"]');
+  const labelMatch = labelLink?.getAttribute("aria-label")?.match(/@([a-z0-9_]{1,15})/i);
+  return labelMatch ? normalizeHandle(labelMatch[1]) : null;
+}
+
+function normalizeHandle(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const match = value.match(/^(?:https?:\/\/(?:twitter|x)\.com)?\/?([^/?#]+)/i);
+  const candidate = (match ? match[1] : value).replace(/^@/, "").toLowerCase();
+  if (!/^[a-z0-9_]{1,15}$/.test(candidate)) return null;
+  if (ROUTE_BLOCKLIST.has(candidate)) return null;
+  return candidate;
 }
 
 function scheduleDiagnosticsWrite(): void {

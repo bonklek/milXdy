@@ -14,7 +14,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 
 ## RemiNet And Beetol Login
 
-- Passwords entered in the Beetol Game login form are sent to RemiliaNET for login and are not stored by milXdy.
+- milXdy uses the user's RemiliaNET browser session for connector login. Direct username/password login is no longer supported by RemiliaNET for this extension path.
 - RemiNet login state is stored in Chrome extension local storage.
 - Login state should persist across browser restarts, extension reloads, and ordinary updates that keep the same extension identity.
 - Browser-session SSO depends on RemiliaNET cookies in the user's browser profile.
@@ -35,6 +35,8 @@ RemiNet Chat is off by default. When enabled, it fetches recent chat messages, o
 
 Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.
 
-## 2FA Limit
+## RemiliaNET Client Support
 
-Accounts with RemiliaNET 2FA should use **Open RemiliaNET SSO** and **Retry session** instead of the popup password login form. After the user finishes RemiliaNET login and 2FA in the browser tab, milXdy checks that browser session and may reuse the RemiliaNET `authToken` cookie for Beetol, RemiStats pokes, and RemiNet Chat connector requests.
+Accounts should use **Open RemiliaNET** and **Retry session**. After the user starts login from remilia.net and finishes any 2FA step in the browser tab, milXdy checks that browser session and may reuse the RemiliaNET `authToken` cookie for Beetol, RemiStats pokes, and RemiNet Chat connector requests. Full 2FA-native extension login depends on RemiliaNET supporting milXdy as an approved client.
+
+The popup **Log out** action disconnects milXdy's connector auth state and prevents automatic browser-session reuse until the user clicks **Retry session** again. It does not necessarily sign the user out of remilia.net in the browser.

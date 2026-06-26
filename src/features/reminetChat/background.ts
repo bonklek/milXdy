@@ -4,6 +4,7 @@ const AUTH_COOKIE_NAME = "authToken";
 const AUTH_COOKIE_TTL_SECONDS = 900;
 const ACCESS_TOKEN_KEY = "beetol.accessToken";
 const REFRESH_TOKEN_KEY = "beetol.refreshToken";
+const DISCONNECTED_KEY = "beetol.disconnected";
 const LEGACY_PREFIX = "bex" + "tol";
 const OIDC_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`;
 
@@ -81,6 +82,15 @@ async function setStored(values: Record<string, unknown>): Promise<void> {
   await chrome.storage.local.set(values);
 }
 
+async function isDisconnected(): Promise<boolean> {
+  const stored = await getStored([DISCONNECTED_KEY]);
+  return stored[DISCONNECTED_KEY] === true;
+}
+
+async function allowSessionAuth(): Promise<void> {
+  await chrome.storage.local.remove([DISCONNECTED_KEY]);
+}
+
 async function migrateAuth(): Promise<void> {
   const legacyAccessKey = `${LEGACY_PREFIX}.accessToken`;
   const legacyRefreshKey = `${LEGACY_PREFIX}.refreshToken`;
@@ -111,6 +121,8 @@ async function getAuthCookie(): Promise<string> {
 }
 
 async function adoptBrowserSession(): Promise<{ ok: boolean; token: string; user?: unknown }> {
+  if (await isDisconnected()) return { ok: false, token: "" };
+
   const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
   if (!whoami.ok) return { ok: false, token: "" };
 
@@ -122,6 +134,7 @@ async function adoptBrowserSession(): Promise<{ ok: boolean; token: string; user
     });
   }
 
+  await allowSessionAuth();
   return { ok: true, token: cookieToken, user: whoami.data };
 }
 
@@ -142,6 +155,7 @@ async function oidc(params: Record<string, string>): Promise<{ ok: boolean }> {
 }
 
 async function refreshAccessToken(): Promise<boolean> {
+  if (await isDisconnected()) return false;
   await migrateAuth();
   const stored = await getStored([REFRESH_TOKEN_KEY]);
   const refreshToken = typeof stored[REFRESH_TOKEN_KEY] === "string" ? stored[REFRESH_TOKEN_KEY] : "";
@@ -151,6 +165,7 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; error?: string }> {
+  if (await isDisconnected()) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
   await migrateAuth();
   const adopted = await adoptBrowserSession();
   if (adopted.ok) {
@@ -259,7 +274,7 @@ async function fetchMediaDataUrl(url: unknown): Promise<Record<string, unknown>>
   const response = await fetch(url, { credentials: "include" });
   if (!response.ok) return { ok: false, status: response.status };
   const contentType = response.headers.get("content-type") || "application/octet-stream";
-  if (!contentType.startsWith("image/")) return { ok: false, error: "UNSUPPORTED_MEDIA_TYPE", contentType };
+  if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) return { ok: false, error: "UNSUPPORTED_MEDIA_TYPE", contentType };
   const dataUrl = await blobToDataUrl(await response.blob(), contentType);
   return { ok: true, dataUrl, contentType };
 }

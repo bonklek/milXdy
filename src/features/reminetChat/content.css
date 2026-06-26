@@ -69,7 +69,7 @@
 .milxdy-chat-card {
   position: relative;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  grid-template-rows: auto minmax(0, 1fr) auto auto auto auto;
   height: var(--rn-frame-height);
   max-height: var(--rn-frame-height);
   overflow: hidden;
@@ -168,6 +168,8 @@
 .milxdy-chat-pending-attachment button,
 .milxdy-chat-poke,
 .milxdy-chat-x-link,
+.milxdy-chat-load-older button,
+.milxdy-chat-message-actions button,
 .milxdy-chat-reactions button {
   flex: 0 0 auto;
   border: 1px solid var(--rn-border);
@@ -221,6 +223,7 @@
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-messages,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-attachment-preview,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-error,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-reply-preview,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-composer,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-resize-grip {
   display: none;
@@ -229,8 +232,11 @@
 .milxdy-chat-header button:hover,
 .milxdy-chat-composer button:hover,
 .milxdy-chat-pending-attachment button:hover,
+.milxdy-chat-reply-preview button:hover,
 .milxdy-chat-poke:hover,
 .milxdy-chat-x-link:hover,
+.milxdy-chat-load-older button:hover,
+.milxdy-chat-message-actions button:hover,
 .milxdy-chat-reactions button:hover {
   filter: brightness(0.98);
   transform: translate(1px, 1px);
@@ -266,6 +272,32 @@
   border: 2px solid #d8d8d8;
 }
 
+.milxdy-chat-load-older {
+  display: grid;
+  justify-items: center;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--rn-border);
+  background: rgba(255, 255, 255, 0.46);
+}
+
+.milxdy-chat-load-older[hidden] {
+  display: none;
+}
+
+.milxdy-chat-load-older button {
+  min-height: 24px;
+  padding: 0 10px;
+  color: var(--rn-link);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 11px;
+  text-transform: none;
+}
+
+.milxdy-chat-load-older button:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
 .milxdy-chat-message-group {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
@@ -297,22 +329,43 @@
   object-fit: cover;
 }
 
+.milxdy-chat-meta a.milxdy-chat-x-link,
 .milxdy-chat-x-link {
-  display: inline-grid;
+  position: relative;
+  display: inline-grid !important;
   place-items: center;
-  width: 13px;
-  height: 13px;
-  padding: 0;
-  border-right-width: 1px;
-  border-bottom-width: 1px;
-  background: #101010;
-  border-color: #101010;
-  color: #ffffff;
-  font-family: Arial, sans-serif;
-  font-size: 8px;
-  font-weight: 700;
-  line-height: 1;
-  vertical-align: -1px;
+  flex: 0 0 14px !important;
+  width: 14px !important;
+  min-width: 14px !important;
+  max-width: 14px !important;
+  height: 14px !important;
+  min-height: 14px !important;
+  max-height: 14px !important;
+  padding: 0 !important;
+  border: 1px solid #101010 !important;
+  border-right-width: 1px !important;
+  border-bottom-width: 1px !important;
+  border-radius: 2px !important;
+  background: #101010 !important;
+  color: #ffffff !important;
+  font: 700 9px/1 Arial, sans-serif !important;
+  text-decoration: none !important;
+  text-shadow: none !important;
+  text-transform: none !important;
+  vertical-align: -2px;
+}
+
+.milxdy-chat-x-link::before {
+  content: none !important;
+}
+
+.milxdy-chat-x-link svg {
+  display: block !important;
+  width: 9px !important;
+  height: 9px !important;
+  color: #ffffff !important;
+  fill: currentColor !important;
+  pointer-events: none;
 }
 
 .milxdy-chat-x-link:hover,
@@ -433,11 +486,11 @@
   padding: 0;
 }
 
-.milxdy-chat-message:hover .milxdy-chat-reactions {
+.milxdy-chat-message:hover .milxdy-chat-message-actions {
   opacity: 1;
 }
 
-.milxdy-chat-message:hover .milxdy-chat-reactions button {
+.milxdy-chat-message:hover .milxdy-chat-message-actions button {
   display: inline-flex;
 }
 
@@ -455,6 +508,42 @@
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 2px;
+}
+
+.milxdy-chat-reply-context {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  margin: 0 0 1px;
+  color: var(--rn-muted);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 9px;
+  font-style: italic;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.milxdy-chat-reply-context span {
+  color: var(--rn-link);
+  font-size: 12px;
+}
+
+.milxdy-chat-reply-context strong {
+  flex: 0 0 auto;
+  color: var(--rn-border-dark);
+  font-weight: 700;
+  font-style: italic;
+}
+
+.milxdy-chat-reply-context em {
+  overflow: hidden;
+  min-width: 0;
+  font-style: italic;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .milxdy-chat-media {
@@ -483,7 +572,7 @@
   object-fit: cover;
 }
 
-.milxdy-chat-reactions {
+.milxdy-chat-message-actions {
   display: flex;
   flex-wrap: wrap;
   gap: 3px;
@@ -492,7 +581,11 @@
   opacity: 1;
 }
 
-.milxdy-chat-reactions button {
+.milxdy-chat-reactions {
+  display: contents;
+}
+
+.milxdy-chat-message-actions button {
   display: none;
   align-items: center;
   justify-content: center;
@@ -506,7 +599,7 @@
   text-transform: none;
 }
 
-.milxdy-chat-reactions button.has-reacts {
+.milxdy-chat-message-actions button.has-reacts {
   display: inline-flex;
 }
 
@@ -524,6 +617,17 @@
   text-align: center;
 }
 
+.milxdy-chat-empty a {
+  color: var(--rn-link);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.milxdy-chat-empty span {
+  display: block;
+}
+
 .milxdy-chat-attachment-preview {
   display: grid;
   gap: 5px;
@@ -533,8 +637,63 @@
 }
 
 .milxdy-chat-attachment-preview[hidden],
-.milxdy-chat-error[hidden] {
+.milxdy-chat-error[hidden],
+.milxdy-chat-reply-preview[hidden] {
   display: none;
+}
+
+.milxdy-chat-reply-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 10px 0;
+  padding: 8px;
+  border: 1px solid #b67cff;
+  border-radius: 8px;
+  background: rgba(246, 232, 255, 0.78);
+  color: var(--rn-text);
+  font-family: "Milxdy Remilia Menlo", monospace;
+  font-size: 11px;
+}
+
+.milxdy-chat-reply-preview > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  min-width: 0;
+}
+
+.milxdy-chat-reply-preview span {
+  color: var(--rn-link);
+  font-size: 15px;
+}
+
+.milxdy-chat-reply-preview strong {
+  flex: 0 0 auto;
+  color: var(--rn-border-dark);
+  font-weight: 700;
+}
+
+.milxdy-chat-reply-preview em {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--rn-muted);
+  font-style: italic;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.milxdy-chat-reply-preview button {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--rn-link);
+  cursor: pointer;
+  font: 700 18px/1 "Milxdy Remilia Menlo", monospace;
 }
 
 .milxdy-chat-pending-attachment {

@@ -16,6 +16,7 @@ export type VisualThemeSettings = {
   pfpNotifications: boolean;
   pfpChat: boolean;
   quoteMediaGap: boolean;
+  maxMediaHeight: number;
   postButtonClickly: boolean;
   postSound: boolean;
   sidebarBevel: boolean;
@@ -24,6 +25,7 @@ export type VisualThemeSettings = {
   newPostsSound: boolean;
   notificationUnreadTint: boolean;
   remistatsBox: boolean;
+  incomingPokeGold: boolean;
   pokePlacement: "top" | "actions";
   reminetChatOverlay: boolean;
   miladyOnly: boolean;
@@ -31,6 +33,14 @@ export type VisualThemeSettings = {
   maxxerIntensity: "subtle" | "marked" | "card";
   maxxerSeparators: "subtle" | "beveled" | "none";
   maxxerShimmer: boolean;
+  tweetPngIncludeImages: boolean;
+  tweetPngIncludeQuoteText: boolean;
+  tweetPngIncludeQuoteImages: boolean;
+  tweetPngShrinkTallImages: boolean;
+  tweetPngIncludeDate: boolean;
+  tweetPngIncludeStats: boolean;
+  tweetPngBorder: boolean;
+  tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
 };
 
 export type SavedVisualTheme = {
@@ -52,6 +62,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   pfpNotifications: true,
   pfpChat: true,
   quoteMediaGap: false,
+  maxMediaHeight: 520,
   postButtonClickly: true,
   postSound: true,
   sidebarBevel: false,
@@ -60,6 +71,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   newPostsSound: true,
   notificationUnreadTint: true,
   remistatsBox: false,
+  incomingPokeGold: true,
   pokePlacement: "actions",
   reminetChatOverlay: false,
   miladyOnly: false,
@@ -67,6 +79,14 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   maxxerIntensity: "marked",
   maxxerSeparators: "subtle",
   maxxerShimmer: true,
+  tweetPngIncludeImages: true,
+  tweetPngIncludeQuoteText: true,
+  tweetPngIncludeQuoteImages: true,
+  tweetPngShrinkTallImages: true,
+  tweetPngIncludeDate: true,
+  tweetPngIncludeStats: true,
+  tweetPngBorder: true,
+  tweetPngBorderPalette: "purple",
 };
 
 export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
@@ -80,6 +100,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     pfpNotifications: true,
     pfpChat: true,
     quoteMediaGap: false,
+    maxMediaHeight: 480,
     postButtonClickly: true,
     postSound: true,
     sidebarBevel: false,
@@ -88,6 +109,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     newPostsSound: true,
     notificationUnreadTint: true,
     remistatsBox: false,
+    incomingPokeGold: true,
     pokePlacement: "actions",
     reminetChatOverlay: false,
     miladyOnly: false,
@@ -95,6 +117,14 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "marked",
     maxxerSeparators: "subtle",
     maxxerShimmer: true,
+    tweetPngIncludeImages: true,
+    tweetPngIncludeQuoteText: true,
+    tweetPngIncludeQuoteImages: true,
+    tweetPngShrinkTallImages: true,
+    tweetPngIncludeDate: true,
+    tweetPngIncludeStats: true,
+    tweetPngBorder: true,
+    tweetPngBorderPalette: "purple",
   },
   moderate: {
     ...DEFAULT_VISUAL_THEME,
@@ -106,6 +136,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     pfpNotifications: true,
     pfpChat: true,
     quoteMediaGap: true,
+    maxMediaHeight: 640,
     postButtonClickly: false,
     postSound: false,
     sidebarBevel: false,
@@ -114,6 +145,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     newPostsSound: false,
     notificationUnreadTint: true,
     remistatsBox: false,
+    incomingPokeGold: true,
     pokePlacement: "top",
     reminetChatOverlay: false,
     miladyOnly: false,
@@ -121,6 +153,14 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "subtle",
     maxxerSeparators: "subtle",
     maxxerShimmer: false,
+    tweetPngIncludeImages: true,
+    tweetPngIncludeQuoteText: true,
+    tweetPngIncludeQuoteImages: true,
+    tweetPngShrinkTallImages: true,
+    tweetPngIncludeDate: true,
+    tweetPngIncludeStats: true,
+    tweetPngBorder: true,
+    tweetPngBorderPalette: "gray",
   },
   min: {
     ...DEFAULT_VISUAL_THEME,
@@ -132,6 +172,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     pfpNotifications: false,
     pfpChat: false,
     quoteMediaGap: true,
+    maxMediaHeight: 0,
     postButtonClickly: false,
     postSound: false,
     sidebarBevel: false,
@@ -140,6 +181,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     newPostsSound: false,
     notificationUnreadTint: false,
     remistatsBox: false,
+    incomingPokeGold: true,
     pokePlacement: "top",
     reminetChatOverlay: false,
     miladyOnly: false,
@@ -147,6 +189,14 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "subtle",
     maxxerSeparators: "none",
     maxxerShimmer: false,
+    tweetPngIncludeImages: true,
+    tweetPngIncludeQuoteText: true,
+    tweetPngIncludeQuoteImages: true,
+    tweetPngShrinkTallImages: true,
+    tweetPngIncludeDate: true,
+    tweetPngIncludeStats: true,
+    tweetPngBorder: false,
+    tweetPngBorderPalette: "gray",
   },
 };
 
@@ -171,6 +221,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     pfpNotifications: booleanValue(record.pfpNotifications, fallback.pfpNotifications),
     pfpChat: booleanValue(record.pfpChat, fallback.pfpChat),
     quoteMediaGap: booleanValue(record.quoteMediaGap, fallback.quoteMediaGap),
+    maxMediaHeight: numberValue(record.maxMediaHeight, fallback.maxMediaHeight, 0, 1200),
     postButtonClickly: booleanValue(record.postButtonClickly, fallback.postButtonClickly),
     postSound: booleanValue(record.postSound, fallback.postSound),
     sidebarBevel: booleanValue(record.sidebarBevel, fallback.sidebarBevel),
@@ -179,6 +230,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     newPostsSound: booleanValue(record.newPostsSound, fallback.newPostsSound),
     notificationUnreadTint: booleanValue(record.notificationUnreadTint, fallback.notificationUnreadTint),
     remistatsBox: booleanValue(record.remistatsBox, fallback.remistatsBox),
+    incomingPokeGold: booleanValue(record.incomingPokeGold, fallback.incomingPokeGold),
     pokePlacement: oneOf(record.pokePlacement, ["top", "actions"], fallback.pokePlacement),
     reminetChatOverlay: booleanValue(record.reminetChatOverlay, fallback.reminetChatOverlay),
     miladyOnly: booleanValue(record.miladyOnly, fallback.miladyOnly),
@@ -186,6 +238,14 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     maxxerIntensity: oneOf(record.maxxerIntensity, ["subtle", "marked", "card"], fallback.maxxerIntensity),
     maxxerSeparators: oneOf(record.maxxerSeparators, ["subtle", "beveled", "none"], fallback.maxxerSeparators),
     maxxerShimmer: booleanValue(record.maxxerShimmer, fallback.maxxerShimmer),
+    tweetPngIncludeImages: booleanValue(record.tweetPngIncludeImages, fallback.tweetPngIncludeImages),
+    tweetPngIncludeQuoteText: booleanValue(record.tweetPngIncludeQuoteText, fallback.tweetPngIncludeQuoteText),
+    tweetPngIncludeQuoteImages: booleanValue(record.tweetPngIncludeQuoteImages, fallback.tweetPngIncludeQuoteImages),
+    tweetPngShrinkTallImages: booleanValue(record.tweetPngShrinkTallImages, fallback.tweetPngShrinkTallImages),
+    tweetPngIncludeDate: booleanValue(record.tweetPngIncludeDate, fallback.tweetPngIncludeDate),
+    tweetPngIncludeStats: booleanValue(record.tweetPngIncludeStats, fallback.tweetPngIncludeStats),
+    tweetPngBorder: booleanValue(record.tweetPngBorder, fallback.tweetPngBorder),
+    tweetPngBorderPalette: oneOf(record.tweetPngBorderPalette, ["purple", "gray", "blue", "green"], fallback.tweetPngBorderPalette),
   };
 }
 
@@ -195,4 +255,9 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 
 function booleanValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function numberValue(value: unknown, fallback: number, min: number, max: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  return Math.min(max, Math.max(min, Math.round(value)));
 }

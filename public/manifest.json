@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "milXdy",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs"],
+  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs", "scripting"],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
@@ -13,6 +13,7 @@
     "http://127.0.0.1/*",
     "https://wiki.remilia.org/*",
     "https://api.remistats.net/*",
+    "https://miladymaker.net/banners/nft/*",
     "https://www.remilia.net/*",
     "wss://www.remilia.net/*"
   ],

@@ -1,5 +1,10 @@
 (function mountBeetolGame() {
-  if (document.getElementById('beetol-hunter-root')) return;
+  const ROOT_VERSION = '2026-06-26-hunt-state-v3';
+  const existingRoot = document.getElementById('beetol-hunter-root');
+  if (existingRoot) {
+    if (existingRoot.dataset.version === ROOT_VERSION) return;
+    existingRoot.remove();
+  }
 
   function hasExtensionRuntime() {
     return typeof globalThis.chrome?.runtime?.id === 'string' && chrome.runtime.id.length > 0;
@@ -12,12 +17,11 @@
     ['junkFaucet', 'Junk Faucet', 'junk-faucet.png'],
   ];
   const TAB_COOLDOWN_KEYS = ['catchBeetle', 'beetleHunt'];
-  const FALLBACK_ACTION_COOLDOWNS = {
-    catchBeetle: 30 * 60 * 1000,
-    beetleHunt: 60 * 60 * 1000,
-  };
+  const HUNT_COOLDOWN_FALLBACK_MS = 60 * 60 * 1000;
   const TAB_ICON_URL = chrome.runtime.getURL('beetol/icons/hunt-beetle.png');
   const POSITION_KEY = 'beetol.hunterPosition';
+  const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
+  const COOLDOWN_STATE_VERSION = 3;
   const ENABLED_KEY = 'milxdy.remistats.beetol.enabled';
   const SETTINGS_THEME_KEY = 'milxdy.settings.theme';
   const LEGACY_PREFIX = 'bex' + 'tol';
@@ -42,6 +46,13 @@
       claimUBC: null,
       junkFaucet: null,
     },
+    cooldownExpiresAt: {
+      catchBeetle: null,
+      beetleHunt: null,
+      claimUBC: null,
+      junkFaucet: null,
+    },
+    huntCharges: 3,
     message: '',
     messageKind: '',
     menuSoundArmed: false,
@@ -52,6 +63,7 @@
 
   const root = document.createElement('div');
   root.id = 'beetol-hunter-root';
+  root.dataset.version = ROOT_VERSION;
   root.innerHTML = `
     <div class="beetol-shell" aria-live="polite">
       <button class="beetol-tab" type="button" title="Beetol Game">
@@ -126,6 +138,17 @@
   function savePosition() {
     if (!hasExtensionRuntime() || !state.position) return;
     chrome.storage.local.set({ [POSITION_KEY]: state.position });
+  }
+
+  function saveCooldownState() {
+    if (!hasExtensionRuntime()) return;
+    chrome.storage.local.set({
+      [COOLDOWN_STATE_KEY]: {
+        version: COOLDOWN_STATE_VERSION,
+        expiresAt: state.cooldownExpiresAt,
+        huntCharges: state.huntCharges,
+      },
+    });
   }
 
   function send(message) {
@@ -227,11 +250,37 @@
     return `${s}s`;
   }
 
+  function normalizeCooldownMs(value) {
+    if (value == null || value === false) return 0;
+    if (typeof value === 'number') {
+      if (!Number.isFinite(value) || value <= 0) return 0;
+      if (value > 1000000000000) return Math.max(0, value - Date.now());
+      return value < 1000 ? value * 1000 : value;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) return 0;
+      const numeric = Number(trimmed);
+      if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
+      const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
+      if (match && match[0].trim()) {
+        const days = Number(match[1] || 0);
+        const hours = Number(match[2] || 0);
+        const minutes = Number(match[3] || 0);
+        const seconds = Number(match[4] || 0);
+        return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
+      }
+      const timestamp = Date.parse(trimmed);
+      if (Number.isFinite(timestamp) && timestamp > Date.now()) return timestamp - Date.now();
+    }
+    return 0;
+  }
+
   function currentCooldowns() {
-    const elapsed = Date.now() - state.fetchedAt;
-    return Object.fromEntries(Object.entries(state.cooldowns).map(([key, value]) => [
+    const now = Date.now();
+    return Object.fromEntries(Object.entries(state.cooldownExpiresAt).map(([key, value]) => [
       key,
-      value === null ? null : Math.max(0, value - elapsed),
+      value === null ? 0 : Math.max(0, value - now),
     ]));
   }
 
@@ -263,28 +312,170 @@
     return prefersDark?.matches ? 'dark' : 'light';
   }
 
-  function mergeCooldowns(user) {
-    const elapsed = Date.now() - state.fetchedAt;
-    const previous = state.cooldowns;
-    const keep = key => previous[key] === null ? null : Math.max(0, previous[key] - elapsed);
-    state.fetchedAt = Date.now();
-    state.cooldowns = {
-      catchBeetle: user?.cooldowns?.catchBeetle ?? keep('catchBeetle'),
-      beetleHunt: user?.cooldowns?.beetleHunt ?? keep('beetleHunt'),
-      claimUBC: user?.cooldowns?.claimUBC ?? keep('claimUBC'),
-      junkFaucet: user?.cooldowns?.junkFaucet ?? keep('junkFaucet'),
+  function firstFiniteNumber(values) {
+    for (const value of values) {
+      const number = Number(value);
+      if (Number.isFinite(number)) return number;
+    }
+    return null;
+  }
+
+  function firstBoolean(values) {
+    for (const value of values) {
+      if (typeof value === 'boolean') return value;
+      if (typeof value === 'number' && Number.isFinite(value) && (value === 0 || value === 1)) return Boolean(value);
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase();
+        if (['true', 'yes', 'ready', 'available', 'enabled', '1'].includes(normalized)) return true;
+        if (['false', 'no', 'not_ready', 'not ready', 'unavailable', 'disabled', '0'].includes(normalized)) return false;
+      }
+    }
+    return null;
+  }
+
+  function huntStateFromUser(user) {
+    const actionData = user?.beetleHunt || user?.actions?.beetleHunt || {};
+    const cooldown = cooldownFromUser(user, 'beetleHunt');
+    const cooldownMs = normalizeCooldownMs(cooldown);
+    const message = [
+      actionData?.message,
+      actionData?.error,
+      user?.beetleHuntMessage,
+      user?.huntMessage,
+    ].find(value => typeof value === 'string' && value.trim());
+    const charges = firstFiniteNumber([
+      user?.beetleHuntCharges,
+      user?.huntCharges,
+      user?.huntsRemaining,
+      user?.beetleHuntsRemaining,
+      user?.charges?.beetleHunt,
+      actionData?.charges,
+      actionData?.remainingCharges,
+      actionData?.huntsRemaining,
+      actionData?.remaining,
+    ]);
+    const available = firstBoolean([
+      user?.canBeetleHunt,
+      user?.canHunt,
+      user?.beetleHuntAvailable,
+      user?.huntAvailable,
+      actionData?.canUse,
+      actionData?.canRun,
+      actionData?.canHunt,
+      actionData?.available,
+      actionData?.availableNow,
+      actionData?.ready,
+      actionData?.enabled,
+    ]);
+    const cooldownActive = firstBoolean([
+      user?.beetleHuntOnCooldown,
+      user?.huntOnCooldown,
+      actionData?.onCooldown,
+      actionData?.isCooldown,
+      actionData?.cooldownActive,
+      actionData?.cooldown,
+      actionData?.disabled,
+    ]);
+    const cooldownMessage = isCooldownMessage(message);
+    const hasSignal = charges !== null || available !== null || cooldownActive !== null || cooldownMs > 0 || cooldown === 0 || cooldownMessage;
+
+    return {
+      hasSignal,
+      charges: charges === null ? null : clamp(Math.floor(charges), 0, 3),
+      cooldownMs,
+      needsCooldownFallback: cooldownActive === true || cooldownMessage,
+      explicitlyReady: available === true || cooldown === 0,
+      explicitlyUnavailable: available === false || cooldownActive === true || charges === 0 || cooldownMs > 0 || cooldownMessage,
     };
   }
 
-  function ensureActionCooldown(action, cooldownMs = 0) {
-    const fallback = FALLBACK_ACTION_COOLDOWNS[action] || 0;
-    const nextCooldown = cooldownMs > 0 ? cooldownMs : fallback;
-    if (!nextCooldown) return;
-    const current = currentCooldowns()[action];
-    if (current === null || current <= 0) {
-      state.cooldowns[action] = nextCooldown;
-      state.fetchedAt = Date.now();
+  function mergeCooldowns(user) {
+    const now = Date.now();
+    state.fetchedAt = now;
+    const huntState = huntStateFromUser(user);
+    for (const key of Object.keys(state.cooldowns)) {
+      const cooldown = cooldownFromUser(user, key);
+      const cooldownMs = normalizeCooldownMs(cooldown);
+      if (cooldownMs > 0 || cooldown === 0) {
+        setActionCooldown(key, cooldownMs);
+      } else if (state.cooldownExpiresAt[key] !== null && state.cooldownExpiresAt[key] <= now) {
+        clearActionCooldown(key);
+      }
     }
+    if (huntState.explicitlyReady && (state.cooldownExpiresAt.beetleHunt ?? 0) <= now) {
+      clearActionCooldown('beetleHunt');
+    }
+    if (huntState.charges !== null) {
+      state.huntCharges = huntState.charges;
+    }
+    if (huntState.explicitlyUnavailable) {
+      const nextCooldown = huntState.cooldownMs || (huntState.needsCooldownFallback ? HUNT_COOLDOWN_FALLBACK_MS : 0);
+      if (nextCooldown > 0) {
+        setActionCooldown('beetleHunt', nextCooldown);
+      } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now) {
+        state.huntCharges = 0;
+      }
+    }
+    if ((state.cooldownExpiresAt.beetleHunt ?? 0) > now) {
+      state.huntCharges = 0;
+    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now && state.huntCharges <= 0 && huntState.charges !== 0 && !huntState.explicitlyUnavailable) {
+      state.huntCharges = 3;
+    }
+    saveCooldownState();
+  }
+
+  function cooldownFromUser(user, action) {
+    const actionData = user?.[action] || user?.actions?.[action] || {};
+    const values = [
+      user?.cooldowns?.[action],
+      user?.cooldownExpiresAt?.[action],
+      user?.cooldownUntil?.[action],
+      actionData?.cooldownMs,
+      actionData?.cooldown,
+      actionData?.cooldownRemaining,
+      actionData?.cooldownRemainingMs,
+      actionData?.remainingMs,
+      actionData?.remaining,
+      actionData?.retryAfterMs,
+      actionData?.retryAfter,
+      actionData?.cooldownUntil,
+      actionData?.availableAt,
+      actionData?.nextAt,
+    ];
+    return values.find(value => normalizeCooldownMs(value) > 0 || value === 0);
+  }
+
+  function setActionCooldown(action, cooldownMs) {
+    const ms = normalizeCooldownMs(cooldownMs);
+    if (ms > 0) {
+      state.cooldowns[action] = ms;
+      state.cooldownExpiresAt[action] = Date.now() + ms;
+      if (action === 'beetleHunt') state.huntCharges = 0;
+    } else {
+      clearActionCooldown(action);
+    }
+  }
+
+  function clearActionCooldown(action) {
+    state.cooldowns[action] = 0;
+    state.cooldownExpiresAt[action] = null;
+    if (action === 'beetleHunt' && state.huntCharges <= 0) state.huntCharges = 3;
+  }
+
+  function applyStoredCooldownState(value) {
+    if (!value || typeof value !== 'object') return;
+    const expiresAt = value.expiresAt || {};
+    for (const key of Object.keys(state.cooldownExpiresAt)) {
+      const expiry = Number(expiresAt[key]);
+      state.cooldownExpiresAt[key] = Number.isFinite(expiry) && expiry > Date.now() ? expiry : null;
+    }
+    const charges = value.version === COOLDOWN_STATE_VERSION ? Number(value.huntCharges) : Number.NaN;
+    if (Number.isFinite(charges)) {
+      state.huntCharges = clamp(Math.floor(charges), 0, 3);
+    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= Date.now()) {
+      state.huntCharges = 3;
+    }
+    if ((state.cooldownExpiresAt.beetleHunt ?? 0) > Date.now()) state.huntCharges = 0;
   }
 
   function render() {
@@ -310,7 +501,7 @@
       const name = state.user?.username || state.user?.name || state.user?.displayName || 'Signed in';
       els.user.textContent = name;
       const cds = currentCooldowns();
-      const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => cds[key]);
+      const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => key === 'beetleHunt' && state.huntCharges <= 0 && cds[key] <= 0 ? null : cds[key]);
       const ready = tabCooldowns.filter(value => value === 0);
       if (ready.length) els.next.textContent = ready.length === 2 ? 'Both ready' : 'Ready';
       else {
@@ -321,14 +512,23 @@
       els.actions.innerHTML = ACTIONS.map(([key, label, icon]) => {
         const cd = cds[key];
         const readyClass = cd === 0 ? ' is-ready' : '';
-        const disabled = state.loading ? ' disabled' : '';
+        const cooldownClass = cd > 0 ? ' is-cooldown' : '';
+        const exhaustedClass = key === 'beetleHunt' && cd <= 0 && state.huntCharges <= 0 ? ' is-exhausted' : '';
+        const huntClass = key === 'beetleHunt' ? ' is-hunt' : '';
+        const disabled = state.loading || cd > 0 || exhaustedClass ? ' disabled' : '';
         const iconUrl = chrome.runtime.getURL(`beetol/icons/${icon}`);
         const cooldownLabel = fmtMs(cd);
+        const huntStatus = cd > 0 ? cooldownLabel : `${state.huntCharges}/3`;
+        const huntChargeAttr = key === 'beetleHunt' ? ` data-hunt-charges="${state.huntCharges}"` : '';
+        const huntFill = key === 'beetleHunt' ? ` style="--beetol-hunt-fill: ${Math.max(0, state.huntCharges) / 3 * 100}%"` : '';
         return `
-          <button class="beetol-action${readyClass}" data-action="${key}" type="button" title="${label}" aria-label="${label}"${disabled}>
-            <img src="${iconUrl}" alt="">
-            <span>${label}</span>
-            <strong>${key === 'beetleHunt' && cd === null ? 'Try once' : cooldownLabel}</strong>
+          <button class="beetol-action${readyClass}${cooldownClass}${exhaustedClass}${huntClass}" data-action="${key}" type="button" title="${label}" aria-label="${label}"${disabled}${huntChargeAttr}${huntFill}>
+            <span class="beetol-action-icon">
+              <img src="${iconUrl}" alt="">
+              ${key === 'beetleHunt' ? `<img class="beetol-hunt-fill-icon" src="${iconUrl}" alt="">` : ''}
+            </span>
+            <span class="beetol-action-label">${label}</span>
+            <strong>${key === 'beetleHunt' ? huntStatus : cooldownLabel}</strong>
           </button>
         `;
       }).join('');
@@ -364,15 +564,27 @@
     render();
   }
 
-  async function runAction(action) {
+  function displayedHuntCharges(button) {
+    const value = Number(button?.dataset?.huntCharges);
+    return Number.isFinite(value) ? clamp(Math.floor(value), 0, 3) : state.huntCharges;
+  }
+
+  function isCooldownMessage(message) {
+    return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
+  }
+
+  async function runAction(action, button = null) {
     if (!state.enabled) return;
     const label = ACTIONS.find(([key]) => key === action)?.[1] || action;
+    const chargesBeforeAction = action === 'beetleHunt' ? displayedHuntCharges(button) : state.huntCharges;
+    if (action === 'beetleHunt') state.huntCharges = chargesBeforeAction;
     state.loading = true;
     setMessage(`${label}...`);
     render();
 
     const response = await send({ type: 'beetol:action', action });
     state.loading = false;
+    const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
 
     if (response?.authRequired) {
       state.signedIn = false;
@@ -381,18 +593,31 @@
       return;
     }
     if (!response?.ok) {
-      setMessage(response?.data?.message || response?.error || `${label} failed.`, 'warn');
+      const cooldownMs = response?.cooldownMs || normalizeCooldownMs(responseMessage);
+      if (action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(responseMessage))) {
+        const nextCooldown = cooldownMs || HUNT_COOLDOWN_FALLBACK_MS;
+        setActionCooldown(action, nextCooldown);
+        state.fetchedAt = Date.now();
+        saveCooldownState();
+        setMessage(`${label} ready in ${fmtMs(nextCooldown)}.`, 'warn');
+      } else {
+        setMessage(responseMessage || `${label} failed.`, 'warn');
+      }
       render();
       return;
     }
     if (response.actionResult?.success === false) {
       const cooldownMs = response.cooldownMs || response.actionResult.cooldownMs || 0;
-      if (cooldownMs > 0) {
-        state.cooldowns[action] = cooldownMs;
+      const message = response.actionResult.message || `${label} failed.`;
+      const cooldownFallback = action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(message)) ? HUNT_COOLDOWN_FALLBACK_MS : 0;
+      if (cooldownMs > 0 || cooldownFallback > 0) {
+        const nextCooldown = cooldownMs || cooldownFallback;
+        setActionCooldown(action, nextCooldown);
         state.fetchedAt = Date.now();
-        setMessage(`${label} ready in ${fmtMs(cooldownMs)}.`, 'warn');
+        saveCooldownState();
+        setMessage(`${label} ready in ${fmtMs(nextCooldown)}.`, 'warn');
       } else {
-        setMessage(response.actionResult.message || `${label} failed.`, 'warn');
+        setMessage(message, 'warn');
       }
       render();
       return;
@@ -402,7 +627,18 @@
       state.user = response.user;
       mergeCooldowns(response.user);
     }
-    ensureActionCooldown(action, response.cooldownMs);
+    const hasAuthoritativeHuntState = action === 'beetleHunt' && response.user && huntStateFromUser(response.user).hasSignal;
+    if (response.cooldownMs > 0) {
+      setActionCooldown(action, response.cooldownMs);
+    } else if (action === 'beetleHunt' && !hasAuthoritativeHuntState) {
+      const nextCharges = clamp(chargesBeforeAction - 1, 0, 3);
+      if (nextCharges <= 0) {
+        setActionCooldown(action, HUNT_COOLDOWN_FALLBACK_MS);
+      } else {
+        state.huntCharges = nextCharges;
+      }
+    }
+    saveCooldownState();
 
     const gained = (response.gained || []).map(({ key, diff }) => (
       diff > 1 ? `${itemName(key)} x${diff}` : itemName(key)
@@ -443,9 +679,9 @@
 
   els.actions.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
-    if (!button || state.loading) return;
+    if (!button || state.loading || button.disabled) return;
     playActionSound();
-    runAction(button.dataset.action);
+    runAction(button.dataset.action, button);
   });
 
   els.refresh.addEventListener('click', () => {
@@ -593,9 +829,11 @@
     [ENABLED_KEY]: undefined,
     [LEGACY_ENABLED_KEY]: true,
     [POSITION_KEY]: null,
+    [COOLDOWN_STATE_KEY]: null,
   }).then(settings => {
     state.enabled = (settings[ENABLED_KEY] ?? settings[LEGACY_ENABLED_KEY]) !== false;
     state.position = settings[POSITION_KEY];
+    applyStoredCooldownState(settings[COOLDOWN_STATE_KEY]);
     applyPosition();
     applySettings(settings);
     render();

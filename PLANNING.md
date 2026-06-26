@@ -178,7 +178,7 @@ Guidance:
 - Do not add page-wide scans for this feature.
 - Consider pausing the one-second render interval when the panel is not visible or when the document is hidden.
 - Keep auth and action requests in the background worker.
-- Make it clear in beta docs that 2FA is not supported by the current password-grant flow.
+- Track official RemiliaNET client support for full 2FA-native extension auth; beta auth now relies on browser-session SSO because direct username/password entry is disabled upstream.
 
 ## Performance Architecture Proposal
 

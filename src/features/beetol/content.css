@@ -227,6 +227,7 @@
   grid-template-rows: 46px 24px 16px;
   align-items: center;
   justify-items: center;
+  position: relative;
   min-width: 0;
   min-height: 94px;
   padding: 7px 5px 6px;
@@ -234,21 +235,55 @@
   background: var(--beetol-button);
   border: 1px solid var(--beetol-border);
   transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+  overflow: hidden;
 }
 
-.beetol-action:hover {
+.beetol-action::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.beetol-action > * {
+  position: relative;
+  z-index: 1;
+}
+
+.beetol-action:not(:disabled):hover {
   border-color: color-mix(in srgb, var(--beetol-accent-strong) 62%, var(--beetol-border));
   transform: translateY(-1px);
 }
 
-.beetol-action img {
+.beetol-action-icon {
+  position: relative;
+  display: block;
+  width: 44px;
+  height: 44px;
+}
+
+.beetol-action-icon img {
   width: 44px;
   height: 44px;
   object-fit: contain;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }
 
-.beetol-action span {
+.beetol-action.is-hunt .beetol-action-icon > img:first-child {
+  opacity: 0.34;
+  filter: grayscale(1) drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+.beetol-action .beetol-hunt-fill-icon {
+  position: absolute;
+  inset: 0;
+  opacity: 1;
+  clip-path: inset(calc(100% - var(--beetol-hunt-fill, 100%)) 0 0 0);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
+
+.beetol-action-label {
   width: 100%;
   overflow: hidden;
   color: var(--beetol-text);
@@ -258,19 +293,81 @@
 }
 
 .beetol-action strong {
-  color: var(--beetol-muted);
+  display: inline-grid;
+  align-items: center;
+  justify-content: center;
+  min-width: 42px;
+  min-height: 16px;
+  padding: 2px 5px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #f7edc8;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 12px;
+  font-weight: 900;
+  line-height: 1;
+  white-space: nowrap;
 }
 
 .beetol-action.is-ready {
   background: var(--beetol-accent-strong);
 }
 
+.beetol-action.is-hunt.is-ready {
+  background: var(--beetol-button);
+}
+
+.beetol-action.is-hunt:not(.is-cooldown)::before {
+  background:
+    linear-gradient(
+      to top,
+      color-mix(in srgb, var(--beetol-accent-strong) 78%, transparent) var(--beetol-hunt-fill, 100%),
+      transparent var(--beetol-hunt-fill, 100%)
+    );
+}
+
+.beetol-action.is-cooldown,
+.beetol-action.is-exhausted {
+  background: #2e3136;
+  border-color: rgba(255, 255, 255, 0.13);
+  filter: grayscale(0.72);
+}
+
+.beetol-action.is-cooldown img,
+.beetol-action.is-exhausted img {
+  opacity: 0.42;
+  filter: grayscale(1);
+}
+
+.beetol-action.is-cooldown .beetol-hunt-fill-icon,
+.beetol-action.is-exhausted .beetol-hunt-fill-icon {
+  opacity: 0;
+}
+
+.beetol-action.is-cooldown .beetol-action-label,
+.beetol-action.is-exhausted .beetol-action-label {
+  color: #9aa0aa;
+}
+
+.beetol-action.is-cooldown strong {
+  border-color: rgba(255, 221, 120, 0.58);
+  background: rgba(255, 201, 78, 0.16);
+  color: #ffe08a;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.24), 0 0 14px rgba(255, 201, 78, 0.13);
+}
+
+.beetol-action.is-exhausted strong {
+  border-color: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.07);
+  color: #c6cbd3;
+}
+
 .beetol-action:disabled {
-  opacity: 0.55;
-  cursor: wait;
+  cursor: not-allowed;
+}
+
+.beetol-loading .beetol-action {
+  opacity: 0.62;
 }
 
 .beetol-crunch-junk {

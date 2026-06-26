@@ -98,7 +98,11 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 
 ### Pokes
 
-The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown.
+The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter.
+
+Successful pokes count toward Miladymaxxer XP the same way likes do when milXdy can map the poked RemiNet account to a tracked Milady X/Twitter handle.
+
+The idle poke icon is an outline hand icon. It changes state only while sending or showing a cooldown.
 
 If the poke icon is missing, confirm **RemiNet connector icons** and **Poke icon** are enabled, then refresh the X/Twitter tab.
 
@@ -106,7 +110,7 @@ During beta testing, the RemiNet connector tab may show the last poke diagnostic
 
 ### Incoming pokes
 
-When RemiNet connector auth is available, milXdy can show a small incoming poke flag for accounts that recently poked you. This is based on recent RemiliaNET notifications inside the active poke window, so it is a current-activity hint rather than a full all-time poke history.
+When RemiNet connector auth is available, milXdy can show a small incoming poke flag for accounts that recently poked you. This is based on recent RemiliaNET notifications inside the active poke window, so it is a current-activity hint rather than a full all-time poke history. **Gold poke alerts** in Appearance gives these flags a shiny gold finish.
 
 ### RemiNet Chat
 
@@ -123,18 +127,16 @@ If the chat does not connect, confirm RemiNet login status first, then refresh t
 
 The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunter panel.
 
-- Use **Username or email** and password for normal RemiliaNET login.
-- Passwords are sent to RemiliaNET for login and are not stored by milXdy.
+- Click **Open RemiliaNET** to open remilia.net.
+- Click **Log in** on RemiliaNET so the site can start its current OIDC login flow.
+- Finish RemiliaNET login in the opened tab, including any 2FA step.
+- Return to milXdy and click **Retry session**.
 - RemiNet login state is stored in Chrome extension local storage.
 - Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
 
-For accounts with 2FA:
+After **Retry session**, milXdy checks the RemiliaNET browser session and reuses the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
 
-1. Click **Open RemiliaNET SSO**.
-2. Finish RemiliaNET login in the opened tab, including the 2FA step.
-3. Return to milXdy and click **Retry session**.
-
-After **Retry session**, milXdy checks the RemiliaNET browser session and reuses the RemiliaNET `authToken` cookie for connector actions. This lets 2FA accounts use Beetol, RemiStats pokes, and RemiNet Chat without completing the popup password login flow.
+Clicking **Log out** disconnects milXdy from the RemiNet connector session. It does not necessarily sign the browser out of remilia.net; click **Retry session** again when you want milXdy to reuse the browser session.
 
 milXdy requests the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
 

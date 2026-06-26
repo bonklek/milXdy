@@ -10,6 +10,7 @@ import { SpeechController } from "./speech";
 import { injectStyles } from "./styles";
 import { loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
+import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
 
 const processed = new WeakMap<HTMLElement, string>();
 let settings: PostreaderSettings;
@@ -128,7 +129,9 @@ function processTweets(): void {
   pendingTweets.clear();
   for (const tweet of tweets) {
     if (!tweet.isConnected) continue;
+    const startedAt = performance.now();
     processTweet(tweet);
+    recordFeatureTiming("postreader", "processTweet", startedAt);
   }
 }
 
@@ -696,36 +699,31 @@ function isPromotedTweet(tweet: HTMLElement): boolean {
 }
 
 function findButtonAnchor(tweet: HTMLElement): HTMLElement | null {
+  const footer = findLikelyActionRow(tweet);
   if (settings.buttonPlacement === "top") {
-    const grok = findGrokButton(tweet);
-    return grok || findTopControl(tweet);
+    return findGrokButton(tweet) || findLastActionButton(tweet, footer);
   }
   if (settings.buttonPlacement === "auto") {
     const grok = findGrokButton(tweet);
     if (grok) return grok;
-    const top = findTopControl(tweet);
-    if (top) return top;
+    const action = findLastActionButton(tweet, footer);
+    if (action) return action;
   }
-  const buttons = Array.from(tweet.querySelectorAll<HTMLElement>(ACTION_BUTTONS));
-  return buttons.at(-1) || null;
+  return findLastActionButton(tweet, footer);
 }
 
-function findGrokButton(tweet: HTMLElement): HTMLElement | null {
-  return Array.from(tweet.querySelectorAll<HTMLElement>('button, [role="button"], a')).find((button) => {
-    return (button.getAttribute("aria-label") || "").toLowerCase().includes("grok");
+function findGrokButton(tweet: HTMLElement, footer: HTMLElement | null = null): HTMLElement | null {
+  const scope = footer || tweet;
+  return Array.from(scope.querySelectorAll<HTMLElement>('button, [role="button"], a')).find((button) => {
+    return !button.closest('[data-testid="quoteTweet"]') && (button.getAttribute("aria-label") || "").toLowerCase().includes("grok");
   }) || null;
 }
 
-function findTopControl(tweet: HTMLElement): HTMLElement | null {
-  const userName = tweet.querySelector<HTMLElement>('[data-testid="User-Name"]');
-  if (!userName) return null;
-  const header = userName.closest<HTMLElement>('[data-testid="User-Name"]')?.parentElement?.parentElement;
-  const controls = Array.from((header || tweet).querySelectorAll<HTMLElement>('button, [role="button"], a')).filter((element) => {
-    if (element.closest(POSTREADER_BUTTON)) return false;
-    if (element.closest('[data-testid="reply"], [data-testid="retweet"], [data-testid="like"], [data-testid="share"]')) return false;
-    return element.getBoundingClientRect().width > 0;
-  });
-  return controls.at(-1) || null;
+function findLastActionButton(tweet: HTMLElement, footer = findLikelyActionRow(tweet)): HTMLElement | null {
+  const scope = footer || tweet;
+  const buttons = Array.from(scope.querySelectorAll<HTMLElement>(ACTION_BUTTONS))
+    .filter((button) => !button.closest('[data-testid="quoteTweet"]'));
+  return buttons.at(-1) || null;
 }
 
 function findLikelyActionRow(tweet: HTMLElement): HTMLElement | null {

@@ -21,23 +21,27 @@ Release tags should be semantic versions with an optional `v` prefix, such as `v
 ```powershell
 npm install
 npm run typecheck
-npm run build
+npm run build:all
+npm run lint:firefox
 ```
 
-The build emits:
+The Chromium build emits browser-ready files under `dist/chromium`. The Firefox build emits the same extension payload under `dist/firefox`, with a Firefox-specific manifest generated from `public/manifest.json`.
 
-- `dist/content.js`
-- `dist/background.js`
-- `dist/popup.js`
-- `dist/features/wiki.js`
-- `dist/features/postreader.js`
-- `dist/features/remistats.js`
-- `dist/features/miladymaxxer.js`
-- `dist/features/beetol.js`
-- `dist/features/reminetChat.js`
-- `dist/worker.js`
-- `dist/ocr.html`
-- `dist/ocrHost.js`
+Required outputs include:
+
+- `dist/chromium/content.js`
+- `dist/chromium/background.js`
+- `dist/chromium/popup.js`
+- `dist/chromium/features/wiki.js`
+- `dist/chromium/features/postreader.js`
+- `dist/chromium/features/remistats.js`
+- `dist/chromium/features/miladymaxxer.js`
+- `dist/chromium/features/beetol.js`
+- `dist/chromium/features/reminetChat.js`
+- `dist/chromium/worker.js`
+- `dist/chromium/ocr.html`
+- `dist/chromium/ocrHost.js`
+- `dist/firefox/manifest.json`
 
 Disabled feature bundles should not be downloaded or parsed on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.
 
@@ -47,7 +51,8 @@ Before publishing:
 
 ```powershell
 npm.cmd run typecheck
-npm.cmd run build
+npm.cmd run build:all
+npm.cmd run lint:firefox
 ```
 
 Also verify:

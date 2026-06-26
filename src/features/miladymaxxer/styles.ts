@@ -125,7 +125,12 @@ export function injectStyles(): void {
       font-weight: 400 !important;
       white-space: nowrap !important;
       margin-left: 4px !important;
-      display: inline !important;
+      display: inline-flex !important;
+      flex: 0 1 auto !important;
+      max-width: 72px !important;
+      min-width: 0 !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
       position: relative !important;
       top: -1px !important;
     }
@@ -159,7 +164,9 @@ export function injectStyles(): void {
     }
 
     html[style*="background-color: rgb(0, 0, 0)"] .miladymaxxer-player-level,
-    body[style*="background-color: rgb(0, 0, 0)"] .miladymaxxer-player-level {
+    html[style*="background-color: rgb(22, 24, 28)"] .miladymaxxer-player-level,
+    body[style*="background-color: rgb(0, 0, 0)"] .miladymaxxer-player-level,
+    body[style*="background-color: rgb(22, 24, 28)"] .miladymaxxer-player-level {
       color: rgba(140, 210, 170, 0.7) !important;
     }
 
@@ -1479,6 +1486,58 @@ export function injectStyles(): void {
     html[data-milxdy-reskin-profile="max"][data-milxdy-visual-maxxer-shimmer="false"] [data-miladymaxxer-effect="milady"]::after {
       animation: none !important;
       opacity: 0.28 !important;
+    }
+
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-miladymaxxer-effect="milady"],
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-miladymaxxer-effect="milady"],
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-miladymaxxer-effect="milady"],
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-miladymaxxer-effect="milady"] {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 24px),
+        linear-gradient(180deg, rgb(32, 26, 14), rgb(24, 20, 10)) !important;
+      box-shadow:
+        inset 3px 0 0 rgba(242, 188, 33, 0.18),
+        inset 0 1px 0 rgba(255, 255, 255, 0.045) !important;
+    }
+
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-miladymaxxer-effect="milady"][data-miladymaxxer-uncaught="true"],
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-miladymaxxer-effect="milady"][data-miladymaxxer-uncaught="true"],
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-miladymaxxer-effect="milady"][data-miladymaxxer-uncaught="true"],
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-miladymaxxer-effect="milady"][data-miladymaxxer-uncaught="true"] {
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.022), rgba(255, 255, 255, 0) 24px),
+        linear-gradient(180deg, rgb(24, 26, 36), rgb(17, 19, 27)) !important;
+    }
+
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-miladymaxxer-effect="milady"]::before,
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-miladymaxxer-effect="milady"]::before,
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-miladymaxxer-effect="milady"]::before,
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-miladymaxxer-effect="milady"]::before {
+      background:
+        linear-gradient(
+          135deg,
+          rgba(160, 140, 55, 0.025) 0%,
+          rgba(140, 120, 45, 0.012) 25%,
+          rgba(255, 255, 255, 0) 50%,
+          rgba(140, 120, 45, 0.012) 75%,
+          rgba(160, 140, 55, 0.018) 100%
+        ) !important;
+    }
+
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-miladymaxxer-effect="milady"]::after,
+    html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-miladymaxxer-effect="milady"]::after,
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-miladymaxxer-effect="milady"]::after,
+    html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-miladymaxxer-effect="milady"]::after {
+      background: linear-gradient(
+        90deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(160, 140, 55, 0.012) 25%,
+        rgba(180, 160, 100, 0.018) 50%,
+        rgba(160, 140, 55, 0.012) 75%,
+        rgba(255, 255, 255, 0) 100%
+      ) !important;
+      animation: none !important;
+      opacity: 0.14 !important;
     }
 
     html[data-milxdy-reskin-profile="max"][data-milxdy-visual-maxxer-intensity="subtle"] [data-miladymaxxer-effect="milady"] {

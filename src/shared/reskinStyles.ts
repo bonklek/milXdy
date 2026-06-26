@@ -50,6 +50,16 @@ export const RESKIN_CSS = `
 
   @media (prefers-color-scheme: dark) {
     :root {
+      --milxdy-rn-blue: #9ea7ff;
+      --milxdy-rn-blue-dark: #cbd0ff;
+      --milxdy-green: #c9f0a8;
+      --milxdy-green-soft: #263f2b;
+      --milxdy-mint-bg: #101b13;
+      --milxdy-pink: #7b4056;
+      --milxdy-pink-dark: #ffc2d2;
+      --milxdy-gold: #ffd978;
+      --milxdy-gold-dark: #ffe7a8;
+      --milxdy-cream: #f4ffe8;
       --milxdy-surface: #171820;
       --milxdy-surface-2: #20222d;
       --milxdy-border: #4c5064;
@@ -58,6 +68,31 @@ export const RESKIN_CSS = `
       --milxdy-muted: rgba(240, 241, 248, 0.62);
       --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.42);
     }
+  }
+
+  html[data-milxdy-reskin-profile][style*="background-color: rgb(0, 0, 0)"],
+  html[data-milxdy-reskin-profile][style*="background-color: rgb(22, 24, 28)"],
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"],
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"],
+  html[data-milxdy-reskin-profile]:has(body[style*="background-color: rgb(0, 0, 0)"]),
+  html[data-milxdy-reskin-profile]:has(body[style*="background-color: rgb(22, 24, 28)"]) {
+    --milxdy-rn-blue: #9ea7ff;
+    --milxdy-rn-blue-dark: #cbd0ff;
+    --milxdy-green: #c9f0a8;
+    --milxdy-green-soft: #263f2b;
+    --milxdy-mint-bg: #101b13;
+    --milxdy-pink: #7b4056;
+    --milxdy-pink-dark: #ffc2d2;
+    --milxdy-gold: #ffd978;
+    --milxdy-gold-dark: #ffe7a8;
+    --milxdy-cream: #f4ffe8;
+    --milxdy-surface: #171820;
+    --milxdy-surface-2: #20222d;
+    --milxdy-border: #4c5064;
+    --milxdy-border-dark: #858cc9;
+    --milxdy-text: #f0f1f8;
+    --milxdy-muted: rgba(240, 241, 248, 0.62);
+    --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.42);
   }
 
   html[data-milxdy-reskin-profile] .remilia-wiki-preview,
@@ -185,6 +220,17 @@ export const RESKIN_CSS = `
     background: var(--milxdy-surface) !important;
   }
 
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]),
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) {
+    background:
+      linear-gradient(180deg, rgba(43, 70, 48, 0.4), rgba(16, 27, 19, 0.24) 180px, transparent 360px),
+      var(--milxdy-surface) !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] body,
   html[data-milxdy-reskin-profile="max"] button,
   html[data-milxdy-reskin-profile="max"] input,
@@ -219,12 +265,96 @@ export const RESKIN_CSS = `
     font-family: var(--milxdy-font-mono) !important;
   }
 
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
+    min-width: 0 !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
+    flex: 1 1 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] span {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    overflow-wrap: normal !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
+    align-items: center !important;
+    display: flex !important;
+    flex: 1 1 100% !important;
+    flex-wrap: nowrap !important;
+    gap: 4px !important;
+    max-width: 100% !important;
+    min-height: 17px !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] a,
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] span {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    overflow-wrap: normal !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-testid="User-Name"] time,
+  html[data-milxdy-reskin-profile="max"] article [data-testid="User-Name"] time *,
+  html[data-milxdy-reskin-profile="max"] article [data-testid="User-Name"] .miladymaxxer-level-inline,
+  html[data-milxdy-reskin-profile="max"] article [data-testid="User-Name"] .reminet-score-badge {
+    flex: 0 0 auto !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] [data-testid="tweetPhoto"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="videoPlayer"],
+  html[data-milxdy-reskin-profile="max"] div[aria-label="Image"] {
+    max-height: var(--milxdy-max-media-height, none) !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) [data-testid="tweetPhoto"],
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) [data-testid="videoPlayer"],
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) div[aria-label="Image"] {
+    overflow: hidden !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) [data-testid="tweetPhoto"] img,
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) [data-testid="videoPlayer"] video,
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) div[aria-label="Image"] img {
+    max-height: var(--milxdy-max-media-height, none) !important;
+    object-fit: contain !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] main[role="main"] > div > div:first-child,
   html[data-milxdy-reskin-profile="max"] [data-testid="primaryColumn"] > div > div:first-child {
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--milxdy-green-soft) 72%, #ffffff), color-mix(in srgb, var(--milxdy-green-soft) 26%, #ffffff)) !important;
     border-bottom: 1px solid var(--milxdy-green) !important;
     box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.55) !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-testid="primaryColumn"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid="primaryColumn"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid="primaryColumn"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid="primaryColumn"] > div > div:first-child {
+    background:
+      linear-gradient(180deg, color-mix(in srgb, var(--milxdy-green-soft) 78%, var(--milxdy-surface-2)), color-mix(in srgb, var(--milxdy-green-soft) 34%, var(--milxdy-surface))) !important;
+    box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.08) !important;
   }
 
   html[data-milxdy-reskin-profile="max"] [data-testid="primaryColumn"],
@@ -257,7 +387,46 @@ export const RESKIN_CSS = `
     font-family: var(--milxdy-font-ui) !important;
     letter-spacing: 0 !important;
     border-radius: 5px !important;
+    color: var(--milxdy-green) !important;
     transition: background 120ms ease, transform 120ms ease !important;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a,
+    html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a *,
+    html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"],
+    html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"] * {
+      color: var(--milxdy-green) !important;
+      fill: currentColor !important;
+    }
+  }
+
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-testid^="AppTabBar_"] *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid^="AppTabBar_"] *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid^="AppTabBar_"] *,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid^="AppTabBar_"] *,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid^="AppTabBar_"] *,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) header[role="banner"] nav a,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) header[role="banner"] nav a *,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"] * {
+    color: var(--milxdy-green) !important;
+    fill: currentColor !important;
   }
 
   html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a:hover {
@@ -269,6 +438,46 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"]:hover,
   html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"]:hover * {
     background-color: transparent !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"]:hover span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"]:hover span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"]:hover span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"]:hover span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"]:hover div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"]:hover div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"]:hover div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"]:hover div[aria-live] span {
+    background-color: rgb(29, 155, 240) !important;
+    color: #ffffff !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Notifications_Link"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] [data-testid="AppTabBar_Messages_Link"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/notifications"] div[aria-live] span,
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"] span[aria-hidden="true"],
+  html[data-milxdy-reskin-profile="max"] a[href="/messages"] div[aria-live] span {
+    align-items: center !important;
+    border-radius: 3px !important;
+    box-sizing: border-box !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    line-height: 1 !important;
+    min-height: 16px !important;
+    min-width: 16px !important;
+    padding: 0 4px !important;
+    text-align: center !important;
   }
 
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-sidebar-bevel="true"] header[role="banner"] nav a,
@@ -286,6 +495,73 @@ export const RESKIN_CSS = `
 
   html[data-milxdy-reskin-profile="max"] header[role="banner"] svg {
     color: var(--milxdy-green) !important;
+    fill: currentColor !important;
+    stroke: currentColor !important;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    html[data-milxdy-reskin-profile] header[role="banner"],
+    html[data-milxdy-reskin-profile] header[role="banner"] nav,
+    html[data-milxdy-reskin-profile] header[role="banner"] a,
+    html[data-milxdy-reskin-profile] header[role="banner"] a > div,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg *,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg path,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg g,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg circle,
+    html[data-milxdy-reskin-profile] header[role="banner"] svg rect {
+      color: var(--milxdy-green) !important;
+      fill: currentColor !important;
+    }
+  }
+
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"],
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] nav,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] a,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] a > div,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg path,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg g,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg circle,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"] header[role="banner"] svg rect,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"],
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] nav,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] a,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] a > div,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg path,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg g,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg circle,
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg rect {
+    color: var(--milxdy-green) !important;
+    fill: currentColor !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"] svg,
+  html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"] svg *,
+  html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a svg,
+  html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a svg * {
+    color: var(--milxdy-green) !important;
+    fill: currentColor !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid^="AppTabBar_"] svg,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid^="AppTabBar_"] svg *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid^="AppTabBar_"] svg,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid^="AppTabBar_"] svg *,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] header[role="banner"] svg *,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] svg,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] svg * {
+    color: var(--milxdy-green) !important;
+    fill: currentColor !important;
   }
 
   html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"],
@@ -347,6 +623,17 @@ export const RESKIN_CSS = `
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 34px),
       color-mix(in srgb, var(--milxdy-surface) 92%, var(--milxdy-mint-bg)) !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] article:not([data-miladymaxxer-effect]),
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] article:not([data-miladymaxxer-effect]),
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] article:not([data-miladymaxxer-effect]),
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] article:not([data-miladymaxxer-effect]),
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) article:not([data-miladymaxxer-effect]),
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) article:not([data-miladymaxxer-effect]) {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 24px),
+      color-mix(in srgb, var(--milxdy-surface) 86%, var(--milxdy-mint-bg)) !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article,
@@ -442,9 +729,25 @@ export const RESKIN_CSS = `
     text-decoration-color: color-mix(in srgb, var(--milxdy-rn-blue) 60%, transparent) !important;
   }
 
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has([aria-label*="New"]),
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="notification"] {
-    background: color-mix(in srgb, var(--milxdy-green-soft) 10%, transparent) !important;
+  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="true"] {
+    background:
+      linear-gradient(90deg, color-mix(in srgb, var(--milxdy-green) 20%, transparent), transparent 72%),
+      color-mix(in srgb, var(--milxdy-green-soft) 38%, var(--milxdy-surface)) !important;
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--milxdy-green) 18%, transparent) !important;
+    position: relative !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div::before {
+    background: color-mix(in srgb, var(--milxdy-green) 72%, var(--milxdy-rn-blue)) !important;
+    content: "" !important;
+    display: block !important;
+    height: 100% !important;
+    left: 0 !important;
+    opacity: 0.92 !important;
+    position: absolute !important;
+    top: 0 !important;
+    width: 3px !important;
   }
 
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-new-posts-pill="true"] [data-milxdy-show-new-posts="true"] {
@@ -477,6 +780,19 @@ export const RESKIN_CSS = `
     box-shadow: none !important;
   }
 
+  html[data-milxdy-visual-incoming-poke-gold="true"] .reminet-incoming-poke-flag,
+  html[data-milxdy-visual-remistats-box="false"][data-milxdy-visual-incoming-poke-gold="true"] .reminet-incoming-poke-flag {
+    border-color: rgba(199, 142, 15, 0.58) !important;
+    background:
+      linear-gradient(135deg, rgba(255, 247, 186, 0.92) 0%, rgba(246, 203, 79, 0.82) 45%, rgba(178, 112, 9, 0.9) 100%) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.72),
+      0 0 0 1px rgba(255, 231, 146, 0.18),
+      0 0 10px rgba(246, 203, 79, 0.34) !important;
+    color: #4d3000 !important;
+    text-shadow: 0 1px 0 rgba(255, 255, 255, 0.55) !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] [data-testid="like"] svg,
   html[data-milxdy-reskin-profile="max"] [data-testid="reply"] svg,
   html[data-milxdy-reskin-profile="max"] [data-testid="retweet"] svg,
@@ -499,6 +815,23 @@ export const RESKIN_CSS = `
     overflow: hidden !important;
   }
 
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] aside [role="complementary"] > div > div,
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] aside [role="complementary"] > div > div,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) aside [role="complementary"] > div > div,
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) aside [role="complementary"] > div > div {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 38px),
+      var(--milxdy-surface) !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] [role="tablist"] [role="tab"][aria-selected="true"] {
     color: var(--milxdy-rn-blue-dark) !important;
   }
@@ -515,6 +848,19 @@ export const RESKIN_CSS = `
     border-radius: 0 !important;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0) 38px),
+      var(--milxdy-surface) !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] div[aria-modal="true"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] div[aria-modal="true"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) div[aria-modal="true"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) div[aria-modal="true"] {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 38px),
       var(--milxdy-surface) !important;
   }
 

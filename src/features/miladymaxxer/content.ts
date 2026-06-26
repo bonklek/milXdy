@@ -67,12 +67,16 @@ import {
 import { injectStyles } from "./styles";
 import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
+import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
 const RESCAN_INTERVAL_MS = 5000;
+const VISIBILITY_ROOT_MARGIN = 900;
+const IDLE_PROCESS_TIMEOUT_MS = 1500;
+const MAX_SURFACES_PER_IDLE = 3;
 
 // ---------------------------------------------------------------------------
 // State
@@ -84,7 +88,6 @@ const remiStatsBeetleCache = new Map<string, Promise<boolean>>();
 
 let settings: ExtensionSettings = DEFAULT_SETTINGS;
 let scanScheduled = false;
-let delayedScanTimer: number | null = null;
 let stats: DetectionStats | null = null;
 let matchedAccounts: MatchedAccountMap | null = null;
 let collectedAvatars: CollectedAvatarMap | null = null;
@@ -93,6 +96,13 @@ let localStateWriteScheduled = false;
 let playerStatsWriteScheduled = false;
 let selfHandle: string | null = null;
 const creditedReplies = new WeakSet<HTMLElement>();
+const queuedElements = new WeakSet<HTMLElement>();
+type SurfaceWork = () => Promise<void> | void;
+const deferredVisibleWork = new WeakMap<HTMLElement, SurfaceWork>();
+const idleWorkQueue: Array<{ element: HTMLElement; work: SurfaceWork }> = [];
+let idleDrainScheduled = false;
+let idleDrainPausedForVisibility = false;
+let visibilityObserver: IntersectionObserver | null = null;
 
 // ---------------------------------------------------------------------------
 // Effects context — wires effects module to our shared state
@@ -132,25 +142,28 @@ async function boot(): Promise<void> {
   ]);
   setSoundSettings(settings);
   prevPlayerLevel = getPlayerLevel(playerStats.totalLikesGiven);
+  observeRemiNetPokeCredits();
   observeStorage();
   subscribeTwitterSurfaces((surface) => {
-    if (surface.kind === "tweet") void processTweet(surface.element);
-    if (surface.kind === "userCell") void processUserCell(surface.element);
+    if (surface.kind === "tweet") processWhenVisible(surface.element, () => processTweet(surface.element));
+    if (surface.kind === "userCell") processWhenVisible(surface.element, () => processUserCell(surface.element));
     if (surface.kind === "notification") void processNotificationGroup(surface.element);
-    if (surface.kind === "directMessage") void processDirectMessage(surface.element);
-    if (surface.kind === "profile") void processProfilePage();
-    scheduleDelayedProcessVisibleTweets();
+    if (surface.kind === "directMessage") processWhenVisible(surface.element, () => processDirectMessage(surface.element));
+    if (surface.kind === "profile") scheduleIdleWork(surface.element, () => processProfilePage());
   });
-  window.addEventListener("scroll", scheduleDelayedProcessVisibleTweets, { passive: true });
   window.addEventListener("resize", () => updatePlayerLevelBadge(), { passive: true });
-  document.addEventListener("click", () => scheduleDelayedProcessVisibleTweets(), { passive: true, capture: true });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && idleDrainPausedForVisibility) {
+      idleDrainPausedForVisibility = false;
+      scheduleIdleDrain();
+    }
+  }, { passive: true });
   window.setInterval(() => {
     replaceXLogo();
     updatePlayerLevelBadge();
     processProfilePage();
   }, RESCAN_INTERVAL_MS);
   scheduleTwitterScan();
-  scheduleDelayedProcessVisibleTweets();
   attachPostButtonSound();
   attachDMSounds();
   attachGlobalMediaHoverSounds();
@@ -174,16 +187,6 @@ function scheduleProcessVisibleTweets(): void {
   });
 }
 
-function scheduleDelayedProcessVisibleTweets(): void {
-  if (delayedScanTimer !== null) {
-    window.clearTimeout(delayedScanTimer);
-  }
-  delayedScanTimer = window.setTimeout(() => {
-    delayedScanTimer = null;
-    scheduleProcessVisibleTweets();
-  }, 350);
-}
-
 // ---------------------------------------------------------------------------
 // Tweet processing
 // ---------------------------------------------------------------------------
@@ -196,7 +199,6 @@ async function processTweet(tweet: HTMLElement): Promise<void> {
       tweet.dataset.miladymaxxerState = "miss";
       delete tweet.dataset.miladymaxxerDebug;
       applyMode(effectsCtx(), tweet);
-      scheduleDelayedProcessVisibleTweets();
       return;
     }
 
@@ -204,7 +206,6 @@ async function processTweet(tweet: HTMLElement): Promise<void> {
       tweet.dataset.miladymaxxerState = "miss";
       delete tweet.dataset.miladymaxxerDebug;
       applyMode(effectsCtx(), tweet);
-      scheduleDelayedProcessVisibleTweets();
       return;
     }
 
@@ -388,6 +389,9 @@ async function processProfilePage(): Promise<void> {
 
   // Always refresh badges even if already processed (skip own profile)
   const self = resolveSelfHandle();
+  if (profileHandle && profileHandle === self && isSelfTrackingDisabled()) {
+    removeProfileLevelBadges();
+  }
   if (profileHandle && profileHandle !== self) {
     const primaryColumn = document.querySelector<HTMLElement>(PRIMARY_COLUMN);
     if (primaryColumn?.dataset.miladymaxxerProfile === "milady") {
@@ -962,10 +966,10 @@ function injectProfileLevelBadge(handle: string): void {
 }
 
 function injectPlayerProfileBadge(): void {
-  if (!settings.showLevelBadge) return;
-
   // Remove existing
-  document.querySelector(".miladymaxxer-player-profile-level")?.remove();
+  removeProfileLevelBadges();
+
+  if (!settings.showLevelBadge || isSelfTrackingDisabled()) return;
 
   const progress = getPlayerLevelProgress(playerStats.totalLikesGiven);
   const pct = progress.needed > 0 ? Math.round((progress.current / progress.needed) * 100) : 0;
@@ -990,6 +994,101 @@ function injectPlayerProfileBadge(): void {
       return;
     }
   }
+}
+
+function processWhenVisible(element: HTMLElement, work: SurfaceWork): void {
+  if (!element.isConnected) return;
+  if (isElementNearViewport(element)) {
+    scheduleIdleWork(element, work);
+    return;
+  }
+  if (!("IntersectionObserver" in window)) {
+    scheduleIdleWork(element, work);
+    return;
+  }
+  deferredVisibleWork.set(element, work);
+  getVisibilityObserver().observe(element);
+}
+
+function getVisibilityObserver(): IntersectionObserver {
+  if (visibilityObserver) return visibilityObserver;
+  visibilityObserver = new IntersectionObserver((entries) => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const element = entry.target as HTMLElement;
+      visibilityObserver?.unobserve(element);
+      const work = deferredVisibleWork.get(element);
+      if (!work) continue;
+      deferredVisibleWork.delete(element);
+      scheduleIdleWork(element, work);
+    }
+  }, {
+    root: null,
+    rootMargin: `${VISIBILITY_ROOT_MARGIN}px 0px`,
+    threshold: 0,
+  });
+  return visibilityObserver;
+}
+
+function scheduleIdleWork(element: HTMLElement, work: SurfaceWork): void {
+  if (!element.isConnected || queuedElements.has(element)) return;
+  queuedElements.add(element);
+  idleWorkQueue.push({ element, work });
+  scheduleIdleDrain();
+}
+
+function scheduleIdleDrain(): void {
+  if (idleDrainScheduled) return;
+  idleDrainScheduled = true;
+  const drain = (deadline?: IdleDeadline) => {
+    idleDrainScheduled = false;
+    let processedCount = 0;
+    while (idleWorkQueue.length > 0 && processedCount < MAX_SURFACES_PER_IDLE) {
+      if (deadline && processedCount > 0 && deadline.timeRemaining() < 5) break;
+      const next = idleWorkQueue.shift();
+      if (!next) break;
+      queuedElements.delete(next.element);
+      if (!next.element.isConnected) continue;
+      if (document.hidden && next.element.getRootNode() === document) {
+        idleWorkQueue.unshift(next);
+        queuedElements.add(next.element);
+        idleDrainPausedForVisibility = true;
+        return;
+      }
+      const startedAt = performance.now();
+      void Promise.resolve(next.work()).finally(() => {
+        recordFeatureTiming("miladymaxxer", "idleSurface", startedAt);
+      });
+      processedCount += 1;
+    }
+    if (idleWorkQueue.length > 0) scheduleIdleDrain();
+  };
+
+  if ("requestIdleCallback" in window) {
+    window.requestIdleCallback(drain, { timeout: IDLE_PROCESS_TIMEOUT_MS });
+  } else {
+    globalThis.setTimeout(() => drain(), 120);
+  }
+}
+
+function isElementNearViewport(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  const height = window.innerHeight || document.documentElement.clientHeight || 0;
+  const width = window.innerWidth || document.documentElement.clientWidth || 0;
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  return rect.bottom >= -VISIBILITY_ROOT_MARGIN
+    && rect.top <= height + VISIBILITY_ROOT_MARGIN
+    && rect.right >= -VISIBILITY_ROOT_MARGIN
+    && rect.left <= width + VISIBILITY_ROOT_MARGIN;
+}
+
+function removeProfileLevelBadges(): void {
+  document.querySelector(".miladymaxxer-player-profile-level")?.remove();
+  document.querySelector(".miladymaxxer-profile-level")?.remove();
+}
+
+function isSelfTrackingDisabled(): boolean {
+  return document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true";
 }
 
 function resolveSelfHandle(): string | null {
@@ -1135,6 +1234,43 @@ function handleLevelUp(handle: string, _newLevel: number): void {
       triggerLevelUpAnimation(tweet);
     }
   }
+}
+
+function observeRemiNetPokeCredits(): void {
+  window.addEventListener("milxdy:remistats-poke-credit", (event) => {
+    const detail = (event as CustomEvent<{ handle?: unknown }>).detail;
+    const handle = normalizeHandle(typeof detail?.handle === "string" ? detail.handle : null);
+    if (!handle) return;
+    creditMiladyInteraction(handle);
+  });
+}
+
+function creditMiladyInteraction(handle: string): void {
+  if (document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true" && handle === resolveSelfHandle()) return;
+  if (!matchedAccounts) return;
+
+  let existing = matchedAccounts[handle];
+  if (!existing && settings.miladyListHandles.includes(handle)) {
+    existing = {
+      handle,
+      displayName: null,
+      postsMatched: 1,
+      postsLiked: 0,
+      lastMatchedAt: new Date().toISOString(),
+      lastDetectionScore: null,
+      caught: false,
+      caughtAt: null,
+      verificationStatus: "unverified",
+    };
+    matchedAccounts[handle] = existing;
+  }
+  if (!existing) return;
+
+  if (!existing.caught) {
+    markAccountCaught(handle);
+    return;
+  }
+  handleLevelUp(handle, 0);
 }
 
 function addToMiladyList(handle: string): void {

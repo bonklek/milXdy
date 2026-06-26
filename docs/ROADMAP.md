@@ -7,32 +7,11 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 - `0.1.x` releases are incremental beta improvements inside the current unpacked-extension architecture.
 - `0.2.x` releases are larger beta feature lanes. They can add new surfaces, integrations, or compatibility expectations without implying final product stability.
 
-## Already Shipped Or Mostly Shipped
+## Most Recent Release
 
-These ideas have already landed in the `0.1.x` beta line and should be maintained rather than planned as new roadmap items:
+For older shipped details, see the descending [changelog](../CHANGELOG.md).
 
-- Bug reporting from inside the extension through GitHub/X, with optional LLM-assisted report drafting. Labels: `ux`, `docs`.
-- Link Later support for saved Remilia Wiki phrases, templated new pages, and existing-page section editing. Labels: `remilia-wiki`, `ux`.
-- Remilia Wiki Grok prompts for post-seeded, generic, and profile article workflows. Labels: `remilia-wiki`.
-- RemiNet connector login persistence and RemiliaNET SSO retry. Labels: `reminet`, `security`.
-- RemiStats poke cooldown display and local poke diagnostics. Labels: `reminet`, `ux`.
-- Guided in-place beta updater. Labels: `ux`, `docs`.
-- Incoming RemiNet poke indicators. Labels: `reminet`.
-- Optional RemiNet Chat sidebar on supported X/Twitter routes. Labels: `reminet`, `experimental`.
-
-## Released: 0.1.3
-
-Theme: update UX, beta polish, RemiNet activity surfaces, and public planning.
-
-Shipped in this release:
-
-- Guided updater in the Suite tab. Labels: `ux`, `docs`.
-- Incoming RemiNet poke indicators. Labels: `reminet`.
-- Optional RemiNet Chat sidebar. Labels: `reminet`, `experimental`.
-- Public docs refactor and root changelog. Labels: `docs`.
-- GitHub Discussions launch for feedback, support, and release planning. Labels: `docs`, `ux`.
-
-## Planned: 0.1.4
+## Released: 0.1.4
 
 Name: The Aesthetic Update.
 
@@ -69,10 +48,11 @@ Theme: settings ergonomics, visual polish, and Remilia/Milady reskin controls.
 
 ## Planned: 0.1.5
 
-Theme: Firefox compatibility, Maxxer recognition, screenshot sharing, and RemiNet/Beetle profile identity.
+Theme: Firefox compatibility, RemiNet polish, screenshot sharing, and RemiNet/Beetle profile identity.
 
 - Firefox support integration. Labels: `browser-compat`, `experimental`.
-  - integrate the contributor Firefox compatibility branch
+  - local Firefox build support exists; manual Firefox smoke testing remains the release gate
+  - use contributor Firefox work as reference/inspiration unless the owner explicitly approves incorporating branch code
   - verify MV3 background behavior, host permissions, cookies, notifications, `chrome.*`/`browser.*` compatibility, web accessible resources, OCR/WASM, ONNX/model assets, and X/Twitter content scripts
   - document exact Firefox load instructions and known limitations
   - preserve Chromium behavior while adding Firefox compatibility
@@ -80,14 +60,16 @@ Theme: Firefox compatibility, Maxxer recognition, screenshot sharing, and RemiNe
   - preserve users with RemiStats beetle stats
   - keep whitelist/manual-list overrides
   - make the effect reversible from settings
-- Expand Miladymaxxer image detection. Labels: `maxxer`, `performance`.
-  - include all recognized collections available to the local classifier/model pipeline
-  - avoid expensive inference unless Maxxer is enabled
-  - preserve bounded detection concurrency
-- Advanced collection behavior menu. Labels: `maxxer`, `settings`, `ux`.
-  - choose which recognized collections are maxxed, minimized, or neutral
-  - support tiered visual treatments such as gold, silver, or neutral
-  - default profile: full Milady maxxing, lower tier or neutral treatment for other recognized collections
+- RemiNet Chat replies. Labels: `reminet`, `chat`, `ux`.
+  - enable replies inside the RemiChat interface
+  - keep reply context compact enough for the sidebar/chat surface
+  - reuse existing RemiNet Chat auth and message transport
+- Poke outline icon polish. Labels: `reminet`, `ux`.
+  - swap the poke pointing-finger icon for an empty outline icon that matches native X action buttons
+  - preserve cooldown, disabled, hover, and diagnostic states
+- Unified Audio settings tab. Labels: `settings`, `postreader`, `ux`, `audio`.
+  - consolidate sound controls and TTS controls into one `Audio` tab
+  - make RemiNet sounds, Postreader speech, and related toggles easier to scan
 - Beetle Game trophy shelf on X profiles. Labels: `beetol`, `reminet`, `ux`.
   - explore replacing or augmenting profile header areas with trophy shelf data
   - keep the feature optional and scoped
@@ -97,19 +79,30 @@ Theme: Firefox compatibility, Maxxer recognition, screenshot sharing, and RemiNe
   - use owned or selected banner NFT items as profile/banner visual variants
   - keep it off by default
   - on click, open the corresponding Blur listing when available
-- Screenshot to RemiNet from X share actions. Labels: `reminet`, `security`, `experimental`.
-  - investigate whether RemiNet has a suitable upload/share endpoint
-  - define privacy boundaries before shipping
-  - require explicit user action and a review step before sending
+- Tweet PNG from X share actions. Labels: `reminet`, `security`, `experimental`.
+  - add an explicit PNG action beside X/Twitter tweet share controls
+  - render a local PNG preview card from the tweet content and attached media
+  - require a review step before copy/download/share
   - avoid sending screenshots automatically
+  - keep direct RemiNet upload/share blocked until a suitable endpoint and auth behavior are confirmed
+
 ## Planned: 0.1.6
 
-Theme: RemiNet chat placement.
+Theme: RemiNet chat placement and expanded Maxxer collection controls.
 
 - Chats-tab RemiNet pseudo chat. Labels: `reminet`, `chat`, `ux`.
   - add a pseudo chat entry to the Chats tab with RemiNet chat pinned at the top
   - keep it visually distinct from native X DMs so users understand what surface they are using
   - reuse existing RemiNet Chat auth and connection handling where possible
+- Expand Miladymaxxer image detection. Labels: `maxxer`, `performance`.
+  - include all recognized collections available to the local classifier/model pipeline
+  - avoid expensive inference unless Maxxer is enabled
+  - preserve bounded detection concurrency
+- Advanced collection behavior menu. Labels: `maxxer`, `settings`, `ux`.
+  - depends on expanded Maxxer detection
+  - choose which recognized collections are maxxed, minimized, or neutral
+  - support tiered visual treatments such as gold, silver, or neutral
+  - default profile: full Milady maxxing, lower tier or neutral treatment for other recognized collections
 
 ## Planned: 0.1.7
 
@@ -217,6 +210,7 @@ Suggested GitHub labels:
 - `chat`
 - `nft`
 - `onboarding`
+- `audio`
 - `remilia-wiki`
 - `reminet`
 - `postreader`

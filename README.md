@@ -33,7 +33,7 @@ npm install
 npm run build
 ```
 
-Then load the generated `dist` folder from `chrome://extensions`.
+Then load the generated `dist/chromium` folder from `chrome://extensions`.
 
 Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
 

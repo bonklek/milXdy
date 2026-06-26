@@ -17,19 +17,31 @@
       </header>
 
       <nav class="tabs" aria-label="Feature settings">
-        <button class="tab is-active" type="button" data-panel="suite"><span>Overview</span><small>Updates</small></button>
-        <button class="tab" type="button" data-panel="wiki"><span>Wiki Links</span><small>Concepts</small></button>
-        <button class="tab" type="button" data-panel="postreader"><span>Read Aloud</span><small>Voice</small></button>
+        <button class="tab is-active" type="button" data-panel="suite"><span>Main</span></button>
+        <button class="tab" type="button" data-panel="visual"><span>Appearance</span></button>
+        <button class="tab" type="button" data-panel="audio"><span>Audio</span></button>
         <button class="tab" type="button" data-panel="remistats"><span>RemiNet</span><small>Stats</small></button>
-        <button class="tab" type="button" data-panel="visual"><span>Appearance</span><small>Themes</small></button>
-        <button class="tab" type="button" data-panel="diagnostics"><span>Health</span><small>Debug</small></button>
+        <button class="tab" type="button" data-panel="wiki"><span>Wiki</span></button>
       </nav>
 
       <section class="panel is-active" data-panel="suite">
         <div class="panel-heading">
-          <h2>Overview</h2>
-          <p>Extension updates and broad diagnostics.</p>
+          <h2>Main</h2>
+          <p>Theme, updates, reports, and diagnostics.</p>
         </div>
+        <section class="setting-group" aria-label="Appearance">
+          <div class="setting-group-header">
+            <h3>Appearance</h3>
+          </div>
+          <div class="field compact-field">
+            <span>Settings theme</span>
+            <div class="segmented-control" id="settingsTheme" role="group" aria-label="Settings theme">
+              <button type="button" data-theme-choice="light">Light</button>
+              <button type="button" data-theme-choice="dark">Dark</button>
+              <button type="button" data-theme-choice="system">System</button>
+            </div>
+          </div>
+        </section>
         <div class="update-status" id="updateStatus">
           <div>
             <strong id="updateStatusTitle">Checking for updates...</strong>
@@ -44,18 +56,25 @@
           </div>
         </div>
         <p class="message" id="updateMessage"></p>
-        <section class="setting-group" aria-label="Appearance">
-          <div class="setting-group-header">
-            <h3>Appearance</h3>
-          </div>
-          <div class="field">
-            <span>Settings theme</span>
-            <div class="segmented-control" id="settingsTheme" role="group" aria-label="Settings theme">
-              <button type="button" data-theme-choice="light">Light</button>
-              <button type="button" data-theme-choice="dark">Dark</button>
-              <button type="button" data-theme-choice="system">System</button>
+        <section class="report-box" aria-labelledby="reportTitle">
+          <div class="report-header">
+            <div>
+              <strong id="reportTitle">Report a bug</strong>
+              <small>Send a bug report to the collector tweet or open a GitHub issue.</small>
             </div>
+            <label class="report-assist"><input id="reportLlmAssist" type="checkbox"> LLM assisted</label>
           </div>
+          <div class="report-grid">
+            <button class="secondary-button" type="button" data-report-target="x">Report via X</button>
+            <button class="secondary-button" type="button" data-report-target="github">Report via GitHub</button>
+          </div>
+          <p class="message" id="reportMessage"></p>
+        </section>
+        <section class="setting-group" aria-label="Runtime status">
+          <div class="setting-group-header">
+            <h3>Runtime Status</h3>
+          </div>
+          <div class="status-grid" id="statusGrid"></div>
         </section>
         <section class="setting-group" aria-label="Privacy and diagnostics">
           <div class="setting-group-header">
@@ -116,38 +135,54 @@
         </section>
       </section>
 
-      <section class="panel" data-panel="postreader">
+      <section class="panel" data-panel="audio">
         <div class="panel-heading">
-          <h2>Read Aloud</h2>
-          <p>Voice playback, included content, controls, and shortcuts.</p>
+          <h2>Audio</h2>
+          <p>Read-aloud playback, voice, and interaction sounds.</p>
         </div>
-        <section class="setting-group" aria-label="Read aloud voice">
+        <section class="setting-group" aria-label="Audio quick controls">
           <div class="setting-group-header">
-            <h3>Voice</h3>
+            <h3>Most Used</h3>
           </div>
           <label class="setting"><span><strong>Show read-aloud controls</strong><small>Add playback buttons to posts.</small></span><input type="checkbox" data-control="postreader.enabled"></label>
           <div class="field-grid">
             <label class="field"><span>Speed</span><input type="number" min="0.5" max="10" step="0.1" data-control="postreader.speed"></label>
             <label class="field"><span>Volume</span><input type="number" min="0" max="1" step="0.05" data-control="postreader.volume"></label>
           </div>
+          <label class="setting"><span><strong>Autoplay next post</strong><small>Continue automatically after a post finishes.</small></span><input type="checkbox" data-control="postreader.autoplayNext"></label>
+        </section>
+        <section class="setting-group" aria-label="Interaction sounds">
+          <div class="setting-group-header">
+            <h3>Interaction Sounds</h3>
+          </div>
+          <label class="setting"><span><strong>Milady Maxxer sounds</strong><small>Play sounds for Milady Maxxer interactions.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
+          <label class="setting"><span><strong>RemiStats sounds</strong><small>Play sound effects for RemiStats actions and pokes.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
+          <label class="field"><span>RemiStats sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
+          <label class="setting"><span><strong>Post sound</strong><small>Play the post-send cue.</small></span><input id="visualPostSound" type="checkbox"></label>
+          <label class="setting"><span><strong>Sidebar click sound</strong><small>Play a small pop on left navigation.</small></span><input id="visualSidebarSound" type="checkbox"></label>
+          <label class="setting"><span><strong>Show-new-posts sound</strong><small>Play a click cue on feed refresh bars.</small></span><input id="visualNewPostsSound" type="checkbox"></label>
+        </section>
+        <section class="setting-group" aria-label="Read aloud voice">
+          <div class="setting-group-header">
+            <h3>Read Aloud Voice</h3>
+          </div>
           <label class="setting"><span><strong>Auto-select voice</strong><small>Choose a suitable installed voice automatically.</small></span><input type="checkbox" data-control="postreader.autoVoice"></label>
-          <label class="field"><span>Specific voice URI</span><input type="text" placeholder="System default" data-control="postreader.voiceURI"></label>
+          <label class="field"><span>Specific voice URI</span><select data-control="postreader.voiceURI"><option value="">System default</option></select></label>
           <label class="field"><span>Text-to-speech engine</span><select data-control="postreader.ttsEngine"><option value="web-speech">Browser Web Speech</option><option value="custom-http">Custom HTTP endpoint</option></select></label>
           <label class="field"><span>Custom TTS endpoint</span><input type="url" placeholder="http://localhost:8787/speak" data-control="postreader.customTtsEndpoint"></label>
           <label class="field"><span>Custom timing source</span><select data-control="postreader.customTtsTimingMode"><option value="engine">Endpoint word boundaries</option><option value="off">Audio only</option></select></label>
         </section>
         <section class="setting-group" aria-label="Read aloud playback">
           <div class="setting-group-header">
-            <h3>Playback</h3>
+            <h3>Read Aloud Playback</h3>
           </div>
-          <label class="setting"><span><strong>Autoplay next post</strong><small>Continue automatically after a post finishes.</small></span><input type="checkbox" data-control="postreader.autoplayNext"></label>
           <label class="field"><span>Autoplay source</span><select data-control="postreader.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll timeline</option></select></label>
           <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="postreader.skipPromotedPosts"></label>
           <label class="setting"><span><strong>Completion sound</strong><small>Play a short cue after each post.</small></span><input type="checkbox" data-control="postreader.endOfTweetDing"></label>
         </section>
         <section class="setting-group" aria-label="Read aloud content">
           <div class="setting-group-header">
-            <h3>Content</h3>
+            <h3>Read Aloud Content</h3>
           </div>
           <label class="setting"><span><strong>Read quoted posts</strong><small>Include quote-post text in playback.</small></span><input type="checkbox" data-control="postreader.includeQuotes"></label>
           <label class="setting"><span><strong>Fetch hidden quote text</strong><small>Retrieve quote content when X hides it.</small></span><input type="checkbox" data-control="postreader.fetchFullQuotes"></label>
@@ -160,7 +195,7 @@
         </section>
         <section class="setting-group" aria-label="Read aloud interface">
           <div class="setting-group-header">
-            <h3>Interface</h3>
+            <h3>Read Aloud Interface</h3>
           </div>
           <label class="setting"><span><strong>Highlight active post</strong><small>Mark the post currently being read.</small></span><input type="checkbox" data-control="postreader.activeTweetHighlight"></label>
           <label class="field"><span>Text highlight style</span><select data-control="postreader.bodyHighlightMode"><option value="smooth">Smooth progress</option><option value="word">Word by word</option><option value="off">Off</option></select></label>
@@ -194,25 +229,19 @@
           </div>
           <label class="setting"><span><strong>Show RemiStats badges</strong><small>Display score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
           <label class="setting"><span><strong>Badge detail tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
-          <label class="setting"><span><strong>RemiStats sounds</strong><small>Play sound effects for RemiStats actions.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
-          <label class="field"><span>Sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
         </section>
         <section class="setting-group" aria-label="Beetol">
           <div class="setting-group-header">
             <h3>Beetol</h3>
           </div>
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
+          <label class="setting"><span><strong>Show RemiliaNET chat on X home</strong><small>Mount global chat in X's right sidebar when the home timeline is open.</small></span><input type="checkbox" data-control="reminetChat.enabled"></label>
           <div class="auth-session" id="beetolSession">
-            <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.</small></div>
+            <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in on remilia.net, then retry the browser session to use Beetol hunts and RemiStats pokes.</small></div>
             <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
           </div>
-          <form class="login-form" id="beetolLoginForm">
-            <input id="beetolUsername" type="text" placeholder="Username or email" autocomplete="username">
-            <input id="beetolPassword" type="password" placeholder="Password" autocomplete="current-password">
-            <button type="submit">Log in</button>
-          </form>
           <div class="inline-actions">
-            <button class="secondary-button" id="beetolOpenSso" type="button">Open RemiliaNET SSO</button>
+            <button class="secondary-button" id="beetolOpenSso" type="button">Open RemiliaNET</button>
             <button class="secondary-button" id="beetolRetrySession" type="button">Retry session</button>
           </div>
           <div class="auth-diagnostic" id="beetolPokeDiagnostic" hidden></div>
@@ -232,7 +261,7 @@
       <section class="panel" data-panel="visual">
         <div class="panel-heading">
           <h2>Appearance</h2>
-          <p>Reskin presets, custom theme files, Maxxer styling, and handle lists.</p>
+          <p>Visual treatment, presets, Milady Maxxer settings, and handle lists.</p>
         </div>
         <label class="field appearance-search"><span>Search appearance settings</span><input id="appearanceSearch" type="search" placeholder="Search fonts, PFPs, RemiStats, Maxxer..."></label>
         <section class="setting-group" aria-label="Visual presets">
@@ -273,6 +302,7 @@
           <div class="field-grid">
             <label class="field"><span>PFP shape</span><select id="visualPfpShape"><option value="rounded-square">Rounded square</option><option value="square">Square</option><option value="circle">Circle</option></select></label>
             <label class="field"><span>Poke placement</span><select id="visualPokePlacement"><option value="actions">Action row</option><option value="top">Top metadata</option></select></label>
+            <label class="field"><span>Max media height</span><input id="visualMaxMediaHeight" type="number" min="0" max="1200" step="20" placeholder="0 disables"></label>
           </div>
           <div class="visual-toggle-grid">
             <label class="setting"><span><strong>Green page fade</strong><small>Fixed Remilia wash behind X.</small></span><input id="visualBackgroundFade" type="checkbox"></label>
@@ -291,17 +321,30 @@
             <div class="setting-group-header"><h3>Buttons and Sounds</h3></div>
             <div class="visual-toggle-grid">
               <label class="setting"><span><strong>Clickly post button</strong><small>Use a depressed button state.</small></span><input id="visualPostButtonClickly" type="checkbox"></label>
-              <label class="setting"><span><strong>Post sound</strong><small>Play the post-send cue.</small></span><input id="visualPostSound" type="checkbox"></label>
               <label class="setting"><span><strong>Sidebar bevel</strong><small>Give left navigation buttons a raised edge.</small></span><input id="visualSidebarBevel" type="checkbox"></label>
-              <label class="setting"><span><strong>Sidebar click sound</strong><small>Play a small pop on left navigation.</small></span><input id="visualSidebarSound" type="checkbox"></label>
               <label class="setting"><span><strong>Show-new-posts pill</strong><small>Style only the inner oval on feed refresh bars.</small></span><input id="visualNewPostsPill" type="checkbox"></label>
-              <label class="setting"><span><strong>Show-new-posts sound</strong><small>Play a click cue on feed refresh bars.</small></span><input id="visualNewPostsSound" type="checkbox"></label>
+            </div>
+          </div>
+          <div class="appearance-subgroup" data-appearance-group="export">
+            <div class="setting-group-header"><h3>PNG Exporter</h3></div>
+            <div class="field-grid">
+              <label class="field"><span>Border palette</span><select id="visualTweetPngBorderPalette"><option value="purple">Purple</option><option value="gray">Gray</option><option value="blue">Blue</option><option value="green">Green</option></select></label>
+            </div>
+            <div class="visual-toggle-grid">
+              <label class="setting"><span><strong>Tweet images</strong><small>Include attached media in PNG exports.</small></span><input id="visualTweetPngIncludeImages" type="checkbox"></label>
+              <label class="setting"><span><strong>Quoted text</strong><small>Include quoted post text when available.</small></span><input id="visualTweetPngIncludeQuoteText" type="checkbox"></label>
+              <label class="setting"><span><strong>Quoted images</strong><small>Include quoted post media when available.</small></span><input id="visualTweetPngIncludeQuoteImages" type="checkbox"></label>
+              <label class="setting"><span><strong>Shrink tall images</strong><small>Keep vertical photos from occupying the full width.</small></span><input id="visualTweetPngShrinkTallImages" type="checkbox"></label>
+              <label class="setting"><span><strong>Date</strong><small>Show the tweet date instead of a link.</small></span><input id="visualTweetPngIncludeDate" type="checkbox"></label>
+              <label class="setting"><span><strong>Beetle stats</strong><small>Include beetles and social credit when RemiStats has them.</small></span><input id="visualTweetPngIncludeStats" type="checkbox"></label>
+              <label class="setting"><span><strong>Border</strong><small>Draw the frame around the exported PNG card and media.</small></span><input id="visualTweetPngBorder" type="checkbox"></label>
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="reminet">
             <div class="setting-group-header"><h3>RemiNet Surfaces</h3></div>
             <div class="visual-toggle-grid">
               <label class="setting"><span><strong>RemiStats backing box</strong><small>Put a grey frame behind stats and poke controls.</small></span><input id="visualRemistatsBox" type="checkbox"></label>
+              <label class="setting"><span><strong>Gold poke alerts</strong><small>Show incoming "poked you!" flags with a shiny gold finish.</small></span><input id="visualIncomingPokeGold" type="checkbox"></label>
               <label class="setting"><span><strong>RemiNet chat overlay</strong><small>Mount global chat in X's right sidebar.</small></span><input id="visualReminetChatOverlay" type="checkbox"></label>
             </div>
           </div>
@@ -339,7 +382,6 @@
             <h3>Maxxer Behavior</h3>
           </div>
           <label class="field"><span>Milady Maxxer mode</span><select data-control="milady.mode"><option value="milady">Milady effects</option><option value="debug">Debug view</option><option value="off">Off</option></select></label>
-          <label class="setting"><span><strong>Interaction sounds</strong><small>Play sounds for Milady Maxxer interactions.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
           <label class="setting"><span><strong>Level badge</strong><small>Show each account's Milady Maxxer level badge.</small></span><input type="checkbox" data-control="milady.showLevelBadge"></label>
           <label class="setting"><span><strong>Include RemiStats beetle users</strong><small>Treat users with beetle stats as Milady Maxxer candidates.</small></span><input type="checkbox" data-control="milady.includeRemiStatsBeetles"></label>
           <label class="field"><span>Profile card style</span><select data-control="milady.cardTheme"><option value="full">Full treatment</option><option value="no-premium">Hide premium layer</option><option value="silver-only">Silver only</option><option value="off">Off</option></select></label>
@@ -356,27 +398,6 @@
         </section>
       </section>
 
-      <section class="panel" data-panel="diagnostics">
-        <div class="panel-heading">
-          <h2>Health</h2>
-          <p>Bug reporting and extension runtime counters.</p>
-        </div>
-        <section class="report-box" aria-labelledby="reportTitle">
-          <div class="report-header">
-            <div>
-              <strong id="reportTitle">Report a bug</strong>
-              <small>Send a bug report to the collector tweet or open a GitHub issue.</small>
-            </div>
-            <label class="report-assist"><input id="reportLlmAssist" type="checkbox"> LLM assisted</label>
-          </div>
-          <div class="report-grid">
-            <button class="secondary-button" type="button" data-report-target="x">Report via X</button>
-            <button class="secondary-button" type="button" data-report-target="github">Report via GitHub</button>
-          </div>
-          <p class="message" id="reportMessage"></p>
-        </section>
-        <div class="status-grid" id="statusGrid"></div>
-      </section>
     </main>
     <div class="modal-backdrop" id="wikiAiHelpDialog" hidden>
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="wikiAiHelpTitle">

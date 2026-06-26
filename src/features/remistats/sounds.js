@@ -258,6 +258,47 @@ async function playPokeSound() {
   }
 }
 
+async function playSpinSound() {
+  try {
+    await ensureContext();
+    if (!audioCtx) return;
+
+    if (audioCtx.state === 'suspended') {
+      await audioCtx.resume().catch(() => {});
+    }
+
+    const now = audioCtx.currentTime;
+    const bus = gain(0.18);
+    connectToMix(bus, { withReverb: true, withDelay: true });
+
+    for (let i = 0; i < 9; i += 1) {
+      const t = now + i * 0.035;
+      const osc = createOscillator(920 - i * 42, i % 2 ? 'triangle' : 'square');
+      const amp = gain(0);
+      osc.connect(amp);
+      amp.connect(bus);
+      amp.gain.setValueAtTime(0, t);
+      amp.gain.linearRampToValueAtTime(0.075, t + 0.006);
+      amp.gain.exponentialRampToValueAtTime(0.001, t + 0.045);
+      osc.start(t);
+      osc.stop(t + 0.055);
+    }
+
+    const stop = createOscillator(260, 'sawtooth');
+    const stopGain = gain(0);
+    const stopAt = now + 0.36;
+    stop.connect(stopGain);
+    stopGain.connect(bus);
+    stopGain.gain.setValueAtTime(0, stopAt);
+    stopGain.gain.linearRampToValueAtTime(0.12, stopAt + 0.01);
+    stopGain.gain.exponentialRampToValueAtTime(0.001, stopAt + 0.13);
+    stop.start(stopAt);
+    stop.stop(stopAt + 0.15);
+  } catch (e) {
+    // Silently ignore AudioContext errors (autoplay policy)
+  }
+}
+
 // Main sound manager
 class SoundManager {
   constructor() {
@@ -322,6 +363,11 @@ class SoundManager {
   async playPoke() {
     if (!this.canPlaySound('POKE', 180)) return;
     await playPokeSound();
+  }
+
+  async playSpin() {
+    if (!this.canPlaySound('SPIN', 220)) return;
+    await playSpinSound();
   }
 
   async playLogoHover() {

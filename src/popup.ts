@@ -37,7 +37,7 @@ const GITHUB_ISSUES_NEW_URL = "https://github.com/bonklek/milXdy/issues/new";
 const X_FEEDBACK_REPLY_URL = "https://x.com/intent/tweet";
 const X_FEEDBACK_POST_ID = "2069113443664220227";
 const X_FEEDBACK_COLLECTOR_URL = `https://x.com/MiladyBonkle/status/${X_FEEDBACK_POST_ID}`;
-const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/login";
+const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/";
 const LAST_POKE_DIAGNOSTIC_KEY = "milxdy.remistats.lastPokeDiagnostic";
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
 
@@ -143,8 +143,8 @@ const bindings: Record<string, ControlBinding> = {
 void boot();
 
 async function boot(): Promise<void> {
-  await setupThemeControls();
   setupTabs();
+  await setupThemeControls();
   setupUpdateStatus();
   await migrateBeetolSettings();
   await loadControls();
@@ -154,6 +154,7 @@ async function boot(): Promise<void> {
   setupWikiAiHelp();
   setupRemiStatsIconControls();
   setupReportActions();
+  setupPostreaderVoiceSelect();
   await renderWikiLaterItems();
   observeWikiLaterItems();
   await setupBeetolPanel();
@@ -209,6 +210,28 @@ function setupRemiStatsIconControls(): void {
   };
   enabled.addEventListener("change", syncDisabled);
   syncDisabled();
+}
+
+function setupPostreaderVoiceSelect(): void {
+  const select = document.querySelector<HTMLSelectElement>('[data-control="postreader.voiceURI"]');
+  if (!select || !("speechSynthesis" in window)) return;
+
+  const render = () => {
+    const current = select.value;
+    const voices = window.speechSynthesis.getVoices();
+    select.textContent = "";
+    select.append(new Option("System default", ""));
+    for (const voice of voices) {
+      select.append(new Option(`${voice.name} (${voice.lang})`, voice.voiceURI));
+    }
+    if (current && !voices.some((voice) => voice.voiceURI === current)) {
+      select.append(new Option(`Unavailable: ${current}`, current));
+    }
+    select.value = current;
+  };
+
+  render();
+  window.speechSynthesis.addEventListener("voiceschanged", render);
 }
 
 async function setupVisualSettings(): Promise<void> {
@@ -470,6 +493,8 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setSelectValue("visualMaxxerIntensity", theme.maxxerIntensity);
   setSelectValue("visualMaxxerSeparators", theme.maxxerSeparators);
   setSelectValue("visualPokePlacement", theme.pokePlacement);
+  setSelectValue("visualTweetPngBorderPalette", theme.tweetPngBorderPalette);
+  setInputValue("visualMaxMediaHeight", String(theme.maxMediaHeight));
   setChecked("visualBackgroundFade", theme.backgroundFade);
   setChecked("visualSquareMedia", theme.squareMedia);
   setChecked("visualPfpFeed", theme.pfpFeed);
@@ -484,10 +509,18 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setChecked("visualNewPostsSound", theme.newPostsSound);
   setChecked("visualNotificationUnreadTint", theme.notificationUnreadTint);
   setChecked("visualRemistatsBox", theme.remistatsBox);
+  setChecked("visualIncomingPokeGold", theme.incomingPokeGold);
   setChecked("visualReminetChatOverlay", theme.reminetChatOverlay);
   setChecked("visualMiladyOnly", theme.miladyOnly);
   setChecked("visualDisableSelfTracking", theme.disableSelfTracking);
   setChecked("visualMaxxerShimmer", theme.maxxerShimmer);
+  setChecked("visualTweetPngIncludeImages", theme.tweetPngIncludeImages);
+  setChecked("visualTweetPngIncludeQuoteText", theme.tweetPngIncludeQuoteText);
+  setChecked("visualTweetPngIncludeQuoteImages", theme.tweetPngIncludeQuoteImages);
+  setChecked("visualTweetPngShrinkTallImages", theme.tweetPngShrinkTallImages);
+  setChecked("visualTweetPngIncludeDate", theme.tweetPngIncludeDate);
+  setChecked("visualTweetPngIncludeStats", theme.tweetPngIncludeStats);
+  setChecked("visualTweetPngBorder", theme.tweetPngBorder);
   if (includeName) setInputValue("visualThemeName", "");
 }
 
@@ -500,6 +533,8 @@ function readVisualEditor(): VisualThemeSettings {
     maxxerIntensity: selectValue("visualMaxxerIntensity"),
     maxxerSeparators: selectValue("visualMaxxerSeparators"),
     pokePlacement: selectValue("visualPokePlacement"),
+    tweetPngBorderPalette: selectValue("visualTweetPngBorderPalette"),
+    maxMediaHeight: numberInputValue("visualMaxMediaHeight"),
     backgroundFade: checkedValue("visualBackgroundFade"),
     squareMedia: checkedValue("visualSquareMedia"),
     pfpFeed: checkedValue("visualPfpFeed"),
@@ -514,10 +549,18 @@ function readVisualEditor(): VisualThemeSettings {
     newPostsSound: checkedValue("visualNewPostsSound"),
     notificationUnreadTint: checkedValue("visualNotificationUnreadTint"),
     remistatsBox: checkedValue("visualRemistatsBox"),
+    incomingPokeGold: checkedValue("visualIncomingPokeGold"),
     reminetChatOverlay: checkedValue("visualReminetChatOverlay"),
     miladyOnly: checkedValue("visualMiladyOnly"),
     disableSelfTracking: checkedValue("visualDisableSelfTracking"),
     maxxerShimmer: checkedValue("visualMaxxerShimmer"),
+    tweetPngIncludeImages: checkedValue("visualTweetPngIncludeImages"),
+    tweetPngIncludeQuoteText: checkedValue("visualTweetPngIncludeQuoteText"),
+    tweetPngIncludeQuoteImages: checkedValue("visualTweetPngIncludeQuoteImages"),
+    tweetPngShrinkTallImages: checkedValue("visualTweetPngShrinkTallImages"),
+    tweetPngIncludeDate: checkedValue("visualTweetPngIncludeDate"),
+    tweetPngIncludeStats: checkedValue("visualTweetPngIncludeStats"),
+    tweetPngBorder: checkedValue("visualTweetPngBorder"),
   });
 }
 
@@ -531,6 +574,8 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualMaxxerIntensity",
     "visualMaxxerSeparators",
     "visualPokePlacement",
+    "visualTweetPngBorderPalette",
+    "visualMaxMediaHeight",
     "visualBackgroundFade",
     "visualSquareMedia",
     "visualPfpFeed",
@@ -545,10 +590,18 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualNewPostsSound",
     "visualNotificationUnreadTint",
     "visualRemistatsBox",
+    "visualIncomingPokeGold",
     "visualReminetChatOverlay",
     "visualMiladyOnly",
     "visualDisableSelfTracking",
     "visualMaxxerShimmer",
+    "visualTweetPngIncludeImages",
+    "visualTweetPngIncludeQuoteText",
+    "visualTweetPngIncludeQuoteImages",
+    "visualTweetPngShrinkTallImages",
+    "visualTweetPngIncludeDate",
+    "visualTweetPngIncludeStats",
+    "visualTweetPngBorder",
   ].flatMap((id) => {
     const element = document.getElementById(id);
     return element instanceof HTMLInputElement || element instanceof HTMLSelectElement ? [element] : [];
@@ -616,6 +669,11 @@ function setChecked(id: string, value: boolean): void {
 
 function checkedValue(id: string): boolean {
   return (document.getElementById(id) as HTMLInputElement | null)?.checked ?? false;
+}
+
+function numberInputValue(id: string): number {
+  const value = Number((document.getElementById(id) as HTMLInputElement | null)?.value || 0);
+  return Number.isFinite(value) ? value : 0;
 }
 
 function slugify(value: string): string {
@@ -1437,9 +1495,6 @@ async function setupBeetolPanel(): Promise<void> {
   const session = document.getElementById("beetolSession");
   const status = document.getElementById("beetolStatus");
   const authDetail = document.getElementById("beetolAuthDetail");
-  const form = document.getElementById("beetolLoginForm") as HTMLFormElement | null;
-  const username = document.getElementById("beetolUsername") as HTMLInputElement | null;
-  const password = document.getElementById("beetolPassword") as HTMLInputElement | null;
   const logout = document.getElementById("beetolLogout") as HTMLButtonElement | null;
   const openSso = document.getElementById("beetolOpenSso") as HTMLButtonElement | null;
   const retrySession = document.getElementById("beetolRetrySession") as HTMLButtonElement | null;
@@ -1448,7 +1503,7 @@ async function setupBeetolPanel(): Promise<void> {
   const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
   const message = document.getElementById("beetolMessage");
 
-  if (!session || !status || !authDetail || !form || !username || !password || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
+  if (!session || !status || !authDetail || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
 
   const settings = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
   color.value = typeof settings.beetolColor === "string" ? settings.beetolColor : "red";
@@ -1468,8 +1523,7 @@ async function setupBeetolPanel(): Promise<void> {
       : "Not signed in";
     authDetail.textContent = signedIn
       ? ""
-      : "Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.";
-    form.hidden = signedIn;
+      : "Sign in on remilia.net, then retry the browser session to use Beetol hunts and RemiStats pokes.";
     logout.hidden = !signedIn;
     openSso.hidden = signedIn;
     retrySession.hidden = signedIn;
@@ -1482,33 +1536,9 @@ async function setupBeetolPanel(): Promise<void> {
   if (signedIn) pokeDiagnostic.hidden = true;
   else await renderPokeDiagnostic(pokeDiagnostic);
 
-  form.addEventListener("submit", (event) => {
-    event.preventDefault();
-    setMessage("Logging in...");
-    void chrome.runtime.sendMessage({
-      type: "beetol:login",
-      username: username.value,
-      password: password.value,
-    }).then((response) => {
-      password.value = "";
-      if (!response?.ok) {
-        const description = String(response?.description || "");
-        const has2fa = /otp|mfa|two.factor|authenticat|not fully set up/i.test(description);
-        setMessage(has2fa
-          ? "2FA requires RemiliaNET SSO. Open SSO, finish login, then retry session."
-          : "Login failed.",
-        "warn");
-        renderAuth(false);
-        return;
-      }
-      setMessage("Logged in.");
-      renderAuth(true);
-    });
-  });
-
   openSso.addEventListener("click", () => {
     openExternalUrl(REMILIA_NET_LOGIN_URL);
-    setMessage("Finish RemiliaNET login in the opened tab, then click Retry session.");
+    setMessage("Click Log in on RemiliaNET, finish the site login flow, then click Retry session.");
   });
 
   retrySession.addEventListener("click", () => {
@@ -1518,7 +1548,7 @@ async function setupBeetolPanel(): Promise<void> {
       const signedIn = Boolean(response?.signedIn);
       renderAuth(signedIn, signedIn ? "session" : "");
       setMessage(signedIn
-        ? "Browser session detected. Some RemiliaNET actions may still require popup login."
+        ? "Browser session detected."
         : "No browser session detected. Complete RemiliaNET SSO first.",
       signedIn ? "" : "warn");
     }).finally(() => {
@@ -1528,7 +1558,7 @@ async function setupBeetolPanel(): Promise<void> {
 
   logout.addEventListener("click", () => {
     void chrome.runtime.sendMessage({ type: "beetol:logout" }).then(() => {
-      setMessage("Logged out.");
+      setMessage("Disconnected from milXdy. Your RemiliaNET website session may still be active.");
       renderAuth(false);
     });
   });

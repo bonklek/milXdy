@@ -3,18 +3,19 @@ const OIDC_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`
 const AUTH_COOKIE_NAME = 'authToken';
 const AUTH_COOKIE_TTL_SECONDS = 900;
 const POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const BEETLE_HUNT_COOLDOWN_FALLBACK_MS = 60 * 60 * 1000;
 const INCOMING_POKE_WINDOW_MS = POKE_COOLDOWN_MS;
 const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
-const POKE_ELIGIBILITY_CACHE_MS = 60 * 1000;
 const ACCESS_TOKEN_KEY = 'beetol.accessToken';
 const REFRESH_TOKEN_KEY = 'beetol.refreshToken';
+const DISCONNECTED_KEY = 'beetol.disconnected';
 const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
 const TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY];
 const LEGACY_PREFIX = 'bex' + 'tol';
+const LEGACY_TOKEN_KEYS = [`${LEGACY_PREFIX}.accessToken`, `${LEGACY_PREFIX}.refreshToken`];
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
-  'beetol:login',
   'beetol:logout',
   'beetol:authStatus',
   'beetol:sessionStatus',
@@ -25,7 +26,6 @@ const MESSAGE_TYPES = new Set([
   'beetol:pokeEligibility',
   'beetol:incomingPokes',
 ]);
-const pokeEligibilityCache = new Map();
 const KNOWN_ITEM_KEYS = new Set([
   'green', 'purple', 'ladybug', 'cucumber', 'monarch', 'pond', 'giraffe_weevil', 'pillbug',
   'imperial_tortoise', 'christmas', 'skull', 'bumblebee', 'golden_tiger', 'blue_longicorn',
@@ -69,11 +69,21 @@ async function migrateAuth() {
 
 async function clearAuth() {
   await clearAuthCookie();
-  return chrome.storage.local.remove(TOKEN_KEYS);
+  await chrome.storage.local.remove([...TOKEN_KEYS, ...LEGACY_TOKEN_KEYS]);
+  return setStored({ [DISCONNECTED_KEY]: true });
 }
 
 async function clearStoredAuth() {
-  return chrome.storage.local.remove(TOKEN_KEYS);
+  return chrome.storage.local.remove([...TOKEN_KEYS, ...LEGACY_TOKEN_KEYS]);
+}
+
+async function isDisconnected() {
+  const stored = await getStored([DISCONNECTED_KEY]);
+  return stored[DISCONNECTED_KEY] === true;
+}
+
+async function allowSessionAuth() {
+  await chrome.storage.local.remove([DISCONNECTED_KEY]);
 }
 
 async function setAuthCookie(accessToken) {
@@ -113,7 +123,11 @@ async function getAuthCookie() {
   }
 }
 
-async function adoptBrowserSession() {
+async function adoptBrowserSession(options = {}) {
+  if (!options.ignoreDisconnect && await isDisconnected()) {
+    return { ok: false, disconnected: true };
+  }
+
   const session = await remiliaSessionFetch('GET', '/api/beetle/user');
   if (!session.ok) return { ok: false, session };
 
@@ -125,6 +139,7 @@ async function adoptBrowserSession() {
     });
   }
 
+  await allowSessionAuth();
   return { ok: true, token: cookieToken, session };
 }
 
@@ -152,6 +167,7 @@ async function oidc(params) {
 }
 
 async function refreshAccessToken() {
+  if (await isDisconnected()) return false;
   await migrateAuth();
   const stored = await getStored([REFRESH_TOKEN_KEY]);
   const refreshToken = stored[REFRESH_TOKEN_KEY];
@@ -161,6 +177,7 @@ async function refreshAccessToken() {
 }
 
 async function remiliaFetch(method, path, body, retry = true) {
+  if (await isDisconnected()) return { ok: false, authRequired: true, disconnected: true };
   await migrateAuth();
   const stored = await getStored([ACCESS_TOKEN_KEY]);
   const adopted = await adoptBrowserSession();
@@ -257,7 +274,7 @@ async function runAction(action) {
   const result = await remiliaAuthedFetch('POST', `/api/beetle/action/${action}`, {});
 
   if (!result.ok) return result;
-  const cooldownMs = extractCooldownMs(result.data);
+  const cooldownMs = extractActionCooldownMs(result.data, action);
   if (result.data?.success === false) return { ok: true, actionResult: result.data, cooldownMs };
 
   const after = await getState();
@@ -355,25 +372,13 @@ async function pokeUser(username) {
 async function getPokeEligibility(username) {
   const cleanUsername = normalizeUsername(username);
   if (!cleanUsername) return { ok: false, error: 'MISSING_USERNAME' };
-  const key = cleanUsername.toLowerCase();
-  const cached = pokeEligibilityCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt < POKE_ELIGIBILITY_CACHE_MS) {
-    return { ...cached.value, cached: true };
-  }
-
-  const result = await remiliaAuthedFetch('GET', `/api/profile/~${encodeURIComponent(cleanUsername)}`);
-  if (!result.ok) return result;
-  const viewerContext = result.data?.viewerContext || {};
-  const cooldownMs = extractCooldownMs(viewerContext);
-  const value = {
+  return {
     ok: true,
     username: cleanUsername,
-    canPoke: viewerContext.canPoke !== false,
-    cooldownMs: viewerContext.canPoke === false ? cooldownMs : 0,
-    data: result.data,
+    canPoke: true,
+    cooldownMs: 0,
+    skippedProfileLookup: true,
   };
-  pokeEligibilityCache.set(key, { fetchedAt: Date.now(), value });
-  return value;
 }
 
 async function getIncomingPokes() {
@@ -491,6 +496,7 @@ function normalizeUsername(value) {
 }
 
 async function remiliaPokeFetch(username) {
+  if (await isDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
   await migrateAuth();
   const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
   const adoptedSession = await adoptBrowserSession();
@@ -503,11 +509,6 @@ async function remiliaPokeFetch(username) {
   }
 
   if (accessToken) await setAuthCookie(accessToken);
-  const before = await remiliaRequest('GET', `/api/profile/~${encodeURIComponent(username)}`, null, {
-    credentials: 'include',
-    authMethod: 'profile-before-cookie',
-  });
-
   const attempts = [
     { authMethod: 'cookie', credentials: 'include' },
     ...(accessToken ? [
@@ -520,12 +521,19 @@ async function remiliaPokeFetch(username) {
     const result = await remiliaRequest('POST', '/api/pokeUser', { username }, attempt);
     results.push(summarizeRequestResult(result));
     if (result.ok && result.data?.success !== false && result.data?.ok !== false) {
-      const verified = await verifyPokeResult(username, before, result, attempt.authMethod, results);
-      await storePokeDiagnostic(verified);
-      return verified.ok ? verified : result;
+      const accepted = {
+        ...result,
+        ok: true,
+        username,
+        authMethod: attempt.authMethod,
+        cooldownMs: extractCooldownMs(result.data) || POKE_COOLDOWN_MS,
+        attempts,
+      };
+      await storePokeDiagnostic(accepted);
+      return accepted;
     }
     if (result.status && result.status !== 401 && result.status !== 403) {
-      await storePokeDiagnostic({ ok: false, username, before: summarizeProfile(before), attempts: results });
+      await storePokeDiagnostic({ ok: false, username, attempts: results });
       return result;
     }
   }
@@ -535,38 +543,10 @@ async function remiliaPokeFetch(username) {
     authRequired: results.some(result => result.status === 401 || result.status === 403),
     error: 'POKE_AUTH_FAILED',
     username,
-    before: summarizeProfile(before),
     attempts: results,
   };
   await storePokeDiagnostic(fallback);
   return fallback;
-}
-
-async function verifyPokeResult(username, before, pokeResult, authMethod, attempts) {
-  const after = await remiliaRequest('GET', `/api/profile/~${encodeURIComponent(username)}`, null, {
-    credentials: 'include',
-    authMethod: 'profile-after-cookie',
-  });
-  const beforeProfile = summarizeProfile(before);
-  const afterProfile = summarizeProfile(after);
-  const beforePokes = Number(before?.data?.user?.pokes);
-  const afterPokes = Number(after?.data?.user?.pokes);
-  const cooldownMs = extractCooldownMs(pokeResult.data) || extractCooldownMs(after.data?.viewerContext) || POKE_COOLDOWN_MS;
-  const verified = pokeResult.data?.success === true
-    || after.data?.viewerContext?.canPoke === false && Number(after.data?.viewerContext?.pokeCooldownSeconds) > 0
-    || Number.isFinite(beforePokes) && Number.isFinite(afterPokes) && afterPokes > beforePokes;
-
-  return {
-    ...pokeResult,
-    ok: Boolean(verified),
-    error: verified ? undefined : 'POKE_NOT_VERIFIED',
-    cooldownMs: verified ? cooldownMs : 0,
-    username,
-    authMethod,
-    before: beforeProfile,
-    after: afterProfile,
-    attempts,
-  };
 }
 
 function summarizeRequestResult(result) {
@@ -579,19 +559,6 @@ function summarizeRequestResult(result) {
   };
 }
 
-function summarizeProfile(result) {
-  return {
-    ok: Boolean(result?.ok),
-    status: result?.status || 0,
-    authMethod: result?.authMethod || '',
-    username: result?.data?.user?.username || '',
-    pokes: result?.data?.user?.pokes,
-    canPoke: result?.data?.viewerContext?.canPoke,
-    pokeCooldownSeconds: result?.data?.viewerContext?.pokeCooldownSeconds,
-    isAuthenticated: result?.data?.isAuthenticated,
-  };
-}
-
 async function storePokeDiagnostic(diagnostic) {
   await setStored({
     [LAST_POKE_DIAGNOSTIC_KEY]: {
@@ -601,9 +568,22 @@ async function storePokeDiagnostic(diagnostic) {
   });
 }
 
-function extractCooldownMs(data) {
+function extractCooldownMs(data, action) {
   const nested = data?.data || {};
+  const actionCooldowns = data?.cooldowns || nested?.cooldowns || {};
+  const actionData = action ? data?.[action] || nested?.[action] || data?.actions?.[action] || nested?.actions?.[action] || {} : {};
   const values = [
+    action ? actionCooldowns?.[action] : undefined,
+    actionData?.cooldownMs,
+    actionData?.cooldown,
+    actionData?.cooldownRemaining,
+    actionData?.cooldownRemainingMs,
+    actionData?.remainingMs,
+    actionData?.remaining,
+    actionData?.retryAfterMs,
+    actionData?.retryAfter,
+    actionData?.message,
+    actionData?.error,
     data?.cooldownMs,
     data?.cooldown,
     data?.cooldownRemaining,
@@ -612,6 +592,8 @@ function extractCooldownMs(data) {
     data?.remaining,
     data?.retryAfterMs,
     data?.retryAfter,
+    data?.message,
+    data?.error,
     data?.nextPokeInMs,
     data?.nextPokeIn,
     data?.pokeCooldownMs,
@@ -625,6 +607,8 @@ function extractCooldownMs(data) {
     nested?.remaining,
     nested?.retryAfterMs,
     nested?.retryAfter,
+    nested?.message,
+    nested?.error,
     nested?.nextPokeInMs,
     nested?.nextPokeIn,
     nested?.pokeCooldownMs,
@@ -638,6 +622,9 @@ function extractCooldownMs(data) {
   }
 
   const untilValues = [
+    actionData?.cooldownUntil,
+    actionData?.availableAt,
+    actionData?.nextAt,
     data?.cooldownUntil,
     data?.nextPokeAt,
     data?.pokeAvailableAt,
@@ -657,10 +644,24 @@ function extractCooldownMs(data) {
   return 0;
 }
 
+function extractActionCooldownMs(data, action) {
+  const cooldownMs = extractCooldownMs(data, action);
+  if (cooldownMs > 0) return cooldownMs;
+  if (action === 'beetleHunt' && isCooldownMessage(data?.message || data?.error || data?.data?.message || data?.data?.error)) {
+    return BEETLE_HUNT_COOLDOWN_FALLBACK_MS;
+  }
+  return 0;
+}
+
+function isCooldownMessage(message) {
+  return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
+}
+
 function normalizeCooldownMs(value) {
   if (value == null || value === false) return 0;
   if (typeof value === 'number') {
     if (!Number.isFinite(value) || value <= 0) return 0;
+    if (value > 1000000000000) return Math.max(0, value - Date.now());
     return value < 1000 ? value * 1000 : value;
   }
   if (typeof value === 'string') {
@@ -685,15 +686,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   (async () => {
     try {
-      if (message?.type === 'beetol:login') {
-        sendResponse(await oidc({
-          grant_type: 'password',
-          username: String(message.username || '').trim(),
-          password: String(message.password || ''),
-          scope: 'openid profile email',
-        }));
-        return;
-      }
       if (message?.type === 'beetol:logout') {
         await clearAuth();
         sendResponse({ ok: true });
@@ -739,7 +731,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
         return;
       }
       if (message?.type === 'beetol:sessionStatus') {
-        const adopted = await adoptBrowserSession();
+        await allowSessionAuth();
+        const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
         sendResponse({
           ok: true,
           signedIn: Boolean(adopted.ok),
