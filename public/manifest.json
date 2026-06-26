@@ -3,7 +3,14 @@
   "name": "milXdy",
   "version": "0.1.4",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs"],
+  "permissions": [
+    "alarms",
+    "contextMenus",
+    "storage",
+    "unlimitedStorage",
+    "notifications",
+    "cookies"
+  ],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
@@ -24,8 +31,13 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
-      "js": ["content.js"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
@@ -39,7 +51,6 @@
         "ocr/core/*",
         "ocr/lang/*",
         "remistats/*",
-        "remilia-fonts/*",
         "beetol/*",
         "reminetChat/*",
         "miladymaxxer/*",
@@ -50,7 +61,11 @@
         "generated/*",
         "models/*"
       ],
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://wiki.remilia.org/*"]
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://wiki.remilia.org/*"
+      ]
     }
   ],
   "options_page": "popup.html",

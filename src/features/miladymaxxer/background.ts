@@ -1,11 +1,12 @@
 // Service worker for badge updates and notifications
+import { browserAction } from "../../shared/browserAction";
 
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "milady:badge" && typeof message.count === "number") {
     const text = message.count > 0 ? String(message.count) : "";
-    chrome.action.setBadgeText({ text });
-    chrome.action.setBadgeBackgroundColor({ color: "#2f4d0c" });
-    chrome.action.setBadgeTextColor({ color: "#f4ffee" });
+    browserAction.setBadgeText({ text });
+    browserAction.setBadgeBackgroundColor({ color: "#2f4d0c" });
+    browserAction.setBadgeTextColor({ color: "#f4ffee" });
   }
   if (message.type === "milady:levelup" && typeof message.level === "number") {
     chrome.notifications.create(`milady-levelup-${Date.now()}`, {

@@ -450,9 +450,6 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
   ctx.onTweetVisible(tweet);
   clearVisualState(tweet);
   const isMatch = tweet.dataset.miladymaxxerState === "match";
-  const miladyOnly = document.documentElement.dataset.milxdyVisualMiladyOnly === "true";
-  const disableSelfTracking = document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true";
-  const isSelf = tweet.dataset.miladymaxxerSelf === "true";
 
   switch (ctx.settings.mode) {
     case "milady":
@@ -527,7 +524,7 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
               // We saw it before (as unliked), now it's liked — real like action
               const handle = tweet.dataset.miladymaxxerHandle;
               const xpKey = handle ? xpKeyForTweet(handle, tweet) : null;
-          if (handle && xpKey && !isSelf && !isTweetTooOldForXP(tweet) && !xpCreditedKeys.has(xpKey)) {
+              if (handle && xpKey && !isTweetTooOldForXP(tweet) && !xpCreditedKeys.has(xpKey)) {
                 xpCreditedKeys.add(xpKey);
                 if (!ctx.isAccountCaught(handle)) {
                   ctx.onCatch(handle);
@@ -560,17 +557,12 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
         } else {
           delete tweet.dataset.miladymaxxerRetweeted;
         }
-        if (disableSelfTracking && isSelf) removeLevelBadge(tweet);
-        else updateLevelBadge(ctx, tweet);
+        updateLevelBadge(ctx, tweet);
         updateMiladyListButton(ctx, tweet);
         return;
       }
       removeLevelBadge(tweet);
       updateMiladyListButton(ctx, tweet);
-      if (miladyOnly && !isAllowedMiladyOnlyContext(tweet)) {
-        tweet.style.display = "none";
-        return;
-      }
       tweet.dataset.miladymaxxerEffect = "diminish";
       delete tweet.dataset.miladymaxxerThread;
       delete tweet.dataset.miladymaxxerNoLikes;
@@ -590,14 +582,4 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
       clearPlaceholder(tweet);
       tweet.style.display = "";
   }
-}
-
-function isAllowedMiladyOnlyContext(tweet: HTMLElement): boolean {
-  if (/\/status\//.test(window.location.pathname)) return true;
-  if (tweet.querySelector('[data-testid="quoteTweet"]')) return true;
-  if (tweet.querySelector('a[href*="/status/"]')) {
-    const replyText = tweet.textContent || "";
-    if (/replying to/i.test(replyText)) return true;
-  }
-  return false;
 }

@@ -104,27 +104,6 @@ async function setAuthCookie(accessToken: string): Promise<void> {
   });
 }
 
-async function getAuthCookie(): Promise<string> {
-  if (!chrome.cookies?.get) return "";
-  const cookie = await chrome.cookies.get({ url: BASE_URL, name: AUTH_COOKIE_NAME }).catch(() => null);
-  return typeof cookie?.value === "string" ? cookie.value : "";
-}
-
-async function adoptBrowserSession(): Promise<{ ok: boolean; token: string; user?: unknown }> {
-  const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
-  if (!whoami.ok) return { ok: false, token: "" };
-
-  const cookieToken = await getAuthCookie();
-  if (cookieToken) {
-    await setStored({
-      [ACCESS_TOKEN_KEY]: cookieToken,
-      [REFRESH_TOKEN_KEY]: null,
-    });
-  }
-
-  return { ok: true, token: cookieToken, user: whoami.data };
-}
-
 async function oidc(params: Record<string, string>): Promise<{ ok: boolean }> {
   const response = await fetch(OIDC_URL, {
     method: "POST",
@@ -152,12 +131,6 @@ async function refreshAccessToken(): Promise<boolean> {
 
 async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; error?: string }> {
   await migrateAuth();
-  const adopted = await adoptBrowserSession();
-  if (adopted.ok) {
-    if (adopted.token) await setAuthCookie(adopted.token);
-    return { ok: true, signedIn: true };
-  }
-
   const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
   let accessToken = typeof stored[ACCESS_TOKEN_KEY] === "string" ? stored[ACCESS_TOKEN_KEY] : "";
   if (!accessToken && stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
@@ -165,7 +138,7 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
     accessToken = typeof refreshed[ACCESS_TOKEN_KEY] === "string" ? refreshed[ACCESS_TOKEN_KEY] : "";
   }
   if (!accessToken) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-  if (accessToken) await setAuthCookie(accessToken);
+  await setAuthCookie(accessToken);
   return { ok: true, signedIn: true };
 }
 
@@ -173,9 +146,7 @@ async function authStatus(): Promise<Record<string, unknown>> {
   const ready = await prepareSocketAuth();
   if (!ready.ok) return { ok: true, signedIn: false };
   const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
-  if (whoami.ok) return { ok: true, signedIn: true, user: whoami.data };
-  const adopted = await adoptBrowserSession();
-  return { ok: true, signedIn: adopted.ok, user: adopted.ok ? adopted.user ?? null : null };
+  return { ok: true, signedIn: whoami.ok, user: whoami.ok ? whoami.data : null };
 }
 
 async function remiliaAuthedFetch(method: string, path: string): Promise<Record<string, unknown>> {
@@ -185,10 +156,6 @@ async function remiliaAuthedFetch(method: string, path: string): Promise<Record<
   if ((result.status === 401 || result.status === 403) && await refreshAccessToken()) {
     await prepareSocketAuth();
     return remiliaRequest(method, path, null);
-  }
-  if (result.status === 401 || result.status === 403) {
-    const adopted = await adoptBrowserSession();
-    if (adopted.ok) return remiliaRequest(method, path, null);
   }
   return result;
 }

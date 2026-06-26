@@ -135,7 +135,6 @@ const pokeCountdownTimers = new Map();
 const pokeEligibilityPending = new Set();
 const pokeEligibilityChecked = new Map();
 let incomingPokeCache = null;
-let visualTheme = {};
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -189,14 +188,6 @@ async function loadPokeThemeSettings() {
 function applyPokeThemeSettings(color, mode) {
   document.documentElement.dataset.reminetPokeColor = POKE_THEME_COLORS.has(color) ? color : 'red';
   document.documentElement.dataset.reminetPokeMode = POKE_THEME_MODES.has(mode) ? mode : 'dark';
-}
-
-async function loadVisualThemeSettings() {
-  const settings = await chrome.storage.local.get({ 'milxdy.settings.visualTheme': {} });
-  visualTheme = settings['milxdy.settings.visualTheme'] || {};
-  document.documentElement.dataset.milxdyVisualRemistatsBox = String(visualTheme.remistatsBox === true);
-  document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement === 'actions' ? 'actions' : 'top';
-  patchExistingBadges();
 }
 
 function applyIconSettings() {
@@ -426,19 +417,6 @@ function createProfileBadgeGroup(badge, username) {
   return group;
 }
 
-function createPokeCluster(username) {
-  const clean = cleanUsername(username);
-  if (!clean) return null;
-  const group = document.createElement('span');
-  group.className = 'reminet-action-poke-group';
-  group.dataset.reminetActionPokeGroup = 'true';
-  group.dataset.reminetUsername = clean;
-  const pokeButton = createPokeButton(clean, true);
-  if (pokeButton) group.appendChild(pokeButton);
-  void updateIncomingPokeFlag(group, clean);
-  return group;
-}
-
 // Create score badge element
 function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
@@ -468,7 +446,7 @@ function createScoreBadge(scoreData, options = {}) {
     </div>
   `;
 
-  if (options.includePokeInside !== false && visualTheme.pokePlacement !== 'actions') {
+  if (options.includePokeInside !== false) {
     const inlinePoke = createPokeButton(remiliaUsername);
     const content = badge.querySelector('.reminet-badge-content');
     if (inlinePoke && content) content.appendChild(inlinePoke);
@@ -582,7 +560,6 @@ async function handlePokeClick(button) {
     return;
   }
 
-  window.reminetSounds?.playPoke?.();
   button.dataset.reminetPokeShaking = 'true';
   setPokeButtonState(button, 'loading', `Poking ${username}...`);
   const response = await safeRuntimeMessage({ type: 'beetol:poke', username });
@@ -828,12 +805,6 @@ function patchExistingBadges() {
       }
       continue;
     }
-    if (visualTheme.pokePlacement === 'actions') {
-      for (const node of badge.querySelectorAll('[data-reminet-poke], [data-reminet-incoming-poke]')) node.remove();
-      const tweet = badge.closest('[data-testid="tweet"]');
-      if (tweet) insertActionPoke(tweet, username);
-      continue;
-    }
     if (badge.querySelector('[data-reminet-poke]')) continue;
     const content = badge.querySelector('.reminet-badge-content');
     if (!username || !content) continue;
@@ -895,13 +866,13 @@ function scheduleHideSharedTooltip(delay = 120) {
 //   2. [data-testid="User-Name"] (tweets)
 //   3. Any [dir="ltr"][class*="css"] block as a last resort
 function insertBadgeIntoElement(element, badge) {
-  const timeElement = Array.from(element.querySelectorAll('time')).find((time) => !time.closest('[data-testid="quoteTweet"]'));
+  const timeElement = element.querySelector('time');
   if (timeElement && timeElement.parentElement) {
     timeElement.parentElement.insertBefore(badge, timeElement.nextSibling);
     return true;
   }
 
-  const userNameContainer = Array.from(element.querySelectorAll('[data-testid="User-Name"]')).find((node) => !node.closest('[data-testid="quoteTweet"]'));
+  const userNameContainer = element.querySelector('[data-testid="User-Name"]');
   if (userNameContainer) {
     const insertPoint = userNameContainer.querySelector('[dir="ltr"]') || userNameContainer;
     if (insertPoint.parentElement) {
@@ -922,13 +893,8 @@ function insertBadgeIntoElement(element, badge) {
 
 // Insert badge into the DOM for tweets and user cells
 async function insertBadge(element) {
-  if (element.closest('[data-testid="quoteTweet"]')) {
-    return;
-  }
   // Check if badge already exists
-  const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
-    .some((badge) => !badge.closest('[data-testid="quoteTweet"]'));
-  if (hasOwnBadge) {
+  if (element.querySelector('[data-reminet-badge]')) {
     return;
   }
   
@@ -958,28 +924,9 @@ async function insertBadge(element) {
     element.removeAttribute('data-reminet-processing');
     
     insertBadgeIntoElement(element, badge);
-    if (visualTheme.pokePlacement === 'actions') {
-      insertActionPoke(element, scoreData.remiliaUsername || username);
-    }
   } catch (error) {
     console.error('Error inserting badge:', error);
     element.removeAttribute('data-reminet-processing');
-  }
-}
-
-function insertActionPoke(element, username) {
-  const clean = cleanUsername(username);
-  if (!clean || element.querySelector('[data-reminet-action-poke-group]')) return;
-  const actions = element.querySelector('[role="group"]');
-  if (!actions) return;
-  const cluster = createPokeCluster(clean);
-  if (!cluster) return;
-  const like = actions.querySelector('[data-testid="like"], [data-testid="unlike"]');
-  const likeSlot = like?.closest('[role="group"] > div') || like?.parentElement?.parentElement;
-  if (likeSlot) {
-    likeSlot.insertAdjacentElement('afterend', cluster);
-  } else {
-    actions.appendChild(cluster);
   }
 }
 
@@ -1212,7 +1159,6 @@ function init() {
     chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
     loadIconSettings(),
     loadPokeThemeSettings(),
-    loadVisualThemeSettings(),
   ]).then(([settings]) => {
     remistatsEnabled = settings['milxdy.remistats.enabled'] !== false;
     if (remistatsEnabled) {
@@ -1227,10 +1173,6 @@ function init() {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && (changes.beetolColor || changes.beetolMode)) {
       applyPokeThemeSettings(changes.beetolColor?.newValue, changes.beetolMode?.newValue);
-      return;
-    }
-    if (area === 'local' && changes['milxdy.settings.visualTheme']) {
-      void loadVisualThemeSettings();
       return;
     }
     if (area !== 'sync') return;

@@ -3,6 +3,7 @@ import "./features/postreader/background";
 import "./features/miladymaxxer/background";
 import "./features/beetol/background.js";
 import "./features/reminetChat/background";
+import { browserAction } from "./shared/browserAction";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,
@@ -103,10 +104,10 @@ async function runUpdateCheck(): Promise<UpdateStatus> {
 
 async function renderUpdateBadge(status: UpdateStatus): Promise<void> {
   if (status.updateAvailable) {
-    await chrome.action.setBadgeText({ text: "UP" });
-    await chrome.action.setBadgeBackgroundColor({ color: "#a45100" });
-    await chrome.action.setBadgeTextColor({ color: "#ffffff" });
+    await browserAction.setBadgeText({ text: "UP" });
+    await browserAction.setBadgeBackgroundColor({ color: "#a45100" });
+    await browserAction.setBadgeTextColor({ color: "#ffffff" });
     return;
   }
-  await chrome.action.setBadgeText({ text: "" });
+  await browserAction.setBadgeText({ text: "" });
 }

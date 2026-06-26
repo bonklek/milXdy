@@ -228,7 +228,6 @@ async function processTweet(tweet: HTMLElement): Promise<void> {
 
     if (author) {
       tweet.dataset.miladymaxxerHandle = author.handle;
-      tweet.dataset.miladymaxxerSelf = String(author.handle === resolveSelfHandle());
     }
 
     if (author && settings.whitelistHandles.includes(author.handle)) {
@@ -1089,7 +1088,6 @@ function incrementStat(key: keyof Omit<DetectionStats, "lastMatchAt">): void {
 }
 
 function markAccountCaught(handle: string): void {
-  if (document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true" && handle === resolveSelfHandle()) return;
   if (!matchedAccounts) return;
 
   const existing = matchedAccounts[handle];
@@ -1109,7 +1107,6 @@ function markAccountCaught(handle: string): void {
 }
 
 function handleLevelUp(handle: string, _newLevel: number): void {
-  if (document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true" && handle === resolveSelfHandle()) return;
   if (!matchedAccounts) return;
 
   const existing = matchedAccounts[handle];

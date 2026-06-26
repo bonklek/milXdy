@@ -219,45 +219,6 @@ async function playNotificationSound() {
   }
 }
 
-async function playPokeSound() {
-  try {
-    await ensureContext();
-    if (!audioCtx) return;
-
-    if (audioCtx.state === 'suspended') {
-      await audioCtx.resume().catch(() => {});
-    }
-
-    const now = audioCtx.currentTime;
-    const bus = gain(0.22);
-    connectToMix(bus, { withReverb: true, withDelay: true });
-
-    const tap = createOscillator(220, 'square');
-    const tapGain = gain(0);
-    tap.connect(tapGain);
-    tapGain.connect(bus);
-    tapGain.gain.setValueAtTime(0, now);
-    tapGain.gain.linearRampToValueAtTime(0.16, now + 0.006);
-    tapGain.gain.exponentialRampToValueAtTime(0.001, now + 0.055);
-    tap.start(now);
-    tap.stop(now + 0.06);
-
-    const chirp = createOscillator(740, 'triangle');
-    const chirpGain = gain(0);
-    chirp.connect(chirpGain);
-    chirpGain.connect(bus);
-    chirp.frequency.setValueAtTime(740, now + 0.035);
-    chirp.frequency.exponentialRampToValueAtTime(1180, now + 0.18);
-    chirpGain.gain.setValueAtTime(0, now + 0.035);
-    chirpGain.gain.linearRampToValueAtTime(0.1, now + 0.055);
-    chirpGain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
-    chirp.start(now + 0.035);
-    chirp.stop(now + 0.24);
-  } catch (e) {
-    // Silently ignore AudioContext errors (autoplay policy)
-  }
-}
-
 // Main sound manager
 class SoundManager {
   constructor() {
@@ -317,11 +278,6 @@ class SoundManager {
   async playNotification() {
     if (!this.enabled) return;
     await playNotificationSound();
-  }
-
-  async playPoke() {
-    if (!this.canPlaySound('POKE', 180)) return;
-    await playPokeSound();
   }
 
   async playLogoHover() {

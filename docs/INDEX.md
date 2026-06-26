@@ -6,7 +6,6 @@
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [Roadmap](ROADMAP.md)
 - [Contributing](CONTRIBUTING.md)
-- [0.1.4 release notes](RELEASE_NOTES_0.1.4.md)
 - [0.1.3 release notes](RELEASE_NOTES_0.1.3.md)
 
 For release history, see the root [CHANGELOG](../CHANGELOG.md).

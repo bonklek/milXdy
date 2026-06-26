@@ -21,7 +21,7 @@
         <button class="tab" type="button" data-panel="wiki"><span>Wiki Links</span><small>Concepts</small></button>
         <button class="tab" type="button" data-panel="postreader"><span>Read Aloud</span><small>Voice</small></button>
         <button class="tab" type="button" data-panel="remistats"><span>RemiNet</span><small>Stats</small></button>
-        <button class="tab" type="button" data-panel="visual"><span>Appearance</span><small>Themes</small></button>
+        <button class="tab" type="button" data-panel="miladymaxxer"><span>Milady Maxxer</span><small>Cards</small></button>
         <button class="tab" type="button" data-panel="diagnostics"><span>Health</span><small>Debug</small></button>
       </nav>
 
@@ -197,11 +197,21 @@
           <label class="setting"><span><strong>RemiStats sounds</strong><small>Play sound effects for RemiStats actions.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
           <label class="field"><span>Sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
         </section>
+        <section class="setting-group" aria-label="RemiNet icons">
+          <div class="setting-group-header">
+            <h3>Icons</h3>
+          </div>
+          <label class="setting"><span><strong>Show metric icons</strong><small>Display icon buttons and badge metric icons.</small></span><input type="checkbox" data-control="remistats.icons.enabled"></label>
+          <label class="setting"><span><strong>Score group</strong><small>Show the star score metric.</small></span><input type="checkbox" data-control="remistats.icons.score"></label>
+          <label class="setting"><span><strong>Beetle group</strong><small>Show the beetle count metric.</small></span><input type="checkbox" data-control="remistats.icons.beetle"></label>
+          <label class="setting"><span><strong>Poke action</strong><small>Show the remilia.net poke button.</small></span><input type="checkbox" data-control="remistats.icons.poke"></label>
+        </section>
         <section class="setting-group" aria-label="Beetol">
           <div class="setting-group-header">
             <h3>Beetol</h3>
           </div>
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
+          <label class="setting"><span><strong>Show RemiliaNET chat on X home</strong><small>Mount global chat in X's right sidebar when the home timeline is open.</small></span><input type="checkbox" data-control="reminetChat.enabled"></label>
           <div class="auth-session" id="beetolSession">
             <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in to remilia.net to use Beetol hunts and RemiStats pokes. Passwords are not stored.</small></div>
             <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
@@ -225,118 +235,17 @@
         <section class="resource-links" aria-label="External RemiNet resources">
           <a class="repo-link" href="https://github.com/erc1337-Coffee/remistats_extension" target="_blank" rel="noreferrer">Original RemiStats repository</a>
           <a class="repo-link" href="https://www.remilia.net" target="_blank" rel="noreferrer">Original Beetol Game page</a>
-          <a class="repo-link" href="https://beetle.wiki/" target="_blank" rel="noreferrer">Beetle Wiki</a>
         </section>
       </section>
 
-      <section class="panel" data-panel="visual">
+      <section class="panel" data-panel="miladymaxxer">
         <div class="panel-heading">
-          <h2>Appearance</h2>
-          <p>Reskin presets, custom theme files, Maxxer styling, and handle lists.</p>
+          <h2>Milady Maxxer</h2>
+          <p>Profile card treatment, level badges, sounds, and handle lists.</p>
         </div>
-        <label class="field appearance-search"><span>Search appearance settings</span><input id="appearanceSearch" type="search" placeholder="Search fonts, PFPs, RemiStats, Maxxer..."></label>
-        <section class="setting-group" aria-label="Visual presets">
-          <div class="setting-group-header">
-            <h3>Presets</h3>
-          </div>
-          <div class="visual-preset-grid" id="visualPresetButtons" role="group" aria-label="Visual profile presets">
-            <button type="button" data-visual-preset="max"><strong>Max</strong><small>Remilia client</small></button>
-            <button type="button" data-visual-preset="moderate"><strong>Medium</strong><small>X and Milady</small></button>
-            <button type="button" data-visual-preset="min"><strong>Minimal</strong><small>Mostly X</small></button>
-            <button type="button" data-visual-preset="custom"><strong>Custom</strong><small>Named theme</small></button>
-          </div>
-          <div class="inline-actions">
-            <button class="secondary-button" id="visualApply" type="button">Apply</button>
-            <button class="secondary-button" id="visualSaveAs" type="button">Save as</button>
-          </div>
-          <p class="message" id="visualMessage"></p>
-        </section>
-        <section class="setting-group" id="visualCustomEditor" aria-label="Custom visual theme">
-          <div class="setting-group-header">
-            <h3>Custom Theme</h3>
-          </div>
-          <div class="field-grid">
-            <label class="field"><span>Saved theme</span><select id="visualThemeSelect"><option value="new">New</option></select></label>
-            <button class="secondary-button visual-delete-button" id="visualDeleteTheme" type="button">Delete theme</button>
-          </div>
-          <div class="appearance-subgroup" data-appearance-group="theme">
-            <div class="setting-group-header"><h3>Theme Base</h3></div>
-            <label class="field"><span>Theme name</span><input id="visualThemeName" type="text" placeholder="My theme"></label>
-            <div class="field-grid">
-              <label class="field"><span>Base profile</span><select id="visualProfile"><option value="max">Max</option><option value="moderate">Medium</option><option value="min">Minimal</option></select></label>
-              <label class="field"><span>Tweet font</span><select id="visualTweetFont"><option value="twitter">X readable</option><option value="hei">Remilia Hei</option><option value="mincho">Remilia Mincho</option><option value="menlo">Remilia Menlo</option></select></label>
-              <label class="field"><span>Chrome font</span><select id="visualUiFont"><option value="hei">Remilia Hei</option><option value="menlo">Remilia Menlo</option><option value="system">System</option></select></label>
-            </div>
-          </div>
-          <div class="appearance-subgroup" data-appearance-group="layout">
-            <div class="setting-group-header"><h3>Layout and Shape</h3></div>
-          <div class="field-grid">
-            <label class="field"><span>PFP shape</span><select id="visualPfpShape"><option value="rounded-square">Rounded square</option><option value="square">Square</option><option value="circle">Circle</option></select></label>
-            <label class="field"><span>Poke placement</span><select id="visualPokePlacement"><option value="actions">Action row</option><option value="top">Top metadata</option></select></label>
-          </div>
-          <div class="visual-toggle-grid">
-            <label class="setting"><span><strong>Green page fade</strong><small>Fixed Remilia wash behind X.</small></span><input id="visualBackgroundFade" type="checkbox"></label>
-            <label class="setting"><span><strong>Square media</strong><small>Remove rounding on images, videos, and quote cards.</small></span><input id="visualSquareMedia" type="checkbox"></label>
-            <label class="setting"><span><strong>Quote/media gap</strong><small>Keep whitespace between media and quoted posts.</small></span><input id="visualQuoteMediaGap" type="checkbox"></label>
-            <label class="setting"><span><strong>Unread notification tint</strong><small>Use the active palette for new notifications.</small></span><input id="visualNotificationUnreadTint" type="checkbox"></label>
-          </div>
-          <details class="setting-group-nested">
-            <summary>PFP surfaces</summary>
-            <label class="setting"><span><strong>Feed PFPs</strong><small>Apply selected shape in timelines.</small></span><input id="visualPfpFeed" type="checkbox"></label>
-            <label class="setting"><span><strong>Notification PFPs</strong><small>Apply selected shape in notifications.</small></span><input id="visualPfpNotifications" type="checkbox"></label>
-            <label class="setting"><span><strong>Chat PFPs</strong><small>Apply selected shape in X chat tabs.</small></span><input id="visualPfpChat" type="checkbox"></label>
-          </details>
-          </div>
-          <div class="appearance-subgroup" data-appearance-group="interaction">
-            <div class="setting-group-header"><h3>Buttons and Sounds</h3></div>
-            <div class="visual-toggle-grid">
-              <label class="setting"><span><strong>Clickly post button</strong><small>Use a depressed button state.</small></span><input id="visualPostButtonClickly" type="checkbox"></label>
-              <label class="setting"><span><strong>Post sound</strong><small>Play the post-send cue.</small></span><input id="visualPostSound" type="checkbox"></label>
-              <label class="setting"><span><strong>Sidebar bevel</strong><small>Give left navigation buttons a raised edge.</small></span><input id="visualSidebarBevel" type="checkbox"></label>
-              <label class="setting"><span><strong>Sidebar click sound</strong><small>Play a small pop on left navigation.</small></span><input id="visualSidebarSound" type="checkbox"></label>
-              <label class="setting"><span><strong>Show-new-posts pill</strong><small>Style only the inner oval on feed refresh bars.</small></span><input id="visualNewPostsPill" type="checkbox"></label>
-              <label class="setting"><span><strong>Show-new-posts sound</strong><small>Play a click cue on feed refresh bars.</small></span><input id="visualNewPostsSound" type="checkbox"></label>
-            </div>
-          </div>
-          <div class="appearance-subgroup" data-appearance-group="reminet">
-            <div class="setting-group-header"><h3>RemiNet Surfaces</h3></div>
-            <div class="visual-toggle-grid">
-              <label class="setting"><span><strong>RemiStats backing box</strong><small>Put a grey frame behind stats and poke controls.</small></span><input id="visualRemistatsBox" type="checkbox"></label>
-              <label class="setting"><span><strong>RemiNet chat overlay</strong><small>Mount global chat in X's right sidebar.</small></span><input id="visualReminetChatOverlay" type="checkbox"></label>
-            </div>
-          </div>
-          <div class="appearance-subgroup" data-appearance-group="maxxer">
-            <div class="setting-group-header"><h3>Maxxer Visuals</h3></div>
-            <div class="field-grid">
-              <label class="field"><span>Maxxer intensity</span><select id="visualMaxxerIntensity"><option value="subtle">Subtle</option><option value="marked">Marked rows</option><option value="card">Raised cards</option></select></label>
-              <label class="field"><span>Maxxer barriers</span><select id="visualMaxxerSeparators"><option value="subtle">Subtle</option><option value="beveled">Beveled</option><option value="none">None</option></select></label>
-            </div>
-            <div class="visual-toggle-grid">
-              <label class="setting"><span><strong>Milady only</strong><small>Hide ordinary feed posts outside replies and quotes.</small></span><input id="visualMiladyOnly" type="checkbox"></label>
-              <label class="setting"><span><strong>Disable self tracking</strong><small>Style your own Milady posts without level tracking.</small></span><input id="visualDisableSelfTracking" type="checkbox"></label>
-              <label class="setting"><span><strong>Maxxer shimmer</strong><small>Animate the Milady sheen.</small></span><input id="visualMaxxerShimmer" type="checkbox"></label>
-            </div>
-          </div>
-        </section>
-        <section class="setting-group" aria-label="RemiStats appearance">
-          <div class="setting-group-header">
-            <h3>RemiStats and Poke</h3>
-          </div>
-          <label class="setting"><span><strong>Show metric icons</strong><small>Display icon buttons and badge metric icons.</small></span><input type="checkbox" data-control="remistats.icons.enabled"></label>
-          <label class="setting"><span><strong>Score group</strong><small>Show the star score metric.</small></span><input type="checkbox" data-control="remistats.icons.score"></label>
-          <label class="setting"><span><strong>Beetle group</strong><small>Show the beetle count metric.</small></span><input type="checkbox" data-control="remistats.icons.beetle"></label>
-          <label class="setting"><span><strong>Poke action</strong><small>Show the remilia.net poke button.</small></span><input type="checkbox" data-control="remistats.icons.poke"></label>
-          <div class="inline-actions">
-            <button class="secondary-button" id="visualExport" type="button">Export</button>
-            <button class="secondary-button" id="visualCopyShare" type="button">Copy string</button>
-            <button class="secondary-button" id="visualImport" type="button">Import</button>
-            <button class="secondary-button" id="visualImportShare" type="button">Paste string</button>
-          </div>
-          <input id="visualImportFile" type="file" accept="application/json,.json" hidden>
-        </section>
         <section class="setting-group" aria-label="Milady Maxxer display">
           <div class="setting-group-header">
-            <h3>Maxxer Behavior</h3>
+            <h3>Display</h3>
           </div>
           <label class="field"><span>Milady Maxxer mode</span><select data-control="milady.mode"><option value="milady">Milady effects</option><option value="debug">Debug view</option><option value="off">Off</option></select></label>
           <label class="setting"><span><strong>Interaction sounds</strong><small>Play sounds for Milady Maxxer interactions.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
