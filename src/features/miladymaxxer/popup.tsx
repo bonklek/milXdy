@@ -4,10 +4,13 @@ import { render } from "solid-js/web";
 import { DEFAULT_SETTINGS, DEFAULT_STATS } from "./shared/constants";
 import { getLevelProgress } from "./shared/levels";
 import {
+  ACTIVE_ACCOUNT_SCOPE_KEY,
   loadCollectedAvatars,
+  loadActiveAccountScope,
   loadMatchedAccounts,
   loadSettings,
   loadStats,
+  migrateLegacyStorageToScope,
   normalizeCollectedAvatars,
   normalizeMatchedAccounts,
   normalizeStats,
@@ -20,6 +23,7 @@ import {
   saveMatchedAccounts,
   saveSettings,
   saveStats,
+  storageKeyForScope,
   uniqueStrings,
 } from "./shared/storage";
 import type {
@@ -744,6 +748,7 @@ function App() {
   const [stats, setStats] = createSignal<DetectionStats>(DEFAULT_STATS);
   const [matchedAccounts, setMatchedAccounts] = createSignal<MatchedAccountMap>({});
   const [collectedAvatars, setCollectedAvatars] = createSignal<CollectedAvatarMap>({});
+  const [accountScope, setAccountScope] = createSignal<string | null>(null);
 
   const sortedAccounts = createMemo(() => Object.values(matchedAccounts()).sort(compareAccounts));
   const accountSearchTerm = createMemo(() => accountSearch().trim().toLowerCase());
@@ -822,11 +827,14 @@ function App() {
   };
 
   onMount(async () => {
+    const scope = await loadActiveAccountScope();
+    setAccountScope(scope);
+    await migrateLegacyStorageToScope(scope);
     const [nextSettings, nextStats, nextMatchedAccounts, nextCollectedAvatars] = await Promise.all([
       loadSettings(),
-      loadStats(),
-      loadMatchedAccounts(),
-      loadCollectedAvatars(),
+      loadStats(scope),
+      loadMatchedAccounts(scope),
+      loadCollectedAvatars(scope),
     ]);
     setSettings(nextSettings);
     setStats(nextStats);
@@ -865,14 +873,33 @@ function App() {
       }
 
       if (area === "local") {
-        if (changes.stats) {
-          setStats(normalizeStats(changes.stats.newValue));
+        const scope = accountScope();
+        const statsKey = storageKeyForScope("stats", scope);
+        const matchedAccountsKey = storageKeyForScope("matchedAccounts", scope);
+        const collectedAvatarsKey = storageKeyForScope("collectedAvatars", scope);
+        if (changes[ACTIVE_ACCOUNT_SCOPE_KEY]) {
+          const nextScope = typeof changes[ACTIVE_ACCOUNT_SCOPE_KEY].newValue === "string"
+            ? changes[ACTIVE_ACCOUNT_SCOPE_KEY].newValue
+            : null;
+          setAccountScope(nextScope);
+          void Promise.all([
+            loadStats(nextScope),
+            loadMatchedAccounts(nextScope),
+            loadCollectedAvatars(nextScope),
+          ]).then(([nextStats, nextMatchedAccounts, nextCollectedAvatars]) => {
+            setStats(nextStats);
+            setMatchedAccounts(nextMatchedAccounts);
+            setCollectedAvatars(nextCollectedAvatars);
+          });
         }
-        if (changes.matchedAccounts) {
-          setMatchedAccounts(normalizeMatchedAccounts(changes.matchedAccounts.newValue));
+        if (changes[statsKey]) {
+          setStats(normalizeStats(changes[statsKey].newValue));
         }
-        if (changes.collectedAvatars) {
-          setCollectedAvatars(normalizeCollectedAvatars(changes.collectedAvatars.newValue));
+        if (changes[matchedAccountsKey]) {
+          setMatchedAccounts(normalizeMatchedAccounts(changes[matchedAccountsKey].newValue));
+        }
+        if (changes[collectedAvatarsKey]) {
+          setCollectedAvatars(normalizeCollectedAvatars(changes[collectedAvatarsKey].newValue));
         }
       }
     };
@@ -916,15 +943,17 @@ function App() {
   };
 
   const handleResetStats = async () => {
-    await Promise.all([resetStats(), resetMatchedAccounts()]);
-    const [nextStats, nextMatchedAccounts] = await Promise.all([loadStats(), loadMatchedAccounts()]);
+    const scope = accountScope();
+    await Promise.all([resetStats(scope), resetMatchedAccounts(scope)]);
+    const [nextStats, nextMatchedAccounts] = await Promise.all([loadStats(scope), loadMatchedAccounts(scope)]);
     setStats(nextStats);
     setMatchedAccounts(nextMatchedAccounts);
   };
 
   const handleResetAvatars = async () => {
-    await resetCollectedAvatars();
-    setCollectedAvatars(await loadCollectedAvatars());
+    const scope = accountScope();
+    await resetCollectedAvatars(scope);
+    setCollectedAvatars(await loadCollectedAvatars(scope));
   };
 
   const handleExportAvatars = () => {
@@ -941,10 +970,11 @@ function App() {
       matchedAccounts: matchedAccounts(),
       collectedAvatars: collectedAvatars(),
     });
+    const scope = accountScope();
     await Promise.all([
-      saveStats(imported.stats),
-      saveMatchedAccounts(imported.matchedAccounts),
-      saveCollectedAvatars(imported.collectedAvatars),
+      saveStats(imported.stats, scope),
+      saveMatchedAccounts(imported.matchedAccounts, scope),
+      saveCollectedAvatars(imported.collectedAvatars, scope),
     ]);
     setStats(imported.stats);
     setMatchedAccounts(imported.matchedAccounts);

@@ -1,0 +1,5 @@
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  spawn-sync: true
+  tesseract.js: true

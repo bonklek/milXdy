@@ -20,12 +20,14 @@ Release tags should be semantic versions with an optional `v` prefix, such as `v
 
 ```powershell
 npm install
-npm run typecheck
-npm run build:all
-npm run lint:firefox
+npm run verify:release:gates:020
 ```
 
-The Chromium build emits browser-ready files under `dist/chromium`. The Firefox build emits the same extension payload under `dist/firefox`, with a Firefox-specific manifest generated from `public/manifest.json`.
+For reproducible release archives, use the npm lockfile as the canonical dependency input (`npm ci` in clean release environments) and run packaging through the checked-in Node scripts. `scripts/package-release.mjs` writes ZIP files with sorted entries, normalized permissions, forward-slash paths, deterministic deflate output, and a fixed timestamp from `SOURCE_DATE_EPOCH` when set. If `SOURCE_DATE_EPOCH` is unset, the release tooling uses its built-in fixed timestamp so repeated packages from the same `dist` tree are byte-for-byte identical.
+
+`scripts/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, profile builds, copied assets, or archive metadata changes.
+
+The profile build emits browser-ready files under `dist/chromium-lite`, `dist/chromium-balanced`, `dist/chromium`, `dist/firefox-lite`, `dist/firefox-balanced`, and `dist/firefox`. The full Chromium build lives at `dist/chromium`; the full Firefox build lives at `dist/firefox`, with a Firefox-specific manifest generated from `public/manifest.json`.
 
 Required outputs include:
 
@@ -33,7 +35,7 @@ Required outputs include:
 - `dist/chromium/background.js`
 - `dist/chromium/popup.js`
 - `dist/chromium/features/wiki.js`
-- `dist/chromium/features/postreader.js`
+- `dist/chromium/features/post-reading.js`
 - `dist/chromium/features/remistats.js`
 - `dist/chromium/features/miladymaxxer.js`
 - `dist/chromium/features/beetol.js`
@@ -50,19 +52,29 @@ Disabled feature bundles should not be downloaded or parsed on initial page load
 Before publishing:
 
 ```powershell
-npm.cmd run typecheck
-npm.cmd run build:all
-npm.cmd run lint:firefox
+npm.cmd run verify:release:gates:020
+npm.cmd run print:live-probe:020
+npm.cmd run verify:live-probe:020
 ```
+
+`verify:release:gates:020` is the canonical release readiness gate. It rebuilds the profile matrix, runs TypeScript, release contracts, platform checks, URL allowlist checks, Music verification, Firefox lint, extension/app smoke checks, release packaging, checksum verification, and reproducible archive verification. Keep live Chrome proof separate and optional because it must validate a real X/Twitter tab after reloading the unpacked `dist/chromium` build.
 
 Also verify:
 
 - `git status --short`
 - app version in `package.json`
 - extension version in `public/manifest.json`
+- release archives in `release/milXdy-<version>-<target>-<profile>.zip`
+- SHA-256 checksum manifest in `release/milXdy-<version>-checksums.sha256`
+- reproducibility verification with `npm run verify:release:reproducible`
 - changelog entry
+- 0.2.0 QA checklist, when cutting a 0.2.x platform beta
+- 0.2.0 Chrome live QA guide, when cutting a platform beta
+- `window.__milxdy020LiveProbe` evidence from the live X/Twitter tab for 0.2.x platform betas
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
+- no local browser caches or machine-specific test output in source or release archives
+- `.gitignore` contains secret-file rules for `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`, `*.p12`, and `*.pfx`
 - GitHub release is marked as a prerelease for beta versions
 
 ## Push Policy

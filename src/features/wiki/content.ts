@@ -1,17 +1,21 @@
 import { loadDenyTerms, loadLocalAliases, localAliasesToEntries, savePerformanceStats } from "./localData";
 import { createMatcher } from "./matcher";
-import { attachPreviewHandlers, installPreviewDismissHandlers } from "./preview";
+import { attachPreviewHandlers, configurePreviewSidebarOpener, installPreviewDismissHandlers } from "./preview";
 import { loadSettings, observeSettings } from "./settings";
 import { injectStyles } from "./styles";
 import type { Settings, WikiMatch } from "./types";
-import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
+import type { TwitterSurface } from "../../shared/twitterScanner";
 import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
+import type { AppRuntimeScheduler, MilxdyContentAppContext } from "../../shared/appPlatform";
+import type { PerformanceMode } from "../../shared/performanceMode";
+import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
 
 const TWEET = 'article[data-testid="tweet"]';
 const TWEET_TEXT = '[data-testid="tweetText"]';
 const LINK_DATA_ATTR = "data-remilia-wiki-hyperlink";
 const LINK_DATA_KEY = "remiliaWikiHyperlink";
-const POSTREADER_BUTTON = '[data-postreader-button="true"]';
+const POST_READING_BUTTON = '[data-post-reading-button="true"]';
+const ACTION_CONTROL_SELECTOR = "button, a, [role='button']";
 const GROK_WIKI_CTA_ID = "remilia-wiki-grok-cta";
 const WIKI_PRELOAD_TEMPLATE = "Template:New page preload";
 const GROK_BUTTON_SELECTORS = [
@@ -32,6 +36,8 @@ const GROK_OPEN_CONVERSATION_SELECTORS = [
   '[aria-label="Open conversation" i]',
   '[title="Open conversation" i]',
 ].join(",");
+const WIKI_SIDEBAR_LAST_URL_KEY = "milxdy.wikiSidebar.lastUrl";
+const WIKI_SIDEBAR_PENDING_URL_KEY = "__milxdyPendingWikiSidebarUrl";
 const GROK_SEND_BUTTON_SELECTORS = [
   '[data-testid="sendButton"]',
   '[aria-label="Send" i]',
@@ -41,56 +47,86 @@ const GROK_SEND_BUTTON_SELECTORS = [
   '[title="Submit" i]',
 ].join(",");
 let processed = new WeakMap<HTMLElement, string>();
-const pendingTweets = new Set<HTMLElement>();
+const pendingTweets = new Map<HTMLElement, HTMLElement[]>();
 let lastContextMenuTarget: HTMLElement | null = null;
 
 let settings: Settings;
 let matchWikiText = createMatcher();
 let scanScheduled = false;
 let statsFlushTimer: number | null = null;
+let booted = false;
+let runtimeScheduleScan: () => void = () => undefined;
+let cancelPendingScan: (() => void) | null = null;
+let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
 const perfStats = {
   tweetsScanned: 0,
   linksCreated: 0,
   matchingMs: 0,
   skippedWholeTweet: 0,
   skippedLowConfidence: 0,
+  skippedPerformanceMode: 0,
 };
+let recordRuntimeDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
+let loadRuntimeAppById: MilxdyContentAppContext["loadAppById"] = () => Promise.resolve(null);
+let lastScrollAt = 0;
+let lastWikiModeDiagnosticSignature = "";
+let cachedDocumentActionControls: HTMLElement[] = [];
+let cachedDocumentActionControlsAt = 0;
 
-void boot();
-
-async function boot(): Promise<void> {
+export async function boot(context?: MilxdyContentAppContext): Promise<void> {
+  if (booted) return;
+  booted = true;
+  runtimeScheduleScan = context?.scheduleScan || runtimeScheduleScan;
+  runtimeScheduler = context?.scheduler || runtimeScheduler;
+  recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
+  loadRuntimeAppById = context?.loadAppById || loadRuntimeAppById;
+  const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
+  configurePreviewSidebarOpener(openWikiSidebarUrl);
+  addDisposable(() => configurePreviewSidebarOpener(null));
   installPreviewDismissHandlers();
   settings = await loadSettings();
   await reloadLocalMatcher();
   applySettings(settings);
-  observeSettings((next) => {
+  addDisposable(observeSettings((next) => {
     settings = next;
     applySettings(next);
     processed = new WeakMap<HTMLElement, string>();
-    scheduleTwitterScan();
-  });
-  chrome.storage.onChanged.addListener((changes, area) => {
+    runtimeScheduleScan();
+  }));
+  const aliasListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local") return;
     if (changes["remiliaWikiHyperlink.localAliases"] || changes["remiliaWikiHyperlink.denyTerms"]) {
       void reloadLocalMatcher().then(() => {
         processed = new WeakMap<HTMLElement, string>();
-        scheduleTwitterScan();
+        runtimeScheduleScan();
       });
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(aliasListener);
+  addDisposable(() => chrome.storage.onChanged.removeListener(aliasListener));
 
-  document.addEventListener("contextmenu", (event) => {
+  const contextMenuListener = (event: MouseEvent) => {
     lastContextMenuTarget = event.target instanceof HTMLElement ? event.target : null;
-  }, true);
+  };
+  document.addEventListener("contextmenu", contextMenuListener, true);
+  addDisposable(() => document.removeEventListener("contextmenu", contextMenuListener, true));
 
-  chrome.runtime.onMessage.addListener((message: unknown) => {
+  const scrollListener = () => {
+    lastScrollAt = performance.now();
+  };
+  document.addEventListener("scroll", scrollListener, { passive: true, capture: true });
+  addDisposable(() => document.removeEventListener("scroll", scrollListener, true));
+
+  const messageListener = (message: unknown) => {
     if (!isCreateWithGrokMessage(message)) return false;
     void createWikiEntryWithGrok(message.selectedText, message.sourceUrl, message.mode);
     return false;
-  });
+  };
+  chrome.runtime.onMessage.addListener(messageListener);
+  addDisposable(() => chrome.runtime.onMessage.removeListener(messageListener));
 
-  document.addEventListener("remilia-wiki-hyperlink:process-container", (event) => {
+  const processContainerListener = (event: Event) => {
     if (!settings.enabled) return;
     const container = (event as CustomEvent<{ container?: HTMLElement }>).detail?.container;
     if (!(container instanceof HTMLElement) || !container.isConnected) return;
@@ -99,14 +135,37 @@ async function boot(): Promise<void> {
     const result = linkContainer(container, effectiveMaxLinksPerPost(), settings.maxLowConfidenceLinksPerPost, signature);
     perfStats.linksCreated += result.linked;
     if (result.linked > 0) scheduleStatsFlush();
-  });
+  };
+  document.addEventListener("remilia-wiki-hyperlink:process-container", processContainerListener);
+  addDisposable(() => document.removeEventListener("remilia-wiki-hyperlink:process-container", processContainerListener));
 
-  subscribeTwitterSurfaces((surface) => {
-    if (surface.kind !== "tweet") return;
-    pendingTweets.add(surface.element);
-    schedulePendingScan();
-  });
-  scheduleTwitterScan();
+  runtimeScheduleScan();
+}
+
+export function onSurface(surface: TwitterSurface): void {
+  if (!settings?.enabled || (surface.kind !== "tweet" && surface.kind !== "profile")) return;
+  pendingTweets.set(surface.element, surface.textContainers);
+  schedulePendingScan();
+}
+
+export function disable(): void {
+  if (settings) settings = { ...settings, enabled: false };
+  clearWikiLinks();
+}
+
+export function dispose(): void {
+  disable();
+  cancelPendingScan?.();
+  cancelPendingScan = null;
+  pendingTweets.clear();
+  if (statsFlushTimer !== null) {
+    window.clearTimeout(statsFlushTimer);
+    statsFlushTimer = null;
+  }
+  booted = false;
+  loadRuntimeAppById = () => Promise.resolve(null);
+  cachedDocumentActionControls = [];
+  cachedDocumentActionControlsAt = 0;
 }
 
 type CreateWithGrokMessage = {
@@ -507,12 +566,21 @@ function showGrokWikiCta(topic: string): void {
     gap: "10px",
   });
   root.append(logo, copy, close);
-  let dragStart: { pointerId: number; x: number; y: number; left: number; top: number; moved: boolean } | null = null;
+  let dragStart: { pointerId: number; x: number; y: number; left: number; top: number; width: number; height: number; moved: boolean } | null = null;
   root.addEventListener("pointerdown", (event) => {
     if ((event.target as HTMLElement | null)?.closest("[data-grok-wiki-close='true']")) return;
     if (event.button !== 0) return;
     const rect = root.getBoundingClientRect();
-    dragStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, left: rect.left, top: rect.top, moved: false };
+    dragStart = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      left: rect.left,
+      top: rect.top,
+      width: rect.width,
+      height: rect.height,
+      moved: false,
+    };
     root.setPointerCapture(event.pointerId);
   });
   root.addEventListener("pointermove", (event) => {
@@ -520,9 +588,8 @@ function showGrokWikiCta(topic: string): void {
     const dx = event.clientX - dragStart.x;
     const dy = event.clientY - dragStart.y;
     if (Math.abs(dx) + Math.abs(dy) > 4) dragStart.moved = true;
-    const rect = root.getBoundingClientRect();
-    const nextLeft = Math.max(6, Math.min(window.innerWidth - rect.width - 6, dragStart.left + dx));
-    const nextTop = Math.max(6, Math.min(window.innerHeight - rect.height - 6, dragStart.top + dy));
+    const nextLeft = Math.max(6, Math.min(window.innerWidth - dragStart.width - 6, dragStart.left + dx));
+    const nextTop = Math.max(6, Math.min(window.innerHeight - dragStart.height - 6, dragStart.top + dy));
     root.style.left = `${nextLeft}px`;
     root.style.top = `${nextTop}px`;
     root.style.right = "auto";
@@ -585,15 +652,17 @@ function positionGrokWikiCta(root: HTMLElement): void {
   const beetolRect = beetol.getBoundingClientRect();
   const left = Math.max(gap, Math.min(window.innerWidth - rootRect.width - gap, beetolRect.left));
   const topAbove = beetolRect.top - rootRect.height - gap;
+  const top = topAbove >= gap ? topAbove : gap;
   root.style.left = `${left}px`;
-  root.style.top = `${topAbove >= gap ? topAbove : gap}px`;
+  root.style.top = `${top}px`;
 
-  if (topAbove < gap || rectsOverlap(root.getBoundingClientRect(), beetol.getBoundingClientRect())) {
-    const nextTop = Math.min(window.innerHeight - beetolRect.height - gap, root.getBoundingClientRect().bottom + gap);
+  const nextRootRect = rectFromPosition(left, top, rootRect.width, rootRect.height);
+  if (topAbove < gap || rectsOverlap(nextRootRect, beetolRect)) {
+    const nextTop = Math.min(window.innerHeight - beetolRect.height - gap, nextRootRect.bottom + gap);
     beetol.style.top = `${Math.max(gap, nextTop)}px`;
     beetol.style.left = `${Math.max(gap, beetolRect.left)}px`;
-    beetol.dataset.snapY = beetol.getBoundingClientRect().top > window.innerHeight / 2 ? "bottom" : "top";
-    beetol.dataset.snapX = beetol.getBoundingClientRect().left > window.innerWidth / 2 ? "right" : "left";
+    beetol.dataset.snapY = Math.max(gap, nextTop) > window.innerHeight / 2 ? "bottom" : "top";
+    beetol.dataset.snapX = Math.max(gap, beetolRect.left) > window.innerWidth / 2 ? "right" : "left";
   }
 }
 
@@ -612,6 +681,10 @@ function avoidBeetolOverlap(root: HTMLElement): void {
 
 function rectsOverlap(a: DOMRect, b: DOMRect): boolean {
   return a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+}
+
+function rectFromPosition(left: number, top: number, width: number, height: number): DOMRect {
+  return new DOMRect(left, top, width, height);
 }
 
 function wikiNewPageUrl(topic: string): string {
@@ -641,15 +714,15 @@ async function openGrokFromTweet(mode: GrokWikiPromptMode): Promise<void> {
 
 function findGrokProfileSummaryButton(): HTMLElement | null {
   const direct = document.querySelector<HTMLElement>(GROK_PROFILE_BUTTON_SELECTORS);
-  if (direct) return direct.closest<HTMLElement>("button, a, [role='button']") || direct;
-  return Array.from(document.querySelectorAll<HTMLElement>("button, a, [role='button']"))
+  if (direct) return closestActionControl(direct) || direct;
+  return documentActionControls()
     .find((element) => /profile summary/i.test(element.getAttribute("aria-label") || element.getAttribute("title") || element.textContent || "")) || null;
 }
 
 function activateOpenConversationButton(): void {
   const direct = document.querySelector<HTMLElement>(GROK_OPEN_CONVERSATION_SELECTORS);
-  const button = direct?.closest<HTMLElement>("button, a, [role='button']")
-    || Array.from(document.querySelectorAll<HTMLElement>("button, a, [role='button']"))
+  const button = closestActionControl(direct)
+    || documentActionControls()
       .find((element) => /open conversation/i.test(element.getAttribute("aria-label") || element.getAttribute("title") || element.textContent || ""));
   if (button) activateElement(button);
 }
@@ -661,13 +734,13 @@ function findGrokButton(root: ParentNode | null): HTMLElement | null {
     if (nearReadButton) return nearReadButton;
   }
   const direct = root.querySelector<HTMLElement>(GROK_BUTTON_SELECTORS);
-  if (direct) return direct.closest<HTMLElement>("button, a, [role='button']") || direct;
-  return Array.from(root.querySelectorAll<HTMLElement>("button, a, [role='button']"))
+  if (direct) return closestActionControl(direct) || direct;
+  return actionControls(root)
     .find(isGrokControl) || null;
 }
 
 function findGrokButtonNearReadButton(root: HTMLElement): HTMLElement | null {
-  const readButton = root.querySelector<HTMLElement>(POSTREADER_BUTTON);
+  const readButton = root.querySelector<HTMLElement>(POST_READING_BUTTON);
   const parent = readButton?.parentElement;
   if (!parent) return null;
   const siblings = Array.from(parent.children).filter((element): element is HTMLElement => element instanceof HTMLElement);
@@ -675,12 +748,34 @@ function findGrokButtonNearReadButton(root: HTMLElement): HTMLElement | null {
   const beforeReadButton = readIndex >= 0 ? siblings.slice(0, readIndex).reverse() : [];
   const afterReadButton = readIndex >= 0 ? siblings.slice(readIndex + 1) : [];
   for (const candidate of [...beforeReadButton, ...afterReadButton, ...siblings]) {
-    const control = candidate.matches("button, a, [role='button']")
+    const control = candidate.matches(ACTION_CONTROL_SELECTOR)
       ? candidate
-      : candidate.querySelector<HTMLElement>("button, a, [role='button']");
+      : candidate.querySelector<HTMLElement>(ACTION_CONTROL_SELECTOR);
     if (control && isGrokControl(control)) return control;
   }
   return null;
+}
+
+function closestActionControl(element: Element | null | undefined): HTMLElement | null {
+  return element?.closest<HTMLElement>(ACTION_CONTROL_SELECTOR) || null;
+}
+
+function actionControls(root: ParentNode): HTMLElement[] {
+  if (root === document || root === document.body || root === document.documentElement) return documentActionControls();
+  return Array.from(root.querySelectorAll<HTMLElement>(ACTION_CONTROL_SELECTOR));
+}
+
+function documentActionControls(maxAgeMs = 180): HTMLElement[] {
+  const now = performance.now();
+  if (cachedDocumentActionControls.length && now - cachedDocumentActionControlsAt < maxAgeMs) {
+    const connected = cachedDocumentActionControls.filter((element) => element.isConnected);
+    if (connected.length === cachedDocumentActionControls.length) return cachedDocumentActionControls;
+    cachedDocumentActionControls = connected;
+    return connected;
+  }
+  cachedDocumentActionControls = Array.from(document.querySelectorAll<HTMLElement>(ACTION_CONTROL_SELECTOR));
+  cachedDocumentActionControlsAt = now;
+  return cachedDocumentActionControls;
 }
 
 function isGrokControl(element: HTMLElement): boolean {
@@ -750,9 +845,9 @@ async function waitForGrokSendButton(timeoutMs: number): Promise<HTMLElement | n
 
 function findGrokSendButton(): HTMLElement | null {
   const direct = document.querySelector<HTMLElement>(GROK_SEND_BUTTON_SELECTORS);
-  const directButton = direct?.closest<HTMLElement>("button, a, [role='button']") || direct;
+  const directButton = closestActionControl(direct) || direct;
   if (directButton && !isDisabledControl(directButton) && !isVoiceModeControl(directButton)) return directButton;
-  return Array.from(document.querySelectorAll<HTMLElement>("button, a, [role='button']"))
+  return documentActionControls()
     .find((element) => {
       if (isDisabledControl(element)) return false;
       if (isVoiceModeControl(element)) return false;
@@ -864,32 +959,53 @@ function applySettings(next: Settings): void {
 }
 
 function schedulePendingScan(): void {
-  if (scanScheduled) return;
+  if (scanScheduled || cancelPendingScan) return;
   scanScheduled = true;
-  queueMicrotask(() => {
+  const mode = currentPerformanceMode();
+  const settleDelay = wikiScrollSettleDelayMs(mode);
+  cancelPendingScan = runtimeScheduler.idle(() => {
+    cancelPendingScan = null;
     scanScheduled = false;
+    if (shouldWaitForScrollSettle(mode)) {
+      const delay = Math.max(50, wikiScrollSettleDelayMs(mode) - (performance.now() - lastScrollAt));
+      cancelPendingScan = runtimeScheduler.timeout(() => {
+        cancelPendingScan = null;
+        schedulePendingScan();
+      }, delay);
+      return;
+    }
     processPendingTweets();
-  });
+  }, { timeout: Math.max(700, settleDelay) });
 }
 
 function processPendingTweets(): void {
   if (!settings.enabled) return;
-  const tweets = Array.from(pendingTweets);
-  pendingTweets.clear();
-  for (const tweet of tweets) {
+  const mode = currentPerformanceMode();
+  const policy = wikiPerformancePolicy(mode);
+  recordWikiModeDiagnostic(mode, policy);
+  const tweets = Array.from(pendingTweets.entries()).slice(0, policy.batchSize);
+  for (const [tweet] of tweets) pendingTweets.delete(tweet);
+  for (const [tweet, textContainers] of tweets) {
     if (!tweet.isConnected) continue;
+    if (!tweetWithinLinkingBudget(tweet, policy)) {
+      perfStats.skippedPerformanceMode += 1;
+      continue;
+    }
     const startedAt = performance.now();
     perfStats.tweetsScanned += 1;
-    processTweet(tweet);
+    processTweet(tweet, textContainers, policy);
     recordFeatureTiming("wiki", "processTweet", startedAt);
   }
   scheduleStatsFlush();
+  if (pendingTweets.size > 0) schedulePendingScan();
 }
 
-function processTweet(tweet: HTMLElement): void {
-  const textContainers = Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT));
-  let remaining = effectiveMaxLinksPerPost();
-  let remainingLowConfidence = settings.maxLowConfidenceLinksPerPost;
+function processTweet(tweet: HTMLElement, surfaceTextContainers: HTMLElement[] | undefined, policy = wikiPerformancePolicy(currentPerformanceMode())): void {
+  const textContainers = surfaceTextContainers?.length
+    ? surfaceTextContainers
+    : Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT));
+  let remaining = Math.min(effectiveMaxLinksPerPost(), policy.maxLinksPerPost);
+  let remainingLowConfidence = Math.min(settings.maxLowConfidenceLinksPerPost, policy.maxLowConfidenceLinksPerPost);
 
   for (const container of textContainers) {
     if (remaining <= 0) break;
@@ -897,6 +1013,11 @@ function processTweet(tweet: HTMLElement): void {
 
     const signature = container.textContent || "";
     if (!signature.trim() || processed.get(container) === signature) continue;
+    if (signature.length > policy.maxTextChars) {
+      perfStats.skippedPerformanceMode += 1;
+      processed.set(container, signature);
+      continue;
+    }
 
     const result = linkContainer(container, remaining, remainingLowConfidence, signature);
     processed.set(container, signature);
@@ -906,8 +1027,73 @@ function processTweet(tweet: HTMLElement): void {
   }
 }
 
+function clearWikiLinks(): void {
+  for (const link of Array.from(document.querySelectorAll<HTMLElement>(`[${LINK_DATA_ATTR}]`))) {
+    const text = document.createTextNode(link.textContent || "");
+    link.replaceWith(text);
+  }
+  processed = new WeakMap<HTMLElement, string>();
+}
+
 function effectiveMaxLinksPerPost(): number {
   return settings.maxLinksPerPostEnabled ? settings.maxLinksPerPost : Number.POSITIVE_INFINITY;
+}
+
+type WikiPerformancePolicy = {
+  batchSize: number;
+  maxLinksPerPost: number;
+  maxLowConfidenceLinksPerPost: number;
+  maxTextChars: number;
+  viewportMarginPx: number;
+};
+
+function currentPerformanceMode(): PerformanceMode {
+  const mode = document.documentElement.dataset.milxdyPerformanceMode;
+  return mode === "fast" || mode === "full" || mode === "developer" ? mode : "balanced";
+}
+
+function wikiPerformancePolicy(mode: PerformanceMode): WikiPerformancePolicy {
+  if (mode === "fast") {
+    return { batchSize: 2, maxLinksPerPost: 1, maxLowConfidenceLinksPerPost: 0, maxTextChars: 360, viewportMarginPx: 220 };
+  }
+  if (mode === "balanced") {
+    return { batchSize: 4, maxLinksPerPost: 2, maxLowConfidenceLinksPerPost: 1, maxTextChars: 900, viewportMarginPx: 800 };
+  }
+  if (mode === "developer") {
+    return { batchSize: 12, maxLinksPerPost: Number.POSITIVE_INFINITY, maxLowConfidenceLinksPerPost: Number.POSITIVE_INFINITY, maxTextChars: Number.POSITIVE_INFINITY, viewportMarginPx: 2200 };
+  }
+  return { batchSize: 8, maxLinksPerPost: Number.POSITIVE_INFINITY, maxLowConfidenceLinksPerPost: Number.POSITIVE_INFINITY, maxTextChars: 1800, viewportMarginPx: 1800 };
+}
+
+function wikiScrollSettleDelayMs(mode: PerformanceMode): number {
+  if (mode === "fast") return 550;
+  if (mode === "balanced") return 260;
+  return 0;
+}
+
+function shouldWaitForScrollSettle(mode: PerformanceMode): boolean {
+  const delay = wikiScrollSettleDelayMs(mode);
+  return delay > 0 && performance.now() - lastScrollAt < delay;
+}
+
+function tweetWithinLinkingBudget(tweet: HTMLElement, policy: WikiPerformancePolicy): boolean {
+  const rect = tweet.getBoundingClientRect();
+  return rect.bottom >= -policy.viewportMarginPx && rect.top <= window.innerHeight + policy.viewportMarginPx;
+}
+
+function recordWikiModeDiagnostic(mode: PerformanceMode, policy: WikiPerformancePolicy): void {
+  const signature = `${mode}:${policy.batchSize}:${policy.maxLinksPerPost}:${policy.maxTextChars}`;
+  if (signature === lastWikiModeDiagnosticSignature) return;
+  lastWikiModeDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("performancePolicy", {
+    mode,
+    batchSize: policy.batchSize,
+    maxLinksPerPost: Number.isFinite(policy.maxLinksPerPost) ? policy.maxLinksPerPost : "unbounded",
+    maxLowConfidenceLinksPerPost: Number.isFinite(policy.maxLowConfidenceLinksPerPost) ? policy.maxLowConfidenceLinksPerPost : "unbounded",
+    maxTextChars: Number.isFinite(policy.maxTextChars) ? policy.maxTextChars : "unbounded",
+    viewportMarginPx: policy.viewportMarginPx,
+    updatedAt: Date.now(),
+  });
 }
 
 function linkContainer(container: HTMLElement, maxLinks: number, maxLowConfidenceLinks: number, containerText: string): { linked: number; lowConfidenceLinked: number } {
@@ -1005,7 +1191,44 @@ function createWikiLink(match: WikiMatch): HTMLAnchorElement {
   link.title = settings.debugMode
     ? `${match.title} | ${link.dataset.wikiSource} | label: ${match.label} | confidence: ${match.confidence ?? 100}`
     : match.title;
-  link.addEventListener("click", (event) => event.stopPropagation());
+  link.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (shouldUseNativeLink(event)) return;
+    event.preventDefault();
+    void openWikiSidebarUrl(link.href).then((opened) => {
+      if (!opened) window.open(link.href, "_blank", "noopener,noreferrer");
+    });
+  });
   attachPreviewHandlers(link, () => settings);
   return link;
+}
+
+async function openWikiSidebarUrl(url: string): Promise<boolean> {
+  try {
+    (window as unknown as Record<string, unknown>)[WIKI_SIDEBAR_PENDING_URL_KEY] = url;
+    await chrome.storage.local.set({ [WIKI_SIDEBAR_LAST_URL_KEY]: url }).catch(() => undefined);
+    document.dispatchEvent(new CustomEvent("milxdy:wiki-sidebar-open", { detail: { url } }));
+    const loaded = await loadRuntimeAppById("wikiSidebar", "wikiLink");
+    if (await openWithWikiSidebarModule(loaded, url)) return true;
+    const directModule = await import(chrome.runtime.getURL("features/wikiSidebar.js")) as unknown;
+    if (await openWithWikiSidebarModule(directModule, url)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+async function openWithWikiSidebarModule(module: unknown, url: string): Promise<boolean> {
+  const sidebar = module as {
+    boot?: () => Promise<void> | void;
+    openWikiUrl?: (value?: string) => Promise<void> | void;
+  } | null;
+  if (typeof sidebar?.openWikiUrl !== "function") return false;
+  await Promise.resolve(sidebar.boot?.());
+  await Promise.resolve(sidebar.openWikiUrl(url));
+  return true;
+}
+
+function shouldUseNativeLink(event: MouseEvent): boolean {
+  return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 }

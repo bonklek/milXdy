@@ -1,38 +1,62 @@
 {
   "name": "milxdy",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
   "license": "VPL",
   "scripts": {
-    "build": "npm run build:chromium",
+    "build": "node scripts/build.mjs --target=chromium",
     "build:chromium": "node scripts/build.mjs --target=chromium",
     "build:firefox": "node scripts/build.mjs --target=firefox",
-    "build:all": "npm run build:chromium && npm run build:firefox",
+    "build:chromium:lite": "node scripts/build.mjs --target=chromium --profile=lite",
+    "build:chromium:balanced": "node scripts/build.mjs --target=chromium --profile=balanced",
+    "build:firefox:lite": "node scripts/build.mjs --target=firefox --profile=lite",
+    "build:firefox:balanced": "node scripts/build.mjs --target=firefox --profile=balanced",
+    "build:chromium:full": "node scripts/build.mjs --target=chromium --profile=full",
+    "build:firefox:full": "node scripts/build.mjs --target=firefox --profile=full",
+    "build:post-reading": "node scripts/build-post-reading.mjs --target=chromium",
+    "dev:post-reading": "node scripts/build-post-reading.mjs --target=chromium --watch",
+    "build:all": "node scripts/build.mjs --target=chromium && node scripts/build.mjs --target=firefox",
+    "build:profiles": "node scripts/build-profiles.mjs",
     "dev": "node scripts/build.mjs --target=chromium --watch",
     "typecheck": "tsc --noEmit",
-    "lint:firefox": "web-ext lint --source-dir dist/firefox"
+    "lint:firefox": "web-ext lint --source-dir dist/firefox",
+    "verify:music": "node scripts/verify-music-build.mjs",
+    "verify:app-smoke:020": "node scripts/verify-app-smoke-020.mjs",
+    "verify:url-allowlist": "node scripts/verify-url-allowlist.mjs",
+    "verify:platform": "node scripts/verify-platform.mjs",
+    "verify:release:020": "node scripts/verify-release-020.mjs",
+    "verify:release:gates:020": "node scripts/verify-release-gates-020.mjs",
+    "verify:release:checksums": "node scripts/verify-release-checksums.mjs",
+    "verify:release:reproducible": "node scripts/verify-reproducible-release.mjs",
+    "verify:smoke:020": "node scripts/verify-extension-smoke-020.mjs",
+    "verify:live-probe:020": "node scripts/verify-live-probe-log-020.mjs",
+    "print:live-probe:020": "node scripts/print-live-smoke-probe-020.mjs",
+    "package:release": "node scripts/package-release.mjs"
   },
   "dependencies": {
     "@tesseract.js-data/eng": "^1.0.0",
+    "@unimusic/chromaprint": "^0.1.4",
+    "jsqr": "^1.4.0",
     "onnxruntime-web": "^1.24.3",
+    "qrcode": "^1.5.4",
     "solid-js": "^1.9.12",
     "tesseract.js": "^7.0.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.1.29",
     "@types/node": "^24.10.1",
-    "esbuild": "0.28.1",
+    "@types/qrcode": "^1.5.6",
+    "esbuild": "^0.28.1",
     "typescript": "^5.9.3",
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
-    "web-ext": "^8.4.0"
+    "web-ext": "^10.4.0"
   },
   "overrides": {
-    "ajv": "8.18.0",
+    "ajv": "8.20.0",
     "shell-quote": "1.8.4",
-    "tmp": "0.2.7",
-    "uuid": "11.1.1"
+    "tmp": "0.2.7"
   }
 }

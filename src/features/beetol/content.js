@@ -1,5 +1,15 @@
-(function mountBeetolGame() {
-  const ROOT_VERSION = '2026-06-26-hunt-state-v3';
+import { createOverlayAppFrame } from "../../shared/overlayAppFrame";
+import {
+  observeOverlayPanelTheme,
+  resolveOverlayPanelTheme,
+  restoreOverlayPanelBox,
+  startOverlayPanelDrag,
+} from "../../shared/overlayPanelBase";
+import { registerOverlayAppRoot } from "../../shared/overlayAppLayout";
+import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
+
+function mountBeetolGame(context = {}) {
+  const ROOT_VERSION = '2026-06-28-settings-dark-signin';
   const existingRoot = document.getElementById('beetol-hunter-root');
   if (existingRoot) {
     if (existingRoot.dataset.version === ROOT_VERSION) return;
@@ -17,8 +27,11 @@
     ['junkFaucet', 'Junk Faucet', 'junk-faucet.png'],
   ];
   const TAB_COOLDOWN_KEYS = ['catchBeetle', 'beetleHunt'];
-  const HUNT_COOLDOWN_FALLBACK_MS = 60 * 60 * 1000;
   const TAB_ICON_URL = chrome.runtime.getURL('beetol/icons/hunt-beetle.png');
+  const ACTION_ICON_URLS = Object.fromEntries(ACTIONS.map(([key, _label, icon]) => [
+    key,
+    chrome.runtime.getURL(`beetol/icons/${icon}`),
+  ]));
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
@@ -27,7 +40,10 @@
   const LEGACY_PREFIX = 'bex' + 'tol';
   const LEGACY_ENABLED_KEY = `milxdy.${LEGACY_PREFIX}.enabled`;
   const SNAP_MARGIN = 10;
-  const prefersDark = globalThis.matchMedia?.('(prefers-color-scheme: dark)');
+  const runtimeScheduler = context.scheduler || createFallbackRuntimeScheduler();
+  const lifecycleSignal = context.signal || null;
+  const runtimeSendMessage = context.sendMessage || ((message) => chrome.runtime.sendMessage(message));
+  const lifecycleActive = () => state.enabled && lifecycleSignal?.aborted !== true;
 
   const state = {
     enabled: true,
@@ -57,9 +73,43 @@
     messageKind: '',
     menuSoundArmed: false,
     position: null,
+    layout: { x: 10, width: 156, height: 320, topOffset: 10 },
     dragging: null,
     photoViewerOpen: false,
+    dockOpen: false,
+    dockSide: 'left',
+    appFrame: null,
   };
+  const disposables = [];
+  function addDisposable(disposable) {
+    disposables.push(disposable);
+  }
+  function addRepeatingTask(callback, delayMs) {
+    let disposed = false;
+    let cancelTimer = null;
+    const run = () => {
+      cancelTimer = null;
+      if (disposed || !lifecycleActive()) return;
+      callback();
+      if (!disposed && lifecycleActive()) cancelTimer = runtimeScheduler.timeout(run, delayMs);
+    };
+    cancelTimer = runtimeScheduler.timeout(run, delayMs);
+    addDisposable(() => {
+      disposed = true;
+      cancelTimer?.();
+      cancelTimer = null;
+    });
+  }
+  function disposeAll() {
+    while (disposables.length) {
+      const disposable = disposables.pop();
+      try {
+        disposable?.();
+      } catch {
+        // Best-effort cleanup for page-level listeners.
+      }
+    }
+  }
 
   const root = document.createElement('div');
   root.id = 'beetol-hunter-root';
@@ -76,9 +126,13 @@
             <div class="beetol-title">Beetol Game</div>
             <div id="beetol-user" class="beetol-subtitle">Checking session...</div>
           </div>
-          <button id="beetol-refresh" class="beetol-icon-btn" type="button" title="Refresh">â†»</button>
+          <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
+          <button id="beetol-refresh" class="beetol-icon-btn" type="button" title="Refresh">&#8635;</button>
         </div>
-        <div id="beetol-signed-out" class="beetol-signed-out-msg">Open Beetol Game from the extensions bar to sign in.</div>
+        <div id="beetol-signed-out" class="beetol-signed-out-msg">
+          <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
+          <span>to RemiliaNET, then refresh Beetol.</span>
+        </div>
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
         <div class="beetol-footer">
@@ -88,6 +142,7 @@
     </div>
   `;
   document.documentElement.appendChild(root);
+  root.dataset.docked = 'true';
   root.querySelector('.beetol-icon').innerHTML = `<img src="${TAB_ICON_URL}" alt="">`;
   root.querySelector('#beetol-refresh').textContent = String.fromCharCode(8635);
 
@@ -102,6 +157,7 @@
     crunchJunk: root.querySelector('#beetol-crunch-junk'),
     message: root.querySelector('#beetol-message'),
     refresh: root.querySelector('#beetol-refresh'),
+    minimize: root.querySelector('#beetol-minimize'),
   };
 
   function clamp(value, min, max) {
@@ -125,9 +181,15 @@
   }
 
   function applyPosition(position = state.position) {
-    const next = position || { edge: 'left', x: SNAP_MARGIN, y: SNAP_MARGIN };
+    if (root.dataset.docked === 'true') {
+      applyDockPosition();
+      return;
+    }
+    const next = position || { edge: 'left', x: state.layout.x, y: state.layout.topOffset };
     const snapped = snapPosition(next.x, next.y);
     state.position = { edge: next.edge || snapped.edge, x: snapped.x, y: snapped.y };
+    state.layout.x = state.position.x;
+    state.layout.topOffset = state.position.y;
     root.style.left = `${state.position.x}px`;
     root.style.top = `${state.position.y}px`;
     root.dataset.snap = state.position.edge;
@@ -135,7 +197,42 @@
     root.dataset.snapY = state.position.y > window.innerHeight / 2 ? 'bottom' : 'top';
   }
 
+  function applyDockPosition() {
+    registerOverlayAppRoot('beetol', root);
+    state.position = { edge: state.dockSide, x: state.layout.x, y: state.layout.topOffset };
+    root.style.left = `${state.layout.x}px`;
+    root.style.right = 'auto';
+    root.style.top = `${state.layout.topOffset}px`;
+    root.dataset.snap = state.dockSide;
+    root.dataset.snapX = state.dockSide;
+    root.dataset.snapY = state.layout.topOffset > window.innerHeight / 2 ? 'bottom' : 'top';
+  }
+
+  async function restoreDockLayout(legacyPosition = state.position) {
+    const layout = await restoreOverlayPanelBox('beetol', {
+      side: state.dockSide,
+      minWidth: 120,
+      minHeight: 160,
+      defaultWidth: els.shell.offsetWidth || root.offsetWidth || 156,
+      defaultHeight: els.shell.offsetHeight || root.offsetHeight || 320,
+      legacy: {
+        width: els.shell.offsetWidth || root.offsetWidth || 156,
+        height: els.shell.offsetHeight || root.offsetHeight || 320,
+        topOffset: legacyPosition?.y,
+      },
+    });
+    state.layout = {
+      x: layout.x ?? legacyPosition?.x ?? state.layout.x,
+      width: layout.width,
+      height: layout.height,
+      topOffset: layout.topOffset,
+    };
+    state.position = { edge: state.dockSide, x: state.layout.x, y: state.layout.topOffset };
+    applyDockPosition();
+  }
+
   function savePosition() {
+    if (root.dataset.docked === 'true') return;
     if (!hasExtensionRuntime() || !state.position) return;
     chrome.storage.local.set({ [POSITION_KEY]: state.position });
   }
@@ -152,8 +249,22 @@
   }
 
   function send(message) {
-    return chrome.runtime.sendMessage(message);
+    if (!lifecycleActive()) return Promise.resolve(null);
+    return runtimeSendMessage(message, message?.type || 'beetol:message');
   }
+
+  function preloadIcon(url) {
+    try {
+      const image = new Image();
+      image.decoding = 'async';
+      image.src = url;
+      image.decode?.().catch(() => {});
+    } catch {
+      // Best effort; icon tags still load normally if decoding is unavailable.
+    }
+  }
+
+  [TAB_ICON_URL, ...Object.values(ACTION_ICON_URLS)].forEach(preloadIcon);
 
   let audioContext = null;
 
@@ -183,9 +294,33 @@
     setTimeout(() => playTone(880, 0.06, 0.018), 42);
   }
 
-  function playActionSound() {
+  function playDefaultActionSound() {
     playTone(440, 0.05, 0.03);
     setTimeout(() => playTone(740, 0.08, 0.022), 38);
+  }
+
+  function playClaimSound() {
+    playTone(520, 0.045, 0.024);
+    setTimeout(() => playTone(660, 0.055, 0.018), 34);
+    setTimeout(() => playTone(880, 0.05, 0.014), 74);
+  }
+
+  function playHuntSound() {
+    playTone(330, 0.045, 0.022);
+    setTimeout(() => playTone(494, 0.07, 0.018), 38);
+    setTimeout(() => playTone(392, 0.045, 0.012), 88);
+  }
+
+  function playActionSound(action = '') {
+    if (action === 'catchBeetle' || action === 'claimUBC') {
+      playClaimSound();
+      return;
+    }
+    if (action === 'beetleHunt') {
+      playHuntSound();
+      return;
+    }
+    playDefaultActionSound();
   }
 
   function playCrunchSound() {
@@ -250,6 +385,18 @@
     return `${s}s`;
   }
 
+  function fmtBadgeMs(ms) {
+    if (ms === null || Number.isNaN(ms)) return '';
+    if (ms <= 0) return '';
+    const seconds = Math.ceil(ms / 1000);
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h) return m ? `${h}h${m}m` : `${h}h`;
+    if (m) return `${m}m`;
+    return `${s}s`;
+  }
+
   function normalizeCooldownMs(value) {
     if (value == null || value === false) return 0;
     if (typeof value === 'number') {
@@ -262,6 +409,13 @@
       if (!trimmed) return 0;
       const numeric = Number(trimmed);
       if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
+      const colonMatch = trimmed.match(/\b(?:(\d+):)?([0-5]?\d):([0-5]\d)\b/);
+      if (colonMatch) {
+        const hours = Number(colonMatch[1] || 0);
+        const minutes = Number(colonMatch[2] || 0);
+        const seconds = Number(colonMatch[3] || 0);
+        return ((hours * 60 + minutes) * 60 + seconds) * 1000;
+      }
       const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
       if (match && match[0].trim()) {
         const days = Number(match[1] || 0);
@@ -309,7 +463,7 @@
     if (state.settings.settingsTheme === 'light' || state.settings.settingsTheme === 'dark') {
       return state.settings.settingsTheme;
     }
-    return prefersDark?.matches ? 'dark' : 'light';
+    return resolveOverlayPanelTheme();
   }
 
   function firstFiniteNumber(values) {
@@ -383,7 +537,6 @@
       hasSignal,
       charges: charges === null ? null : clamp(Math.floor(charges), 0, 3),
       cooldownMs,
-      needsCooldownFallback: cooldownActive === true || cooldownMessage,
       explicitlyReady: available === true || cooldown === 0,
       explicitlyUnavailable: available === false || cooldownActive === true || charges === 0 || cooldownMs > 0 || cooldownMessage,
     };
@@ -409,9 +562,8 @@
       state.huntCharges = huntState.charges;
     }
     if (huntState.explicitlyUnavailable) {
-      const nextCooldown = huntState.cooldownMs || (huntState.needsCooldownFallback ? HUNT_COOLDOWN_FALLBACK_MS : 0);
-      if (nextCooldown > 0) {
-        setActionCooldown('beetleHunt', nextCooldown);
+      if (huntState.cooldownMs > 0) {
+        setActionCooldown('beetleHunt', huntState.cooldownMs);
       } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now) {
         state.huntCharges = 0;
       }
@@ -479,6 +631,7 @@
   }
 
   function render() {
+    if (lifecycleSignal?.aborted) return;
     if (!hasExtensionRuntime()) {
       root.hidden = true;
       state.enabled = false;
@@ -486,6 +639,7 @@
     }
     root.hidden = !state.enabled;
     if (!state.enabled) return;
+    root.dataset.dockOpen = String(state.dockOpen);
     root.classList.toggle('beetol-signed-out', !state.signedIn);
     root.classList.toggle('beetol-loading', state.loading);
     els.head.hidden = !state.signedIn;
@@ -516,16 +670,16 @@
         const exhaustedClass = key === 'beetleHunt' && cd <= 0 && state.huntCharges <= 0 ? ' is-exhausted' : '';
         const huntClass = key === 'beetleHunt' ? ' is-hunt' : '';
         const disabled = state.loading || cd > 0 || exhaustedClass ? ' disabled' : '';
-        const iconUrl = chrome.runtime.getURL(`beetol/icons/${icon}`);
+        const iconUrl = ACTION_ICON_URLS[key];
         const cooldownLabel = fmtMs(cd);
         const huntStatus = cd > 0 ? cooldownLabel : `${state.huntCharges}/3`;
         const huntChargeAttr = key === 'beetleHunt' ? ` data-hunt-charges="${state.huntCharges}"` : '';
-        const huntFill = key === 'beetleHunt' ? ` style="--beetol-hunt-fill: ${Math.max(0, state.huntCharges) / 3 * 100}%"` : '';
+        const huntFill = key === 'beetleHunt' ? ` style="--beetol-hunt-fill: ${Math.max(0, state.huntCharges) / 3 * 100}%; --beetol-hunt-icon: url('${iconUrl}')"` : '';
         return `
           <button class="beetol-action${readyClass}${cooldownClass}${exhaustedClass}${huntClass}" data-action="${key}" type="button" title="${label}" aria-label="${label}"${disabled}${huntChargeAttr}${huntFill}>
             <span class="beetol-action-icon">
               <img src="${iconUrl}" alt="">
-              ${key === 'beetleHunt' ? `<img class="beetol-hunt-fill-icon" src="${iconUrl}" alt="">` : ''}
+              ${key === 'beetleHunt' ? '<span class="beetol-hunt-fill-icon" aria-hidden="true"></span>' : ''}
             </span>
             <span class="beetol-action-label">${label}</span>
             <strong>${key === 'beetleHunt' ? huntStatus : cooldownLabel}</strong>
@@ -536,15 +690,28 @@
 
     els.message.textContent = state.message;
     els.message.className = state.messageKind ? `beetol-${state.messageKind}` : '';
+    state.appFrame?.updateDock({
+      badgeText: dockBadgeText(),
+      title: state.signedIn ? `Beetol Game: ${els.next.textContent || ''}` : 'Beetol Game: sign in',
+    });
+  }
+
+  function dockBadgeText() {
+    if (!state.signedIn) return '';
+    const cds = currentCooldowns();
+    const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => key === 'beetleHunt' && state.huntCharges <= 0 && cds[key] <= 0 ? null : cds[key]);
+    const next = tabCooldowns.filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
+    return next ? fmtBadgeMs(next) : '';
   }
 
   async function refreshState(silent = false) {
-    if (!state.enabled || document.hidden) return;
+    if (!lifecycleActive() || document.hidden) return;
     if (!state.signedIn) return;
     state.loading = true;
     if (!silent) setMessage('Refreshing...');
     render();
     const response = await send({ type: 'beetol:getState' });
+    if (!lifecycleActive()) return;
     state.loading = false;
 
     if (response?.authRequired) {
@@ -574,7 +741,7 @@
   }
 
   async function runAction(action, button = null) {
-    if (!state.enabled) return;
+    if (!lifecycleActive()) return;
     const label = ACTIONS.find(([key]) => key === action)?.[1] || action;
     const chargesBeforeAction = action === 'beetleHunt' ? displayedHuntCharges(button) : state.huntCharges;
     if (action === 'beetleHunt') state.huntCharges = chargesBeforeAction;
@@ -583,6 +750,7 @@
     render();
 
     const response = await send({ type: 'beetol:action', action });
+    if (!lifecycleActive()) return;
     state.loading = false;
     const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
 
@@ -595,11 +763,14 @@
     if (!response?.ok) {
       const cooldownMs = response?.cooldownMs || normalizeCooldownMs(responseMessage);
       if (action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(responseMessage))) {
-        const nextCooldown = cooldownMs || HUNT_COOLDOWN_FALLBACK_MS;
-        setActionCooldown(action, nextCooldown);
+        if (cooldownMs > 0) {
+          setActionCooldown(action, cooldownMs);
+        } else {
+          state.huntCharges = 0;
+        }
         state.fetchedAt = Date.now();
         saveCooldownState();
-        setMessage(`${label} ready in ${fmtMs(nextCooldown)}.`, 'warn');
+        setMessage(cooldownMs > 0 ? `${label} ready in ${fmtMs(cooldownMs)}.` : (responseMessage || `${label}: try again after cooldown.`), 'warn');
       } else {
         setMessage(responseMessage || `${label} failed.`, 'warn');
       }
@@ -607,15 +778,22 @@
       return;
     }
     if (response.actionResult?.success === false) {
-      const cooldownMs = response.cooldownMs || response.actionResult.cooldownMs || 0;
+      if (response.user) {
+        state.user = response.user;
+        mergeCooldowns(response.user);
+      }
+      const cooldownMs = response.cooldownMs || response.actionResult.cooldownMs || currentCooldowns()[action] || 0;
       const message = response.actionResult.message || `${label} failed.`;
-      const cooldownFallback = action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(message)) ? HUNT_COOLDOWN_FALLBACK_MS : 0;
-      if (cooldownMs > 0 || cooldownFallback > 0) {
-        const nextCooldown = cooldownMs || cooldownFallback;
-        setActionCooldown(action, nextCooldown);
+      if (cooldownMs > 0) {
+        setActionCooldown(action, cooldownMs);
         state.fetchedAt = Date.now();
         saveCooldownState();
-        setMessage(`${label} ready in ${fmtMs(nextCooldown)}.`, 'warn');
+        setMessage(`${label} ready in ${fmtMs(cooldownMs)}.`, 'warn');
+      } else if (action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(message))) {
+        state.huntCharges = 0;
+        state.fetchedAt = Date.now();
+        saveCooldownState();
+        setMessage(message, 'warn');
       } else {
         setMessage(message, 'warn');
       }
@@ -632,11 +810,7 @@
       setActionCooldown(action, response.cooldownMs);
     } else if (action === 'beetleHunt' && !hasAuthoritativeHuntState) {
       const nextCharges = clamp(chargesBeforeAction - 1, 0, 3);
-      if (nextCharges <= 0) {
-        setActionCooldown(action, HUNT_COOLDOWN_FALLBACK_MS);
-      } else {
-        state.huntCharges = nextCharges;
-      }
+      state.huntCharges = nextCharges;
     }
     saveCooldownState();
 
@@ -648,12 +822,13 @@
   }
 
   async function crunchJunk() {
-    if (!state.enabled) return;
+    if (!lifecycleActive()) return;
     state.loading = true;
     setMessage('Crunching all junk...');
     render();
 
     const response = await send({ type: 'beetol:crunchJunk' });
+    if (!lifecycleActive()) return;
     state.loading = false;
 
     if (response?.authRequired) {
@@ -680,13 +855,19 @@
   els.actions.addEventListener('click', event => {
     const button = event.target.closest('[data-action]');
     if (!button || state.loading || button.disabled) return;
-    playActionSound();
+    playActionSound(button.dataset.action);
     runAction(button.dataset.action, button);
   });
 
   els.refresh.addEventListener('click', () => {
     playActionSound();
     refreshState();
+  });
+
+  els.minimize?.addEventListener('click', () => {
+    state.dockOpen = false;
+    applyDockPosition();
+    render();
   });
 
   els.crunchJunk.addEventListener('click', () => {
@@ -698,62 +879,47 @@
   function startDrag(event) {
     const button = event.target.closest('button');
     if (event.button !== 0 || (button && !button.classList.contains('beetol-tab'))) return;
-    const rect = root.getBoundingClientRect();
-    state.dragging = {
-      pointerId: event.pointerId,
-      offsetX: event.clientX - rect.left,
-      offsetY: event.clientY - rect.top,
-      moved: false,
-    };
     root.classList.add('beetol-dragging');
-    root.setPointerCapture?.(event.pointerId);
+    startOverlayPanelDrag(event, {
+      appId: 'beetol',
+      root,
+      minWidth: 120,
+      minHeight: 160,
+      side: () => state.dockSide,
+      box: () => ({
+        x: state.layout.x,
+        width: els.shell.offsetWidth || root.offsetWidth || state.layout.width,
+        height: els.shell.offsetHeight || root.offsetHeight || state.layout.height,
+        topOffset: state.layout.topOffset,
+      }),
+      setBox: box => {
+        if (typeof box.x === 'number') state.layout.x = box.x;
+        if (typeof box.width === 'number') state.layout.width = box.width;
+        if (typeof box.height === 'number') state.layout.height = box.height;
+        if (typeof box.topOffset === 'number') state.layout.topOffset = box.topOffset;
+        state.position = { edge: state.dockSide, x: state.layout.x, y: state.layout.topOffset };
+      },
+      apply: applyDockPosition,
+      persist: () => {
+        root.classList.remove('beetol-dragging');
+        savePosition();
+      },
+      disabled: () => state.dockOpen !== true,
+    });
   }
 
   root.addEventListener('pointerdown', event => {
+    if (event.target.closest('a')) return;
     if (!event.target.closest('.beetol-tab, .beetol-head, .beetol-signed-out-msg')) return;
     startDrag(event);
   });
 
-  root.addEventListener('pointermove', event => {
-    if (!state.dragging || state.dragging.pointerId !== event.pointerId) return;
-    const width = els.shell.offsetWidth || root.offsetWidth || 156;
-    const height = els.shell.offsetHeight || root.offsetHeight || 42;
-    const maxX = Math.max(SNAP_MARGIN, window.innerWidth - width - SNAP_MARGIN);
-    const maxY = Math.max(SNAP_MARGIN, window.innerHeight - height - SNAP_MARGIN);
-    const x = clamp(event.clientX - state.dragging.offsetX, SNAP_MARGIN, maxX);
-    const y = clamp(event.clientY - state.dragging.offsetY, SNAP_MARGIN, maxY);
-    state.dragging.moved = true;
-    state.position = { edge: state.position?.edge || 'left', x, y };
-    root.style.left = `${x}px`;
-    root.style.top = `${y}px`;
-  });
-
-  root.addEventListener('pointerup', event => {
-    if (!state.dragging || state.dragging.pointerId !== event.pointerId) return;
-    const position = snapPosition(
-      event.clientX - state.dragging.offsetX,
-      event.clientY - state.dragging.offsetY,
-    );
-    state.dragging = null;
-    state.position = position;
-    root.classList.remove('beetol-dragging');
-    root.releasePointerCapture?.(event.pointerId);
-    applyPosition(position);
-    savePosition();
-  });
-
-  root.addEventListener('pointercancel', event => {
-    if (!state.dragging || state.dragging.pointerId !== event.pointerId) return;
-    state.dragging = null;
-    root.classList.remove('beetol-dragging');
-    root.releasePointerCapture?.(event.pointerId);
-    applyPosition();
-  });
-
-  window.addEventListener('resize', () => {
+  const resizeListener = () => {
     applyPosition();
     savePosition();
-  });
+  };
+  window.addEventListener('resize', resizeListener);
+  addDisposable(() => window.removeEventListener('resize', resizeListener));
 
   function isPhotoViewerOpen() {
     if (location.pathname.includes('/photo/')) return true;
@@ -769,11 +935,45 @@
     root.dataset.photoViewer = String(open);
   }
 
-  const photoViewerObserver = new MutationObserver(syncPhotoViewerOffset);
-  photoViewerObserver.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener('popstate', syncPhotoViewerOffset);
-  window.addEventListener('hashchange', syncPhotoViewerOffset);
-  window.setInterval(syncPhotoViewerOffset, 1000);
+  let cancelPhotoViewerSync = null;
+  const schedulePhotoViewerSync = () => {
+    if (!lifecycleActive() || cancelPhotoViewerSync) return;
+    cancelPhotoViewerSync = runtimeScheduler.timeout(() => {
+      cancelPhotoViewerSync = null;
+      if (!lifecycleActive()) return;
+      syncPhotoViewerOffset();
+    }, 80);
+  };
+  addDisposable(() => {
+    cancelPhotoViewerSync?.();
+    cancelPhotoViewerSync = null;
+  });
+  let cancelPhotoViewerFollowUp = null;
+  const schedulePhotoViewerFollowUp = delayMs => {
+    if (!lifecycleActive()) return;
+    cancelPhotoViewerFollowUp?.();
+    cancelPhotoViewerFollowUp = runtimeScheduler.timeout(() => {
+      cancelPhotoViewerFollowUp = null;
+      if (!lifecycleActive()) return;
+      schedulePhotoViewerSync();
+    }, delayMs);
+  };
+  addDisposable(() => {
+    cancelPhotoViewerFollowUp?.();
+    cancelPhotoViewerFollowUp = null;
+  });
+  const photoViewerClickListener = () => {
+    schedulePhotoViewerSync();
+    schedulePhotoViewerFollowUp(350);
+  };
+  document.addEventListener('click', photoViewerClickListener, true);
+  addDisposable(() => document.removeEventListener('click', photoViewerClickListener, true));
+  const photoViewerKeyListener = event => {
+    if (event.key === 'Escape') schedulePhotoViewerFollowUp(120);
+  };
+  document.addEventListener('keydown', photoViewerKeyListener, true);
+  addDisposable(() => document.removeEventListener('keydown', photoViewerKeyListener, true));
+  syncPhotoViewerOffset();
 
   els.shell.addEventListener('pointerenter', () => {
     if (state.menuSoundArmed) return;
@@ -785,7 +985,8 @@
     state.menuSoundArmed = false;
   });
 
-  chrome.storage.onChanged.addListener((changes, area) => {
+  const storageListener = (changes, area) => {
+    if (!lifecycleActive()) return;
     if (area !== 'local') return;
     if (changes[ENABLED_KEY]) {
       state.enabled = changes[ENABLED_KEY].newValue !== false;
@@ -808,19 +1009,74 @@
     } else {
       render();
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(storageListener);
+  addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
 
-  prefersDark?.addEventListener?.('change', () => {
+  const panelThemeListener = () => {
+    if (!lifecycleActive()) return;
     if (state.settings.mode !== 'settings' || state.settings.settingsTheme !== 'system') return;
     root.dataset.mode = resolvedPanelMode();
-  });
+  };
+  addDisposable(observeOverlayPanelTheme(panelThemeListener));
 
-  setInterval(() => {
-    if (state.enabled && !document.hidden) render();
+  addRepeatingTask(() => {
+    if (lifecycleActive() && !document.hidden) render();
   }, 1000);
-  setInterval(() => {
-    if (state.enabled && !document.hidden) refreshState(true);
+  addRepeatingTask(() => {
+    if (lifecycleActive() && !document.hidden) refreshState(true);
   }, 60_000);
+
+  state.appFrame = createOverlayAppFrame({
+    id: 'beetol',
+    label: 'Beetol Game',
+    icon: TAB_ICON_URL,
+    badgeText: '',
+    isOpen: () => state.dockOpen,
+    onOpen: () => {
+      if (!lifecycleActive()) return;
+      state.dockOpen = true;
+      applyDockPosition();
+      render();
+    },
+    onClose: () => {
+      if (!lifecycleActive()) return;
+      state.dockOpen = false;
+      applyDockPosition();
+      render();
+    },
+    onSideChange: side => {
+      if (!lifecycleActive()) return;
+      state.dockSide = side;
+      applyDockPosition();
+    },
+  });
+  window.__milxdyBeetolLifecycle = {
+    open() {
+      if (!lifecycleActive()) return;
+      state.dockOpen = true;
+      applyDockPosition();
+      render();
+    },
+    close() {
+      if (!lifecycleActive()) return;
+      state.dockOpen = false;
+      applyDockPosition();
+      render();
+    },
+    dispose() {
+      state.dockOpen = false;
+      state.enabled = false;
+      disposeAll();
+      state.appFrame?.remove?.();
+      root.remove();
+      if (window.__milxdyBeetolLifecycle?.dispose === this.dispose) delete window.__milxdyBeetolLifecycle;
+    },
+    route() {
+      if (!lifecycleActive()) return;
+      syncPhotoViewerOffset();
+    },
+  };
 
   chrome.storage.local.get({
     beetolColor: 'red',
@@ -831,20 +1087,44 @@
     [POSITION_KEY]: null,
     [COOLDOWN_STATE_KEY]: null,
   }).then(settings => {
+    if (lifecycleSignal?.aborted) return;
     state.enabled = (settings[ENABLED_KEY] ?? settings[LEGACY_ENABLED_KEY]) !== false;
     state.position = settings[POSITION_KEY];
+    void restoreDockLayout(state.position);
     applyStoredCooldownState(settings[COOLDOWN_STATE_KEY]);
-    applyPosition();
     applySettings(settings);
     render();
     if (!state.enabled) return;
     send({ type: 'beetol:authStatus' }).then(response => {
+      if (!lifecycleActive()) return;
       state.signedIn = Boolean(response?.signedIn);
       render();
       if (state.signedIn) refreshState(true);
     });
   });
   render();
-})();
+}
 
-export {};
+export function boot(context = {}) {
+  mountBeetolGame(context);
+}
+
+export function open() {
+  window.__milxdyBeetolLifecycle?.open?.();
+}
+
+export function close() {
+  window.__milxdyBeetolLifecycle?.close?.();
+}
+
+export function onRouteChange() {
+  window.__milxdyBeetolLifecycle?.route?.();
+}
+
+export function disable() {
+  window.__milxdyBeetolLifecycle?.dispose?.();
+}
+
+export function dispose() {
+  window.__milxdyBeetolLifecycle?.dispose?.();
+}

@@ -1,2 +1,2 @@
 import "../features/remistats/sounds.js";
-import "../features/remistats/content.js";
+export * from "../features/remistats/content.js";

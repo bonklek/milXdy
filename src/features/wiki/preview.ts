@@ -8,19 +8,69 @@ const HOVER_DELAY_MS = 250;
 let activeCard: HTMLElement | null = null;
 let activeLink: HTMLAnchorElement | null = null;
 let hoverTimer: number | null = null;
+let sidebarOpener: ((url: string) => Promise<boolean> | boolean) | null = null;
+let previewDelegationInstalled = false;
+let dismissHandlersInstalled = false;
+const previewSettingsProviders = new WeakMap<HTMLAnchorElement, () => Settings>();
+
+export function configurePreviewSidebarOpener(opener: ((url: string) => Promise<boolean> | boolean) | null): void {
+  sidebarOpener = opener;
+}
 
 export function attachPreviewHandlers(link: HTMLAnchorElement, settingsProvider: () => Settings): void {
-  link.addEventListener("mouseenter", () => schedulePreview(link, settingsProvider));
-  link.addEventListener("focus", () => schedulePreview(link, settingsProvider));
-  link.addEventListener("mouseleave", hidePreviewSoon);
-  link.addEventListener("blur", hidePreview);
+  previewSettingsProviders.set(link, settingsProvider);
+  installPreviewDelegation();
 }
 
 export function installPreviewDismissHandlers(): void {
+  if (dismissHandlersInstalled) return;
+  dismissHandlersInstalled = true;
+  installPreviewDelegation();
   window.addEventListener("scroll", hidePreview, { passive: true });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape") hidePreview();
   });
+}
+
+function installPreviewDelegation(): void {
+  if (previewDelegationInstalled) return;
+  previewDelegationInstalled = true;
+  document.addEventListener("mouseover", handlePreviewMouseOver, { passive: true });
+  document.addEventListener("mouseout", handlePreviewMouseOut, { passive: true });
+  document.addEventListener("focusin", handlePreviewFocusIn);
+  document.addEventListener("focusout", handlePreviewFocusOut);
+}
+
+function handlePreviewMouseOver(event: MouseEvent): void {
+  const link = previewLinkFromEvent(event);
+  if (!link) return;
+  if (event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) return;
+  const settingsProvider = previewSettingsProviders.get(link);
+  if (settingsProvider) schedulePreview(link, settingsProvider);
+}
+
+function handlePreviewMouseOut(event: MouseEvent): void {
+  const link = previewLinkFromEvent(event);
+  if (!link) return;
+  if (event.relatedTarget instanceof Node && link.contains(event.relatedTarget)) return;
+  hidePreviewSoon();
+}
+
+function handlePreviewFocusIn(event: FocusEvent): void {
+  const link = previewLinkFromEvent(event);
+  if (!link) return;
+  const settingsProvider = previewSettingsProviders.get(link);
+  if (settingsProvider) schedulePreview(link, settingsProvider);
+}
+
+function handlePreviewFocusOut(event: FocusEvent): void {
+  if (previewLinkFromEvent(event)) hidePreview();
+}
+
+function previewLinkFromEvent(event: Event): HTMLAnchorElement | null {
+  const target = event.target instanceof Element ? event.target : null;
+  const link = target?.closest<HTMLAnchorElement>("a.remilia-wiki-link[data-wiki-title]");
+  return link && previewSettingsProviders.has(link) ? link : null;
 }
 
 function schedulePreview(link: HTMLAnchorElement, settingsProvider: () => Settings): void {
@@ -192,11 +242,24 @@ function renderPreview(data: PreviewData): HTMLElement {
   footer.target = "_blank";
   footer.rel = "noopener noreferrer";
   footer.textContent = "Read on Remilia Wiki";
+  footer.addEventListener("click", (event) => {
+    if (!sidebarOpener || shouldUseNativeLink(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void Promise.resolve(sidebarOpener(data.url)).then((opened) => {
+      if (opened) hidePreview();
+      else window.open(data.url, "_blank", "noopener,noreferrer");
+    });
+  });
   body.appendChild(footer);
 
   card.addEventListener("mouseleave", hidePreview);
   card.appendChild(body);
   return card;
+}
+
+function shouldUseNativeLink(event: MouseEvent): boolean {
+  return event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
 }
 
 function positionPreview(card: HTMLElement, link: HTMLElement): void {

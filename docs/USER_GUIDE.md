@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked Chromium extension for improving X/Twitter workflows around Remilia Wiki, Postreader, RemiNet/RemiStats, Beetol Game, and Maxxer. Open the extension icon to configure each feature tab.
+milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
 
 ## Updating The Extension
 
@@ -16,26 +16,56 @@ Do not remove the extension or load a second unpacked folder unless you intend t
 
 The Suite tab provides a guided version of this flow:
 
-- **Download** opens the latest GitHub prerelease zip when the update checker finds one.
+- **Download** opens the matching GitHub prerelease zip for the current browser target and build profile when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed target/profile.
 - **Steps** copies the safe in-place update checklist.
 - **Reload** calls Chrome's extension reload after you have replaced the files in the same folder.
 
-## Suite
+## Main, Apps, And Appearance
 
-Use the Suite tab for whole-extension controls.
+Use the Main tab for whole-extension controls, the in-page **Apps** rail item for app enablement and rail pinning, and the Appearance tab for visual presets.
 
 - **Update status** checks the configured GitHub release endpoint and exposes guided update buttons when needed.
-- **Reskin profile** controls how strongly milXdy restyles X/Twitter and Milady Maxxer surfaces:
-  - **Max** makes X look like a Remilia/Milady client, with broad X chrome changes and the strongest Maxxer card/profile treatments.
-  - **Moderate** keeps X recognizable while adding visible Remilia/Milady panels, badges, marked-surface styling, and balanced Maxxer treatments.
-  - **Min** keeps X mostly original, with restrained milXdy controls and lightweight Maxxer markers.
+- **Performance mode** is separate from Appearance. Fast minimizes background work, Balanced is the default, Full preloads more app surfaces, and Developer records extra diagnostics.
 - **Performance diagnostics** stores lightweight counters used by the Diag tab. Leave this off unless testing performance or preparing a bug report.
+
+### Apps Hub And Side Rail
+
+The shared side rail appears on X/Twitter and hosts dockable first-party apps such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, and Maxxer.
+
+- Click **Apps** to open the Apps Hub.
+- Use **Enable** or **Disable** to control whether an app can run.
+- Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
+- Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
+- On fresh installs, the Apps Hub opens once with Lite, Balanced, and Full setup choices. These choices apply app enablement, default rail pins, and the matching Performance mode. Skipping keeps the conservative fresh-install defaults, with heavier full-profile apps such as Music, Miladychan Portal, Beetol, RemiNet Chat, and Milady Maxxer left disabled until you enable them or choose Full.
+
+Enabled and pinned are different states: an app can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions.
+
+### Preset Decisions
+
+The Appearance presets set both visual treatment and ambient audio so each profile feels intentionally different.
+
+- **Max** is the full Remilia client profile. It enables the strongest X chrome reskin, Remilia fonts, shaped PFPs, square media, RemiStats backing boxes, gold incoming-poke alerts, RemiNet Chat overlay, raised/beveled Maxxer cards, shimmer, full Tweet PNG borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and the Post-reading completion ding.
+- **Medium** is the daily-driver profile. It keeps X recognizable, uses readable tweet text with Remilia UI chrome, shapes feed PFPs only, keeps media close to X defaults, uses native action-row pokes, enables RemiStats backing boxes and gold incoming-poke alerts, uses marked Maxxer rows without shimmer, keeps Tweet PNG exports complete with a neutral border, and keeps RemiStats/Milady Maxxer sounds without extra chrome click sounds.
+- **Minimal** is the quiet stock-X profile. It leaves fonts, PFPs, media, notifications, RemiStats backing boxes, gold poke styling, chat overlay, Maxxer shimmer, Tweet PNG borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and Post-reading completion dings off. It keeps functional controls such as action-row pokes and complete Tweet PNG content available.
+
+Read-aloud itself stays independent of presets because it is a utility/accessibility feature rather than part of the aesthetic intensity.
 
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
 
+## Platform Performance Modes
+
+Performance mode controls runtime budgets for scanning, lazy app imports, idle work, and background network concurrency.
+
+- **Fast**: smallest visible-surface window, no idle preloads, low network concurrency, no periodic safety scan.
+- **Balanced**: default mode with moderate surface budgets and no periodic safety scan.
+- **Full**: larger surface budgets and idle preload for richer app availability.
+- **Developer**: broad budgets plus long-task and layout-shift diagnostics for debugging.
+
+Use Fast when X/Twitter responsiveness matters most. Use Developer only while gathering diagnostics because it intentionally records more runtime data.
+
 ## Remilia Wiki
 
-The Wiki tab controls inline Remilia Wiki links and article-drafting helpers.
+The Wiki tab controls inline Remilia Wiki links, the docked Wiki sidebar app, and article-drafting helpers.
 
 ### Inline links
 
@@ -44,6 +74,10 @@ The Wiki tab controls inline Remilia Wiki links and article-drafting helpers.
 - **Debug mode** exposes matching diagnostics.
 - **Max links per post** and **Max low-confidence links** prevent posts from becoming overloaded with links.
 - **Link color** changes the inline link color.
+
+### Remilia Wiki Sidebar
+
+**Wiki** in the Apps rail opens a docked Remilia Wiki sidebar. Normal clicks on inline wiki links and preview read-more links open this sidebar by default; modifier-clicks keep the browser's normal new-tab behavior. The sidebar accepts only `https://wiki.remilia.org` URLs and includes an open-in-tab control for the full wiki page.
 
 ### Link later
 
@@ -73,16 +107,19 @@ The **Grok workflow** setting controls how much prompting milXdy does:
 
 Socratic mode is better for harder articles because it forces Grok to gather sources and plan before drafting. It is slower and depends more heavily on X/Grok UI stability.
 
-## Postreader
+## Post-reading
 
-The Reader tab controls post read-aloud behavior.
+The Reader tab controls post and Wiki read-aloud behavior.
 
-- Use **Postreader controls** to show read buttons on posts.
+- Use **Post-reading controls** to show read buttons on posts.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
 - **Include quote posts**, **Fetch full quotes**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
+- Use the Wiki sidebar read-aloud controls to read articles, move between paragraphs, and optionally auto-scroll the current spoken line into view.
+
+Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use an estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
 
 OCR runs locally and can miss stylized, low-resolution, or low-contrast text.
 
@@ -114,11 +151,12 @@ When RemiNet connector auth is available, milXdy can show a small incoming poke 
 
 ### RemiNet Chat
 
-Enable **Show RemiliaNET chat on X home** to mount the RemiNet Chat sidebar on supported X/Twitter routes.
+Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/Twitter routes and add a RemiNet entry to X Messages.
 
 - The chat uses the same RemiNet connector login as pokes and Beetol Game.
 - It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
 - It supports reactions, pokes, attachments, media previews, profile lookups, and minimized mode.
+- In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
 
 If the chat does not connect, confirm RemiNet login status first, then refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
@@ -131,10 +169,10 @@ The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunt
 - Click **Log in** on RemiliaNET so the site can start its current OIDC login flow.
 - Finish RemiliaNET login in the opened tab, including any 2FA step.
 - Return to milXdy and click **Retry session**.
-- RemiNet login state is stored in Chrome extension local storage.
+- RemiNet connector state and the short-lived RemiliaNET access token are stored in Chrome extension local storage. Rotating OIDC refresh tokens are kept in extension background memory when available and are not intentionally persisted.
 - Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
 
-After **Retry session**, milXdy checks the RemiliaNET browser session and reuses the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
+After **Retry session**, milXdy checks the RemiliaNET browser session and reuses or silently renews the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
 
 Clicking **Log out** disconnects milXdy from the RemiNet connector session. It does not necessarily sign the browser out of remilia.net; click **Retry session** again when you want milXdy to reuse the browser session.
 
@@ -147,6 +185,32 @@ Enable **Show Beetol hunt panel** to mount the Beetol Game hover panel on X/Twit
 - **Beetol color** controls the panel accent.
 - **Beetol mode** controls dark/light styling.
 - The panel uses the same RemiNet connector login as pokes.
+
+## Miladychan Portal
+
+Enable and pin **Miladychan** from the Apps Hub to browse live Miladychan boards from the shared side rail.
+
+- The portal shows active board summaries for the configured Miladychan boards.
+- Open a board to browse its thread list, sorted by sticky status, activity, connected users, posts, and update time.
+- Open a thread to read posts and media previews.
+- Thread headers and media links open the native Miladychan site, which remains the primary posting and full-board surface.
+- The portal stores panel layout and theme locally.
+
+The portal is a reader/browser surface. Deeper board deck, board-inspired radio, and advanced Miladychan expansion are tracked as future roadmap work.
+
+## Music
+
+Enable and pin **Music** from the Apps Hub to open the docked local music app.
+
+- **Library** indexes user-selected local folders in Chromium browsers that support persistent folder handles. Rescans ask for permission again when needed, mark removed files as missing, normalize basic filename metadata, and flag likely duplicates without touching local audio files.
+- **Queue** controls local playback order, including reorder, shuffle, repeat, progress seek, and volume.
+- **Playlists** lets you create, add visible library tracks, reorder, remove, retry matching, play, export, import, and QR-share metadata playlists.
+- **Radio** creates metadata-based sessions from playlists. Joining or importing a session computes the current track and offset locally from the shared start time and marks the active joined session.
+- **Settings** controls local folders, ISRC enrichment, auto-match behavior, and the optional AcoustID client key.
+
+ISRC enrichment is local-first. milXdy can infer candidates from file metadata, query MusicBrainz, and optionally use AcoustID when the user provides a key. Playlist and radio QR payloads share title, artist, album, ISRC, duration, playlist name, and start time metadata, not audio files. Imports match local files by ISRC first and then by title, artist, album, and duration.
+
+Firefox support for local music folders is limited by browser folder-handle support; use Chromium for the full local library workflow.
 
 ## Maxxer
 
@@ -178,11 +242,13 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 ## Privacy And Persistence
 
 - RemiStats calls `https://api.remistats.net`.
-- Remilia Wiki previews call `https://wiki.remilia.org`.
+- Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org`.
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; chat live updates use `wss://www.remilia.net`.
+- Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`.
+- Music enrichment may call MusicBrainz and AcoustID when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
-- Postreader OCR and Maxxer avatar inference run locally.
+- Post-reading OCR and Maxxer avatar inference run locally.
 - RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
 
 Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.

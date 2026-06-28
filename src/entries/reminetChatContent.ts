@@ -1,1 +1,1 @@
-import "../features/reminetChat/content";
+export * from "../features/reminetChat/content";

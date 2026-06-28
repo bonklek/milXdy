@@ -39,6 +39,28 @@ export async function safeLocalSet(values: Record<string, unknown>): Promise<boo
   }
 }
 
+export async function safeLocalRemove(keys: readonly string[]): Promise<boolean> {
+  if (!hasExtensionRuntime() || keys.length === 0) return false;
+  try {
+    await chrome.storage.local.remove([...keys] as never[]);
+    return true;
+  } catch (error) {
+    if (!markExtensionInvalidated(error)) throw error;
+    return false;
+  }
+}
+
+export async function safeSyncRemove(keys: readonly string[]): Promise<boolean> {
+  if (!hasExtensionRuntime() || keys.length === 0) return false;
+  try {
+    await chrome.storage.sync.remove([...keys] as never[]);
+    return true;
+  } catch (error) {
+    if (!markExtensionInvalidated(error)) throw error;
+    return false;
+  }
+}
+
 export async function safeRuntimeMessage<T>(message: unknown): Promise<T | null> {
   if (!hasExtensionRuntime()) return null;
   try {

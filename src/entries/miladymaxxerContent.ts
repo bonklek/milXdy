@@ -1,1 +1,1 @@
-import "../features/miladymaxxer/content";
+export * from "../features/miladymaxxer/content";

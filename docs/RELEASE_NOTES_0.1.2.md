@@ -9,7 +9,7 @@ milXdy `0.1.2` expanded the beta with Beetol integration, RemiNet login improvem
 - Added independent RemiStats score, beetle, and poke icon controls.
 - Improved poke sending, cooldown display, and related diagnostics.
 - Added Remilia Wiki Grok workflows, Link Later support, and a draggable new-page shortcut.
-- Improved Postreader OCR, image text ordering, quote handling, and custom TTS setup.
+- Improved Post-reading OCR, image text ordering, quote handling, and custom TTS setup.
 - Added Diag-tab bug reporting through GitHub or X, with optional LLM-assisted report drafting.
 - Expanded user documentation for install, update, privacy, and troubleshooting.
 

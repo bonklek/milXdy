@@ -11,6 +11,7 @@ export const DEFAULT_SETTINGS: ExtensionSettings = {
   whitelistHandles: [],
   miladyListHandles: [],
   includeRemiStatsBeetles: true,
+  hideNonMiladyOrBeetlePosts: false,
   soundEnabled: true,
   showLevelBadge: true,
   cardTheme: "full" as const,

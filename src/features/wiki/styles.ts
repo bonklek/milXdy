@@ -6,8 +6,14 @@ export function injectStyles(): void {
   style.id = STYLE_ID;
   style.textContent = `
     .remilia-wiki-link {
+      border: 0;
       color: var(--remilia-wiki-link-color, #ff4fbf);
+      font: inherit;
+      letter-spacing: inherit;
+      line-height: inherit;
+      padding: 0;
       text-decoration: underline;
+      text-decoration-thickness: from-font;
       text-decoration-style: dotted;
       text-underline-offset: 0.18em;
       cursor: pointer;

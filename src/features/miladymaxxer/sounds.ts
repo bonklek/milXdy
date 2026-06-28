@@ -12,19 +12,78 @@ import {
 import type { ExtensionSettings } from "./shared/types";
 
 // Module-level settings reference, updated by content.ts via setSoundSettings()
-let settings: ExtensionSettings = { mode: "off", whitelistHandles: [], miladyListHandles: [], includeRemiStatsBeetles: true, soundEnabled: false, showLevelBadge: true, cardTheme: "full" };
+let settings: ExtensionSettings = { mode: "off", whitelistHandles: [], miladyListHandles: [], includeRemiStatsBeetles: true, hideNonMiladyOrBeetlePosts: false, soundEnabled: false, showLevelBadge: true, cardTheme: "full" };
 
 export function setSoundSettings(next: ExtensionSettings): void {
   settings = next;
 }
 
+function isMaxxerDisabled(): boolean {
+  return document.documentElement.dataset.milxdyVisualDisableMaxxer === "true";
+}
+
+function isMaxxerActive(): boolean {
+  return settings.mode !== "off" && !isMaxxerDisabled();
+}
+
 let audioContext: AudioContext | null = null;
 const soundsAttached = new WeakSet<HTMLElement>();
+const soundSurfaces = new WeakSet<HTMLElement>();
 let dmListenersAttached = false;
+let gestureListenersAttached = false;
+let surfaceSoundDelegatesAttached = false;
+let postButtonSoundDelegateAttached = false;
+let globalMediaHoverDelegateAttached = false;
+type SoundDocumentEventMap = {
+  click: MouseEvent;
+  keydown: KeyboardEvent;
+  mousedown: MouseEvent;
+  mouseover: MouseEvent;
+};
+type SoundDocumentEventType = keyof SoundDocumentEventMap;
+type SoundDocumentListener<Type extends SoundDocumentEventType> = (event: SoundDocumentEventMap[Type]) => void;
+type SoundDocumentEventEntry = {
+  capture: boolean;
+  dispatcher: EventListener;
+  listeners: Set<EventListener>;
+};
+const soundDocumentEvents = new Map<string, SoundDocumentEventEntry>();
+
+function addSoundDocumentListener<Type extends SoundDocumentEventType>(
+  type: Type,
+  listener: SoundDocumentListener<Type>,
+  options: AddEventListenerOptions,
+  addDisposable: (disposable: () => void) => void,
+): void {
+  const capture = options.capture === true;
+  const key = `${type}:${capture ? "capture" : "bubble"}`;
+  let entry = soundDocumentEvents.get(key);
+  if (!entry) {
+    const listeners = new Set<EventListener>();
+    const dispatcher: EventListener = (event) => {
+      for (const current of Array.from(listeners)) current(event);
+    };
+    document.addEventListener(type, dispatcher, options);
+    entry = { capture, dispatcher, listeners };
+    soundDocumentEvents.set(key, entry);
+  }
+
+  const eventListener = listener as EventListener;
+  entry.listeners.add(eventListener);
+  addDisposable(() => {
+    const current = soundDocumentEvents.get(key);
+    if (!current) return;
+    current.listeners.delete(eventListener);
+    if (current.listeners.size > 0) return;
+    document.removeEventListener(type, current.dispatcher, current.capture);
+    soundDocumentEvents.delete(key);
+  });
+}
 
 // Eagerly create & resume AudioContext on first user gesture so it's
 // ready for non-gesture sounds (MutationObserver callbacks, etc.)
 function ensureAudioContext(): void {
+  if (!isMaxxerActive() || !settings.soundEnabled) return;
   if (audioContext && audioContext.state === "running") return;
   if (!audioContext) {
     try {
@@ -38,10 +97,56 @@ function ensureAudioContext(): void {
   }
 }
 
-// Bootstrap: listen for any user gesture to unlock audio
-document.addEventListener("click", ensureAudioContext, { once: false, passive: true, capture: true });
-document.addEventListener("keydown", ensureAudioContext, { once: false, passive: true, capture: true });
-document.addEventListener("mousedown", ensureAudioContext, { once: false, passive: true, capture: true });
+export function initializeSoundRuntime(addDisposable: (disposable: () => void) => void = () => undefined): void {
+  if (gestureListenersAttached) return;
+  gestureListenersAttached = true;
+  addSoundDocumentListener("click", ensureAudioContext, { passive: true, capture: true }, addDisposable);
+  addSoundDocumentListener("keydown", ensureAudioContext, { passive: true, capture: true }, addDisposable);
+  addSoundDocumentListener("mousedown", ensureAudioContext, { passive: true, capture: true }, addDisposable);
+  addDisposable(() => {
+    gestureListenersAttached = false;
+    audioContext?.close?.().catch(() => undefined);
+    audioContext = null;
+  });
+}
+
+export function initializeSurfaceSoundRuntime(addDisposable: (disposable: () => void) => void = () => undefined): void {
+  if (surfaceSoundDelegatesAttached) return;
+  surfaceSoundDelegatesAttached = true;
+
+  const mouseoverListener = (event: MouseEvent) => {
+    if (!isMaxxerActive()) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target) return;
+    const surface = closestSoundSurface(target);
+    if (!surface) return;
+
+    const media = target.closest<HTMLElement>(MEDIA_ELEMENTS);
+    if (media && surface.contains(media)) {
+      if (event.relatedTarget instanceof Node && media.contains(event.relatedTarget)) return;
+      playMediaHoverSound(surface.dataset.miladymaxxerEffect === "milady");
+      return;
+    }
+
+    if (event.relatedTarget instanceof Node && surface.contains(event.relatedTarget)) return;
+    playHoverSound(surface.dataset.miladymaxxerEffect === "milady");
+  };
+
+  const clickListener = (event: MouseEvent) => {
+    if (!isMaxxerActive()) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (!target?.closest(INTERACTIVE_ELEMENT)) return;
+    const surface = closestSoundSurface(target);
+    if (!surface) return;
+    playClickSound(surface.dataset.miladymaxxerEffect === "milady");
+  };
+
+  addSoundDocumentListener("mouseover", mouseoverListener, { passive: true }, addDisposable);
+  addSoundDocumentListener("click", clickListener, { passive: true }, addDisposable);
+  addDisposable(() => {
+    surfaceSoundDelegatesAttached = false;
+  });
+}
 
 
 // AudioContext can only be created/resumed after a real user gesture (click/keydown).
@@ -193,84 +298,60 @@ function playMediaHoverSound(isMilady: boolean): void {
 }
 
 export function attachSoundEvents(tweet: HTMLElement): void {
-  if (soundsAttached.has(tweet)) return;
-  soundsAttached.add(tweet);
-
-  const isMilady = () => tweet.dataset.miladymaxxerEffect === "milady";
-
-  tweet.addEventListener("mouseenter", () => {
-    if (settings.mode !== "off") {
-      playHoverSound(isMilady());
-    }
-  }, { passive: true });
-
-  tweet.addEventListener("click", (e) => {
-    if (settings.mode !== "off") {
-      const target = e.target as HTMLElement;
-      // Only play on interactive elements
-      if (target.closest(INTERACTIVE_ELEMENT)) {
-        playClickSound(isMilady());
-      }
-    }
-  }, { passive: true });
-
-  // Media hover sounds
-  const mediaElements = tweet.querySelectorAll<HTMLElement>(MEDIA_ELEMENTS);
-  for (const media of Array.from(mediaElements)) {
-    if (soundsAttached.has(media)) continue;
-    soundsAttached.add(media);
-    media.addEventListener("mouseenter", () => {
-      if (settings.mode !== "off") {
-        playMediaHoverSound(isMilady());
-      }
-    }, { passive: true });
-  }
+  soundSurfaces.add(tweet);
 }
 
 // Global media hover sounds — attaches a subtle pip to ALL media on the page,
 // regardless of whether the tweet was processed by the milady detection system.
-export function attachGlobalMediaHoverSounds(): void {
-  if (settings.mode === "off") return;
-
-  const mediaElements = document.querySelectorAll<HTMLElement>(MEDIA_ELEMENTS);
-  for (const media of Array.from(mediaElements)) {
-    if (soundsAttached.has(media)) continue;
-    soundsAttached.add(media);
-    media.addEventListener("mouseenter", () => {
-      if (settings.mode !== "off" && settings.soundEnabled && getAudioContext(true)) {
+export function attachGlobalMediaHoverSounds(addDisposable: (disposable: () => void) => void = () => undefined): void {
+  if (globalMediaHoverDelegateAttached) return;
+  globalMediaHoverDelegateAttached = true;
+  const mouseoverListener = (event: MouseEvent) => {
+    if (!isMaxxerActive() || !settings.soundEnabled || !getAudioContext(true)) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    const media = target?.closest<HTMLElement>(MEDIA_ELEMENTS);
+    if (!media || closestSoundSurface(media)) return;
+    if (event.relatedTarget instanceof Node && media.contains(event.relatedTarget)) return;
+    // Very subtle, short pip: quieter and shorter than the milady media hover.
+    playTone(500, 0.05, "sine", 0.02);
+  };
+  addSoundDocumentListener("mouseover", mouseoverListener, { passive: true }, addDisposable);
+  addDisposable(() => {
+    globalMediaHoverDelegateAttached = false;
+  });
         // Very subtle, short pip — quieter and shorter than the milady media hover
-        playTone(500, 0.05, "sine", 0.02);
-      }
-    }, { passive: true });
-  }
 }
 
-export function attachPostButtonSound(): void {
-  if (settings.mode === "off") return;
+export function attachPostButtonSound(addDisposable: (disposable: () => void) => void = () => undefined): void {
+  if (postButtonSoundDelegateAttached) return;
+  postButtonSoundDelegateAttached = true;
+  const clickListener = (event: MouseEvent) => {
+    if (!isMaxxerActive()) return;
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest(POST_BUTTONS)) playSendSound();
+  };
+  addSoundDocumentListener("click", clickListener, { passive: true }, addDisposable);
+  addDisposable(() => {
+    postButtonSoundDelegateAttached = false;
+  });
+  return;
+}
 
-  // Regular tweet buttons
-  const postButtons = document.querySelectorAll<HTMLElement>(POST_BUTTONS);
-
-  for (const button of Array.from(postButtons)) {
-    if (soundsAttached.has(button)) continue;
-    soundsAttached.add(button);
-
-    button.addEventListener("click", () => {
-      if (settings.mode !== "off") {
-        playSendSound();
-      }
-    }, { passive: true });
+function closestSoundSurface(target: HTMLElement): HTMLElement | null {
+  for (let node: HTMLElement | null = target; node; node = node.parentElement) {
+    if (soundSurfaces.has(node)) return node;
   }
+  return null;
 }
 
 // Global DM sound handlers - set up once
-export function attachDMSounds(): void {
+export function attachDMSounds(addDisposable: (disposable: () => void) => void = () => undefined): void {
   if (dmListenersAttached) return;
   dmListenersAttached = true;
 
   // Document-level click handler for all DM interactions
-  document.addEventListener("click", (e) => {
-    if (settings.mode === "off") return;
+  const clickListener = (e: MouseEvent) => {
+    if (!isMaxxerActive()) return;
 
     const target = e.target as HTMLElement;
     const button = target.closest("button") as HTMLElement | null;
@@ -297,11 +378,12 @@ export function attachDMSounds(): void {
     }
 
     // No click sounds in DM conversations — too noisy
-  }, { passive: true, capture: true });
+  };
+  addSoundDocumentListener("click", clickListener, { passive: true, capture: true }, addDisposable);
 
   // Document-level keydown for Enter to send in DM composer
-  document.addEventListener("keydown", (e) => {
-    if (settings.mode === "off") return;
+  const keydownListener = (e: KeyboardEvent) => {
+    if (!isMaxxerActive()) return;
     if (e.key !== "Enter" || e.shiftKey) return;
 
     const target = e.target as HTMLElement;
@@ -321,11 +403,12 @@ export function attachDMSounds(): void {
     if (inDMPage && isTextbox && notTweetComposer) {
       playSendSound();
     }
-  }, { passive: true, capture: true });
+  };
+  addSoundDocumentListener("keydown", keydownListener, { passive: true, capture: true }, addDisposable);
 
   // Hover sound on chat list items and DM links
-  document.addEventListener("mouseover", (e) => {
-    if (settings.mode === "off") return;
+  const mouseoverListener = (e: MouseEvent) => {
+    if (!isMaxxerActive()) return;
     if (!getAudioContext(true)) return;
 
     const target = e.target as HTMLElement;
@@ -339,77 +422,72 @@ export function attachDMSounds(): void {
       soundsAttached.add(chatLink);
       playTone(600, 0.04, "sine", 0.03, 0, 0.01);
     }
-  }, { passive: true });
+  };
+  addSoundDocumentListener("mouseover", mouseoverListener, { passive: true }, addDisposable);
+  addDisposable(() => {
+    dmListenersAttached = false;
+  });
 
 }
 
 
-// Poll for new DM messages by tracking seen message UUIDs.
-// Self-starting: runs a global 500ms interval that checks if we're on a DM page.
-// Suppresses the pip for 2s after any user interaction to avoid false positives
+// Track new DM message surfaces delivered by the shared runtime scanner.
+// Suppresses the pip for 2s after user interaction to avoid false positives
 // caused by Twitter regenerating DOM nodes with new UUIDs on re-render.
 const seenMessageIds = new Set<string>();
 let dmPollStarted = false;
 let wasInDMs = false;
 let lastUserInteraction = 0;
 
-export function observeIncomingMessages(): void {
+export function observeIncomingMessages(addDisposable: (disposable: () => void) => void = () => undefined): void {
   if (dmPollStarted) return;
   dmPollStarted = true;
 
   // Track sends to suppress false pips (Twitter re-renders on send create new UUIDs)
   const markSend = () => { lastUserInteraction = Date.now(); };
-  document.addEventListener("keydown", (e) => {
+  const keydownListener = (e: KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) markSend();
-  }, { passive: true, capture: true });
+  };
+  addSoundDocumentListener("keydown", keydownListener, { passive: true, capture: true }, addDisposable);
+  addDisposable(() => {
+    dmPollStarted = false;
+    wasInDMs = false;
+    seenMessageIds.clear();
+  });
+}
 
-  setInterval(() => {
-    const inDMs = window.location.pathname.includes("/messages") ||
-                  window.location.pathname.includes("/i/chat");
+export function syncIncomingMessageRoute(): void {
+  if (isDmRoute()) return;
+  if (!wasInDMs) return;
+  seenMessageIds.clear();
+  wasInDMs = false;
+}
 
-    if (!inDMs) {
-      if (wasInDMs) {
-        seenMessageIds.clear();
-        wasInDMs = false;
-      }
-      return;
-    }
+export function handleIncomingMessageSurface(element: HTMLElement): void {
+  if (!isDmRoute()) {
+    syncIncomingMessageRoute();
+    return;
+  }
+  const id = element.matches(DM_MESSAGE)
+    ? element.getAttribute("data-testid")
+    : element.querySelector<HTMLElement>(DM_MESSAGE)?.getAttribute("data-testid");
+  if (!id) return;
 
-    // Seed on first poll after entering DMs
-    if (!wasInDMs) {
-      wasInDMs = true;
-      lastUserInteraction = Date.now();
-      for (const msg of Array.from(document.querySelectorAll(DM_MESSAGE))) {
-        const id = msg.getAttribute("data-testid");
-        if (id) seenMessageIds.add(id);
-      }
-      return;
-    }
+  if (!wasInDMs) {
+    wasInDMs = true;
+    lastUserInteraction = Date.now();
+    seenMessageIds.add(id);
+    return;
+  }
 
-    if (!settings.soundEnabled || settings.mode === "off") return;
-    if (document.hidden) return;
+  if (seenMessageIds.has(id)) return;
+  seenMessageIds.add(id);
+  if (!settings.soundEnabled || !isMaxxerActive() || document.hidden) return;
+  if (Date.now() - lastUserInteraction < 2000) return;
+  playMessageBlip();
+}
 
-    // Suppress pip for 2s after user interaction (Twitter re-renders create new UUIDs)
-    if (Date.now() - lastUserInteraction < 2000) {
-      // Still update the seen set so we don't false-trigger after cooldown
-      for (const msg of Array.from(document.querySelectorAll(DM_MESSAGE))) {
-        const id = msg.getAttribute("data-testid");
-        if (id) seenMessageIds.add(id);
-      }
-      return;
-    }
-
-    let hasNew = false;
-    for (const msg of Array.from(document.querySelectorAll(DM_MESSAGE))) {
-      const id = msg.getAttribute("data-testid");
-      if (id && !seenMessageIds.has(id)) {
-        seenMessageIds.add(id);
-        hasNew = true;
-      }
-    }
-
-    if (hasNew) {
-      playMessageBlip();
-    }
-  }, 250);
+function isDmRoute(): boolean {
+  return window.location.pathname.includes("/messages") ||
+    window.location.pathname.includes("/i/chat");
 }

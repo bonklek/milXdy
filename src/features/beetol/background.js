@@ -1,19 +1,24 @@
-const BASE_URL = 'https://www.remilia.net';
-const OIDC_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`;
-const AUTH_COOKIE_NAME = 'authToken';
-const AUTH_COOKIE_TTL_SECONDS = 900;
+import { registerBackgroundMessageHandlers } from "../../shared/backgroundRouter";
+import {
+  REMILIA_BASE_URL,
+  prepareRemiliaAuth,
+  renewRemiliaAuth,
+  clearRemiliaAuth,
+  clearStoredRemiliaAuth,
+  isRemiliaDisconnected,
+  allowRemiliaSessionAuth,
+  setRemiliaAuthCookie,
+  adoptRemiliaBrowserSession,
+  migrateRemiliaAuth,
+} from "../../shared/remiliaAuth";
+
+const BASE_URL = REMILIA_BASE_URL;
 const POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const BEETLE_HUNT_COOLDOWN_FALLBACK_MS = 60 * 60 * 1000;
 const INCOMING_POKE_WINDOW_MS = POKE_COOLDOWN_MS;
 const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
-const ACCESS_TOKEN_KEY = 'beetol.accessToken';
-const REFRESH_TOKEN_KEY = 'beetol.refreshToken';
-const DISCONNECTED_KEY = 'beetol.disconnected';
 const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
-const TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY];
-const LEGACY_PREFIX = 'bex' + 'tol';
-const LEGACY_TOKEN_KEYS = [`${LEGACY_PREFIX}.accessToken`, `${LEGACY_PREFIX}.refreshToken`];
+const SESSION_PROBE_PATH = '/api/beetle/user';
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
   'beetol:logout',
@@ -57,133 +62,32 @@ async function setStored(values) {
   return chrome.storage.local.set(values);
 }
 
-async function migrateAuth() {
-  const legacyAccessKey = `${LEGACY_PREFIX}.accessToken`;
-  const legacyRefreshKey = `${LEGACY_PREFIX}.refreshToken`;
-  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, legacyAccessKey, legacyRefreshKey]);
-  const next = {};
-  if (!stored[ACCESS_TOKEN_KEY] && stored[legacyAccessKey]) next[ACCESS_TOKEN_KEY] = stored[legacyAccessKey];
-  if (!stored[REFRESH_TOKEN_KEY] && stored[legacyRefreshKey]) next[REFRESH_TOKEN_KEY] = stored[legacyRefreshKey];
-  if (Object.keys(next).length) await setStored(next);
-}
+const migrateAuth = migrateRemiliaAuth;
 
 async function clearAuth() {
-  await clearAuthCookie();
-  await chrome.storage.local.remove([...TOKEN_KEYS, ...LEGACY_TOKEN_KEYS]);
-  return setStored({ [DISCONNECTED_KEY]: true });
+  return clearRemiliaAuth();
 }
 
 async function clearStoredAuth() {
-  return chrome.storage.local.remove([...TOKEN_KEYS, ...LEGACY_TOKEN_KEYS]);
-}
-
-async function isDisconnected() {
-  const stored = await getStored([DISCONNECTED_KEY]);
-  return stored[DISCONNECTED_KEY] === true;
-}
-
-async function allowSessionAuth() {
-  await chrome.storage.local.remove([DISCONNECTED_KEY]);
-}
-
-async function setAuthCookie(accessToken) {
-  if (!accessToken || !chrome.cookies?.set) return;
-  try {
-    await chrome.cookies.set({
-      url: BASE_URL,
-      name: AUTH_COOKIE_NAME,
-      value: accessToken,
-      path: '/',
-      secure: true,
-      sameSite: 'no_restriction',
-      expirationDate: Math.floor(Date.now() / 1000) + AUTH_COOKIE_TTL_SECONDS,
-    });
-  } catch (error) {
-    console.warn('Failed to set RemiliaNET auth cookie', error);
-  }
-}
-
-async function clearAuthCookie() {
-  if (!chrome.cookies?.remove) return;
-  try {
-    await chrome.cookies.remove({ url: BASE_URL, name: AUTH_COOKIE_NAME });
-  } catch (error) {
-    console.warn('Failed to clear RemiliaNET auth cookie', error);
-  }
-}
-
-async function getAuthCookie() {
-  if (!chrome.cookies?.get) return '';
-  try {
-    const cookie = await chrome.cookies.get({ url: BASE_URL, name: AUTH_COOKIE_NAME });
-    return typeof cookie?.value === 'string' ? cookie.value : '';
-  } catch (error) {
-    console.warn('Failed to read RemiliaNET auth cookie', error);
-    return '';
-  }
+  return clearStoredRemiliaAuth();
 }
 
 async function adoptBrowserSession(options = {}) {
-  if (!options.ignoreDisconnect && await isDisconnected()) {
-    return { ok: false, disconnected: true };
-  }
-
-  const session = await remiliaSessionFetch('GET', '/api/beetle/user');
-  if (!session.ok) return { ok: false, session };
-
-  const cookieToken = await getAuthCookie();
-  if (cookieToken) {
-    await setStored({
-      [ACCESS_TOKEN_KEY]: cookieToken,
-      [REFRESH_TOKEN_KEY]: null,
-    });
-  }
-
-  await allowSessionAuth();
-  return { ok: true, token: cookieToken, session };
-}
-
-async function oidc(params) {
-  const response = await fetch(OIDC_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: 'profile', ...params }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    return {
-      ok: false,
-      error: data.error || `HTTP ${response.status}`,
-      description: data.error_description || '',
-    };
-  }
-  if (!data.access_token) return { ok: false, error: 'NO_ACCESS_TOKEN' };
-  await setAuthCookie(data.access_token);
-  await setStored({
-    [ACCESS_TOKEN_KEY]: data.access_token,
-    [REFRESH_TOKEN_KEY]: data.refresh_token || null,
-  });
-  return { ok: true };
+  return adoptRemiliaBrowserSession(SESSION_PROBE_PATH, options);
 }
 
 async function refreshAccessToken() {
-  if (await isDisconnected()) return false;
-  await migrateAuth();
-  const stored = await getStored([REFRESH_TOKEN_KEY]);
-  const refreshToken = stored[REFRESH_TOKEN_KEY];
-  if (!refreshToken) return false;
-  const result = await oidc({ grant_type: 'refresh_token', refresh_token: refreshToken });
+  const result = await renewRemiliaAuth(SESSION_PROBE_PATH);
   return result.ok;
 }
 
 async function remiliaFetch(method, path, body, retry = true) {
-  if (await isDisconnected()) return { ok: false, authRequired: true, disconnected: true };
+  if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true };
   await migrateAuth();
-  const stored = await getStored([ACCESS_TOKEN_KEY]);
-  const adopted = await adoptBrowserSession();
-  const accessToken = adopted.token || stored[ACCESS_TOKEN_KEY];
+  const prepared = await prepareRemiliaAuth(SESSION_PROBE_PATH);
+  const accessToken = prepared.token;
   if (!accessToken) return { ok: false, authRequired: true };
-  await setAuthCookie(accessToken);
+  await setRemiliaAuthCookie(accessToken);
 
   const result = await remiliaRequest(method, path, body, {
     credentials: 'include',
@@ -275,7 +179,16 @@ async function runAction(action) {
 
   if (!result.ok) return result;
   const cooldownMs = extractActionCooldownMs(result.data, action);
-  if (result.data?.success === false) return { ok: true, actionResult: result.data, cooldownMs };
+  if (result.data?.success === false) {
+    const after = await getState();
+    return {
+      ok: true,
+      actionResult: result.data,
+      cooldownMs,
+      user: after.ok ? after.user : null,
+      fetchedAt: after.ok ? after.fetchedAt : Date.now(),
+    };
+  }
 
   const after = await getState();
   const inventoryAfter = after.ok ? after.user?.inventory || {} : {};
@@ -496,19 +409,13 @@ function normalizeUsername(value) {
 }
 
 async function remiliaPokeFetch(username) {
-  if (await isDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
+  if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
   await migrateAuth();
-  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
-  const adoptedSession = await adoptBrowserSession();
-  let accessToken = adoptedSession.token || stored[ACCESS_TOKEN_KEY];
-  if (!accessToken && stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
-    accessToken = (await getStored([ACCESS_TOKEN_KEY]))[ACCESS_TOKEN_KEY];
-  }
-  if (!accessToken) {
-    if (!adoptedSession.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
-  }
+  const prepared = await prepareRemiliaAuth(SESSION_PROBE_PATH);
+  const accessToken = prepared.token || '';
+  if (!accessToken && !prepared.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
 
-  if (accessToken) await setAuthCookie(accessToken);
+  if (accessToken) await setRemiliaAuthCookie(accessToken);
   const attempts = [
     { authMethod: 'cookie', credentials: 'include' },
     ...(accessToken ? [
@@ -647,9 +554,6 @@ function extractCooldownMs(data, action) {
 function extractActionCooldownMs(data, action) {
   const cooldownMs = extractCooldownMs(data, action);
   if (cooldownMs > 0) return cooldownMs;
-  if (action === 'beetleHunt' && isCooldownMessage(data?.message || data?.error || data?.data?.message || data?.data?.error)) {
-    return BEETLE_HUNT_COOLDOWN_FALLBACK_MS;
-  }
   return 0;
 }
 
@@ -669,6 +573,13 @@ function normalizeCooldownMs(value) {
     if (!trimmed) return 0;
     const numeric = Number(trimmed);
     if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
+    const colonMatch = trimmed.match(/\b(?:(\d+):)?([0-5]?\d):([0-5]\d)\b/);
+    if (colonMatch) {
+      const hours = Number(colonMatch[1] || 0);
+      const minutes = Number(colonMatch[2] || 0);
+      const seconds = Number(colonMatch[3] || 0);
+      return ((hours * 60 + minutes) * 60 + seconds) * 1000;
+    }
     const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
     if (match && match[0].trim()) {
       const days = Number(match[1] || 0);
@@ -681,93 +592,81 @@ function normalizeCooldownMs(value) {
   return 0;
 }
 
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!MESSAGE_TYPES.has(message?.type)) return false;
+registerBackgroundMessageHandlers([{
+  type: 'beetol:*',
+  matches: isBeetolMessage,
+  handle: handleBeetolMessage,
+}]);
 
-  (async () => {
-    try {
-      if (message?.type === 'beetol:logout') {
-        await clearAuth();
-        sendResponse({ ok: true });
-        return;
-      }
-      if (message?.type === 'beetol:authStatus') {
-        await migrateAuth();
-        const adopted = await adoptBrowserSession();
-        if (adopted.ok) {
-          sendResponse({
-            ok: true,
-            signedIn: true,
-            method: adopted.token ? 'sso' : 'session',
-          });
-          return;
-        }
-        const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
-        if (stored[ACCESS_TOKEN_KEY]) {
-          const whoami = await remiliaFetch('GET', '/api/profile/whoami');
-          sendResponse({
-            ok: true,
-            signedIn: Boolean(whoami.ok),
-            method: whoami.ok ? 'token' : null,
-            user: whoami.ok ? whoami.data : null,
-          });
-          return;
-        }
-        if (stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
-          const whoami = await remiliaFetch('GET', '/api/profile/whoami');
-          sendResponse({
-            ok: true,
-            signedIn: Boolean(whoami.ok),
-            method: whoami.ok ? 'token' : null,
-            user: whoami.ok ? whoami.data : null,
-          });
-          return;
-        }
-        sendResponse({
-          ok: true,
-          signedIn: false,
-          method: null,
-        });
-        return;
-      }
-      if (message?.type === 'beetol:sessionStatus') {
-        await allowSessionAuth();
-        const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
-        sendResponse({
-          ok: true,
-          signedIn: Boolean(adopted.ok),
-          method: adopted.ok ? (adopted.token ? 'sso' : 'session') : null,
-        });
-        return;
-      }
-      if (message?.type === 'beetol:getState') {
-        sendResponse(await getState());
-        return;
-      }
-      if (message?.type === 'beetol:action') {
-        sendResponse(await runAction(message.action));
-        return;
-      }
-      if (message?.type === 'beetol:crunchJunk') {
-        sendResponse(await crunchJunk());
-        return;
-      }
-      if (message?.type === 'beetol:poke') {
-        sendResponse(await pokeUser(message.username));
-        return;
-      }
-      if (message?.type === 'beetol:pokeEligibility') {
-        sendResponse(await getPokeEligibility(message.username));
-        return;
-      }
-      if (message?.type === 'beetol:incomingPokes') {
-        sendResponse(await getIncomingPokes());
-        return;
-      }
-      sendResponse({ ok: false, error: 'UNKNOWN_BEETOL_MESSAGE' });
-    } catch (error) {
-      sendResponse({ ok: false, error: error?.message || String(error) });
-    }
-  })();
-  return true;
-});
+function isBeetolMessage(message) {
+  return MESSAGE_TYPES.has(message?.type);
+}
+
+async function handleBeetolMessage(message) {
+  if (message?.type === 'beetol:logout') {
+    await clearAuth();
+    return { ok: true };
+  }
+  if (message?.type === 'beetol:authStatus') {
+    return getAuthStatus();
+  }
+  if (message?.type === 'beetol:sessionStatus') {
+    await allowRemiliaSessionAuth();
+    const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
+    return {
+      ok: true,
+      signedIn: Boolean(adopted.ok),
+      method: adopted.ok ? (adopted.token ? 'sso' : 'session') : null,
+    };
+  }
+  if (message?.type === 'beetol:getState') {
+    return getState();
+  }
+  if (message?.type === 'beetol:action') {
+    return runAction(message.action);
+  }
+  if (message?.type === 'beetol:crunchJunk') {
+    return crunchJunk();
+  }
+  if (message?.type === 'beetol:poke') {
+    return pokeUser(message.username);
+  }
+  if (message?.type === 'beetol:pokeEligibility') {
+    return getPokeEligibility(message.username);
+  }
+  if (message?.type === 'beetol:incomingPokes') {
+    return getIncomingPokes();
+  }
+  return { ok: false, error: 'UNKNOWN_BEETOL_MESSAGE' };
+}
+
+async function getAuthStatus() {
+  await migrateAuth();
+  const adopted = await adoptBrowserSession();
+  if (adopted.ok) {
+    return {
+      ok: true,
+      signedIn: true,
+      method: adopted.token ? 'sso' : 'session',
+    };
+  }
+  const renewed = await renewRemiliaAuth(SESSION_PROBE_PATH);
+  if (renewed.ok) {
+    return authStatusFromWhoami(renewed.method || 'token');
+  }
+  return {
+    ok: true,
+    signedIn: false,
+    method: null,
+  };
+}
+
+async function authStatusFromWhoami(method = 'token') {
+  const whoami = await remiliaFetch('GET', '/api/profile/whoami');
+  return {
+    ok: true,
+    signedIn: Boolean(whoami.ok),
+    method: whoami.ok ? method : null,
+    user: whoami.ok ? whoami.data : null,
+  };
+}

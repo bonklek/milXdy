@@ -1,11 +1,20 @@
 import { cp, copyFile, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { createRequire } from "node:module";
 import esbuild from "esbuild";
+import { commonAssetDirs, webAccessibleMatches } from "./release-builds.mjs";
+import { appIncludedInBuildProfile, hostPermissionsForProfile } from "./release-registry.mjs";
 
 const watch = process.argv.includes("--watch");
 const target = readTarget();
-const outDir = `dist/${target}`;
+const buildProfile = readProfile();
+const outDir = buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`;
+const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const registryApps = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
+const firstPartyApps = registryApps.filter((app) => appIncludedInBuildProfile(app, buildProfile));
+const require = createRequire(import.meta.url);
+const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
 
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
@@ -14,39 +23,45 @@ await mkdir(`${outDir}/features`, { recursive: true });
 await writeManifest();
 await copyFile("public/popup.html", `${outDir}/popup.html`);
 await copyFile("public/popup.css", `${outDir}/popup.css`);
-await copyFile("public/ocr.html", `${outDir}/ocr.html`);
-if (existsSync("public/miladymaxxer/milady-logo.png")) {
+if (appEnabled("post-reading")) {
+  await copyFile("public/ocr.html", `${outDir}/ocr.html`);
+}
+if (appEnabled("miladymaxxer") && existsSync("public/miladymaxxer/milady-logo.png")) {
   await copyFile("public/miladymaxxer/milady-logo.png", `${outDir}/milady-logo.png`);
 }
 
-for (const dir of ["icons", "remistats", "remilia-fonts", "beetol", "miladymaxxer", "models", "generated", "wiki-helper"]) {
+for (const dir of unique([
+  ...commonAssetDirs,
+  ...firstPartyApps.flatMap((app) => app.assets || []),
+])) {
   if (existsSync(`public/${dir}`)) {
     await cp(`public/${dir}`, `${outDir}/${dir}`, { recursive: true });
   }
 }
-if (existsSync("src/features/remistats/remistats.css")) {
-  await copyFile("src/features/remistats/remistats.css", `${outDir}/remistats/remistats.css`);
+for (const sheet of firstPartyApps.flatMap((app) => app.css || [])) {
+  if (existsSync(sheet.source)) {
+    await mkdir(`${outDir}/${sheet.targetDir}`, { recursive: true });
+    await copyFile(sheet.source, `${outDir}/${sheet.targetDir}/${sheet.target}`);
+  }
 }
-if (existsSync("src/features/beetol/content.css")) {
-  await copyFile("src/features/beetol/content.css", `${outDir}/beetol/content.css`);
-}
-if (existsSync("src/features/reminetChat/content.css")) {
-  await mkdir(`${outDir}/reminetChat`, { recursive: true });
-  await copyFile("src/features/reminetChat/content.css", `${outDir}/reminetChat/content.css`);
+if (appEnabled("music") && existsSync("node_modules/@unimusic/chromaprint/dist/chromaprint.wasm")) {
+  await copyFile("node_modules/@unimusic/chromaprint/dist/chromaprint.wasm", `${outDir}/features/chromaprint.wasm`);
 }
 
-await mkdir(`${outDir}/ocr/core`, { recursive: true });
-await mkdir(`${outDir}/ocr/lang`, { recursive: true });
-if (existsSync("node_modules/tesseract.js/dist/worker.min.js")) {
-  await copyFile("node_modules/tesseract.js/dist/worker.min.js", `${outDir}/ocr/worker.min.js`);
+if (appEnabled("post-reading")) {
+  await mkdir(`${outDir}/ocr/core`, { recursive: true });
+  await mkdir(`${outDir}/ocr/lang`, { recursive: true });
+  if (existsSync("node_modules/tesseract.js/dist/worker.min.js")) {
+    await copyFile("node_modules/tesseract.js/dist/worker.min.js", `${outDir}/ocr/worker.min.js`);
+  }
+  if (tesseractCoreDir) {
+    await cp(tesseractCoreDir, `${outDir}/ocr/core`, { recursive: true });
+  }
+  if (existsSync("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz")) {
+    await copyFile("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz", `${outDir}/ocr/lang/eng.traineddata.gz`);
+  }
 }
-if (existsSync("node_modules/tesseract.js-core")) {
-  await cp("node_modules/tesseract.js-core", `${outDir}/ocr/core`, { recursive: true });
-}
-if (existsSync("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz")) {
-  await copyFile("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz", `${outDir}/ocr/lang/eng.traineddata.gz`);
-}
-if (existsSync("node_modules/onnxruntime-web/dist")) {
+if (appEnabled("miladymaxxer") && existsSync("node_modules/onnxruntime-web/dist")) {
   await mkdir(`${outDir}/ort`, { recursive: true });
   for (const file of [
     "ort-wasm-simd-threaded.jsep.mjs",
@@ -63,6 +78,12 @@ const common = {
   target: "es2022",
   sourcemap: false,
   logLevel: "info",
+  define: {
+    MILXDY_BUILD_PROFILE: JSON.stringify(buildProfile),
+    MILXDY_BUILD_TARGET: JSON.stringify(target),
+    MILXDY_VERSION: JSON.stringify(packageJson.version),
+  },
+  plugins: [profileRegistryPlugin()],
 };
 
 const contexts = [];
@@ -77,8 +98,60 @@ function readTarget() {
   return value;
 }
 
+function readProfile() {
+  const value = process.argv.find((arg) => arg.startsWith("--profile="))?.split("=")[1] ?? "full";
+  if (value !== "lite" && value !== "balanced" && value !== "full") {
+    throw new Error(`Unknown build profile "${value}". Use "lite", "balanced", or "full".`);
+  }
+  return value;
+}
+
+function appEnabled(id) {
+  return firstPartyApps.some((app) => app.id === id);
+}
+
+function profileRegistryPlugin() {
+  return {
+    name: "milxdy-profile-registry",
+    setup(build) {
+      build.onLoad({ filter: /firstPartyApps\.json$/ }, () => ({
+        contents: JSON.stringify(registryApps),
+        loader: "json",
+      }));
+    },
+  };
+}
+
+function unique(values) {
+  return Array.from(new Set(values));
+}
+
+function resolvePackageDir(packageName) {
+  try {
+    return resolve(require.resolve(`${packageName}/package.json`), "..");
+  } catch {
+    try {
+      return dirname(require.resolve(packageName));
+    } catch {
+      return resolvePnpmPackageDir(packageName);
+    }
+  }
+}
+
+function resolvePnpmPackageDir(packageName) {
+  const pnpmDir = resolve("node_modules/.pnpm");
+  if (!existsSync(pnpmDir)) return null;
+  const packageFolderName = packageName.replace("/", "+");
+  const entry = readdirSync(pnpmDir).find((name) => name === packageFolderName || name.startsWith(`${packageFolderName}@`));
+  if (!entry) return null;
+  const packageDir = resolve(pnpmDir, entry, "node_modules", packageName);
+  return existsSync(packageDir) ? packageDir : null;
+}
+
 async function writeManifest() {
   const manifest = JSON.parse(await readFile("public/manifest.json", "utf8"));
+  manifest.host_permissions = buildHostPermissions(manifest.host_permissions || []);
+  manifest.web_accessible_resources = buildWebAccessibleResources(manifest.web_accessible_resources || []);
   if (target === "firefox") {
     manifest.background = {
       scripts: ["background.js"],
@@ -92,6 +165,33 @@ async function writeManifest() {
     };
   }
   await writeFile(`${outDir}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
+}
+
+function buildHostPermissions(existing) {
+  if (buildProfile === "full") return existing;
+  return hostPermissionsForProfile(registryApps, buildProfile);
+}
+
+function buildWebAccessibleResources(existing) {
+  const resources = unique([
+    "brand/*",
+    "icons/*",
+    "remilia-fonts/*",
+    "features/*.js",
+    ...firstPartyApps.flatMap((app) => app.assets || []).map((dir) => `${dir}/*`),
+    ...firstPartyApps.flatMap((app) => app.requiredOutputs || []),
+  ]);
+  if (appEnabled("post-reading")) {
+    resources.push("ocr/*");
+    if (tesseractCoreDir) resources.push("ocr/core/*");
+    if (existsSync("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz")) resources.push("ocr/lang/*");
+  }
+  if (appEnabled("music")) resources.push("features/*.wasm");
+  if (appEnabled("miladymaxxer")) resources.push("features/*.wasm", "worker.js", "ort/*", "generated/*", "models/*", "milady-logo.png");
+  return [{
+    resources: unique(resources),
+    matches: webAccessibleMatches,
+  }];
 }
 
 async function buildOrWatch(options) {
@@ -132,19 +232,14 @@ async function mirrorChromiumRootOutput() {
     "popup.css",
     "popup.html",
     "popup.js",
+    "wikiFrame.js",
     "worker.js",
-    "beetol",
     "features",
-    "generated",
-    "icons",
-    "miladymaxxer",
-    "models",
-    "ocr",
-    "ort",
-    "remilia-fonts",
-    "reminetChat",
-    "remistats",
-    "wiki-helper",
+    ...unique([
+      ...commonAssetDirs,
+      ...firstPartyApps.flatMap((app) => app.assets || []),
+      ...firstPartyApps.flatMap((app) => (app.css || []).map((sheet) => sheet.targetDir)),
+    ]),
   ];
   for (const entry of entries) {
     await rm(`${rootOutDir}/${entry}`, { recursive: true, force: true });
@@ -160,6 +255,7 @@ await buildOrWatch({
     content: source("src/content.ts"),
     background: source("src/background.ts"),
     popup: source("src/popup.ts"),
+    wikiFrame: source("src/entries/wikiFrameContent.ts"),
   },
   outdir: outDir,
   format: "iife",
@@ -167,43 +263,31 @@ await buildOrWatch({
 
 await buildOrWatch({
   ...common,
-  entryPoints: {
-    "features/wiki": source("src/entries/wikiContent.ts"),
-    "features/postreader": source("src/entries/postreaderContent.ts"),
-    "features/remistats": source("src/entries/remistatsContent.ts"),
-    "features/miladymaxxer": source("src/entries/miladymaxxerContent.ts"),
-    "features/beetol": source("src/entries/beetolContent.ts"),
-    "features/reminetChat": source("src/entries/reminetChatContent.ts"),
-  },
+  entryPoints: Object.fromEntries(firstPartyApps.map((app) => [app.entryName, source(app.entryPoint)])),
   outdir: outDir,
   format: "esm",
 });
 
 await buildOrWatch({
   ...common,
-  entryPoints: {
-    worker: source("src/features/miladymaxxer/worker.ts"),
-    ocrHost: source("src/features/postreader/ocrHost.ts"),
-  },
+  entryPoints: Object.fromEntries([
+    appEnabled("miladymaxxer") ? ["worker", source("src/features/miladymaxxer/worker.ts")] : null,
+    appEnabled("post-reading") ? ["ocrHost", source("src/features/post-reading/ocrHost.ts")] : null,
+  ].filter(Boolean)),
   outdir: outDir,
   format: "iife",
 });
 
 if (watch) {
-  console.log(`Watching milXdy ${target} extension files with ${contexts.length} build contexts...`);
+  console.log(`Watching milXdy ${target}/${buildProfile} extension files with ${contexts.length} build contexts...`);
 }
 
 if (!watch) {
   const required = [
     `${outDir}/content.js`,
-    `${outDir}/features/wiki.js`,
-    `${outDir}/features/postreader.js`,
-    `${outDir}/features/remistats.js`,
-    `${outDir}/features/miladymaxxer.js`,
-    `${outDir}/features/beetol.js`,
-    `${outDir}/features/reminetChat.js`,
-    `${outDir}/ocr.html`,
-    `${outDir}/ocrHost.js`,
+    `${outDir}/wikiFrame.js`,
+    ...firstPartyApps.map((app) => `${outDir}/${app.entryName}.js`),
+    ...firstPartyApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
   ];
   const missing = required.filter((file) => !existsSync(file));
   if (missing.length > 0) {

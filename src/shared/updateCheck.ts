@@ -5,9 +5,14 @@ export type UpdateStatus = {
   latestUrl: string | null;
   latestAssetUrl: string | null;
   latestAssetName: string | null;
+  expectedAssetName: string | null;
+  matchedExpectedAsset: boolean;
   updateAvailable: boolean;
   error?: string;
 };
+
+declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
+declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
 
 export const UPDATE_STATUS_KEY = "milxdy.updateStatus";
 export const UPDATE_ALARM_NAME = "milxdy.updateCheck";
@@ -61,13 +66,18 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       throw new Error("Latest prerelease did not include a version tag");
     }
 
+    const expectedAssetName = expectedReleaseAssetName(latestVersion);
+    const asset = chooseReleaseAsset(release, expectedAssetName);
+
     return {
       checkedAt,
       currentVersion,
       latestVersion,
       latestUrl: typeof release.html_url === "string" ? release.html_url : null,
-      latestAssetUrl: releaseAssetUrl(release),
-      latestAssetName: releaseAssetName(release),
+      latestAssetUrl: typeof asset?.browser_download_url === "string" ? asset.browser_download_url : null,
+      latestAssetName: typeof asset?.name === "string" ? asset.name : null,
+      expectedAssetName,
+      matchedExpectedAsset: Boolean(expectedAssetName && asset?.name === expectedAssetName),
       updateAvailable: compareVersions(latestVersion, currentVersion) > 0,
     };
   } catch (error) {
@@ -78,6 +88,8 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       latestUrl: null,
       latestAssetUrl: null,
       latestAssetName: null,
+      expectedAssetName: expectedReleaseAssetName(null),
+      matchedExpectedAsset: false,
       updateAvailable: false,
       error: error instanceof Error ? error.message : String(error),
     };
@@ -111,20 +123,21 @@ function dateValue(value: unknown): number {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
-function releaseAssetUrl(release: GitHubRelease): string | null {
-  const asset = chooseReleaseAsset(release);
-  return typeof asset?.browser_download_url === "string" ? asset.browser_download_url : null;
-}
-
-function releaseAssetName(release: GitHubRelease): string | null {
-  const asset = chooseReleaseAsset(release);
-  return typeof asset?.name === "string" ? asset.name : null;
-}
-
-function chooseReleaseAsset(release: GitHubRelease): GitHubReleaseAsset | null {
+function chooseReleaseAsset(release: GitHubRelease, expectedAssetName: string | null): GitHubReleaseAsset | null {
   const assets = Array.isArray(release.assets) ? release.assets : [];
+  if (expectedAssetName) {
+    const exact = assets.find((asset) => asset.name === expectedAssetName);
+    if (exact) return exact;
+  }
   return assets.find((asset) => /milxdy.*\.zip$/i.test(asset.name || ""))
     || assets.find((asset) => /\.zip$/i.test(asset.name || ""))
     || assets[0]
     || null;
+}
+
+function expectedReleaseAssetName(version: string | null): string | null {
+  if (!version) return null;
+  const target = typeof MILXDY_BUILD_TARGET === "string" ? MILXDY_BUILD_TARGET : "chromium";
+  const profile = typeof MILXDY_BUILD_PROFILE === "string" ? MILXDY_BUILD_PROFILE : "full";
+  return `milXdy-${version}-${target}-${profile}.zip`;
 }

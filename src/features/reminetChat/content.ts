@@ -1,10 +1,32 @@
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
+import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../shared/overlayAppChrome";
+import { createOverlayAppFrame, type OverlayAppFrame } from "../../shared/overlayAppFrame";
+import {
+  clampOverlayPanelBox,
+  observeOverlayPanelTheme,
+  resolveOverlayPanelTheme,
+  restoreOverlayPanelBox,
+  startOverlayPanelDrag,
+  startOverlayPanelResize,
+} from "../../shared/overlayPanelBase";
+import { registerOverlayAppRoot } from "../../shared/overlayAppLayout";
+import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } from "../../shared/appPlatform";
+import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
+const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
+const NATIVE_DM_HIDDEN_ATTR = "data-milxdy-native-dm-hidden";
 const CHAT_ID = 1;
-const SOCKET_URL = "wss://www.remilia.net/api/ws";
+const SOCKET_PORT_NAME = "reminetChat:socket";
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
-const SIDE_KEY = "milxdy.reminetChat.side";
+const SOUND_ENABLED_KEY = "milxdy.reminetChat.sounds.enabled";
+const SOUND_VOLUME_KEY = "milxdy.reminetChat.sounds.volume";
+const SOUND_SEND_KEY = "milxdy.reminetChat.sounds.send";
+const SOUND_REACT_KEY = "milxdy.reminetChat.sounds.react";
+const SOUND_REACT_TO_ME_KEY = "milxdy.reminetChat.sounds.reactToMe";
+const SOUND_MESSAGE_KEY = "milxdy.reminetChat.sounds.message";
+const SOUND_POKE_KEY = "milxdy.reminetChat.sounds.poke";
+const WIDTH_KEY = "milxdy.reminetChat.width";
 const HEIGHT_KEY = "milxdy.reminetChat.height";
 const TOP_KEY = "milxdy.reminetChat.top";
 const PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
@@ -12,18 +34,33 @@ const MAX_MESSAGES = 300;
 const HISTORY_PAGE_SIZE = 30;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PROFILE_CACHE_MAX_ENTRIES = 250;
-const REACTIONS = ["\u{1f631}", "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}", "\u{1faa2}"];
+const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
+const LEFT_RAIL_MIN_HEIGHT_PX = 260;
+const REACTIONS = ["\u{1f631}", "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const POKE_ICON = "\u{1faf5}";
 const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+const REMINET_CHAT_ICON = chrome.runtime.getURL("remistats/star.svg");
 const mediaDataUrlCache = new Map<string, string>();
 const mediaDataUrlPending = new Set<string>();
 const xHandleByRemiliaHandle = new Map<string, string>();
 const profileLookupPending = new Set<string>();
 const profileLookupDone = new Set<string>();
 const pokeCooldowns = new Map<string, number>();
-const pokeCountdownTimers = new Map<HTMLElement, number>();
+const pokeCountdownTimers = new Map<HTMLElement, () => void>();
+const pokeButtonsByUsername = new Map<string, Set<HTMLElement>>();
+const hiddenNativeDmElements = new Set<HTMLElement>();
+const ROUTE_MOUNT_RETRY_DELAYS_MS = [120, 300, 700, 1500, 3000] as const;
+let audioContext: AudioContext | null = null;
+let booted = false;
+let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
+let cancelReconnectTimer: (() => void) | null = null;
+let cancelSendResetTimer: (() => void) | null = null;
+let cancelMountRetryTimer: (() => void) | null = null;
+let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = safeRuntimeMessage;
+let lifecycleSignal: AbortSignal | null = null;
+let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
 
 type RuntimeRecord = Record<string, unknown>;
 
@@ -54,7 +91,7 @@ type ApiUser = {
   profile_pic_url?: string;
   pfpUrl?: string;
   pfp_url?: string;
-  color?: string;
+  color?: number | string;
   theme?: string;
   connections?: unknown[];
 };
@@ -136,9 +173,12 @@ type MessageGroup = {
 
 type ChatState = {
   root: HTMLElement | null;
+  mountMode: "rail" | "left" | "messages" | null;
+  messagesSelected: boolean;
   messages: ApiMessage[];
   users: Map<number, ApiUser>;
-  ws: WebSocket | null;
+  socketPort: chrome.runtime.Port | null;
+  socketState: "closed" | "connecting" | "open";
   reconnectTimer: number | null;
   loading: boolean;
   loadingOlder: boolean;
@@ -154,15 +194,29 @@ type ChatState = {
   minimized: boolean;
   theme: "light" | "dark" | "system";
   side: "left" | "right";
+  x: number;
+  frameWidth: number;
   frameHeight: number;
   topOffset: number;
+  soundEnabled: boolean;
+  soundVolume: number;
+  soundSend: boolean;
+  soundReact: boolean;
+  soundReactToMe: boolean;
+  soundMessage: boolean;
+  soundPoke: boolean;
+  appFrame: OverlayAppFrame | null;
+  layoutReady: boolean;
 };
 
 const state: ChatState = {
   root: null,
+  mountMode: null,
+  messagesSelected: false,
   messages: [],
   users: new Map(),
-  ws: null,
+  socketPort: null,
+  socketState: "closed",
   reconnectTimer: null,
   loading: false,
   loadingOlder: false,
@@ -175,58 +229,175 @@ const state: ChatState = {
   pendingAttachments: [],
   composerError: "",
   replyTo: null,
-  minimized: false,
+  minimized: true,
   theme: "system",
   side: "right",
+  x: 0,
+  frameWidth: 350,
   frameHeight: 560,
   topOffset: 8,
+  soundEnabled: true,
+  soundVolume: 0.55,
+  soundSend: true,
+  soundReact: true,
+  soundReactToMe: true,
+  soundMessage: true,
+  soundPoke: true,
+  appFrame: null,
+  layoutReady: false,
 };
 
-void boot();
-
-function boot(): void {
+export function boot(context?: MilxdyContentAppContext): void {
+  if (booted) return;
+  booted = true;
+  state.enabled = true;
+  addRuntimeDisposable = context?.addDisposable || (() => undefined);
+  lifecycleSignal = context?.signal || null;
+  runtimeScheduler = context?.scheduler || runtimeScheduler;
+  runtimeSendMessage = context?.sendMessage || runtimeSendMessage;
+  ensureOverlayAppChromeStyles();
+  registerDockItem();
+  if (shouldAutoOpenMessagesChat()) {
+    state.messagesSelected = true;
+    state.minimized = false;
+  }
   ensureRoot();
+  scheduleMountRetry();
   void loadLayoutSettings();
   void loadTheme();
-  window.matchMedia?.("(prefers-color-scheme: dark)").addEventListener("change", applyTheme);
-  observeRouteAndLayout();
+  void loadSoundSettings();
+  addRuntimeDisposable(observeOverlayPanelTheme(applyTheme));
+  observeLayoutSignals();
   observeEnablement();
+  observeMessagesSelection();
   void refreshAuthAndHistory();
 }
 
-function observeRouteAndLayout(): void {
-  let lastHref = location.href;
-  let layoutTimer: number | null = null;
-  const scheduleLayout = () => {
-    if (!state.enabled || layoutTimer !== null) return;
-    layoutTimer = window.setTimeout(() => {
-      layoutTimer = null;
+export function onRouteChange(_route: MilxdyRouteChange): void {
+  if (!lifecycleActive()) return;
+  if (isMessagesRoute()) {
+    state.messagesSelected = shouldAutoOpenMessagesChat();
+    if (state.messagesSelected) state.minimized = false;
+  }
+  ensureRoot();
+  scheduleMountRetry();
+  void refreshAuthAndHistory();
+}
+
+export function open(): void {
+  if (!lifecycleActive()) return;
+  if (isMessagesRoute() && !state.messagesSelected) state.messagesSelected = true;
+  state.minimized = false;
+  ensureRoot();
+  scheduleMountRetry();
+  render();
+  void refreshAuthAndHistory();
+}
+
+export function close(): void {
+  closeChatPanel();
+}
+
+export function disable(): void {
+  state.enabled = false;
+  destroy();
+}
+
+export function dispose(): void {
+  disable();
+  state.appFrame?.remove();
+  state.appFrame = null;
+  addRuntimeDisposable = () => undefined;
+  lifecycleSignal = null;
+  booted = false;
+}
+
+function lifecycleActive(): boolean {
+  return booted && state.enabled && lifecycleSignal?.aborted !== true;
+}
+
+function registerDockItem(): void {
+  state.appFrame = createOverlayAppFrame({
+    id: "reminetChat",
+    label: "RemiNet Chat",
+    icon: REMINET_CHAT_ICON,
+    initialSide: state.side,
+    isOpen: () => Boolean(state.root && !state.minimized),
+    onOpen: () => {
+      if (isMessagesRoute() && !state.messagesSelected) {
+        state.messagesSelected = true;
+        state.minimized = false;
+        ensureRoot();
+        void refreshAuthAndHistory();
+        return;
+      }
+      if (!state.root) {
+        state.minimized = false;
+        ensureRoot();
+        void refreshAuthAndHistory();
+      }
+      render();
+    },
+    onClose: () => {
+      closeChatPanel();
+    },
+    onSideChange: (side) => {
+      state.side = side;
       ensureRoot();
-      applyLayout();
-    }, 300);
-  };
-  const observer = new MutationObserver((mutations) => {
-    if (!state.enabled) return;
-    if (lastHref !== location.href) {
-      lastHref = location.href;
-      ensureRoot();
-      void refreshAuthAndHistory();
-      return;
-    }
-    const root = state.root;
-    if (root && mutations.every((mutation) => root.contains(mutation.target))) return;
-    scheduleLayout();
-  });
-  observer.observe(document.documentElement, { childList: true, subtree: true });
-  window.addEventListener("resize", scheduleLayout, { passive: true });
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) closeSocket();
-    else if (state.enabled && state.signedIn && isChatRoute()) connectSocket();
+      render();
+    },
   });
 }
 
+function observeLayoutSignals(): void {
+  let cancelLayoutTimer: (() => void) | null = null;
+  addRuntimeDisposable(() => {
+    cancelLayoutTimer?.();
+    cancelLayoutTimer = null;
+    cancelMountRetryTimer?.();
+    cancelMountRetryTimer = null;
+  });
+  const scheduleLayout = () => {
+    if (!lifecycleActive() || cancelLayoutTimer) return;
+    cancelLayoutTimer = runtimeScheduler.timeout(() => {
+      cancelLayoutTimer = null;
+      if (!lifecycleActive()) return;
+      applyLayout();
+    }, 300);
+  };
+  window.addEventListener("resize", scheduleLayout, { passive: true });
+  addRuntimeDisposable(() => window.removeEventListener("resize", scheduleLayout));
+  const visibilityListener = () => {
+    if (document.hidden) closeSocket();
+    else if (lifecycleActive()) {
+      ensureRoot();
+      scheduleMountRetry();
+      if (state.signedIn && isChatRoute()) connectSocket();
+    }
+  };
+  document.addEventListener("visibilitychange", visibilityListener);
+  addRuntimeDisposable(() => document.removeEventListener("visibilitychange", visibilityListener));
+}
+
+function scheduleMountRetry(attempt = 0): void {
+  cancelMountRetryTimer?.();
+  cancelMountRetryTimer = null;
+  if (!lifecycleActive() || state.minimized || state.root || !isChatRoute()) return;
+  const delayMs = ROUTE_MOUNT_RETRY_DELAYS_MS[Math.min(attempt, ROUTE_MOUNT_RETRY_DELAYS_MS.length - 1)];
+  cancelMountRetryTimer = runtimeScheduler.timeout(() => {
+    cancelMountRetryTimer = null;
+    if (!lifecycleActive() || state.minimized || state.root || !isChatRoute()) return;
+    ensureRoot();
+    if (!state.root && attempt < ROUTE_MOUNT_RETRY_DELAYS_MS.length - 1) scheduleMountRetry(attempt + 1);
+  }, delayMs);
+}
+
 function observeEnablement(): void {
-  chrome.storage.onChanged.addListener((changes, area) => {
+  const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+    if (area === "sync") {
+      applySoundSettingChanges(changes);
+      return;
+    }
     if (area !== "local") return;
     if (changes[SETTINGS_THEME_KEY]) {
       state.theme = normalizeThemeMode(changes[SETTINGS_THEME_KEY].newValue);
@@ -241,11 +412,22 @@ function observeEnablement(): void {
       ensureRoot();
       void refreshAuthAndHistory(true);
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(storageListener);
+  addRuntimeDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
 }
 
 function destroy(): void {
+  cancelMountRetryTimer?.();
+  cancelMountRetryTimer = null;
   closeSocket();
+  cancelSendResetTimer?.();
+  cancelSendResetTimer = null;
+  for (const cancelTimer of pokeCountdownTimers.values()) cancelTimer();
+  pokeCountdownTimers.clear();
+  pokeButtonsByUsername.clear();
+  removePseudoChatRow();
+  restoreNativeDmPane();
   state.messages = [];
   state.users.clear();
   state.pendingAttachments = [];
@@ -259,14 +441,30 @@ function destroy(): void {
   state.sending = false;
   state.root?.remove();
   state.root = null;
+  state.mountMode = null;
+  state.messagesSelected = false;
 }
 
-function isChatRoute(): boolean {
+function isSupportedRoute(): boolean {
   return location.pathname === "/"
     || location.pathname === "/home"
     || location.pathname === "/notifications"
+    || isMessagesRoute()
     || /^\/[^/]+\/status\/\d+/.test(location.pathname)
     || isProfileRoute();
+}
+
+function isChatRoute(): boolean {
+  if (isMessagesRoute()) return state.messagesSelected;
+  return isSupportedRoute();
+}
+
+function isMessagesRoute(): boolean {
+  return location.pathname === "/messages" || location.pathname.startsWith("/messages/") || location.pathname.startsWith("/i/chat");
+}
+
+function shouldAutoOpenMessagesChat(): boolean {
+  return location.pathname === "/i/chat" || location.pathname === "/i/chat/";
 }
 
 function isProfileRoute(): boolean {
@@ -287,40 +485,87 @@ function isProfileRoute(): boolean {
 
 function ensureRoot(): void {
   if (!state.enabled) return;
-  if (!isChatRoute()) {
+  if (!isSupportedRoute()) {
+    removePseudoChatRow();
+    restoreNativeDmPane();
     if (state.root) {
       closeSocket();
       state.root.remove();
       state.root = null;
+      state.mountMode = null;
     }
     return;
   }
 
-  const rail = findMountTarget();
   const existing = document.getElementById(ROOT_ID) as HTMLElement | null;
-  if (!rail) {
-    if (existing) existing.remove();
+  const mountTarget = findMountTarget();
+  if (isMessagesRoute()) {
+    ensurePseudoChatRow();
+  } else {
+    removePseudoChatRow();
+    state.messagesSelected = false;
+    restoreNativeDmPane();
+  }
+
+  if (state.minimized) {
+    if (existing) {
+      closeSocket();
+      existing.remove();
+    }
     state.root = null;
+    state.mountMode = null;
+    restoreNativeDmPane();
+    updatePseudoChatRowState();
+    updateDockState();
+    return;
+  }
+
+  if (!isChatRoute()) {
+    if (existing) {
+      closeSocket();
+      existing.remove();
+    }
+    state.root = null;
+    state.mountMode = null;
+    restoreNativeDmPane();
+    updatePseudoChatRowState();
+    return;
+  }
+
+  if (!mountTarget) {
+    if (existing) {
+      closeSocket();
+      existing.remove();
+    }
+    state.root = null;
+    state.mountMode = null;
+    if (isMessagesRoute()) restoreNativeDmPane();
     return;
   }
 
   const root = existing || createRoot();
-  const mount = state.side === "left" ? "left" : "rail";
-  const changed = !existing || root.parentElement !== rail || root.dataset.mount !== mount;
-  if (root.parentElement !== rail) {
-    if (state.side === "left") rail.appendChild(root);
-    else rail.insertBefore(root, rail.firstChild);
+  root.classList.add("milxdy-overlay-app-shell");
+  root.querySelector(".milxdy-chat-card")?.classList.add("milxdy-overlay-app-card");
+  root.querySelector(".milxdy-chat-header")?.classList.add("milxdy-overlay-app-header");
+  const mount = isMessagesRoute() ? "messages" : "rail";
+  const changed = !existing || root.parentElement !== mountTarget || root.dataset.mount !== mount;
+  if (root.parentElement !== mountTarget) {
+    mountTarget.appendChild(root);
   }
   root.dataset.mount = mount;
   state.root = root;
+  state.mountMode = mount;
+  if (mount === "messages") hideNativeDmPaneContent(mountTarget, root);
+  else restoreNativeDmPane();
+  updatePseudoChatRowState();
   applyTheme();
   applyLayout();
   if (changed) render();
 }
 
 function findMountTarget(): HTMLElement | null {
-  if (state.side === "left") return document.body;
-  return findRightRail();
+  if (isMessagesRoute()) return findDmConversationPane();
+  return document.body;
 }
 
 function findRightRail(): HTMLElement | null {
@@ -329,22 +574,194 @@ function findRightRail(): HTMLElement | null {
   return column.querySelector<HTMLElement>(":scope > div") || column;
 }
 
+function findDmContainer(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('[data-testid="dm-container"]')
+    || document.querySelector<HTMLElement>('[aria-label="Timeline: Messages"]')
+    || document.querySelector<HTMLElement>('main[role="main"]');
+}
+
+function findDmListMount(): HTMLElement | null {
+  const container = findDmContainer();
+  if (!container) return null;
+  const existing = document.getElementById(PSEUDO_ROW_ID);
+  if (existing?.parentElement) return existing.parentElement;
+  const conversationRow = findFirstDmConversationRow();
+  if (conversationRow?.parentElement && container.contains(conversationRow.parentElement)) return conversationRow.parentElement;
+  const timeline = findMessagesTimeline();
+  const firstCell = firstMessagesTimelineCell(timeline);
+  if (firstCell?.parentElement && container.contains(firstCell.parentElement)) return firstCell.parentElement;
+  return timeline?.querySelector<HTMLElement>(":scope > div") || timeline;
+}
+
+function findFirstDmConversationRow(): HTMLElement | null {
+  const container = findDmContainer();
+  const timeline = findMessagesTimeline();
+  const root = timeline || container || document;
+  const timelineCell = firstMessagesTimelineCell(root);
+  if (timelineCell) return timelineCell;
+  const link = Array.from(root.querySelectorAll<HTMLElement>('a[href^="/messages/"], a[href^="/i/chat/"]'))
+    .find((candidate) => isConversationHref(candidate.getAttribute("href")) && candidate.offsetWidth > 0 && candidate.offsetHeight > 0) || null;
+  if (!link) return null;
+  return link.closest<HTMLElement>('[data-testid="cellInnerDiv"], [role="link"], [role="button"], [data-testid="conversation"]') || link.closest<HTMLElement>("a") || link;
+}
+
+function isConversationHref(value: string | null): boolean {
+  if (!value) return false;
+  if (value === "/messages" || value === "/messages/compose") return false;
+  return /^\/messages\/[^/?#]+/.test(value) || /^\/i\/chat\/[^/?#]+/.test(value);
+}
+
+function findMessagesTimeline(): HTMLElement | null {
+  const container = findDmContainer();
+  if (!container) return null;
+  return Array.from(document.querySelectorAll<HTMLElement>('[aria-label="Timeline: Messages"]'))
+    .find((element) => (container.contains(element) || element.contains(container)) && element.offsetWidth >= 240 && element.offsetHeight >= 80) || null;
+}
+
+function firstMessagesTimelineCell(root: ParentNode | null): HTMLElement | null {
+  if (!root) return null;
+  return Array.from(root.querySelectorAll<HTMLElement>('[data-testid="cellInnerDiv"]'))
+    .find((candidate) => isLikelyDmConversationRow(candidate) || isUsableMessagesTimelineCell(candidate)) || null;
+}
+
+function isLikelyDmConversationRow(element: HTMLElement): boolean {
+  if (element.id === PSEUDO_ROW_ID || element.querySelector(`#${PSEUDO_ROW_ID}`)) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 240 || rect.height < 56) return false;
+  if (element.querySelector('input, textarea, [role="searchbox"]')) return false;
+  const link = element.querySelector<HTMLElement>('a[href^="/messages/"], a[href^="/i/chat/"]');
+  if (isConversationHref(link?.getAttribute("href") || null)) return true;
+  const text = (element.textContent || "").trim();
+  const hasAvatar = Boolean(element.querySelector('img, [data-testid*="UserAvatar"], [aria-label*="profile" i]'));
+  return hasAvatar && text.length > 0;
+}
+
+function isUsableMessagesTimelineCell(element: HTMLElement): boolean {
+  if (element.id === PSEUDO_ROW_ID || element.querySelector(`#${PSEUDO_ROW_ID}`)) return false;
+  if (element.querySelector('input, textarea, [role="searchbox"]')) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 240 || rect.height < 40) return false;
+  return Boolean((element.textContent || "").trim());
+}
+
+function findDmConversationPane(): HTMLElement | null {
+  const container = findDmContainer();
+  if (!container) return null;
+  const panel = container.querySelector<HTMLElement>('[data-testid="dm-conversation-panel"]');
+  if (panel && panel.offsetWidth >= 320) return panel;
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>('[role="region"], main, section, div'))
+    .filter((element) => element.id !== ROOT_ID && element.offsetWidth >= 320 && element.offsetHeight >= 260);
+  const listMount = findDmListMount();
+  return candidates
+    .filter((element) => element !== listMount && !element.contains(listMount))
+    .sort((left, right) => right.offsetWidth * right.offsetHeight - left.offsetWidth * left.offsetHeight)[0] || null;
+}
+
+function ensurePseudoChatRow(): void {
+  const mount = findDmListMount();
+  if (!mount) {
+    removePseudoChatRow();
+    return;
+  }
+  const before = findFirstDmConversationRow();
+  const row = document.getElementById(PSEUDO_ROW_ID) as HTMLButtonElement | null || createPseudoChatRow();
+  if (before?.parentElement === mount) {
+    if (row.parentElement !== mount || row.nextElementSibling !== before) mount.insertBefore(row, before);
+  } else if (row.parentElement !== mount) {
+    mount.insertBefore(row, mount.firstChild);
+  }
+  updatePseudoChatRowState();
+}
+
+function createPseudoChatRow(): HTMLButtonElement {
+  const row = document.createElement("button");
+  const logoUrl = REMINET_CHAT_ICON;
+  row.id = PSEUDO_ROW_ID;
+  row.type = "button";
+  row.setAttribute("role", "link");
+  row.dataset.milxdyReminetChatRow = "true";
+  row.setAttribute("aria-label", "Open RemiliaNET Chat in milXdy");
+  row.innerHTML = `
+    <span class="milxdy-chat-pseudo-avatar" aria-hidden="true"><img src="${escapeHtml(logoUrl)}" alt=""></span>
+    <span class="milxdy-chat-pseudo-copy">
+      <strong>RemiliaNET Chat</strong>
+      <span>RemiNet Global Chat</span>
+    </span>
+  `;
+  row.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    state.messagesSelected = true;
+    state.minimized = false;
+    ensureRoot();
+    void refreshAuthAndHistory();
+  });
+  return row;
+}
+
+function updatePseudoChatRowState(): void {
+  const row = document.getElementById(PSEUDO_ROW_ID);
+  if (!row) return;
+  row.dataset.selected = String(state.messagesSelected);
+  row.setAttribute("aria-pressed", String(state.messagesSelected));
+}
+
+function removePseudoChatRow(): void {
+  document.getElementById(PSEUDO_ROW_ID)?.remove();
+}
+
+function hideNativeDmPaneContent(pane: HTMLElement, root: HTMLElement): void {
+  for (const child of Array.from(pane.children)) {
+    if (child === root || !(child instanceof HTMLElement)) continue;
+    child.setAttribute(NATIVE_DM_HIDDEN_ATTR, "true");
+    hiddenNativeDmElements.add(child);
+  }
+}
+
+function restoreNativeDmPane(): void {
+  for (const element of Array.from(hiddenNativeDmElements)) {
+    element.removeAttribute(NATIVE_DM_HIDDEN_ATTR);
+    hiddenNativeDmElements.delete(element);
+  }
+}
+
+function observeMessagesSelection(): void {
+  const selectionListener = (event: MouseEvent) => {
+    if (!state.messagesSelected || !isMessagesRoute()) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target || target.closest(`#${PSEUDO_ROW_ID}`) || target.closest(`#${ROOT_ID}`)) return;
+    const nativeDmLink = target.closest('a[href^="/messages/"], a[href^="/i/chat/"]');
+    if (!nativeDmLink) return;
+    state.messagesSelected = false;
+    closeSocket();
+    state.root?.remove();
+    state.root = null;
+    state.mountMode = null;
+    restoreNativeDmPane();
+    updatePseudoChatRowState();
+  };
+  document.addEventListener("click", selectionListener, true);
+  addRuntimeDisposable(() => document.removeEventListener("click", selectionListener, true));
+}
+
 function createRoot(): HTMLElement {
   const root = document.createElement("section");
   root.id = ROOT_ID;
+  root.className = "milxdy-overlay-app-shell";
+  prepareOverlayAppRoot(root);
   root.innerHTML = `
-    <div class="milxdy-chat-card">
-      <header class="milxdy-chat-header">
+    <div class="milxdy-chat-card milxdy-overlay-app-card">
+      <header class="milxdy-chat-header milxdy-overlay-app-header">
         <div>
           <strong>RemiliaNET Chat</strong>
           <span data-role="status">Connecting...</span>
         </div>
         <div class="milxdy-chat-header-actions">
           <button type="button" data-role="refresh" title="Refresh chat">Refresh</button>
-          <button type="button" data-role="side" title="Move chat left" aria-label="Move chat left">&#9664;</button>
           <button type="button" data-role="minimize" title="Minimize chat" aria-label="Minimize chat">-</button>
         </div>
       </header>
+      <div class="milxdy-chat-surface-notice">RemiNet Global Chat</div>
       <div class="milxdy-chat-load-older" data-role="load-older" hidden></div>
       <div class="milxdy-chat-messages" data-role="messages"></div>
       <div class="milxdy-chat-attachment-preview" data-role="attachments" hidden></div>
@@ -356,24 +773,19 @@ function createRoot(): HTMLElement {
         <input data-role="input" type="text" maxlength="500" autocomplete="off" placeholder="Say something">
         <button data-role="send" type="submit">Send</button>
       </form>
-      <div class="milxdy-chat-resize-grip" data-role="resize" title="Drag to resize chat"></div>
+      <div class="milxdy-chat-resize-grip" data-role="resize" data-resize-axis="y" title="Drag to resize chat height"></div>
+      <div class="milxdy-chat-resize-edge milxdy-chat-resize-edge-side" data-role="resize" data-resize-axis="x" title="Drag to resize chat width"></div>
     </div>
   `;
   root.querySelector<HTMLButtonElement>('[data-role="refresh"]')?.addEventListener("click", () => {
     void refreshAuthAndHistory(true);
   });
   root.querySelector<HTMLButtonElement>('[data-role="minimize"]')?.addEventListener("click", () => {
-    state.minimized = !state.minimized;
-    render();
+    closeChatPanel();
   });
-  root.querySelector<HTMLButtonElement>('[data-role="side"]')?.addEventListener("click", () => {
-    state.side = state.side === "right" ? "left" : "right";
-    state.topOffset = defaultTopOffset();
-    void chrome.storage.local.set({ [SIDE_KEY]: state.side, [TOP_KEY]: state.topOffset });
-    ensureRoot();
-    render();
-  });
-  root.querySelector<HTMLElement>('[data-role="resize"]')?.addEventListener("pointerdown", startResize);
+  for (const handle of Array.from(root.querySelectorAll<HTMLElement>('[data-role="resize"]'))) {
+    handle.addEventListener("pointerdown", startResize);
+  }
   root.querySelector<HTMLElement>(".milxdy-chat-header")?.addEventListener("pointerdown", startDrag);
   root.querySelector<HTMLFormElement>('[data-role="form"]')?.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -409,6 +821,8 @@ function createRoot(): HTMLElement {
 }
 
 async function refreshAuthAndHistory(force = false): Promise<void> {
+  if (!lifecycleActive()) return;
+  if (state.minimized) return;
   if (!state.enabled || !isChatRoute() || state.loading && !force) return;
   state.loading = true;
   if (force) {
@@ -416,7 +830,8 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
     state.showOlderButton = false;
   }
   renderStatus("Checking RemiNet session...");
-  const auth = await safeRuntimeMessage({ type: "reminetChat:authStatus" }).then(asRecord).catch(() => null);
+  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:authStatus").then(asRecord).catch(() => null);
+  if (!lifecycleActive()) return;
   state.signedIn = Boolean(auth?.signedIn);
   state.currentUser = state.signedIn ? normalizeCurrentUser(auth?.user) : null;
   if (!state.signedIn) {
@@ -427,9 +842,10 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
     return;
   }
 
-  const history = await safeRuntimeMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE })
+  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE }, "reminetChat:getHistory")
     .then(asRecord)
     .catch((error) => asRecord({ ok: false, error: String(error) }));
+  if (!lifecycleActive()) return;
   if (history.ok) {
     ingestApiPayload(history.data);
     sortAndTrimMessages();
@@ -444,6 +860,7 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
 }
 
 async function loadOlderMessages(): Promise<void> {
+  if (!lifecycleActive()) return;
   if (!state.signedIn || state.loadingOlder || !state.hasMoreOlder || state.messages.length === 0) return;
   const before = oldestMessageId();
   if (!before) return;
@@ -453,9 +870,10 @@ async function loadOlderMessages(): Promise<void> {
   const previousIds = new Set(state.messages.map((message) => message.id));
   state.loadingOlder = true;
   render();
-  const history = await safeRuntimeMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE, before })
+  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE, before }, "reminetChat:getHistoryOlder")
     .then(asRecord)
     .catch((error) => asRecord({ ok: false, error: String(error) }));
+  if (!lifecycleActive()) return;
   if (history.ok) {
     const historyCount = countPayloadMessages(history.data);
     ingestApiPayload(history.data);
@@ -471,6 +889,7 @@ async function loadOlderMessages(): Promise<void> {
   state.loadingOlder = false;
   render();
   window.requestAnimationFrame(() => {
+    if (!lifecycleActive()) return;
     const nextScroller = state.root?.querySelector<HTMLElement>('[data-role="messages"]') || null;
     if (!nextScroller) return;
     const delta = nextScroller.scrollHeight - previousHeight;
@@ -568,13 +987,13 @@ function normalizeMedia(value: unknown): MediaAttachment | null {
   return {
     mediaId: numberOrNull(record.mediaId ?? record.media_id),
     media_id: numberOrNull(record.media_id ?? record.mediaId),
-    url: stringOrNull(record.url ?? record.src ?? record.mediaUrl ?? record.media_url),
+    url: stringOrNull(record.url ?? record.src ?? record.mediaUrl ?? record.media_url ?? record.videoUrl ?? record.video_url ?? record.sourceUrl ?? record.source_url),
     width: numberOrNull(record.width),
     height: numberOrNull(record.height),
     mimeType: stringOrNull(record.mimeType ?? record.mime_type),
     mime_type: stringOrNull(record.mime_type ?? record.mimeType),
-    thumbnailUrl: stringOrNull(record.thumbnailUrl ?? record.thumbnail_url ?? record.thumbUrl ?? record.thumb_url),
-    thumbnail_url: stringOrNull(record.thumbnail_url ?? record.thumbnailUrl ?? record.thumb_url ?? record.thumbUrl),
+    thumbnailUrl: stringOrNull(record.thumbnailUrl ?? record.thumbnail_url ?? record.thumbUrl ?? record.thumb_url ?? record.posterUrl ?? record.poster_url),
+    thumbnail_url: stringOrNull(record.thumbnail_url ?? record.thumbnailUrl ?? record.thumb_url ?? record.thumbUrl ?? record.poster_url ?? record.posterUrl),
   };
 }
 
@@ -622,43 +1041,52 @@ function upsertMessage(message: ApiMessage): void {
 }
 
 function connectSocket(): void {
-  if (!state.enabled || document.hidden || state.ws?.readyState === WebSocket.OPEN || state.ws?.readyState === WebSocket.CONNECTING) return;
-  void safeRuntimeMessage({ type: "reminetChat:prepareSocket" }).then(asRecord).then((ready) => {
-    if (!ready.ok) return;
-    const ws = new WebSocket(SOCKET_URL);
-    state.ws = ws;
-    ws.addEventListener("open", () => {
-      renderStatus("Live");
-      ws.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
-    });
-    ws.addEventListener("message", (event) => handleSocketFrame(event.data));
-    ws.addEventListener("close", () => {
-      if (state.ws === ws) state.ws = null;
+  if (!lifecycleActive() || document.hidden || state.socketState === "open" || state.socketState === "connecting") return;
+  if (!state.socketPort) {
+    try {
+      state.socketPort = chrome.runtime.connect({ name: SOCKET_PORT_NAME });
+    } catch {
+      renderStatus("Connection interrupted.");
+      scheduleReconnect();
+      return;
+    }
+    state.socketPort.onMessage.addListener(handleSocketPortMessage);
+    state.socketPort.onDisconnect.addListener(() => {
+      state.socketPort = null;
+      state.socketState = "closed";
       scheduleReconnect();
     });
-    ws.addEventListener("error", () => renderStatus("Connection interrupted."));
-  });
+  }
+  state.socketState = "connecting";
+  state.socketPort.postMessage({ type: "connect" });
 }
 
 function closeSocket(): void {
-  if (state.reconnectTimer) {
-    window.clearTimeout(state.reconnectTimer);
-    state.reconnectTimer = null;
+  cancelReconnectTimer?.();
+  cancelReconnectTimer = null;
+  state.reconnectTimer = null;
+  if (state.socketPort) {
+    try {
+      state.socketPort.postMessage({ type: "close" });
+      state.socketPort.disconnect();
+    } catch {
+      // Port may already be disconnected after route changes or reloads.
+    }
   }
-  if (state.ws) {
-    const ws = state.ws;
-    state.ws = null;
-    ws.close();
-  }
+  state.socketPort = null;
+  state.socketState = "closed";
 }
 
 function scheduleReconnect(): void {
-  if (!state.enabled || !state.signedIn || !isChatRoute() || document.hidden || state.reconnectTimer) return;
+  if (!lifecycleActive() || !state.signedIn || !isChatRoute() || document.hidden || state.reconnectTimer) return;
   renderStatus("Reconnecting...");
-  state.reconnectTimer = window.setTimeout(() => {
+  cancelReconnectTimer = runtimeScheduler.timeout(() => {
+    cancelReconnectTimer = null;
     state.reconnectTimer = null;
+    if (!lifecycleActive()) return;
     connectSocket();
   }, 2500);
+  state.reconnectTimer = -1;
 }
 
 function handleSocketFrame(data: unknown): void {
@@ -671,9 +1099,11 @@ function handleSocketFrame(data: unknown): void {
   }
   const payload = frame.payload;
   if (frame.type === "deliver" || frame.type === "message_edit" || frame.type === "reaction") {
+    const previousMessages = new Map(state.messages.map((message) => [message.id, message]));
     ingestApiPayload(payload);
     const messageId = payload && typeof payload === "object" ? Number((payload as RuntimeRecord).message_id) : NaN;
     if (Number.isFinite(messageId)) removeOptimisticForServerEcho(messageId);
+    playSocketFrameSound(frame.type, payload, previousMessages);
     sortAndTrimMessages();
     render();
   }
@@ -690,13 +1120,14 @@ function handleSocketFrame(data: unknown): void {
 }
 
 async function submitMessage(): Promise<void> {
+  if (!lifecycleActive()) return;
   const root = state.root;
   const input = root?.querySelector<HTMLInputElement>('[data-role="input"]');
   if (!input || state.sending) return;
   const text = input.value.trim();
   if (!text && state.pendingAttachments.length === 0) return;
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) connectSocket();
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+  if (state.socketState !== "open") connectSocket();
+  if (state.socketState !== "open") {
     renderStatus("Chat is reconnecting.");
     return;
   }
@@ -705,6 +1136,7 @@ async function submitMessage(): Promise<void> {
   state.composerError = "";
   render();
   const uploaded = await uploadPendingAttachments();
+  if (!lifecycleActive()) return;
   if (!uploaded.ok) {
     state.sending = false;
     state.composerError = uploaded.error;
@@ -728,15 +1160,8 @@ async function submitMessage(): Promise<void> {
   sortAndTrimMessages();
   render();
   const mediaIds = [...uploaded.images.map(mediaId), mediaId(uploaded.video)].filter((id): id is number => typeof id === "number");
-  const ws = state.ws;
-  if (!ws || ws.readyState !== WebSocket.OPEN) {
-    state.sending = false;
-    renderStatus("Chat is reconnecting.");
-    render();
-    return;
-  }
   const inReplyToId = state.replyTo?.id;
-  ws.send(JSON.stringify({
+  const sent = sendSocketPayload({
     type: "submit",
     payload: {
       chat_id: CHAT_ID,
@@ -744,19 +1169,71 @@ async function submitMessage(): Promise<void> {
       in_reply_to_id: Number.isFinite(inReplyToId) ? inReplyToId : undefined,
       media_ids: mediaIds.length ? mediaIds : undefined,
     },
-  }));
+  });
+  if (!sent) {
+    state.sending = false;
+    renderStatus("Chat is reconnecting.");
+    render();
+    return;
+  }
+  playChatSound("send");
   input.value = "";
   clearPendingAttachments();
   state.replyTo = null;
-  window.setTimeout(() => {
+  cancelSendResetTimer?.();
+  cancelSendResetTimer = runtimeScheduler.timeout(() => {
+    cancelSendResetTimer = null;
+    if (!lifecycleActive()) return;
     state.sending = false;
     render();
   }, 350);
 }
 
+function handleSocketPortMessage(message: unknown): void {
+  const record = asRecord(message);
+  if (record.type === "socket:connecting") {
+    state.socketState = "connecting";
+    renderStatus("Connecting...");
+    return;
+  }
+  if (record.type === "socket:open") {
+    state.socketState = "open";
+    renderStatus("Live");
+    return;
+  }
+  if (record.type === "socket:frame") {
+    handleSocketFrame(record.data);
+    return;
+  }
+  if (record.type === "socket:close") {
+    state.socketState = "closed";
+    scheduleReconnect();
+    return;
+  }
+  if (record.type === "socket:error") {
+    if (record.authRequired) state.signedIn = false;
+    renderStatus(typeof record.error === "string" ? record.error : "Connection interrupted.");
+  }
+}
+
+function sendSocketPayload(payload: Record<string, unknown>): boolean {
+  if (!state.socketPort || state.socketState !== "open") return false;
+  try {
+    state.socketPort.postMessage({ type: "send", payload });
+    return true;
+  } catch {
+    state.socketState = "closed";
+    scheduleReconnect();
+    return false;
+  }
+}
+
 function render(): void {
   const root = state.root;
-  if (!root) return;
+  if (!root) {
+    updateDockState();
+    return;
+  }
   const loadOlder = root.querySelector<HTMLElement>('[data-role="load-older"]');
   const messages = root.querySelector<HTMLElement>('[data-role="messages"]');
   const send = root.querySelector<HTMLButtonElement>('[data-role="send"]');
@@ -768,17 +1245,12 @@ function render(): void {
 
   root.dataset.minimized = String(state.minimized);
   root.dataset.side = state.side;
+  updateDockState();
   const minimize = root.querySelector<HTMLButtonElement>('[data-role="minimize"]');
   if (minimize) {
     minimize.textContent = state.minimized ? "+" : "-";
     minimize.title = state.minimized ? "Expand chat" : "Minimize chat";
     minimize.setAttribute("aria-label", minimize.title);
-  }
-  const side = root.querySelector<HTMLButtonElement>('[data-role="side"]');
-  if (side) {
-    side.innerHTML = state.side === "right" ? "&#9664;" : "&#9654;";
-    side.title = state.side === "right" ? "Move chat left" : "Move chat right";
-    side.setAttribute("aria-label", side.title);
   }
 
   input.disabled = !state.signedIn;
@@ -837,17 +1309,205 @@ function renderLoadOlderButton(): string {
 
 async function loadTheme(): Promise<void> {
   const stored: Record<string, unknown> = await chrome.storage.local.get(SETTINGS_THEME_KEY).catch(() => ({}));
+  if (!lifecycleActive()) return;
   state.theme = normalizeThemeMode(stored[SETTINGS_THEME_KEY]);
   applyTheme();
 }
 
+function closeChatPanel(): void {
+  state.minimized = true;
+  closeSocket();
+  const root = state.root;
+  state.root = null;
+  state.mountMode = null;
+  if (isMessagesRoute()) state.messagesSelected = false;
+  restoreNativeDmPane();
+  updatePseudoChatRowState();
+  updateDockState();
+  animateOverlayAppClose(root, () => root?.remove());
+}
+
+function updateDockState(): void {
+  state.appFrame?.updateDock({
+    badgeText: state.signedIn ? "" : "!",
+    title: state.signedIn ? "RemiNet Chat" : "RemiNet Chat: sign in",
+  });
+}
+
+async function loadSoundSettings(): Promise<void> {
+  const stored: RuntimeRecord = await chrome.storage.sync.get({
+    [SOUND_ENABLED_KEY]: true,
+    [SOUND_VOLUME_KEY]: 0.55,
+    [SOUND_SEND_KEY]: true,
+    [SOUND_REACT_KEY]: true,
+    [SOUND_REACT_TO_ME_KEY]: true,
+    [SOUND_MESSAGE_KEY]: true,
+    [SOUND_POKE_KEY]: true,
+  }).catch(() => ({}));
+  if (!lifecycleActive()) return;
+  state.soundEnabled = stored[SOUND_ENABLED_KEY] !== false;
+  state.soundVolume = clampVolume(stored[SOUND_VOLUME_KEY]);
+  state.soundSend = stored[SOUND_SEND_KEY] !== false;
+  state.soundReact = stored[SOUND_REACT_KEY] !== false;
+  state.soundReactToMe = stored[SOUND_REACT_TO_ME_KEY] !== false;
+  state.soundMessage = stored[SOUND_MESSAGE_KEY] !== false;
+  state.soundPoke = stored[SOUND_POKE_KEY] !== false;
+}
+
+function applySoundSettingChanges(changes: Record<string, chrome.storage.StorageChange>): void {
+  if (changes[SOUND_ENABLED_KEY]) state.soundEnabled = changes[SOUND_ENABLED_KEY].newValue !== false;
+  if (changes[SOUND_VOLUME_KEY]) state.soundVolume = clampVolume(changes[SOUND_VOLUME_KEY].newValue);
+  if (changes[SOUND_SEND_KEY]) state.soundSend = changes[SOUND_SEND_KEY].newValue !== false;
+  if (changes[SOUND_REACT_KEY]) state.soundReact = changes[SOUND_REACT_KEY].newValue !== false;
+  if (changes[SOUND_REACT_TO_ME_KEY]) state.soundReactToMe = changes[SOUND_REACT_TO_ME_KEY].newValue !== false;
+  if (changes[SOUND_MESSAGE_KEY]) state.soundMessage = changes[SOUND_MESSAGE_KEY].newValue !== false;
+  if (changes[SOUND_POKE_KEY]) state.soundPoke = changes[SOUND_POKE_KEY].newValue !== false;
+}
+
+function playSocketFrameSound(type: unknown, payload: unknown, previousMessages: Map<number, ApiMessage>): void {
+  if (type === "deliver") {
+    const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
+    if (!message || messageAuthorId(message) === currentUserId()) return;
+    if (!previousMessages.has(message.id)) playChatSound("message");
+    return;
+  }
+  if (type !== "reaction") return;
+  const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
+  if (!message || messageAuthorId(message) !== currentUserId()) return;
+  const previous = previousMessages.get(message.id);
+  if (reactionSignature(previous) !== reactionSignature(message)) playChatSound("reactToMe");
+}
+
+function messageFromPayloadId(payload: unknown): ApiMessage | null {
+  if (!payload || typeof payload !== "object") return null;
+  const id = Number((payload as RuntimeRecord).message_id ?? (payload as RuntimeRecord).messageId ?? (payload as RuntimeRecord).id);
+  return Number.isFinite(id) ? state.messages.find((message) => message.id === id) || null : null;
+}
+
+function messageFromSocketPayload(payload: unknown): ApiMessage | null {
+  if (!payload || typeof payload !== "object") return null;
+  const record = payload as RuntimeRecord;
+  const candidates = [
+    record.message,
+    record.chatMessage,
+    record.chat_message,
+    record.data,
+    payload,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const message = normalizeMessage(Number(objectValue(candidate).id ?? objectValue(candidate).message_id), candidate as RuntimeRecord);
+    if (message) return message;
+  }
+  return null;
+}
+
+function reactionSignature(message: ApiMessage | undefined): string {
+  return (message?.reactions || [])
+    .map((reaction) => `${reaction.emoji || ""}:${reaction.userId ?? reaction.user_id ?? reaction.username ?? reaction.handle ?? reaction.name ?? ""}`)
+    .sort()
+    .join("|");
+}
+
+type ChatSoundKind = "send" | "react" | "reactToMe" | "message" | "poke";
+
+function playChatSound(kind: ChatSoundKind): void {
+  if (!state.soundEnabled || state.soundVolume <= 0) return;
+  if (kind === "send" && !state.soundSend) return;
+  if (kind === "react" && !state.soundReact) return;
+  if (kind === "reactToMe" && !state.soundReactToMe) return;
+  if (kind === "message" && !state.soundMessage) return;
+  if (kind === "poke" && !state.soundPoke) return;
+  const context = getAudioContext();
+  if (!context) return;
+  if (context.state === "suspended") void context.resume().catch(() => undefined);
+  const now = context.currentTime + 0.01;
+  if (kind === "send") playTone(context, now, [520, 700], 0.055, "triangle", 0.8);
+  if (kind === "react") playTone(context, now, [860, 620], 0.045, "square", 0.45);
+  if (kind === "reactToMe") playTone(context, now, [480, 720, 960], 0.05, "sine", 0.75);
+  if (kind === "message") playTone(context, now, [660, 880], 0.065, "sine", 0.65);
+  if (kind === "poke") playPokeTone(context, now);
+}
+
+function playTone(context: AudioContext, start: number, frequencies: number[], step: number, type: OscillatorType, gainScale: number): void {
+  frequencies.forEach((frequency, index) => {
+    const oscillator = context.createOscillator();
+    const gain = context.createGain();
+    const when = start + index * step;
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(frequency, when);
+    gain.gain.setValueAtTime(0.0001, when);
+    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.08 * gainScale), when + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, when + step);
+    oscillator.connect(gain);
+    gain.connect(context.destination);
+    oscillator.start(when);
+    oscillator.stop(when + step + 0.02);
+  });
+}
+
+function playPokeTone(context: AudioContext, start: number): void {
+  const tap = context.createOscillator();
+  const tapGain = context.createGain();
+  tap.type = "square";
+  tap.frequency.setValueAtTime(220, start);
+  tapGain.gain.setValueAtTime(0.0001, start);
+  tapGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.035), start + 0.006);
+  tapGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.055);
+  tap.connect(tapGain);
+  tapGain.connect(context.destination);
+  tap.start(start);
+  tap.stop(start + 0.06);
+
+  const chirp = context.createOscillator();
+  const chirpGain = context.createGain();
+  const chirpStart = start + 0.035;
+  chirp.type = "triangle";
+  chirp.frequency.setValueAtTime(740, chirpStart);
+  chirp.frequency.exponentialRampToValueAtTime(1180, start + 0.18);
+  chirpGain.gain.setValueAtTime(0.0001, chirpStart);
+  chirpGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.025), chirpStart + 0.02);
+  chirpGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+  chirp.connect(chirpGain);
+  chirpGain.connect(context.destination);
+  chirp.start(chirpStart);
+  chirp.stop(start + 0.24);
+}
+
+function getAudioContext(): AudioContext | null {
+  if (audioContext) return audioContext;
+  const AudioContextCtor = window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+  if (!AudioContextCtor) return null;
+  audioContext = new AudioContextCtor();
+  return audioContext;
+}
+
+function clampVolume(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return 0.55;
+  return Math.max(0, Math.min(1, numeric));
+}
+
 async function loadLayoutSettings(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get([SIDE_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
-  state.side = stored[SIDE_KEY] === "left" ? "left" : "right";
-  const height = Number(stored[HEIGHT_KEY]);
-  if (Number.isFinite(height)) state.frameHeight = clampFrameHeight(height);
-  const top = Number(stored[TOP_KEY]);
-  if (Number.isFinite(top)) state.topOffset = clampTopOffset(top, state.frameHeight);
+  const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
+  if (!lifecycleActive()) return;
+  const layout = await restoreOverlayPanelBox("reminetChat", {
+    side: state.side,
+    minWidth: 320,
+    minHeight: 260,
+    defaultWidth: state.frameWidth,
+    defaultHeight: state.frameHeight,
+    legacy: {
+      width: stored[WIDTH_KEY],
+      height: stored[HEIGHT_KEY],
+      topOffset: stored[TOP_KEY],
+    },
+  });
+  state.x = layout.x ?? state.x;
+  state.frameWidth = layout.width;
+  state.frameHeight = layout.height;
+  state.topOffset = layout.topOffset;
+  state.layoutReady = true;
   applyLayout();
   ensureRoot();
 }
@@ -859,24 +1519,46 @@ function normalizeThemeMode(value: unknown): "light" | "dark" | "system" {
 function applyTheme(): void {
   const root = state.root;
   if (!root) return;
-  const mode = state.theme === "system"
-    ? window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"
-    : state.theme;
-  root.dataset.theme = mode;
+  root.dataset.theme = appThemeMode();
+}
+
+function appThemeMode(): "light" | "dark" {
+  return resolveOverlayPanelTheme();
 }
 
 function applyLayout(): void {
   const root = state.root;
   if (!root) return;
-  state.topOffset = clampTopOffset(state.topOffset, state.frameHeight);
-  if (state.side === "left") {
-    root.style.setProperty("--rn-left-top", `${state.topOffset}px`);
-  } else {
-    root.style.setProperty("--rn-rail-top", `${state.topOffset}px`);
+  registerOverlayAppRoot("reminetChat", root);
+  if (state.mountMode === "messages") {
     root.style.removeProperty("--rn-left-top");
+    root.style.removeProperty("--rn-rail-top");
+    root.style.removeProperty("--rn-frame-height");
+    markOverlayAppLayoutReady(root, true);
+    return;
   }
-  state.frameHeight = clampFrameHeight(state.frameHeight);
+  const box = clampOverlayPanelBox(
+    { x: state.x, width: state.frameWidth, height: state.frameHeight, topOffset: state.topOffset },
+    { minWidth: 320, minHeight: 260, dockSide: state.side },
+  );
+  state.x = box.x ?? state.x;
+  state.frameWidth = box.width;
+  state.frameHeight = box.height;
+  state.topOffset = box.topOffset;
+  root.style.setProperty("--rn-rail-top", `${state.topOffset}px`);
+  root.style.setProperty("--rn-rail-left", `${state.x}px`);
+  root.style.setProperty("--rn-rail-width", `${state.frameWidth}px`);
+  root.style.removeProperty("--rn-left-top");
   root.style.setProperty("--rn-frame-height", `${state.frameHeight}px`);
+  markOverlayAppLayoutReady(root, state.layoutReady);
+}
+
+function rightRailRect(): DOMRect | null {
+  const column = document.querySelector<HTMLElement>('[data-testid="sidebarColumn"]');
+  const rail = column?.querySelector<HTMLElement>(":scope > div") || column;
+  const rect = rail?.getBoundingClientRect();
+  if (!rect || rect.width < 260) return null;
+  return rect;
 }
 
 function leftDockTop(): number {
@@ -884,78 +1566,107 @@ function leftDockTop(): number {
   if (!beetol) return 8;
   const rect = beetol.getBoundingClientRect();
   if (rect.width === 0 || rect.height === 0) return 8;
-  return Math.max(8, Math.min(window.innerHeight - 120, rect.bottom + 8));
+  return Math.max(8, Math.min(layoutViewportHeight() - 120, rect.bottom + 8));
+}
+
+function leftRailTop(): number {
+  return leftDockTop();
+}
+
+function leftRailHeight(topOffset: number): number {
+  const available = layoutViewportHeight() - topOffset - LEFT_RAIL_BOTTOM_CLEARANCE_PX;
+  if (available < LEFT_RAIL_MIN_HEIGHT_PX) return Math.max(1, Math.floor(available));
+  return Math.floor(available);
+}
+
+function layoutViewportHeight(): number {
+  const heights = [
+    window.innerHeight,
+    document.documentElement.clientHeight,
+  ].filter((height): height is number => typeof height === "number" && Number.isFinite(height) && height > 0);
+  return Math.floor(Math.max(...heights));
 }
 
 function defaultTopOffset(): number {
   if (state.side !== "left") return rightDockMinTop();
-  return leftDockTop();
+  return leftRailTop();
 }
 
 function startDrag(event: PointerEvent): void {
+  if (state.mountMode === "messages") return;
   if (event.button !== 0) return;
   const target = event.target instanceof Element ? event.target : null;
   if (target?.closest("button, a, input, textarea, select, [data-role='resize']")) return;
   const root = state.root;
   if (!root) return;
-  event.preventDefault();
-  const startY = event.clientY;
-  const startTop = state.topOffset;
-  const pointerId = event.pointerId;
-  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(pointerId);
   root.dataset.dragging = "true";
-
-  const move = (moveEvent: PointerEvent) => {
-    state.topOffset = clampTopOffset(startTop + moveEvent.clientY - startY, state.frameHeight);
-    applyLayout();
-  };
-  const up = () => {
-    root.dataset.dragging = "false";
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
-    void chrome.storage.local.set({ [TOP_KEY]: state.topOffset });
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", up);
+  startOverlayPanelDrag(event, {
+    appId: "reminetChat",
+    root,
+    side: () => state.side,
+    box: () => ({ x: state.x, width: state.frameWidth, height: state.frameHeight, topOffset: state.topOffset }),
+    setBox: (box) => {
+      if (typeof box.x === "number") state.x = box.x;
+      if (typeof box.width === "number") state.frameWidth = box.width;
+      if (typeof box.height === "number") state.frameHeight = box.height;
+      if (typeof box.topOffset === "number") state.topOffset = box.topOffset;
+    },
+    apply: applyLayout,
+    persist: () => {
+      root.dataset.dragging = "false";
+      void chrome.storage.local.set({ [TOP_KEY]: state.topOffset });
+    },
+    disabled: () => state.mountMode === "messages",
+    minWidth: 320,
+    minHeight: 260,
+  });
 }
 
 function startResize(event: PointerEvent): void {
+  if (state.mountMode === "messages") return;
   if (event.button !== 0 || state.minimized) return;
   const root = state.root;
   if (!root) return;
-  event.preventDefault();
-  const startY = event.clientY;
-  const startHeight = state.frameHeight;
-  const pointerId = event.pointerId;
-  (event.currentTarget as HTMLElement | null)?.setPointerCapture?.(pointerId);
+  const axis = resizeAxis(event.currentTarget);
+  startOverlayPanelResize(event, {
+    appId: "reminetChat",
+    root,
+    side: () => state.side,
+    box: () => ({ x: state.x, width: state.frameWidth, height: state.frameHeight, topOffset: state.topOffset || defaultTopOffset() }),
+    setBox: (box) => {
+      if (typeof box.x === "number") state.x = box.x;
+      if (typeof box.width === "number") state.frameWidth = box.width;
+      if (typeof box.height === "number") state.frameHeight = box.height;
+      if (typeof box.topOffset === "number") state.topOffset = box.topOffset;
+    },
+    apply: applyLayout,
+    persist: () => {
+      void chrome.storage.local.set({ [WIDTH_KEY]: state.frameWidth, [HEIGHT_KEY]: state.frameHeight, [TOP_KEY]: state.topOffset });
+    },
+    disabled: () => state.mountMode === "messages" || state.minimized,
+    minWidth: 320,
+    minHeight: 260,
+  }, axis);
+}
 
-  const move = (moveEvent: PointerEvent) => {
-    state.frameHeight = clampFrameHeight(startHeight + moveEvent.clientY - startY);
-    applyLayout();
-  };
-  const up = () => {
-    window.removeEventListener("pointermove", move);
-    window.removeEventListener("pointerup", up);
-    window.removeEventListener("pointercancel", up);
-    void chrome.storage.local.set({ [HEIGHT_KEY]: state.frameHeight });
-  };
-  window.addEventListener("pointermove", move);
-  window.addEventListener("pointerup", up);
-  window.addEventListener("pointercancel", up);
+function resizeAxis(target: EventTarget | null): "both" | "x" | "y" {
+  if (!(target instanceof HTMLElement)) return "both";
+  return target.dataset.resizeAxis === "x" || target.dataset.resizeAxis === "y" ? target.dataset.resizeAxis : "both";
 }
 
 function clampFrameHeight(value: number): number {
-  const top = clampTopOffset(state.topOffset || defaultTopOffset(), value);
-  const max = Math.max(260, window.innerHeight - top - 12);
-  return Math.max(260, Math.min(Math.floor(value), max));
+  return clampOverlayPanelBox(
+    { x: state.x, width: state.frameWidth, height: value, topOffset: state.topOffset || defaultTopOffset() },
+    { minWidth: 320, minHeight: 260, dockSide: state.side },
+  ).height;
 }
 
 function clampTopOffset(value: number, frameHeight = state.frameHeight): number {
-  const min = state.side === "right" ? rightDockMinTop() : 8;
-  const max = Math.max(min, window.innerHeight - Math.min(frameHeight, window.innerHeight - 16) - 8);
-  return Math.max(min, Math.min(Math.floor(value), max));
+  const box = clampOverlayPanelBox(
+    { x: state.x, width: state.frameWidth, height: frameHeight, topOffset: value },
+    { minWidth: 320, minHeight: 260, dockSide: state.side },
+  );
+  return box.topOffset;
 }
 
 function rightDockMinTop(): number {
@@ -986,17 +1697,17 @@ function renderMessageGroup(group: MessageGroup): string {
   const handleValue = remiliaHandle(user);
   const name = displayName(user, group.authorId, first);
   const avatar = avatarUrl(user);
-  const color = user?.color && /^#[0-9a-f]{6}$/i.test(user.color) ? user.color : "";
+  const color = remiliaUserColor(user);
   const profileUrl = handleValue ? `https://www.remilia.net/~${encodeURIComponent(handleValue)}` : "https://www.remilia.net";
   const xHandle = connectedXHandle(user) || cachedXHandleForRemiliaHandle(handleValue);
   return `
-    <article class="milxdy-chat-message-group" data-remilia-handle="${escapeHtml(handleValue)}" data-x-handle="${escapeHtml(xHandle)}">
+    <article class="milxdy-chat-message-group" data-remilia-handle="${escapeHtml(handleValue)}" data-x-handle="${escapeHtml(xHandle)}"${color ? ` style="--rn-user-color:${escapeHtml(color)}"` : ""}>
       <div class="milxdy-chat-user-column">
         <a class="milxdy-chat-avatar" href="${profileUrl}" target="_blank" rel="noopener noreferrer" title="Open RemiliaNET profile">${avatar ? `<img src="${escapeHtml(absoluteRemiliaUrl(avatar))}" alt="">` : ""}</a>
       </div>
       <div class="milxdy-chat-body">
         <div class="milxdy-chat-meta">
-          <a href="${profileUrl}" target="_blank" rel="noopener noreferrer" style="${color ? `color:${color}` : ""}">${escapeHtml(name)}</a>
+          <a class="milxdy-chat-author" href="${profileUrl}" target="_blank" rel="noopener noreferrer">${escapeHtml(name)}</a>
           ${handleValue ? `<span>~${escapeHtml(handleValue)}</span>` : ""}
           <time>${escapeHtml(formatTime(messageTime(first)))}</time>
           <span class="milxdy-chat-inline-actions">
@@ -1016,6 +1727,7 @@ function renderStackedMessage(message: ApiMessage): string {
       ${renderReplyContext(message)}
       ${message.body ? `<div class="milxdy-chat-text">${formatBody(message.body)}</div>` : ""}
       ${renderAttachments(message)}
+      ${renderReactionCounts(message)}
       ${renderMessageActions(message)}
     </div>
   `;
@@ -1060,23 +1772,29 @@ function renderAttachments(message: ApiMessage): string {
 function renderImageAttachment(media: MediaAttachment): string {
   if (!media.url) return "";
   const url = absoluteRemiliaUrl(media.url);
+  if (!url) return "";
   const cached = mediaDataUrlCache.get(url);
-  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img ${cached ? `src="${escapeHtml(cached)}"` : ""} data-media-url="${escapeHtml(url)}" alt="" loading="lazy"></a>`;
+  const src = cached || (isRemiliaMediaUrl(url) ? "" : url);
+  const bridgeAttribute = isRemiliaMediaUrl(url) ? ` data-media-url="${escapeHtml(url)}"` : "";
+  return `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer"><img ${src ? `src="${escapeHtml(src)}"` : ""}${bridgeAttribute} alt="" loading="lazy"></a>`;
 }
 
 function renderVideoAttachment(media: MediaAttachment): string {
-  const url = media.url || media.thumbnailUrl || media.thumbnail_url;
-  if (!url) return "";
-  const absolute = absoluteRemiliaUrl(url);
-  const cached = mediaDataUrlCache.get(absolute);
-  return `<video ${cached ? `src="${escapeHtml(cached)}"` : ""} data-media-url="${escapeHtml(absolute)}" controls playsinline preload="metadata"></video>`;
+  const videoUrl = media.url ? absoluteRemiliaUrl(media.url) : "";
+  const posterUrl = media.thumbnailUrl || media.thumbnail_url ? absoluteRemiliaUrl(media.thumbnailUrl || media.thumbnail_url || "") : "";
+  if (!videoUrl && posterUrl) {
+    return `<a href="${escapeHtml(posterUrl)}" target="_blank" rel="noopener noreferrer"><img src="${escapeHtml(posterUrl)}" alt="" loading="lazy"></a>`;
+  }
+  if (!videoUrl) return "";
+  return `<video src="${escapeHtml(videoUrl)}"${posterUrl ? ` poster="${escapeHtml(posterUrl)}"` : ""} controls playsinline preload="metadata"></video>`;
 }
 
 function hydrateInlineMedia(container: HTMLElement): void {
-  const media = Array.from(container.querySelectorAll<HTMLImageElement | HTMLVideoElement>("img[data-media-url], video[data-media-url]"));
+  if (!lifecycleActive()) return;
+  const media = Array.from(container.querySelectorAll<HTMLImageElement>("img[data-media-url]"));
   for (const element of media) {
     const url = element.dataset.mediaUrl || "";
-    if (!url || element.currentSrc.startsWith("data:") || element.getAttribute("src")?.startsWith("data:")) continue;
+    if (!url || !isRemiliaMediaUrl(url) || element.currentSrc.startsWith("data:") || element.getAttribute("src")?.startsWith("data:")) continue;
     const cached = mediaDataUrlCache.get(url);
     if (cached) {
       setMediaSource(element, cached);
@@ -1084,13 +1802,14 @@ function hydrateInlineMedia(container: HTMLElement): void {
     }
     if (mediaDataUrlPending.has(url)) continue;
     mediaDataUrlPending.add(url);
-    void safeRuntimeMessage({ type: "reminetChat:fetchMedia", url })
+    void runtimeSendMessage({ type: "reminetChat:fetchMedia", url }, "reminetChat:fetchMedia")
       .then(asRecord)
       .then((response) => {
+        if (!lifecycleActive()) return;
         const dataUrl = stringOrUndefined(response.dataUrl);
         if (!response.ok || !dataUrl) return;
         mediaDataUrlCache.set(url, dataUrl);
-        for (const next of container.querySelectorAll<HTMLImageElement | HTMLVideoElement>(`img[data-media-url="${cssEscape(url)}"], video[data-media-url="${cssEscape(url)}"]`)) {
+        for (const next of container.querySelectorAll<HTMLImageElement>(`img[data-media-url="${cssEscape(url)}"]`)) {
           setMediaSource(next, dataUrl);
         }
       })
@@ -1100,9 +1819,8 @@ function hydrateInlineMedia(container: HTMLElement): void {
   }
 }
 
-function setMediaSource(element: HTMLImageElement | HTMLVideoElement, dataUrl: string): void {
+function setMediaSource(element: HTMLImageElement, dataUrl: string): void {
   element.src = dataUrl;
-  if (element instanceof HTMLVideoElement) element.load();
 }
 
 function cssEscape(value: string): string {
@@ -1114,26 +1832,79 @@ function cssEscape(value: string): string {
 function renderMessageActions(message: ApiMessage): string {
   return `
     <div class="milxdy-chat-message-actions">
-      <button class="milxdy-chat-reply-action" type="button" data-chat-action="reply" data-message-id="${message.id}" title="Reply" aria-label="Reply">&#8625;</button>
       ${renderReactions(message)}
+      <button class="milxdy-chat-reply-action" type="button" data-chat-action="reply" data-message-id="${message.id}" title="Reply" aria-label="Reply">${replyIconSvg()}</button>
     </div>
   `;
 }
 
+function replyIconSvg(): string {
+  return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.5 5.5h13v9h-7l-5 4v-4h-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+}
+
 function renderReactions(message: ApiMessage): string {
+  const counts = reactionCounts(message);
+  return `
+    <div class="milxdy-chat-reactions">
+      ${REACTIONS.map((emoji) => {
+        const count = counts.get(emoji) || 0;
+        const reacted = currentUserReacted(message, emoji);
+        return `<button type="button" data-active="${String(reacted)}" data-chat-action="react" data-message-id="${message.id}" data-emoji="${emoji}" title="${escapeHtml(reactionTooltip(message, emoji, count))}" aria-pressed="${String(reacted)}">${emoji}</button>`;
+      }).join("")}
+    </div>
+  `;
+}
+
+function renderReactionCounts(message: ApiMessage): string {
+  const counts = reactionCounts(message);
+  const items = REACTIONS
+    .map((emoji) => {
+      const count = counts.get(emoji) || 0;
+      if (count < 1) return "";
+      const reacted = currentUserReacted(message, emoji);
+      return `<button type="button" data-active="${String(reacted)}" data-chat-action="react" data-message-id="${message.id}" data-emoji="${emoji}" title="${escapeHtml(reactionTooltip(message, emoji, count))}" aria-pressed="${String(reacted)}">${emoji} ${count}</button>`;
+    })
+    .filter(Boolean);
+  return items.length ? `<div class="milxdy-chat-reaction-counts">${items.join("")}</div>` : "";
+}
+
+function reactionCounts(message: ApiMessage): Map<string, number> {
   const counts = new Map<string, number>();
   for (const reaction of message.reactions || []) {
     if (!reaction.emoji) continue;
     counts.set(reaction.emoji, (counts.get(reaction.emoji) || 0) + 1);
   }
-  return `
-    <div class="milxdy-chat-reactions">
-      ${REACTIONS.map((emoji) => {
-        const count = counts.get(emoji) || 0;
-        return `<button class="${count ? "has-reacts" : ""}" type="button" data-chat-action="react" data-message-id="${message.id}" data-emoji="${emoji}" title="${escapeHtml(reactionTooltip(message, emoji, count))}">${emoji}${count ? ` ${count}` : ""}</button>`;
-      }).join("")}
-    </div>
-  `;
+  return counts;
+}
+
+function currentUserReacted(message: ApiMessage, emoji: string): boolean {
+  return (message.reactions || []).some((reaction) => reaction.emoji === emoji && reactionBelongsToCurrentUser(reaction));
+}
+
+function reactionBelongsToCurrentUser(reaction: Reaction): boolean {
+  const user = reaction.user || null;
+  const userId = reaction.userId ?? reaction.user_id ?? user?.id ?? user?.userId ?? user?.user_id ?? 0;
+  const currentId = currentUserId();
+  if (userId && currentId && userId === currentId) return true;
+  const current = state.currentUser;
+  const currentHandles = [
+    remiliaHandle(current),
+    current?.username,
+    current?.handle,
+    current?.userHandle,
+    current?.user_handle,
+  ].map((value) => (value || "").toLowerCase()).filter(Boolean);
+  const reactionHandles = [
+    reaction.handle,
+    reaction.username,
+    reaction.name,
+    remiliaHandle(user),
+    user?.username,
+    user?.handle,
+    user?.userHandle,
+    user?.user_handle,
+  ].map((value) => (value || "").toLowerCase()).filter(Boolean);
+  return reactionHandles.some((value) => currentHandles.includes(value));
 }
 
 function renderPendingAttachment(attachment: PendingAttachment): string {
@@ -1215,6 +1986,7 @@ function reactionTooltip(message: ApiMessage, emoji: string, count: number): str
 }
 
 function reactionAuthorName(reaction: Reaction): string {
+  if (reactionBelongsToCurrentUser(reaction)) return "you";
   const userId = reaction.userId ?? reaction.user_id ?? reaction.user?.id ?? reaction.user?.userId ?? reaction.user?.user_id ?? 0;
   const user = reaction.user || state.users.get(userId) || (userId && userId === currentUserId() ? state.currentUser : null);
   return user?.displayName
@@ -1233,8 +2005,11 @@ function compactText(value: string, maxLength: number): string {
 }
 
 function reactToMessage(messageId: number, emoji: string): void {
-  if (!Number.isFinite(messageId) || !emoji || !state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  state.ws.send(JSON.stringify({ type: "react", payload: { chat_id: CHAT_ID, message_id: messageId, emoji } }));
+  if (!Number.isFinite(messageId) || !emoji || state.socketState !== "open") return;
+  const message = state.messages.find((item) => item.id === messageId);
+  const type = message && currentUserReacted(message, emoji) ? "unreact" : "react";
+  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: messageId, emoji } })) return;
+  if (type === "react") playChatSound("react");
 }
 
 function renderPokeButton(username: string): string {
@@ -1248,18 +2023,21 @@ function renderPokeButton(username: string): string {
 }
 
 async function pokeUser(username: string): Promise<void> {
+  if (!lifecycleActive()) return;
   const clean = cleanUsername(username);
   if (!clean) return;
   const key = clean.toLowerCase();
   const cooldownUntil = pokeCooldowns.get(key) || 0;
-  const button = state.root?.querySelector<HTMLElement>(`.milxdy-chat-poke[data-username="${cssEscape(clean)}"]`) || null;
+  const button = pokeButtonsForUsername(clean)[0] || null;
   if (cooldownUntil > Date.now()) {
     if (button) startPokeCooldown(button, clean, cooldownUntil - Date.now());
     return;
   }
+  playChatSound("poke");
   if (button) setPokeButtonState(button, "loading", `Poking ${clean}...`);
   renderStatus(`Poking ${clean}...`);
-  const response = await safeRuntimeMessage({ type: "beetol:poke", username: clean }).then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+  const response = await runtimeSendMessage({ type: "beetol:poke", username: clean }, "beetol:poke").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+  if (!lifecycleActive()) return;
   const cooldownMs = extractPokeCooldownMs(response);
   if (response.ok || cooldownMs > 0) {
     startPokeCooldownForUser(clean, cooldownMs || DEFAULT_POKE_COOLDOWN_MS);
@@ -1275,19 +2053,58 @@ function startPokeCooldownForUser(username: string, cooldownMs: number): void {
   if (!clean) return;
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
-  render();
+  const buttons = pokeButtonsForUsername(clean);
+  if (!buttons.length) {
+    render();
+    return;
+  }
+  for (const button of buttons) {
+    startPokeCooldown(button, clean, until - Date.now(), until);
+  }
 }
 
 function syncPokeCooldownButtons(root: HTMLElement): void {
   for (const button of Array.from(root.querySelectorAll<HTMLElement>(".milxdy-chat-poke"))) {
     const username = cleanUsername(button.dataset.username || "");
     if (!username) continue;
+    registerPokeButton(button, username);
     const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
     if (cooldownUntil > Date.now()) startPokeCooldown(button, username, cooldownUntil - Date.now(), cooldownUntil);
   }
 }
 
+function registerPokeButton(button: HTMLElement, username: string): void {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  const key = clean.toLowerCase();
+  let buttons = pokeButtonsByUsername.get(key);
+  if (!buttons) {
+    buttons = new Set();
+    pokeButtonsByUsername.set(key, buttons);
+  }
+  buttons.add(button);
+}
+
+function pokeButtonsForUsername(username: string): HTMLElement[] {
+  const clean = cleanUsername(username);
+  if (!clean) return [];
+  const key = clean.toLowerCase();
+  const buttons = pokeButtonsByUsername.get(key);
+  if (!buttons) return [];
+  const connected: HTMLElement[] = [];
+  for (const button of Array.from(buttons)) {
+    if (!button.isConnected || cleanUsername(button.dataset.username || "").toLowerCase() !== key) {
+      buttons.delete(button);
+      continue;
+    }
+    connected.push(button);
+  }
+  if (buttons.size === 0) pokeButtonsByUsername.delete(key);
+  return connected;
+}
+
 function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: number, knownUntil?: number): void {
+  if (!lifecycleActive()) return;
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = knownUntil || Date.now() + Math.max(1000, Number(cooldownMs) || 0);
@@ -1297,7 +2114,13 @@ function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: nu
   setPokeButtonState(button, "cooldown", `Already poked ${clean}`);
   button.dataset.pokeCooldownUntil = String(until);
 
+  let cancelNextTick: (() => void) | null = null;
   const update = () => {
+    cancelNextTick = null;
+    if (!lifecycleActive() || !button.isConnected) {
+      clearPokeCountdown(button);
+      return;
+    }
     const remaining = until - Date.now();
     if (remaining <= 0) {
       clearPokeCountdown(button);
@@ -1311,15 +2134,17 @@ function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: nu
     button.textContent = label;
     button.title = `Poke ${clean} again in ${label}`;
     button.setAttribute("aria-label", button.title);
+    cancelNextTick = runtimeScheduler.timeout(update, 1000);
+    pokeCountdownTimers.set(button, cancelNextTick);
   };
 
   update();
-  pokeCountdownTimers.set(button, window.setInterval(update, 1000));
+  if (cancelNextTick) pokeCountdownTimers.set(button, cancelNextTick);
 }
 
 function clearPokeCountdown(button: HTMLElement): void {
-  const timer = pokeCountdownTimers.get(button);
-  if (timer) window.clearInterval(timer);
+  const cancelTimer = pokeCountdownTimers.get(button);
+  if (cancelTimer) cancelTimer();
   pokeCountdownTimers.delete(button);
 }
 
@@ -1468,14 +2293,16 @@ async function uploadPendingAttachments(): Promise<{ ok: true; images: MediaAtta
   const images: MediaAttachment[] = [];
   let video: MediaAttachment | null = null;
   for (const attachment of state.pendingAttachments) {
+    if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
     attachment.status = "uploading";
     render();
-    const response = await safeRuntimeMessage({
+    const response = await runtimeSendMessage({
       type: "reminetChat:uploadAttachment",
       name: attachment.name,
       mimeType: attachment.mimeType,
       dataUrl: attachment.dataUrl,
-    }).then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+    }, "reminetChat:uploadAttachment").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+    if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
     if (!response.ok) {
       attachment.status = "error";
       return { ok: false, error: String(response.error || "Upload failed.") };
@@ -1502,6 +2329,7 @@ function userForAuthor(authorId: number, message: ApiMessage): ApiUser | null {
 }
 
 function queueProfileLookup(authorId: number, user: ApiUser): void {
+  if (!lifecycleActive()) return;
   const handleValue = remiliaHandle(user);
   const directXHandle = connectedXHandle(user);
   if (directXHandle) {
@@ -1519,6 +2347,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
   void (async () => {
     try {
       const cached = await getCachedProfile(cacheKey);
+      if (!lifecycleActive()) return;
       if (cached) {
         const cachedXHandle = connectedXHandle(cached);
         if (cachedXHandle) xHandleByRemiliaHandle.set(cacheKey, cachedXHandle);
@@ -1528,7 +2357,8 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
         return;
       }
 
-      const profileResponse = await safeRuntimeMessage({ type: "reminetChat:getProfile", username: handleValue }).then(asRecord);
+      const profileResponse = await runtimeSendMessage({ type: "reminetChat:getProfile", username: handleValue }, "reminetChat:getProfile").then(asRecord);
+      if (!lifecycleActive()) return;
       const enriched = profileUserFromResponse(profileResponse);
       const enrichedXHandle = enriched ? connectedXHandle(enriched) : "";
       if (profileResponse.ok && enriched && enrichedXHandle) {
@@ -1545,6 +2375,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
       }
 
       const remiStatsUser = await getRemiStatsCachedUser(cacheKey);
+      if (!lifecycleActive()) return;
       const remiStatsXHandle = remiStatsUser ? connectedXHandle(remiStatsUser) : "";
       if (remiStatsUser && remiStatsXHandle) {
         xHandleByRemiliaHandle.set(cacheKey, remiStatsXHandle);
@@ -1560,7 +2391,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
 }
 
 async function getRemiStatsCachedUser(handleKey: string): Promise<ApiUser | null> {
-  const response = await safeRuntimeMessage({ type: "remistats:getUser", handle: handleKey }).then(asRecord).catch(() => asRecord({}));
+  const response = await runtimeSendMessage({ type: "remistats:getUser", handle: handleKey }, "remistats:getUser").then(asRecord).catch(() => asRecord({}));
   if (!response.ok) return null;
   const data = objectValue(response.data);
   const user = objectValue(data.user);
@@ -1659,6 +2490,22 @@ function profileUserFromResponse(response: RuntimeRecord): ApiUser | null {
 function displayName(user: ApiUser | null, authorId: number, message: ApiMessage): string {
   const handleValue = remiliaHandle(user);
   return user?.displayName || user?.display_name || user?.name || handleValue || (message.id < 0 ? "You" : `User ${authorId || "?"}`);
+}
+
+function remiliaUserColor(user: ApiUser | null): string {
+  const hue = remiliaUserHue(user);
+  return hue === null ? "" : `hsl(${hue}, 60%, 45%)`;
+}
+
+function remiliaUserHue(user: ApiUser | null): number | null {
+  const raw = user?.color;
+  if (typeof raw === "number" && Number.isFinite(raw)) return normalizeHue(raw);
+  if (typeof raw === "string" && /^\d+(\.\d+)?$/.test(raw.trim())) return normalizeHue(Number(raw));
+  return null;
+}
+
+function normalizeHue(value: number): number {
+  return ((Math.round(value) % 360) + 360) % 360;
 }
 
 function remiliaHandle(user: ApiUser | null): string {
@@ -1875,8 +2722,21 @@ function mediaId(media: MediaAttachment | null): number | null {
 }
 
 function absoluteRemiliaUrl(url: string): string {
-  if (url.startsWith("/")) return `https://www.remilia.net${url}`;
-  return url;
+  try {
+    const parsed = new URL(url, "https://www.remilia.net");
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "";
+  } catch {
+    return "";
+  }
+}
+
+function isRemiliaMediaUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" && parsed.hostname === "www.remilia.net";
+  } catch {
+    return false;
+  }
 }
 
 function formatBody(value: string): string {

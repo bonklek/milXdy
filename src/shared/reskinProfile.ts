@@ -16,6 +16,8 @@ export type VisualThemeSettings = {
   pfpNotifications: boolean;
   pfpChat: boolean;
   quoteMediaGap: boolean;
+  appWindowStyle: "reminet" | "classic";
+  appShadows: boolean;
   maxMediaHeight: number;
   postButtonClickly: boolean;
   postSound: boolean;
@@ -29,6 +31,7 @@ export type VisualThemeSettings = {
   pokePlacement: "top" | "actions";
   reminetChatOverlay: boolean;
   miladyOnly: boolean;
+  disableMaxxer: boolean;
   disableSelfTracking: boolean;
   maxxerIntensity: "subtle" | "marked" | "card";
   maxxerSeparators: "subtle" | "beveled" | "none";
@@ -51,6 +54,13 @@ export type SavedVisualTheme = {
   settings: VisualThemeSettings;
 };
 
+export type ProfileAudioSettings = {
+  miladySoundEnabled: boolean;
+  remistatsSoundsEnabled: boolean;
+  remistatsSoundVolume: number;
+  postReadingEndOfTweetDing: boolean;
+};
+
 export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   profile: DEFAULT_RESKIN_PROFILE,
   tweetFont: "twitter",
@@ -62,6 +72,8 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   pfpNotifications: true,
   pfpChat: true,
   quoteMediaGap: false,
+  appWindowStyle: "reminet",
+  appShadows: true,
   maxMediaHeight: 520,
   postButtonClickly: true,
   postSound: true,
@@ -75,6 +87,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   pokePlacement: "actions",
   reminetChatOverlay: false,
   miladyOnly: false,
+  disableMaxxer: false,
   disableSelfTracking: false,
   maxxerIntensity: "marked",
   maxxerSeparators: "subtle",
@@ -93,6 +106,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
   max: {
     ...DEFAULT_VISUAL_THEME,
     profile: "max",
+    tweetFont: "hei",
+    uiFont: "hei",
     backgroundFade: true,
     squareMedia: true,
     pfpShape: "rounded-square",
@@ -100,22 +115,25 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     pfpNotifications: true,
     pfpChat: true,
     quoteMediaGap: false,
+    appWindowStyle: "reminet",
+    appShadows: true,
     maxMediaHeight: 480,
     postButtonClickly: true,
     postSound: true,
-    sidebarBevel: false,
-    sidebarSound: false,
+    sidebarBevel: true,
+    sidebarSound: true,
     newPostsPill: true,
     newPostsSound: true,
     notificationUnreadTint: true,
     remistatsBox: false,
     incomingPokeGold: true,
     pokePlacement: "actions",
-    reminetChatOverlay: false,
+    reminetChatOverlay: true,
     miladyOnly: false,
+    disableMaxxer: false,
     disableSelfTracking: false,
-    maxxerIntensity: "marked",
-    maxxerSeparators: "subtle",
+    maxxerIntensity: "card",
+    maxxerSeparators: "beveled",
     maxxerShimmer: true,
     tweetPngIncludeImages: true,
     tweetPngIncludeQuoteText: true,
@@ -129,13 +147,17 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
   moderate: {
     ...DEFAULT_VISUAL_THEME,
     profile: "moderate",
+    tweetFont: "twitter",
+    uiFont: "hei",
     backgroundFade: false,
     squareMedia: false,
-    pfpShape: "circle",
+    pfpShape: "rounded-square",
     pfpFeed: true,
-    pfpNotifications: true,
-    pfpChat: true,
+    pfpNotifications: false,
+    pfpChat: false,
     quoteMediaGap: true,
+    appWindowStyle: "reminet",
+    appShadows: true,
     maxMediaHeight: 640,
     postButtonClickly: false,
     postSound: false,
@@ -146,11 +168,12 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     notificationUnreadTint: true,
     remistatsBox: false,
     incomingPokeGold: true,
-    pokePlacement: "top",
+    pokePlacement: "actions",
     reminetChatOverlay: false,
     miladyOnly: false,
+    disableMaxxer: false,
     disableSelfTracking: false,
-    maxxerIntensity: "subtle",
+    maxxerIntensity: "marked",
     maxxerSeparators: "subtle",
     maxxerShimmer: false,
     tweetPngIncludeImages: true,
@@ -165,6 +188,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
   min: {
     ...DEFAULT_VISUAL_THEME,
     profile: "min",
+    tweetFont: "twitter",
+    uiFont: "system",
     backgroundFade: false,
     squareMedia: false,
     pfpShape: "circle",
@@ -172,6 +197,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     pfpNotifications: false,
     pfpChat: false,
     quoteMediaGap: true,
+    appWindowStyle: "reminet",
+    appShadows: false,
     maxMediaHeight: 0,
     postButtonClickly: false,
     postSound: false,
@@ -181,10 +208,11 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     newPostsSound: false,
     notificationUnreadTint: false,
     remistatsBox: false,
-    incomingPokeGold: true,
-    pokePlacement: "top",
+    incomingPokeGold: false,
+    pokePlacement: "actions",
     reminetChatOverlay: false,
     miladyOnly: false,
+    disableMaxxer: false,
     disableSelfTracking: false,
     maxxerIntensity: "subtle",
     maxxerSeparators: "none",
@@ -197,6 +225,27 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeStats: true,
     tweetPngBorder: false,
     tweetPngBorderPalette: "gray",
+  },
+};
+
+export const PROFILE_AUDIO_PRESETS: Record<ReskinProfile, ProfileAudioSettings> = {
+  max: {
+    miladySoundEnabled: true,
+    remistatsSoundsEnabled: true,
+    remistatsSoundVolume: 0.75,
+    postReadingEndOfTweetDing: true,
+  },
+  moderate: {
+    miladySoundEnabled: true,
+    remistatsSoundsEnabled: true,
+    remistatsSoundVolume: 0.55,
+    postReadingEndOfTweetDing: false,
+  },
+  min: {
+    miladySoundEnabled: false,
+    remistatsSoundsEnabled: false,
+    remistatsSoundVolume: 0.4,
+    postReadingEndOfTweetDing: false,
   },
 };
 
@@ -221,6 +270,8 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     pfpNotifications: booleanValue(record.pfpNotifications, fallback.pfpNotifications),
     pfpChat: booleanValue(record.pfpChat, fallback.pfpChat),
     quoteMediaGap: booleanValue(record.quoteMediaGap, fallback.quoteMediaGap),
+    appWindowStyle: oneOf(record.appWindowStyle, ["reminet", "classic"], fallback.appWindowStyle),
+    appShadows: booleanValue(record.appShadows, fallback.appShadows),
     maxMediaHeight: numberValue(record.maxMediaHeight, fallback.maxMediaHeight, 0, 1200),
     postButtonClickly: booleanValue(record.postButtonClickly, fallback.postButtonClickly),
     postSound: booleanValue(record.postSound, fallback.postSound),
@@ -234,6 +285,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     pokePlacement: oneOf(record.pokePlacement, ["top", "actions"], fallback.pokePlacement),
     reminetChatOverlay: booleanValue(record.reminetChatOverlay, fallback.reminetChatOverlay),
     miladyOnly: booleanValue(record.miladyOnly, fallback.miladyOnly),
+    disableMaxxer: booleanValue(record.disableMaxxer, fallback.disableMaxxer),
     disableSelfTracking: booleanValue(record.disableSelfTracking, fallback.disableSelfTracking),
     maxxerIntensity: oneOf(record.maxxerIntensity, ["subtle", "marked", "card"], fallback.maxxerIntensity),
     maxxerSeparators: oneOf(record.maxxerSeparators, ["subtle", "beveled", "none"], fallback.maxxerSeparators),

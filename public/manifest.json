@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "milXdy",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs", "scripting"],
+  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs"],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
@@ -11,11 +11,17 @@
     "https://pbs.twimg.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
+    "https://remilia.wiki/*",
     "https://wiki.remilia.org/*",
     "https://api.remistats.net/*",
+    "https://ethereum.publicnode.com/*",
     "https://miladymaker.net/banners/nft/*",
     "https://www.remilia.net/*",
-    "wss://www.remilia.net/*"
+    "wss://www.remilia.net/*",
+    "https://boards.miladychan.org/*",
+    "wss://boards.miladychan.org/*",
+    "https://musicbrainz.org/*",
+    "https://api.acoustid.org/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -27,12 +33,19 @@
     {
       "matches": ["https://x.com/*", "https://twitter.com/*"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://wiki.remilia.org/*", "https://remilia.wiki/*"],
+      "js": ["wikiFrame.js"],
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "web_accessible_resources": [
     {
       "resources": [
+        "brand/*",
         "icons/*",
         "ocr.html",
         "ocrHost.js",
@@ -41,17 +54,21 @@
         "ocr/lang/*",
         "remistats/*",
         "remilia-fonts/*",
+        "post-reading/*",
         "beetol/*",
         "reminetChat/*",
+        "miladychanSpotlight/*",
+        "music/*",
         "miladymaxxer/*",
         "features/*.js",
+        "features/*.wasm",
         "milady-logo.png",
         "worker.js",
         "ort/*",
         "generated/*",
         "models/*"
       ],
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://wiki.remilia.org/*"]
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://remilia.wiki/*", "https://wiki.remilia.org/*"]
     }
   ],
   "options_page": "popup.html",

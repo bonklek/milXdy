@@ -1,1 +1,1 @@
-import "../features/beetol/content.js";
+export * from "../features/beetol/content.js";

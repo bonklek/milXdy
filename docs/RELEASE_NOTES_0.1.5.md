@@ -50,14 +50,14 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 ### Performance and diagnostics
 
 - Shared Twitter scanner now extracts handles, pauses safety scans while the tab is hidden, and writes scanner diagnostics when enabled.
-- Feature timing diagnostics are available for RemiStats, Miladymaxxer, Postreader, and Wiki processing.
+- Feature timing diagnostics are available for RemiStats, Miladymaxxer, Post-reading, and Wiki processing.
 - Health/reporting moved into the Main popup tab.
 
 ## Changed
 
 - Popup navigation is now **Main**, **Appearance**, **Audio**, **RemiNet**, and **Wiki**.
-- Postreader voice selection now uses an installed browser voice dropdown instead of a free-text URI field.
-- Postreader placement prefers the X action row instead of tweet header controls.
+- Post-reading voice selection now uses an installed browser voice dropdown instead of a free-text URI field.
+- Post-reading placement prefers the X action row instead of tweet header controls.
 - Max visual profile now has configurable max media height and improved tweet-header overflow behavior.
 - Unread notification tinting is more precise and no longer broadly styles all notification articles.
 - Miladymaxxer self profile badges are suppressed when self-tracking is disabled.

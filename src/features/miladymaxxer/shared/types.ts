@@ -6,6 +6,7 @@ export interface ExtensionSettings {
   whitelistHandles: string[];
   miladyListHandles: string[];
   includeRemiStatsBeetles: boolean;
+  hideNonMiladyOrBeetlePosts: boolean;
   soundEnabled: boolean;
   showLevelBadge: boolean;
   cardTheme: CardTheme;

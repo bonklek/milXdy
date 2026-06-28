@@ -10,7 +10,7 @@ npm.cmd run build:firefox
 npm.cmd run lint:firefox
 ```
 
-`web-ext` warnings from bundled OCR, ONNX, or existing UI code need review, but lint errors should block release.
+`web-ext` warnings from bundled OCR, ONNX, dynamic imports, or existing UI code need review, but lint errors should block release. Keep the current warning review in [Firefox lint warning classification](FIREFOX_LINT_WARNINGS.md).
 
 ## Load
 
@@ -24,7 +24,7 @@ npm.cmd run lint:firefox
 - Popup opens and all tabs render.
 - `https://x.com` loads with no content bootstrap errors.
 - Remilia Wiki link previews still render.
-- Postreader can read a post, and OCR progresses past the hidden-host loading stage.
+- Post-reading can read a post, and OCR progresses past the hidden-host loading stage.
 - RemiStats badges and RemiNet poke state render.
 - RemiNet Chat connects when enabled.
 - Beetol auth/session status works.

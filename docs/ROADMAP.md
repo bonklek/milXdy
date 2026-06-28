@@ -4,167 +4,147 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 ## Versioning Rule
 
-- `0.1.x` releases are incremental beta improvements inside the current unpacked-extension architecture.
-- `0.2.x` releases are larger beta feature lanes. They can add new surfaces, integrations, or compatibility expectations without implying final product stability.
+- `0.1.x` releases were early integrated-extension beta releases.
+- `0.2.x` releases are platform beta releases. They can change architecture, app surfaces, packaging expectations, and public product framing without implying final product stability.
 
 ## Most Recent Release
 
 For older shipped details, see the descending [changelog](../CHANGELOG.md).
 
-## Released: 0.1.4
+## Released: 0.2.0 - The Platform Update
 
-Name: The Aesthetic Update.
+Theme: app platform refactor, side-rail apps, performance modes, and new first-party app surfaces.
 
-Theme: settings ergonomics, visual polish, and Remilia/Milady reskin controls.
+- First-party app platform. Labels: `architecture`, `performance`, `settings`, `distribution`.
+  - moved feature loading onto a shared app registry and lifecycle contract
+  - made build entries, copied assets, host permissions, dock metadata, and runtime cost metadata registry-driven
+  - documented the local-first app SDK and future GitHub app-package path
+  - presented this as the first platform/mod-system pass, not the completed external app layer
+  - gave developers enough manifest, lifecycle, surface, and Hub vocabulary to begin designing future milXdy apps
+- Shared runtime and performance modes. Labels: `architecture`, `performance`.
+  - shrank the root content bootstrap
+  - added one shared scanner, route service, lifecycle owner, and idle scheduler
+  - separated Appearance intensity from Performance mode: Fast, Balanced, Full, and Developer
+  - kept disabled or unopened heavy apps lazy wherever possible
+- Shared overlay dock and app panels. Labels: `ux`, `architecture`.
+  - gave dockable apps one shared side-rail, frame, drag/resize behavior, theme resolution, and panel persistence model
+  - moved RemiNet Chat, Post-reading, Beetol, Miladychan, Music, and Maxxer-style panels toward a consistent app shell
+- Background service consolidation. Labels: `architecture`, `security`.
+  - centralized background message routing and strict fetch allowlists
+  - kept RemiStats, RemiliaNET, Miladychan, music, image proxy, and upload-style services on typed message paths
+- Miladychan Portal. Labels: `miladychan`, `ux`, `experimental`.
+  - added a docked Miladychan board/thread browser and portal surface
+  - kept the native Miladychan site primary and preserved pseudonymous board culture
+  - left deeper board/deck/radio expansion as future follow-up
+- Music MVP and local radio foundation. Labels: `music`, `integration`, `experimental`.
+  - added a docked local music app with library/playlists/radio groundwork
+  - supported local-first ISRC enrichment with optional user-provided AcoustID key and MusicBrainz lookup
+  - kept lifestyle radio/stations as a future expansion rather than a basic player-only vision
+- Public docs and onboarding posture. Labels: `docs`, `onboarding`, `ux`.
+  - updated public docs around the platform model, app SDK, performance modes, and Firefox/Chromium install paths
+  - kept screenshot/readme/onboarding work scoped to what is accurate for the platform release
 
-- Profile/default settings presets. Labels: `settings`, `ux`.
-  - Max: visually invasive Remilia/Milady reskin where X becomes mostly unrecognizable, with the highest Maxxer treatment intensity
-  - Moderate: recognizable X layout with visible Remilia/Milady chrome, marked-surface styling, and balanced Maxxer treatments
-  - Min: mostly original X appearance with restrained milXdy controls and lightweight Maxxer markers
-  - clearly describe which features each preset enables
-- RemiNet-style visual polish. Labels: `reminet`, `maxxer`, `ux`.
-  - CSS pass for max settings, including broad X chrome reskin only in Max
-  - refactor Miladymaxxer visual treatments around the Max/Moderate/Min preset model
-  - more consistent RemiNet/Beetol/Maxxer styling
-  - preserve readable, stable controls in the popup
-- X chrome reskin surfaces. Labels: `ux`, `maxxer`, `reminet`.
-  - apply Remilia/Milady styling to high-visibility X surfaces when Max or Moderate presets are active
-  - keep route changes and right-column layout stable
-  - avoid reskinning sensitive or confusing surfaces in Min mode
-- Remilia font and visual asset pass. Labels: `ux`, `docs`.
-  - bundle and apply approved Remilia-style fonts/assets where appropriate
-  - keep bundled assets documented and license-compatible
-  - preserve readable fallbacks if custom fonts fail to load
-- RemiNet Chat visual integration. Labels: `reminet`, `chat`, `ux`.
-  - make the chat sidebar feel visually consistent with the new aesthetic presets
-  - keep controls legible in light/dark mode
-  - avoid covering X controls or crowding the right rail
-- Beetol and RemiStats polish. Labels: `beetol`, `reminet`, `ux`.
-  - align Beetol panel, RemiStats badges, sounds, poke indicators, and cooldown states with the new aesthetic system
-  - keep status/cooldown text clear at small sizes
-- Remilia Wiki flow follow-up. Labels: `remilia-wiki`, `ux`.
-  - clarify the Link Later decision tree between new page and existing page
-  - keep current new-page and existing-page search flows as the fallback
-
-## Planned: 0.1.5
+## Released: 0.1.5
 
 Theme: Firefox compatibility, RemiNet polish, screenshot sharing, and RemiNet/Beetle profile identity.
 
-- Firefox support integration. Labels: `browser-compat`, `experimental`.
-  - local Firefox build support exists; manual Firefox smoke testing remains the release gate
-  - use contributor Firefox work as reference/inspiration unless the owner explicitly approves incorporating branch code
-  - verify MV3 background behavior, host permissions, cookies, notifications, `chrome.*`/`browser.*` compatibility, web accessible resources, OCR/WASM, ONNX/model assets, and X/Twitter content scripts
-  - document exact Firefox load instructions and known limitations
-  - preserve Chromium behavior while adding Firefox compatibility
-- Complete minimization of non-Milady profile pictures. Labels: `maxxer`, `performance`.
-  - preserve users with RemiStats beetle stats
-  - keep whitelist/manual-list overrides
-  - make the effect reversible from settings
-- RemiNet Chat replies. Labels: `reminet`, `chat`, `ux`.
-  - enable replies inside the RemiChat interface
-  - keep reply context compact enough for the sidebar/chat surface
-  - reuse existing RemiNet Chat auth and message transport
-- Poke outline icon polish. Labels: `reminet`, `ux`.
-  - swap the poke pointing-finger icon for an empty outline icon that matches native X action buttons
-  - preserve cooldown, disabled, hover, and diagnostic states
-- Unified Audio settings tab. Labels: `settings`, `postreader`, `ux`, `audio`.
-  - consolidate sound controls and TTS controls into one `Audio` tab
-  - make RemiNet sounds, Postreader speech, and related toggles easier to scan
-- Beetle Game trophy shelf on X profiles. Labels: `beetol`, `reminet`, `ux`.
-  - explore replacing or augmenting profile header areas with trophy shelf data
-  - keep the feature optional and scoped
-  - avoid layout shifts on X profile pages
-- Optional banner randomizer. Labels: `identity`, `nft`, `ux`, `experimental`.
-  - pair with the trophy shelf/profile identity work
-  - use owned or selected banner NFT items as profile/banner visual variants
-  - keep it off by default
-  - on click, open the corresponding Blur listing when available
-- Tweet PNG from X share actions. Labels: `reminet`, `security`, `experimental`.
-  - add an explicit PNG action beside X/Twitter tweet share controls
-  - render a local PNG preview card from the tweet content and attached media
-  - require a review step before copy/download/share
-  - avoid sending screenshots automatically
-  - keep direct RemiNet upload/share blocked until a suitable endpoint and auth behavior are confirmed
+- Firefox package pipeline. Labels: `browser-compat`, `experimental`.
+  - added repeatable Chromium and Firefox build targets
+  - added Firefox manifest generation, Firefox linting, and Firefox QA documentation
+  - manual Firefox smoke testing remains required before broad Firefox support claims
+- RemiNet Chat polish. Labels: `reminet`, `chat`, `ux`.
+  - added replies, reply previews, reply context rendering, and reply payload support
+  - expanded reaction choices and reaction tooltips
+  - added video attachment hydration and profile lookup caching
+- RemiNet auth and poke polish. Labels: `reminet`, `beetol`, `ux`.
+  - replaced direct username/password popup auth with browser-session RemiliaNET auth
+  - added explicit disconnect/retry behavior
+  - added outline poke controls, persisted poke cooldowns, gold incoming-poke styling, and Maxxer XP credit for successful pokes
+- Beetol and profile identity. Labels: `beetol`, `identity`, `nft`, `ux`.
+  - improved Beetol cooldown handling, hunt charge display, and ready/cooldown/exhausted states
+  - added Beetle trophy shelf profile banners
+  - added original, trophy shelf, and random Banners NFT profile banner cycling with lever artwork and spin sound
+- Tweet PNG export. Labels: `reminet`, `security`, `experimental`.
+  - added local PNG rendering from X/Twitter share actions
+  - added clipboard, download, and share paths
+  - added quote, media, date, RemiStats, border, and palette controls
 
-## Planned: 0.1.6
+## Coming Platform Direction: Composable App/Mod System
 
-Theme: RemiNet chat placement and expanded Maxxer collection controls.
+Theme: turn bundled first-party features into efficient composable apps and open a path for community-built milXdy apps.
+
+The long-term platform goal is a complete mod system where default apps and future community apps can live as packages in an apps folder. Each app should declare its manifest, surfaces, permissions, assets, dock behavior, Performance-mode cost, privacy notes, background services, and lifecycle hooks, then compose with the shared milXdy runtime instead of patching the extension root directly.
+
+This will take more refactoring than a simple folder move. Many apps need the same expensive substrate: X/Twitter timeline scanning, profile/user detection, route handling, media detection, shared visual effects, overlay panels, storage, background fetches, and diagnostics. Those systems need to remain shared so apps can be powerful without multiplying observers, network queues, DOM writes, and visual-effect layers.
+
+Near-term platform work after `0.2.0` should therefore focus on:
+
+- extracting default apps behind cleaner package boundaries while keeping shared scanners and effects centralized
+- defining the apps folder layout and package manifest shape
+- stabilizing lifecycle hooks for app boot, enable, disable, route changes, surface delivery, overlay open/close, and dispose
+- adding review rules for host permissions, background services, storage keys, privacy labels, and performance cost
+- keeping Apps Hub disclosure tied to manifest metadata so users understand what each app loads, stores, and fetches
+- deciding how community apps are installed, updated, verified, disabled, and removed
+
+Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
+
+## Planned: 0.2.1
+
+Theme: RemiNet chat placement, expanded Maxxer collection controls, and direct RemiNet PNG sharing.
 
 - Chats-tab RemiNet pseudo chat. Labels: `reminet`, `chat`, `ux`.
-  - add a pseudo chat entry to the Chats tab with RemiNet chat pinned at the top
+  - add a pseudo chat entry to the X Chats tab with RemiNet chat pinned at the top
   - keep it visually distinct from native X DMs so users understand what surface they are using
-  - reuse existing RemiNet Chat auth and connection handling where possible
-- Expand Miladymaxxer image detection. Labels: `maxxer`, `performance`.
-  - include all recognized collections available to the local classifier/model pipeline
-  - avoid expensive inference unless Maxxer is enabled
-  - preserve bounded detection concurrency
-- Advanced collection behavior menu. Labels: `maxxer`, `settings`, `ux`.
-  - depends on expanded Maxxer detection
-  - choose which recognized collections are maxxed, minimized, or neutral
-  - support tiered visual treatments such as gold, silver, or neutral
-  - default profile: full Milady maxxing, lower tier or neutral treatment for other recognized collections
+  - reuse existing RemiNet Chat auth, background service, and docked chat handling where possible
+- Expanded Maxxer collection behavior. Labels: `maxxer`, `performance`, `settings`.
+  - include recognized collections that the local classifier/model pipeline can support reliably
+  - add an advanced behavior menu for maxxed, lower-tier, neutral, or minimized treatment
+  - complete reversible non-Milady minimization without minimizing RemiStats beetle users
+- Direct Tweet PNG upload to RemiNet. Labels: `reminet`, `security`, `experimental`.
+  - build on the local Tweet PNG exporter
+  - require endpoint/API confirmation and browser-session auth behavior
+  - require preview/review behavior before upload
+  - never send or upload PNGs automatically
 
-## Planned: 0.1.7
+## Planned: 0.2.2
 
-Theme: Meme Depot reply picker.
+Theme: reply and composer media tools.
 
-- Meme Depot reply picker. Labels: `meme-depot`, `ux`, `experimental`.
-  - investigate a Tenor-like reply picker using `https://memedepot.com/d/milady` as a source
-  - require clear user action before inserting media into an X reply
+- Miladybooru or Meme Depot reply picker. Labels: `meme-depot`, `miladybooru`, `ux`, `experimental`.
+  - investigate a Tenor-like reply picker using an approved Milady image corpus
+  - support search, scrollable gallery browsing, and clear user action before inserting media
   - define caching, attribution, and source reliability expectations before shipping
+- Meme saver folder. Labels: `media`, `ux`.
+  - add a local reaction image/gif collection near reply attachment controls
+  - support save-to-collection for uploaded reply images
+- Quick composer helpers. Labels: `composer`, `ux`.
+  - add a small Milady-head reply action that can send `milady`, `remilio`, or a user-selected phrase
+  - consider a Milady Maker composer button that opens Maker and passes draft text where technically possible
 
-## Target: 0.2.0
+## Planned: 0.2.3
 
-Name: The User Update.
+Theme: Post-reading companion voice experiments.
 
-Theme: public presentation and repo onboarding.
-
-- Public screenshots and README visual guide. Labels: `docs`, `ux`.
-  - add safe, non-personal screenshots for the popup, RemiNet surfaces, Wiki/Grok flow, Postreader, Maxxer, or Health reporting
-  - keep screenshots free of private handles, notifications, local paths, bookmarks, DMs, and auth state
-  - use stable filenames and alt text so GitHub readers can understand the extension at a glance
-- Fullscreen onboarding guide and tutorial for fresh installs. Labels: `onboarding`, `ux`, `docs`.
-  - show first-run users a guided introduction to major feature areas
-  - explain safe update behavior, settings presets, privacy-sensitive integrations, and where to report bugs
-  - keep the guide skippable and available later from the popup
-
-## Target: 0.2.1
-
-Theme: Miladychan discovery.
-
-- Miladychan discovery. Labels: `miladychan`, `reminet`, `experimental`.
-  - "trending on Miladychan" or similar community-signal surface
-  - possible right-sidebar module for trending Miladychan posts
-  - define data source, cache policy, and moderation/safety behavior
-
-## Target: 0.2.3
-
-Theme: Postreader TTS companion.
-
-- Postreader TTS side package. Labels: `postreader`, `integration`, `experimental`.
+- Post-reading TTS side package. Labels: `post-reading`, `integration`, `experimental`.
   - document install instructions for a local TTS companion package
   - link to the external repo when ready
   - keep milXdy functional without the side package
-  - decide whether this remains a Postreader companion or becomes its own package
+  - decide whether this remains a Post-reading companion or becomes its own package
 
-## Target: 0.2.4
+## Planned: 0.2.4
 
-Theme: optional milXdy user registry.
+Theme: optional identity and registry experiments.
 
 - Facelord Fixer classifier. Labels: `maxxer`, `privacy`, `experimental`.
   - detect accounts using a real face and full name
   - offer reversible handling modes such as minimize/erase, Kagamify, or scramble
-  - Kagamify would replace the profile picture/name presentation with Milady-flavored placeholders
   - require careful false-positive handling because this can affect real-person identity presentation
 - Optional milXdy user registry. Labels: `identity`, `reminet`, `security`, `experimental`.
   - explore opt-in profile badges for users who run milXdy
   - likely requires a lightweight lookup/sync service and profile ownership proof
   - needs clear privacy, opt-in, removal, and abuse-control rules before public release
-  - dependency: an API or static registry service for lookup/sync
-  - dependency: profile ownership verification, likely through X account proof or RemiNet-linked identity
-  - dependency: published privacy terms for opt-in data, retention, removal, and abuse handling
 
-## Target: 0.2.5
+## Planned: 0.2.5
 
 Theme: daily Milady spin.
 
@@ -175,18 +155,40 @@ Theme: daily Milady spin.
   - let users choose which collection their daily spins use
   - investigate whether this is purely local or requires infrastructure
 
+## Planned: 0.2.6
+
+Theme: lifestyle radio.
+
+- Personal and board-inspired radio stations. Labels: `music`, `miladychan`, `experimental`.
+  - move beyond playlist start-time radio toward station, timed block, and album/record concepts
+  - support local-first station schedules and QR/import sharing by metadata rather than audio
+  - connect future board-inspired stations to Miladychan surfaces if upstream data supports it
+
+## Planned: 0.2.7
+
+Theme: stats, leaderboards, and shareable activity.
+
+- Stats and leaderboards panel. Labels: `stats`, `beetol`, `reminet`, `post-reading`, `experimental`.
+  - unify Maxxer XP, pokes, Beetol actions, Post-reading usage, RemiStats, and local diagnostics where useful
+  - avoid turning metrics into simple farm loops
+- Beetle Hunt share-to-X. Labels: `beetol`, `sharing`, `ux`.
+  - add explicit user-initiated sharing for Beetle Hunt results or milestones
+- Optional poke feed. Labels: `reminet`, `ux`, `experimental`.
+  - investigate a lightweight history/feed for poke activity if RemiNet data supports it
+
 ## Backlog Without Version Commitment
 
+- Public screenshots and README visual guide. Labels: `docs`, `ux`.
+- Fullscreen onboarding guide and tutorial for fresh installs. Labels: `onboarding`, `ux`, `docs`.
 - Chrome Web Store readiness, if distribution goals change. Labels: `distribution`, `blocked-upstream`.
 - Mobile extension mode. Labels: `mobile`, `ux`, `experimental`.
-  - investigate a mode that can be saved to the home screen
-  - mimic the desktop browsing experience where possible
-  - identify which extension features can realistically work in a mobile browser/app-like surface
-  - document limits before advertising this as mobile support
+- Like button presets. Labels: `ux`, `experimental`.
+- Unfollow suggestions using Maxxer signals. Labels: `maxxer`, `ux`, `experimental`.
+- RemiCast integration. Labels: `integration`, `experimental`.
+- Twitch streaming embeds. Labels: `integration`, `media`, `experimental`.
 - `$CULT` token cheer. Labels: `experimental`, `security`.
-  - investigate public ENS/ETH discovery only if there is a clear privacy-safe user value
-  - require explicit opt-in before any wallet/address-linked behavior
-  - do not expose or infer wallet identity in UI without user intent
+- On-chain tipping and rotating receiving wallets. Labels: `identity`, `privacy`, `security`, `experimental`.
+- Miladychan deck and advanced live-board expansion. Labels: `miladychan`, `architecture`, `experimental`.
 - A deeper shared scanner rewrite if performance data shows enabled features still duplicate too much DOM work. Labels: `performance`, `architecture`.
 
 ## Planning Labels
@@ -211,26 +213,29 @@ Suggested GitHub labels:
 - `nft`
 - `onboarding`
 - `audio`
+- `music`
+- `media`
+- `composer`
+- `stats`
+- `sharing`
 - `remilia-wiki`
 - `reminet`
-- `postreader`
+- `post-reading`
 - `maxxer`
 - `beetol`
 - `miladychan`
 - `meme-depot`
+- `miladybooru`
 - `experimental`
 - `blocked-upstream`
 
 Suggested GitHub milestones:
 
-- `0.1.3`
-- `0.1.4`
-- `0.1.5`
-- `0.1.6`
-- `0.1.7`
 - `0.2.0`
 - `0.2.1`
+- `0.2.2`
 - `0.2.3`
 - `0.2.4`
 - `0.2.5`
-
+- `0.2.6`
+- `0.2.7`

@@ -4,7 +4,7 @@ release/
 _sources/
 .agents/
 .codex/
-ideas/
+tmp/
 .env
 .env.*
 !.env.example
@@ -12,6 +12,7 @@ ideas/
 *.key
 *.p12
 *.pfx
+ideas/
 *.log
 *.tmp
 *.map

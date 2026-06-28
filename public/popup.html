@@ -29,6 +29,27 @@
           <h2>Main</h2>
           <p>Theme, updates, reports, and diagnostics.</p>
         </div>
+        <section class="onboarding-start" id="onboardingStart" aria-labelledby="onboardingTitle" hidden>
+          <div class="onboarding-header">
+            <div>
+              <strong id="onboardingTitle">Light Start</strong>
+              <small>Fresh install setup for the full milXdy experience.</small>
+            </div>
+            <span id="onboardingProgress">0/4 ready</span>
+          </div>
+          <ul class="onboarding-tasks" id="onboardingTasks"></ul>
+          <div class="onboarding-actions">
+            <button class="secondary-button primary-action" id="onboardingApplyFull" type="button">Enable full setup</button>
+            <button class="secondary-button" id="onboardingOpenRemilia" type="button">Open RemiliaNET</button>
+            <button class="secondary-button" id="onboardingRetryRemilia" type="button">Retry session</button>
+            <button class="secondary-button" id="onboardingOpenX" type="button">Open or refresh X</button>
+            <button class="secondary-button" id="onboardingPinToolbar" type="button">Pinned in toolbar</button>
+            <button class="secondary-button" id="onboardingAppearance" type="button">Review appearance</button>
+            <button class="secondary-button" id="onboardingAudio" type="button">Review audio</button>
+            <button class="secondary-button" id="onboardingDismiss" type="button">Done</button>
+          </div>
+          <p class="message" id="onboardingMessage"></p>
+        </section>
         <section class="setting-group" aria-label="Appearance">
           <div class="setting-group-header">
             <h3>Appearance</h3>
@@ -41,6 +62,21 @@
               <button type="button" data-theme-choice="system">System</button>
             </div>
           </div>
+        </section>
+        <section class="setting-group" aria-label="Performance">
+          <div class="setting-group-header">
+            <h3>Performance</h3>
+          </div>
+          <label class="field">
+            <span>Runtime mode</span>
+            <select data-control="performanceMode" id="performanceMode">
+              <option value="fast">Fast</option>
+              <option value="balanced">Balanced</option>
+              <option value="full">Full</option>
+              <option value="developer">Developer</option>
+            </select>
+          </label>
+          <p class="message" id="performanceModeDetail"></p>
         </section>
         <div class="update-status" id="updateStatus">
           <div>
@@ -144,12 +180,12 @@
           <div class="setting-group-header">
             <h3>Most Used</h3>
           </div>
-          <label class="setting"><span><strong>Show read-aloud controls</strong><small>Add playback buttons to posts.</small></span><input type="checkbox" data-control="postreader.enabled"></label>
+          <label class="setting"><span><strong>Show read-aloud controls</strong><small>Add playback buttons to posts.</small></span><input type="checkbox" data-control="post-reading.enabled"></label>
           <div class="field-grid">
-            <label class="field"><span>Speed</span><input type="number" min="0.5" max="10" step="0.1" data-control="postreader.speed"></label>
-            <label class="field"><span>Volume</span><input type="number" min="0" max="1" step="0.05" data-control="postreader.volume"></label>
+            <label class="field"><span>Speed</span><input type="number" min="0.5" max="10" step="0.1" data-control="post-reading.speed"></label>
+            <label class="field"><span>Volume</span><input type="number" min="0" max="1" step="0.05" data-control="post-reading.volume"></label>
           </div>
-          <label class="setting"><span><strong>Autoplay next post</strong><small>Continue automatically after a post finishes.</small></span><input type="checkbox" data-control="postreader.autoplayNext"></label>
+          <label class="setting"><span><strong>Autoplay next post</strong><small>Continue automatically after a post finishes.</small></span><input type="checkbox" data-control="post-reading.autoplayNext"></label>
         </section>
         <section class="setting-group" aria-label="Interaction sounds">
           <div class="setting-group-header">
@@ -158,6 +194,13 @@
           <label class="setting"><span><strong>Milady Maxxer sounds</strong><small>Play sounds for Milady Maxxer interactions.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
           <label class="setting"><span><strong>RemiStats sounds</strong><small>Play sound effects for RemiStats actions and pokes.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
           <label class="field"><span>RemiStats sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="remistats.soundVolume"></label>
+          <label class="setting"><span><strong>RemiChat sounds</strong><small>Play sound effects for sidebar chat events.</small></span><input type="checkbox" data-control="reminetChat.sounds.enabled"></label>
+          <label class="field"><span>RemiChat sound volume</span><input type="number" min="0" max="1" step="0.05" data-control="reminetChat.sounds.volume"></label>
+          <label class="setting"><span><strong>RemiChat send sound</strong><small>Play a cue when you send a sidebar message.</small></span><input type="checkbox" data-control="reminetChat.sounds.send"></label>
+          <label class="setting"><span><strong>RemiChat react sound</strong><small>Play a cue when you react to a message.</small></span><input type="checkbox" data-control="reminetChat.sounds.react"></label>
+          <label class="setting"><span><strong>RemiChat reaction alert</strong><small>Play a cue when someone reacts to your message.</small></span><input type="checkbox" data-control="reminetChat.sounds.reactToMe"></label>
+          <label class="setting"><span><strong>RemiChat new message sound</strong><small>Play a cue when a new message arrives.</small></span><input type="checkbox" data-control="reminetChat.sounds.message"></label>
+          <label class="setting"><span><strong>RemiChat poke sound</strong><small>Play the poke cue when you poke from sidebar chat.</small></span><input type="checkbox" data-control="reminetChat.sounds.poke"></label>
           <label class="setting"><span><strong>Post sound</strong><small>Play the post-send cue.</small></span><input id="visualPostSound" type="checkbox"></label>
           <label class="setting"><span><strong>Sidebar click sound</strong><small>Play a small pop on left navigation.</small></span><input id="visualSidebarSound" type="checkbox"></label>
           <label class="setting"><span><strong>Show-new-posts sound</strong><small>Play a click cue on feed refresh bars.</small></span><input id="visualNewPostsSound" type="checkbox"></label>
@@ -166,54 +209,54 @@
           <div class="setting-group-header">
             <h3>Read Aloud Voice</h3>
           </div>
-          <label class="setting"><span><strong>Auto-select voice</strong><small>Choose a suitable installed voice automatically.</small></span><input type="checkbox" data-control="postreader.autoVoice"></label>
-          <label class="field"><span>Specific voice URI</span><select data-control="postreader.voiceURI"><option value="">System default</option></select></label>
-          <label class="field"><span>Text-to-speech engine</span><select data-control="postreader.ttsEngine"><option value="web-speech">Browser Web Speech</option><option value="custom-http">Custom HTTP endpoint</option></select></label>
-          <label class="field"><span>Custom TTS endpoint</span><input type="url" placeholder="http://localhost:8787/speak" data-control="postreader.customTtsEndpoint"></label>
-          <label class="field"><span>Custom timing source</span><select data-control="postreader.customTtsTimingMode"><option value="engine">Endpoint word boundaries</option><option value="off">Audio only</option></select></label>
+          <label class="setting"><span><strong>Auto-select voice</strong><small>Choose a suitable installed voice automatically.</small></span><input type="checkbox" data-control="post-reading.autoVoice"></label>
+          <label class="field"><span>Specific voice URI</span><select data-control="post-reading.voiceURI"><option value="">System default</option></select></label>
+          <label class="field"><span>Text-to-speech engine</span><select data-control="post-reading.ttsEngine"><option value="web-speech">Browser Web Speech</option><option value="custom-http">Custom HTTP endpoint</option></select></label>
+          <label class="field"><span>Custom TTS endpoint</span><input type="url" placeholder="http://localhost:8787/speak" data-control="post-reading.customTtsEndpoint"></label>
+          <label class="field"><span>Custom timing source</span><select data-control="post-reading.customTtsTimingMode"><option value="engine">Endpoint word boundaries</option><option value="off">Audio only</option></select></label>
         </section>
         <section class="setting-group" aria-label="Read aloud playback">
           <div class="setting-group-header">
             <h3>Read Aloud Playback</h3>
           </div>
-          <label class="field"><span>Autoplay source</span><select data-control="postreader.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll timeline</option></select></label>
-          <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="postreader.skipPromotedPosts"></label>
-          <label class="setting"><span><strong>Completion sound</strong><small>Play a short cue after each post.</small></span><input type="checkbox" data-control="postreader.endOfTweetDing"></label>
+          <label class="field"><span>Autoplay source</span><select data-control="post-reading.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll timeline</option></select></label>
+          <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="post-reading.skipPromotedPosts"></label>
+          <label class="setting"><span><strong>Completion sound</strong><small>Play a short cue after each post.</small></span><input type="checkbox" data-control="post-reading.endOfTweetDing"></label>
         </section>
         <section class="setting-group" aria-label="Read aloud content">
           <div class="setting-group-header">
             <h3>Read Aloud Content</h3>
           </div>
-          <label class="setting"><span><strong>Read quoted posts</strong><small>Include quote-post text in playback.</small></span><input type="checkbox" data-control="postreader.includeQuotes"></label>
-          <label class="setting"><span><strong>Fetch hidden quote text</strong><small>Retrieve quote content when X hides it.</small></span><input type="checkbox" data-control="postreader.fetchFullQuotes"></label>
-          <label class="field"><span>Fetched quote display</span><select data-control="postreader.fullQuoteDisplay"><option value="scroll">Scroll into view</option><option value="expand">Expand inline</option><option value="hidden">Keep hidden</option></select></label>
-          <label class="setting"><span><strong>Read hyperlinks</strong><small>Include link text and URLs.</small></span><input type="checkbox" data-control="postreader.includeHyperlinks"></label>
-          <label class="setting"><span><strong>Read image alt text</strong><small>Use alt text when it is available.</small></span><input type="checkbox" data-control="postreader.includeImageAltText"></label>
-          <label class="setting"><span><strong>OCR images during playback</strong><small>Scan images only after playback starts.</small></span><input type="checkbox" data-control="postreader.includeImageOcr"></label>
-          <label class="setting"><span><strong>Read link cards</strong><small>Include preview titles and descriptions.</small></span><input type="checkbox" data-control="postreader.includeLinkPreviews"></label>
-          <label class="setting"><span><strong>Expand truncated posts</strong><small>Open "show more" before reading.</small></span><input type="checkbox" data-control="postreader.expandShowMore"></label>
+          <label class="setting"><span><strong>Read quoted posts</strong><small>Include quote-post text in playback.</small></span><input type="checkbox" data-control="post-reading.includeQuotes"></label>
+          <label class="setting"><span><strong>Fetch hidden quote text</strong><small>Retrieve quote content when X hides it.</small></span><input type="checkbox" data-control="post-reading.fetchFullQuotes"></label>
+          <label class="field"><span>Fetched quote display</span><select data-control="post-reading.fullQuoteDisplay"><option value="scroll">Scroll into view</option><option value="expand">Expand inline</option><option value="hidden">Keep hidden</option></select></label>
+          <label class="setting"><span><strong>Read hyperlinks</strong><small>Include link text and URLs.</small></span><input type="checkbox" data-control="post-reading.includeHyperlinks"></label>
+          <label class="setting"><span><strong>Read image alt text</strong><small>Use alt text when it is available.</small></span><input type="checkbox" data-control="post-reading.includeImageAltText"></label>
+          <label class="setting"><span><strong>OCR images during playback</strong><small>Scan images only after playback starts.</small></span><input type="checkbox" data-control="post-reading.includeImageOcr"></label>
+          <label class="setting"><span><strong>Read link cards</strong><small>Include preview titles and descriptions.</small></span><input type="checkbox" data-control="post-reading.includeLinkPreviews"></label>
+          <label class="setting"><span><strong>Expand truncated posts</strong><small>Open "show more" before reading.</small></span><input type="checkbox" data-control="post-reading.expandShowMore"></label>
         </section>
         <section class="setting-group" aria-label="Read aloud interface">
           <div class="setting-group-header">
             <h3>Read Aloud Interface</h3>
           </div>
-          <label class="setting"><span><strong>Highlight active post</strong><small>Mark the post currently being read.</small></span><input type="checkbox" data-control="postreader.activeTweetHighlight"></label>
-          <label class="field"><span>Text highlight style</span><select data-control="postreader.bodyHighlightMode"><option value="smooth">Smooth progress</option><option value="word">Word by word</option><option value="off">Off</option></select></label>
-          <label class="field"><span>Floating player position</span><select data-control="postreader.playerPosition"><option value="top-right">Top right</option><option value="top-left">Top left</option><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option></select></label>
-          <label class="field"><span>Read button placement</span><select data-control="postreader.buttonPlacement"><option value="auto">Auto</option><option value="actions">Post action row</option><option value="top">Top of post</option></select></label>
-          <label class="setting"><span><strong>Read handles instead of names</strong><small>Use @handles for author names.</small></span><input type="checkbox" data-control="postreader.useHandles"></label>
+          <label class="setting"><span><strong>Highlight active post</strong><small>Mark the post currently being read.</small></span><input type="checkbox" data-control="post-reading.activeTweetHighlight"></label>
+          <label class="field"><span>Text highlight style</span><select data-control="post-reading.bodyHighlightMode"><option value="smooth">Smooth progress</option><option value="word">Word by word</option><option value="off">Off</option></select></label>
+          <label class="field"><span>Floating player position</span><select data-control="post-reading.playerPosition"><option value="top-right">Top right</option><option value="top-left">Top left</option><option value="bottom-right">Bottom right</option><option value="bottom-left">Bottom left</option></select></label>
+          <label class="field"><span>Read button placement</span><select data-control="post-reading.buttonPlacement"><option value="auto">Auto</option><option value="actions">Post action row</option><option value="top">Top of post</option></select></label>
+          <label class="setting"><span><strong>Read handles instead of names</strong><small>Use @handles for author names.</small></span><input type="checkbox" data-control="post-reading.useHandles"></label>
         </section>
         <section class="setting-group" aria-label="Read aloud keyboard shortcuts">
           <div class="setting-group-header">
             <h3>Keyboard Shortcuts</h3>
           </div>
           <div class="field-grid">
-            <label class="field"><span>Next post</span><input type="text" data-control="postreader.keyNextTweet"></label>
-            <label class="field"><span>Previous post</span><input type="text" data-control="postreader.keyPreviousTweet"></label>
-            <label class="field"><span>Next chunk</span><input type="text" data-control="postreader.keyNextChunk"></label>
-            <label class="field"><span>Previous chunk</span><input type="text" data-control="postreader.keyPreviousChunk"></label>
-            <label class="field"><span>Skip OCR</span><input type="text" data-control="postreader.keySkipOcr"></label>
-            <label class="field"><span>Play or pause</span><input type="text" data-control="postreader.keyPlayPause"></label>
+            <label class="field"><span>Next post</span><input type="text" data-control="post-reading.keyNextTweet"></label>
+            <label class="field"><span>Previous post</span><input type="text" data-control="post-reading.keyPreviousTweet"></label>
+            <label class="field"><span>Next chunk</span><input type="text" data-control="post-reading.keyNextChunk"></label>
+            <label class="field"><span>Previous chunk</span><input type="text" data-control="post-reading.keyPreviousChunk"></label>
+            <label class="field"><span>Skip OCR</span><input type="text" data-control="post-reading.keySkipOcr"></label>
+            <label class="field"><span>Play or pause</span><input type="text" data-control="post-reading.keyPlayPause"></label>
           </div>
         </section>
       </section>
@@ -302,12 +345,14 @@
           <div class="field-grid">
             <label class="field"><span>PFP shape</span><select id="visualPfpShape"><option value="rounded-square">Rounded square</option><option value="square">Square</option><option value="circle">Circle</option></select></label>
             <label class="field"><span>Poke placement</span><select id="visualPokePlacement"><option value="actions">Action row</option><option value="top">Top metadata</option></select></label>
+            <label class="field"><span>App window style</span><select id="visualAppWindowStyle"><option value="reminet">RemiliaNet</option><option value="classic">Classic bevel</option></select></label>
             <label class="field"><span>Max media height</span><input id="visualMaxMediaHeight" type="number" min="0" max="1200" step="20" placeholder="0 disables"></label>
           </div>
           <div class="visual-toggle-grid">
             <label class="setting"><span><strong>Green page fade</strong><small>Fixed Remilia wash behind X.</small></span><input id="visualBackgroundFade" type="checkbox"></label>
             <label class="setting"><span><strong>Square media</strong><small>Remove rounding on images, videos, and quote cards.</small></span><input id="visualSquareMedia" type="checkbox"></label>
             <label class="setting"><span><strong>Quote/media gap</strong><small>Keep whitespace between media and quoted posts.</small></span><input id="visualQuoteMediaGap" type="checkbox"></label>
+            <label class="setting"><span><strong>App shadows</strong><small>Show drop shadows under milXdy app windows.</small></span><input id="visualAppShadows" type="checkbox"></label>
             <label class="setting"><span><strong>Unread notification tint</strong><small>Use the active palette for new notifications.</small></span><input id="visualNotificationUnreadTint" type="checkbox"></label>
           </div>
           <details class="setting-group-nested">
@@ -355,7 +400,7 @@
               <label class="field"><span>Maxxer barriers</span><select id="visualMaxxerSeparators"><option value="subtle">Subtle</option><option value="beveled">Beveled</option><option value="none">None</option></select></label>
             </div>
             <div class="visual-toggle-grid">
-              <label class="setting"><span><strong>Milady only</strong><small>Hide ordinary feed posts outside replies and quotes.</small></span><input id="visualMiladyOnly" type="checkbox"></label>
+              <label class="setting"><span><strong>Disable Maxxer entirely</strong><small>Stop Maxxer scanning, badges, sounds, and visual effects on X.</small></span><input id="visualDisableMaxxer" type="checkbox"></label>
               <label class="setting"><span><strong>Disable self tracking</strong><small>Style your own Milady posts without level tracking.</small></span><input id="visualDisableSelfTracking" type="checkbox"></label>
               <label class="setting"><span><strong>Maxxer shimmer</strong><small>Animate the Milady sheen.</small></span><input id="visualMaxxerShimmer" type="checkbox"></label>
             </div>
@@ -384,6 +429,7 @@
           <label class="field"><span>Milady Maxxer mode</span><select data-control="milady.mode"><option value="milady">Milady effects</option><option value="debug">Debug view</option><option value="off">Off</option></select></label>
           <label class="setting"><span><strong>Level badge</strong><small>Show each account's Milady Maxxer level badge.</small></span><input type="checkbox" data-control="milady.showLevelBadge"></label>
           <label class="setting"><span><strong>Include RemiStats beetle users</strong><small>Treat users with beetle stats as Milady Maxxer candidates.</small></span><input type="checkbox" data-control="milady.includeRemiStatsBeetles"></label>
+          <label class="setting"><span><strong>Milady/beetle stats only</strong><small>Hide timeline posts unless the author is detected as Milady or has RemiStats beetles.</small></span><input type="checkbox" data-control="milady.hideNonMiladyOrBeetlePosts"></label>
           <label class="field"><span>Profile card style</span><select data-control="milady.cardTheme"><option value="full">Full treatment</option><option value="no-premium">Hide premium layer</option><option value="silver-only">Silver only</option><option value="off">Off</option></select></label>
         </section>
         <section class="setting-group" aria-label="Milady Maxxer handle lists">

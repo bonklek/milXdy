@@ -22,11 +22,13 @@ export async function saveSettings(settings: Settings): Promise<void> {
   await chrome.storage.local.set({ [SETTINGS_KEY]: normalizeSettings(settings) });
 }
 
-export function observeSettings(callback: (settings: Settings) => void): void {
-  chrome.storage.onChanged.addListener((changes, area) => {
+export function observeSettings(callback: (settings: Settings) => void): () => void {
+  const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local" || !changes[SETTINGS_KEY]) return;
     callback(normalizeSettings(asPartialSettings(changes[SETTINGS_KEY].newValue)));
-  });
+  };
+  chrome.storage.onChanged.addListener(listener);
+  return () => chrome.storage.onChanged.removeListener(listener);
 }
 
 function asPartialSettings(value: unknown): Partial<Settings> | undefined {

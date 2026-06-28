@@ -1,0 +1,74 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  color: #21151c;
+  background: #fff8fb;
+  font: 14px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+main {
+  padding: 14px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+header img {
+  width: 32px;
+  height: 32px;
+}
+
+h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+#close {
+  border: 1px solid #d8bccb;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #21151c;
+  background: #fff;
+}
+
+#app {
+  display: grid;
+  gap: 12px;
+}
+
+label {
+  display: grid;
+  gap: 5px;
+  font-weight: 650;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #d8bccb;
+  border-radius: 6px;
+  padding: 6px 8px;
+  color: #21151c;
+  background: #fff;
+}
+
+input[type="checkbox"] {
+  width: auto;
+  justify-self: start;
+}

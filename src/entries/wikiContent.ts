@@ -1,1 +1,1 @@
-import "../features/wiki/content";
+export * from "../features/wiki/content";

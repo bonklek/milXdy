@@ -1,12 +1,21 @@
-const BASE_URL = "https://www.remilia.net";
+import { registerBackgroundMessageHandlers } from "../../shared/backgroundRouter";
+import { isAllowedUrl, type UrlAllowRule } from "../../shared/urlAllowlist";
+import {
+  REMILIA_BASE_URL,
+  prepareRemiliaAuth,
+  renewRemiliaAuth,
+  setRemiliaAuthCookie,
+  adoptRemiliaBrowserSession,
+} from "../../shared/remiliaAuth";
+
+const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
-const AUTH_COOKIE_NAME = "authToken";
-const AUTH_COOKIE_TTL_SECONDS = 900;
-const ACCESS_TOKEN_KEY = "beetol.accessToken";
-const REFRESH_TOKEN_KEY = "beetol.refreshToken";
-const DISCONNECTED_KEY = "beetol.disconnected";
-const LEGACY_PREFIX = "bex" + "tol";
-const OIDC_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`;
+const SOCKET_URL = "wss://www.remilia.net/api/ws";
+const SOCKET_PORT_NAME = "reminetChat:socket";
+const SESSION_PROBE_PATH = "/api/profile/whoami";
+const REMILIA_MEDIA_RULES: readonly UrlAllowRule[] = [
+  { protocol: "https:", hostname: "www.remilia.net", includeSubdomains: true },
+];
 
 type ChatMessage =
   | { type: "reminetChat:authStatus" }
@@ -16,45 +25,83 @@ type ChatMessage =
   | { type: "reminetChat:fetchMedia"; url?: string }
   | { type: "reminetChat:getProfile"; username?: string };
 
-chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
-  if (!isChatMessage(message)) return false;
+registerBackgroundMessageHandlers([{
+  type: "reminetChat:*",
+  matches: isChatMessage,
+  handle: handleChatMessage,
+}]);
 
-  (async () => {
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== SOCKET_PORT_NAME) return;
+  let socket: WebSocket | null = null;
+  let closed = false;
+
+  const post = (message: Record<string, unknown>) => {
     try {
-      if (message.type === "reminetChat:authStatus") {
-        sendResponse(await authStatus());
-        return;
-      }
-      if (message.type === "reminetChat:prepareSocket") {
-        const ready = await prepareSocketAuth();
-        sendResponse(ready);
-        return;
-      }
-      if (message.type === "reminetChat:getHistory") {
-        const limit = clampNumber(message.limit, 1, 50, 30);
-        const params = new URLSearchParams({ limit: String(limit) });
-        if (typeof message.before === "number" && Number.isFinite(message.before)) params.set("before", String(message.before));
-        if (typeof message.after === "number" && Number.isFinite(message.after)) params.set("after", String(message.after));
-        sendResponse(await remiliaAuthedFetch("GET", `/api/chats/${CHAT_ID}/messages?${params.toString()}`));
-        return;
-      }
-      if (message.type === "reminetChat:uploadAttachment") {
-        sendResponse(await uploadAttachment(message.name, message.mimeType, message.dataUrl));
-        return;
-      }
-      if (message.type === "reminetChat:fetchMedia") {
-        sendResponse(await fetchMediaDataUrl(message.url));
-        return;
-      }
-      if (message.type === "reminetChat:getProfile") {
-        sendResponse(await getProfile(message.username));
-      }
-    } catch (error) {
-      sendResponse({ ok: false, error: error instanceof Error ? error.message : String(error) });
+      port.postMessage(message);
+    } catch {
+      // The content side can disappear during navigation or extension reload.
     }
-  })();
+  };
 
-  return true;
+  const closeSocket = () => {
+    const current = socket;
+    socket = null;
+    if (current && current.readyState !== WebSocket.CLOSED && current.readyState !== WebSocket.CLOSING) {
+      current.close();
+    }
+  };
+
+  const connectSocket = async () => {
+    if (closed || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
+    const ready = await prepareSocketAuth();
+    if (!ready.ok) {
+      post({ type: "socket:error", error: ready.error || "AUTH_REQUIRED", authRequired: true });
+      return;
+    }
+    const nextSocket = new WebSocket(SOCKET_URL);
+    socket = nextSocket;
+    post({ type: "socket:connecting" });
+    nextSocket.addEventListener("open", () => {
+      if (socket !== nextSocket || closed) return;
+      nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
+      post({ type: "socket:open" });
+    });
+    nextSocket.addEventListener("message", (event) => {
+      if (socket !== nextSocket || closed) return;
+      post({ type: "socket:frame", data: event.data });
+    });
+    nextSocket.addEventListener("close", () => {
+      if (socket === nextSocket) socket = null;
+      post({ type: "socket:close" });
+    });
+    nextSocket.addEventListener("error", () => {
+      post({ type: "socket:error", error: "Connection interrupted." });
+    });
+  };
+
+  port.onMessage.addListener((message: unknown) => {
+    const record = objectValue(message);
+    if (record.type === "connect") {
+      void connectSocket();
+      return;
+    }
+    if (record.type === "close") {
+      closeSocket();
+      return;
+    }
+    if (record.type === "send") {
+      if (!socket || socket.readyState !== WebSocket.OPEN || typeof record.payload !== "object" || record.payload === null) {
+        post({ type: "socket:error", error: "Socket is not open." });
+        return;
+      }
+      socket.send(JSON.stringify(record.payload));
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    closed = true;
+    closeSocket();
+  });
 });
 
 function isChatMessage(message: unknown): message is ChatMessage {
@@ -68,119 +115,52 @@ function isChatMessage(message: unknown): message is ChatMessage {
     || type === "reminetChat:getProfile";
 }
 
+async function handleChatMessage(message: ChatMessage): Promise<Record<string, unknown>> {
+  try {
+    if (message.type === "reminetChat:authStatus") {
+      return await authStatus();
+    }
+    if (message.type === "reminetChat:prepareSocket") {
+      return await prepareSocketAuth();
+    }
+    if (message.type === "reminetChat:getHistory") {
+      const limit = clampNumber(message.limit, 1, 50, 30);
+      const params = new URLSearchParams({ limit: String(limit) });
+      if (typeof message.before === "number" && Number.isFinite(message.before)) params.set("before", String(message.before));
+      if (typeof message.after === "number" && Number.isFinite(message.after)) params.set("after", String(message.after));
+      return await remiliaAuthedFetch("GET", `/api/chats/${CHAT_ID}/messages?${params.toString()}`);
+    }
+    if (message.type === "reminetChat:uploadAttachment") {
+      return await uploadAttachment(message.name, message.mimeType, message.dataUrl);
+    }
+    if (message.type === "reminetChat:fetchMedia") {
+      return await fetchMediaDataUrl(message.url);
+    }
+    return await getProfile(message.username);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const next = Number(value);
   if (!Number.isFinite(next)) return fallback;
   return Math.max(min, Math.min(max, Math.floor(next)));
 }
 
-async function getStored(keys: string[]): Promise<Record<string, unknown>> {
-  return chrome.storage.local.get(keys);
-}
-
-async function setStored(values: Record<string, unknown>): Promise<void> {
-  await chrome.storage.local.set(values);
-}
-
-async function isDisconnected(): Promise<boolean> {
-  const stored = await getStored([DISCONNECTED_KEY]);
-  return stored[DISCONNECTED_KEY] === true;
-}
-
-async function allowSessionAuth(): Promise<void> {
-  await chrome.storage.local.remove([DISCONNECTED_KEY]);
-}
-
-async function migrateAuth(): Promise<void> {
-  const legacyAccessKey = `${LEGACY_PREFIX}.accessToken`;
-  const legacyRefreshKey = `${LEGACY_PREFIX}.refreshToken`;
-  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, legacyAccessKey, legacyRefreshKey]);
-  const next: Record<string, unknown> = {};
-  if (!stored[ACCESS_TOKEN_KEY] && stored[legacyAccessKey]) next[ACCESS_TOKEN_KEY] = stored[legacyAccessKey];
-  if (!stored[REFRESH_TOKEN_KEY] && stored[legacyRefreshKey]) next[REFRESH_TOKEN_KEY] = stored[legacyRefreshKey];
-  if (Object.keys(next).length) await setStored(next);
-}
-
-async function setAuthCookie(accessToken: string): Promise<void> {
-  if (!accessToken || !chrome.cookies?.set) return;
-  await chrome.cookies.set({
-    url: BASE_URL,
-    name: AUTH_COOKIE_NAME,
-    value: accessToken,
-    path: "/",
-    secure: true,
-    sameSite: "no_restriction",
-    expirationDate: Math.floor(Date.now() / 1000) + AUTH_COOKIE_TTL_SECONDS,
-  });
-}
-
-async function getAuthCookie(): Promise<string> {
-  if (!chrome.cookies?.get) return "";
-  const cookie = await chrome.cookies.get({ url: BASE_URL, name: AUTH_COOKIE_NAME }).catch(() => null);
-  return typeof cookie?.value === "string" ? cookie.value : "";
-}
-
-async function adoptBrowserSession(): Promise<{ ok: boolean; token: string; user?: unknown }> {
-  if (await isDisconnected()) return { ok: false, token: "" };
-
-  const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
-  if (!whoami.ok) return { ok: false, token: "" };
-
-  const cookieToken = await getAuthCookie();
-  if (cookieToken) {
-    await setStored({
-      [ACCESS_TOKEN_KEY]: cookieToken,
-      [REFRESH_TOKEN_KEY]: null,
-    });
-  }
-
-  await allowSessionAuth();
-  return { ok: true, token: cookieToken, user: whoami.data };
-}
-
-async function oidc(params: Record<string, string>): Promise<{ ok: boolean }> {
-  const response = await fetch(OIDC_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: "profile", ...params }),
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok || !data.access_token) return { ok: false };
-  await setAuthCookie(data.access_token);
-  await setStored({
-    [ACCESS_TOKEN_KEY]: data.access_token,
-    [REFRESH_TOKEN_KEY]: data.refresh_token || null,
-  });
-  return { ok: true };
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
 
 async function refreshAccessToken(): Promise<boolean> {
-  if (await isDisconnected()) return false;
-  await migrateAuth();
-  const stored = await getStored([REFRESH_TOKEN_KEY]);
-  const refreshToken = typeof stored[REFRESH_TOKEN_KEY] === "string" ? stored[REFRESH_TOKEN_KEY] : "";
-  if (!refreshToken) return false;
-  const result = await oidc({ grant_type: "refresh_token", refresh_token: refreshToken });
+  const result = await renewRemiliaAuth(SESSION_PROBE_PATH);
   return result.ok;
 }
 
 async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; error?: string }> {
-  if (await isDisconnected()) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-  await migrateAuth();
-  const adopted = await adoptBrowserSession();
-  if (adopted.ok) {
-    if (adopted.token) await setAuthCookie(adopted.token);
-    return { ok: true, signedIn: true };
-  }
-
-  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY]);
-  let accessToken = typeof stored[ACCESS_TOKEN_KEY] === "string" ? stored[ACCESS_TOKEN_KEY] : "";
-  if (!accessToken && stored[REFRESH_TOKEN_KEY] && await refreshAccessToken()) {
-    const refreshed = await getStored([ACCESS_TOKEN_KEY]);
-    accessToken = typeof refreshed[ACCESS_TOKEN_KEY] === "string" ? refreshed[ACCESS_TOKEN_KEY] : "";
-  }
-  if (!accessToken) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-  if (accessToken) await setAuthCookie(accessToken);
+  const auth = await prepareRemiliaAuth(SESSION_PROBE_PATH);
+  if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
+  if (auth.token) await setRemiliaAuthCookie(auth.token);
   return { ok: true, signedIn: true };
 }
 
@@ -189,7 +169,7 @@ async function authStatus(): Promise<Record<string, unknown>> {
   if (!ready.ok) return { ok: true, signedIn: false };
   const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
   if (whoami.ok) return { ok: true, signedIn: true, user: whoami.data };
-  const adopted = await adoptBrowserSession();
+  const adopted = await adoptRemiliaBrowserSession(SESSION_PROBE_PATH);
   return { ok: true, signedIn: adopted.ok, user: adopted.ok ? adopted.user ?? null : null };
 }
 
@@ -202,7 +182,7 @@ async function remiliaAuthedFetch(method: string, path: string): Promise<Record<
     return remiliaRequest(method, path, null);
   }
   if (result.status === 401 || result.status === 403) {
-    const adopted = await adoptBrowserSession();
+    const adopted = await adoptRemiliaBrowserSession(SESSION_PROBE_PATH);
     if (adopted.ok) return remiliaRequest(method, path, null);
   }
   return result;
@@ -286,12 +266,7 @@ async function getProfile(username: unknown): Promise<Record<string, unknown>> {
 }
 
 function isAllowedMediaUrl(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:" && (url.hostname === "www.remilia.net" || url.hostname.endsWith(".remilia.net"));
-  } catch {
-    return false;
-  }
+  return isAllowedUrl(value, REMILIA_MEDIA_RULES);
 }
 
 async function blobToDataUrl(blob: Blob, contentType: string): Promise<string> {

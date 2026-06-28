@@ -13,12 +13,24 @@ import type {
   PlayerStats,
 } from "./types";
 
+export type MaxxerAccountScope = string | null | undefined;
+
+export const ACTIVE_ACCOUNT_SCOPE_KEY = "miladymaxxer.activeXAccount";
+export const LEGACY_STATS_KEY = "stats";
+export const LEGACY_MATCHED_ACCOUNTS_KEY = "matchedAccounts";
+export const LEGACY_COLLECTED_AVATARS_KEY = "collectedAvatars";
+export const LEGACY_PLAYER_STATS_KEY = "playerStats";
+
+const SCOPED_KEY_PREFIX = "miladymaxxer.xAccount";
+const LEGACY_MIGRATION_KEY = "miladymaxxer.legacyStorageMigratedTo";
+
 export async function loadSettings(): Promise<ExtensionSettings> {
   const stored = await chrome.storage.sync.get({
     mode: DEFAULT_SETTINGS.mode,
     whitelistHandles: DEFAULT_SETTINGS.whitelistHandles,
     miladyListHandles: DEFAULT_SETTINGS.miladyListHandles,
     includeRemiStatsBeetles: DEFAULT_SETTINGS.includeRemiStatsBeetles,
+    hideNonMiladyOrBeetlePosts: DEFAULT_SETTINGS.hideNonMiladyOrBeetlePosts,
     soundEnabled: DEFAULT_SETTINGS.soundEnabled,
     showLevelBadge: DEFAULT_SETTINGS.showLevelBadge,
     cardTheme: DEFAULT_SETTINGS.cardTheme,
@@ -28,6 +40,7 @@ export async function loadSettings(): Promise<ExtensionSettings> {
     whitelistHandles: normalizeWhitelistHandles(stored.whitelistHandles),
     miladyListHandles: normalizeWhitelistHandles(stored.miladyListHandles),
     includeRemiStatsBeetles: typeof stored.includeRemiStatsBeetles === "boolean" ? stored.includeRemiStatsBeetles : DEFAULT_SETTINGS.includeRemiStatsBeetles,
+    hideNonMiladyOrBeetlePosts: typeof stored.hideNonMiladyOrBeetlePosts === "boolean" ? stored.hideNonMiladyOrBeetlePosts : DEFAULT_SETTINGS.hideNonMiladyOrBeetlePosts,
     soundEnabled: typeof stored.soundEnabled === "boolean" ? stored.soundEnabled : DEFAULT_SETTINGS.soundEnabled,
     showLevelBadge: typeof stored.showLevelBadge === "boolean" ? stored.showLevelBadge : DEFAULT_SETTINGS.showLevelBadge,
     cardTheme: isCardTheme(stored.cardTheme) ? stored.cardTheme : DEFAULT_SETTINGS.cardTheme,
@@ -40,58 +53,61 @@ export async function saveSettings(settings: ExtensionSettings): Promise<void> {
     whitelistHandles: normalizeWhitelistHandles(settings.whitelistHandles),
     miladyListHandles: normalizeWhitelistHandles(settings.miladyListHandles),
     includeRemiStatsBeetles: settings.includeRemiStatsBeetles,
+    hideNonMiladyOrBeetlePosts: settings.hideNonMiladyOrBeetlePosts,
     soundEnabled: settings.soundEnabled,
     showLevelBadge: settings.showLevelBadge,
     cardTheme: settings.cardTheme,
   });
 }
 
-export async function loadStats(): Promise<DetectionStats> {
-  const stored = await chrome.storage.local.get({
-    stats: DEFAULT_STATS,
-  });
-  return normalizeStats(stored.stats);
+export async function loadStats(scope?: MaxxerAccountScope): Promise<DetectionStats> {
+  const key = storageKeyForScope(LEGACY_STATS_KEY, scope);
+  const stored = await chrome.storage.local.get({ [key]: DEFAULT_STATS });
+  if (stored[key] !== undefined) return normalizeStats(stored[key]);
+  return DEFAULT_STATS;
 }
 
-export async function saveStats(stats: DetectionStats): Promise<void> {
+export async function saveStats(stats: DetectionStats, scope?: MaxxerAccountScope): Promise<void> {
   await chrome.storage.local.set({
-    stats,
+    [storageKeyForScope(LEGACY_STATS_KEY, scope)]: stats,
   });
 }
 
-export async function loadMatchedAccounts(): Promise<MatchedAccountMap> {
-  const stored = await chrome.storage.local.get({
-    matchedAccounts: DEFAULT_MATCHED_ACCOUNTS,
-  });
-  return normalizeMatchedAccounts(stored.matchedAccounts);
+export async function loadMatchedAccounts(scope?: MaxxerAccountScope): Promise<MatchedAccountMap> {
+  const key = storageKeyForScope(LEGACY_MATCHED_ACCOUNTS_KEY, scope);
+  const stored = await chrome.storage.local.get({ [key]: DEFAULT_MATCHED_ACCOUNTS });
+  if (stored[key] !== undefined) return normalizeMatchedAccounts(stored[key]);
+  return DEFAULT_MATCHED_ACCOUNTS;
 }
 
-export async function saveMatchedAccounts(matchedAccounts: MatchedAccountMap): Promise<void> {
+export async function saveMatchedAccounts(matchedAccounts: MatchedAccountMap, scope?: MaxxerAccountScope): Promise<void> {
   await chrome.storage.local.set({
-    matchedAccounts,
+    [storageKeyForScope(LEGACY_MATCHED_ACCOUNTS_KEY, scope)]: matchedAccounts,
   });
 }
 
-export async function loadCollectedAvatars(): Promise<CollectedAvatarMap> {
-  const stored = await chrome.storage.local.get({
-    collectedAvatars: DEFAULT_COLLECTED_AVATARS,
-  });
-  return normalizeCollectedAvatars(stored.collectedAvatars);
+export async function loadCollectedAvatars(scope?: MaxxerAccountScope): Promise<CollectedAvatarMap> {
+  const key = storageKeyForScope(LEGACY_COLLECTED_AVATARS_KEY, scope);
+  const stored = await chrome.storage.local.get({ [key]: DEFAULT_COLLECTED_AVATARS });
+  if (stored[key] !== undefined) return normalizeCollectedAvatars(stored[key]);
+  return DEFAULT_COLLECTED_AVATARS;
 }
 
-export async function saveCollectedAvatars(collectedAvatars: CollectedAvatarMap): Promise<void> {
+export async function saveCollectedAvatars(collectedAvatars: CollectedAvatarMap, scope?: MaxxerAccountScope): Promise<void> {
   await chrome.storage.local.set({
-    collectedAvatars,
+    [storageKeyForScope(LEGACY_COLLECTED_AVATARS_KEY, scope)]: collectedAvatars,
   });
 }
 
-export async function loadPlayerStats(): Promise<PlayerStats> {
-  const stored = await chrome.storage.local.get({ playerStats: DEFAULT_PLAYER_STATS });
-  return normalizePlayerStats(stored.playerStats);
+export async function loadPlayerStats(scope?: MaxxerAccountScope): Promise<PlayerStats> {
+  const key = storageKeyForScope(LEGACY_PLAYER_STATS_KEY, scope);
+  const stored = await chrome.storage.local.get({ [key]: DEFAULT_PLAYER_STATS });
+  if (stored[key] !== undefined) return normalizePlayerStats(stored[key]);
+  return DEFAULT_PLAYER_STATS;
 }
 
-export async function savePlayerStats(playerStats: PlayerStats): Promise<void> {
-  await chrome.storage.local.set({ playerStats });
+export async function savePlayerStats(playerStats: PlayerStats, scope?: MaxxerAccountScope): Promise<void> {
+  await chrome.storage.local.set({ [storageKeyForScope(LEGACY_PLAYER_STATS_KEY, scope)]: playerStats });
 }
 
 export function normalizePlayerStats(raw: unknown): PlayerStats {
@@ -102,16 +118,75 @@ export function normalizePlayerStats(raw: unknown): PlayerStats {
   };
 }
 
-export async function resetStats(): Promise<void> {
-  await saveStats(DEFAULT_STATS);
+export async function resetStats(scope?: MaxxerAccountScope): Promise<void> {
+  await saveStats(DEFAULT_STATS, scope);
 }
 
-export async function resetMatchedAccounts(): Promise<void> {
-  await saveMatchedAccounts(DEFAULT_MATCHED_ACCOUNTS);
+export async function resetMatchedAccounts(scope?: MaxxerAccountScope): Promise<void> {
+  await saveMatchedAccounts(DEFAULT_MATCHED_ACCOUNTS, scope);
 }
 
-export async function resetCollectedAvatars(): Promise<void> {
-  await saveCollectedAvatars(DEFAULT_COLLECTED_AVATARS);
+export async function resetCollectedAvatars(scope?: MaxxerAccountScope): Promise<void> {
+  await saveCollectedAvatars(DEFAULT_COLLECTED_AVATARS, scope);
+}
+
+export async function loadActiveAccountScope(): Promise<string | null> {
+  const stored = await chrome.storage.local.get(ACTIVE_ACCOUNT_SCOPE_KEY);
+  const scope = stored[ACTIVE_ACCOUNT_SCOPE_KEY];
+  return typeof scope === "string" ? normalizeAccountScope(scope) : null;
+}
+
+export async function saveActiveAccountScope(scope: MaxxerAccountScope): Promise<void> {
+  const normalized = normalizeAccountScope(scope);
+  if (normalized) {
+    await chrome.storage.local.set({ [ACTIVE_ACCOUNT_SCOPE_KEY]: normalized });
+  }
+}
+
+export async function migrateLegacyStorageToScope(scope: MaxxerAccountScope): Promise<void> {
+  const normalized = normalizeAccountScope(scope);
+  if (!normalized) return;
+  const keys = [
+    LEGACY_MIGRATION_KEY,
+    LEGACY_STATS_KEY,
+    LEGACY_MATCHED_ACCOUNTS_KEY,
+    LEGACY_COLLECTED_AVATARS_KEY,
+    LEGACY_PLAYER_STATS_KEY,
+    storageKeyForScope(LEGACY_STATS_KEY, normalized),
+    storageKeyForScope(LEGACY_MATCHED_ACCOUNTS_KEY, normalized),
+    storageKeyForScope(LEGACY_COLLECTED_AVATARS_KEY, normalized),
+    storageKeyForScope(LEGACY_PLAYER_STATS_KEY, normalized),
+  ];
+  const stored = await chrome.storage.local.get(keys);
+  if (stored[LEGACY_MIGRATION_KEY]) return;
+  const updates: Record<string, unknown> = { [LEGACY_MIGRATION_KEY]: normalized };
+  copyLegacyValue(stored, updates, LEGACY_STATS_KEY, normalized);
+  copyLegacyValue(stored, updates, LEGACY_MATCHED_ACCOUNTS_KEY, normalized);
+  copyLegacyValue(stored, updates, LEGACY_COLLECTED_AVATARS_KEY, normalized);
+  copyLegacyValue(stored, updates, LEGACY_PLAYER_STATS_KEY, normalized);
+  await chrome.storage.local.set(updates);
+}
+
+export function storageKeyForScope(baseKey: string, scope?: MaxxerAccountScope): string {
+  const normalized = normalizeAccountScope(scope);
+  return normalized ? `${SCOPED_KEY_PREFIX}.${normalized}.${baseKey}` : baseKey;
+}
+
+export function normalizeAccountScope(scope: MaxxerAccountScope): string | null {
+  const normalized = typeof scope === "string" ? normalizeHandle(scope) : "";
+  return normalized || null;
+}
+
+function copyLegacyValue(
+  stored: Record<string, unknown>,
+  updates: Record<string, unknown>,
+  legacyKey: string,
+  scope: string,
+): void {
+  const scopedKey = storageKeyForScope(legacyKey, scope);
+  if (stored[scopedKey] === undefined && stored[legacyKey] !== undefined) {
+    updates[scopedKey] = stored[legacyKey];
+  }
 }
 
 function isMode(value: unknown): value is ExtensionSettings["mode"] {

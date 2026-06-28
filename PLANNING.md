@@ -7,7 +7,7 @@ This project consolidates several related browser extensions into one coherent M
 Initial inputs:
 
 - Local: `remilia-wiki-hyperlink`
-- Local: `tweet-reader` / `postreader`
+- Local: `tweet-reader` / `post-reading`
 - Remote: `erc1337-Coffee/remistats_extension`
 - Remote: `remiliacorp/miladymaxxer`
 - Local: `Beetol-hunter`
@@ -47,7 +47,7 @@ The future agent should add lightweight performance instrumentation early, even 
 
 ### Shared X/Twitter DOM Scanning
 
-This is the largest cross-package slowdown risk. The local Remilia Wiki and Postreader extensions both use a page-wide `MutationObserver`, debounce updates, and periodically rescan all visible or mounted tweets. Miladymaxxer also rescans tweets, notifications, user cells, direct messages, and profiles. RemiStats scans tweets, user cells, profile headers, and group chat avatars.
+This is the largest cross-package slowdown risk. The local Remilia Wiki and Post-reading extensions both use a page-wide `MutationObserver`, debounce updates, and periodically rescan all visible or mounted tweets. Miladymaxxer also rescans tweets, notifications, user cells, direct messages, and profiles. RemiStats scans tweets, user cells, profile headers, and group chat avatars.
 
 If integrated naively, the combined extension could run four independent observers and three or four recurring full-document `querySelectorAll` passes. The beta should instead use one shared scanner that owns mutation observation, route-change detection, and periodic health rescans.
 
@@ -91,7 +91,7 @@ Guidance:
 - Keep preview fetch lazy-on-hover with a hover delay.
 - Store preview cache under the shared namespaced storage helper.
 
-### Postreader
+### Post-reading
 
 Primary costs:
 
@@ -101,7 +101,7 @@ Primary costs:
 - Speech boundary updates and word/smooth highlighting.
 - Tokenizing tweet body DOM for highlights.
 
-Important UX point: Postreader should do almost no heavy work until the user asks it to read a post. The timeline should only get lightweight read buttons.
+Important UX point: Post-reading should do almost no heavy work until the user asks it to read a post. The timeline should only get lightweight read buttons.
 
 Guidance:
 
@@ -229,20 +229,20 @@ The consolidated beta now uses lazy content feature bootstrapping:
 Current lazy gates:
 
 - Remilia Wiki: `remiliaWikiHyperlink.settings.enabled`
-- Postreader: sync `enabled`
+- Post-reading: sync `enabled`
 - RemiStats: sync `milxdy.remistats.enabled`
 - Miladymaxxer: sync `mode !== "off"`
 - Beetol Game: local `milxdy.remistats.beetol.enabled`
 
 Beetol Game also skips its one-second render tick and 60-second refresh while disabled or while the document is hidden.
 
-Remaining larger opportunity: replace the separate content-script observers and full-page scan loops in Wiki, Postreader, RemiStats, and Miladymaxxer with one shared scanner. Lazy boot avoids disabled-feature cost, but enabled features still run their own observers today.
+Remaining larger opportunity: replace the separate content-script observers and full-page scan loops in Wiki, Post-reading, RemiStats, and Miladymaxxer with one shared scanner. Lazy boot avoids disabled-feature cost, but enabled features still run their own observers today.
 
 Additional efficiency pass completed:
 
 - Added a shared X/Twitter scanner service with one `MutationObserver`, one safety rescan interval, and normalized surface emissions.
 - Migrated Remilia Wiki Hyperlink to shared tweet events.
-- Migrated Postreader button insertion to shared tweet events.
+- Migrated Post-reading button insertion to shared tweet events.
 - Replaced RemiStats per-badge tooltip elements, scroll listeners, and cleanup observers with one delegated tooltip manager.
 - Added bounded Miladymaxxer avatar detection concurrency. Detection currently runs with one active image/model task at a time, while preserving the existing URL cache.
 - Added diagnostics storage for shared scanner counters and Miladymaxxer detection queue stats when diagnostics are enabled.
@@ -314,7 +314,7 @@ RemiStats ships a global stylesheet, Miladymaxxer applies rich card styling, and
 Mitigation:
 
 - Prefix classes with a shared namespace such as `milxdy-`.
-- Add feature namespaces such as `milxdy-wiki-*`, `milxdy-postreader-*`, `milxdy-remistats-*`, and `milxdy-maxxer-*`.
+- Add feature namespaces such as `milxdy-wiki-*`, `milxdy-post-reading-*`, `milxdy-remistats-*`, and `milxdy-maxxer-*`.
 - Avoid global element selectors and broad X/Twitter selectors in injected CSS unless tightly scoped.
 - Keep feature UI DOM under identifiable root nodes where practical.
 
@@ -327,7 +327,7 @@ Mitigation:
 - Namespace all new storage keys.
 - Suggested shape:
   - `milxdy.features.wiki`
-  - `milxdy.features.postreader`
+  - `milxdy.features.post-reading`
   - `milxdy.features.remistats`
   - `milxdy.features.miladymaxxer`
   - `milxdy.shared`
@@ -336,9 +336,9 @@ Mitigation:
 
 ### Asset Path Breakage
 
-Postreader and Miladymaxxer depend on non-trivial runtime assets.
+Post-reading and Miladymaxxer depend on non-trivial runtime assets.
 
-Postreader currently needs Tesseract assets such as:
+Post-reading currently needs Tesseract assets such as:
 
 - `ocr/worker.min.js`
 - `ocr/core/*`
@@ -372,7 +372,7 @@ Mitigation:
 The source projects use different approaches:
 
 - Remilia Wiki Hyperlink: TypeScript + custom esbuild script.
-- Postreader: TypeScript + custom esbuild script + Tesseract asset copying.
+- Post-reading: TypeScript + custom esbuild script + Tesseract asset copying.
 - RemiStats: no build step; root JS/CSS/HTML loaded directly.
 - Miladymaxxer: Vite/Solid popup plus esbuild content/background/worker builds and static ONNX assets.
 
@@ -427,7 +427,7 @@ Mitigation:
 
 1. Create the shared MV3 extension shell, manifest, build script, popup/options frame, storage helper, and feature toggle registry.
 2. Integrate Remilia Wiki Hyperlink first because it is local, TypeScript-based, and already has popup/options/background/content boundaries.
-3. Integrate Postreader next to prove OCR asset copying, WASM CSP, and heavier static asset handling.
+3. Integrate Post-reading next to prove OCR asset copying, WASM CSP, and heavier static asset handling.
 4. Integrate RemiStats after converting root JavaScript/CSS into namespaced feature modules.
 5. Integrate Miladymaxxer last because it has the highest runtime complexity: ONNX inference, worker assets, rich DOM effects, notifications, XP state, and Solid popup code.
 
@@ -446,7 +446,7 @@ Mitigation:
 - Popup opens and exposes separate settings/status for each feature.
 - Each feature can be independently enabled and disabled.
 - X/Twitter timeline scanning does not create duplicate UI after route changes or infinite scroll.
-- OCR assets load correctly when Postreader is enabled.
+- OCR assets load correctly when Post-reading is enabled.
 - ONNX/model assets load correctly when Miladymaxxer is enabled.
 - RemiStats fetches are batched or cached and do not spam the API.
 - Injected CSS does not leak across features.

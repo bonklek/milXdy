@@ -97,11 +97,34 @@ function hasMiladyAbove(tweet: HTMLElement): boolean {
 }
 
 function hasMiladyBelow(tweet: HTMLElement): boolean {
-  const container = tweet.closest(CELL_INNER_DIV) ?? tweet.parentElement;
-  if (!container) return false;
-  const next = container.nextElementSibling;
-  const nextTweet = next?.querySelector<HTMLElement>(TWEET);
+  const nextTweet = getNextTweet(tweet);
   return nextTweet?.dataset.miladymaxxerState === "match";
+}
+
+function getPreviousTweet(tweet: HTMLElement): HTMLElement | null {
+  const container = tweet.closest(CELL_INNER_DIV) ?? tweet.parentElement;
+  if (!container) return null;
+  const prev = container.previousElementSibling;
+  return prev?.querySelector<HTMLElement>(TWEET) ?? null;
+}
+
+function getNextTweet(tweet: HTMLElement): HTMLElement | null {
+  const container = tweet.closest(CELL_INNER_DIV) ?? tweet.parentElement;
+  if (!container) return null;
+  const next = container.nextElementSibling;
+  return next?.querySelector<HTMLElement>(TWEET) ?? null;
+}
+
+function isMiladyReplyContext(tweet: HTMLElement): boolean {
+  return /\/status\//.test(window.location.pathname) && hasMiladyBelow(tweet);
+}
+
+function revealRepliedToContext(tweet: HTMLElement): void {
+  if (!/\/status\//.test(window.location.pathname)) return;
+  const previousTweet = getPreviousTweet(tweet);
+  if (!previousTweet || previousTweet.dataset.miladymaxxerState === "match") return;
+  clearPlaceholder(previousTweet);
+  previousTweet.style.display = "";
 }
 
 function applyDebugState(tweet: HTMLElement): void {
@@ -447,6 +470,10 @@ export function applyHiddenState(ctx: EffectsContext, tweet: HTMLElement): void 
 }
 
 export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl?: string): void {
+  if (document.documentElement.dataset.milxdyVisualDisableMaxxer === "true") {
+    clearEffects(tweet);
+    return;
+  }
   ctx.onTweetVisible(tweet);
   clearVisualState(tweet);
   const isMatch = tweet.dataset.miladymaxxerState === "match";
@@ -563,10 +590,15 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
         if (disableSelfTracking && isSelf) removeLevelBadge(tweet);
         else updateLevelBadge(ctx, tweet);
         updateMiladyListButton(ctx, tweet);
+        revealRepliedToContext(tweet);
         return;
       }
       removeLevelBadge(tweet);
       updateMiladyListButton(ctx, tweet);
+      if (ctx.settings.hideNonMiladyOrBeetlePosts && !isMiladyReplyContext(tweet)) {
+        tweet.style.display = "none";
+        return;
+      }
       if (miladyOnly && !isAllowedMiladyOnlyContext(tweet)) {
         tweet.style.display = "none";
         return;

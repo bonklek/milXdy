@@ -1,12 +1,34 @@
 # Changelog
 
-## 0.1.5
+## 0.2.0
 
-Status: release candidate.
+Status: released.
+
+See [milXdy 0.2.0 release notes](docs/RELEASE_NOTES_0.2.0.md).
+
+Current release-gate state:
+
+- Non-live release gates are consolidated under `npm run verify:release:gates:020` and are passing in this workspace.
+- Live Chrome/X runtime proof is optional manual QA for 0.2.0 and is not part of the release readiness gate.
 
 Highlights:
 
-- Added a unified **Audio** tab that groups Postreader voice/playback settings, RemiStats sounds, Milady Maxxer sounds, and visual interaction sounds.
+- Added the shared app registry, runtime lifecycle, Apps Hub, side rail, Performance modes, profile build matrix, and release packaging/checksum gates.
+- Added the docked Remilia Wiki sidebar, Miladychan Portal, and Music MVP surfaces.
+- Moved background fetches toward shared routing and explicit URL allowlists.
+- Documented `0.2.0` as the first app-platform preview before the complete composable app/mod system, where default and community apps can eventually live as packages while sharing scanners, effects, runtime services, and performance budgets.
+- Expanded Post-reading/read-aloud with Wiki sidebar article routing, dock-attached Wiki playback, boundary-aware highlighting, voice support probing, estimated highlight fallbacks, custom TTS timing support, and a standalone Chromium build path.
+- Added reproducible release archive verification so the 0.2.0 release gate checks deterministic ZIP output in addition to package checksums.
+- Added final release documentation for shared Wiki sidebar routing, shared Remilia auth, centralized install defaults, RemiStats tooltip hardening, dependency overrides, and release hygiene.
+- Updated `esbuild` to `0.28.1` in both checked-in lockfiles after the final audit pass so the Windows dev-server file-read advisory is not present in the release dependency tree.
+
+## 0.1.5
+
+Status: released.
+
+Highlights:
+
+- Added a unified **Audio** tab that groups Post-reading voice/playback settings, RemiStats sounds, Milady Maxxer sounds, and visual interaction sounds.
 - Removed the obsolete RemiliaNET username/password popup login form and made browser-session RemiliaNET auth the connector path for Beetol, RemiStats pokes, and RemiNet Chat.
 - Added explicit RemiNet disconnect behavior so **Log out** stops automatic browser-session reuse until **Retry session** is clicked again.
 - Added RemiChat replies with reply actions, reply previews, reply context rendering, and reply payload support.
@@ -24,10 +46,10 @@ Highlights:
 - Added visual theme controls for max media height, gold incoming poke alerts, and Tweet PNG export styling.
 - Improved Max visual profile layout with tweet-header/metadata overflow handling, configurable media height limits, and more precise unread notification tinting.
 - Improved shared X/Twitter surface scanning with extracted handles, visibility-aware safety scans, and scanner diagnostics.
-- Added feature timing diagnostics for RemiStats, Miladymaxxer, Postreader, and Wiki processing when performance diagnostics are enabled.
+- Added feature timing diagnostics for RemiStats, Miladymaxxer, Post-reading, and Wiki processing when performance diagnostics are enabled.
 - Added repeatable Chromium and Firefox build targets, with Firefox manifest generation and QA linting inspired by the contributor work in bonklek/milXdy#4.
 - Moved Health/reporting into the Main popup tab and compressed popup navigation to Main, Wiki Links, Audio, RemiNet, and Milady Maxxer.
-- Changed Postreader button placement to prefer the action row instead of tweet header controls.
+- Changed Post-reading button placement to prefer the action row instead of tweet header controls.
 - Suppressed Miladymaxxer self profile badges when self-tracking is disabled.
 
 Still pending:
@@ -75,6 +97,6 @@ Highlights:
 - Beetol integration and RemiNet login persistence.
 - Remilia Wiki Grok workflows and draggable new-page shortcut.
 - RemiStats poke cooldown and diagnostics improvements.
-- Postreader OCR/custom TTS documentation.
+- Post-reading OCR/custom TTS documentation.
 - Diag bug reporting with optional LLM assistance.
 - Expanded user documentation.

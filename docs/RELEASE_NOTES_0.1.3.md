@@ -34,7 +34,7 @@ milXdy `0.1.3` is a public beta polish release focused on safer updates, clearer
 
 - Reworked the popup tabs into clearer user-facing sections: Overview, Wiki Links, Read Aloud, RemiNet, Milady Maxxer, and Health.
 - Grouped settings inside each tab so prior extension controls remain visible without one long flat menu.
-- Added clearer labels for Postreader voice/playback/content/interface/shortcut controls, RemiNet badge/icon/auth controls, and Milady Maxxer display/list controls.
+- Added clearer labels for Post-reading voice/playback/content/interface/shortcut controls, RemiNet badge/icon/auth controls, and Milady Maxxer display/list controls.
 - Added signed-in styling for the RemiNet auth session panel and hides stale poke diagnostics once auth is active.
 
 ### Documentation and release planning

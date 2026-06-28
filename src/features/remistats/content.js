@@ -1,6 +1,6 @@
-import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
 import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
+import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -44,6 +44,7 @@ const trophyBannerCache = new Map();
 const trophyBannerPending = new Map();
 let prefetchedBannersNft = null;
 let prefetchedBannersNftPending = null;
+const reminetProcessingElements = new Set();
 
 // Batch fetching queue
 let batchQueue = new Set();
@@ -70,6 +71,30 @@ const ROUTE_BLOCKLIST = new Set([
   'jobs', 'lists', 'bookmarks', 'communities', 'topics', 'verified-orgs-signup'
 ]);
 
+function cleanRouteUsername(candidate) {
+  const clean = cleanUsername(candidate);
+  return clean && !ROUTE_BLOCKLIST.has(clean.toLowerCase()) ? clean : null;
+}
+
+function markReminetProcessing(element, timestamped = false) {
+  if (!element) return;
+  element.setAttribute('data-reminet-processing', 'true');
+  if (timestamped) element.dataset.reminetProcessingAt = String(Date.now());
+  reminetProcessingElements.add(element);
+}
+
+function clearReminetProcessing(element) {
+  if (!element) return;
+  element.removeAttribute('data-reminet-processing');
+  delete element.dataset.reminetProcessingAt;
+  reminetProcessingElements.delete(element);
+}
+
+function usernameFromStatusHref(href) {
+  const match = String(href || '').match(/^(?:https?:\/\/(?:twitter|x)\.com)?\/([^\/\?#]+)\/status\/\d+/i);
+  return match ? cleanRouteUsername(match[1]) : null;
+}
+
 // Find the first profile-link username inside a container, skipping routes
 // like /messages/<id> that appear in DM cells before the avatar link.
 function findUsernameInLinks(container) {
@@ -79,10 +104,31 @@ function findUsernameInLinks(container) {
     if (href.includes('/status/')) continue;
     const match = href.match(/^\/([^\/\?#]+)(?:\/|$)/);
     if (!match) continue;
-    const candidate = match[1];
-    if (ROUTE_BLOCKLIST.has(candidate)) continue;
+    const candidate = cleanRouteUsername(match[1]);
+    if (!candidate) continue;
     return candidate;
   }
+  return null;
+}
+
+function findTweetAuthorUsername(tweet) {
+  const userNameContainer = Array.from(tweet.querySelectorAll('[data-testid="User-Name"]'))
+    .find((node) => !node.closest('[data-testid="quoteTweet"]'));
+  if (userNameContainer) {
+    for (const link of Array.from(userNameContainer.querySelectorAll('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))) {
+      const href = link.getAttribute('href');
+      if (href?.includes('/status/')) continue;
+      const match = String(href || '').match(/^(?:https?:\/\/(?:twitter|x)\.com)?\/([^\/\?#]+)(?:\/|$)/i);
+      const handle = match ? cleanRouteUsername(match[1]) : null;
+      if (handle) return handle;
+    }
+  }
+
+  const statusLink = Array.from(tweet.querySelectorAll('a[href*="/status/"]'))
+    .find((link) => !link.closest('[data-testid="quoteTweet"]'));
+  const fromStatus = usernameFromStatusHref(statusLink?.getAttribute('href'));
+  if (fromStatus) return fromStatus;
+
   return null;
 }
 
@@ -91,8 +137,8 @@ function extractUsernameFromAvatar(container) {
   const avatar = container.querySelector('[data-testid^="UserAvatar-Container-"]');
   if (avatar) {
     const testid = avatar.getAttribute('data-testid');
-    const candidate = testid.replace('UserAvatar-Container-', '').trim();
-    if (candidate && !ROUTE_BLOCKLIST.has(candidate)) {
+    const candidate = cleanRouteUsername(testid.replace('UserAvatar-Container-', '').trim());
+    if (candidate) {
       return candidate;
     }
   }
@@ -108,8 +154,13 @@ function extractUsername(element) {
   let username = null;
 
   if (container) {
-    // Most reliable: X's own avatar testid always has the username baked in
-    username = extractUsernameFromAvatar(container);
+    if (tweet) {
+      username = findTweetAuthorUsername(tweet);
+    }
+
+    if (!username) {
+      username = extractUsernameFromAvatar(container);
+    }
 
     if (!username) {
       username = findUsernameInLinks(container);
@@ -142,10 +193,12 @@ let maxBeetles = 100;
 let maxScore = 1000;
 let remistatsEnabled = true;
 let reminetDelegationInstalled = false;
+let removeRemiStatsDelegation = null;
 let activeTooltipBadge = null;
 let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
+const pokeButtonsByUsername = new Map();
 let incomingPokeCache = null;
 let visualTheme = {};
 const DEFAULT_ICON_SETTINGS = {
@@ -239,7 +292,7 @@ async function processBatch(usernames) {
   const requested = Array.from(usernames).map(u => u.toLowerCase());
   try {
     const responses = await Promise.all(requested.map(async (handle) => {
-      const response = await safeRuntimeMessage({ type: 'remistats:getUser', handle });
+      const response = await runtimeSendMessage({ type: 'remistats:getUser', handle }, 'remistats:getUser');
       return [handle, response];
     }));
 
@@ -259,9 +312,13 @@ async function processBatch(usernames) {
       if (data.user) {
         const user = data.user;
         const userData = transformApiResponse(user, requestedHandle);
-        const normalized = (user.twitterHandle || requestedHandle).toLowerCase();
-        scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
-        results[normalized] = userData;
+        const normalized = cleanUsername(user.twitterHandle || requestedHandle).toLowerCase();
+        scoreCache.set(requestedHandle, { data: userData, timestamp: Date.now() });
+        results[requestedHandle] = userData;
+        if (normalized && normalized !== requestedHandle) {
+          scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
+          results[normalized] = userData;
+        }
       } else {
         scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
         results[requestedHandle] = null;
@@ -368,7 +425,7 @@ function createPokeButton(username, standalone = false, xHandle = '') {
     button.dataset.reminetStandalonePoke = 'true';
   }
   restorePokeButtonIcon(button);
-  button.title = `Poke ${clean} on remilia.net`;
+  button.title = 'Poke';
   button.setAttribute('aria-label', button.title);
   button.addEventListener('click', (event) => {
     event.preventDefault();
@@ -376,8 +433,39 @@ function createPokeButton(username, standalone = false, xHandle = '') {
     event.stopImmediatePropagation();
     void handlePokeClick(button);
   }, true);
+  registerPokeButton(button, clean);
   applyKnownPokeCooldown(button, clean);
   return button;
+}
+
+function registerPokeButton(button, username) {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  const key = clean.toLowerCase();
+  let buttons = pokeButtonsByUsername.get(key);
+  if (!buttons) {
+    buttons = new Set();
+    pokeButtonsByUsername.set(key, buttons);
+  }
+  buttons.add(button);
+}
+
+function pokeButtonsForUsername(username) {
+  const clean = cleanUsername(username);
+  if (!clean) return [];
+  const key = clean.toLowerCase();
+  const buttons = pokeButtonsByUsername.get(key);
+  if (!buttons) return [];
+  const connected = [];
+  for (const button of Array.from(buttons)) {
+    if (!button.isConnected || cleanUsername(button.dataset.reminetUsername).toLowerCase() !== key) {
+      buttons.delete(button);
+      continue;
+    }
+    connected.push(button);
+  }
+  if (buttons.size === 0) pokeButtonsByUsername.delete(key);
+  return connected;
 }
 
 function applyKnownPokeCooldown(button, username) {
@@ -449,7 +537,7 @@ function ensureStandalonePokeButton(badge, username) {
   const next = badge.nextElementSibling;
   if (next?.matches?.('[data-reminet-standalone-poke]')) {
     next.dataset.reminetUsername = clean;
-    next.title = `Poke ${clean} on remilia.net`;
+    next.title = 'Poke';
     next.setAttribute('aria-label', next.title);
     return;
   }
@@ -477,6 +565,161 @@ function createProfileBadgeGroup(badge, username) {
   return group;
 }
 
+function createProfilePokeSlot(username = '') {
+  const slot = document.createElement('span');
+  slot.className = 'reminet-profile-poke-slot';
+  slot.dataset.reminetProfilePokeSlot = 'true';
+  const clean = cleanUsername(username);
+  if (clean) slot.dataset.reminetUsername = clean;
+  return slot;
+}
+
+function fillProfilePokeSlot(slot, username) {
+  if (!slot) return;
+  const clean = cleanUsername(username);
+  const button = createPokeButton(clean, true);
+  slot.replaceChildren();
+  if (button) {
+    slot.appendChild(button);
+  }
+  if (clean) slot.dataset.reminetUsername = clean;
+}
+
+function createProfileActionPokeSlot(username = '') {
+  const slot = document.createElement('span');
+  slot.className = 'reminet-profile-action-poke-slot';
+  slot.dataset.reminetProfileActionPokeSlot = 'true';
+  const clean = cleanUsername(username);
+  if (clean) slot.dataset.reminetUsername = clean;
+  return slot;
+}
+
+function profileActionFollowButton(userNameSection) {
+  const primaryColumn = userNameSection?.closest?.('[data-testid="primaryColumn"]') || document;
+  const userNameRect = userNameSection?.getBoundingClientRect?.();
+  const buttons = Array.from(primaryColumn.querySelectorAll('button, [role="button"]'));
+  return buttons.find((button) => {
+    const text = (button.textContent || '').trim();
+    const label = button.getAttribute?.('aria-label') || '';
+    const testid = button.getAttribute?.('data-testid') || '';
+    if (!/(^|-)unfollow$|(^|-)follow$/i.test(testid) && !/^(Following|Follow)$/i.test(text) && !/^(Following|Follow)/i.test(label)) {
+      return false;
+    }
+    const rect = button.getBoundingClientRect?.();
+    return rect
+      && rect.width >= 48
+      && rect.height >= 24
+      && (!userNameRect || rect.bottom <= userNameRect.top + 8);
+  }) || null;
+}
+
+function directChildUnder(parent, node) {
+  if (!parent || !node || !parent.contains(node)) return null;
+  let current = node;
+  while (current?.parentElement && current.parentElement !== parent) {
+    current = current.parentElement;
+  }
+  return current?.parentElement === parent ? current : null;
+}
+
+function attachProfileActionPokeSlot(userNameSection, slot) {
+  if (!userNameSection || !slot) return false;
+  const followButton = profileActionFollowButton(userNameSection);
+  if (!followButton?.parentElement) return false;
+  const primaryColumn = userNameSection.closest?.('[data-testid="primaryColumn"]') || document;
+  let actionRow = null;
+  let current = followButton.parentElement;
+  while (current && current !== primaryColumn) {
+    const style = getComputedStyle(current);
+    const hasPeerAction = Boolean(
+      current.querySelector('[data-testid="userActions"], [data-testid="sendDMFromProfile"], [aria-label*="notifications" i]')
+    );
+    if (style.display === 'flex' && style.flexDirection === 'row' && hasPeerAction) {
+      actionRow = current;
+      break;
+    }
+    current = current.parentElement;
+  }
+  if (!actionRow) return false;
+  const followChild = directChildUnder(actionRow, followButton) || followButton;
+  for (const previous of Array.from(document.querySelectorAll('[data-reminet-profile-action-poke-slot="true"]'))) {
+    if (previous !== slot) previous.remove();
+  }
+  if (slot.parentElement !== actionRow || slot.nextSibling !== followChild) {
+    actionRow.insertBefore(slot, followChild);
+  }
+  return true;
+}
+
+function ensureProfileActionPokeSlot(userNameSection, username = '') {
+  const clean = cleanUsername(username);
+  const existing = document.querySelector('[data-reminet-profile-action-poke-slot="true"]');
+  const slot = existing || createProfileActionPokeSlot(clean);
+  if (clean) slot.dataset.reminetUsername = clean;
+  fillProfilePokeSlot(slot, clean);
+  attachProfileActionPokeSlot(userNameSection, slot);
+  return slot;
+}
+
+function normalizeProfilePokeGroup(badge, username) {
+  const group = badge?.closest?.('[data-reminet-profile-badge-group]');
+  if (!group) return false;
+  const clean = cleanUsername(username || badge.dataset.reminetUsername || profileUsernameFromUrl());
+
+  for (const child of Array.from(badge.parentElement?.children || [])) {
+    if (child.matches?.('[data-reminet-standalone-poke]')) child.remove();
+  }
+
+  group.querySelector('[data-reminet-profile-poke-slot]')?.remove();
+  ensureProfileActionPokeSlot(document.querySelector('[data-testid="UserName"]'), clean);
+  if (clean) group.dataset.reminetUsername = clean;
+  void updateIncomingPokeFlag(group, clean);
+  return true;
+}
+
+function closestProfileHandleRow(userNameSection, handleSpan, followsYou) {
+  if (!userNameSection || !handleSpan) return null;
+  const candidates = [];
+  let current = handleSpan.parentElement;
+  while (current && current !== userNameSection) {
+    const rect = current.getBoundingClientRect?.();
+    const text = current.textContent || '';
+    if (
+      rect
+      && rect.height <= 30
+      && text.includes('@')
+      && (!followsYou || current.contains(followsYou))
+    ) {
+      candidates.push(current);
+    }
+    current = current.parentElement;
+  }
+  return candidates[0] || null;
+}
+
+function attachProfileBadgeGroup(userNameSection, group) {
+  if (!userNameSection || !group) return false;
+  const handleSpan = Array.from(userNameSection.querySelectorAll('span[style*="color"], span'))
+    .find((span) => (span.textContent || '').trim().startsWith('@'));
+  const followsYou = userNameSection.querySelector('[data-testid="userFollowIndicator"]')
+    || Array.from(userNameSection.querySelectorAll('span, div'))
+      .find((element) => (element.textContent || '').trim().toLowerCase() === 'follows you');
+  const row = closestProfileHandleRow(userNameSection, handleSpan, followsYou);
+  if (!row) {
+    userNameSection.appendChild(group);
+    return false;
+  }
+  for (const previous of Array.from(userNameSection.querySelectorAll('[data-reminet-profile-handle-row="true"]'))) {
+    if (previous !== row) delete previous.dataset.reminetProfileHandleRow;
+  }
+  row.dataset.reminetProfileHandleRow = 'true';
+  if (followsYou && !followsYou.closest('[data-reminet-profile-badge-group]')) {
+    followsYou.dataset.reminetProfileFollowsYou = 'true';
+  }
+  if (group.parentElement !== row) row.appendChild(group);
+  return true;
+}
+
 function createPokeCluster(username, xHandle = '') {
   const clean = cleanUsername(username);
   if (!clean) return null;
@@ -488,6 +731,108 @@ function createPokeCluster(username, xHandle = '') {
   if (pokeButton) group.appendChild(pokeButton);
   void updateIncomingPokeFlag(group, clean);
   return group;
+}
+
+function createActionPokeSlot(username = '') {
+  const clean = cleanUsername(username);
+  const group = document.createElement('div');
+  group.className = 'reminet-action-poke-group';
+  group.dataset.reminetActionPokeGroup = 'true';
+  group.dataset.reminetPokeState = 'loading';
+  if (clean) group.dataset.reminetUsername = clean;
+  return group;
+}
+
+function fillActionPokeSlot(group, username, xHandle = '') {
+  if (!group) return;
+  const clean = cleanUsername(username);
+  group.replaceChildren();
+  group.dataset.reminetPokeState = clean ? 'ready' : 'empty';
+  if (!clean) {
+    group.setAttribute('aria-hidden', 'true');
+    return;
+  }
+  if (group.dataset.milxdyTweetSlot === 'remistats-action-poke') delete group.dataset.milxdyTweetSlot;
+  group.removeAttribute('aria-hidden');
+  group.dataset.reminetUsername = clean;
+  const pokeButton = createPokeButton(clean, true, xHandle);
+  if (pokeButton) group.appendChild(pokeButton);
+  void updateIncomingPokeFlag(group, clean);
+}
+
+function createBadgeSlot(username = '', options = {}) {
+  const slot = document.createElement('span');
+  slot.className = 'reminet-badge-slot';
+  slot.dataset.reminetBadgeSlot = 'true';
+  slot.dataset.reminetState = 'loading';
+  if (options.profile) slot.dataset.reminetProfileSlot = 'true';
+  if (options.actionPoke) slot.dataset.reminetActionPoke = 'true';
+  const clean = cleanUsername(username);
+  if (clean) slot.dataset.reminetUsername = clean;
+  slot.setAttribute('aria-hidden', 'true');
+  return slot;
+}
+
+function prepareBadgeSlot(slot, username = '', options = {}) {
+  if (!slot) return null;
+  slot.classList.add('reminet-badge-slot');
+  slot.dataset.reminetBadgeSlot = 'true';
+  slot.dataset.reminetState = 'loading';
+  if (options.profile) slot.dataset.reminetProfileSlot = 'true';
+  if (options.actionPoke) slot.dataset.reminetActionPoke = 'true';
+  const clean = cleanUsername(username);
+  if (clean) slot.dataset.reminetUsername = clean;
+  slot.setAttribute('aria-hidden', 'true');
+  return slot;
+}
+
+function fillBadgeSlot(slot, badge, username = '') {
+  if (!slot || !badge) return null;
+  const clean = cleanUsername(username) || badge.dataset.reminetUsername || '';
+  slot.replaceChildren(badge);
+  slot.dataset.reminetState = 'ready';
+  slot.removeAttribute('aria-hidden');
+  if (clean) slot.dataset.reminetUsername = clean;
+  return badge;
+}
+
+function cachedScoreData(username) {
+  const clean = cleanUsername(username).toLowerCase();
+  if (!clean) return undefined;
+  const cached = scoreCache.get(clean);
+  if (!cached || Date.now() - cached.timestamp >= CONFIG.cacheTimeout) return undefined;
+  return cached.data;
+}
+
+function fillProfileBadgeFromScore(slot, group, scoreData, username) {
+  if (!slot || !group || !scoreData) return null;
+  const badge = createScoreBadge(scoreData, { includePokeInside: false });
+  badge.style.marginLeft = '0';
+  badge.style.display = 'inline-flex';
+  badge.style.verticalAlign = 'middle';
+  badge.setAttribute('data-profile-badge', username);
+  const remiliaUsername = scoreData.remiliaUsername || scoreData.username || username;
+  group.dataset.reminetUsername = remiliaUsername;
+  fillBadgeSlot(slot, badge, remiliaUsername);
+  void updateIncomingPokeFlag(group, remiliaUsername);
+  return { badge, remiliaUsername };
+}
+
+function positionBadgeSlotNearTweetTime(element, slot) {
+  if (!element || !slot || slot.dataset.reminetProfileSlot === 'true') return false;
+  const timeElement = Array.from(element.querySelectorAll('time')).find((time) => !time.closest('[data-testid="quoteTweet"]'));
+  if (!timeElement?.parentElement) return false;
+  if (slot.parentElement !== timeElement.parentElement || slot.previousSibling !== timeElement) {
+    timeElement.parentElement.insertBefore(slot, timeElement.nextSibling);
+  }
+  return true;
+}
+
+function markBadgeSlotEmpty(slot) {
+  if (!slot) return;
+  slot.replaceChildren();
+  slot.dataset.reminetState = 'empty';
+  slot.setAttribute('aria-hidden', 'true');
 }
 
 // Create score badge element
@@ -581,7 +926,7 @@ function installRemiStatsDelegation() {
   if (reminetDelegationInstalled) return;
   reminetDelegationInstalled = true;
 
-  document.addEventListener('mouseover', async (event) => {
+  const mouseoverHandler = async (event) => {
     const badge = event.target.closest?.('[data-reminet-badge]');
     if (!badge || !document.body.contains(badge)) return;
     event.stopPropagation();
@@ -592,17 +937,17 @@ function installRemiStatsDelegation() {
     }
     if (settings.showTooltips === false) return;
     showSharedTooltip(badge);
-  }, true);
+  };
 
-  document.addEventListener('mouseout', (event) => {
+  const mouseoutHandler = (event) => {
     const badge = event.target.closest?.('[data-reminet-badge]');
     if (!badge) return;
     const related = event.relatedTarget;
     if (related instanceof Node && badge.contains(related)) return;
     scheduleHideSharedTooltip();
-  }, true);
+  };
 
-  document.addEventListener('click', (event) => {
+  const clickHandler = (event) => {
     const pokeButton = event.target.closest?.('[data-reminet-poke]');
     if (pokeButton) {
       event.stopPropagation();
@@ -618,13 +963,28 @@ function installRemiStatsDelegation() {
     event.stopPropagation();
     event.preventDefault();
     window.open(profileUrl, '_blank');
-  }, true);
+  };
 
-  window.addEventListener('scroll', () => {
+  const scrollHandler = () => {
     if (!activeTooltipBadge) return;
     positionSharedTooltip(activeTooltipBadge);
     scheduleHideSharedTooltip(300);
-  }, { passive: true, capture: true });
+  };
+
+  document.addEventListener('mouseover', mouseoverHandler, true);
+  document.addEventListener('mouseout', mouseoutHandler, true);
+  document.addEventListener('click', clickHandler, true);
+  window.addEventListener('scroll', scrollHandler, { passive: true, capture: true });
+
+  removeRemiStatsDelegation = () => {
+    document.removeEventListener('mouseover', mouseoverHandler, true);
+    document.removeEventListener('mouseout', mouseoutHandler, true);
+    document.removeEventListener('click', clickHandler, true);
+    window.removeEventListener('scroll', scrollHandler, { capture: true });
+    reminetDelegationInstalled = false;
+    removeRemiStatsDelegation = null;
+  };
+  addRuntimeDisposable(removeRemiStatsDelegation);
 }
 
 async function handlePokeClick(button) {
@@ -641,7 +1001,7 @@ async function handlePokeClick(button) {
   window.reminetSounds?.playPoke?.();
   button.dataset.reminetPokeShaking = 'true';
   setPokeButtonState(button, 'loading', `Poking ${username}...`);
-  const response = await safeRuntimeMessage({ type: 'beetol:poke', username });
+  const response = await runtimeSendMessage({ type: 'beetol:poke', username }, 'beetol:poke');
   delete button.dataset.reminetPokeShaking;
 
   if (response?.ok) {
@@ -790,6 +1150,7 @@ function normalizeCooldownMs(value) {
 }
 
 function startPokeCooldown(button, username, cooldownMs) {
+  if (!lifecycleActive()) return;
   const normalizedMs = Math.max(1000, Number(cooldownMs) || 0);
   const until = Date.now() + normalizedMs;
   const key = username.toLowerCase();
@@ -799,24 +1160,31 @@ function startPokeCooldown(button, username, cooldownMs) {
   clearPokeCountdown(button);
   setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
 
+  let cancelNextTick = null;
   const update = () => {
+    cancelNextTick = null;
+    if (!lifecycleActive() || !button.isConnected) {
+      clearPokeCountdown(button);
+      return;
+    }
     const remaining = until - Date.now();
     if (remaining <= 0) {
       clearPokeCountdown(button);
       pokeCooldowns.delete(key);
       void removeStoredPokeCooldown(username);
-      setPokeButtonState(button, 'idle', `Poke ${username} on remilia.net`);
+      setPokeButtonState(button, 'idle', 'Poke');
       return;
     }
     const label = formatPokeCooldown(remaining);
     button.textContent = label;
     button.title = `Poke ${username} again in ${label}`;
     button.setAttribute('aria-label', button.title);
+    cancelNextTick = runtimeScheduler.timeout(update, 1000);
+    pokeCountdownTimers.set(button, cancelNextTick);
   };
 
   update();
-  const timer = window.setInterval(update, 1000);
-  pokeCountdownTimers.set(button, timer);
+  if (cancelNextTick) pokeCountdownTimers.set(button, cancelNextTick);
 }
 
 function startPokeCooldownForUsername(username, cooldownMs) {
@@ -825,7 +1193,7 @@ function startPokeCooldownForUsername(username, cooldownMs) {
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
   void persistPokeCooldown(clean, until);
-  for (const button of document.querySelectorAll(`[data-reminet-poke][data-reminet-username="${cssEscape(clean)}"]`)) {
+  for (const button of pokeButtonsForUsername(clean)) {
     startPokeCooldown(button, clean, until - Date.now());
   }
 }
@@ -835,16 +1203,24 @@ function clearPokeCooldownForUsername(username) {
   if (!clean) return;
   pokeCooldowns.delete(clean.toLowerCase());
   void removeStoredPokeCooldown(clean);
-  for (const button of document.querySelectorAll(`[data-reminet-poke][data-reminet-username="${cssEscape(clean)}"]`)) {
+  for (const button of pokeButtonsForUsername(clean)) {
     clearPokeCountdown(button);
-    setPokeButtonState(button, 'idle', `Poke ${clean} on remilia.net`);
+    setPokeButtonState(button, 'idle', 'Poke');
   }
 }
 
 function clearPokeCountdown(button) {
-  const timer = pokeCountdownTimers.get(button);
-  if (timer) window.clearInterval(timer);
+  const cancelTimer = pokeCountdownTimers.get(button);
+  if (cancelTimer) cancelTimer();
   pokeCountdownTimers.delete(button);
+}
+
+function clearAllPokeCountdowns() {
+  for (const cancelTimer of pokeCountdownTimers.values()) {
+    cancelTimer();
+  }
+  pokeCountdownTimers.clear();
+  pokeButtonsByUsername.clear();
 }
 
 function restorePokeButtonIcon(button) {
@@ -907,7 +1283,7 @@ async function getIncomingPokeHandles() {
     return incomingPokeCache.handles;
   }
 
-  const response = await safeRuntimeMessage({ type: 'beetol:incomingPokes' });
+  const response = await runtimeSendMessage({ type: 'beetol:incomingPokes' }, 'beetol:incomingPokes');
   const handles = new Set(
     Array.isArray(response?.pokers)
       ? response.pokers.map(handle => cleanUsername(handle).toLowerCase()).filter(Boolean)
@@ -921,13 +1297,7 @@ function patchExistingBadges() {
   for (const badge of document.querySelectorAll('[data-reminet-badge]:not([data-reminet-compact])')) {
     const username = badge.dataset.reminetUsername || profileUsernameFromUrl();
     if (badge.hasAttribute('data-profile-badge')) {
-      if (badge.parentElement?.matches?.('[data-reminet-profile-badge-group]')) {
-        if (!badge.parentElement.querySelector('[data-reminet-poke]')) {
-          const button = createPokeButton(username, true);
-          if (button) badge.parentElement.appendChild(button);
-        }
-        void updateIncomingPokeFlag(badge.parentElement, username);
-      } else {
+      if (!normalizeProfilePokeGroup(badge, username)) {
         ensureStandalonePokeButton(badge, username);
       }
       continue;
@@ -998,10 +1368,10 @@ function scheduleHideSharedTooltip(delay = 120) {
 //   1. <time> element (tweets and user cells)
 //   2. [data-testid="User-Name"] (tweets)
 //   3. Any [dir="ltr"][class*="css"] block as a last resort
-function insertBadgeIntoElement(element, badge) {
+function insertBadgeIntoElement(element, badgeOrSlot) {
   const timeElement = Array.from(element.querySelectorAll('time')).find((time) => !time.closest('[data-testid="quoteTweet"]'));
   if (timeElement && timeElement.parentElement) {
-    timeElement.parentElement.insertBefore(badge, timeElement.nextSibling);
+    timeElement.parentElement.insertBefore(badgeOrSlot, timeElement.nextSibling);
     return true;
   }
 
@@ -1009,7 +1379,7 @@ function insertBadgeIntoElement(element, badge) {
   if (userNameContainer) {
     const insertPoint = userNameContainer.querySelector('[dir="ltr"]') || userNameContainer;
     if (insertPoint.parentElement) {
-      insertPoint.parentElement.insertBefore(badge, insertPoint.nextSibling);
+      insertPoint.parentElement.insertBefore(badgeOrSlot, insertPoint.nextSibling);
       return true;
     }
   }
@@ -1017,7 +1387,7 @@ function insertBadgeIntoElement(element, badge) {
   const fallback = element.querySelector('[dir="ltr"][class*="css"]');
   if (fallback && fallback.parentElement) {
     const insertPoint = fallback.querySelector('[dir="ltr"]') || fallback;
-    insertPoint.parentElement.insertBefore(badge, insertPoint.nextSibling);
+    insertPoint.parentElement.insertBefore(badgeOrSlot, insertPoint.nextSibling);
     return true;
   }
 
@@ -1027,57 +1397,112 @@ function insertBadgeIntoElement(element, badge) {
 // Insert badge into the DOM for tweets and user cells
 async function insertBadge(element, usernameOverride = null) {
   if (element.closest('[data-testid="quoteTweet"]')) {
-    return;
+    return markSurfaceResult(element, 'quote-skip');
   }
   // Check if badge already exists
   const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
     .some((badge) => !badge.closest('[data-testid="quoteTweet"]'));
   if (hasOwnBadge) {
-    return;
+    return markSurfaceResult(element, 'already-has-badge');
   }
   
   // Mark element as processing to prevent duplicate insertions during async operations
   if (element.hasAttribute('data-reminet-processing')) {
-    return;
+    if (!surfaceProcessingIsStale(element)) {
+      return markSurfaceResult(element, 'processing');
+    }
+    clearReminetProcessing(element);
   }
-  element.setAttribute('data-reminet-processing', 'true');
+  markReminetProcessing(element, true);
   
   const username = cleanUsername(usernameOverride) || extractUsername(element);
   if (!username) {
-    element.removeAttribute('data-reminet-processing');
-    return;
+    clearReminetProcessing(element);
+    return markSurfaceResult(element, 'no-handle');
   }
+  element.dataset.reminetLookupHandle = username;
+
+  const existingSlot = Array.from(element.querySelectorAll('[data-milxdy-tweet-slot="remistats-badge"], [data-reminet-badge-slot]'))
+    .find((slot) => !slot.closest('[data-testid="quoteTweet"]'));
+  const badgeSlot = existingSlot
+    ? prepareBadgeSlot(existingSlot, username, { actionPoke: visualTheme.pokePlacement !== 'actions' })
+    : createBadgeSlot(username, { actionPoke: visualTheme.pokePlacement !== 'actions' });
+  positionBadgeSlotNearTweetTime(element, badgeSlot);
+  if (!existingSlot && !insertBadgeIntoElement(element, badgeSlot)) {
+    clearReminetProcessing(element);
+    return markSurfaceResult(element, 'slot-missing', username);
+  }
+  const actionPokeSlot = visualTheme.pokePlacement === 'actions'
+    ? reserveActionPoke(element, username)
+    : null;
   
   try {
     const scoreData = await fetchUserScore(username);
 
     if (!scoreData) {
-      element.removeAttribute('data-reminet-processing');
-      return;
+      markBadgeSlotEmpty(badgeSlot);
+      fillActionPokeSlot(actionPokeSlot, '');
+      clearReminetProcessing(element);
+      return markSurfaceResult(element, 'fetch-empty', username);
     }
 
     const badge = createScoreBadge(scoreData);
     
     // Remove processing flag since we're about to insert the badge
-    element.removeAttribute('data-reminet-processing');
+    clearReminetProcessing(element);
     
-    insertBadgeIntoElement(element, badge);
+    fillBadgeSlot(badgeSlot, badge, scoreData.remiliaUsername || username);
     if (visualTheme.pokePlacement === 'actions') {
       insertActionPoke(element, scoreData.remiliaUsername || username, username);
     }
+    return markSurfaceResult(element, 'rendered', scoreData.remiliaUsername || username);
   } catch (error) {
     console.error('Error inserting badge:', error);
-    element.removeAttribute('data-reminet-processing');
+    markBadgeSlotEmpty(badgeSlot);
+    fillActionPokeSlot(actionPokeSlot, '');
+    clearReminetProcessing(element);
+    return markSurfaceResult(element, 'api-error', username);
   }
+}
+
+function markSurfaceResult(element, status, username = '') {
+  if (element?.dataset) {
+    element.dataset.reminetDebug = status;
+    if (username) element.dataset.reminetLookupHandle = cleanUsername(username);
+  }
+  return { status, username: cleanUsername(username) };
+}
+
+function surfaceProcessingIsStale(element) {
+  const startedAt = Number(element.dataset.reminetProcessingAt || 0);
+  return !Number.isFinite(startedAt) || startedAt <= 0 || Date.now() - startedAt > 10000;
 }
 
 function insertActionPoke(element, username, xHandle = '') {
   const clean = cleanUsername(username);
-  if (!clean || element.querySelector('[data-reminet-action-poke-group]')) return;
+  const existing = element.querySelector('[data-reminet-action-poke-group]');
+  if (existing) {
+    fillActionPokeSlot(existing, clean, xHandle || extractUsername(element));
+    return;
+  }
+  if (!clean) return;
   const actions = element.querySelector('[role="group"]');
   if (!actions) return;
   const cluster = createPokeCluster(clean, xHandle || extractUsername(element));
   if (!cluster) return;
+  insertActionPokeGroup(actions, cluster);
+}
+
+function reserveActionPoke(element, username, xHandle = '') {
+  if (element.querySelector('[data-reminet-action-poke-group]')) return null;
+  const actions = element.querySelector('[role="group"]');
+  if (!actions) return null;
+  const cluster = createActionPokeSlot(username);
+  insertActionPokeGroup(actions, cluster, xHandle);
+  return cluster;
+}
+
+function insertActionPokeGroup(actions, cluster) {
   const like = actions.querySelector('[data-testid="like"], [data-testid="unlike"]');
   const likeSlot = like?.closest('[role="group"] > div') || like?.parentElement?.parentElement;
   if (likeSlot) {
@@ -1088,13 +1513,7 @@ function insertActionPoke(element, username, xHandle = '') {
 }
 
 function idle() {
-  return new Promise((resolve) => {
-    if (typeof window.requestIdleCallback === 'function') {
-      window.requestIdleCallback(resolve, { timeout: 1500 });
-    } else {
-      window.setTimeout(resolve, 250);
-    }
-  });
+  return new Promise((resolve) => runtimeScheduler.idle(resolve, { timeout: 1500 }));
 }
 
 function remiliaUrl(path) {
@@ -1271,7 +1690,7 @@ function randomBannersNft() {
 }
 
 async function fetchBannerImageDataUrl(imageUrl) {
-  const response = await safeRuntimeMessage({ type: 'milxdy:fetchImageDataUrl', url: imageUrl });
+  const response = await runtimeSendMessage({ type: 'milxdy:fetchImageDataUrl', url: imageUrl }, 'milxdy:fetchImageDataUrl');
   return response?.ok && typeof response.dataUrl === 'string' ? response.dataUrl : imageUrl;
 }
 
@@ -1569,6 +1988,13 @@ async function upgradeProfileTrophyBanner(remiliaUsername, profilePath) {
 const processedProfiles = new Set();
 let lastProfileUrl = location.href;
 let groupChatScanTimer = null;
+let routeProfileTimer = null;
+let booted = false;
+let runtimeScheduleScan = () => undefined;
+let addRuntimeDisposable = () => undefined;
+let runtimeSendMessage = safeRuntimeMessage;
+let lifecycleSignal = null;
+let runtimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 1500, timeoutFallbackMs: 250 });
 
 // Insert badge on profile pages
 async function insertProfileBadge() {
@@ -1606,9 +2032,11 @@ async function insertProfileBadge() {
   }
 
   if (!username) {
-    userNameSection.removeAttribute('data-reminet-processing');
+    clearReminetProcessing(userNameSection);
     return;
   }
+
+  const profileKey = `${username}-${window.location.pathname}`;
   
   // Check if badge already exists in this specific location
   const existingBadge = userNameSection.querySelector('[data-reminet-badge]:not([data-reminet-compact])');
@@ -1619,17 +2047,34 @@ async function insertProfileBadge() {
       (group || existingBadge).remove();
     } else {
       const existingUsername = existingBadge.dataset.reminetUsername || username;
+      const group = existingBadge.closest('[data-reminet-profile-badge-group]');
+      if (group) attachProfileBadgeGroup(userNameSection, group);
       void upgradeProfileTrophyBanner(existingUsername, window.location.pathname);
-      if (existingBadge.parentElement?.matches?.('[data-reminet-profile-badge-group]')) {
-        if (!existingBadge.parentElement.querySelector('[data-reminet-poke]')) {
-          const button = createPokeButton(existingUsername, true);
-          if (button) existingBadge.parentElement.appendChild(button);
-        }
-        void updateIncomingPokeFlag(existingBadge.parentElement, existingUsername);
-      } else {
+      if (!normalizeProfilePokeGroup(existingBadge, existingUsername)) {
         ensureStandalonePokeButton(existingBadge, existingUsername);
       }
       return;
+    }
+  }
+
+  const existingSlot = userNameSection.querySelector('[data-reminet-profile-slot]');
+  if (existingSlot) {
+    const existingSlotUsername = cleanUsername(existingSlot.dataset.reminetUsername);
+    if (existingSlotUsername && existingSlotUsername.toLowerCase() !== username.toLowerCase()) {
+      const group = existingSlot.closest('[data-reminet-profile-badge-group]');
+      (group || existingSlot).remove();
+    } else {
+      if (existingSlot.dataset.reminetState === 'empty') {
+        const group = existingSlot.closest('[data-reminet-profile-badge-group]');
+        (group || existingSlot).remove();
+        processedProfiles.delete(profileKey);
+      } else {
+        const group = existingSlot.closest('[data-reminet-profile-badge-group]');
+        const slotUsername = existingSlotUsername || username;
+        if (group) attachProfileBadgeGroup(userNameSection, group);
+        ensureProfileActionPokeSlot(userNameSection, slotUsername);
+        return;
+      }
     }
   }
   
@@ -1637,50 +2082,63 @@ async function insertProfileBadge() {
   if (userNameSection.hasAttribute('data-reminet-processing')) {
     return;
   }
-  userNameSection.setAttribute('data-reminet-processing', 'true');
+  markReminetProcessing(userNameSection);
   
   // Create a unique key for this profile + location
-  const profileKey = `${username}-${window.location.pathname}`;
   if (processedProfiles.has(profileKey)) {
-    userNameSection.removeAttribute('data-reminet-processing');
+    const cached = cachedScoreData(username);
+    if (cached) {
+      const profileBadgeSlot = createBadgeSlot(username, { profile: true });
+      const profilePokeSlot = ensureProfileActionPokeSlot(userNameSection, username);
+      const profileBadgeGroup = document.createElement('span');
+      profileBadgeGroup.className = 'reminet-profile-badge-group';
+      profileBadgeGroup.dataset.reminetProfileBadgeGroup = 'true';
+      profileBadgeGroup.dataset.reminetUsername = username;
+      profileBadgeGroup.append(profileBadgeSlot);
+      attachProfileBadgeGroup(userNameSection, profileBadgeGroup);
+      const filled = fillProfileBadgeFromScore(profileBadgeSlot, profileBadgeGroup, cached, username);
+      if (filled) fillProfilePokeSlot(profilePokeSlot, filled.remiliaUsername);
+    }
+    clearReminetProcessing(userNameSection);
     return;
   }
+
+  const profileBadgeSlot = createBadgeSlot(username, { profile: true });
+  const profilePokeSlot = ensureProfileActionPokeSlot(userNameSection, username);
+  const profileBadgeGroup = document.createElement('span');
+  profileBadgeGroup.className = 'reminet-profile-badge-group';
+  profileBadgeGroup.dataset.reminetProfileBadgeGroup = 'true';
+  profileBadgeGroup.dataset.reminetUsername = username;
+  profileBadgeGroup.append(profileBadgeSlot);
+
+  attachProfileBadgeGroup(userNameSection, profileBadgeGroup);
+
   try {
     const scoreData = await fetchUserScore(username);
 
     if (scoreData === null) {
       processedProfiles.add(profileKey);
-      userNameSection.removeAttribute('data-reminet-processing');
+      markBadgeSlotEmpty(profileBadgeSlot);
+      clearReminetProcessing(userNameSection);
       return;
     }
 
     if (!scoreData) {
-      userNameSection.removeAttribute('data-reminet-processing');
+      markBadgeSlotEmpty(profileBadgeSlot);
+      clearReminetProcessing(userNameSection);
       return;
     }
 
     processedProfiles.add(profileKey);
 
-    userNameSection.removeAttribute('data-reminet-processing');
+    clearReminetProcessing(userNameSection);
     void upgradeProfileTrophyBanner(scoreData.remiliaUsername || scoreData.username || username, window.location.pathname);
-    const badge = createScoreBadge(scoreData, { includePokeInside: false });
-    badge.style.marginLeft = '0';
-    badge.style.display = 'inline-flex';
-    badge.style.verticalAlign = 'middle';
-    badge.setAttribute('data-profile-badge', username);
-    const profileBadgeGroup = createProfileBadgeGroup(badge, scoreData.remiliaUsername || username);
-    
-    // Find the handle text (the @username part)
-    const handleSpan = userNameSection.querySelector('span[style*="color"]');
-    if (handleSpan && handleSpan.textContent.startsWith('@')) {
-      handleSpan.parentElement.appendChild(profileBadgeGroup);
-    } else {
-      // Fallback: append to the username section
-      userNameSection.appendChild(profileBadgeGroup);
-    }
+    const filled = fillProfileBadgeFromScore(profileBadgeSlot, profileBadgeGroup, scoreData, username);
+    if (filled) fillProfilePokeSlot(profilePokeSlot, filled.remiliaUsername);
   } catch (error) {
     console.error('Error inserting profile badge:', error);
-    userNameSection.removeAttribute('data-reminet-processing');
+    markBadgeSlotEmpty(profileBadgeSlot);
+    clearReminetProcessing(userNameSection);
     // Remove from processed set on error so we can retry
     processedProfiles.delete(profileKey);
   }
@@ -1774,41 +2232,89 @@ async function processGroupChatAvatars() {
   }
 }
 
-// Process all visible user elements
-async function processUserElements() {
-  if (!remistatsEnabled) return;
-  const tweets = document.querySelectorAll('[data-testid="tweet"]');
-  const userCells = document.querySelectorAll('[data-testid="UserCell"]');
-
-  const elements = [...tweets, ...userCells];
-
-  for (const element of elements) {
-    await insertBadge(element);
-  }
-
-  await insertProfileBadge();
-  await processGroupChatAvatars();
-}
-
 async function processSurfaceElement(element, username = null) {
-  if (!remistatsEnabled) return;
+  if (!remistatsEnabled) return { status: 'disabled', username: '' };
   if (element.matches?.('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]')) {
     const startedAt = performance.now();
     try {
-      await insertBadge(element, username);
+      return await insertBadge(element, username);
     } finally {
       recordFeatureTiming('remistats', 'insertBadge', startedAt);
     }
   }
+  return { status: 'unsupported-surface', username: '' };
+}
+
+function reconcileMountedSurfaces(limit = 160) {
+  if (!lifecycleActive() || !remistatsEnabled) return;
+  const surfaces = Array.from(document.querySelectorAll('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]'))
+    .filter(shouldReconcileSurface)
+    .slice(0, limit);
+  let index = 0;
+  const processNext = () => {
+    if (!lifecycleActive() || !remistatsEnabled || index >= surfaces.length) return;
+    const batch = surfaces.slice(index, index + 6);
+    index += batch.length;
+    for (const element of batch) {
+      prepareSurfaceForReconcile(element);
+      void processSurfaceElement(element);
+    }
+    if (index < surfaces.length) runtimeScheduler.idle(processNext, { timeout: 1200 });
+  };
+  runtimeScheduler.idle(processNext, { timeout: 250 });
+}
+
+function scheduleSurfaceReconciliation(delays = [250, 1500, 4000]) {
+  for (const delay of delays) {
+    const cancel = runtimeScheduler.timeout(() => reconcileMountedSurfaces(), delay);
+    addRuntimeDisposable(cancel);
+  }
+}
+
+function shouldReconcileSurface(element) {
+  if (!element?.isConnected) return false;
+  if (element.closest('[data-testid="quoteTweet"]')) return false;
+  const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
+    .some((badge) => !badge.closest('[data-testid="quoteTweet"]'));
+  if (hasOwnBadge) return false;
+  return Boolean(
+    element.matches?.('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]')
+  );
+}
+
+function prepareSurfaceForReconcile(element) {
+  if (surfaceProcessingIsStale(element)) {
+    clearReminetProcessing(element);
+  }
+  for (const slot of Array.from(element.querySelectorAll('[data-reminet-badge-slot][data-reminet-state="empty"], [data-milxdy-tweet-slot="remistats-badge"][data-reminet-state="empty"]'))) {
+    if (slot.closest('[data-testid="quoteTweet"]')) continue;
+    slot.dataset.reminetState = 'reserved';
+    slot.removeAttribute('aria-hidden');
+  }
 }
 
 function scheduleGroupChatAvatars(delay = 250) {
-  if (!isInGroupChat()) return;
-  if (groupChatScanTimer) window.clearTimeout(groupChatScanTimer);
-  groupChatScanTimer = window.setTimeout(() => {
+  if (!lifecycleActive() || !isInGroupChat()) return;
+  if (groupChatScanTimer) groupChatScanTimer();
+  groupChatScanTimer = runtimeScheduler.timeout(() => {
     groupChatScanTimer = null;
+    if (!lifecycleActive()) return;
     void processGroupChatAvatars();
   }, delay);
+}
+
+export function boot(context = {}) {
+  runtimeScheduleScan = context.scheduleScan || runtimeScheduleScan;
+  runtimeScheduler = context.scheduler || runtimeScheduler;
+  runtimeSendMessage = context.sendMessage || runtimeSendMessage;
+  addRuntimeDisposable = context.addDisposable || (() => undefined);
+  lifecycleSignal = context.signal || null;
+  if (booted) return;
+  booted = true;
+  const bootSignal = lifecycleSignal;
+  bootSignal?.addEventListener?.('abort', disable, { once: true });
+  addRuntimeDisposable(() => bootSignal?.removeEventListener?.('abort', disable));
+  init();
 }
 
 function init() {
@@ -1819,9 +2325,11 @@ function init() {
     loadPokeThemeSettings(),
     loadVisualThemeSettings(),
   ]).then(([settings]) => {
+    if (!lifecycleActive()) return;
     remistatsEnabled = settings['milxdy.remistats.enabled'] !== false;
     if (remistatsEnabled) {
-      scheduleTwitterScan();
+      runtimeScheduleScan();
+      scheduleSurfaceReconciliation();
       insertProfileBadge();
       scheduleGroupChatAvatars();
     } else {
@@ -1829,7 +2337,8 @@ function init() {
     }
   });
 
-  chrome.storage.onChanged.addListener((changes, area) => {
+  const storageListener = (changes, area) => {
+    if (!lifecycleActive()) return;
     if (area === 'local' && (changes.beetolColor || changes.beetolMode)) {
       applyPokeThemeSettings(changes.beetolColor?.newValue, changes.beetolMode?.newValue);
       return;
@@ -1842,7 +2351,8 @@ function init() {
     if (changes['milxdy.remistats.enabled']) {
       remistatsEnabled = changes['milxdy.remistats.enabled'].newValue !== false;
       if (remistatsEnabled) {
-        scheduleTwitterScan();
+        runtimeScheduleScan();
+        scheduleSurfaceReconciliation();
         insertProfileBadge();
         scheduleGroupChatAvatars();
       } else {
@@ -1852,51 +2362,86 @@ function init() {
     }
     if (iconSettingChanged(changes)) {
       void loadIconSettings().then(() => {
-        if (!remistatsEnabled) return;
-        processUserElements();
+        if (!lifecycleActive() || !remistatsEnabled) return;
+        runtimeScheduleScan();
+        scheduleSurfaceReconciliation([100, 1000]);
+        void insertProfileBadge();
       });
     }
-  });
+  };
+  chrome.storage.onChanged.addListener(storageListener);
+  addRuntimeDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
 
-  subscribeTwitterSurfaces((surface) => {
-    if (surface.kind === 'tweet' || surface.kind === 'userCell') {
-      void processSurfaceElement(surface.element, surface.handle);
-    }
-    if (surface.kind === 'profile') {
-      void insertProfileBadge();
-    }
-    if (surface.kind === 'directMessage') {
-      scheduleGroupChatAvatars();
-    }
-  });
+  runtimeScheduleScan();
+  scheduleSurfaceReconciliation([5000]);
+}
 
-  window.setInterval(() => {
-    if (!remistatsEnabled) return;
-    if (location.href !== lastProfileUrl) {
-      lastProfileUrl = location.href;
-      processedProfiles.clear();
-      incomingPokeCache = null;
-      scheduleTwitterScan();
-      window.setTimeout(insertProfileBadge, 350);
-      scheduleGroupChatAvatars(350);
-    }
-  }, 2500);
+export function onSurface(surface) {
+  if (!lifecycleActive() || !remistatsEnabled) return;
+  if (surface.kind === 'tweet' || surface.kind === 'userCell') {
+    void processSurfaceElement(surface.element, surface.handle);
+  }
+  if (surface.kind === 'profile') {
+    void insertProfileBadge();
+  }
+  if (surface.kind === 'directMessage') {
+    scheduleGroupChatAvatars();
+  }
+}
+
+export function onRouteChange(route) {
+  if (!lifecycleActive() || !remistatsEnabled || route.href === lastProfileUrl) return;
+  lastProfileUrl = route.href;
+  processedProfiles.clear();
+  incomingPokeCache = null;
+  runtimeScheduleScan();
+  scheduleSurfaceReconciliation([200, 1200, 3500]);
+  if (routeProfileTimer) routeProfileTimer();
+  routeProfileTimer = runtimeScheduler.timeout(() => {
+    routeProfileTimer = null;
+    if (!lifecycleActive()) return;
+    void insertProfileBadge();
+  }, 350);
+  scheduleGroupChatAvatars(350);
+}
+
+export function disable() {
+  remistatsEnabled = false;
+  clearAllPokeCountdowns();
+  if (tooltipHideTimer) {
+    window.clearTimeout(tooltipHideTimer);
+    tooltipHideTimer = null;
+  }
+  activeTooltipBadge = null;
+  clearRemiStatsBadges();
+}
+
+export function dispose() {
+  disable();
+  removeRemiStatsDelegation?.();
+  if (groupChatScanTimer) {
+    groupChatScanTimer();
+    groupChatScanTimer = null;
+  }
+  if (routeProfileTimer) {
+    routeProfileTimer();
+    routeProfileTimer = null;
+  }
+  addRuntimeDisposable = () => undefined;
+  lifecycleSignal = null;
+  booted = false;
+}
+
+function lifecycleActive() {
+  return booted && lifecycleSignal?.aborted !== true;
 }
 
 function clearRemiStatsBadges() {
-  for (const node of document.querySelectorAll('[data-reminet-profile-badge-group], [data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
+  for (const node of document.querySelectorAll('[data-reminet-profile-badge-group], [data-reminet-profile-action-poke-slot], [data-reminet-action-poke-group], [data-reminet-badge-slot], [data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
     node.remove();
   }
-  for (const node of document.querySelectorAll('[data-reminet-processing]')) {
-    node.removeAttribute('data-reminet-processing');
+  for (const node of Array.from(reminetProcessingElements)) {
+    clearReminetProcessing(node);
   }
 }
 
-// Wait for page to be ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
-} else {
-  init();
-}
-
-export {};

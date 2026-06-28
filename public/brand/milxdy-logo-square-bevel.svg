@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="420" viewBox="0 0 420 420" role="img" aria-labelledby="title desc">
+  <title id="title">milXdy MX square logo with blue bevel border</title>
+  <desc id="desc">Square milXdy mark with a lowercase pink m and a large uppercase X over a cloud-derived blue halftone background with a beveled blue frame.</desc>
+  <defs>
+    <style>
+      .word {
+        fill: #ff19d8;
+        font-family: "Arial Rounded MT Bold", "Nunito", "Avenir Next Rounded", Arial, sans-serif;
+        font-size: 138px;
+        font-weight: 800;
+        paint-order: stroke fill;
+        stroke: #ffffff;
+        stroke-linejoin: round;
+        stroke-width: 12px;
+      }
+
+      .x-main {
+        fill: #ff19d8;
+        paint-order: stroke fill;
+        stroke: #ffffff;
+        stroke-linejoin: round;
+        stroke-width: 34px;
+      }
+    </style>
+  </defs>
+
+  <rect x="30" y="30" width="360" height="360" fill="#ffffff"/>
+  <image href="milxdy-logo-square-cloud-halftone-bg.png" x="30" y="30" width="360" height="360" preserveAspectRatio="none"/>
+
+  <path d="M20 18h382l-12 16H34z" fill="#bed3e5"/>
+  <path d="M402 18v384l-12-12V34z" fill="#809ab3"/>
+  <path d="M20 18v384l14-12V34z" fill="#9eb8cf"/>
+  <path d="M20 402h382l-12-12H34z" fill="#6f8da8"/>
+  <rect x="30" y="30" width="360" height="360" fill="none" stroke="#9eb8cf" stroke-width="10"/>
+  <rect x="37" y="37" width="346" height="346" fill="none" stroke="#d4e5f2" stroke-width="4"/>
+
+  <g transform="translate(72 260)">
+    <text class="word" x="0" y="0">m</text>
+    <g transform="translate(108 -135) scale(0.62)">
+      <path class="x-main" d="M178.57 127.15 290.27 0h-26.46l-97.03 110.38L89.34 0H0l117.13 166.93L0 300.25h26.46l102.4-116.59 81.8 116.59h89.34M36.01 19.54H76.66l187.13 262.13h-40.66"/>
+      <path fill="#ffffff" d="M38 21h28l184 258h-28z"/>
+    </g>
+  </g>
+</svg>

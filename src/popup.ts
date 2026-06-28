@@ -1,10 +1,25 @@
 type Area = "local" | "sync";
 type ControlKind = "boolean" | "number" | "string" | "nullableString" | "handleList";
 type ThemeMode = "light" | "dark" | "system";
+type BuildProfile = "lite" | "balanced" | "full";
+type BuildTarget = "chromium" | "firefox";
+type PopupFeatureId = "rootVisuals" | "post-reading" | "wiki" | "remistats" | "miladymaxxer" | "beetol" | "reminetChat";
 
+declare const MILXDY_BUILD_PROFILE: string;
+declare const MILXDY_BUILD_TARGET: string;
+
+import type { AppPreset } from "./shared/appPlatform";
+import { FIRST_PARTY_APPS } from "./shared/firstPartyApps";
+import {
+  PERFORMANCE_MODE_KEY,
+  budgetForPerformanceMode,
+  normalizePerformanceMode,
+  type PerformanceMode,
+} from "./shared/performanceMode";
 import {
   DEFAULT_RESKIN_PROFILE,
   DEFAULT_VISUAL_THEME,
+  PROFILE_AUDIO_PRESETS,
   RESKIN_PROFILE_KEY,
   VISUAL_CUSTOM_THEMES_KEY,
   VISUAL_PRESETS,
@@ -14,6 +29,7 @@ import {
   type ReskinProfile,
   type SavedVisualTheme,
   type VisualThemeSettings,
+  type ProfileAudioSettings,
 } from "./shared/reskinProfile";
 
 type ControlBinding = {
@@ -38,8 +54,20 @@ const X_FEEDBACK_REPLY_URL = "https://x.com/intent/tweet";
 const X_FEEDBACK_POST_ID = "2069113443664220227";
 const X_FEEDBACK_COLLECTOR_URL = `https://x.com/MiladyBonkle/status/${X_FEEDBACK_POST_ID}`;
 const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/";
+const X_HOME_URL = "https://x.com/home";
 const LAST_POKE_DIAGNOSTIC_KEY = "milxdy.remistats.lastPokeDiagnostic";
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
+const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
+const ONBOARDING_ACTIVE_KEY = "milxdy.onboarding.active";
+const ONBOARDING_TOOLBAR_PINNED_KEY = "milxdy.onboarding.toolbarPinned";
+const RAIL_PIN_KEY = "milxdy.apps.railPinned";
+const BUILD_PROFILE = normalizeBuildProfile(MILXDY_BUILD_PROFILE);
+const BUILD_TARGET = normalizeBuildTarget(MILXDY_BUILD_TARGET);
+const PROFILE_FEATURES: Record<BuildProfile, readonly PopupFeatureId[]> = {
+  lite: ["rootVisuals", "post-reading"],
+  balanced: ["rootVisuals", "post-reading", "wiki", "remistats"],
+  full: ["rootVisuals", "post-reading", "wiki", "remistats", "miladymaxxer", "beetol", "reminetChat"],
+};
 
 type UpdateStatus = {
   checkedAt: number;
@@ -48,6 +76,8 @@ type UpdateStatus = {
   latestUrl: string | null;
   latestAssetUrl?: string | null;
   latestAssetName?: string | null;
+  expectedAssetName?: string | null;
+  matchedExpectedAsset?: boolean;
   updateAvailable: boolean;
   error?: string;
 };
@@ -81,6 +111,7 @@ let visualSelectedThemeId = "new";
 
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
+  performanceMode: { area: "local", key: PERFORMANCE_MODE_KEY, kind: "string", fallback: "balanced" },
   reskinProfile: { area: "local", key: RESKIN_PROFILE_KEY, kind: "string", fallback: DEFAULT_RESKIN_PROFILE },
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
   "wiki.previewsEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "previewsEnabled", kind: "boolean", fallback: true },
@@ -90,41 +121,48 @@ const bindings: Record<string, ControlBinding> = {
   "wiki.maxLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLinksPerPost", kind: "number", fallback: 4 },
   "wiki.maxLowConfidenceLinksPerPost": { area: "local", key: WIKI_SETTINGS_KEY, property: "maxLowConfidenceLinksPerPost", kind: "number", fallback: 1 },
   "wiki.linkColor": { area: "local", key: WIKI_SETTINGS_KEY, property: "linkColor", kind: "string", fallback: "#ff4fbf" },
-  "postreader.enabled": { area: "sync", key: "enabled", kind: "boolean", fallback: true },
-  "postreader.speed": { area: "sync", key: "speed", kind: "number", fallback: 1 },
-  "postreader.volume": { area: "sync", key: "volume", kind: "number", fallback: 1 },
-  "postreader.voiceURI": { area: "sync", key: "voiceURI", kind: "nullableString", fallback: null },
-  "postreader.autoVoice": { area: "sync", key: "autoVoice", kind: "boolean", fallback: true },
-  "postreader.ttsEngine": { area: "sync", key: "ttsEngine", kind: "string", fallback: "web-speech" },
-  "postreader.customTtsEndpoint": { area: "sync", key: "customTtsEndpoint", kind: "nullableString", fallback: null },
-  "postreader.customTtsTimingMode": { area: "sync", key: "customTtsTimingMode", kind: "string", fallback: "engine" },
-  "postreader.autoplayNext": { area: "sync", key: "autoplayNext", kind: "boolean", fallback: false },
-  "postreader.autoplayMode": { area: "sync", key: "autoplayMode", kind: "string", fallback: "visible" },
-  "postreader.skipPromotedPosts": { area: "sync", key: "skipPromotedPosts", kind: "boolean", fallback: true },
-  "postreader.endOfTweetDing": { area: "sync", key: "endOfTweetDing", kind: "boolean", fallback: false },
-  "postreader.includeQuotes": { area: "sync", key: "includeQuotes", kind: "boolean", fallback: true },
-  "postreader.fetchFullQuotes": { area: "sync", key: "fetchFullQuotes", kind: "boolean", fallback: false },
-  "postreader.fullQuoteDisplay": { area: "sync", key: "fullQuoteDisplay", kind: "string", fallback: "scroll" },
-  "postreader.includeHyperlinks": { area: "sync", key: "includeHyperlinks", kind: "boolean", fallback: false },
-  "postreader.includeImageAltText": { area: "sync", key: "includeImageAltText", kind: "boolean", fallback: true },
-  "postreader.includeImageOcr": { area: "sync", key: "includeImageOcr", kind: "boolean", fallback: false },
-  "postreader.includeLinkPreviews": { area: "sync", key: "includeLinkPreviews", kind: "boolean", fallback: true },
-  "postreader.expandShowMore": { area: "sync", key: "expandShowMore", kind: "boolean", fallback: true },
-  "postreader.activeTweetHighlight": { area: "sync", key: "activeTweetHighlight", kind: "boolean", fallback: true },
-  "postreader.bodyHighlightMode": { area: "sync", key: "bodyHighlightMode", kind: "string", fallback: "smooth" },
-  "postreader.playerPosition": { area: "sync", key: "playerPosition", kind: "string", fallback: "top-right" },
-  "postreader.buttonPlacement": { area: "sync", key: "buttonPlacement", kind: "string", fallback: "auto" },
-  "postreader.useHandles": { area: "sync", key: "useHandles", kind: "boolean", fallback: false },
-  "postreader.keyNextTweet": { area: "sync", key: "keyNextTweet", kind: "string", fallback: "Ctrl+Alt+ArrowDown" },
-  "postreader.keyPreviousTweet": { area: "sync", key: "keyPreviousTweet", kind: "string", fallback: "Ctrl+Alt+ArrowUp" },
-  "postreader.keyNextChunk": { area: "sync", key: "keyNextChunk", kind: "string", fallback: "Ctrl+Alt+ArrowRight" },
-  "postreader.keyPreviousChunk": { area: "sync", key: "keyPreviousChunk", kind: "string", fallback: "Ctrl+Alt+ArrowLeft" },
-  "postreader.keySkipOcr": { area: "sync", key: "keySkipOcr", kind: "string", fallback: "Ctrl+Alt+S" },
-  "postreader.keyPlayPause": { area: "sync", key: "keyPlayPause", kind: "string", fallback: "Ctrl+Alt+\\" },
+  "post-reading.enabled": { area: "sync", key: "enabled", kind: "boolean", fallback: true },
+  "post-reading.speed": { area: "sync", key: "speed", kind: "number", fallback: 1 },
+  "post-reading.volume": { area: "sync", key: "volume", kind: "number", fallback: 1 },
+  "post-reading.voiceURI": { area: "sync", key: "voiceURI", kind: "nullableString", fallback: null },
+  "post-reading.autoVoice": { area: "sync", key: "autoVoice", kind: "boolean", fallback: true },
+  "post-reading.ttsEngine": { area: "sync", key: "ttsEngine", kind: "string", fallback: "web-speech" },
+  "post-reading.customTtsEndpoint": { area: "sync", key: "customTtsEndpoint", kind: "nullableString", fallback: null },
+  "post-reading.customTtsTimingMode": { area: "sync", key: "customTtsTimingMode", kind: "string", fallback: "engine" },
+  "post-reading.autoplayNext": { area: "sync", key: "autoplayNext", kind: "boolean", fallback: true },
+  "post-reading.autoplayMode": { area: "sync", key: "autoplayMode", kind: "string", fallback: "autoscroll" },
+  "post-reading.skipPromotedPosts": { area: "sync", key: "skipPromotedPosts", kind: "boolean", fallback: true },
+  "post-reading.endOfTweetDing": { area: "sync", key: "endOfTweetDing", kind: "boolean", fallback: true },
+  "post-reading.includeQuotes": { area: "sync", key: "includeQuotes", kind: "boolean", fallback: true },
+  "post-reading.fetchFullQuotes": { area: "sync", key: "fetchFullQuotes", kind: "boolean", fallback: true },
+  "post-reading.fullQuoteDisplay": { area: "sync", key: "fullQuoteDisplay", kind: "string", fallback: "scroll" },
+  "post-reading.includeHyperlinks": { area: "sync", key: "includeHyperlinks", kind: "boolean", fallback: false },
+  "post-reading.includeImageAltText": { area: "sync", key: "includeImageAltText", kind: "boolean", fallback: true },
+  "post-reading.includeImageOcr": { area: "sync", key: "includeImageOcr", kind: "boolean", fallback: true },
+  "post-reading.includeLinkPreviews": { area: "sync", key: "includeLinkPreviews", kind: "boolean", fallback: true },
+  "post-reading.expandShowMore": { area: "sync", key: "expandShowMore", kind: "boolean", fallback: true },
+  "post-reading.activeTweetHighlight": { area: "sync", key: "activeTweetHighlight", kind: "boolean", fallback: true },
+  "post-reading.bodyHighlightMode": { area: "sync", key: "bodyHighlightMode", kind: "string", fallback: "smooth" },
+  "post-reading.playerPosition": { area: "sync", key: "playerPosition", kind: "string", fallback: "top-right" },
+  "post-reading.buttonPlacement": { area: "sync", key: "buttonPlacement", kind: "string", fallback: "auto" },
+  "post-reading.useHandles": { area: "sync", key: "useHandles", kind: "boolean", fallback: false },
+  "post-reading.keyNextTweet": { area: "sync", key: "keyNextTweet", kind: "string", fallback: "Ctrl+Alt+ArrowDown" },
+  "post-reading.keyPreviousTweet": { area: "sync", key: "keyPreviousTweet", kind: "string", fallback: "Ctrl+Alt+ArrowUp" },
+  "post-reading.keyNextChunk": { area: "sync", key: "keyNextChunk", kind: "string", fallback: "Ctrl+Alt+ArrowRight" },
+  "post-reading.keyPreviousChunk": { area: "sync", key: "keyPreviousChunk", kind: "string", fallback: "Ctrl+Alt+ArrowLeft" },
+  "post-reading.keySkipOcr": { area: "sync", key: "keySkipOcr", kind: "string", fallback: "Ctrl+Alt+S" },
+  "post-reading.keyPlayPause": { area: "sync", key: "keyPlayPause", kind: "string", fallback: "Ctrl+Alt+\\" },
   "remistats.enabled": { area: "sync", key: "milxdy.remistats.enabled", kind: "boolean", fallback: true },
   "remistats.showTooltips": { area: "sync", key: "showTooltips", kind: "boolean", fallback: true },
   "remistats.soundsEnabled": { area: "sync", key: "soundsEnabled", kind: "boolean", fallback: true },
   "remistats.soundVolume": { area: "sync", key: "soundVolume", kind: "number", fallback: 0.6 },
+  "reminetChat.sounds.enabled": { area: "sync", key: "milxdy.reminetChat.sounds.enabled", kind: "boolean", fallback: true },
+  "reminetChat.sounds.volume": { area: "sync", key: "milxdy.reminetChat.sounds.volume", kind: "number", fallback: 0.55 },
+  "reminetChat.sounds.send": { area: "sync", key: "milxdy.reminetChat.sounds.send", kind: "boolean", fallback: true },
+  "reminetChat.sounds.react": { area: "sync", key: "milxdy.reminetChat.sounds.react", kind: "boolean", fallback: true },
+  "reminetChat.sounds.reactToMe": { area: "sync", key: "milxdy.reminetChat.sounds.reactToMe", kind: "boolean", fallback: true },
+  "reminetChat.sounds.message": { area: "sync", key: "milxdy.reminetChat.sounds.message", kind: "boolean", fallback: true },
+  "reminetChat.sounds.poke": { area: "sync", key: "milxdy.reminetChat.sounds.poke", kind: "boolean", fallback: true },
   "remistats.icons.enabled": { area: "sync", key: "milxdy.remistats.icons.enabled", kind: "boolean", fallback: true },
   "remistats.icons.score": { area: "sync", key: "milxdy.remistats.icons.score", kind: "boolean", fallback: true },
   "remistats.icons.beetle": { area: "sync", key: "milxdy.remistats.icons.beetle", kind: "boolean", fallback: true },
@@ -133,6 +171,7 @@ const bindings: Record<string, ControlBinding> = {
   "milady.soundEnabled": { area: "sync", key: "soundEnabled", kind: "boolean", fallback: true },
   "milady.showLevelBadge": { area: "sync", key: "showLevelBadge", kind: "boolean", fallback: true },
   "milady.includeRemiStatsBeetles": { area: "sync", key: "includeRemiStatsBeetles", kind: "boolean", fallback: true },
+  "milady.hideNonMiladyOrBeetlePosts": { area: "sync", key: "hideNonMiladyOrBeetlePosts", kind: "boolean", fallback: false },
   "milady.cardTheme": { area: "sync", key: "cardTheme", kind: "string", fallback: "full" },
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
@@ -143,22 +182,100 @@ const bindings: Record<string, ControlBinding> = {
 void boot();
 
 async function boot(): Promise<void> {
+  applyBuildProfileAvailability();
   setupTabs();
   await setupThemeControls();
   setupUpdateStatus();
   await migrateBeetolSettings();
   await loadControls();
+  setupPerformanceModeControl();
   await setupVisualSettings();
+  await setupOnboarding();
   setupWikiMaxLinksControl();
   setupWikiPreloadTemplateAction();
   setupWikiAiHelp();
   setupRemiStatsIconControls();
   setupReportActions();
-  setupPostreaderVoiceSelect();
+  setupPostReadingVoiceSelect();
   await renderWikiLaterItems();
   observeWikiLaterItems();
   await setupBeetolPanel();
   await renderStatus();
+}
+
+function normalizeBuildProfile(value: unknown): BuildProfile {
+  return value === "lite" || value === "balanced" || value === "full" ? value : "full";
+}
+
+function normalizeBuildTarget(value: unknown): BuildTarget {
+  return value === "firefox" ? "firefox" : "chromium";
+}
+
+function applyBuildProfileAvailability(): void {
+  document.documentElement.dataset.milxdyBuildProfile = BUILD_PROFILE;
+  document.documentElement.dataset.milxdyBuildTarget = BUILD_TARGET;
+  for (const control of Array.from(document.querySelectorAll<HTMLElement>("[data-control]"))) {
+    const feature = popupFeatureForControl(control.dataset.control || "");
+    if (feature && !profileHasFeature(feature)) hideUnavailableControl(control);
+  }
+  setPanelAvailability("wiki", profileHasFeature("wiki"));
+  setPanelAvailability("remistats", profileHasFeature("remistats") || profileHasFeature("beetol") || profileHasFeature("reminetChat"));
+  hideEmptySettingGroups();
+  ensureVisibleActivePanel();
+}
+
+function popupFeatureForControl(control: string): PopupFeatureId | null {
+  if (control.startsWith("post-reading.")) return "post-reading";
+  if (control.startsWith("wiki.")) return "wiki";
+  if (control.startsWith("remistats.beetol.")) return "beetol";
+  if (control.startsWith("remistats.")) return "remistats";
+  if (control.startsWith("milady.")) return "miladymaxxer";
+  if (control.startsWith("reminetChat.")) return "reminetChat";
+  return null;
+}
+
+function profileHasFeature(feature: PopupFeatureId): boolean {
+  return PROFILE_FEATURES[BUILD_PROFILE].includes(feature);
+}
+
+function hideUnavailableControl(control: HTMLElement): void {
+  const row = control.closest<HTMLElement>(".setting, .field, .setting-group-nested, .inline-actions") || control;
+  row.hidden = true;
+  row.dataset.profileUnavailable = "true";
+}
+
+function setPanelAvailability(panelId: string, available: boolean): void {
+  const tab = document.querySelector<HTMLElement>(`.tab[data-panel="${panelId}"]`);
+  const panel = document.querySelector<HTMLElement>(`.panel[data-panel="${panelId}"]`);
+  if (tab) {
+    tab.hidden = !available;
+    tab.dataset.profileUnavailable = String(!available);
+  }
+  if (panel) {
+    panel.hidden = !available;
+    panel.dataset.profileUnavailable = String(!available);
+  }
+}
+
+function hideEmptySettingGroups(): void {
+  for (const group of Array.from(document.querySelectorAll<HTMLElement>(".setting-group"))) {
+    const controls = Array.from(group.querySelectorAll<HTMLElement>("[data-control], input[id], select[id], button[id]"));
+    if (controls.length === 0) continue;
+    const hasVisibleControl = controls.some((control) => !control.closest<HTMLElement>("[hidden]"));
+    if (!hasVisibleControl) {
+      group.hidden = true;
+      group.dataset.profileUnavailable = "true";
+    }
+  }
+}
+
+function ensureVisibleActivePanel(): void {
+  const activePanel = document.querySelector<HTMLElement>(".panel.is-active");
+  if (activePanel && !activePanel.hidden) return;
+  const fallbackPanel = document.querySelector<HTMLElement>('.panel[data-panel="suite"]');
+  const fallbackTab = document.querySelector<HTMLElement>('.tab[data-panel="suite"]');
+  for (const panel of Array.from(document.querySelectorAll<HTMLElement>(".panel"))) panel.classList.toggle("is-active", panel === fallbackPanel);
+  for (const tab of Array.from(document.querySelectorAll<HTMLElement>(".tab"))) tab.classList.toggle("is-active", tab === fallbackTab);
 }
 
 async function setupThemeControls(): Promise<void> {
@@ -196,6 +313,283 @@ function renderThemeChoice(buttons: HTMLButtonElement[], active: ThemeMode): voi
   }
 }
 
+function setupPerformanceModeControl(): void {
+  const select = document.getElementById("performanceMode") as HTMLSelectElement | null;
+  const detail = document.getElementById("performanceModeDetail");
+  if (!select || !detail) return;
+  const render = () => {
+    const mode = normalizePerformanceMode(select.value);
+    detail.textContent = performanceModeSummary(mode);
+  };
+  select.addEventListener("change", render);
+  render();
+}
+
+function performanceModeSummary(mode: PerformanceMode): string {
+  const budget = budgetForPerformanceMode(mode);
+  const preload = budget.idlePreloadDelayMs === null
+    ? "no idle preload"
+    : `idle preload after ${Math.round(budget.idlePreloadDelayMs / 1000)}s`;
+  const safety = budget.safetyScanIntervalMs === null
+    ? "no safety scans"
+    : `safety scan ${Math.round(budget.safetyScanIntervalMs / 1000)}s`;
+  const diagnostics = budget.diagnostics ? ", diagnostics on" : "";
+  const label = mode === "fast"
+    ? "Fast keeps X responsive"
+    : mode === "balanced"
+      ? "Balanced is the default"
+      : mode === "full"
+        ? "Full warms more apps"
+        : "Developer records extra diagnostics";
+  return `${label}: ${budget.maxIdleTasksPerFrame} idle tasks/frame, ${budget.networkConcurrency} network slots, ${preload}, ${safety}${diagnostics}.`;
+}
+
+async function setupOnboarding(): Promise<void> {
+  const root = document.getElementById("onboardingStart");
+  if (!root) return;
+  const active = await shouldShowOnboarding();
+  root.hidden = !active;
+  if (!active) return;
+
+  const applyFull = document.getElementById("onboardingApplyFull") as HTMLButtonElement | null;
+  const openRemilia = document.getElementById("onboardingOpenRemilia") as HTMLButtonElement | null;
+  const retryRemilia = document.getElementById("onboardingRetryRemilia") as HTMLButtonElement | null;
+  const pinToolbar = document.getElementById("onboardingPinToolbar") as HTMLButtonElement | null;
+  const openX = document.getElementById("onboardingOpenX") as HTMLButtonElement | null;
+  const dismiss = document.getElementById("onboardingDismiss") as HTMLButtonElement | null;
+  const appearance = document.getElementById("onboardingAppearance") as HTMLButtonElement | null;
+  const audio = document.getElementById("onboardingAudio") as HTMLButtonElement | null;
+
+  applyFull?.addEventListener("click", () => {
+    applyFull.disabled = true;
+    void applyFullStartSetup().finally(() => {
+      applyFull.disabled = false;
+    });
+  });
+  openRemilia?.addEventListener("click", () => {
+    void openExternalUrl(REMILIA_NET_LOGIN_URL);
+    showOnboardingMessage("Finish RemiliaNET sign-in, then retry the session.");
+  });
+  retryRemilia?.addEventListener("click", () => {
+    retryRemilia.disabled = true;
+    void renderOnboarding().finally(() => {
+      retryRemilia.disabled = false;
+    });
+  });
+  pinToolbar?.addEventListener("click", () => {
+    void chrome.storage.local.set({ [ONBOARDING_TOOLBAR_PINNED_KEY]: true }).then(renderOnboarding);
+  });
+  openX?.addEventListener("click", () => {
+    void openOrRefreshX();
+  });
+  appearance?.addEventListener("click", () => activatePanel("visual"));
+  audio?.addEventListener("click", () => activatePanel("audio"));
+  dismiss?.addEventListener("click", () => {
+    void chrome.storage.local.set({
+      [FIRST_RUN_STATUS_KEY]: "complete",
+      [ONBOARDING_ACTIVE_KEY]: false,
+    }).then(() => {
+      root.hidden = true;
+    });
+  });
+
+  await chrome.storage.local.set({ [ONBOARDING_ACTIVE_KEY]: true });
+  await renderOnboarding();
+}
+
+async function shouldShowOnboarding(): Promise<boolean> {
+  const stored = await chrome.storage.local.get({
+    [FIRST_RUN_STATUS_KEY]: "complete",
+    [ONBOARDING_ACTIVE_KEY]: false,
+  });
+  return stored[FIRST_RUN_STATUS_KEY] === "pending" || stored[ONBOARDING_ACTIVE_KEY] === true;
+}
+
+async function renderOnboarding(): Promise<void> {
+  const tasksRoot = document.getElementById("onboardingTasks");
+  const progress = document.getElementById("onboardingProgress");
+  const retryRemilia = document.getElementById("onboardingRetryRemilia") as HTMLButtonElement | null;
+  if (!tasksRoot || !progress) return;
+
+  const [local, remiliaAuth, hasXTab, toolbarPinnedByBrowser] = await Promise.all([
+    chrome.storage.local.get([
+      PERFORMANCE_MODE_KEY,
+      RESKIN_PROFILE_KEY,
+      RAIL_PIN_KEY,
+      ONBOARDING_TOOLBAR_PINNED_KEY,
+    ]),
+    chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null),
+    hasOpenXTab(),
+    isToolbarPinned(),
+  ]);
+  const signedIn = Boolean(remiliaAuth?.signedIn);
+  const fullSetup = await isFullStartSetup(local);
+  const toolbarPinned = toolbarPinnedByBrowser || local[ONBOARDING_TOOLBAR_PINNED_KEY] === true;
+  const tasks = [
+    ["Full suite enabled", fullSetup, "Performance, Max appearance, app enablement, and rail pins."],
+    ["RemiliaNET signed in", signedIn, signedIn ? "Browser session detected." : "Needed for Beetol, RemiStats pokes, and chat."],
+    ["Toolbar pinned", toolbarPinned, "Keep milXdy one click away after install."],
+    ["X opened or refreshed", hasXTab, "Open X so the side rail and enabled apps can mount."],
+  ] as const;
+  const done = tasks.filter(([, complete]) => complete).length;
+  progress.textContent = `${done}/${tasks.length} ready`;
+  if (retryRemilia) retryRemilia.textContent = signedIn ? "Session ready" : "Retry session";
+  tasksRoot.textContent = "";
+  for (const [label, complete, detail] of tasks) {
+    const item = document.createElement("li");
+    item.className = "onboarding-task";
+    item.dataset.done = String(complete);
+    item.innerHTML = `<span aria-hidden="true"></span><div><strong>${escapeHtml(label)}</strong><small>${escapeHtml(detail)}</small></div>`;
+    tasksRoot.append(item);
+  }
+}
+
+async function isFullStartSetup(local: Record<string, unknown>): Promise<boolean> {
+  const pinned = Array.isArray(local[RAIL_PIN_KEY]) ? local[RAIL_PIN_KEY] as unknown[] : [];
+  const expectedPinned = railAppIdsForPreset("full");
+  const appEnabledStates = await Promise.all(
+    FIRST_PARTY_APPS
+      .filter((app) => app.available !== false)
+      .map((app) => app.isEnabled()),
+  );
+  return normalizePerformanceMode(local[PERFORMANCE_MODE_KEY]) === "full"
+    && normalizeReskinProfile(local[RESKIN_PROFILE_KEY]) === "max"
+    && appEnabledStates.every(Boolean)
+    && expectedPinned.every((id) => pinned.includes(id));
+}
+
+async function applyFullStartSetup(): Promise<void> {
+  showOnboardingMessage("Applying full setup...");
+  await Promise.all(
+    FIRST_PARTY_APPS
+      .filter((app) => app.available !== false && app.setEnabled)
+      .map((app) => app.setEnabled?.(true)),
+  );
+  const fullTheme = { ...VISUAL_PRESETS.max };
+  const railPinned = railAppIdsForPreset("full");
+  await Promise.all([
+    persistVisualTheme(fullTheme),
+    applyProfileAudioPreset(PROFILE_AUDIO_PRESETS.max),
+    chrome.storage.local.set({
+      [PERFORMANCE_MODE_KEY]: "full",
+      [RAIL_PIN_KEY]: railPinned,
+      [FIRST_RUN_STATUS_KEY]: "complete",
+      [ONBOARDING_ACTIVE_KEY]: true,
+      [SETTINGS_THEME_KEY]: "system",
+      "milxdy.diagnostics.enabled": false,
+      "milxdy.reminetChat.enabled": true,
+      "milxdy.miladychan.enabled": true,
+      "milxdy.music.enabled": true,
+      "milxdy.remistats.beetol.enabled": true,
+      [WIKI_SETTINGS_KEY]: {
+        enabled: true,
+        previewsEnabled: true,
+        debugMode: false,
+        grokWorkflowMode: "socratic",
+        maxLinksPerPostEnabled: false,
+        maxLinksPerPost: 4,
+        maxLowConfidenceLinksPerPost: 1,
+        linkColor: "#ff4fbf",
+      },
+    }),
+    chrome.storage.sync.set({
+      enabled: true,
+      autoVoice: true,
+      autoplayNext: true,
+      includeQuotes: true,
+      includeImageAltText: true,
+      includeLinkPreviews: true,
+      expandShowMore: true,
+      activeTweetHighlight: true,
+      "milxdy.remistats.enabled": true,
+      showTooltips: true,
+      soundsEnabled: true,
+      soundVolume: 0.75,
+      mode: "milady",
+      soundEnabled: true,
+      showLevelBadge: true,
+      includeRemiStatsBeetles: true,
+      "milxdy.reminetChat.sounds.enabled": true,
+      "milxdy.reminetChat.sounds.send": true,
+      "milxdy.reminetChat.sounds.react": true,
+      "milxdy.reminetChat.sounds.reactToMe": true,
+      "milxdy.reminetChat.sounds.message": true,
+      "milxdy.reminetChat.sounds.poke": true,
+    }),
+  ]);
+  setControlValue("performanceMode", "full");
+  setControlValue("diagnosticsEnabled", false);
+  setControlValue("wiki.enabled", true);
+  setControlValue("wiki.previewsEnabled", true);
+  setControlValue("wiki.debugMode", false);
+  setControlValue("wiki.grokWorkflowMode", "socratic");
+  setControlValue("post-reading.enabled", true);
+  setControlValue("remistats.enabled", true);
+  setControlValue("remistats.showTooltips", true);
+  setControlValue("remistats.soundsEnabled", true);
+  setControlValue("remistats.soundVolume", 0.75);
+  setControlValue("milady.mode", "milady");
+  setControlValue("milady.soundEnabled", true);
+  setControlValue("milady.showLevelBadge", true);
+  setControlValue("milady.includeRemiStatsBeetles", true);
+  setControlValue("remistats.beetol.enabled", true);
+  setControlValue("reminetChat.enabled", true);
+  const performanceSelect = document.getElementById("performanceMode");
+  performanceSelect?.dispatchEvent(new Event("change"));
+  writeVisualEditor(fullTheme);
+  renderVisualPresetButtons();
+  showOnboardingMessage("Full setup is on. Sign in to RemiliaNET and refresh X to finish.");
+  await refreshXTabs();
+  await renderOnboarding();
+  await renderStatus();
+}
+
+function railAppIdsForPreset(preset: AppPreset): string[] {
+  return FIRST_PARTY_APPS
+    .filter((app) => app.available !== false
+      && app.dock
+      && app.hub?.rail.supported !== false
+      && app.hub?.presets.includes(preset))
+    .map((app) => app.id);
+}
+
+async function hasOpenXTab(): Promise<boolean> {
+  const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] }).catch(() => []);
+  return tabs.length > 0;
+}
+
+async function isToolbarPinned(): Promise<boolean> {
+  if (!chrome.action?.getUserSettings) return false;
+  const settings = await chrome.action.getUserSettings().catch(() => null);
+  return settings?.isOnToolbar === true;
+}
+
+async function openOrRefreshX(): Promise<void> {
+  const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] }).catch(() => []);
+  if (tabs.length === 0) {
+    await openExternalUrl(X_HOME_URL);
+  } else {
+    await Promise.all(tabs.map((tab) => tab.id ? chrome.tabs.reload(tab.id).catch(() => undefined) : Promise.resolve()));
+    const first = tabs.find((tab) => tab.id && tab.windowId);
+    if (first?.id && first.windowId) {
+      await chrome.tabs.update(first.id, { active: true }).catch(() => undefined);
+      await chrome.windows.update(first.windowId, { focused: true }).catch(() => undefined);
+    }
+  }
+  showOnboardingMessage("X is ready. The enabled rail apps will mount on refresh.");
+  await renderOnboarding();
+}
+
+function activatePanel(panelId: string): void {
+  const tab = document.querySelector<HTMLButtonElement>(`.tab[data-panel="${cssEscape(panelId)}"]`);
+  tab?.click();
+}
+
+function showOnboardingMessage(text: string): void {
+  const message = document.getElementById("onboardingMessage");
+  if (message) message.textContent = text;
+}
+
 function setupRemiStatsIconControls(): void {
   const enabled = document.querySelector<HTMLInputElement>('[data-control="remistats.icons.enabled"]');
   const children = Array.from(document.querySelectorAll<HTMLInputElement>(
@@ -212,8 +606,8 @@ function setupRemiStatsIconControls(): void {
   syncDisabled();
 }
 
-function setupPostreaderVoiceSelect(): void {
-  const select = document.querySelector<HTMLSelectElement>('[data-control="postreader.voiceURI"]');
+function setupPostReadingVoiceSelect(): void {
+  const select = document.querySelector<HTMLSelectElement>('[data-control="post-reading.voiceURI"]');
   if (!select || !("speechSynthesis" in window)) return;
 
   const render = () => {
@@ -283,10 +677,14 @@ async function setupVisualSettings(): Promise<void> {
       visualDraft = readVisualEditor();
       visualMode = "custom";
       renderVisualPresetButtons();
+      if (element.id === "visualDisableMaxxer") {
+        void persistVisualTheme(visualDraft).then(() => showVisualMessage("Saved Maxxer setting."));
+      }
     });
   }
   apply.addEventListener("click", () => {
-    void applyVisualTheme(readVisualEditor(), "Applied visual theme.");
+    const profile = visualMode === "custom" ? null : visualMode;
+    void applyVisualTheme(readVisualEditor(), profile ? `Applied ${profileLabel(profile)} preset.` : "Applied visual theme.", profile);
   });
   saveAs.addEventListener("click", () => {
     void saveVisualThemeAs();
@@ -372,7 +770,16 @@ async function deleteSelectedVisualTheme(): Promise<void> {
   showVisualMessage(`Deleted "${selected.name}".`);
 }
 
-async function applyVisualTheme(settings: VisualThemeSettings, messageText: string): Promise<void> {
+async function applyVisualTheme(settings: VisualThemeSettings, messageText: string, profileAudio?: ReskinProfile | null): Promise<void> {
+  await persistVisualTheme(settings);
+  if (profileAudio) {
+    await applyProfileAudioPreset(PROFILE_AUDIO_PRESETS[profileAudio]);
+  }
+  showVisualMessage(messageText);
+  await refreshXTabs();
+}
+
+async function persistVisualTheme(settings: VisualThemeSettings): Promise<VisualThemeSettings> {
   const theme = normalizeVisualTheme(settings);
   visualDraft = theme;
   await chrome.storage.local.set({
@@ -380,8 +787,29 @@ async function applyVisualTheme(settings: VisualThemeSettings, messageText: stri
     [VISUAL_THEME_KEY]: theme,
     "milxdy.reminetChat.enabled": theme.reminetChatOverlay,
   });
-  showVisualMessage(messageText);
-  await refreshXTabs();
+  return theme;
+}
+
+async function applyProfileAudioPreset(settings: ProfileAudioSettings): Promise<void> {
+  await chrome.storage.sync.set({
+    soundEnabled: settings.miladySoundEnabled,
+    soundsEnabled: settings.remistatsSoundsEnabled,
+    soundVolume: settings.remistatsSoundVolume,
+    endOfTweetDing: settings.postReadingEndOfTweetDing,
+  });
+  setControlValue("milady.soundEnabled", settings.miladySoundEnabled);
+  setControlValue("remistats.soundsEnabled", settings.remistatsSoundsEnabled);
+  setControlValue("remistats.soundVolume", settings.remistatsSoundVolume);
+  setControlValue("post-reading.endOfTweetDing", settings.postReadingEndOfTweetDing);
+}
+
+function setControlValue(id: string, value: unknown): void {
+  const element = document.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[data-control="${cssEscape(id)}"]`);
+  if (element) setElementValue(element, value);
+}
+
+function profileLabel(profile: ReskinProfile): string {
+  return profile === "max" ? "Max" : profile === "moderate" ? "Medium" : "Minimal";
 }
 
 async function saveVisualThemeAs(): Promise<void> {
@@ -493,6 +921,7 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setSelectValue("visualMaxxerIntensity", theme.maxxerIntensity);
   setSelectValue("visualMaxxerSeparators", theme.maxxerSeparators);
   setSelectValue("visualPokePlacement", theme.pokePlacement);
+  setSelectValue("visualAppWindowStyle", theme.appWindowStyle);
   setSelectValue("visualTweetPngBorderPalette", theme.tweetPngBorderPalette);
   setInputValue("visualMaxMediaHeight", String(theme.maxMediaHeight));
   setChecked("visualBackgroundFade", theme.backgroundFade);
@@ -501,6 +930,7 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setChecked("visualPfpNotifications", theme.pfpNotifications);
   setChecked("visualPfpChat", theme.pfpChat);
   setChecked("visualQuoteMediaGap", theme.quoteMediaGap);
+  setChecked("visualAppShadows", theme.appShadows);
   setChecked("visualPostButtonClickly", theme.postButtonClickly);
   setChecked("visualPostSound", theme.postSound);
   setChecked("visualSidebarBevel", theme.sidebarBevel);
@@ -511,7 +941,7 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setChecked("visualRemistatsBox", theme.remistatsBox);
   setChecked("visualIncomingPokeGold", theme.incomingPokeGold);
   setChecked("visualReminetChatOverlay", theme.reminetChatOverlay);
-  setChecked("visualMiladyOnly", theme.miladyOnly);
+  setChecked("visualDisableMaxxer", theme.disableMaxxer);
   setChecked("visualDisableSelfTracking", theme.disableSelfTracking);
   setChecked("visualMaxxerShimmer", theme.maxxerShimmer);
   setChecked("visualTweetPngIncludeImages", theme.tweetPngIncludeImages);
@@ -533,6 +963,7 @@ function readVisualEditor(): VisualThemeSettings {
     maxxerIntensity: selectValue("visualMaxxerIntensity"),
     maxxerSeparators: selectValue("visualMaxxerSeparators"),
     pokePlacement: selectValue("visualPokePlacement"),
+    appWindowStyle: selectValue("visualAppWindowStyle"),
     tweetPngBorderPalette: selectValue("visualTweetPngBorderPalette"),
     maxMediaHeight: numberInputValue("visualMaxMediaHeight"),
     backgroundFade: checkedValue("visualBackgroundFade"),
@@ -541,6 +972,7 @@ function readVisualEditor(): VisualThemeSettings {
     pfpNotifications: checkedValue("visualPfpNotifications"),
     pfpChat: checkedValue("visualPfpChat"),
     quoteMediaGap: checkedValue("visualQuoteMediaGap"),
+    appShadows: checkedValue("visualAppShadows"),
     postButtonClickly: checkedValue("visualPostButtonClickly"),
     postSound: checkedValue("visualPostSound"),
     sidebarBevel: checkedValue("visualSidebarBevel"),
@@ -551,7 +983,7 @@ function readVisualEditor(): VisualThemeSettings {
     remistatsBox: checkedValue("visualRemistatsBox"),
     incomingPokeGold: checkedValue("visualIncomingPokeGold"),
     reminetChatOverlay: checkedValue("visualReminetChatOverlay"),
-    miladyOnly: checkedValue("visualMiladyOnly"),
+    disableMaxxer: checkedValue("visualDisableMaxxer"),
     disableSelfTracking: checkedValue("visualDisableSelfTracking"),
     maxxerShimmer: checkedValue("visualMaxxerShimmer"),
     tweetPngIncludeImages: checkedValue("visualTweetPngIncludeImages"),
@@ -574,6 +1006,7 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualMaxxerIntensity",
     "visualMaxxerSeparators",
     "visualPokePlacement",
+    "visualAppWindowStyle",
     "visualTweetPngBorderPalette",
     "visualMaxMediaHeight",
     "visualBackgroundFade",
@@ -582,6 +1015,7 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualPfpNotifications",
     "visualPfpChat",
     "visualQuoteMediaGap",
+    "visualAppShadows",
     "visualPostButtonClickly",
     "visualPostSound",
     "visualSidebarBevel",
@@ -592,7 +1026,7 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualRemistatsBox",
     "visualIncomingPokeGold",
     "visualReminetChatOverlay",
-    "visualMiladyOnly",
+    "visualDisableMaxxer",
     "visualDisableSelfTracking",
     "visualMaxxerShimmer",
     "visualTweetPngIncludeImages",
@@ -836,6 +1270,12 @@ function normalizeHandleList(value: string): string[] {
 
 function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function stringList(value: unknown): string {
+  return Array.isArray(value) && value.length
+    ? value.filter((entry): entry is string => typeof entry === "string" && entry.trim().length > 0).join(", ") || "none"
+    : "none";
 }
 
 function cssEscape(value: string): string {
@@ -1195,7 +1635,13 @@ function setupUpdateStatus(): void {
         return;
       }
       openExternalUrl(url);
-      if (message) message.textContent = status?.latestAssetUrl ? "Opened the release zip download." : "Opened the release page.";
+      if (message) {
+        message.textContent = status?.matchedExpectedAsset
+          ? `Opened ${status.latestAssetName}.`
+          : status?.latestAssetUrl
+            ? `Opened ${status.latestAssetName || "a release zip"}. Confirm it matches this build before replacing files.`
+            : "Opened the release page.";
+      }
     });
   });
   copySteps?.addEventListener("click", () => {
@@ -1243,7 +1689,9 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   if (updateStatus.updateAvailable && updateStatus.latestVersion) {
     root.dataset.state = "available";
     title.textContent = `Update available: v${updateStatus.latestVersion}`;
-    detail.textContent = `Installed v${updateStatus.currentVersion}. Download, replace files in the same folder, then reload to preserve settings and stats.`;
+    detail.textContent = updateStatus.matchedExpectedAsset
+      ? `Installed v${updateStatus.currentVersion}. Download ${updateStatus.latestAssetName}, replace files in the same folder, then reload to preserve settings and stats.`
+      : `Installed v${updateStatus.currentVersion}. Expected ${updateStatus.expectedAssetName || "this build's profile archive"}; open the release page if Download does not match.`;
     download.hidden = false;
     copySteps.hidden = false;
     reload.hidden = false;
@@ -1276,6 +1724,7 @@ function updateStepsText(status: UpdateStatus | null): string {
   const installedVersion = chrome.runtime.getManifest().version;
   const latest = status?.latestVersion ? `v${status.latestVersion}` : "the latest release";
   const asset = status?.latestAssetName ? ` (${status.latestAssetName})` : "";
+  const expected = status?.expectedAssetName ? `Expected archive: ${status.expectedAssetName}` : "";
   const releaseUrl = status?.latestUrl || "https://github.com/bonklek/milXdy/releases";
   const downloadUrl = status?.latestAssetUrl || releaseUrl;
   return [
@@ -1283,6 +1732,7 @@ function updateStepsText(status: UpdateStatus | null): string {
     "",
     `Installed: v${status?.currentVersion || installedVersion}`,
     `Target: ${latest}${asset}`,
+    expected,
     "",
     "1. Download the latest milXdy prerelease zip:",
     downloadUrl,
@@ -1303,6 +1753,8 @@ function isUpdateStatus(value: unknown): value is UpdateStatus {
     && typeof record.currentVersion === "string"
     && (typeof record.latestAssetUrl === "string" || record.latestAssetUrl == null)
     && (typeof record.latestAssetName === "string" || record.latestAssetName == null)
+    && (typeof record.expectedAssetName === "string" || record.expectedAssetName == null)
+    && (typeof record.matchedExpectedAsset === "boolean" || record.matchedExpectedAsset == null)
     && typeof record.updateAvailable === "boolean";
 }
 
@@ -1326,8 +1778,9 @@ async function renderStatus(): Promise<void> {
       "playerStats",
       "milxdy.diagnostics.scanner",
       "milxdy.diagnostics.miladyDetection",
-      "milxdy.diagnostics.loadedFeatures",
+      "milxdy.diagnostics.runtime",
       "remiliaWikiHyperlink.performance",
+      PERFORMANCE_MODE_KEY,
       RESKIN_PROFILE_KEY,
     ]),
     chrome.storage.sync.get(["mode"]),
@@ -1336,13 +1789,19 @@ async function renderStatus(): Promise<void> {
   const matchedAccounts = objectValue(local.matchedAccounts);
   const scanner = objectValue(local["milxdy.diagnostics.scanner"]);
   const miladyDetection = objectValue(local["milxdy.diagnostics.miladyDetection"]);
-  const loadedFeatures = objectValue(local["milxdy.diagnostics.loadedFeatures"]);
+  const runtime = objectValue(local["milxdy.diagnostics.runtime"]);
   const wikiPerformance = objectValue(local["remiliaWikiHyperlink.performance"]);
+  const performanceMode = normalizePerformanceMode(local[PERFORMANCE_MODE_KEY]);
   const profile = typeof local[RESKIN_PROFILE_KEY] === "string" ? local[RESKIN_PROFILE_KEY] : DEFAULT_RESKIN_PROFILE;
   statusGrid.innerHTML = "";
   for (const item of [
     ["Reskin", profile],
-    ["Loaded bundles", Array.isArray(loadedFeatures.features) ? loadedFeatures.features.join(", ") || "none" : "unknown"],
+    ["Performance", performanceMode],
+    ["Build", `${BUILD_TARGET}/${BUILD_PROFILE}`],
+    ["Loaded apps", stringList(runtime.loadedApps)],
+    ["Heavy apps", stringList(runtime.loadedHeavyApps)],
+    ["Worker-heavy", stringList(runtime.loadedWorkerHeavyApps)],
+    ["Network apps", stringList(runtime.loadedNetworkApps)],
     ["Mode", typeof sync.mode === "string" ? sync.mode : "milady"],
     ["Maxxer matches", String(Object.keys(matchedAccounts).length)],
     ["Avatars checked", String(stats.avatarsChecked ?? 0)],
@@ -1399,6 +1858,7 @@ function bugReportTemplate(): { title: string; full: string; x: string } {
       "### Bug report",
       "",
       `milXdy version: ${version}`,
+      `Build: ${BUILD_TARGET}/${BUILD_PROFILE}`,
       "Browser:",
       "Feature area:",
       "What happened:",
@@ -1407,8 +1867,8 @@ function bugReportTemplate(): { title: string; full: string; x: string } {
       "Console errors/screenshots:",
     ].join("\n"),
     x: [
-      "🐞 milXdy bug report",
-      `v${version}`,
+      "milXdy bug report",
+      `v${version} ${BUILD_TARGET}/${BUILD_PROFILE}`,
       "Feature:",
       "Issue:",
       "Steps:",
@@ -1438,6 +1898,7 @@ function llmBugReportPrompt(target: "github" | "x", template: { title: string; f
     "Help me create a high-quality milXdy bug report through a short interview.",
     "",
     `milXdy version: ${version}`,
+    `Build: ${BUILD_TARGET}/${BUILD_PROFILE}`,
     ...targetInstructions,
     "",
     "Interview flow:",
