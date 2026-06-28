@@ -531,21 +531,26 @@ function createScoreBadge(scoreData, options = {}) {
   const beetlePercent = Math.min(100, (beetleCount / maxBeetles) * 100);
   
   // Build PFP image URL if we have project and ID
-  const pfpImageUrl = (scoreData.pfpProject && scoreData.pfpId) 
-    ? `https://pfp.remilia.net/pfp/${scoreData.pfpProject.toLowerCase()}/${scoreData.pfpId}`
+  const pfpProject = scoreData.pfpProject ? String(scoreData.pfpProject) : '';
+  const pfpId = scoreData.pfpId ? String(scoreData.pfpId) : '';
+  const pfpImageUrl = (pfpProject && pfpId)
+    ? `https://pfp.remilia.net/pfp/${encodeURIComponent(pfpProject.toLowerCase())}/${encodeURIComponent(pfpId)}`
     : '';
   
-  const pfpInfo = scoreData.pfpProject ? `${scoreData.pfpProject} #${scoreData.pfpId}` : '';
+  const pfpInfo = pfpProject ? `${pfpProject} #${pfpId}` : '';
+  const displayName = escapeHtml(scoreData.displayName || remiliaUsername);
+  const twitterHandle = escapeHtml(scoreData.twitterHandle || remiliaUsername);
+  const tooltipPfpInfo = escapeHtml(pfpInfo);
   
   badge.dataset.reminetProfileUrl = remiliaUsername ? `https://remilia.net/~${remiliaUsername}` : '';
   badge.dataset.reminetTooltipHtml = `
     <div class="reminet-tooltip-header">
-      <span class="reminet-tooltip-displayname">${scoreData.displayName || remiliaUsername}</span>
-      <span class="reminet-tooltip-handle">@${scoreData.twitterHandle || remiliaUsername}</span>
+      <span class="reminet-tooltip-displayname">${displayName}</span>
+      <span class="reminet-tooltip-handle">@${twitterHandle}</span>
     </div>
     ${pfpInfo ? `<div class="reminet-tooltip-pfp">
-      ${pfpImageUrl ? `<img src="${pfpImageUrl}" alt="${pfpInfo}" class="pfp-image" onerror="this.style.display='none';" />` : ''}
-      <span class="pfp-label">${pfpInfo}</span>
+      ${pfpImageUrl ? `<img src="${pfpImageUrl}" alt="${tooltipPfpInfo}" class="pfp-image" />` : ''}
+      <span class="pfp-label">${tooltipPfpInfo}</span>
     </div>` : ''}
     <div class="reminet-tooltip-metrics">
       <div class="metric">

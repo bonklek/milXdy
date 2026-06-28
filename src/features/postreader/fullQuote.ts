@@ -3,8 +3,6 @@ import { hasExtensionRuntime, safeRuntimeMessage } from "../../shared/extensionR
 
 const cache = new Map<string, string | null>();
 const embeddedQuoteCache = new Map<string, EmbeddedQuote | null>();
-const X_GRAPHQL_BEARER = "REMOVED_X_GRAPHQL_BEARER_TOKEN";
-const TWEET_RESULT_QUERY_ID = "8CEYnZhCp0dx9DFyyEBlbQ";
 
 export type FullQuoteFetchResult = {
   text: string | null;
@@ -44,15 +42,6 @@ export async function fetchFullQuote(url: string, signal: AbortSignal): Promise<
   if (htmlText) {
     cache.set(normalizedUrl, htmlText);
     return { text: htmlText, status: "ok" };
-  }
-
-  const graphQlText = await fetchGraphQlTweetText(normalizedUrl, signal).catch((error) => {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return null;
-  });
-  if (graphQlText) {
-    cache.set(normalizedUrl, graphQlText);
-    return { text: graphQlText, status: "ok" };
   }
 
   const syndicationText = await fetchSyndicationText(normalizedUrl, signal).catch((error) => {
@@ -128,16 +117,8 @@ export async function fetchEmbeddedQuote(url: string, signal: AbortSignal): Prom
       return null;
     })
     : null;
-  const graphQlText = quoteUrl
-    ? await fetchGraphQlTweetText(quoteUrl, signal).catch((error) => {
-      if (error instanceof DOMException && error.name === "AbortError") throw error;
-      debugFullQuote("embedded:graphql-error", { quoteUrl, error: errorMessage(error) });
-      return null;
-    })
-    : null;
   const best = chooseBestTextCandidate([
     { source: "html", text: htmlText },
-    { source: "graphql", text: graphQlText },
     { source: "syndication", text },
   ]);
   const result = screenName && id
@@ -152,7 +133,6 @@ export async function fetchEmbeddedQuote(url: string, signal: AbortSignal): Prom
     sourceUrl: normalizedUrl,
     quoteUrl,
     htmlLength: htmlText?.length ?? 0,
-    graphqlLength: graphQlText?.length ?? 0,
     syndicationLength: text?.length ?? 0,
     chosenSource: best?.source ?? null,
     chosenLength: best?.text.length ?? 0,
@@ -222,124 +202,6 @@ async function pollRenderedTweetText(frame: HTMLIFrameElement): Promise<string |
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function fetchGraphQlTweetText(url: string, signal: AbortSignal): Promise<string | null> {
-  const id = extractTweetId(url);
-  if (!id) return null;
-  const endpoint = new URL(`https://x.com/i/api/graphql/${TWEET_RESULT_QUERY_ID}/TweetResultByRestId`);
-  endpoint.searchParams.set("variables", JSON.stringify({
-    tweetId: id,
-    withCommunity: false,
-    includePromotedContent: false,
-    withVoice: false,
-  }));
-  endpoint.searchParams.set("features", JSON.stringify(graphQlFeatures()));
-  endpoint.searchParams.set("fieldToggles", JSON.stringify(graphQlFieldToggles()));
-
-  const response = await fetch(url, {
-    credentials: "include",
-    signal,
-    headers: {
-      authorization: `Bearer ${decodeURIComponent(X_GRAPHQL_BEARER)}`,
-      "x-csrf-token": getCsrfToken(),
-      "x-twitter-active-user": "yes",
-      "x-twitter-auth-type": "OAuth2Session",
-    },
-  });
-  if (!response.ok) return null;
-  const data = await response.json() as unknown;
-  return cleanSyndicationText(findLongFormText(data) || findTweetLegacyText(data) || "");
-}
-
-function findLongFormText(value: unknown): string | null {
-  return findStringByPath(value, "note_tweet_results", "result", "text");
-}
-
-function findTweetLegacyText(value: unknown): string | null {
-  return findStringByPath(value, "legacy", "full_text") || findStringByPath(value, "legacy", "text");
-}
-
-function findStringByPath(value: unknown, ...path: string[]): string | null {
-  const found = findObjectWithPath(value, path);
-  return typeof found === "string" ? found : null;
-}
-
-function findObjectWithPath(value: unknown, path: string[]): unknown {
-  if (!value || typeof value !== "object") return null;
-  const record = value as Record<string, unknown>;
-  let cursor: unknown = record;
-  for (const key of path) {
-    if (!cursor || typeof cursor !== "object" || !(key in cursor)) {
-      cursor = null;
-      break;
-    }
-    cursor = (cursor as Record<string, unknown>)[key];
-  }
-  if (typeof cursor === "string") return cursor;
-  for (const child of Object.values(record)) {
-    const found = Array.isArray(child)
-      ? child.map((entry) => findObjectWithPath(entry, path)).find((entry) => typeof entry === "string")
-      : findObjectWithPath(child, path);
-    if (typeof found === "string") return found;
-  }
-  return null;
-}
-
-function getCsrfToken(): string {
-  return decodeURIComponent(document.cookie.match(/(?:^|; )ct0=([^;]+)/)?.[1] || "");
-}
-
-function graphQlFeatures(): Record<string, boolean> {
-  return {
-    creator_subscriptions_tweet_preview_api_enabled: true,
-    premium_content_api_read_enabled: false,
-    communities_web_enable_tweet_community_results_fetch: true,
-    c9s_tweet_anatomy_moderator_badge_enabled: true,
-    responsive_web_grok_analyze_button_fetch_trends_enabled: false,
-    responsive_web_grok_analyze_post_followups_enabled: true,
-    rweb_video_screen_enabled: false,
-    rweb_cashtags_enabled: false,
-    profile_label_improvements_pcf_label_in_post_enabled: true,
-    responsive_web_profile_redirect_enabled: false,
-    rweb_tipjar_consumption_enabled: true,
-    verified_phone_label_enabled: false,
-    responsive_web_graphql_skip_user_profile_image_extensions_enabled: false,
-    responsive_web_graphql_timeline_navigation_enabled: true,
-    rweb_cashtags_composer_attachment_enabled: false,
-    responsive_web_jetfuel_frame: false,
-    responsive_web_grok_share_attachment_enabled: true,
-    responsive_web_grok_annotations_enabled: true,
-    articles_preview_enabled: true,
-    responsive_web_edit_tweet_api_enabled: true,
-    graphql_is_translatable_rweb_tweet_is_translatable_enabled: true,
-    view_counts_everywhere_api_enabled: true,
-    longform_notetweets_consumption_enabled: true,
-    responsive_web_twitter_article_tweet_consumption_enabled: true,
-    tweet_with_visibility_results_prefer_gql_limited_actions_policy_enabled: true,
-    longform_notetweets_rich_text_read_enabled: true,
-    longform_notetweets_inline_media_enabled: true,
-    freedom_of_speech_not_reach_fetch_enabled: true,
-    standardized_nudges_misinfo: true,
-    post_ctas_fetch_enabled: true,
-    responsive_web_enhance_cards_enabled: false,
-    responsive_web_grok_image_annotation_enabled: true,
-    responsive_web_grok_imagine_annotation_enabled: true,
-    responsive_web_grok_community_note_auto_translation_is_enabled: false,
-  };
-}
-
-function graphQlFieldToggles(): Record<string, boolean> {
-  return {
-    withArticleRichContentState: true,
-    withArticlePlainText: false,
-    withArticleSummaryText: false,
-    withArticleVoiceOver: false,
-    withGrokAnalyze: false,
-    withDisallowedReplyControls: false,
-    withPayments: false,
-    withAuxiliaryUserLabels: false,
-  };
 }
 
 async function fetchOembedText(url: string, signal: AbortSignal): Promise<string | null> {

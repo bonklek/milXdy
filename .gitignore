@@ -5,6 +5,13 @@ _sources/
 .agents/
 .codex/
 ideas/
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
 *.log
 *.tmp
 *.map

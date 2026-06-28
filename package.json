@@ -23,10 +23,16 @@
   "devDependencies": {
     "@types/chrome": "^0.1.29",
     "@types/node": "^24.10.1",
-    "esbuild": "^0.27.0",
+    "esbuild": "0.28.1",
     "typescript": "^5.9.3",
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
     "web-ext": "^8.4.0"
+  },
+  "overrides": {
+    "ajv": "8.18.0",
+    "shell-quote": "1.8.4",
+    "tmp": "0.2.7",
+    "uuid": "11.1.1"
   }
 }

@@ -13,6 +13,11 @@ type BackgroundMessage = FetchJsonMessage | FetchTextMessage;
 chrome.runtime.onMessage.addListener((message: unknown, _sender, sendResponse) => {
   if (!isBackgroundMessage(message)) return false;
 
+  if (!isAllowedFetchMessage(message)) {
+    sendResponse({ ok: false, status: 0, error: "UNSUPPORTED_URL" });
+    return false;
+  }
+
   void fetch(message.url, { credentials: "omit" })
     .then(async (response) => {
       if (!response.ok) {
@@ -36,4 +41,23 @@ function isBackgroundMessage(message: unknown): message is BackgroundMessage {
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
   return (record.type === "postreader:fetchJson" || record.type === "postreader:fetchText") && typeof record.url === "string";
+}
+
+function isAllowedFetchMessage(message: BackgroundMessage): boolean {
+  let url: URL;
+  try {
+    url = new URL(message.url);
+  } catch {
+    return false;
+  }
+
+  if (message.type === "postreader:fetchJson") {
+    return url.protocol === "https:"
+      && url.hostname === "cdn.syndication.twimg.com"
+      && url.pathname === "/tweet-result";
+  }
+
+  return url.protocol === "https:"
+    && (url.hostname === "x.com" || url.hostname === "twitter.com")
+    && /^\/[^/?#]+\/status\/\d+\/?$/.test(url.pathname);
 }
