@@ -145,6 +145,8 @@ let booted = false;
 let runtimeScheduleScan: () => void = () => undefined;
 const recoveryTimers = new Set<() => void>();
 let cancelScheduledScan: (() => void) | null = null;
+let cancelVisualRefresh: (() => void) | null = null;
+let visualRefreshScheduled = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = (message) => safeRuntimeMessage(message);
@@ -282,6 +284,28 @@ function clearScheduledScan(): void {
   scanScheduled = false;
 }
 
+function clearScheduledVisualRefresh(): void {
+  cancelVisualRefresh?.();
+  cancelVisualRefresh = null;
+  visualRefreshScheduled = false;
+}
+
+function scheduleVisualRefresh(): void {
+  if (visualRefreshScheduled) return;
+  visualRefreshScheduled = true;
+  cancelVisualRefresh = runtimeScheduler.timeout(() => {
+    cancelVisualRefresh = null;
+    visualRefreshScheduled = false;
+    if (!lifecycleActive()) return;
+    if (!maxxerSurfaceActive()) {
+      disableMaxxerRuntime();
+      return;
+    }
+    scheduleProcessVisibleTweets();
+    updatePlayerLevelBadge();
+  }, 250);
+}
+
 function trackMaxxerElement(element: HTMLElement | null | undefined): void {
   if (element) maxxerMutatedElements.add(element);
 }
@@ -357,6 +381,7 @@ export function onRouteChange(_route: MilxdyRouteChange): void {
 export function disable(): void {
   clearRecoveryTimers();
   clearScheduledScan();
+  clearScheduledVisualRefresh();
   disableMaxxerRuntime();
   closeMaxxerPanel();
 }
@@ -377,6 +402,7 @@ export function dispose(): void {
   disable();
   clearRecoveryTimers();
   clearScheduledScan();
+  clearScheduledVisualRefresh();
   maxxerAppFrame?.remove();
   maxxerAppFrame = null;
   addRuntimeDisposable = () => undefined;
@@ -2256,12 +2282,7 @@ function observeStorage(): void {
     }
 
     if (area === "local" && (changes[RESKIN_PROFILE_KEY] || changes[VISUAL_THEME_KEY])) {
-      if (!maxxerSurfaceActive()) {
-        disableMaxxerRuntime();
-      } else {
-        scheduleProcessVisibleTweets();
-        updatePlayerLevelBadge();
-      }
+      scheduleVisualRefresh();
     }
 
     if (area === "local" && changes[statsKey]) {

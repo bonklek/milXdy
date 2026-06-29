@@ -10,7 +10,6 @@
   vertical-align: middle;
   line-height: 1;
   cursor: pointer;
-  transition: transform 0.2s ease;
 }
 
 .reminet-badge-slot {
@@ -220,7 +219,7 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   line-height: 1;
   vertical-align: middle;
   flex: 0 0 auto;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
 .reminet-poke-outline-icon {
@@ -500,7 +499,7 @@ html[data-milxdy-x-theme="dim"] .reminet-profile-action-poke-slot .reminet-poke-
   gap: 4px;
   padding: 2px 10px 2px 8px;
   cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: 'Remilia Mincho', serif;
   font-size: 12px;
   font-weight: 600;
@@ -989,7 +988,7 @@ html[data-milxdy-visual-incoming-poke-gold="true"][data-reminet-poke-mode="dark"
   white-space: nowrap;
   pointer-events: auto;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .reminet-compact-badge:hover {

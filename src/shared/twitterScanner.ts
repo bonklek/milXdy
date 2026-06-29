@@ -48,7 +48,8 @@ let removeVisibilityListener: (() => void) | null = null;
 let removeScrollListener: (() => void) | null = null;
 let enabledSurfaceKinds = new Set<TwitterSurfaceKind>(["tweet", "userCell", "notification", "directMessage", "profile"]);
 
-const counters = {
+function createScannerCounters() {
+  return {
   mutations: 0,
   surfacesQueued: 0,
   surfacesEmitted: 0,
@@ -63,6 +64,9 @@ const counters = {
   fullScans: 0,
   lazyFieldsComputed: 0,
   activeSurfaceKinds: 5,
+  maxSurfacesPerFlushBudget: 24,
+  maxSurfacesPerScrollFlushBudget: 6,
+  maxSurfacesPerFullScanBudget: 72,
   maxPendingSurfacesBudget: 144,
   lastFullScanQueued: 0,
   lastFullScanDropped: 0,
@@ -72,9 +76,14 @@ const counters = {
   maxPendingSurfaces: 0,
   lastFlushBatchSize: 0,
   lastFlushRemaining: 0,
+  lastFlushLimit: 0,
+  lastFlushReason: "" as "normal" | "scroll" | "",
   lastFlushMs: 0,
   updatedAt: 0,
-};
+  };
+}
+
+const counters = createScannerCounters();
 
 export function subscribeTwitterSurfaces(listener: Listener): () => void {
   listeners.add(listener);
@@ -95,6 +104,17 @@ export function getTwitterScannerCounters(): typeof counters {
   return { ...counters };
 }
 
+export function resetTwitterScannerCounters(): void {
+  Object.assign(counters, createScannerCounters(), {
+    activeSurfaceKinds: enabledSurfaceKinds.size,
+    maxSurfacesPerFlushBudget: maxSurfacesPerFlush,
+    maxSurfacesPerScrollFlushBudget: maxSurfacesPerScrollFlush,
+    maxSurfacesPerFullScanBudget: maxSurfacesPerFullScan,
+    maxPendingSurfacesBudget: maxPendingSurfaces,
+    updatedAt: Date.now(),
+  });
+}
+
 export function configureTwitterScanner(options: {
   safetyScanIntervalMs?: number | null;
   surfaceKinds?: readonly TwitterSurfaceKind[];
@@ -107,12 +127,15 @@ export function configureTwitterScanner(options: {
   safetyScanIntervalMs = options.safetyScanIntervalMs ?? null;
   if (typeof options.maxSurfacesPerFlush === "number" && Number.isFinite(options.maxSurfacesPerFlush)) {
     maxSurfacesPerFlush = Math.max(1, Math.floor(options.maxSurfacesPerFlush));
+    counters.maxSurfacesPerFlushBudget = maxSurfacesPerFlush;
   }
   if (typeof options.maxSurfacesPerScrollFlush === "number" && Number.isFinite(options.maxSurfacesPerScrollFlush)) {
     maxSurfacesPerScrollFlush = Math.max(1, Math.floor(options.maxSurfacesPerScrollFlush));
+    counters.maxSurfacesPerScrollFlushBudget = maxSurfacesPerScrollFlush;
   }
   if (typeof options.maxSurfacesPerFullScan === "number" && Number.isFinite(options.maxSurfacesPerFullScan)) {
     maxSurfacesPerFullScan = Math.max(1, Math.floor(options.maxSurfacesPerFullScan));
+    counters.maxSurfacesPerFullScanBudget = maxSurfacesPerFullScan;
   }
   if (typeof options.maxPendingSurfaces === "number" && Number.isFinite(options.maxPendingSurfaces)) {
     maxPendingSurfaces = Math.max(maxSurfacesPerFlush, Math.floor(options.maxPendingSurfaces));
@@ -125,6 +148,8 @@ export function configureTwitterScanner(options: {
     enabledSurfaceKinds = new Set(options.surfaceKinds);
     counters.activeSurfaceKinds = enabledSurfaceKinds.size;
   }
+  counters.updatedAt = Date.now();
+  scheduleDiagnosticsWrite();
   restartSafetyTimer();
 }
 
@@ -331,7 +356,8 @@ function flush(): void {
   scanScheduled = false;
   const startedAt = performance.now();
   const surfaces: Array<[HTMLElement, TwitterSurfaceKind]> = [];
-  const flushLimit = activeFlushLimit();
+  const flushReason = activeFlushReason();
+  const flushLimit = activeFlushLimit(flushReason);
   for (const entry of pending.entries()) {
     surfaces.push(entry);
     pending.delete(entry[0]);
@@ -349,19 +375,28 @@ function flush(): void {
     }
   }
   counters.flushes += 1;
-  if (flushLimit < maxSurfacesPerFlush) counters.scrollFlushesThrottled += 1;
+  if (flushReason === "scroll") counters.scrollFlushesThrottled += 1;
   counters.lastFlushBatchSize = surfaces.length;
   counters.lastFlushRemaining = pending.size;
+  counters.lastFlushLimit = flushLimit;
+  counters.lastFlushReason = flushReason;
   counters.lastFlushMs = Math.round((performance.now() - startedAt) * 10) / 10;
   counters.updatedAt = Date.now();
   scheduleDiagnosticsWrite();
   if (pending.size > 0) scheduleFlush();
 }
 
-function activeFlushLimit(): number {
-  return scrollSettleRemainingMs() > 0
+function activeFlushReason(): "normal" | "scroll" {
+  return scrollSettleRemainingMs() > 0 ? "scroll" : "normal";
+}
+
+function activeFlushLimit(reason = activeFlushReason()): number {
+  const limit = reason === "scroll"
     ? Math.min(maxSurfacesPerFlush, maxSurfacesPerScrollFlush)
     : maxSurfacesPerFlush;
+  counters.lastFlushLimit = limit;
+  counters.lastFlushReason = reason;
+  return limit;
 }
 
 function scrollSettleRemainingMs(): number {

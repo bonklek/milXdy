@@ -68,6 +68,8 @@ type PostReadingPerformancePolicy = {
   batchSize: number;
   maxPendingTweets: number;
   maxTextCharsForButton: number;
+  maxHighlightChars: number;
+  maxHighlightTokens: number;
 };
 
 type HighlightTarget = {
@@ -405,15 +407,21 @@ function processTweet(
   policy = postReadingPerformancePolicy(),
   surfaceTextContainers: HTMLElement[] = [],
 ): void {
-  if (tweet.querySelector(POST_READING_BUTTON)) return;
   const textContainers = surfaceTextContainers.length > 0 && surfaceTextContainers.every((container) => container.isConnected)
     ? surfaceTextContainers
     : Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT))
       .filter((container) => !container.closest(QUOTE_TWEET));
   const signature = textContainers.map((container) => container.textContent || "").join("\n").trim();
   if (!signature) return;
-  if (processed.get(tweet) === signature) return;
-  if (signature.length > policy.maxTextCharsForButton) {
+
+  const existingButton = tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
+  const footer = surfaceActionRow || findLikelyActionRow(tweet);
+  const anchor = findButtonAnchor(tweet, footer);
+  if (processed.get(tweet) === signature && existingButton) {
+    placeReadButton(tweet, existingButton, anchor, footer);
+    return;
+  }
+  if (!existingButton && signature.length > policy.maxTextCharsForButton) {
     processed.set(tweet, signature);
     recordRuntimeDiagnostic("buttonSkipped", {
       reason: "performanceTextCap",
@@ -425,17 +433,35 @@ function processTweet(
   }
   processed.set(tweet, signature);
 
-  const button = createReadButton(tweet);
-  const footer = surfaceActionRow || findLikelyActionRow(tweet);
-  const anchor = findButtonAnchor(tweet, footer);
+  const button = existingButton || createReadButton(tweet);
+  placeReadButton(tweet, button, anchor, footer);
+}
+
+function placeReadButton(
+  tweet: HTMLElement,
+  button: HTMLButtonElement,
+  anchor: HTMLElement | null,
+  footer: HTMLElement | null,
+): void {
   if (settings.buttonPlacement === "actions") {
     insertActionOverlayButton(button, anchor, footer);
     return;
   }
   if (insertHeaderSlotButton(tweet, button)) return;
-  if (anchor?.parentElement) {
+  if (anchor?.parentElement && button.parentElement !== anchor.parentElement) {
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
     anchor.parentElement.insertBefore(button, anchor.nextSibling);
+    removeEmptyAdHocButtonSlot(previousSlot);
+  } else if (anchor?.parentElement && button.previousSibling !== anchor) {
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+    anchor.parentElement.insertBefore(button, anchor.nextSibling);
+    removeEmptyAdHocButtonSlot(previousSlot);
   }
+}
+
+function removeEmptyAdHocButtonSlot(slot: HTMLElement | null): void {
+  if (!slot || slot.dataset.milxdyTweetSlot || slot.childElementCount > 0) return;
+  slot.remove();
 }
 
 function currentPerformanceMode(): string {
@@ -445,15 +471,15 @@ function currentPerformanceMode(): string {
 function postReadingPerformancePolicy(): PostReadingPerformancePolicy {
   const mode = currentPerformanceMode();
   if (mode === "fast") {
-    return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900 };
+    return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900, maxHighlightChars: 700, maxHighlightTokens: 96 };
   }
   if (mode === "balanced") {
-    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800 };
+    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800, maxHighlightChars: 1400, maxHighlightTokens: 180 };
   }
   if (mode === "developer") {
-    return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY };
+    return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: Number.POSITIVE_INFINITY, maxHighlightTokens: Number.POSITIVE_INFINITY };
   }
-  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY };
+  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: 2600, maxHighlightTokens: 320 };
 }
 
 function createReadButton(tweet: HTMLElement): HTMLButtonElement {
@@ -477,14 +503,27 @@ function insertActionOverlayButton(button: HTMLButtonElement, anchor: HTMLElemen
     || anchor?.parentElement?.querySelector<HTMLElement>(RUNTIME_POST_READING_SLOT)
     || null;
   if (runtimeSlot) {
-    runtimeSlot.replaceChildren(button);
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+    if (button.parentElement !== runtimeSlot || runtimeSlot.childElementCount !== 1) {
+      runtimeSlot.replaceChildren(button);
+    }
+    removeEmptyAdHocButtonSlot(previousSlot);
     runtimeSlot.removeAttribute("aria-hidden");
+    return;
+  }
+  const existingSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+  if (existingSlot && !existingSlot.dataset.milxdyTweetSlot) {
+    if (anchor?.parentElement && (existingSlot.parentElement !== anchor.parentElement || existingSlot.previousSibling !== anchor)) {
+      anchor.parentElement.insertBefore(existingSlot, anchor.nextSibling);
+    } else if (!existingSlot.parentElement) {
+      footer?.append(existingSlot);
+    }
     return;
   }
   const slot = document.createElement("span");
   slot.dataset.postReadingButtonSlot = "true";
   slot.className = "post-reading-button-slot";
-  slot.append(button);
+  if (button.parentElement !== slot) slot.append(button);
   if (anchor?.parentElement) {
     anchor.parentElement.insertBefore(slot, anchor.nextSibling);
     return;
@@ -495,7 +534,11 @@ function insertActionOverlayButton(button: HTMLButtonElement, anchor: HTMLElemen
 function insertHeaderSlotButton(tweet: HTMLElement, button: HTMLButtonElement): boolean {
   const runtimeSlot = tweet.querySelector<HTMLElement>(RUNTIME_POST_READING_HEADER_SLOT);
   if (!runtimeSlot) return false;
-  runtimeSlot.replaceChildren(button);
+  const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+  if (button.parentElement !== runtimeSlot || runtimeSlot.childElementCount !== 1) {
+    runtimeSlot.replaceChildren(button);
+  }
+  removeEmptyAdHocButtonSlot(previousSlot);
   runtimeSlot.removeAttribute("aria-hidden");
   markHeaderControlHost(runtimeSlot);
   return true;
@@ -1378,6 +1421,11 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   activateHighlightTarget(target);
   const highlightMode = effectiveHighlightMode(target);
 
+  if (!canTokenizeHighlightTarget(target, highlightMode)) {
+    clearSmoothAnimation();
+    return;
+  }
+
   if (highlightMode !== "smooth") {
     const words = prepareWordBody(body);
     const currentWord = findCurrentWordToken(words, relativeIndex, state.charLength);
@@ -1451,6 +1499,45 @@ function findEstimatedChunkEnd(text: string, chunkStart: number): number {
   const slice = remaining.slice(0, 220);
   const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "), slice.lastIndexOf(", "));
   return chunkStart + (boundary > 80 ? boundary + 1 : Math.min(220, remaining.length));
+}
+
+function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlightMode): boolean {
+  if (mode === "off") return false;
+  const body = target.body;
+  const hasExistingTokens = Boolean(body.querySelector('[data-post-reading-word="true"], [data-post-reading-smooth-word="true"]'));
+  if (hasExistingTokens) return true;
+  const policy = postReadingPerformancePolicy();
+  if (target.text.length <= policy.maxHighlightChars) {
+    const tokenEstimate = estimateHighlightTokenCount(target.text);
+    if (tokenEstimate <= policy.maxHighlightTokens) return true;
+    recordHighlightTokenizationSkip(target, mode, "token-cap", tokenEstimate);
+    return false;
+  }
+  recordHighlightTokenizationSkip(target, mode, "char-cap", estimateHighlightTokenCount(target.text));
+  return false;
+}
+
+function recordHighlightTokenizationSkip(
+  target: HighlightTarget,
+  mode: BodyHighlightMode,
+  reason: "char-cap" | "token-cap",
+  tokenEstimate: number,
+): void {
+  const performanceMode = currentPerformanceMode();
+  const signature = `skip:${performanceMode}:${mode}:${target.kind}:${reason}:${Math.round(target.text.length / 100)}:${Math.round(tokenEstimate / 20)}`;
+  if (signature === lastHighlightDiagnosticSignature) return;
+  lastHighlightDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("highlight", {
+    configured: settings.bodyHighlightMode,
+    effective: "off",
+    skippedMode: mode,
+    performanceMode,
+    target: target.kind,
+    textLength: target.text.length,
+    tokenEstimate,
+    reason,
+    updatedAt: Date.now(),
+  });
 }
 
 function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {

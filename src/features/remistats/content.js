@@ -1,5 +1,6 @@
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
 import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
+import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../shared/reskinProfile";
 import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
 
 // Content script for overlaying user scores on X.com.
@@ -200,7 +201,7 @@ const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
 let incomingPokeCache = null;
-let visualTheme = {};
+let visualTheme = DEFAULT_VISUAL_THEME;
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -256,13 +257,27 @@ function applyPokeThemeSettings(color, mode) {
   document.documentElement.dataset.reminetPokeMode = POKE_THEME_MODES.has(mode) ? mode : 'dark';
 }
 
+function normalizeRemistatsVisualTheme(value) {
+  const normalized = normalizeVisualTheme(value);
+  const record = value && typeof value === 'object' ? value : {};
+  const pokePlacement = record.pokePlacement === 'top' || record.pokePlacement === 'actions'
+    ? record.pokePlacement
+    : DEFAULT_VISUAL_THEME.pokePlacement;
+  return { ...normalized, pokePlacement };
+}
+
 async function loadVisualThemeSettings() {
-  const settings = await chrome.storage.local.get({ 'milxdy.settings.visualTheme': {} });
-  visualTheme = settings['milxdy.settings.visualTheme'] || {};
+  const settings = await chrome.storage.local.get({ 'milxdy.settings.visualTheme': DEFAULT_VISUAL_THEME });
+  const nextTheme = normalizeRemistatsVisualTheme(settings['milxdy.settings.visualTheme']);
+  const previousPlacement = visualTheme.pokePlacement;
+  visualTheme = nextTheme;
   document.documentElement.dataset.milxdyVisualRemistatsBox = String(visualTheme.remistatsBox === true);
-  document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement === 'actions' ? 'actions' : 'top';
+  document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement;
   document.documentElement.dataset.milxdyVisualIncomingPokeGold = String(visualTheme.incomingPokeGold !== false);
   patchExistingBadges();
+  if (previousPlacement !== visualTheme.pokePlacement) {
+    scheduleSurfaceReconciliation([450, 2200]);
+  }
 }
 
 function applyIconSettings() {
@@ -1989,6 +2004,12 @@ const processedProfiles = new Set();
 let lastProfileUrl = location.href;
 let groupChatScanTimer = null;
 let routeProfileTimer = null;
+let reconciliationTimer = null;
+let reconciliationScheduled = false;
+let reconciliationDueAt = 0;
+let reconciliationRunning = false;
+let reconciliationFollowUp = false;
+let reconciliationFollowUpDelay = 900;
 let booted = false;
 let runtimeScheduleScan = () => undefined;
 let addRuntimeDisposable = () => undefined;
@@ -2245,30 +2266,97 @@ async function processSurfaceElement(element, username = null) {
   return { status: 'unsupported-surface', username: '' };
 }
 
-function reconcileMountedSurfaces(limit = 160) {
+function currentPerformanceMode() {
+  return document.documentElement.dataset.milxdyPerformanceMode || 'balanced';
+}
+
+function remistatsReconciliationPolicy() {
+  const mode = currentPerformanceMode();
+  if (mode === 'fast') return { limit: 48, batchSize: 3 };
+  if (mode === 'balanced') return { limit: 96, batchSize: 4 };
+  if (mode === 'developer') return { limit: 320, batchSize: 12 };
+  return { limit: 160, batchSize: 6 };
+}
+
+function finishSurfaceReconciliation() {
+  reconciliationRunning = false;
+  if (!reconciliationFollowUp || !lifecycleActive() || !remistatsEnabled) return;
+  const delay = reconciliationFollowUpDelay;
+  reconciliationFollowUp = false;
+  reconciliationFollowUpDelay = 900;
+  scheduleSurfaceReconciliation([delay]);
+}
+
+function reconcileMountedSurfaces(limit = remistatsReconciliationPolicy().limit) {
   if (!lifecycleActive() || !remistatsEnabled) return;
+  if (reconciliationRunning) {
+    reconciliationFollowUp = true;
+    return;
+  }
+  reconciliationRunning = true;
+  const policy = remistatsReconciliationPolicy();
   const surfaces = Array.from(document.querySelectorAll('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]'))
     .filter(shouldReconcileSurface)
-    .slice(0, limit);
+    .slice(0, Math.max(1, limit));
   let index = 0;
   const processNext = () => {
-    if (!lifecycleActive() || !remistatsEnabled || index >= surfaces.length) return;
-    const batch = surfaces.slice(index, index + 6);
+    if (!lifecycleActive() || !remistatsEnabled) {
+      finishSurfaceReconciliation();
+      return;
+    }
+    if (index >= surfaces.length) {
+      finishSurfaceReconciliation();
+      return;
+    }
+    const batch = surfaces.slice(index, index + policy.batchSize);
     index += batch.length;
     for (const element of batch) {
       prepareSurfaceForReconcile(element);
       void processSurfaceElement(element);
     }
-    if (index < surfaces.length) runtimeScheduler.idle(processNext, { timeout: 1200 });
+    if (index < surfaces.length) {
+      runtimeScheduler.idle(processNext, { timeout: 1200 });
+    } else {
+      finishSurfaceReconciliation();
+    }
   };
   runtimeScheduler.idle(processNext, { timeout: 250 });
 }
 
+function normalizeReconciliationDelays(delays) {
+  const list = Array.isArray(delays) ? delays : [delays];
+  const normalized = list
+    .map((delay) => Number(delay))
+    .filter((delay) => Number.isFinite(delay) && delay >= 0)
+    .sort((left, right) => left - right);
+  return normalized.length > 0 ? normalized : [250];
+}
+
 function scheduleSurfaceReconciliation(delays = [250, 1500, 4000]) {
-  for (const delay of delays) {
-    const cancel = runtimeScheduler.timeout(() => reconcileMountedSurfaces(), delay);
-    addRuntimeDisposable(cancel);
+  if (!lifecycleActive() || !remistatsEnabled) return;
+  const normalized = normalizeReconciliationDelays(delays);
+  if (normalized.length > 1) {
+    reconciliationFollowUp = true;
+    reconciliationFollowUpDelay = Math.max(reconciliationFollowUpDelay, normalized[normalized.length - 1]);
   }
+  if (reconciliationRunning) {
+    reconciliationFollowUp = true;
+    return;
+  }
+  const dueAt = Date.now() + normalized[0];
+  if (reconciliationScheduled) {
+    reconciliationFollowUp = true;
+    if (reconciliationDueAt && reconciliationDueAt <= dueAt) return;
+    reconciliationTimer?.();
+  }
+  reconciliationScheduled = true;
+  reconciliationDueAt = dueAt;
+  reconciliationTimer = runtimeScheduler.timeout(() => {
+    reconciliationTimer = null;
+    reconciliationScheduled = false;
+    reconciliationDueAt = 0;
+    reconcileMountedSurfaces();
+  }, normalized[0]);
 }
 
 function shouldReconcileSurface(element) {
@@ -2344,7 +2432,12 @@ function init() {
       return;
     }
     if (area === 'local' && changes['milxdy.settings.visualTheme']) {
-      void loadVisualThemeSettings();
+      void loadVisualThemeSettings().then(() => {
+        if (!lifecycleActive() || !remistatsEnabled) return;
+        runtimeScheduleScan();
+        scheduleSurfaceReconciliation([300, 2200]);
+        void insertProfileBadge();
+      });
       return;
     }
     if (area !== 'sync') return;
@@ -2427,6 +2520,15 @@ export function dispose() {
     routeProfileTimer();
     routeProfileTimer = null;
   }
+  if (reconciliationTimer) {
+    reconciliationTimer();
+    reconciliationTimer = null;
+  }
+  reconciliationScheduled = false;
+  reconciliationDueAt = 0;
+  reconciliationRunning = false;
+  reconciliationFollowUp = false;
+  reconciliationFollowUpDelay = 900;
   addRuntimeDisposable = () => undefined;
   lifecycleSignal = null;
   booted = false;
