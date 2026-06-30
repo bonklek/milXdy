@@ -6,10 +6,10 @@ export function parseCount(text: string): number {
   if (!text) return 0;
   const lower = text.toLowerCase();
   if (lower.includes("k")) {
-    return parseFloat(lower.replace("k", "")) * 1000;
+    return (parseFloat(lower.replace("k", "")) || 0) * 1000;
   }
   if (lower.includes("m")) {
-    return parseFloat(lower.replace("m", "")) * 1000000;
+    return (parseFloat(lower.replace("m", "")) || 0) * 1000000;
   }
   return parseInt(text, 10) || 0;
 }
