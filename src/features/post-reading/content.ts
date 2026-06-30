@@ -1,4 +1,4 @@
-import { extractReadablePost, formatReadablePost } from "./extractText";
+import { extractReadablePost, formatReadablePost, isReadableHyperlink } from "./extractText";
 import { fetchEmbeddedQuote, fetchFullQuote } from "./fullQuote";
 import { icon } from "./icons";
 import { recognizeImageText, type OcrImage } from "./ocr";
@@ -1665,6 +1665,10 @@ function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth"): HTMLE
   resetBodyTokenizationForMode(body, mode);
   saveOriginalBody(body);
   body.dataset.postReadingHighlightMode = mode;
+  // When readable hyperlinks are not spoken, leave their text untokenized and out
+  // of the cursor count so token offsets stay aligned with the link-stripped spoken
+  // text. Otherwise the highlight drifts ahead by each skipped link's length.
+  const skipReadableLinks = !settings.includeHyperlinks;
   const words: HTMLElement[] = [];
   let index = 0;
   let textCursor = 0;
@@ -1676,6 +1680,7 @@ function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth"): HTMLE
   }
 
   for (const node of textNodes) {
+    if (skipReadableLinks && isInReadableHyperlink(node)) continue;
     if (!node.textContent?.trim()) {
       textCursor += node.textContent?.length || 0;
       continue;
@@ -1708,6 +1713,11 @@ function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth"): HTMLE
     node.parentNode?.replaceChild(fragment, node);
   }
   return words;
+}
+
+function isInReadableHyperlink(node: Node): boolean {
+  const anchor = node.parentElement?.closest<HTMLAnchorElement>("a[href]") || null;
+  return Boolean(anchor && isReadableHyperlink(anchor));
 }
 
 function resetBodyTokenizationForMode(body: HTMLElement, mode: "word" | "smooth"): void {

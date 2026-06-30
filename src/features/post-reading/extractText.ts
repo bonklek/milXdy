@@ -261,7 +261,7 @@ function extractTweetTextNodeText(node: HTMLElement, includeHyperlinks: boolean)
   return clone.innerText || clone.textContent || "";
 }
 
-function isReadableHyperlink(link: HTMLAnchorElement): boolean {
+export function isReadableHyperlink(link: HTMLAnchorElement): boolean {
   const text = cleanText(link.innerText || link.textContent || "");
   const href = link.getAttribute("href") || "";
   if (/^(https?:\/\/|www\.|t\.co\/)/i.test(text)) return true;
