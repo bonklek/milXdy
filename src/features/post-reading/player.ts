@@ -25,7 +25,7 @@ type PlayerActions = {
   onBoundarySupportChange: (results: Record<string, BoundarySupport>) => void;
   getVoices: () => SpeechSynthesisVoice[];
   getPreferredVoice: () => SpeechSynthesisVoice | null;
-  probeBoundarySupport: (voice: SpeechSynthesisVoice) => Promise<boolean>;
+  probeBoundarySupport: (voice: SpeechSynthesisVoice, signal?: AbortSignal) => Promise<boolean>;
 };
 
 export class MiniPlayer {
@@ -55,6 +55,7 @@ export class MiniPlayer {
   private closing = false;
   private boundarySupport = new Map<string, BoundarySupport>();
   private probingVoices = false;
+  private probeAbort: AbortController | null = null;
 
   constructor(settings: PostReadingSettings, actions: PlayerActions) {
     this.settings = settings;
@@ -255,6 +256,7 @@ export class MiniPlayer {
   }
 
   close(): void {
+    this.stopProbe();
     this.settingsPanel.hidden = true;
     this.root.dataset.settingsOpen = "false";
     this.closing = true;
@@ -446,10 +448,11 @@ export class MiniPlayer {
     const probeButton = document.createElement("button");
     probeButton.type = "button";
     probeButton.className = "post-reading-secondary";
-    probeButton.textContent = this.probingVoices ? "Testing voices..." : "Test voice highlighting";
-    probeButton.disabled = this.probingVoices || voices.length === 0;
+    probeButton.textContent = this.probingVoices ? "Stop testing voices" : "Test voice highlighting";
+    probeButton.disabled = !this.probingVoices && voices.length === 0;
     probeButton.addEventListener("click", () => {
-      void this.probeVoices(sortedVoices);
+      if (this.probingVoices) this.stopProbe();
+      else void this.probeVoices(sortedVoices);
     });
 
     const speedLabel = document.createElement("label");
@@ -546,23 +549,36 @@ export class MiniPlayer {
   }
 
   private async probeVoices(voices: SpeechSynthesisVoice[]): Promise<void> {
+    if (this.probingVoices) return;
     this.probingVoices = true;
+    this.probeAbort = new AbortController();
+    const signal = this.probeAbort.signal;
     this.renderSettings();
-    for (const voice of voices) {
-      if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
-      if (knownVoiceBoundarySupport(voice) === "supported") {
-        this.boundarySupport.set(voice.voiceURI, "supported");
+    try {
+      for (const voice of voices) {
+        if (signal.aborted) break;
+        if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
+        if (knownVoiceBoundarySupport(voice) === "supported") {
+          this.boundarySupport.set(voice.voiceURI, "supported");
+          this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
+          this.renderSettings();
+          continue;
+        }
+        const supported = await this.actions.probeBoundarySupport(voice, signal);
+        if (signal.aborted) break;
+        this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");
         this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
         this.renderSettings();
-        continue;
       }
-      const supported = await this.actions.probeBoundarySupport(voice);
-      this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");
-      this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
+    } finally {
+      this.probingVoices = false;
+      this.probeAbort = null;
       this.renderSettings();
     }
-    this.probingVoices = false;
-    this.renderSettings();
+  }
+
+  private stopProbe(): void {
+    this.probeAbort?.abort();
   }
 }
 

@@ -36,7 +36,7 @@ export type TtsEngine = {
   speak: (request: TtsRequest) => Promise<TtsSession>;
   getVoices?: () => SpeechSynthesisVoice[];
   getPreferredVoice?: () => SpeechSynthesisVoice | null;
-  probeBoundarySupport?: (voice: SpeechSynthesisVoice) => Promise<boolean>;
+  probeBoundarySupport?: (voice: SpeechSynthesisVoice, signal?: AbortSignal) => Promise<boolean>;
 };
 
 type CustomSpeechResponse = {
@@ -219,8 +219,9 @@ export function createTtsEngine(settings: PostReadingSettings): TtsEngine {
   return engine;
 }
 
-export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice): Promise<boolean> {
+export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice, signal?: AbortSignal): Promise<boolean> {
   if (!("speechSynthesis" in window) || !("SpeechSynthesisUtterance" in window)) return false;
+  if (signal?.aborted) return false;
   return new Promise((resolve) => {
     const utterance = new SpeechSynthesisUtterance("Post-reading checks whether this voice reports steady word timing for smooth highlighting.");
     utterance.voice = voice;
@@ -234,11 +235,14 @@ export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice): Pr
       if (settled) return;
       settled = true;
       window.clearTimeout(timeout);
+      signal?.removeEventListener("abort", onAbort);
       try {
         window.speechSynthesis.cancel();
       } catch {}
       resolve(result);
     };
+    const onAbort = () => finish(false);
+    signal?.addEventListener("abort", onAbort);
     const timeout = window.setTimeout(() => finish(hasEnoughBoundaries()), 5000);
     utterance.onboundary = (event) => {
       if (typeof event.charIndex !== "number" || event.charIndex <= lastCharIndex) return;

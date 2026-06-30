@@ -84,8 +84,8 @@ export class SpeechController {
     return this.engine.getPreferredVoice?.() ?? null;
   }
 
-  async probeBoundarySupport(voice: SpeechSynthesisVoice): Promise<boolean> {
-    return this.engine.probeBoundarySupport?.(voice) ?? false;
+  async probeBoundarySupport(voice: SpeechSynthesisVoice, signal?: AbortSignal): Promise<boolean> {
+    return this.engine.probeBoundarySupport?.(voice, signal) ?? false;
   }
 
   onComplete(callback: (() => void) | null): void {

@@ -157,7 +157,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => speech.getVoices(),
     getPreferredVoice: () => speech.getPreferredVoice(),
-    probeBoundarySupport: (voice) => speech.probeBoundarySupport(voice),
+    probeBoundarySupport: (voice, signal) => speech.probeBoundarySupport(voice, signal),
   });
   wikiSpeech = new SpeechController(settings);
   wikiPlayer = new MiniPlayer(settings, {
@@ -191,7 +191,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => wikiSpeech.getVoices(),
     getPreferredVoice: () => wikiSpeech.getPreferredVoice(),
-    probeBoundarySupport: (voice) => wikiSpeech.probeBoundarySupport(voice),
+    probeBoundarySupport: (voice, signal) => wikiSpeech.probeBoundarySupport(voice, signal),
   });
   appFrame = createOverlayAppFrame({
     id: "post-reading",
