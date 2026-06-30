@@ -44,11 +44,17 @@ let maxPendingSurfaces = 144;
 let scrollSettleMs = 160;
 let lastScrollAt = 0;
 let deferredFullScanTimer: number | null = null;
+let deferredFlushTimer: number | null = null;
 let removeVisibilityListener: (() => void) | null = null;
 let removeScrollListener: (() => void) | null = null;
+let removePointerMoveListener: (() => void) | null = null;
 let enabledSurfaceKinds = new Set<TwitterSurfaceKind>(["tweet", "userCell", "notification", "directMessage", "profile"]);
+let lastNotificationPointerAt = 0;
+let fullScanNotificationHoverDeferred = false;
+const notificationPointerSettleMs = 120;
 
-const counters = {
+function createScannerCounters() {
+  return {
   mutations: 0,
   surfacesQueued: 0,
   surfacesEmitted: 0,
@@ -56,6 +62,9 @@ const counters = {
   surfacesDroppedPendingCap: 0,
   safetyScans: 0,
   scrollEvents: 0,
+  notificationPointerEvents: 0,
+  fullScanRequestsDeferredForNotificationHover: 0,
+  flushesDeferredForNotificationHover: 0,
   fullScanRequestsDeferredForScroll: 0,
   fullScanRequests: 0,
   fullScanRequestsCoalesced: 0,
@@ -63,6 +72,9 @@ const counters = {
   fullScans: 0,
   lazyFieldsComputed: 0,
   activeSurfaceKinds: 5,
+  maxSurfacesPerFlushBudget: 24,
+  maxSurfacesPerScrollFlushBudget: 6,
+  maxSurfacesPerFullScanBudget: 72,
   maxPendingSurfacesBudget: 144,
   lastFullScanQueued: 0,
   lastFullScanDropped: 0,
@@ -72,9 +84,14 @@ const counters = {
   maxPendingSurfaces: 0,
   lastFlushBatchSize: 0,
   lastFlushRemaining: 0,
+  lastFlushLimit: 0,
+  lastFlushReason: "" as "normal" | "scroll" | "",
   lastFlushMs: 0,
   updatedAt: 0,
-};
+  };
+}
+
+const counters = createScannerCounters();
 
 export function subscribeTwitterSurfaces(listener: Listener): () => void {
   listeners.add(listener);
@@ -95,6 +112,17 @@ export function getTwitterScannerCounters(): typeof counters {
   return { ...counters };
 }
 
+export function resetTwitterScannerCounters(): void {
+  Object.assign(counters, createScannerCounters(), {
+    activeSurfaceKinds: enabledSurfaceKinds.size,
+    maxSurfacesPerFlushBudget: maxSurfacesPerFlush,
+    maxSurfacesPerScrollFlushBudget: maxSurfacesPerScrollFlush,
+    maxSurfacesPerFullScanBudget: maxSurfacesPerFullScan,
+    maxPendingSurfacesBudget: maxPendingSurfaces,
+    updatedAt: Date.now(),
+  });
+}
+
 export function configureTwitterScanner(options: {
   safetyScanIntervalMs?: number | null;
   surfaceKinds?: readonly TwitterSurfaceKind[];
@@ -107,12 +135,15 @@ export function configureTwitterScanner(options: {
   safetyScanIntervalMs = options.safetyScanIntervalMs ?? null;
   if (typeof options.maxSurfacesPerFlush === "number" && Number.isFinite(options.maxSurfacesPerFlush)) {
     maxSurfacesPerFlush = Math.max(1, Math.floor(options.maxSurfacesPerFlush));
+    counters.maxSurfacesPerFlushBudget = maxSurfacesPerFlush;
   }
   if (typeof options.maxSurfacesPerScrollFlush === "number" && Number.isFinite(options.maxSurfacesPerScrollFlush)) {
     maxSurfacesPerScrollFlush = Math.max(1, Math.floor(options.maxSurfacesPerScrollFlush));
+    counters.maxSurfacesPerScrollFlushBudget = maxSurfacesPerScrollFlush;
   }
   if (typeof options.maxSurfacesPerFullScan === "number" && Number.isFinite(options.maxSurfacesPerFullScan)) {
     maxSurfacesPerFullScan = Math.max(1, Math.floor(options.maxSurfacesPerFullScan));
+    counters.maxSurfacesPerFullScanBudget = maxSurfacesPerFullScan;
   }
   if (typeof options.maxPendingSurfaces === "number" && Number.isFinite(options.maxPendingSurfaces)) {
     maxPendingSurfaces = Math.max(maxSurfacesPerFlush, Math.floor(options.maxPendingSurfaces));
@@ -125,6 +156,8 @@ export function configureTwitterScanner(options: {
     enabledSurfaceKinds = new Set(options.surfaceKinds);
     counters.activeSurfaceKinds = enabledSurfaceKinds.size;
   }
+  counters.updatedAt = Date.now();
+  scheduleDiagnosticsWrite();
   restartSafetyTimer();
 }
 
@@ -149,6 +182,14 @@ function ensureScanner(): void {
   };
   window.addEventListener("scroll", scrollListener, { passive: true });
   removeScrollListener = () => window.removeEventListener("scroll", scrollListener);
+  const pointerMoveListener = (event: PointerEvent) => {
+    if (!enabledSurfaceKinds.has("notification") || !isNotificationPointerTarget(event.target)) return;
+    lastNotificationPointerAt = performance.now();
+    counters.notificationPointerEvents += 1;
+    counters.updatedAt = Date.now();
+  };
+  window.addEventListener("pointermove", pointerMoveListener, { passive: true });
+  removePointerMoveListener = () => window.removeEventListener("pointermove", pointerMoveListener);
 }
 
 function stopScanner(): void {
@@ -160,6 +201,9 @@ function stopScanner(): void {
   removeVisibilityListener = null;
   removeScrollListener?.();
   removeScrollListener = null;
+  removePointerMoveListener?.();
+  removePointerMoveListener = null;
+  fullScanNotificationHoverDeferred = false;
   if (flushTimer !== null) {
     window.clearTimeout(flushTimer);
     flushTimer = null;
@@ -183,6 +227,10 @@ function stopScanner(): void {
   if (deferredFullScanTimer !== null) {
     window.clearTimeout(deferredFullScanTimer);
     deferredFullScanTimer = null;
+  }
+  if (deferredFlushTimer !== null) {
+    window.clearTimeout(deferredFlushTimer);
+    deferredFlushTimer = null;
   }
 }
 
@@ -230,6 +278,20 @@ function scheduleFullScan(): void {
     scheduleDiagnosticsWrite();
     return;
   }
+  const remainingNotificationPointerSettle = notificationPointerSettleRemainingMs();
+  if (remainingNotificationPointerSettle > 0 && !fullScanNotificationHoverDeferred) {
+    fullScanNotificationHoverDeferred = true;
+    counters.fullScanRequestsDeferredForNotificationHover += 1;
+    counters.updatedAt = Date.now();
+    if (deferredFullScanTimer === null) {
+      deferredFullScanTimer = window.setTimeout(() => {
+        deferredFullScanTimer = null;
+        scheduleFullScan();
+      }, remainingNotificationPointerSettle);
+    }
+    scheduleDiagnosticsWrite();
+    return;
+  }
   if (fullScanFrame !== null) {
     counters.fullScanRequestsCoalesced += 1;
     return;
@@ -242,6 +304,7 @@ function scheduleFullScan(): void {
 
 function runFullScan(): void {
   const startedAt = performance.now();
+  fullScanNotificationHoverDeferred = false;
   counters.fullScans += 1;
   const selector = activeSurfaceSelector();
   if (!selector) {
@@ -320,6 +383,19 @@ function debounceFlush(): void {
 
 function scheduleFlush(): void {
   if (scanScheduled) return;
+  const remainingNotificationPointerSettle = pendingOnlyNotificationSurfaces() ? notificationPointerSettleRemainingMs() : 0;
+  if (remainingNotificationPointerSettle > 0) {
+    counters.flushesDeferredForNotificationHover += 1;
+    counters.updatedAt = Date.now();
+    if (deferredFlushTimer === null) {
+      deferredFlushTimer = window.setTimeout(() => {
+        deferredFlushTimer = null;
+        scheduleFlush();
+      }, remainingNotificationPointerSettle);
+    }
+    scheduleDiagnosticsWrite();
+    return;
+  }
   scanScheduled = true;
   flushFrame = window.requestAnimationFrame(() => {
     flushFrame = null;
@@ -331,7 +407,8 @@ function flush(): void {
   scanScheduled = false;
   const startedAt = performance.now();
   const surfaces: Array<[HTMLElement, TwitterSurfaceKind]> = [];
-  const flushLimit = activeFlushLimit();
+  const flushReason = activeFlushReason();
+  const flushLimit = activeFlushLimit(flushReason);
   for (const entry of pending.entries()) {
     surfaces.push(entry);
     pending.delete(entry[0]);
@@ -349,24 +426,65 @@ function flush(): void {
     }
   }
   counters.flushes += 1;
-  if (flushLimit < maxSurfacesPerFlush) counters.scrollFlushesThrottled += 1;
+  if (flushReason === "scroll") counters.scrollFlushesThrottled += 1;
   counters.lastFlushBatchSize = surfaces.length;
   counters.lastFlushRemaining = pending.size;
+  counters.lastFlushLimit = flushLimit;
+  counters.lastFlushReason = flushReason;
   counters.lastFlushMs = Math.round((performance.now() - startedAt) * 10) / 10;
   counters.updatedAt = Date.now();
   scheduleDiagnosticsWrite();
   if (pending.size > 0) scheduleFlush();
 }
 
-function activeFlushLimit(): number {
-  return scrollSettleRemainingMs() > 0
+function activeFlushReason(): "normal" | "scroll" {
+  return scrollSettleRemainingMs() > 0 ? "scroll" : "normal";
+}
+
+function activeFlushLimit(reason = activeFlushReason()): number {
+  const limit = reason === "scroll"
     ? Math.min(maxSurfacesPerFlush, maxSurfacesPerScrollFlush)
     : maxSurfacesPerFlush;
+  counters.lastFlushLimit = limit;
+  counters.lastFlushReason = reason;
+  return limit;
 }
 
 function scrollSettleRemainingMs(): number {
   if (scrollSettleMs <= 0 || lastScrollAt <= 0) return 0;
   return Math.max(0, Math.ceil(scrollSettleMs - (performance.now() - lastScrollAt)));
+}
+
+function notificationPointerSettleRemainingMs(): number {
+  if (notificationPointerSettleMs <= 0 || lastNotificationPointerAt <= 0 || !isNotificationsRoute()) return 0;
+  return Math.max(0, Math.ceil(notificationPointerSettleMs - (performance.now() - lastNotificationPointerAt)));
+}
+
+function pendingOnlyNotificationSurfaces(): boolean {
+  if (pending.size === 0) return false;
+  for (const kind of pending.values()) {
+    if (kind !== "notification") return false;
+  }
+  return true;
+}
+
+function isNotificationsRoute(): boolean {
+  return location.pathname === "/notifications" || location.pathname.startsWith("/notifications/");
+}
+
+function isNotificationPointerTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  if (!isNotificationsRoute()) return false;
+  const notification = target.closest('article[data-testid="notification"]');
+  if (!notification) return false;
+  return Boolean(target.closest([
+    'article[data-testid="notification"] a[role="link"]',
+    'article[data-testid="notification"] a[href^="/"]',
+    'article[data-testid="notification"] [data-testid="User-Name"]',
+    'article[data-testid="notification"] [data-testid^="UserAvatar-Container-"]',
+    'article[data-testid="notification"] [data-testid="Tweet-User-Avatar"]',
+    'article[data-testid="notification"] img[src*="profile_images"]',
+  ].join(",")));
 }
 
 function buildSurface(kind: TwitterSurfaceKind, element: HTMLElement): TwitterSurface {

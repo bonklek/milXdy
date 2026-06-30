@@ -5,6 +5,8 @@ export const DEFAULT_SETTINGS: PostReadingSettings = {
   speed: 1,
   volume: 1,
   voiceURI: null,
+  voiceLanguageFilter: "all",
+  voiceGenderFilter: "all",
   autoVoice: true,
   ttsEngine: "web-speech",
   customTtsEndpoint: null,

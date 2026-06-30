@@ -1,6 +1,6 @@
 # milXdy 0.2.0 QA Checklist
 
-Use this checklist before cutting a `0.2.0` prerelease. The canonical release readiness gate is `npm run verify:release:gates:020`; live Chrome proof is optional manual QA evidence.
+Use this checklist before cutting the `0.2.0` release. The canonical release readiness gate is `npm run verify:release:gates:020`; live Chrome proof and screenshots are optional manual QA evidence.
 
 ## Automated Gates
 
@@ -23,13 +23,14 @@ If `node` is unavailable on `PATH` in the test environment, run the same scripts
 - Run `npm run verify:live-probe:020` after updating the QA log when live browser evidence is being collected.
 - Confirm the shared side rail appears.
 - Open **Apps** and confirm Lite, Balanced, and Full first-run choices appear on a fresh profile or cleared extension storage.
-- Click **Skip** in a fresh profile and confirm conservative defaults persist: Music, Miladychan Portal, Beetol, RemiNet Chat, and Milady Maxxer remain disabled until explicitly enabled or Full is selected.
+- Click **Skip** in a fresh profile and confirm first-party apps remain available and toggleable by default.
 - Confirm the Apps Hub runtime summary shows the active Performance mode plus enabled, pinned, loaded, loading, and failed counts.
 - Confirm each Apps Hub card shows compact runtime state, load triggers, cost metadata, rail support, privacy labels, remote services, and deferred or loaded state when applicable.
 - Open an app card's Details view and confirm it lists behavior, performance impact, load triggers, data notes, permission notes, storage notes, and current build availability.
 - Use an available app card's Reset action and confirm it clears only that app's declared local/sync storage keys, refreshes enablement, updates rail visibility, and records a `hub.reset.<appId>` diagnostic.
-- In Lite and Balanced builds, confirm Apps Hub still lists profile-excluded apps as unavailable with a build-profile explanation, without Enable, Pin, or Open controls.
+- In Lite and Balanced builds, confirm every first-party app remains available with Enable, Pin, and Open controls where that app supports them.
 - Apply each first-run preset in a fresh/cleared profile and confirm matching Performance mode, enabled apps, and default rail pins.
+- Open the Apps Hub settings menu after first-run and confirm Lite, Balanced, and Full setup choices can still be reapplied.
 - Confirm app enable/disable changes persist after refreshing X/Twitter.
 - Confirm pin/unpin changes persist after refreshing X/Twitter.
 - Confirm the dock gear can switch left/right side, reorder icons, and reset order.
@@ -106,7 +107,9 @@ If `node` is unavailable on `PATH` in the test environment, run the same scripts
 ## Release Metadata
 
 - Confirm `CHANGELOG.md` links the `0.2.0` release notes.
+- Confirm `docs/RELEASE_NOTES_0.2.0.md` has no stale "Remaining Before Release" item that has already shipped.
+- Confirm [RELEASE_SCREENSHOTS_0.2.0.md](RELEASE_SCREENSHOTS_0.2.0.md) has matching screenshot evidence for side rail, Performance modes, Miladychan Portal, and Music before publishing release media.
 - Confirm `package.json`, `public/manifest.json`, and generated Chromium/Firefox manifests report version `0.2.0`.
-- Confirm GitHub release assets include Chromium/Firefox Lite, Balanced, and Full zips plus `milXdy-0.2.0-checksums.sha256` from `npm run package:release`, then run `npm run verify:release:checksums` and `npm run verify:release:reproducible`, and confirm beta releases are marked as prereleases.
+- Confirm GitHub release assets include Chromium/Firefox Lite, Balanced, and Full zips plus `milXdy-0.2.0-checksums.sha256` from `npm run package:release`, then run `npm run verify:release:checksums` and `npm run verify:release:reproducible`, and confirm the GitHub release is published as a normal release.
 - Confirm generated release archives contain source-built extension output only, with local browser caches and machine-specific test output excluded.
 - Confirm `.gitignore` keeps secret-bearing files out of the repository while allowing `.env.example`.

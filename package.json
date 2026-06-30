@@ -1,6 +1,6 @@
 {
   "name": "milxdy",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
@@ -23,6 +23,8 @@
     "typecheck": "tsc --noEmit",
     "lint:firefox": "web-ext lint --source-dir dist/firefox",
     "verify:music": "node scripts/verify-music-build.mjs",
+    "verify:post-reading:hyperlink-offsets": "node scripts/verify-post-reading-hyperlink-offsets.mjs",
+    "verify:update-check": "vitest run src/shared/updateCheck.test.ts",
     "verify:app-smoke:020": "node scripts/verify-app-smoke-020.mjs",
     "verify:url-allowlist": "node scripts/verify-url-allowlist.mjs",
     "verify:platform": "node scripts/verify-platform.mjs",

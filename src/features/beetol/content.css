@@ -314,6 +314,27 @@
   display: block;
 }
 
+.beetol-signed-out-msg button {
+  margin-top: 7px;
+  border: 1px solid var(--beetol-border);
+  border-right: 3px solid #adadad;
+  border-bottom: 3px solid #adadad;
+  border-radius: 0;
+  padding: 4px 8px;
+  background: var(--beetol-button);
+  color: var(--beetol-text);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.beetol-signed-out-msg button:hover {
+  filter: brightness(0.98);
+  transform: translate(1px, 1px);
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+}
+
 .beetol-signed-out .beetol-panel {
   width: 260px;
 }

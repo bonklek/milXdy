@@ -11,13 +11,15 @@ import type { MilxdyContentAppContext } from "../../shared/appPlatform";
 
 let postSoundContext: AudioContext | null = null;
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
-const unreadNotifications = new WeakSet<HTMLElement>();
+const xUnreadNotifications = new WeakSet<HTMLElement>();
+const clickedNotificationKeys = new WeakMap<HTMLElement, string>();
 const SHOW_NEW_POSTS_RE = /show\s+\d+\s+posts?/i;
 const HOME_LOGO_REPLACEMENT_CLASS = "milady-logo-replacement";
 const HOME_LOGO_BACKGROUND_CLASS = "milxdy-home-logo-background";
 let booted = false;
 let loadUserActionApp: MilxdyContentAppContext["loadAppById"] = async () => null;
 let queueNotificationSurface: ((notification: HTMLElement) => void) | null = null;
+let queueTweetSurface: ((tweet: HTMLElement) => void) | null = null;
 let refreshHomeLogo: (() => void) | null = null;
 type RootVisualClickHandler = (event: MouseEvent) => void;
 const rootVisualClickHandlers = new Set<RootVisualClickHandler>();
@@ -60,9 +62,11 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
   setupShowNewPostsMarkers();
   setupTweetPngShareActions(context);
   setupNotificationUnreadMarkers(context);
+  setupOrphanReplyMarkers(context);
 }
 
 export function onSurface(surface: { kind: string; element: HTMLElement }): void {
+  if (surface.kind === "tweet") queueTweetSurface?.(surface.element);
   if (surface.kind === "notification") queueNotificationSurface?.(surface.element);
 }
 
@@ -80,6 +84,7 @@ export function dispose(): void {
   postSoundContext = null;
   loadUserActionApp = async () => null;
   refreshHomeLogo = null;
+  queueTweetSurface = null;
   rootVisualClickHandlers.clear();
   if (rootVisualClickListenerInstalled) {
     document.removeEventListener("click", dispatchRootVisualClick, true);
@@ -369,6 +374,7 @@ function homeLinkHasVisibleNavigationLabels(homeLink: HTMLAnchorElement): boolea
 }
 
 function resolveHomeLogoAccentColor(): string {
+  if (document.documentElement.dataset.milxdyReskinProfile !== "max") return "#1d9bf0";
   const storedColor = detectStoredXAccentColor();
   if (storedColor) return storedColor;
   const sampledColor = sampleXAccentColor();
@@ -382,7 +388,7 @@ function resolveHomeLogoAccentColor(): string {
       return "#7856ff";
     case "gray":
     default:
-      return document.documentElement.dataset.milxdyReskinProfile === "max" ? "#3f6f16" : "#4f6f8f";
+      return "#3f6f16";
   }
 }
 
@@ -678,24 +684,26 @@ function injectTweetPngStyles(): void {
 
 function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void {
   const pending = new Set<HTMLElement>();
-  let cancelTimer: (() => void) | null = null;
+  let rafId = 0;
+  const flush = () => {
+    rafId = 0;
+    if (context.signal.aborted) return;
+    const notifications = Array.from(pending);
+    pending.clear();
+    for (const queued of notifications) markNotificationUnread(queued);
+  };
   const queueNotification = (notification: HTMLElement) => {
     pending.add(notification);
-    if (cancelTimer !== null) return;
-    cancelTimer = context.scheduler.timeout(() => {
-      cancelTimer = null;
-      if (context.signal.aborted) return;
-      const notifications = Array.from(pending);
-      pending.clear();
-      for (const queued of notifications) markNotificationUnread(queued);
-    }, 150);
+    if (rafId) return;
+    rafId = window.requestAnimationFrame(flush);
   };
 
   const notificationClickListener = (event: MouseEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     const notification = target?.closest<HTMLElement>('article[data-testid="notification"]');
     if (!notification) return;
-    unreadNotifications.delete(notification);
+    xUnreadNotifications.delete(notification);
+    clickedNotificationKeys.set(notification, notificationReadKey(notification));
     notification.dataset.milxdyNotificationUnread = "false";
     notification.dataset.milxdyNotificationUnreadSource = "clicked";
     const cell = notification.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
@@ -710,8 +718,8 @@ function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void 
 
   queueNotificationSurface = queueNotification;
   context.addDisposable(() => {
-    cancelTimer?.();
-    cancelTimer = null;
+    if (rafId) window.cancelAnimationFrame(rafId);
+    rafId = 0;
     pending.clear();
     if (queueNotificationSurface === queueNotification) queueNotificationSurface = null;
   });
@@ -722,7 +730,8 @@ function markNotificationUnread(notification: HTMLElement): void {
   const cell = notification.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
   const unreadSource = getUnreadNotificationSource(notification, cell);
   const unread = Boolean(unreadSource);
-  if (unread) unreadNotifications.add(notification);
+  if (unread && unreadSource !== "previous-x-unread") xUnreadNotifications.add(notification);
+  if (unread) clickedNotificationKeys.delete(notification);
   notification.dataset.milxdyNotificationUnread = String(unread);
   notification.dataset.milxdyNotificationUnreadSource = unreadSource || "none";
   if (cell) cell.dataset.milxdyNotificationUnread = String(unread);
@@ -730,12 +739,17 @@ function markNotificationUnread(notification: HTMLElement): void {
 }
 
 function getUnreadNotificationSource(notification: HTMLElement, cell: HTMLElement | null): string | null {
+  if (clickedNotificationKeys.get(notification) === notificationReadKey(notification)) return null;
+
   const labelText = [
     notification.getAttribute("aria-label"),
     cell?.getAttribute("aria-label"),
     notification.querySelector<HTMLElement>('[aria-label*="Unread"], [aria-label*="unread"], [aria-label*="New"], [aria-label*="new"]')?.getAttribute("aria-label"),
   ].filter(Boolean).join(" ");
   if (/\b(unread|new notification|new notifications)\b/i.test(labelText)) return "aria";
+
+  const markerSource = getUnreadMarkerSource(notification, cell);
+  if (markerSource) return markerSource;
 
   const candidates = [
     cell,
@@ -748,12 +762,100 @@ function getUnreadNotificationSource(notification: HTMLElement, cell: HTMLElemen
     if (element instanceof HTMLElement && isTwitterUnreadBackground(element.style.backgroundColor)) return "inline-style";
     const styleBackground = element.getAttribute("style")?.match(/background-color:\s*([^;]+)/i)?.[1];
     if (styleBackground && isTwitterUnreadBackground(styleBackground)) return "style-attribute";
+    if (element instanceof HTMLElement && isTwitterUnreadBackground(window.getComputedStyle(element).backgroundColor)) return "computed-style";
   }
-  for (const element of candidates) {
-    if (isTwitterUnreadBackground(window.getComputedStyle(element).backgroundColor)) return "computed-style";
-  }
-  if (unreadNotifications.has(notification)) return "previous-x-unread";
+  if (xUnreadNotifications.has(notification)) return "previous-x-unread";
   return null;
+}
+
+function setupOrphanReplyMarkers(context: MilxdyContentAppContext): void {
+  injectOrphanReplyStyles();
+  const pending = new Set<HTMLElement>();
+  let queued = false;
+  const flush = () => {
+    queued = false;
+    const tweets = Array.from(pending);
+    pending.clear();
+    for (const tweet of tweets) markOrphanReply(tweet);
+  };
+  queueTweetSurface = (tweet: HTMLElement) => {
+    pending.add(tweet);
+    if (queued) return;
+    queued = true;
+    window.requestAnimationFrame(flush);
+  };
+  for (const tweet of document.querySelectorAll<HTMLElement>('article[data-testid="tweet"]')) queueTweetSurface(tweet);
+  context.addDisposable(() => {
+    pending.clear();
+    queueTweetSurface = null;
+  });
+}
+
+function markOrphanReply(tweet: HTMLElement): void {
+  if (!tweet.isConnected) return;
+  const hasReplyContext = /\breplying to\b/i.test(tweet.textContent || "");
+  const hasNativeConnector = Boolean(tweet.querySelector([
+    'div[style*="background-color: rgb(207, 217, 222)"]',
+    'div[style*="background-color: rgb(239, 243, 244)"]',
+    'div[style*="background-color: rgb(196, 207, 214)"]',
+    'div[style*="background-color: rgb(56, 68, 77)"]',
+    'div[style*="background-color: rgb(61, 73, 82)"]',
+    'div[style*="background-color: rgb(51, 54, 57)"]',
+    'div[style*="background-color: rgb(47, 51, 54)"]',
+    'div[style*="background-color: rgb(66, 83, 100)"]',
+  ].join(", ")));
+  tweet.dataset.milxdyOrphanReply = String(hasReplyContext && !hasNativeConnector);
+}
+
+function injectOrphanReplyStyles(): void {
+  if (document.getElementById("milxdy-orphan-reply-styles")) return;
+  const style = document.createElement("style");
+  style.id = "milxdy-orphan-reply-styles";
+  style.textContent = `
+    article[data-testid="tweet"][data-milxdy-orphan-reply="true"] {
+      position: relative;
+    }
+    article[data-testid="tweet"][data-milxdy-orphan-reply="true"]::before {
+      content: "";
+      position: absolute;
+      left: 38px;
+      top: 0;
+      width: 2px;
+      height: 18px;
+      background: rgba(83, 100, 113, 0.58);
+      pointer-events: none;
+      z-index: 1;
+    }
+    html[data-milxdy-x-theme="dark"] article[data-testid="tweet"][data-milxdy-orphan-reply="true"]::before,
+    html[data-milxdy-x-theme="dim"] article[data-testid="tweet"][data-milxdy-orphan-reply="true"]::before {
+      background: rgba(139, 152, 165, 0.62);
+    }
+  `;
+  document.head.append(style);
+}
+
+function notificationReadKey(notification: HTMLElement): string {
+  const statusHref = Array.from(notification.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+    .map((anchor) => anchor.href)
+    .find(Boolean);
+  if (statusHref) return statusHref;
+  return (notification.textContent || "").replace(/\s+/g, " ").trim().slice(0, 240);
+}
+
+function getUnreadMarkerSource(notification: HTMLElement, cell: HTMLElement | null): string | null {
+  const root = cell || notification;
+  const marker = Array.from(root.querySelectorAll<HTMLElement>('[data-testid], [aria-label], [role="status"]'))
+    .find((element) => {
+      const label = `${element.getAttribute("data-testid") || ""} ${element.getAttribute("aria-label") || ""}`.toLowerCase();
+      if (/\b(read|mark as read|settings|more)\b/.test(label)) return false;
+      return /\b(unread|new notification|new notifications)\b/.test(label);
+    });
+  if (marker) return "marker-label";
+
+  const statusText = Array.from(root.querySelectorAll<HTMLElement>('[role="status"], [aria-live]'))
+    .map((element) => element.textContent || "")
+    .join(" ");
+  return /\b(unread|new notification|new notifications)\b/i.test(statusText) ? "status-text" : null;
 }
 
 function isTwitterUnreadBackground(value: string): boolean {

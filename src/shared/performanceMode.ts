@@ -2,8 +2,7 @@ import { safeLocalGet, safeLocalSet } from "./extensionRuntime";
 
 export type PerformanceMode = "fast" | "balanced" | "full" | "developer";
 
-export type PerformanceModeBudget = {
-  mode: PerformanceMode;
+type PerformanceRuntimeBudgetFields = {
   visibleSurfaceMarginPx: number;
   idleSurfaceTimeoutMs: number;
   maxIdleTasksPerFrame: number;
@@ -24,6 +23,15 @@ export type PerformanceModeBudget = {
   allowHeavyIdlePreload: boolean;
   allowHeavySurfaceImports: boolean;
   allowWorkerPreload: boolean;
+};
+
+export type PerformanceStartupBudgetOverlay = Partial<PerformanceRuntimeBudgetFields> & {
+  durationMs: number;
+};
+
+export type PerformanceModeBudget = PerformanceRuntimeBudgetFields & {
+  mode: PerformanceMode;
+  startup?: PerformanceStartupBudgetOverlay | null;
 };
 
 export const PERFORMANCE_MODE_KEY = "milxdy.performance.mode";
@@ -53,6 +61,18 @@ export const PERFORMANCE_BUDGETS: Record<PerformanceMode, PerformanceModeBudget>
     allowHeavyIdlePreload: false,
     allowHeavySurfaceImports: false,
     allowWorkerPreload: false,
+    startup: {
+      durationMs: 2500,
+      maxIdleTasksPerFrame: 1,
+      maxScannerSurfacesPerFlush: 6,
+      maxScannerSurfacesPerScrollFlush: 2,
+      maxScannerSurfacesPerFullScan: 12,
+      maxScannerPendingSurfaces: 24,
+      maxSurfaceDeliveryQueuePerApp: 4,
+      maxSurfaceImportsPerRoute: 1,
+      allowHeavySurfaceImports: false,
+      allowWorkerPreload: false,
+    },
   },
   balanced: {
     mode: "balanced",
@@ -76,6 +96,18 @@ export const PERFORMANCE_BUDGETS: Record<PerformanceMode, PerformanceModeBudget>
     allowHeavyIdlePreload: false,
     allowHeavySurfaceImports: false,
     allowWorkerPreload: false,
+    startup: {
+      durationMs: 3000,
+      maxIdleTasksPerFrame: 1,
+      maxScannerSurfacesPerFlush: 10,
+      maxScannerSurfacesPerScrollFlush: 3,
+      maxScannerSurfacesPerFullScan: 24,
+      maxScannerPendingSurfaces: 48,
+      maxSurfaceDeliveryQueuePerApp: 6,
+      maxSurfaceImportsPerRoute: 1,
+      allowHeavySurfaceImports: false,
+      allowWorkerPreload: false,
+    },
   },
   full: {
     mode: "full",
@@ -99,6 +131,19 @@ export const PERFORMANCE_BUDGETS: Record<PerformanceMode, PerformanceModeBudget>
     allowHeavyIdlePreload: true,
     allowHeavySurfaceImports: true,
     allowWorkerPreload: false,
+    startup: {
+      durationMs: 3500,
+      maxIdleTasksPerFrame: 2,
+      maxScannerSurfacesPerFlush: 16,
+      maxScannerSurfacesPerScrollFlush: 6,
+      maxScannerSurfacesPerFullScan: 48,
+      maxScannerPendingSurfaces: 96,
+      maxSurfaceDeliveryQueuePerApp: 12,
+      maxSurfaceImportsPerRoute: 2,
+      idlePreloadDelayMs: 10000,
+      allowHeavySurfaceImports: false,
+      allowWorkerPreload: false,
+    },
   },
   developer: {
     mode: "developer",
@@ -122,6 +167,7 @@ export const PERFORMANCE_BUDGETS: Record<PerformanceMode, PerformanceModeBudget>
     allowHeavyIdlePreload: true,
     allowHeavySurfaceImports: true,
     allowWorkerPreload: true,
+    startup: null,
   },
 };
 

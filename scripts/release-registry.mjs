@@ -1,12 +1,11 @@
 import { coreHostPermissions } from "./release-builds.mjs";
 
 export function appIncludedInBuildProfile(app, profile) {
-  if (profile === "full") return true;
-  return app.hub?.presets?.includes(profile) === true;
+  return true;
 }
 
 export function appsForProfile(registry, profile) {
-  return registry.filter((app) => appIncludedInBuildProfile(app, profile));
+  return registry;
 }
 
 export function featureBundleName(app) {

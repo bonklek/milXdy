@@ -13,6 +13,7 @@ const CHAT_ID = 1;
 const SOCKET_URL = "wss://www.remilia.net/api/ws";
 const SOCKET_PORT_NAME = "reminetChat:socket";
 const SESSION_PROBE_PATH = "/api/profile/whoami";
+const SOCKET_HEARTBEAT_MS = 25_000;
 const REMILIA_MEDIA_RULES: readonly UrlAllowRule[] = [
   { protocol: "https:", hostname: "www.remilia.net", includeSubdomains: true },
 ];
@@ -35,6 +36,7 @@ chrome.runtime.onConnect.addListener((port) => {
   if (port.name !== SOCKET_PORT_NAME) return;
   let socket: WebSocket | null = null;
   let closed = false;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   const post = (message: Record<string, unknown>) => {
     try {
@@ -45,11 +47,34 @@ chrome.runtime.onConnect.addListener((port) => {
   };
 
   const closeSocket = () => {
+    stopHeartbeat();
     const current = socket;
     socket = null;
     if (current && current.readyState !== WebSocket.CLOSED && current.readyState !== WebSocket.CLOSING) {
       current.close();
     }
+  };
+
+  const stopHeartbeat = () => {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer);
+      heartbeatTimer = null;
+    }
+  };
+
+  const startHeartbeat = (target: WebSocket) => {
+    stopHeartbeat();
+    heartbeatTimer = setInterval(() => {
+      if (socket !== target || closed) {
+        stopHeartbeat();
+        return;
+      }
+      if (target.readyState !== WebSocket.OPEN) {
+        post({ type: "socket:heartbeat", ok: false, readyState: target.readyState, reason: "not-open" });
+        return;
+      }
+      post({ type: "socket:heartbeat", ok: true, readyState: target.readyState, at: Date.now() });
+    }, SOCKET_HEARTBEAT_MS);
   };
 
   const connectSocket = async () => {
@@ -65,18 +90,20 @@ chrome.runtime.onConnect.addListener((port) => {
     nextSocket.addEventListener("open", () => {
       if (socket !== nextSocket || closed) return;
       nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
-      post({ type: "socket:open" });
+      startHeartbeat(nextSocket);
+      post({ type: "socket:open", at: Date.now() });
     });
     nextSocket.addEventListener("message", (event) => {
       if (socket !== nextSocket || closed) return;
       post({ type: "socket:frame", data: event.data });
     });
-    nextSocket.addEventListener("close", () => {
+    nextSocket.addEventListener("close", (event) => {
+      stopHeartbeat();
       if (socket === nextSocket) socket = null;
-      post({ type: "socket:close" });
+      post({ type: "socket:close", code: event.code, reason: event.reason, wasClean: event.wasClean });
     });
     nextSocket.addEventListener("error", () => {
-      post({ type: "socket:error", error: "Connection interrupted." });
+      post({ type: "socket:error", error: "Connection interrupted.", reason: "socket-error" });
     });
   };
 
@@ -100,6 +127,7 @@ chrome.runtime.onConnect.addListener((port) => {
   });
   port.onDisconnect.addListener(() => {
     closed = true;
+    stopHeartbeat();
     closeSocket();
   });
 });

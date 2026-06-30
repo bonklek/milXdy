@@ -87,7 +87,7 @@
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) var(--music-player-height);
   height: var(--music-height);
-  min-height: 350px;
+  min-height: min(350px, calc(100vh - var(--music-top) - 12px));
   max-height: calc(100vh - var(--music-top) - 12px);
   overflow: hidden;
   border: 1px solid var(--music-border);
@@ -874,13 +874,13 @@
   position: relative;
   z-index: 4;
   display: grid;
-  align-content: start;
+  align-content: center;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   height: var(--music-player-height);
   max-height: var(--music-player-height);
-  min-height: 158px;
-  padding: 10px 12px 12px;
+  min-height: 0;
+  padding: 8px 12px 9px;
   border-top: 1px solid var(--music-border);
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--music-surface) 12%, transparent), transparent 48%),
@@ -1058,12 +1058,12 @@
 }
 
 #milxdy-music-root[data-minimized="true"][data-player-size="micro"] .milxdy-music-progress {
-  grid-column: 1 / -1;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: none;
 }
 
 #milxdy-music-root[data-minimized="true"][data-player-size="micro"] .milxdy-music-player .milxdy-music-controls {
-  display: none;
+  justify-content: center;
+  gap: 4px;
 }
 
 #milxdy-music-root[data-minimized="true"][data-player-size="micro"] .milxdy-music-volume {
@@ -1082,10 +1082,6 @@
   min-width: 28px;
   height: 28px;
   min-height: 28px;
-}
-
-#milxdy-music-root[data-minimized="true"][data-player-size="micro"] .milxdy-music-progress span {
-  display: none;
 }
 
 .milxdy-music-player .milxdy-music-controls {
@@ -1194,10 +1190,6 @@
   display: none !important;
 }
 
-#milxdy-music-root[data-minimized="true"][data-player-size="micro"] .milxdy-music-progress-play {
-  display: grid !important;
-}
-
 .milxdy-music-progress span {
   color: var(--music-muted);
   font: 10px/1 var(--music-font-mono);
@@ -1207,6 +1199,7 @@
 
 .milxdy-music-volume {
   grid-template-columns: auto minmax(0, 150px);
+  min-width: 0;
   justify-content: center;
 }
 
@@ -1389,16 +1382,22 @@
 .milxdy-music-resize-grip {
   position: absolute;
   z-index: 8;
-  right: 0;
   bottom: 0;
   width: 18px;
   height: 18px;
+}
+
+.milxdy-music-resize-grip-left {
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.milxdy-music-resize-grip-right {
+  right: 0;
   cursor: nwse-resize;
 }
 
-#milxdy-music-root[data-side="right"] .milxdy-music-resize-grip {
-  right: auto;
-  left: 0;
+#milxdy-music-root[data-side="right"] .milxdy-music-resize-grip-left {
   cursor: nesw-resize;
 }
 

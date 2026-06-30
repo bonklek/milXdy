@@ -7,6 +7,7 @@ const files = {
   qa: await readFile("docs/QA_0.2.0.md", "utf8"),
   qaLog: await readFile("docs/QA_LOG_0.2.0.md", "utf8"),
   chromeLiveQa: await readFile("docs/CHROME_LIVE_QA_0.2.0.md", "utf8"),
+  screenshots: await readFile("docs/RELEASE_SCREENSHOTS_0.2.0.md", "utf8"),
   releases: await readFile("docs/RELEASES.md", "utf8"),
   readme: await readFile("README.md", "utf8"),
   packageJson: await readFile("package.json", "utf8"),
@@ -54,9 +55,11 @@ console.log("0.2.0 release verification passed.");
 
 function verifyRoadmapAndReleaseNotes() {
   assert(files.roadmap.includes("## Released: 0.2.0 - The Platform Update"), "roadmap must mark 0.2.0 as released");
+  assert(files.roadmap.includes("## In Progress: 0.2.1 - The Polish Patch"), "roadmap must mark 0.2.1 as in progress");
   assert(files.changelog.includes("docs/RELEASE_NOTES_0.2.0.md"), "changelog must link 0.2.0 release notes");
   assert(files.changelog.includes("verify:release:gates:020") && files.changelog.includes("Non-live release gates"), "changelog must summarize the current 0.2.0 non-live gate status");
   assert(files.changelog.includes("Live Chrome/X runtime proof is optional manual QA") && files.changelog.includes("not part of the release readiness gate"), "changelog must keep live browser QA optional for 0.2.0 readiness");
+  assert(files.changelog.includes("Release screenshots are optional release-media evidence"), "changelog must keep 0.2.0 release screenshots optional for prerelease archives");
   assert(files.changelog.includes("Remilia Wiki sidebar") && files.changelog.includes("Miladychan Portal") && files.changelog.includes("Music MVP"), "changelog must summarize 0.2.0 app-surface highlights");
   assert(JSON.parse(files.packageJson).version === "0.2.0", "package.json version must be 0.2.0");
   assert(JSON.parse(files.manifest).version === "0.2.0", "public manifest version must be 0.2.0");
@@ -66,7 +69,7 @@ function verifyRoadmapAndReleaseNotes() {
     "Miladychan Portal",
     "Music",
     "Documentation",
-    "Verification",
+    "Remaining Before Release",
   ]) {
     assert(files.releaseNotes.includes(`## ${section}`) || files.releaseNotes.includes(`### ${section}`), `0.2.0 release notes missing ${section}`);
   }
@@ -120,7 +123,7 @@ function verifyDocsCoverage() {
     assert(files.qa.includes(`## ${phrase}`), `0.2.0 QA checklist missing ${phrase}`);
   }
   assert(files.qa.includes("npm run verify:release:gates:020"), "0.2.0 QA checklist must include the canonical non-live release gate runner");
-  assert(files.qa.includes("canonical release readiness gate") && files.qa.includes("live Chrome proof is optional manual QA evidence"), "0.2.0 QA checklist must keep live Chrome proof optional outside release readiness");
+  assert(files.qa.includes("canonical release readiness gate") && files.qa.includes("live Chrome proof and screenshots are optional manual QA evidence"), "0.2.0 QA checklist must keep live Chrome proof optional outside release readiness");
   assert(files.releases.includes("npm run verify:release:gates:020") && files.releases.includes("npm.cmd run verify:release:gates:020"), "release process must use the canonical non-live release gate runner");
   assert(files.releases.includes("Keep live Chrome proof separate and optional"), "release process must keep the live Chrome gate optional outside release readiness");
   assert(files.releases.includes("dist/chromium-lite") && files.releases.includes("dist/firefox-balanced"), "release process must document profile build output directories");
@@ -131,7 +134,7 @@ function verifyDocsCoverage() {
   assert(files.qa.includes("Apps Hub runtime summary"), "0.2.0 QA checklist must include Apps Hub runtime summary smoke coverage");
   assert(files.qa.includes("rail support, privacy labels, remote services"), "0.2.0 QA checklist must include Apps Hub disclosure metadata smoke coverage");
   assert(files.qa.includes("Open an app card's Details view"), "0.2.0 QA checklist must include Apps Hub detail disclosure smoke coverage");
-  assert(files.qa.includes("Click **Skip**") && files.qa.includes("conservative defaults") && files.qa.includes("Milady Maxxer remain disabled"), "0.2.0 QA checklist must cover first-run Skip conservative defaults");
+  assert(files.qa.includes("Click **Skip**") && files.qa.includes("first-party apps remain available") && files.qa.includes("setup choices can still be reapplied"), "0.2.0 QA checklist must cover first-run Skip defaults and persistent setup controls");
   assert(files.packageJson.includes('"build:profiles"'), "package scripts must include build:profiles");
   assert(files.packageJson.includes('"verify:release:checksums"'), "package scripts must include verify:release:checksums");
   assert(files.packageJson.includes('"verify:release:reproducible"'), "package scripts must include verify:release:reproducible");
@@ -155,15 +158,15 @@ function verifyDocsCoverage() {
   assert(files.releaseNotes.includes("verify:live-probe:020"), "0.2.0 release notes must mention live probe log verifier");
   assert(files.releaseNotes.includes("checksums.sha256"), "0.2.0 release notes must mention checksum manifest");
   assert(files.releaseNotes.includes("QA_LOG_0.2.0.md"), "0.2.0 release notes must link QA evidence log");
-  assert(files.releaseNotes.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 release notes must link Chrome live QA guide");
-  const privateMediaPlanningDoc = "RELEASE_" + "SCREENSHOTS_0.2.0.md";
-  assert(!files.releaseNotes.includes(privateMediaPlanningDoc), "0.2.0 release notes must not link nonpublic planning docs");
+  assert(files.releaseNotes.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 release notes must link Chrome live QA handoff");
+  assert(files.releaseNotes.includes("RELEASE_SCREENSHOTS_0.2.0.md"), "0.2.0 release notes must link release screenshot asks");
+  assert(files.releaseNotes.includes("optional release-media screenshots"), "0.2.0 release notes must keep screenshots optional release media");
   assert(files.readme.includes("npm run build:profiles") && files.readme.includes("dist/chromium-balanced") && !files.readme.includes("npm run build:all"), "README source-build instructions must use the 0.2.0 profile matrix");
   assert(files.readme.includes("milXdy-<version>-chromium-full.zip") && files.readme.includes("milXdy-<version>-chromium-balanced.zip") && files.readme.includes("milXdy-<version>-chromium-lite.zip"), "README release install instructions must name profile-specific Chromium archives");
   assert(files.readme.includes("firefox-full") && files.readme.includes("firefox-balanced") && files.readme.includes("firefox-lite"), "README release install instructions must name profile-specific Firefox archives");
   assert(files.userGuide.includes("Apps Hub And Side Rail"), "user guide must cover the 0.2.0 Apps Hub surface");
-  assert(files.userGuide.includes("Skipping keeps the conservative fresh-install defaults") && files.userGuide.includes("Music, Miladychan Portal, Beetol, RemiNet Chat, and Milady Maxxer"), "user guide must document conservative first-run Skip defaults");
-  assert(files.userGuide.includes("matching GitHub prerelease zip") && files.userGuide.includes("target/profile"), "user guide update workflow must describe target/profile-aware downloads");
+  assert(files.userGuide.includes("every first-party app available and toggleable") && files.userGuide.includes("setup choices remain available from the Apps Hub settings menu"), "user guide must document enabled first-run defaults and persistent setup controls");
+  assert(files.userGuide.includes("matching GitHub release zip") && files.userGuide.includes("target/profile"), "user guide update workflow must describe target/profile-aware downloads");
   assert(files.releases.includes("npm run verify:release:gates:020"), "release process must document the canonical non-live gate runner");
   assert(files.releases.includes("SOURCE_DATE_EPOCH") && files.releases.includes("npm run verify:release:reproducible"), "release process must document deterministic release archive reproduction");
   assert(files.troubleshooting.includes("dist/chromium") && files.troubleshooting.includes("dist/firefox"), "troubleshooting must point users at generated browser output directories");
@@ -173,21 +176,30 @@ function verifyDocsCoverage() {
   assert(files.qa.includes("checksums.sha256"), "0.2.0 QA checklist must include checksum manifest");
   assert(files.qa.includes("checksum verification"), "0.2.0 QA checklist must include checksum verifier coverage");
   assert(files.qa.includes("app smoke"), "0.2.0 QA checklist must include app smoke verifier coverage");
-  assert(files.qa.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 QA checklist must link Chrome live QA guide");
+  assert(files.qa.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 QA checklist must link Chrome live QA handoff");
   assert(files.qa.includes("npm run verify:live-probe:020"), "0.2.0 QA checklist must include live probe log verifier");
   assert(files.qa.includes("npm run print:live-probe:020") && files.qa.includes("window.__milxdy020LiveProbe"), "0.2.0 QA checklist must include live probe workflow");
-  assert(!files.qa.includes(privateMediaPlanningDoc), "0.2.0 QA checklist must not link nonpublic planning docs");
+  assert(files.qa.includes("RELEASE_SCREENSHOTS_0.2.0.md"), "0.2.0 QA checklist must mention screenshot evidence");
   assert(files.qaLog.includes("Live Chrome Probe"), "0.2.0 QA evidence log must record live Chrome probe status");
   assert(files.qaLog.includes("#milxdy-overlay-dock-root"), "0.2.0 QA evidence log must record overlay dock probe marker");
   assert(files.qaLog.includes("missing loaded 0.2.0 runtime"), "0.2.0 QA evidence log must record current live smoke blocker");
   assert(files.qaLog.includes("live Chrome runtime smoke is optional manual QA") && files.qaLog.includes("not part of the 0.2.0 release readiness gate"), "0.2.0 QA evidence log must mark live Chrome proof optional");
   assert(files.qaLog.includes("release/milXdy-0.2.0-checksums.sha256"), "0.2.0 QA evidence log must record checksum manifest artifact");
-  assert(files.qaLog.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 QA evidence log must link Chrome live QA guide");
+  assert(files.qaLog.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 QA evidence log must link Chrome live QA handoff");
   assert(files.qaLog.includes("npm run verify:live-probe:020"), "0.2.0 QA evidence log must mention live probe log verifier");
   assert(files.qaLog.includes("npm run verify:music"), "0.2.0 QA evidence log must use the package music verifier command");
   assert(!files.qaLog.includes("npm run verify:music-build"), "0.2.0 QA evidence log must not reference a non-existent music npm script");
   assert(files.qaLog.includes("npm run print:live-probe:020") && files.qaLog.includes("scripts/live-smoke-probe-020.js"), "0.2.0 QA evidence log must document live probe tooling");
-  assert(!files.qaLog.includes("## Release " + "Screenshot Evidence"), "0.2.0 QA evidence log must not include nonpublic planning status");
+  assert(files.qaLog.includes("## Release Screenshot Evidence"), "0.2.0 QA evidence log must include release screenshot evidence status");
+  assert(files.qaLog.includes("Status: not captured") && files.qaLog.includes("optional release-media evidence") && files.qaLog.includes("not required for cutting the 0.2.0 prerelease archives"), "0.2.0 QA evidence log must keep screenshots optional for release readiness");
+  for (const phrase of [
+    "Shared side rail",
+    "Performance mode setting",
+    "Miladychan Portal docked panel",
+    "Music app docked panel",
+  ]) {
+    assert(files.qaLog.includes(phrase), `0.2.0 QA evidence log missing pending screenshot item: ${phrase}`);
+  }
   for (const marker of [
     "#milxdy-overlay-dock-root",
     "#milxdy-app-hub-panel",
@@ -265,22 +277,20 @@ function verifyDocsCoverage() {
   assert(files.popup.includes("milxdy.diagnostics.runtime") && files.popup.includes("loadedHeavyApps") && files.popup.includes("loadedWorkerHeavyApps") && files.popup.includes("loadedNetworkApps"), "popup Health diagnostics must consume shared runtime app diagnostics");
   assert(files.popup.includes("MILXDY_BUILD_TARGET") && files.popup.includes("Build: ${BUILD_TARGET}/${BUILD_PROFILE}") && files.popup.includes("v${version} ${BUILD_TARGET}/${BUILD_PROFILE}"), "bug report templates must include build target/profile metadata");
   assert(files.overlayDock.includes("OverlayDockSettingsAction") && files.overlayDock.includes("setSettingsAction") && files.overlayDock.includes("settingsActionButton"), "overlay dock must expose reusable settings actions");
-  assert(files.contentRuntime.includes('setSettingsAction("milxdy.addApps"') && files.contentRuntime.includes('label: "Add Apps"') && files.contentRuntime.includes("onActivate: openHubPanel"), "dock settings must include an Add Apps route into the Apps Hub");
+  assert(files.contentRuntime.includes('setSettingsAction("milxdy.addApps"') && files.contentRuntime.includes('label: "Add Apps"') && files.contentRuntime.includes("onActivate: openHubPanel"), "dock settings must include an Add Apps handoff into the Apps Hub");
   assert(files.contentRuntime.includes('setSettingsAction("milxdy.addApps", null)'), "runtime dispose must unregister the Add Apps dock settings action");
-  assert(files.build.includes("contents: JSON.stringify(registryApps)"), "profile builds must keep full app metadata for unavailable-app Hub cards");
-  assert(files.contentRuntime.includes("app.available === false") && files.contentRuntime.includes("milxdy-app-hub-unavailable") && files.contentRuntime.includes("Unavailable in this build"), "Apps Hub must show unavailable apps with a clear build-profile explanation");
-  assert(files.contentRuntime.includes("build:unavailable") && files.contentRuntime.includes("available: app.available !== false"), "runtime diagnostics must distinguish unavailable build-profile apps");
-  assert(files.firstPartyApps.includes("setEnabled: available ? setEnabled : undefined") && files.firstPartyApps.includes("isEnabled: available ? isEnabled : async () => false"), "unavailable apps must not expose enablement controls or report enabled state");
+  assert(files.build.includes("const firstPartyApps = registryApps") && files.build.includes("contents: JSON.stringify(registryApps)"), "profile builds must include every first-party app and keep full app metadata");
+  assert(files.firstPartyApps.includes("available: true") && files.firstPartyApps.includes("isEnabled,") && files.firstPartyApps.includes("setEnabled,"), "all first-party apps must stay available and toggleable in every build profile");
   assert(files.firstPartyApps.includes("defaultEnabledById") && files.firstPartyApps.includes("defaultAppEnabled") && files.firstPartyApps.includes("enabledFromStoredValue"), "first-party enablement adapters must use registry defaultEnabled metadata for fallback state");
   assert(files.background.includes("chrome.runtime.onInstalled.addListener") && files.background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   for (const freshInstallDefault of [
-    '"milxdy.miladychan.enabled": false',
-    '"milxdy.music.enabled": false',
-    '"milxdy.reminetChat.enabled": false',
-    '"milxdy.remistats.beetol.enabled": false',
-    'mode: "off"',
+    '"milxdy.miladychan.enabled": true',
+    '"milxdy.music.enabled": true',
+    '"milxdy.reminetChat.enabled": true',
+    '"milxdy.remistats.beetol.enabled": true',
+    'mode: "milady"',
   ]) {
-    assert(files.background.includes(freshInstallDefault), `central background missing conservative first-run default: ${freshInstallDefault}`);
+    assert(files.background.includes(freshInstallDefault), `central background missing enabled first-run default: ${freshInstallDefault}`);
   }
   assert(!files.remistatsBackground.includes("chrome.runtime.onInstalled.addListener"), "RemiStats must not duplicate central install default seeding");
   assert(files.appSmokeVerifier.includes("Miladychan Portal") && files.appSmokeVerifier.includes("createRadioSession") && files.appSmokeVerifier.includes("features/chromaprint.wasm"), "app smoke verifier must cover Miladychan Portal and Music MVP contracts");
@@ -292,9 +302,19 @@ function verifyDocsCoverage() {
     'version: "0.2.0"',
     'buildTarget: "chromium"',
     "missingRequired",
-    "Keep promotional planning outside this public QA guide",
+    "Do not use screenshots from a tab where the runtime probe is blocked when preparing optional release media",
   ]) {
-    assert(files.chromeLiveQa.includes(phrase), `Chrome live QA guide missing ${phrase}`);
+    assert(files.chromeLiveQa.includes(phrase), `Chrome live QA handoff missing ${phrase}`);
+  }
+  for (const phrase of [
+    "Shared side rail",
+    "Performance mode",
+    "Miladychan Portal",
+    "Music app docked panel",
+    "window.__milxdy020LiveProbe",
+    "#milxdy-overlay-dock-root",
+  ]) {
+    assert(files.screenshots.includes(phrase), `0.2.0 release screenshots missing ${phrase}`);
   }
   assert(files.packageRelease.includes("milXdy-${version}-${build.target}-${build.profile}.zip"), "release packaging must use deterministic profile archive names");
   assert(files.packageRelease.includes("createDeterministicZip"), "release packaging must use the deterministic Node zip writer");
@@ -329,6 +349,7 @@ function verifyDocumentedNpmScripts() {
     "docs/QA_0.2.0.md": files.qa,
     "docs/QA_LOG_0.2.0.md": files.qaLog,
     "docs/RELEASE_NOTES_0.2.0.md": files.releaseNotes,
+    "docs/RELEASE_SCREENSHOTS_0.2.0.md": files.screenshots,
     "docs/RELEASES.md": files.releases,
   };
   for (const [name, text] of Object.entries(docs)) {

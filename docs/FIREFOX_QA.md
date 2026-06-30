@@ -23,9 +23,10 @@ npm.cmd run lint:firefox
 
 - Popup opens and all tabs render.
 - `https://x.com` loads with no content bootstrap errors.
+- Console CSP warnings from the X page that mention `abs.twimg.com` are expected page-level noise unless they name a milXdy extension URL or block a milXdy-injected asset.
 - Remilia Wiki link previews still render.
 - Post-reading can read a post, and OCR progresses past the hidden-host loading stage.
-- RemiStats badges and RemiNet poke state render.
+- RemiStats badges and RemiNet poke state render. When badge detail tooltips include a Remilia PFP, the image should load from `https://pfp.remilia.net/pfp/...` without a Firefox host-permission or CSP block.
 - RemiNet Chat connects when enabled.
 - Beetol auth/session status works.
 - Maxxer avatar detection runs and updates diagnostics in Debug mode.

@@ -219,6 +219,7 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 }
 
 #milxdy-reminet-chat-root[data-mount="left"] .milxdy-chat-resize-grip,
+#milxdy-reminet-chat-root[data-mount="left"] .milxdy-chat-resize-corner,
 #milxdy-reminet-chat-root[data-mount="left"] .milxdy-chat-resize-edge {
   display: none;
 }
@@ -231,6 +232,15 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   width: var(--rn-rail-width);
   max-width: calc(100vw - 16px);
   margin: 0;
+}
+
+#milxdy-reminet-chat-root[data-host-image-viewer-open="true"] {
+  pointer-events: none;
+}
+
+#milxdy-reminet-chat-root[data-host-image-viewer-open="true"][data-mount="left"],
+#milxdy-reminet-chat-root[data-host-image-viewer-open="true"][data-mount="rail"] {
+  z-index: 1;
 }
 
 #milxdy-reminet-chat-root[data-mount="messages"] {
@@ -338,6 +348,7 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 
 #milxdy-reminet-chat-root[data-mount="messages"] .milxdy-chat-header [data-role="minimize"],
 #milxdy-reminet-chat-root[data-mount="messages"] .milxdy-chat-resize-grip,
+#milxdy-reminet-chat-root[data-mount="messages"] .milxdy-chat-resize-corner,
 #milxdy-reminet-chat-root[data-mount="messages"] .milxdy-chat-resize-edge {
   display: none;
 }
@@ -447,6 +458,7 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-reply-preview,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-composer,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-resize-grip,
+#milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-resize-corner,
 #milxdy-reminet-chat-root[data-minimized="true"] .milxdy-chat-resize-edge {
   display: none;
 }
@@ -957,6 +969,34 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   display: block;
 }
 
+.milxdy-chat-reconnect {
+  display: grid;
+  gap: 8px;
+}
+
+.milxdy-chat-reconnect button {
+  justify-self: center;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid #626bb2;
+  border-right-width: 2px;
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  background: #e8eaff;
+  color: #171f82;
+  cursor: pointer;
+  font: 700 12px/1.2 var(--rn-font-ui);
+}
+
+.milxdy-chat-reconnect button:hover:not(:disabled) {
+  background: #f4f5ff;
+}
+
+.milxdy-chat-reconnect button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .milxdy-chat-attachment-preview {
   display: grid;
   gap: 5px;
@@ -1191,6 +1231,26 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 
 .milxdy-chat-resize-grip::before {
   content: none;
+}
+
+.milxdy-chat-resize-corner {
+  position: absolute;
+  z-index: 4;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  background: transparent;
+}
+
+.milxdy-chat-resize-corner-left {
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.milxdy-chat-resize-corner-right {
+  right: 0;
+  cursor: nwse-resize;
 }
 
 .milxdy-chat-resize-edge {

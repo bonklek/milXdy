@@ -5,12 +5,15 @@ export type FullQuoteDisplay = "hidden" | "expand" | "scroll";
 export type PlayerPosition = "top-right" | "bottom-right" | "top-left" | "bottom-left";
 export type TtsEngineChoice = "web-speech" | "custom-http";
 export type CustomTtsTimingMode = "off" | "engine";
+export type VoiceGenderFilter = "all" | "female" | "male";
 
 export type PostReadingSettings = {
   enabled: boolean;
   speed: number;
   volume: number;
   voiceURI: string | null;
+  voiceLanguageFilter: string;
+  voiceGenderFilter: VoiceGenderFilter;
   autoVoice: boolean;
   ttsEngine: TtsEngineChoice;
   customTtsEndpoint: string | null;

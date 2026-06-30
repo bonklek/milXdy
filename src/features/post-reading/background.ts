@@ -29,7 +29,7 @@ async function fetchPostReadingResource(message: BackgroundMessage): Promise<Rec
       return { ok: false, status: 0, error: "UNSUPPORTED_URL" };
     }
     const response = await runNetworkTask(
-      () => fetch(message.url, { credentials: "omit" }),
+      () => fetch(message.url, { credentials: message.type === "post-reading:fetchText" ? "include" : "omit" }),
       message.type,
     );
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
@@ -74,9 +74,13 @@ function isAllowedFetchMessage(message: BackgroundMessage): boolean {
       && url.pathname.startsWith("/media/");
   }
 
-  return url.protocol === "https:"
-    && (url.hostname === "x.com" || url.hostname === "twitter.com")
-    && /^\/[^/?#]+\/status\/\d+\/?$/.test(url.pathname);
+  if (url.protocol !== "https:") return false;
+  if (url.hostname === "x.com" || url.hostname === "twitter.com") {
+    return url.pathname === "/home" || /^\/[^/?#]+\/status\/\d+\/?$/.test(url.pathname);
+  }
+  return (url.hostname === "abs.twimg.com" || url.hostname.endsWith(".twimg.com"))
+    && url.pathname.startsWith("/responsive-web/client-web/")
+    && url.pathname.endsWith(".js");
 }
 
 function arrayBufferToBase64(buffer: ArrayBuffer): string {

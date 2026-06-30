@@ -1,4 +1,5 @@
 import { icon } from "../post-reading/icons";
+import { TextHighlightEngine } from "../post-reading/highlightEngine";
 
 type WikiSidebarOpenTabMessage = {
   type: "wikiSidebar:openTab";
@@ -62,7 +63,8 @@ let activeArticle: ActiveArticle | null = null;
 let smoothVisualIndex = 0;
 let smoothAnimationFrame: number | null = null;
 let smoothAnimationTimer: number | null = null;
-let smoothAnimationTokens: HTMLElement[] = [];
+let activeSmoothToken: HTMLElement | null = null;
+let pendingSmoothAnimation: { tokens: HTMLElement[]; token: HTMLElement; toIndex: number } | null = null;
 let lastAutoScrolledLineTop: number | null = null;
 let lastBoundaryAt: number | null = null;
 let lastRelativeIndex: number | null = null;
@@ -74,6 +76,7 @@ let calibrationSamples = 0;
 let calibrationLocked = false;
 let frameBooted = false;
 const CALIBRATION_SAMPLE_LIMIT = 5;
+const highlightEngine = new TextHighlightEngine();
 
 if (window.top !== window) {
   bootWikiFrame();
@@ -292,8 +295,7 @@ function applyHighlightBoundary(message: WikiHighlightMessage): void {
   const relativeIndex = Math.max(0, Math.min(range.text.length, charIndex - range.start));
   if (message.mode === "word") {
     const tokens = prepareTokenizedBlock(range.element, "word");
-    const current = findCurrentToken(tokens, relativeIndex, message.charLength ?? null);
-    for (const token of tokens) token.dataset.postReadingCurrentWord = String(token === current);
+    const current = highlightEngine.paintWord(tokens, relativeIndex, message.charLength ?? null);
     followReadingLine(current, message.autoScroll !== false);
     return;
   }
@@ -305,13 +307,17 @@ function applyHighlightBoundary(message: WikiHighlightMessage): void {
   }
   if (message.status && message.status !== "speaking") {
     suspendSmoothTrackingAt(relativeIndex);
-    snapSmoothAt(tokens, relativeIndex);
+    highlightEngine.paintSmooth(tokens, relativeIndex, {
+      charLength: message.charLength ?? null,
+      textLength: range.text.length,
+      snapToCurrent: true,
+      boundaryElapsedTime: message.boundaryElapsedTime,
+    });
     followReadingLine(findNearestToken(tokens, relativeIndex), message.autoScroll !== false);
     return;
   }
-  const previousRelativeIndex = lastRelativeIndex;
-  updateBoundaryCalibration(relativeIndex, message.boundaryElapsedTime);
-  paintSmoothTokens(tokens, relativeIndex, previousRelativeIndex, range.text.length, rangeChanged);
+  paintSmoothTokens(tokens, relativeIndex, range.text.length, rangeChanged, message.charLength ?? null, message.boundaryElapsedTime ?? null);
+  lastRelativeIndex = relativeIndex;
   followReadingLine(findNearestToken(tokens, relativeIndex), message.autoScroll !== false);
 }
 
@@ -330,76 +336,23 @@ function clearReadHighlight(): void {
 }
 
 function clearBlockHighlight(element: HTMLElement): void {
-  clearSmoothAnimation();
+  highlightEngine.clearElement(element);
   lastAutoScrolledLineTop = null;
-  for (const word of Array.from(element.querySelectorAll<HTMLElement>('[data-post-reading-word="true"]'))) {
-    delete word.dataset.postReadingCurrentWord;
-  }
-  for (const word of Array.from(element.querySelectorAll<HTMLElement>('[data-post-reading-smooth-word="true"]'))) {
-    delete word.dataset.postReadingSmoothFilled;
-    word.style.removeProperty("--post-reading-fill");
-    word.style.removeProperty("--post-reading-fill-duration");
-  }
 }
 
 function restoreOriginalBlock(element: HTMLElement): void {
-  if (element.dataset.postReadingOriginalHtml) {
-    element.innerHTML = element.dataset.postReadingOriginalHtml;
-    delete element.dataset.postReadingOriginalHtml;
-  } else {
-    clearBlockHighlight(element);
-  }
-  delete element.dataset.postReadingHighlightMode;
+  highlightEngine.restoreOriginalElement(element);
 }
 
 function prepareTokenizedBlock(element: HTMLElement, mode: "word" | "smooth"): HTMLElement[] {
-  const selector = mode === "word" ? '[data-post-reading-word="true"]' : '[data-post-reading-smooth-word="true"]';
-  const existing = Array.from(element.querySelectorAll<HTMLElement>(selector));
-  if (existing.length > 0) return existing;
-  if (element.dataset.postReadingHighlightMode && element.dataset.postReadingHighlightMode !== mode) {
-    restoreOriginalBlock(element);
-  }
-  if (!element.dataset.postReadingOriginalHtml) element.dataset.postReadingOriginalHtml = element.innerHTML;
-  element.dataset.postReadingHighlightMode = mode;
-  const text = normalizeBlockText(element.innerText || element.textContent || "");
-  element.textContent = "";
-  const parts = mode === "smooth" ? buildSmoothParts(text) : text.match(/\S+|\s+/g) || [];
-  const tokens: HTMLElement[] = [];
-  let cursor = 0;
-  let index = 0;
-  for (const part of parts) {
-    if (/^\s+$/.test(part) && mode === "word") {
-      element.append(document.createTextNode(part));
-      cursor += part.length;
-      continue;
-    }
-    const span = document.createElement("span");
-    if (mode === "word") span.dataset.postReadingWord = "true";
-    else {
-      span.dataset.postReadingSmoothWord = "true";
-      span.dataset.postReadingTokenKind = /^\s+$/.test(part) ? "space" : "word";
-    }
-    span.dataset.postReadingWordIndex = String(index++);
-    span.dataset.postReadingStart = String(cursor);
-    span.dataset.postReadingLength = String(part.length);
-    if (mode === "smooth") {
-      span.dataset.postReadingReadableLength = String(readableTokenLength(part));
-    }
-    span.textContent = part;
-    tokens.push(span);
-    element.append(span);
-    cursor += part.length;
-  }
-  return tokens;
+  return highlightEngine.prepareTokens(element, mode, {
+    textOverride: normalizeBlockText(element.innerText || element.textContent || ""),
+    smoothReadableLength: true,
+  });
 }
 
 function findCurrentToken(tokens: HTMLElement[], relativeIndex: number, charLength: number | null): HTMLElement | null {
-  if (charLength !== null && charLength > 0) {
-    const midpoint = relativeIndex + Math.max(0, Math.floor((charLength - 1) / 2));
-    const token = tokens.find((item) => midpoint >= tokenStart(item) && midpoint < tokenStart(item) + tokenLength(item));
-    if (token) return token;
-  }
-  return findNearestToken(tokens, relativeIndex);
+  return highlightEngine.findCurrentToken(tokens, relativeIndex, charLength);
 }
 
 function findNearestToken(tokens: HTMLElement[], relativeIndex: number): HTMLElement | null {
@@ -422,35 +375,21 @@ function findNearestToken(tokens: HTMLElement[], relativeIndex: number): HTMLEle
 function paintSmoothTokens(
   tokens: HTMLElement[],
   relativeIndex: number,
-  previousRelativeIndex: number | null,
   textLength: number,
   snapToCurrent = false,
+  charLength: number | null = null,
+  boundaryElapsedTime: number | null = null,
 ): void {
-  clearSmoothAnimation();
-  if (snapToCurrent) {
-    smoothVisualIndex = relativeIndex;
-    resetSmoothTokenFill(tokens);
-  }
-  const currentToken = findCurrentToken(tokens, relativeIndex, null);
-  if (!currentToken) {
-    snapSmoothAt(tokens, Math.min(textLength, relativeIndex));
-    return;
-  }
-  const animationStart = previousRelativeIndex === null ? relativeIndex : Math.max(0, Math.min(previousRelativeIndex, relativeIndex));
-  const visualStart = Math.max(animationStart, Math.min(relativeIndex, smoothVisualIndex));
-  const predictedNextBoundary = findNextBoundaryIndex(tokens, relativeIndex);
-  const minimumLead = Math.max(4, Math.round(calibratedCharsPerSecond * 0.24));
-  const animationEnd = Math.min(textLength, Math.max(visualStart, predictedNextBoundary, relativeIndex + minimumLead));
-  const duration = estimateTokenDurationMs(Math.max(1, animationEnd - visualStart || tokenLength(currentToken)));
-  snapSmoothAt(tokens, visualStart);
-  animateSmoothRange(tokens, visualStart, animationEnd, duration);
+  highlightEngine.paintSmooth(tokens, relativeIndex, {
+    charLength,
+    textLength,
+    snapToCurrent,
+    boundaryElapsedTime,
+  });
 }
 
 function resetSmoothTokenFill(tokens: HTMLElement[]): void {
-  for (const token of tokens) {
-    delete token.dataset.postReadingSmoothFilled;
-    setSmoothFillImmediate(token, null);
-  }
+  highlightEngine.resetSmoothTokenFill(tokens);
 }
 
 function paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
@@ -483,34 +422,27 @@ function applySmoothAt(tokens: HTMLElement[], cursorIndex: number, forceComplete
   }
 }
 
-function animateSmoothRange(tokens: HTMLElement[], fromIndex: number, toIndex: number, durationMs: number): void {
+function animateSmoothRange(tokens: HTMLElement[], token: HTMLElement, fromIndex: number, toIndex: number, durationMs: number): void {
+  clearSmoothAnimation({ completePending: false });
   if (durationMs <= 0 || toIndex <= fromIndex) {
     snapSmoothAt(tokens, toIndex);
     return;
   }
-  const animatedTokens = tokens.filter((token) => {
-    const start = tokenStart(token);
-    const end = start + tokenLength(token);
-    return end > fromIndex && start < toIndex;
-  });
-  smoothAnimationTokens = animatedTokens;
+  pendingSmoothAnimation = { tokens, token, toIndex };
   smoothAnimationFrame = window.requestAnimationFrame(() => {
     smoothAnimationFrame = null;
     if (!tokens.some((token) => token.isConnected)) return;
     smoothVisualIndex = Math.max(smoothVisualIndex, toIndex);
-    for (const token of animatedTokens) {
-      const end = tokenStart(token) + tokenLength(token);
-      token.style.setProperty("--post-reading-fill-duration", `${durationMs}ms`);
-      token.style.setProperty("--post-reading-fill", `${rangeFillPercentForToken(token, toIndex)}%`);
-      if (end <= toIndex) token.dataset.postReadingSmoothFilled = "true";
-      else delete token.dataset.postReadingSmoothFilled;
-    }
+    token.style.setProperty("--post-reading-fill-duration", `${durationMs}ms`);
+    token.style.setProperty("--post-reading-fill", `${rangeFillPercentForToken(token, toIndex)}%`);
+    if (tokenStart(token) + tokenReadableLength(token) <= toIndex) token.dataset.postReadingSmoothFilled = "true";
+    else delete token.dataset.postReadingSmoothFilled;
   });
   smoothAnimationTimer = window.setTimeout(() => {
     smoothAnimationTimer = null;
+    pendingSmoothAnimation = null;
     if (!tokens.some((token) => token.isConnected)) return;
     snapSmoothAt(tokens, toIndex);
-    smoothAnimationTokens = [];
   }, durationMs + 24);
 }
 
@@ -551,26 +483,12 @@ function boundaryElapsedMs(boundaryElapsedTime: unknown, now: number): number | 
 }
 
 function suspendSmoothTrackingAt(relativeIndex: number): void {
-  clearSmoothAnimation();
-  lastBoundaryAt = null;
+  highlightEngine.suspendSmoothTracking(relativeIndex);
   lastRelativeIndex = relativeIndex;
-  lastBoundaryElapsedTime = null;
 }
 
-function clearSmoothAnimation(): void {
-  if (smoothAnimationFrame !== null) {
-    window.cancelAnimationFrame(smoothAnimationFrame);
-    smoothAnimationFrame = null;
-  }
-  if (smoothAnimationTimer !== null) {
-    window.clearTimeout(smoothAnimationTimer);
-    smoothAnimationTimer = null;
-  }
-  for (const token of smoothAnimationTokens) {
-    const fill = token.style.getPropertyValue("--post-reading-fill").trim();
-    setSmoothFillImmediate(token, fill.endsWith("%") ? Number(fill.slice(0, -1)) : null);
-  }
-  smoothAnimationTokens = [];
+function clearSmoothAnimation(options: { completePending?: boolean } = {}): void {
+  highlightEngine.clearSmoothAnimation(options);
 }
 
 function setSmoothFillImmediate(token: HTMLElement, percent: number | null): void {
@@ -584,21 +502,13 @@ function setSmoothFillImmediate(token: HTMLElement, percent: number | null): voi
 }
 
 function resetSmoothTracking(rangeElement: HTMLElement | null): void {
-  clearSmoothAnimation();
-  smoothVisualIndex = 0;
-  lastBoundaryAt = null;
+  highlightEngine.resetSmoothTracking(rangeElement);
   lastRelativeIndex = null;
-  lastBoundaryElapsedTime = null;
   activeSmoothRangeElement = rangeElement;
-  calibratedCharsPerSecond = baselineCharsPerSecond;
-  calibrationSamples = 0;
-  calibrationLocked = false;
 }
 
 function updateBaselineReadingSpeed(speed: unknown): void {
-  const numeric = typeof speed === "number" && Number.isFinite(speed) ? speed : 1;
-  baselineCharsPerSecond = 13 * Math.max(0.5, numeric);
-  if (lastBoundaryAt === null) calibratedCharsPerSecond = baselineCharsPerSecond;
+  highlightEngine.updateBaselineReadingSpeed(speed);
 }
 
 function rangeFillPercentForToken(token: HTMLElement, cursorIndex: number): number {

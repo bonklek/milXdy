@@ -10,7 +10,6 @@
   vertical-align: middle;
   line-height: 1;
   cursor: pointer;
-  transition: transform 0.2s ease;
 }
 
 .reminet-badge-slot {
@@ -39,6 +38,17 @@
 [data-milxdy-metadata-row="true"] > .reminet-badge-slot:not([data-reminet-profile-slot="true"]) {
   flex: 0 0 auto;
   margin-left: 8px;
+}
+
+.reminet-badge-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin: 1px 0 2px;
+}
+
+.reminet-badge-row > .reminet-badge-slot:not([data-reminet-profile-slot="true"]) {
+  margin-left: 0;
 }
 
 .reminet-badge-slot[data-reminet-action-poke="true"] {
@@ -220,7 +230,7 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   line-height: 1;
   vertical-align: middle;
   flex: 0 0 auto;
-  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
 }
 
 .reminet-poke-outline-icon {
@@ -312,24 +322,27 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   position: relative !important;
   display: flex !important;
   align-items: center !important;
+  flex-wrap: wrap !important;
   gap: 4px !important;
+  row-gap: 3px !important;
   box-sizing: border-box !important;
   width: 100% !important;
   min-width: 0 !important;
   min-height: 21px !important;
-  padding-right: 84px !important;
+  padding-right: 0 !important;
+  overflow: visible !important;
 }
 
 [data-reminet-profile-handle-row="true"] > .reminet-profile-badge-group {
-  position: absolute;
-  top: 50%;
-  right: 0;
+  position: static;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   gap: 4px;
-  margin-left: 0;
+  margin-left: 4px;
   min-width: 78px;
-  max-height: 21px;
-  transform: translateY(-50%);
+  max-width: 100%;
+  max-height: none;
+  transform: none;
 }
 
 [data-reminet-profile-handle-row="true"] > :not(.reminet-profile-badge-group) {
@@ -346,6 +359,13 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   max-width: max-content !important;
   white-space: nowrap !important;
   vertical-align: middle !important;
+}
+
+[data-reminet-profile-handle-row="true"] .miladymaxxer-profile-level,
+[data-reminet-profile-handle-row="true"] .miladymaxxer-player-profile-level {
+  flex: 0 1 auto !important;
+  margin-left: 4px !important;
+  max-width: 100% !important;
 }
 
 [data-reminet-profile-handle-row="true"] .reminet-badge-slot[data-reminet-profile-slot="true"] {
@@ -460,9 +480,17 @@ html[data-milxdy-x-theme="dim"] .reminet-profile-action-poke-slot .reminet-poke-
   height: 12px;
 }
 
+.reminet-incoming-poke-row {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  margin-top: 4px;
+}
+
 .reminet-incoming-poke-flag {
   display: inline-flex;
   align-items: center;
+  max-width: 100%;
   height: 20px;
   padding: 0 7px;
   border: 1px solid rgba(29, 155, 240, 0.38);
@@ -474,6 +502,7 @@ html[data-milxdy-x-theme="dim"] .reminet-profile-action-poke-slot .reminet-poke-
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0;
+  white-space: nowrap;
 }
 
 @keyframes reminet-poke-shake {
@@ -500,7 +529,7 @@ html[data-milxdy-x-theme="dim"] .reminet-profile-action-poke-slot .reminet-poke-
   gap: 4px;
   padding: 2px 10px 2px 8px;
   cursor: pointer;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   font-family: 'Remilia Mincho', serif;
   font-size: 12px;
   font-weight: 600;
@@ -989,7 +1018,7 @@ html[data-milxdy-visual-incoming-poke-gold="true"][data-reminet-poke-mode="dark"
   white-space: nowrap;
   pointer-events: auto;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
-  transition: transform 0.15s ease, background 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .reminet-compact-badge:hover {

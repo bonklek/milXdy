@@ -84,8 +84,8 @@ export class SpeechController {
     return this.engine.getPreferredVoice?.() ?? null;
   }
 
-  async probeBoundarySupport(voice: SpeechSynthesisVoice): Promise<boolean> {
-    return this.engine.probeBoundarySupport?.(voice) ?? false;
+  async probeBoundarySupport(voice: SpeechSynthesisVoice, signal?: AbortSignal): Promise<boolean> {
+    return this.engine.probeBoundarySupport?.(voice, signal) ?? false;
   }
 
   onComplete(callback: (() => void) | null): void {
@@ -259,15 +259,31 @@ function splitText(text: string, absoluteOffset = 0): SpeechChunk[] {
   if (!normalized) return [];
   const leadingTrim = text.search(/\S/);
   const baseOffset = absoluteOffset + (leadingTrim >= 0 ? leadingTrim : 0);
-  if (normalized.length <= 220) return [{ text: normalized, offset: baseOffset }];
+  const maxChunkLength = 1200;
+  const minBoundaryLength = 650;
+  if (normalized.length <= maxChunkLength) return [{ text: normalized, offset: baseOffset }];
 
   const chunks: SpeechChunk[] = [];
   let remaining = normalized;
   let offset = baseOffset;
   while (remaining.length > 0) {
-    const slice = remaining.slice(0, 220);
-    const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "), slice.lastIndexOf(", "));
-    const end = boundary > 80 ? boundary + 1 : Math.min(220, remaining.length);
+    if (remaining.length <= maxChunkLength) {
+      const finalText = remaining.trim();
+      const localTrim = remaining.search(/\S/);
+      if (finalText) chunks.push({ text: finalText, offset: offset + Math.max(0, localTrim) });
+      break;
+    }
+    const slice = remaining.slice(0, maxChunkLength);
+    const paragraphBoundary = slice.lastIndexOf("\n\n");
+    const sentenceBoundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+    const softBoundary = Math.max(paragraphBoundary, sentenceBoundary);
+    const fallbackBoundary = slice.lastIndexOf(", ");
+    const boundary = softBoundary > minBoundaryLength
+      ? softBoundary
+      : fallbackBoundary > minBoundaryLength
+        ? fallbackBoundary
+        : maxChunkLength;
+    const end = boundary < maxChunkLength ? boundary + 1 : Math.min(maxChunkLength, remaining.length);
     const rawChunk = remaining.slice(0, end);
     const chunkText = rawChunk.trim();
     const localTrim = rawChunk.search(/\S/);

@@ -13,6 +13,7 @@ Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into th
 
 - Enable **Post-reading controls** to show read buttons on posts.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI**.
+- Use the compact voice language and gender filters to narrow the browser voices that selection and test highlighting will consider.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
 - Enable **Include quote posts**, **Fetch full quotes**, **Image alt text**, **Image OCR**, or **Link previews** when you want richer spoken context.
 - Use **Skip OCR** to cancel pending image text or skip active image text.
@@ -24,7 +25,7 @@ Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into th
 
 Tweet reading and Wiki reading share the reader runtime but pause each other so only one read-aloud session speaks at a time.
 
-Word and paragraph highlighting is most accurate with browser voices that report stable speech boundaries. milXdy probes voices and prefers known boundary-capable voices; other voices use an estimated smooth-highlight fallback.
+Word and paragraph highlighting is most accurate with browser voices that report stable speech boundaries. milXdy probes voices and prefers known boundary-capable voices; other voices use an estimated smooth-highlight fallback for both feed posts and Wiki playback.
 
 Custom HTTP TTS can return audio plus optional timing boundaries. When boundaries are provided, Post-reading can keep highlighting and seeking closer to the spoken audio.
 

@@ -96,6 +96,7 @@ async function writeManifest() {
     host_permissions: [
       "https://x.com/*",
       "https://twitter.com/*",
+      "https://abs.twimg.com/*",
       "https://pbs.twimg.com/*",
       "http://localhost/*",
       "http://127.0.0.1/*",

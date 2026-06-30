@@ -1,6 +1,7 @@
 import {
   configureTwitterScanner,
   getTwitterScannerCounters,
+  resetTwitterScannerCounters,
   scheduleTwitterScan,
   subscribeTwitterSurfaces,
   type TwitterSurface,
@@ -51,6 +52,9 @@ type RuntimeState = {
   unpatchHistory: (() => void) | null;
   performanceMode: PerformanceMode;
   budget: PerformanceModeBudget;
+  effectiveBudget: PerformanceModeBudget;
+  startupBudgetTimer: number | null;
+  startupBudgetActive: boolean;
   dockRegistrations: Map<MilxdyAppId, OverlayDockRegistration>;
   hideAllDockRegistration: OverlayDockRegistration | null;
   hubDockRegistration: OverlayDockRegistration | null;
@@ -65,6 +69,7 @@ type RuntimeState = {
   } | null;
   firstRunPending: boolean;
   railPinnedApps: Set<MilxdyAppId>;
+  railUnpinnedApps: Set<MilxdyAppId>;
   railPinsExplicit: boolean;
   idlePreloadTimer: number | null;
   routeSurfaceImports: number;
@@ -83,7 +88,12 @@ type RuntimeState = {
     dedupedByElement: number;
     dedupedByKey: number;
     keyCacheSize: number;
+    drains: number;
+    lastDrainBatchSize: number;
+    lastDrainMs: number;
   };
+  tweetScaffoldSignatures: WeakMap<HTMLElement, string>;
+  tweetScaffoldStats: TweetScaffoldStats;
   networkQueue: NetworkTask[];
   activeNetworkTasks: number;
   networkStats: NetworkSchedulerStats;
@@ -102,6 +112,7 @@ const DIAGNOSTIC_FLUSH_MS = 1200;
 const RUNTIME_IMPORT_FLAG = "__milxdyContentRuntimeLoading";
 const TWEET_SCAFFOLD_STYLE_ID = "milxdy-tweet-scaffold-style";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
+const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
 const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
 const HUB_PANEL_ID = "milxdy-app-hub-panel";
 
@@ -163,6 +174,18 @@ type SurfaceImportDecision =
   | { mode: "idle" }
   | { mode: "blocked"; reason: string };
 
+type ScaffoldResult = "created" | "present" | "missing";
+
+type TweetScaffoldStats = {
+  attempts: number;
+  skipsBySignature: number;
+  createdSlots: number;
+  createdBySlot: Record<string, number>;
+  durationMs: number;
+  lastDurationMs: number;
+  maxDurationMs: number;
+};
+
 export type ContentRuntime = {
   boot: () => Promise<void>;
   loadApp: (app: MilxdyAppManifest, reason?: string) => Promise<MilxdyContentAppModule | null>;
@@ -188,6 +211,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     unpatchHistory: null,
     performanceMode: "balanced",
     budget: budgetForPerformanceMode("balanced"),
+    effectiveBudget: budgetForPerformanceMode("balanced"),
+    startupBudgetTimer: null,
+    startupBudgetActive: false,
     dockRegistrations: new Map(),
     hideAllDockRegistration: null,
     hubDockRegistration: null,
@@ -198,6 +224,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubAppDrag: null,
     firstRunPending: false,
     railPinnedApps: new Set(),
+    railUnpinnedApps: new Set(),
     railPinsExplicit: false,
     idlePreloadTimer: null,
     routeSurfaceImports: 0,
@@ -216,7 +243,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       dedupedByElement: 0,
       dedupedByKey: 0,
       keyCacheSize: 0,
+      drains: 0,
+      lastDrainBatchSize: 0,
+      lastDrainMs: 0,
     },
+    tweetScaffoldSignatures: new WeakMap(),
+    tweetScaffoldStats: createTweetScaffoldStats(),
     networkQueue: [],
     activeNetworkTasks: 0,
     networkStats: {
@@ -248,7 +280,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     runtimeDisposables: new DisposableStore(),
   };
   const scheduler = createRuntimeScheduler(
-    () => state.budget,
+    () => state.effectiveBudget,
     () => state.disposed,
     (depth) => {
       state.idleQueueDepth = depth;
@@ -259,19 +291,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   async function boot(): Promise<void> {
     const bootStartedAt = performance.now();
+    resetRuntimeCounters();
+    resetTwitterScannerCounters();
     state.performanceMode = await loadPerformanceMode();
     state.budget = budgetForPerformanceMode(state.performanceMode);
+    activateStartupBudgetWindow();
     applyRuntimeDocumentMarkers(state.performanceMode);
     injectTweetScaffoldStyles();
     await loadFirstRunState();
-    configureTwitterScanner({
-      safetyScanIntervalMs: state.budget.safetyScanIntervalMs,
-      maxSurfacesPerFlush: state.budget.maxScannerSurfacesPerFlush,
-      maxSurfacesPerScrollFlush: state.budget.maxScannerSurfacesPerScrollFlush,
-      maxSurfacesPerFullScan: state.budget.maxScannerSurfacesPerFullScan,
-      maxPendingSurfaces: state.budget.maxScannerPendingSurfaces,
-      scrollSettleMs: state.budget.scrollSettleMs,
-    });
+    configureTwitterScannerFromEffectiveBudget();
     configurePerformanceObservers();
     startRouteService();
     await loadRailPins();
@@ -454,6 +482,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.dispose();
     if (state.diagnosticsTimer !== null) window.clearTimeout(state.diagnosticsTimer);
     if (state.idlePreloadTimer !== null) window.clearTimeout(state.idlePreloadTimer);
+    clearStartupBudgetTimer();
     state.longTaskObserver?.disconnect();
     state.layoutShiftObserver?.disconnect();
     for (const registration of state.dockRegistrations.values()) registration.remove();
@@ -551,8 +580,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function observeRailPins(): void {
     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== "local" || !changes[RAIL_PIN_KEY]) return;
-      applyStoredRailPins(changes[RAIL_PIN_KEY].newValue);
+      if (area !== "local" || (!changes[RAIL_PIN_KEY] && !changes[RAIL_UNPIN_KEY])) return;
+      if (changes[RAIL_PIN_KEY]) applyStoredRailPins(changes[RAIL_PIN_KEY].newValue);
+      if (changes[RAIL_UNPIN_KEY]) applyStoredRailUnpins(changes[RAIL_UNPIN_KEY].newValue);
       for (const app of state.apps) updateDockRegistration(app);
       syncHiddenRailItems();
       renderHubPanel();
@@ -566,12 +596,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (area !== "local" || !changes[PERFORMANCE_MODE_KEY]) return;
       state.performanceMode = normalizePerformanceMode(changes[PERFORMANCE_MODE_KEY].newValue);
       state.budget = budgetForPerformanceMode(state.performanceMode);
+      activateStartupBudgetWindow();
       applyRuntimeDocumentMarkers(state.performanceMode);
       updateScannerConfiguration();
       configurePerformanceObservers();
       recordRuntimeDiagnostic("runtime.performanceMode", {
         mode: state.performanceMode,
         budget: state.budget,
+        effectiveBudget: state.effectiveBudget,
+        startupBudgetActive: state.startupBudgetActive,
         updatedAt: Date.now(),
       });
       drainNetworkQueue();
@@ -625,16 +658,83 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     controller.abort();
   }
 
+  function resetRuntimeCounters(): void {
+    state.importAvoidance = {};
+    state.surfaceCounts = {};
+    state.surfaceDeliveries = {};
+    state.surfaceSkips = {};
+    state.surfaceDeliveryCache = new WeakMap();
+    state.surfaceDeliveryKeyCache.clear();
+    state.surfaceDeliveryStats = {
+      queued: 0,
+      droppedQueueCap: 0,
+      dedupedByElement: 0,
+      dedupedByKey: 0,
+      keyCacheSize: 0,
+      drains: 0,
+      lastDrainBatchSize: 0,
+      lastDrainMs: 0,
+    };
+    state.tweetScaffoldSignatures = new WeakMap();
+    state.tweetScaffoldStats = createTweetScaffoldStats();
+    state.routeSurfaceImports = 0;
+  }
+
+  function activateStartupBudgetWindow(): void {
+    clearStartupBudgetTimer();
+    const startup = state.budget.startup;
+    if (state.performanceMode === "developer" || !startup || startup.durationMs <= 0) {
+      state.effectiveBudget = state.budget;
+      state.startupBudgetActive = false;
+      return;
+    }
+    const { durationMs, ...overrides } = startup;
+    state.effectiveBudget = {
+      ...state.budget,
+      ...overrides,
+      mode: state.budget.mode,
+      startup: state.budget.startup,
+    };
+    state.startupBudgetActive = true;
+    state.startupBudgetTimer = window.setTimeout(() => {
+      state.startupBudgetTimer = null;
+      state.effectiveBudget = state.budget;
+      state.startupBudgetActive = false;
+      updateScannerConfiguration();
+      scheduleTwitterScan();
+      drainNetworkQueue();
+      scheduleIdlePreloads();
+      flushDiagnosticsSoon();
+      recordRuntimeDiagnostic("runtime.startupBudget", {
+        mode: state.performanceMode,
+        restored: true,
+        durationMs,
+        updatedAt: Date.now(),
+      });
+    }, durationMs);
+  }
+
+  function clearStartupBudgetTimer(): void {
+    if (state.startupBudgetTimer === null) return;
+    window.clearTimeout(state.startupBudgetTimer);
+    state.startupBudgetTimer = null;
+  }
+
   function updateScannerConfiguration(): void {
     state.surfaceAppIndex = buildSurfaceAppIndex();
+    configureTwitterScannerFromEffectiveBudget(Array.from(state.surfaceAppIndex.keys()));
+  }
+
+  function configureTwitterScannerFromEffectiveBudget(surfaceKinds?: readonly TwitterSurfaceKind[]): void {
+    const budget = state.effectiveBudget;
     configureTwitterScanner({
-      safetyScanIntervalMs: state.budget.safetyScanIntervalMs,
-      maxSurfacesPerFlush: state.budget.maxScannerSurfacesPerFlush,
-      maxSurfacesPerScrollFlush: state.budget.maxScannerSurfacesPerScrollFlush,
-      maxSurfacesPerFullScan: state.budget.maxScannerSurfacesPerFullScan,
-      maxPendingSurfaces: state.budget.maxScannerPendingSurfaces,
-      scrollSettleMs: state.budget.scrollSettleMs,
-      surfaceKinds: Array.from(state.surfaceAppIndex.keys()),
+      safetyScanIntervalMs: budget.safetyScanIntervalMs,
+      maxSurfacesPerFlush: budget.maxScannerSurfacesPerFlush,
+      maxSurfacesPerScrollFlush: budget.maxScannerSurfacesPerScrollFlush,
+      maxSurfacesPerFullScan: budget.maxScannerSurfacesPerFullScan,
+      maxPendingSurfaces: budget.maxScannerPendingSurfaces,
+      scrollSettleMs: budget.scrollSettleMs,
+      surfaceKinds,
     });
   }
 
@@ -708,6 +808,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordSurfaceSkip(app, surface, "offscreen");
       return;
     }
+    prepareTweetFeatureScaffold(app, surface);
     if (surfaceWasRecentlyDelivered(app, surface)) {
       recordSurfaceSkip(app, surface, "dedupe");
       return;
@@ -728,7 +829,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       queue = { deliveries: [], cancelDrain: null };
       state.surfaceDeliveryQueues.set(delivery.app.id, queue);
     }
-    while (queue.deliveries.length >= state.budget.maxSurfaceDeliveryQueuePerApp) {
+    while (queue.deliveries.length >= state.effectiveBudget.maxSurfaceDeliveryQueuePerApp) {
       const dropped = queue.deliveries.shift();
       if (!dropped) break;
       state.surfaceDeliveryStats.droppedQueueCap += 1;
@@ -744,7 +845,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     queue.cancelDrain = scheduler.idle(() => {
       queue.cancelDrain = null;
       void drainSurfaceDeliveryQueue(appId, queue);
-    }, { timeout: state.budget.idleSurfaceTimeoutMs });
+    }, { timeout: state.effectiveBudget.idleSurfaceTimeoutMs });
   }
 
   async function drainSurfaceDeliveryQueue(appId: MilxdyAppId, queue: AppSurfaceDeliveryQueue): Promise<void> {
@@ -752,20 +853,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       clearSurfaceDeliveryQueueForApp(appId);
       return;
     }
-    const batchSize = Math.max(1, state.budget.maxIdleTasksPerFrame);
+    const startedAt = performance.now();
+    const batchSize = Math.max(1, state.effectiveBudget.maxIdleTasksPerFrame);
     const batch = queue.deliveries.splice(0, batchSize);
-    for (const delivery of batch) {
-      if (state.disposed || !state.enabledApps.has(delivery.app.id)) break;
-      if (state.loaded.get(delivery.app.id) !== delivery.module) continue;
-      if (!delivery.surface.element.isConnected) {
-        recordSurfaceSkip(delivery.app, delivery.surface, "disconnected");
-        continue;
+    try {
+      for (const delivery of batch) {
+        if (state.disposed || !state.enabledApps.has(delivery.app.id)) break;
+        if (state.loaded.get(delivery.app.id) !== delivery.module) continue;
+        if (!delivery.surface.element.isConnected) {
+          recordSurfaceSkip(delivery.app, delivery.surface, "disconnected");
+          continue;
+        }
+        await Promise.resolve(delivery.module.onSurface?.(delivery.surface))
+          .finally(() => {
+            recordFeatureTiming(delivery.app.id, `surface.${delivery.surface.kind}`, delivery.startedAt);
+            recordSurfaceHeightChange(delivery.app, delivery.surface, delivery.heightBefore);
+          });
       }
-      await Promise.resolve(delivery.module.onSurface?.(delivery.surface))
-        .finally(() => {
-          recordFeatureTiming(delivery.app.id, `surface.${delivery.surface.kind}`, delivery.startedAt);
-          recordSurfaceHeightChange(delivery.app, delivery.surface, delivery.heightBefore);
-        });
+    } finally {
+      state.surfaceDeliveryStats.drains += 1;
+      state.surfaceDeliveryStats.lastDrainBatchSize = batch.length;
+      state.surfaceDeliveryStats.lastDrainMs = Math.round((performance.now() - startedAt) * 10) / 10;
+      flushDiagnosticsSoon();
     }
     if (queue.deliveries.length > 0) scheduleSurfaceDeliveryDrain(appId, queue);
     else state.surfaceDeliveryQueues.delete(appId);
@@ -784,28 +893,131 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function prepareTweetScaffold(surface: TwitterSurface): void {
-    const needsHeaderMarkers = state.enabledApps.has("rootVisuals");
-    const needsPostReadingSlot = state.enabledApps.has("post-reading");
-    const needsRemistatsSlot = state.enabledApps.has("remistats");
-    if (!needsHeaderMarkers && !needsPostReadingSlot && !needsRemistatsSlot) return;
-    injectTweetScaffoldStyles();
-    surface.element.dataset.milxdyTweetScaffold = "true";
-    if (needsHeaderMarkers) markTweetHeaderScaffold(surface.element);
-    if (needsPostReadingSlot) ensurePostReadingButtonSlot(surface);
-    if (needsRemistatsSlot) {
-      ensureRemistatsBadgeSlot(surface);
-      ensureRemistatsActionPokeSlot(surface);
+    applyTweetScaffold(surface, {
+      headerMarkers: state.enabledApps.has("rootVisuals"),
+      postReadingSlot: false,
+      remistatsSlots: false,
+    });
+  }
+
+  function prepareTweetFeatureScaffold(app: MilxdyAppManifest, surface: TwitterSurface): void {
+    if (surface.kind !== "tweet") return;
+    const needsPostReadingSlot = app.id === "post-reading";
+    const needsRemistatsSlots = app.id === "remistats";
+    if (!needsPostReadingSlot && !needsRemistatsSlots) return;
+    applyTweetScaffold(surface, {
+      headerMarkers: state.enabledApps.has("rootVisuals"),
+      postReadingSlot: needsPostReadingSlot,
+      remistatsSlots: needsRemistatsSlots,
+    });
+  }
+
+  function applyTweetScaffold(
+    surface: TwitterSurface,
+    options: { headerMarkers: boolean; postReadingSlot: boolean; remistatsSlots: boolean },
+  ): void {
+    if (tweetSurfaceIsInsideQuote(surface)) return;
+    const placement = document.documentElement.dataset.milxdyPostReadingButtonPlacement === "actions" ? "actions" : "header";
+    const pokePlacement = document.documentElement.dataset.milxdyVisualPokePlacement === "top" ? "top" : "actions";
+    const requestedTokens = [
+      options.headerMarkers ? "header" : "",
+      options.postReadingSlot ? `post:${placement}` : "",
+      options.remistatsSlots ? `remistats:${pokePlacement}` : "",
+    ].filter(Boolean);
+    if (requestedTokens.length === 0) return;
+    state.tweetScaffoldStats.attempts += 1;
+    const previousSignature = state.tweetScaffoldSignatures.get(surface.element) || "";
+    const completedTokens = new Set(previousSignature.split("|").filter(Boolean));
+    for (const token of requestedTokens) {
+      if (completedTokens.has(token) && !tweetScaffoldTokenPresent(surface, token)) completedTokens.delete(token);
     }
+    if (requestedTokens.every((token) => completedTokens.has(token))) {
+      state.tweetScaffoldStats.skipsBySignature += 1;
+      flushDiagnosticsSoon();
+      return;
+    }
+
+    const startedAt = performance.now();
+    injectTweetScaffoldStyles();
+    if (surface.element.dataset.milxdyTweetScaffold !== "true") surface.element.dataset.milxdyTweetScaffold = "true";
+    if (options.headerMarkers && !completedTokens.has("header") && markTweetHeaderScaffold(surface.element)) {
+      completedTokens.add("header");
+    }
+    if (options.postReadingSlot && !completedTokens.has(`post:${placement}`)) {
+      const result = ensurePostReadingButtonSlot(surface);
+      if (result === "created") recordTweetScaffoldSlotCreated(`post-reading-${placement}`);
+      if (result !== "missing") completedTokens.add(`post:${placement}`);
+    }
+    if (options.remistatsSlots && !completedTokens.has(`remistats:${pokePlacement}`)) {
+      const badgeResult = ensureRemistatsBadgeSlot(surface);
+      const actionResult = pokePlacement === "top" ? "present" : ensureRemistatsActionPokeSlot(surface);
+      if (badgeResult === "created") recordTweetScaffoldSlotCreated("remistats-badge");
+      if (actionResult === "created") recordTweetScaffoldSlotCreated("remistats-action-poke");
+      if (badgeResult !== "missing" && actionResult !== "missing") completedTokens.add(`remistats:${pokePlacement}`);
+    }
+    state.tweetScaffoldSignatures.set(surface.element, Array.from(completedTokens).sort().join("|"));
+    const duration = Math.round((performance.now() - startedAt) * 10) / 10;
+    state.tweetScaffoldStats.lastDurationMs = duration;
+    state.tweetScaffoldStats.durationMs = Math.round((state.tweetScaffoldStats.durationMs + duration) * 10) / 10;
+    state.tweetScaffoldStats.maxDurationMs = Math.max(state.tweetScaffoldStats.maxDurationMs, duration);
+    flushDiagnosticsSoon();
   }
 
-  function ensurePostReadingButtonSlot(surface: TwitterSurface): void {
+  function tweetScaffoldTokenPresent(surface: TwitterSurface, token: string): boolean {
+    if (token === "header") {
+      return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-header="true"], [data-milxdy-display-name="true"], [data-milxdy-metadata-row="true"]'));
+    }
+    if (token === "post:header") {
+      return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="post-reading-header-action"]'));
+    }
+    if (token === "post:actions") {
+      return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="post-reading-action"]'));
+    }
+    if (token === "remistats:top") {
+      return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="remistats-badge"]'));
+    }
+    if (token === "remistats:actions") {
+      const hasBadge = Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="remistats-badge"]'));
+      const hasAction = Boolean(findOwnedTweetNode(
+        surface,
+        '[data-milxdy-tweet-slot="remistats-action-poke"], [data-reminet-action-poke-group="true"]',
+      ));
+      return hasBadge && hasAction;
+    }
+    return false;
+  }
+
+  function tweetNodeBelongsToSurface(surface: { element: HTMLElement }, node: HTMLElement | null | undefined): boolean {
+    if (!node || !surface.element.contains(node)) return false;
+    const ownerTweet = node.closest<HTMLElement>('[data-testid="tweet"]');
+    if (ownerTweet && ownerTweet !== surface.element && surface.element.contains(ownerTweet)) return false;
+    const quoteTweet = node.closest<HTMLElement>('[data-testid="quoteTweet"]');
+    if (quoteTweet && quoteTweet !== surface.element && surface.element.contains(quoteTweet)) return false;
+    return true;
+  }
+
+  function tweetSurfaceIsInsideQuote(surface: { element: HTMLElement }): boolean {
+    const quoteTweet = surface.element.closest<HTMLElement>('[data-testid="quoteTweet"]');
+    return Boolean(quoteTweet && quoteTweet !== surface.element);
+  }
+
+  function findOwnedTweetNode<T extends HTMLElement = HTMLElement>(surface: TwitterSurface, selector: string): T | undefined {
+    return Array.from(surface.element.querySelectorAll<T>(selector))
+      .find((element) => tweetNodeBelongsToSurface(surface, element));
+  }
+
+  function recordTweetScaffoldSlotCreated(slot: string): void {
+    state.tweetScaffoldStats.createdSlots += 1;
+    state.tweetScaffoldStats.createdBySlot[slot] = (state.tweetScaffoldStats.createdBySlot[slot] || 0) + 1;
+  }
+
+  function ensurePostReadingButtonSlot(surface: TwitterSurface): ScaffoldResult {
     const placement = document.documentElement.dataset.milxdyPostReadingButtonPlacement || "auto";
-    if (placement === "actions") ensurePostReadingActionSlot(surface);
-    else ensurePostReadingHeaderSlot(surface);
+    return placement === "actions" ? ensurePostReadingActionSlot(surface) : ensurePostReadingHeaderSlot(surface);
   }
 
-  function ensurePostReadingHeaderSlot(surface: TwitterSurface): void {
-    if (surface.element.querySelector('[data-milxdy-tweet-slot="post-reading-header-action"]')) return;
+  function ensurePostReadingHeaderSlot(surface: TwitterSurface): ScaffoldResult {
+    if (surface.element.querySelector('[data-milxdy-tweet-slot="post-reading-header-action"]')) return "present";
     const actionRow = surface.actionRow;
     const anchor = Array.from(surface.element.querySelectorAll<HTMLElement>('button, [role="button"], a, [aria-label], [data-testid]'))
       .find((button) => {
@@ -826,7 +1038,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
           return label.includes("caret") || label.includes("more");
         });
-    if (!anchor?.parentElement) return;
+    if (!anchor?.parentElement) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "post-reading-header-action";
     slot.dataset.postReadingButtonSlot = "true";
@@ -835,6 +1047,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (anchor.getAttribute("data-testid") === "caret") anchor.parentElement.insertBefore(slot, anchor);
     else anchor.parentElement.insertBefore(slot, anchor.nextSibling);
     markPostReadingHeaderControlHost(slot);
+    return "created";
   }
 
   function markPostReadingHeaderControlHost(slot: HTMLElement): void {
@@ -851,10 +1064,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function ensurePostReadingActionSlot(surface: TwitterSurface): void {
-    if (surface.element.querySelector('[data-milxdy-tweet-slot="post-reading-action"]')) return;
+  function ensurePostReadingActionSlot(surface: TwitterSurface): ScaffoldResult {
+    if (surface.element.querySelector('[data-milxdy-tweet-slot="post-reading-action"]')) return "present";
     const actionRow = surface.actionRow;
-    if (!actionRow) return;
+    if (!actionRow) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "post-reading-action";
     slot.className = "post-reading-button-slot";
@@ -864,16 +1077,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .at(-1);
     if (anchor?.parentElement) anchor.parentElement.insertBefore(slot, anchor.nextSibling);
     else actionRow.append(slot);
+    return "created";
   }
 
-  function ensureRemistatsBadgeSlot(surface: TwitterSurface): void {
-    if (surface.element.querySelector('[data-milxdy-tweet-slot="remistats-badge"]')) return;
-    const anchor = Array.from(surface.element.querySelectorAll<HTMLElement>("time"))
-      .find((element) => !element.closest('[data-testid="quoteTweet"]'))
-      || Array.from(surface.element.querySelectorAll<HTMLElement>('[data-testid="User-Name"] [dir="ltr"], [data-testid="User-Name"]'))
-        .find((element) => !element.closest('[data-testid="quoteTweet"]'));
+  function ensureRemistatsBadgeSlot(surface: TwitterSurface): ScaffoldResult {
+    if (findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="remistats-badge"]')) return "present";
+    const anchor = findOwnedTweetNode(surface, "time")
+      || findOwnedTweetNode(surface, '[data-testid="User-Name"] [dir="ltr"], [data-testid="User-Name"]');
     const parent = anchor?.parentElement;
-    if (!anchor || !parent) return;
+    if (!anchor || !parent) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "remistats-badge";
     slot.dataset.reminetBadgeSlot = "true";
@@ -881,13 +1093,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     slot.className = "reminet-badge-slot";
     slot.setAttribute("aria-hidden", "true");
     parent.insertBefore(slot, anchor.nextSibling);
+    return "created";
   }
 
-  function ensureRemistatsActionPokeSlot(surface: TwitterSurface): void {
-    if (document.documentElement.dataset.milxdyVisualPokePlacement === "top") return;
-    if (surface.element.querySelector('[data-reminet-action-poke-group="true"], [data-milxdy-tweet-slot="remistats-action-poke"]')) return;
+  function ensureRemistatsActionPokeSlot(surface: TwitterSurface): ScaffoldResult {
+    if (findOwnedTweetNode(surface, '[data-reminet-action-poke-group="true"], [data-milxdy-tweet-slot="remistats-action-poke"]')) return "present";
     const actionRow = surface.actionRow;
-    if (!actionRow) return;
+    if (!actionRow) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "remistats-action-poke";
     slot.dataset.reminetActionPokeGroup = "true";
@@ -898,11 +1110,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const likeSlot = like?.closest<HTMLElement>('[role="group"] > div') || like?.parentElement?.parentElement;
     if (likeSlot) likeSlot.insertAdjacentElement("afterend", slot);
     else actionRow.append(slot);
+    return "created";
   }
 
-  function markTweetHeaderScaffold(tweet: HTMLElement): void {
+  function markTweetHeaderScaffold(tweet: HTMLElement): boolean {
+    let marked = false;
     for (const userName of Array.from(tweet.querySelectorAll<HTMLElement>('[data-testid="User-Name"]'))) {
-      if (userName.closest('[data-testid="quoteTweet"]')) continue;
+      if (!tweetNodeBelongsToSurface({ element: tweet }, userName)) continue;
       const displayNameLink = findDisplayNameLink(userName);
       if (!displayNameLink) continue;
       const displayRow = displayNameLink.parentElement;
@@ -911,7 +1125,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       displayRow?.setAttribute("data-milxdy-display-name-row", "true");
       displayNameLink.setAttribute("data-milxdy-display-name", "true");
       metadataRow?.setAttribute("data-milxdy-metadata-row", "true");
+      marked = true;
     }
+    return marked;
   }
 
   function findDisplayNameLink(userName: HTMLElement): HTMLElement | null {
@@ -972,8 +1188,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   async function loadRailPins(): Promise<void> {
-    const stored = await safeLocalGet({ [RAIL_PIN_KEY]: null });
+    const stored = await safeLocalGet({ [RAIL_PIN_KEY]: null, [RAIL_UNPIN_KEY]: [] });
     applyStoredRailPins(stored?.[RAIL_PIN_KEY]);
+    applyStoredRailUnpins(stored?.[RAIL_UNPIN_KEY]);
   }
 
   async function loadFirstRunState(): Promise<void> {
@@ -988,40 +1205,65 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return;
     }
     state.railPinsExplicit = true;
-    state.railPinnedApps = new Set(value.filter((id): id is string => typeof id === "string"));
+    state.railPinnedApps = new Set(value.filter((id): id is MilxdyAppId => typeof id === "string") as MilxdyAppId[]);
+  }
+
+  function applyStoredRailUnpins(value: unknown): void {
+    state.railUnpinnedApps = new Set(
+      Array.isArray(value)
+        ? value.filter((id): id is MilxdyAppId => typeof id === "string") as MilxdyAppId[]
+        : [],
+    );
   }
 
   function isRailPinned(app: MilxdyAppManifest): boolean {
     if (!app.dock || app.available === false || app.hub?.rail.supported === false) return false;
-    if (state.railPinsExplicit) return state.railPinnedApps.has(app.id);
+    if (state.railUnpinnedApps.has(app.id)) return false;
+    if (state.railPinnedApps.has(app.id)) return true;
     return state.enabledApps.has(app.id) && app.hub?.rail.defaultPinned === true;
   }
 
   function currentRailPins(): MilxdyAppId[] {
-    if (state.railPinsExplicit) return Array.from(state.railPinnedApps);
-    return state.apps
+    const next = new Set(state.railPinnedApps);
+    for (const app of state.apps
       .filter((app) => app.available !== false && app.dock && app.hub?.rail.supported !== false && app.hub?.rail.defaultPinned === true && state.enabledApps.has(app.id))
-      .map((app) => app.id);
+      .filter((app) => !state.railUnpinnedApps.has(app.id))) {
+      next.add(app.id);
+    }
+    return Array.from(next);
   }
 
   function ensureDefaultRailPin(app: MilxdyAppManifest): void {
     if (!app.dock || app.available === false || app.hub?.rail.supported === false || app.hub?.rail.defaultPinned !== true) return;
-    if (!state.railPinsExplicit || state.railPinnedApps.has(app.id)) return;
+    if (state.railUnpinnedApps.has(app.id) || state.railPinnedApps.has(app.id)) return;
     state.railPinnedApps.add(app.id);
-    void safeLocalSet({ [RAIL_PIN_KEY]: Array.from(state.railPinnedApps) });
+    state.railPinsExplicit = true;
+    void persistRailVisibility();
   }
 
   function setRailPinned(appId: MilxdyAppId, pinned: boolean): void {
     const next = new Set(currentRailPins());
-    if (pinned) next.add(appId);
-    else next.delete(appId);
+    if (pinned) {
+      next.add(appId);
+      state.railUnpinnedApps.delete(appId);
+    } else {
+      next.delete(appId);
+      state.railUnpinnedApps.add(appId);
+    }
     state.railPinsExplicit = true;
     state.railPinnedApps = next;
-    void safeLocalSet({ [RAIL_PIN_KEY]: Array.from(next) });
+    void persistRailVisibility();
     const app = state.apps.find((candidate) => candidate.id === appId);
     if (app) updateDockRegistration(app);
     syncHiddenRailItems();
     renderHubPanel();
+  }
+
+  function persistRailVisibility(): Promise<boolean> {
+    return safeLocalSet({
+      [RAIL_PIN_KEY]: Array.from(state.railPinnedApps),
+      [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
+    });
   }
 
   function setAppEnabled(app: MilxdyAppManifest, enabled: boolean): void {
@@ -1031,6 +1273,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         error: app.unavailableReason || "unavailableInBuild",
         updatedAt: Date.now(),
       });
+      renderHubPanel();
+      return;
+    }
+    const performanceBlock = enabled ? appEnableBlockedByPerformance(app) : null;
+    if (performanceBlock) {
+      recordRuntimeDiagnostic(`hub.enablement.${app.id}`, {
+        enabled: false,
+        error: performanceBlock,
+        mode: state.performanceMode,
+        updatedAt: Date.now(),
+      });
+      window.alert(performanceBlock);
       renderHubPanel();
       return;
     }
@@ -1132,26 +1386,32 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function applyAppPreset(preset: AppPreset): void {
     const startedAt = performance.now();
+    const presetApps = state.apps
+      .filter((app) => app.available !== false && app.setEnabled)
+      .filter((app) => preset === "full" || app.hub?.presets.includes(preset) === true);
+    const blockedApps = presetApps
+      .filter((app) => appEnableBlockedByPerformance(app));
     const enabledTasks = state.apps
       .filter((app) => app.available !== false && app.setEnabled)
+      .filter((app) => preset === "full" || app.hub?.presets.includes(preset) === true)
+      .filter((app) => !appEnableBlockedByPerformance(app))
       .map(async (app) => {
-        const shouldEnable = app.hub?.presets.includes(preset) === true;
-        await app.setEnabled?.(shouldEnable);
-        if (shouldEnable) state.enabledApps.add(app.id);
-        else {
-          state.enabledApps.delete(app.id);
-          await disableApp(app);
-        }
+        await app.setEnabled?.(true);
+        state.enabledApps.add(app.id);
+        updateDockRegistration(app);
       });
     const pinned = state.apps
       .filter((app) => app.available !== false && app.dock && app.hub?.rail.supported !== false && app.hub?.rail.defaultPinned && app.hub.presets.includes(preset))
+      .filter((app) => !appEnableBlockedByPerformance(app))
       .map((app) => app.id);
     state.railPinsExplicit = true;
     state.railPinnedApps = new Set(pinned);
+    for (const appId of pinned) state.railUnpinnedApps.delete(appId);
     const performanceMode: PerformanceMode = preset === "lite" ? "fast" : preset === "full" ? "full" : "balanced";
     void Promise.all(enabledTasks)
       .then(() => safeLocalSet({
         [RAIL_PIN_KEY]: pinned,
+        [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
         [FIRST_RUN_STATUS_KEY]: "complete",
         [PERFORMANCE_MODE_KEY]: performanceMode,
       }))
@@ -1159,16 +1419,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         state.firstRunPending = false;
         state.performanceMode = performanceMode;
         state.budget = budgetForPerformanceMode(performanceMode);
+        activateStartupBudgetWindow();
         applyRuntimeDocumentMarkers(performanceMode);
-        configureTwitterScanner({
-          safetyScanIntervalMs: state.budget.safetyScanIntervalMs,
-          maxSurfacesPerFlush: state.budget.maxScannerSurfacesPerFlush,
-          maxSurfacesPerScrollFlush: state.budget.maxScannerSurfacesPerScrollFlush,
-          maxSurfacesPerFullScan: state.budget.maxScannerSurfacesPerFullScan,
-          maxPendingSurfaces: state.budget.maxScannerPendingSurfaces,
-          scrollSettleMs: state.budget.scrollSettleMs,
-          surfaceKinds: interestedSurfaceKinds(),
-        });
+        configureTwitterScannerFromEffectiveBudget(interestedSurfaceKinds());
         for (const app of state.apps) {
           if (await app.isEnabled()) {
             state.enabledApps.add(app.id);
@@ -1184,7 +1437,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         renderHubPanel();
         recordRuntimeDiagnostic("hub.preset", {
           preset,
-          performanceMode,
+          performanceMode: state.performanceMode,
+          enabledTargetCount: enabledTasks.length,
+          blockedTargetCount: blockedApps.length,
+          blockedApps: blockedApps.map((app) => app.id),
           enabledApps: Array.from(state.enabledApps),
           railPinnedApps: pinned,
           updateMs: Math.round((performance.now() - startedAt) * 10) / 10,
@@ -1352,14 +1608,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const heading = document.createElement("strong");
       heading.textContent = "Light Start";
       const copy = document.createElement("p");
-      copy.textContent = "Full enables every included app, pins supported rail apps, and raises performance for the richest setup. Sign in to RemiliaNET from the popup afterward for Beetol, pokes, and chat.";
-      const actions = document.createElement("div");
-      actions.className = "milxdy-app-hub-preset-actions";
-      actions.append(
-        presetButton("Lite", "lite"),
-        presetButton("Balanced", "balanced"),
-        presetButton("Full setup", "full"),
-      );
+      copy.textContent = "Choose a default app set and rail pins. Runtime performance stays controlled by the Performance setting.";
+      const actions = presetActions();
       const skip = document.createElement("button");
       skip.type = "button";
       skip.textContent = "Keep defaults";
@@ -1374,6 +1624,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.hubDockSettingsOpen) {
       const dockSettings = getOverlayDock().createSettingsPanel(renderHubPanel);
       dockSettings.classList.add("milxdy-app-hub-dock-settings");
+      dockSettings.append(appHubSetupSettings());
       root.append(dockSettings);
     }
 
@@ -1462,6 +1713,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return button;
   }
 
+  function presetActions(): HTMLElement {
+    const actions = document.createElement("div");
+    actions.className = "milxdy-app-hub-preset-actions";
+    actions.append(
+      presetButton("Lite apps", "lite"),
+      presetButton("Balanced apps", "balanced"),
+      presetButton("All apps", "full"),
+    );
+    return actions;
+  }
+
+  function appHubSetupSettings(): HTMLElement {
+    const section = document.createElement("section");
+    section.className = "milxdy-app-hub-setup-settings";
+    const title = document.createElement("strong");
+    title.textContent = "Setup";
+    const detail = document.createElement("span");
+    detail.textContent = "Reapply app enablement and default rail pins without changing runtime performance.";
+    section.append(title, detail, presetActions());
+    return section;
+  }
+
   function appHubRuntimeSummary(): HTMLElement {
     const summary = document.createElement("section");
     summary.className = "milxdy-app-hub-runtime";
@@ -1531,6 +1804,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
     const body = document.createElement("div");
     body.className = "milxdy-app-hub-body";
+    const enableControl = appHubEnableControl(app);
     const description = document.createElement("p");
     description.textContent = app.hub?.shortDescription || app.description;
     const meta = document.createElement("span");
@@ -1539,6 +1813,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const runtime = document.createElement("span");
     runtime.className = "milxdy-app-hub-runtime-state";
     runtime.textContent = appRuntimeSummary(app);
+    if (enableControl) body.append(enableControl);
     body.append(description, meta, notes);
     if (app.available === false && app.unavailableReason) {
       const unavailable = document.createElement("span");
@@ -1550,23 +1825,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
     const controls = document.createElement("div");
     controls.className = "milxdy-app-hub-controls";
-    if (app.available !== false && app.setEnabled) {
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "milxdy-app-hub-switch";
-      toggle.dataset.checked = String(state.enabledApps.has(app.id));
-      toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-checked", String(state.enabledApps.has(app.id)));
-      toggle.setAttribute("aria-label", `${app.name} ${state.enabledApps.has(app.id) ? "on" : "off"}`);
-      const switchKnob = document.createElement("span");
-      switchKnob.className = "milxdy-app-hub-switch-knob";
-      const switchText = document.createElement("span");
-      switchText.className = "milxdy-app-hub-switch-text";
-      switchText.textContent = state.enabledApps.has(app.id) ? "On" : "Off";
-      toggle.append(switchKnob, switchText);
-      toggle.addEventListener("click", () => setAppEnabled(app, !state.enabledApps.has(app.id)));
-      controls.append(toggle);
-    }
     if (app.available !== false && app.dock && app.hub?.rail.supported !== false) {
       const pin = document.createElement("button");
       pin.type = "button";
@@ -1596,6 +1854,59 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
     card.append(summary, body, controls);
     return card;
+  }
+
+  function appHubEnableControl(app: MilxdyAppManifest): HTMLElement {
+    const row = document.createElement("div");
+    row.className = "milxdy-app-hub-enable-row";
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.className = "milxdy-app-hub-switch";
+    const switchKnob = document.createElement("span");
+    switchKnob.className = "milxdy-app-hub-switch-knob";
+    const switchText = document.createElement("span");
+    switchText.className = "milxdy-app-hub-switch-text";
+    const detail = document.createElement("span");
+    detail.className = "milxdy-app-hub-enable-detail";
+
+    if (app.available === false) {
+      toggle.disabled = true;
+      toggle.dataset.checked = "false";
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", "false");
+      toggle.setAttribute("aria-disabled", "true");
+      toggle.setAttribute("aria-label", `${app.name} unavailable in this build`);
+      switchText.textContent = "Unavailable";
+      detail.textContent = app.unavailableReason || "This app cannot be enabled right now.";
+    } else if (!app.setEnabled) {
+      toggle.disabled = true;
+      toggle.dataset.checked = "true";
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", "true");
+      toggle.setAttribute("aria-disabled", "true");
+      toggle.setAttribute("aria-label", `${app.name} is always on`);
+      switchText.textContent = "Always on";
+      detail.textContent = "Core feature";
+    } else {
+      const enabled = state.enabledApps.has(app.id);
+      const performanceBlock = enabled ? null : appEnableBlockedByPerformance(app);
+      toggle.dataset.checked = String(enabled);
+      toggle.setAttribute("role", "switch");
+      toggle.setAttribute("aria-checked", String(enabled));
+      if (performanceBlock) {
+        toggle.dataset.performanceBlocked = "true";
+        toggle.setAttribute("aria-disabled", "true");
+      }
+      toggle.setAttribute("aria-label", performanceBlock || `${enabled ? "Disable" : "Enable"} ${app.name}`);
+      toggle.title = performanceBlock || "";
+      switchText.textContent = enabled ? "On" : "Off";
+      detail.textContent = performanceBlock || (enabled ? "Click to disable this app." : "Click to enable this app.");
+      toggle.addEventListener("click", () => setAppEnabled(app, !state.enabledApps.has(app.id)));
+    }
+
+    toggle.append(switchKnob, switchText);
+    row.append(toggle, detail);
+    return row;
   }
 
   function startHubAppDrag(event: PointerEvent, appId: MilxdyAppId): void {
@@ -1736,7 +2047,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function appRuntimeSummary(app: MilxdyAppManifest): string {
     const diagnostic = state.diagnostics.get(app.id);
     const parts = [
-      app.available === false ? "build:unavailable" : "build:available",
+      app.available === false ? "app:unavailable" : "app:available",
       `state:${diagnostic?.state || "pending"}`,
       isRailPinned(app) ? "rail:pinned" : "rail:hidden",
       `load:${app.loadTriggers.join(",")}`,
@@ -1750,10 +2061,32 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return parts.join(" | ");
   }
 
+  function appEnableBlockedByPerformance(app: MilxdyAppManifest): string | null {
+    if (app.available === false || !app.setEnabled) return null;
+    if (app.id === "reminetChat" && state.performanceMode !== "fast") return null;
+    if (allowsFastModerateSurfaceImport(app)) return null;
+    if (state.performanceMode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
+      return "Please change your performance settings to enable";
+    }
+    if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !state.effectiveBudget.allowHeavyStartup) {
+      return "Please change your performance settings to enable";
+    }
+    if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !state.effectiveBudget.allowHeavySurfaceImports) {
+      return "Please change your performance settings to enable";
+    }
+    if (app.cost.worker === "heavy" && state.performanceMode !== "full" && state.performanceMode !== "developer") {
+      return "Please change your performance settings to enable";
+    }
+    if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !state.effectiveBudget.allowHeavySurfaceImports) {
+      return "Please change your performance settings to enable";
+    }
+    return null;
+  }
+
   function shouldLoadAtStartup(app: MilxdyAppManifest): boolean {
     if (!app.loadTriggers.includes("startup")) return false;
-    if (app.cost.startup === "heavy" && !state.budget.allowHeavyStartup) return false;
-    if (app.cost.worker === "heavy" && !state.budget.allowWorkerPreload) return false;
+    if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyStartup) return false;
+    if (app.cost.worker === "heavy" && !state.effectiveBudget.allowWorkerPreload) return false;
     return true;
   }
 
@@ -1761,11 +2094,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.loaded.has(app.id)) return { mode: "immediate" };
     if (state.loading.has(app.id)) return { mode: "blocked", reason: "importInFlight" };
     if (state.pendingSurfaceImports.has(app.id)) return { mode: "blocked", reason: "surfaceImportPending" };
-    if (state.routeSurfaceImports >= state.budget.maxSurfaceImportsPerRoute) return { mode: "blocked", reason: "routeImportCap" };
+    if (state.routeSurfaceImports >= state.effectiveBudget.maxSurfaceImportsPerRoute) return { mode: "blocked", reason: "routeImportCap" };
     if (!surfaceIsWithinBudget) return { mode: "blocked", reason: "offscreen" };
     const performanceBlock = surfaceDeliveryBlockedByPerformance(app, surface.kind);
     if (performanceBlock) return { mode: "blocked", reason: performanceBlock };
-    if (state.performanceMode === "fast" && !isCheapSurfaceImport(app)) return { mode: "blocked", reason: "fastSurfaceCost" };
+    if (state.performanceMode === "fast" && !isCheapSurfaceImport(app) && !allowsFastModerateSurfaceImport(app)) return { mode: "blocked", reason: "fastSurfaceCost" };
     if (state.performanceMode === "balanced" && shouldIdleSurfaceImport(app)) return { mode: "idle" };
     return { mode: "immediate" };
   }
@@ -1774,7 +2107,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.routeSurfaceImports += 1;
     recordRuntimeDiagnostic(`surfaceImport.${app.id}`, {
       mode: state.performanceMode,
+      startupBudgetActive: state.startupBudgetActive,
       routeImports: state.routeSurfaceImports,
+      routeImportCap: state.effectiveBudget.maxSurfaceImportsPerRoute,
       updatedAt: Date.now(),
     });
   }
@@ -1807,7 +2142,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       void loadApp(app, `surfaceIdle:${surface.kind}`).then((loaded) => {
         if (loaded?.onSurface && shouldDeliverSurface) deliverSurface(app, loaded, surface, surfaceIsWithinBudget || stillWithinBudget);
       });
-    }, { timeout: Math.max(state.budget.idleSurfaceTimeoutMs, 1000) });
+    }, { timeout: Math.max(state.effectiveBudget.idleSurfaceTimeoutMs, 1000) });
   }
 
   function isCheapSurfaceImport(app: MilxdyAppManifest): boolean {
@@ -1815,6 +2150,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       && app.cost.network === "none"
       && app.cost.worker !== "heavy"
       && app.cost.domWrite === "small";
+  }
+
+  function allowsFastModerateSurfaceImport(app: MilxdyAppManifest): boolean {
+    return app.id === "remistats";
   }
 
   function shouldIdleSurfaceImport(app: MilxdyAppManifest): boolean {
@@ -1825,10 +2164,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function surfaceDeliveryBlockedByPerformance(app: MilxdyAppManifest, surfaceKind: TwitterSurfaceKind): string | null {
-    if (state.performanceMode === "fast" && !isCheapSurfaceImport(app)) return "fastSurfaceCost";
-    if (app.cost.perSurface === "heavy" && !state.budget.allowHeavySurfaceImports) return "heavySurface";
-    if (app.cost.worker === "heavy" && !state.budget.allowWorkerPreload) return "heavyWorker";
-    if (surfaceKind === "tweet" && app.cost.domWrite === "large" && !state.budget.allowHeavySurfaceImports) return "largeDomWrite";
+    if (state.performanceMode === "fast" && !isCheapSurfaceImport(app) && !allowsFastModerateSurfaceImport(app)) return "fastSurfaceCost";
+    if (app.cost.perSurface === "heavy" && !state.effectiveBudget.allowHeavySurfaceImports) return "heavySurface";
+    if (app.cost.worker === "heavy" && !state.effectiveBudget.allowWorkerPreload) return "heavyWorker";
+    if (surfaceKind === "tweet" && app.cost.domWrite === "large" && !state.effectiveBudget.allowHeavySurfaceImports) return "largeDomWrite";
     return null;
   }
 
@@ -1839,7 +2178,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function surfaceWithinBudget(surface: TwitterSurface): boolean {
     if (surface.kind === "profile") return true;
     const rect = surface.element.getBoundingClientRect();
-    const margin = state.budget.visibleSurfaceMarginPx;
+    const margin = state.effectiveBudget.visibleSurfaceMarginPx;
     return rect.bottom >= -margin && rect.top <= window.innerHeight + margin;
   }
 
@@ -1849,12 +2188,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       state.idlePreloadTimer = null;
     }
     if (state.performanceMode !== "full" && state.performanceMode !== "developer") return;
-    if (state.budget.idlePreloadDelayMs === null || document.hidden) return;
+    if (state.effectiveBudget.idlePreloadDelayMs === null || document.hidden) return;
     state.idlePreloadTimer = window.setTimeout(() => {
       state.idlePreloadTimer = null;
       for (const app of state.apps) {
         if (!app.loadTriggers.includes("idle") || state.loaded.has(app.id)) continue;
-        if (app.cost.startup === "heavy" && !state.budget.allowHeavyIdlePreload) {
+        if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyIdlePreload) {
           recordImportAvoided(app, "idle:heavy");
           continue;
         }
@@ -1868,7 +2207,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         });
         break;
       }
-    }, state.budget.idlePreloadDelayMs);
+    }, state.effectiveBudget.idlePreloadDelayMs);
   }
 
   function scheduleProgressiveIdlePreload(): void {
@@ -1916,7 +2255,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function surfaceWasRecentlyDelivered(app: MilxdyAppManifest, surface: TwitterSurface): boolean {
-    if (!state.budget.dedupeSurfaceElements) return false;
+    if (!state.effectiveBudget.dedupeSurfaceElements) return false;
     const deliveredApps = state.surfaceDeliveryCache.get(surface.element) || new Set<MilxdyAppId>();
     if (deliveredApps.has(app.id)) {
       state.surfaceDeliveryStats.dedupedByElement += 1;
@@ -1924,12 +2263,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     deliveredApps.add(app.id);
     state.surfaceDeliveryCache.set(surface.element, deliveredApps);
-    if (state.budget.surfaceDedupeTtlMs > 0) {
+    if (state.effectiveBudget.surfaceDedupeTtlMs > 0) {
       const now = Date.now();
       purgeExpiredSurfaceDeliveryKeys(now);
       const key = `${app.id}:${surface.cacheKey}`;
       const deliveredAt = state.surfaceDeliveryKeyCache.get(key);
-      if (deliveredAt !== undefined && now - deliveredAt < state.budget.surfaceDedupeTtlMs) {
+      if (deliveredAt !== undefined && now - deliveredAt < state.effectiveBudget.surfaceDedupeTtlMs) {
         state.surfaceDeliveryStats.dedupedByKey += 1;
         return true;
       }
@@ -1940,7 +2279,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function purgeExpiredSurfaceDeliveryKeys(now = Date.now()): void {
-    const ttl = state.budget.surfaceDedupeTtlMs;
+    const ttl = state.effectiveBudget.surfaceDedupeTtlMs;
     if (ttl <= 0) {
       state.surfaceDeliveryKeyCache.clear();
       state.surfaceDeliveryStats.keyCacheSize = 0;
@@ -1963,7 +2302,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function measureSurfaceHeight(surface: TwitterSurface): number | null {
-    if (!state.budget.diagnostics || surface.kind !== "tweet" || !surface.element.isConnected) return null;
+    if (!state.effectiveBudget.diagnostics || surface.kind !== "tweet" || !surface.element.isConnected) return null;
     return Math.round(surface.element.getBoundingClientRect().height * 10) / 10;
   }
 
@@ -1990,7 +2329,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       cancelNetworkQueue();
       return;
     }
-    while (state.activeNetworkTasks < Math.max(1, state.budget.networkConcurrency) && state.networkQueue.length > 0) {
+    while (state.activeNetworkTasks < Math.max(1, state.effectiveBudget.networkConcurrency) && state.networkQueue.length > 0) {
       const task = state.networkQueue.shift();
       if (!task) return;
       if (task.canceled) {
@@ -2070,6 +2409,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         "milxdy.diagnostics.runtime": {
           mode: state.performanceMode,
           budget: state.budget,
+          effectiveBudget: state.effectiveBudget,
+          startupBudgetActive: state.startupBudgetActive,
           route: state.route,
           loadedApps: Array.from(state.loaded.keys()).sort(),
           loadingApps: Array.from(state.loading.keys()).sort(),
@@ -2086,6 +2427,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           idleQueueDepth: state.idleQueueDepth,
           idleQueueMaxDepth: state.idleQueueMaxDepth,
           idleScheduler: state.idleSchedulerStats,
+          scaffold: state.tweetScaffoldStats,
           surfaceDelivery: state.surfaceDeliveryStats,
           surfaceDeliveryQueueDepth: Array.from(state.surfaceDeliveryQueues.entries()).reduce<Record<string, number>>((depths, [appId, queue]) => {
             depths[appId] = queue.deliveries.length;
@@ -2095,7 +2437,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             ...state.networkStats,
             active: state.activeNetworkTasks,
             queuedDepth: state.networkQueue.length,
-            concurrency: state.budget.networkConcurrency,
+            concurrency: state.effectiveBudget.networkConcurrency,
           },
           longTasks: state.longTasks.slice(-25),
           layoutShifts: state.layoutShifts.slice(-25),
@@ -2129,7 +2471,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.layoutShiftObserver = null;
     state.longTasks = [];
     state.layoutShifts = [];
-    if (!state.budget.diagnostics || typeof PerformanceObserver === "undefined") return;
+    if (!state.effectiveBudget.diagnostics || typeof PerformanceObserver === "undefined") return;
     try {
       state.longTaskObserver = new PerformanceObserver((list) => {
         for (const entry of list.getEntries()) {
@@ -2167,6 +2509,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   return { boot, loadApp, notifyRoute, dispose, diagnostics };
+}
+
+function createTweetScaffoldStats(): TweetScaffoldStats {
+  return {
+    attempts: 0,
+    skipsBySignature: 0,
+    createdSlots: 0,
+    createdBySlot: {},
+    durationMs: 0,
+    lastDurationMs: 0,
+    maxDurationMs: 0,
+  };
 }
 
 function appDiagnosticsBase(app: MilxdyAppManifest, state: AppLoadState): AppDiagnostics {
@@ -2383,6 +2737,9 @@ function injectTweetScaffoldStyles(): void {
       --milxdy-hub-soft: rgba(242, 236, 213, 0.76);
       --milxdy-hub-accent: #f0b72d;
       --milxdy-hub-button-border: rgba(191, 151, 38, 0.52);
+      --milxdy-hub-switch-on: #0f6b52;
+      --milxdy-hub-switch-on-border: #69e0af;
+      --milxdy-hub-switch-on-text: #ffffff;
       position: fixed;
       top: 16px;
       bottom: 136px;
@@ -2615,6 +2972,18 @@ function injectTweetScaffoldStyles(): void {
       flex-wrap: wrap;
       gap: 6px;
     }
+    .milxdy-app-hub-setup-settings {
+      display: grid;
+      gap: 6px;
+      padding-top: 8px;
+      margin-top: 8px;
+      border-top: 1px solid var(--milxdy-hub-row-line);
+    }
+    .milxdy-app-hub-setup-settings span {
+      color: var(--milxdy-hub-soft);
+      font-size: 12px;
+      line-height: 1.35;
+    }
     .milxdy-app-hub-card {
       display: grid;
       gap: 5px;
@@ -2797,6 +3166,19 @@ function injectTweetScaffoldStyles(): void {
       line-height: 1.2;
       text-transform: capitalize;
     }
+    .milxdy-app-hub-enable-row {
+      display: grid;
+      grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 3px 0 5px;
+    }
+    .milxdy-app-hub-enable-row .milxdy-app-hub-enable-detail {
+      color: var(--milxdy-hub-soft);
+      font-size: 11px;
+      line-height: 1.25;
+      text-transform: none;
+    }
     .milxdy-app-hub-controls {
       display: none;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2807,6 +3189,7 @@ function injectTweetScaffoldStyles(): void {
     }
     .milxdy-app-hub-header button,
     .milxdy-app-hub-preset-actions button,
+    .milxdy-app-hub-enable-row button,
     .milxdy-app-hub-controls button {
       border: 2px solid var(--milxdy-hub-button-border);
       border-radius: 0;
@@ -2823,16 +3206,22 @@ function injectTweetScaffoldStyles(): void {
     }
     .milxdy-app-hub-header button:active,
     .milxdy-app-hub-preset-actions button:active,
+    .milxdy-app-hub-enable-row button:active,
     .milxdy-app-hub-controls button:active {
       box-shadow:
         inset 2px 2px 0 rgba(0, 0, 0, 0.58),
         inset -2px -2px 0 rgba(255, 244, 207, 0.18);
       transform: translate(1px, 1px);
     }
+    .milxdy-app-hub-enable-row button:disabled,
     .milxdy-app-hub-controls button:disabled {
       cursor: default;
       opacity: 0.52;
     }
+    .milxdy-app-hub-enable-row button:disabled:active {
+      transform: none;
+    }
+    .milxdy-app-hub-enable-row .milxdy-app-hub-switch,
     .milxdy-app-hub-controls .milxdy-app-hub-switch {
       grid-column: 1 / -1;
       display: grid;
@@ -2841,6 +3230,18 @@ function injectTweetScaffoldStyles(): void {
       gap: 7px;
       min-height: 32px;
       text-align: left;
+    }
+    .milxdy-app-hub-enable-row .milxdy-app-hub-switch {
+      grid-column: auto;
+    }
+    .milxdy-app-hub-enable-row .milxdy-app-hub-switch[data-checked="true"],
+    .milxdy-app-hub-controls .milxdy-app-hub-switch[data-checked="true"] {
+      border-color: var(--milxdy-hub-switch-on-border);
+      background: var(--milxdy-hub-switch-on);
+      color: var(--milxdy-hub-switch-on-text);
+      box-shadow:
+        inset 2px 2px 0 rgba(255, 255, 255, 0.22),
+        inset -2px -2px 0 rgba(0, 0, 0, 0.46);
     }
     .milxdy-app-hub-switch-knob {
       position: relative;
@@ -2862,12 +3263,25 @@ function injectTweetScaffoldStyles(): void {
       transition: transform 140ms ease;
     }
     .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-knob {
-      background: rgba(248, 211, 93, 0.34);
-      box-shadow: inset 0 0 0 1px rgba(248, 211, 93, 0.5);
+      background: rgba(255, 255, 255, 0.24);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52);
     }
     .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-knob::after {
       transform: translateX(14px);
-      background: #f8d35d;
+      background: #ffffff;
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
+    }
+    .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-text {
+      color: #ffffff;
+    }
+    .milxdy-app-hub-switch[data-performance-blocked="true"] {
+      cursor: help;
+      opacity: 0.54;
+      filter: grayscale(0.75);
+    }
+    .milxdy-app-hub-switch[data-performance-blocked="true"] .milxdy-app-hub-switch-knob {
+      border-color: rgba(128, 128, 128, 0.52);
+      background: rgba(128, 128, 128, 0.22);
     }
     .milxdy-app-hub-switch-text {
       min-width: 0;
@@ -2896,6 +3310,9 @@ function injectTweetScaffoldStyles(): void {
       --milxdy-hub-soft: rgba(16, 16, 20, 0.74);
       --milxdy-hub-accent: #000080;
       --milxdy-hub-button-border: #808080;
+      --milxdy-hub-switch-on: #005c3b;
+      --milxdy-hub-switch-on-border: #003f29;
+      --milxdy-hub-switch-on-text: #ffffff;
       color: var(--milxdy-hub-text);
       background: var(--milxdy-hub-face);
       border-color: var(--milxdy-hub-outline);
@@ -2968,6 +3385,9 @@ function injectTweetScaffoldStyles(): void {
     html[data-milxdy-settings-theme="light"] .milxdy-app-hub-body span,
     html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-body span {
       color: var(--milxdy-hub-muted);
+    }
+    .milxdy-app-hub-body .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-text {
+      color: #ffffff !important;
     }
     html[data-milxdy-x-theme="light"] .milxdy-app-hub-unavailable,
     html[data-milxdy-settings-theme="light"] .milxdy-app-hub-unavailable,

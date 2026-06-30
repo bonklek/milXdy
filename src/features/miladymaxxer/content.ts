@@ -145,6 +145,8 @@ let booted = false;
 let runtimeScheduleScan: () => void = () => undefined;
 const recoveryTimers = new Set<() => void>();
 let cancelScheduledScan: (() => void) | null = null;
+let cancelVisualRefresh: (() => void) | null = null;
+let visualRefreshScheduled = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = (message) => safeRuntimeMessage(message);
@@ -282,6 +284,28 @@ function clearScheduledScan(): void {
   scanScheduled = false;
 }
 
+function clearScheduledVisualRefresh(): void {
+  cancelVisualRefresh?.();
+  cancelVisualRefresh = null;
+  visualRefreshScheduled = false;
+}
+
+function scheduleVisualRefresh(): void {
+  if (visualRefreshScheduled) return;
+  visualRefreshScheduled = true;
+  cancelVisualRefresh = runtimeScheduler.timeout(() => {
+    cancelVisualRefresh = null;
+    visualRefreshScheduled = false;
+    if (!lifecycleActive()) return;
+    if (!maxxerSurfaceActive()) {
+      disableMaxxerRuntime();
+      return;
+    }
+    scheduleProcessVisibleTweets();
+    updatePlayerLevelBadge();
+  }, 250);
+}
+
 function trackMaxxerElement(element: HTMLElement | null | undefined): void {
   if (element) maxxerMutatedElements.add(element);
 }
@@ -357,6 +381,7 @@ export function onRouteChange(_route: MilxdyRouteChange): void {
 export function disable(): void {
   clearRecoveryTimers();
   clearScheduledScan();
+  clearScheduledVisualRefresh();
   disableMaxxerRuntime();
   closeMaxxerPanel();
 }
@@ -377,6 +402,7 @@ export function dispose(): void {
   disable();
   clearRecoveryTimers();
   clearScheduledScan();
+  clearScheduledVisualRefresh();
   maxxerAppFrame?.remove();
   maxxerAppFrame = null;
   addRuntimeDisposable = () => undefined;
@@ -557,7 +583,8 @@ function renderMaxxerPanel(): void {
         ${listed.length ? listed.map((account, index) => accountRow(account, index + 1, true)).join("") : emptyPanelState("No matching profiles.")}
       </div>
     </section>
-    <div class="miladymaxxer-panel-resize-grip" data-maxxer-resize="true" data-resize-axis="both" title="Drag to resize"></div>
+    <div class="miladymaxxer-panel-resize-grip miladymaxxer-panel-resize-grip-left" data-maxxer-resize="true" data-resize-axis="both" data-resize-side="left" title="Drag to resize"></div>
+    <div class="miladymaxxer-panel-resize-grip miladymaxxer-panel-resize-grip-right" data-maxxer-resize="true" data-resize-axis="both" data-resize-side="right" title="Drag to resize"></div>
     <div class="miladymaxxer-panel-resize-edge miladymaxxer-panel-resize-edge-side" data-maxxer-resize="true" data-resize-axis="x" title="Drag to resize width"></div>
     <div class="miladymaxxer-panel-resize-edge miladymaxxer-panel-resize-edge-bottom" data-maxxer-resize="true" data-resize-axis="y" title="Drag to resize height"></div>
   `;
@@ -930,7 +957,7 @@ async function processTweet(tweet: HTMLElement): Promise<void> {
 const processedQuoteTweets = new WeakMap<HTMLElement, string>();
 
 async function processQuoteTweet(tweet: HTMLElement): Promise<void> {
-  if (!maxxerSurfaceActive()) {
+  if (!maxxerSurfaceActive() || !fullAppearanceActive()) {
     clearQuoteTweetState(tweet);
     return;
   }
@@ -1248,6 +1275,10 @@ function isMaxxerDisabled(): boolean {
   return document.documentElement.dataset.milxdyVisualDisableMaxxer === "true";
 }
 
+function fullAppearanceActive(): boolean {
+  return document.documentElement.dataset.milxdyReskinProfile === "max";
+}
+
 function lifecycleActive(): boolean {
   return booted && lifecycleSignal?.aborted !== true;
 }
@@ -1277,18 +1308,12 @@ function clearUserCellMaxxerState(cell: HTMLElement): void {
 }
 
 function clearProfileMaxxerState(): void {
-  const primaryColumn = document.querySelector<HTMLElement>(PRIMARY_COLUMN);
-  const hadProfileState = primaryColumn?.dataset.miladymaxxerProfile != null;
   for (const element of Array.from(maxxerMutatedElements)) {
     delete element.dataset.miladymaxxerProfile;
   }
-  const hadProfileBadge = Boolean(document.querySelector(".miladymaxxer-player-profile-level, .miladymaxxer-profile-level"));
   const playerBadge = document.querySelector(".miladymaxxer-player-level");
   removeProfileLevelBadges();
   playerBadge?.remove();
-  if (hadProfileState || hadProfileBadge || playerBadge) {
-    void sendMaxxerMessage({ type: "milady:badge", count: 0 }, "clear badge");
-  }
 }
 
 function clearMaxxerSurface(element: HTMLElement): void {
@@ -2097,14 +2122,14 @@ function schedulePlayerStatsWrite(): void {
 let prevPlayerLevel = 0;
 
 function updatePlayerLevelBadge(): void {
+  for (const badge of Array.from(document.querySelectorAll<HTMLElement>(".miladymaxxer-player-level"))) {
+    badge.remove();
+  }
+
   if (!maxxerSurfaceActive()) {
     clearProfileMaxxerState();
     return;
   }
-  const logoImg = document.querySelector(`[data-milxdy-home-logo-wrapper="true"] .${LOGO_REPLACEMENT_CLASS}`);
-  if (!logoImg) return;
-  const wrapper = logoImg.parentElement;
-  if (!wrapper) return;
 
   const progress = getPlayerLevelProgress(playerStats.totalLikesGiven);
   const newLevel = progress.level;
@@ -2113,53 +2138,9 @@ function updatePlayerLevelBadge(): void {
   if (newLevel > prevPlayerLevel && prevPlayerLevel > 0) {
     playLevelUpSound();
     void sendMaxxerMessage({ type: "milady:levelup", level: newLevel }, "level up");
-    const existing = wrapper.querySelector(".miladymaxxer-player-level") as HTMLElement | null;
-    if (existing) {
-      existing.style.transform = "scale(1.3)";
-      existing.style.transition = "transform 0.3s ease";
-      runtimeScheduler.timeout(() => {
-        if (!lifecycleActive()) return;
-        existing.style.transform = "";
-      }, 400);
-    }
   }
   prevPlayerLevel = newLevel;
 
-  // Update extension badge with player level
-  void sendMaxxerMessage({ type: "milady:badge", count: newLevel > 0 ? newLevel : 0 }, "badge");
-
-  let badge = wrapper.querySelector(".miladymaxxer-player-level") as HTMLElement | null;
-  if (newLevel <= 0) {
-    badge?.remove();
-    return;
-  }
-
-  const filled = progress.needed > 0 ? Math.round((progress.current / progress.needed) * 4) : 0;
-  const ascii = "\u2593".repeat(filled) + "\u2591".repeat(4 - filled);
-  const pct = progress.needed > 0 ? Math.round((progress.current / progress.needed) * 100) : 0;
-
-  // Responsive: detect sidebar width and adjust text
-  const sidebar = logoImg.closest('[role="heading"]')?.parentElement?.parentElement ?? logoImg.closest("header, nav")?.parentElement ?? logoImg.closest('[data-testid="primaryColumn"]')?.previousElementSibling;
-  const sidebarWidth = sidebar ? (sidebar as HTMLElement).offsetWidth : window.innerWidth;
-  let text: string;
-  if (sidebarWidth < 88) {
-    // Ultra narrow (collapsed sidebar) â€” just level number
-    text = `Lv.${progress.level}`;
-  } else if (sidebarWidth < 200) {
-    // Narrow (DMs open) â€” compact
-    text = `Lv.${progress.level} ${pct}%`;
-  } else {
-    // Normal â€” full display
-    text = `Lv. ${progress.level} ${ascii} ${pct}%`;
-  }
-
-  if (!badge) {
-    badge = document.createElement("span");
-    badge.className = "miladymaxxer-player-level";
-    wrapper.appendChild(badge);
-  }
-  badge.textContent = text;
-  badge.title = `Player Level ${progress.level} \u00b7 ${progress.current}/${progress.needed} to next level\n${playerStats.totalLikesGiven} total milady likes`;
 }
 
 function mergeUniqueStrings(
@@ -2256,12 +2237,7 @@ function observeStorage(): void {
     }
 
     if (area === "local" && (changes[RESKIN_PROFILE_KEY] || changes[VISUAL_THEME_KEY])) {
-      if (!maxxerSurfaceActive()) {
-        disableMaxxerRuntime();
-      } else {
-        scheduleProcessVisibleTweets();
-        updatePlayerLevelBadge();
-      }
+      scheduleVisualRefresh();
     }
 
     if (area === "local" && changes[statsKey]) {

@@ -36,7 +36,17 @@ const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PROFILE_CACHE_MAX_ENTRIES = 250;
 const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
 const LEFT_RAIL_MIN_HEIGHT_PX = 260;
-const REACTIONS = ["\u{1f631}", "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
+const SOCKET_STALE_TIMEOUT_MS = 70_000;
+const SOCKET_RECOVERY_MIN_GAP_MS = 5_000;
+const RECENT_REFRESH_LIMIT = 20;
+const SHOCKED_REACTION = "\u{1f62e}";
+const REACTIONS = [SHOCKED_REACTION, "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
+const REACTION_ALIASES = new Map([
+  ["\u{1f62e}", SHOCKED_REACTION],
+  ["\u{1f632}", SHOCKED_REACTION],
+  ["\u{1f631}", SHOCKED_REACTION],
+  ["\u{1f633}", SHOCKED_REACTION],
+]);
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const POKE_ICON = "\u{1faf5}";
@@ -56,9 +66,11 @@ let audioContext: AudioContext | null = null;
 let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let cancelReconnectTimer: (() => void) | null = null;
+let cancelStaleTimer: (() => void) | null = null;
 let cancelSendResetTimer: (() => void) | null = null;
 let cancelMountRetryTimer: (() => void) | null = null;
 let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = safeRuntimeMessage;
+let recordDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
 
@@ -180,6 +192,13 @@ type ChatState = {
   socketPort: chrome.runtime.Port | null;
   socketState: "closed" | "connecting" | "open";
   reconnectTimer: number | null;
+  staleTimer: number | null;
+  recoveryInFlight: boolean;
+  lastSocketActivityAt: number;
+  lastRecoveryAt: number;
+  reconnectAttempts: number;
+  recoveryVisibleState: "none" | "recovering" | "auth-required" | "failed";
+  recoveryMessage: string;
   loading: boolean;
   loadingOlder: boolean;
   hasMoreOlder: boolean;
@@ -207,6 +226,7 @@ type ChatState = {
   soundPoke: boolean;
   appFrame: OverlayAppFrame | null;
   layoutReady: boolean;
+  hostImageViewerOpen: boolean;
 };
 
 const state: ChatState = {
@@ -218,6 +238,13 @@ const state: ChatState = {
   socketPort: null,
   socketState: "closed",
   reconnectTimer: null,
+  staleTimer: null,
+  recoveryInFlight: false,
+  lastSocketActivityAt: 0,
+  lastRecoveryAt: 0,
+  reconnectAttempts: 0,
+  recoveryVisibleState: "none",
+  recoveryMessage: "",
   loading: false,
   loadingOlder: false,
   hasMoreOlder: true,
@@ -245,6 +272,7 @@ const state: ChatState = {
   soundPoke: true,
   appFrame: null,
   layoutReady: false,
+  hostImageViewerOpen: false,
 };
 
 export function boot(context?: MilxdyContentAppContext): void {
@@ -255,6 +283,7 @@ export function boot(context?: MilxdyContentAppContext): void {
   lifecycleSignal = context?.signal || null;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   runtimeSendMessage = context?.sendMessage || runtimeSendMessage;
+  recordDiagnostic = context?.recordDiagnostic || recordDiagnostic;
   ensureOverlayAppChromeStyles();
   registerDockItem();
   if (shouldAutoOpenMessagesChat()) {
@@ -268,6 +297,7 @@ export function boot(context?: MilxdyContentAppContext): void {
   void loadSoundSettings();
   addRuntimeDisposable(observeOverlayPanelTheme(applyTheme));
   observeLayoutSignals();
+  observeHostImageViewer();
   observeEnablement();
   observeMessagesSelection();
   void refreshAuthAndHistory();
@@ -372,7 +402,7 @@ function observeLayoutSignals(): void {
     else if (lifecycleActive()) {
       ensureRoot();
       scheduleMountRetry();
-      if (state.signedIn && isChatRoute()) connectSocket();
+      if (state.signedIn && isChatRoute()) void recoverChatConnection("visibility-resume", { visible: false, force: true });
     }
   };
   document.addEventListener("visibilitychange", visibilityListener);
@@ -420,6 +450,7 @@ function observeEnablement(): void {
 function destroy(): void {
   cancelMountRetryTimer?.();
   cancelMountRetryTimer = null;
+  clearSocketStaleTimer();
   closeSocket();
   cancelSendResetTimer?.();
   cancelSendResetTimer = null;
@@ -439,6 +470,10 @@ function destroy(): void {
   state.hasMoreOlder = true;
   state.showOlderButton = false;
   state.sending = false;
+  state.recoveryInFlight = false;
+  state.recoveryVisibleState = "none";
+  state.recoveryMessage = "";
+  state.hostImageViewerOpen = false;
   state.root?.remove();
   state.root = null;
   state.mountMode = null;
@@ -555,6 +590,7 @@ function ensureRoot(): void {
   root.dataset.mount = mount;
   state.root = root;
   state.mountMode = mount;
+  applyHostImageViewerState();
   if (mount === "messages") hideNativeDmPaneContent(mountTarget, root);
   else restoreNativeDmPane();
   updatePseudoChatRowState();
@@ -744,6 +780,86 @@ function observeMessagesSelection(): void {
   addRuntimeDisposable(() => document.removeEventListener("click", selectionListener, true));
 }
 
+function observeHostImageViewer(): void {
+  let cancelCheckTimer: (() => void) | null = null;
+  const scheduleCheck = () => {
+    if (!lifecycleActive() || cancelCheckTimer) return;
+    cancelCheckTimer = runtimeScheduler.timeout(() => {
+      cancelCheckTimer = null;
+      updateHostImageViewerState();
+    }, 50);
+  };
+  const observer = new MutationObserver(scheduleCheck);
+  observer.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["aria-label", "aria-modal", "data-testid", "role"],
+    childList: true,
+    subtree: true,
+  });
+  window.addEventListener("popstate", scheduleCheck);
+  window.addEventListener("hashchange", scheduleCheck);
+  addRuntimeDisposable(() => {
+    cancelCheckTimer?.();
+    cancelCheckTimer = null;
+    observer.disconnect();
+    window.removeEventListener("popstate", scheduleCheck);
+    window.removeEventListener("hashchange", scheduleCheck);
+  });
+  updateHostImageViewerState();
+}
+
+function updateHostImageViewerState(): void {
+  const open = isHostImageViewerOpen();
+  if (state.hostImageViewerOpen === open) {
+    applyHostImageViewerState();
+    return;
+  }
+  state.hostImageViewerOpen = open;
+  applyHostImageViewerState();
+}
+
+function applyHostImageViewerState(): void {
+  if (!state.root) return;
+  state.root.dataset.hostImageViewerOpen = String(state.hostImageViewerOpen);
+}
+
+function isHostImageViewerOpen(): boolean {
+  return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"], [aria-modal="true"]'))
+    .some(isLikelyHostImageViewerDialog);
+}
+
+function isLikelyHostImageViewerDialog(dialog: HTMLElement): boolean {
+  if (dialog.closest(`#${ROOT_ID}`) || !isVisibleElement(dialog)) return false;
+  const hasCloseControl = Boolean(dialog.querySelector<HTMLElement>('[aria-label="Close"], [data-testid="app-bar-close"], [data-testid="close"]'));
+  if (!hasCloseControl) return false;
+  return isXPhotoRoute() || hasXPhotoLink(dialog) || hasXMediaViewerSignature(dialog);
+}
+
+function isXPhotoRoute(): boolean {
+  return /\/photo\/\d+(?:$|[/?#])/.test(location.pathname);
+}
+
+function hasXPhotoLink(dialog: HTMLElement): boolean {
+  return Boolean(dialog.querySelector<HTMLAnchorElement>('a[href*="/photo/"]'));
+}
+
+function hasXMediaViewerSignature(dialog: HTMLElement): boolean {
+  const swipeContainer = dialog.querySelector<HTMLElement>('[data-testid="swipe-to-dismiss"]');
+  if (!swipeContainer) return false;
+  return Boolean(swipeContainer.querySelector<HTMLElement>(
+    [
+      'img[src*="pbs.twimg.com/media"]',
+      'img[src*="twimg.com/media"]',
+      "video",
+    ].join(", "),
+  ));
+}
+
+function isVisibleElement(element: HTMLElement): boolean {
+  const rect = element.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
+}
+
 function createRoot(): HTMLElement {
   const root = document.createElement("section");
   root.id = ROOT_ID;
@@ -774,6 +890,8 @@ function createRoot(): HTMLElement {
         <button data-role="send" type="submit">Send</button>
       </form>
       <div class="milxdy-chat-resize-grip" data-role="resize" data-resize-axis="y" title="Drag to resize chat height"></div>
+      <div class="milxdy-chat-resize-corner milxdy-chat-resize-corner-left" data-role="resize" data-resize-axis="both" data-resize-side="left" title="Drag to resize chat"></div>
+      <div class="milxdy-chat-resize-corner milxdy-chat-resize-corner-right" data-role="resize" data-resize-axis="both" data-resize-side="right" title="Drag to resize chat"></div>
       <div class="milxdy-chat-resize-edge milxdy-chat-resize-edge-side" data-role="resize" data-resize-axis="x" title="Drag to resize chat width"></div>
     </div>
   `;
@@ -816,6 +934,7 @@ function createRoot(): HTMLElement {
     if (kind === "cancel-reply") clearReplyTo();
     if (kind === "poke") void pokeUser(action.dataset.username || "");
     if (kind === "load-older") void loadOlderMessages();
+    if (kind === "retry-session") void recoverChatConnection("manual-retry", { visible: true, force: true });
   });
   return root;
 }
@@ -825,6 +944,8 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
   if (state.minimized) return;
   if (!state.enabled || !isChatRoute() || state.loading && !force) return;
   state.loading = true;
+  state.recoveryVisibleState = "none";
+  state.recoveryMessage = "";
   if (force) {
     state.hasMoreOlder = true;
     state.showOlderButton = false;
@@ -837,7 +958,7 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
   if (!state.signedIn) {
     state.loading = false;
     closeSocket();
-    renderStatus("Sign in to RemiliaNET.");
+    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
     render();
     return;
   }
@@ -849,11 +970,12 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
   if (history.ok) {
     ingestApiPayload(history.data);
     sortAndTrimMessages();
-    state.hasMoreOlder = state.messages.length > 0;
+    state.hasMoreOlder = state.messages.some((message) => message.id > 0);
     renderStatus("Live");
     connectSocket();
   } else {
-    renderStatus(history.authRequired ? "Sign in to RemiliaNET." : "Could not load chat.");
+    if (history.authRequired) setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
+    else renderStatus("Could not load chat.");
   }
   state.loading = false;
   render();
@@ -861,7 +983,7 @@ async function refreshAuthAndHistory(force = false): Promise<void> {
 
 async function loadOlderMessages(): Promise<void> {
   if (!lifecycleActive()) return;
-  if (!state.signedIn || state.loadingOlder || !state.hasMoreOlder || state.messages.length === 0) return;
+  if (!state.signedIn || state.loadingOlder || state.messages.length === 0) return;
   const before = oldestMessageId();
   if (!before) return;
   const scroller = state.root?.querySelector<HTMLElement>('[data-role="messages"]') || null;
@@ -879,7 +1001,7 @@ async function loadOlderMessages(): Promise<void> {
     ingestApiPayload(history.data);
     sortAndTrimMessages("oldest");
     const addedMessages = state.messages.some((message) => !previousIds.has(message.id));
-    state.hasMoreOlder = addedMessages && historyCount >= HISTORY_PAGE_SIZE;
+    state.hasMoreOlder = addedMessages;
     state.showOlderButton = state.hasMoreOlder;
   } else {
     state.hasMoreOlder = false;
@@ -1009,9 +1131,15 @@ function normalizeReactions(value: unknown): Reaction[] | null {
       username: stringOrUndefined(record.username ?? record.userName ?? record.user_name ?? record.handle),
       handle: stringOrUndefined(record.handle ?? record.userHandle ?? record.user_handle),
       name: stringOrUndefined(record.name ?? record.displayName ?? record.display_name),
-      emoji: stringOrUndefined(record.emoji ?? record.reaction),
+      emoji: normalizeReactionEmoji(stringOrUndefined(record.emoji ?? record.reaction)),
     };
   }).filter((item) => item.emoji);
+}
+
+function normalizeReactionEmoji(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().replace(/\ufe0f/g, "");
+  return REACTION_ALIASES.get(normalized) || normalized;
 }
 
 function normalizeReactionUser(value: unknown): ApiUser | null {
@@ -1042,29 +1170,33 @@ function upsertMessage(message: ApiMessage): void {
 
 function connectSocket(): void {
   if (!lifecycleActive() || document.hidden || state.socketState === "open" || state.socketState === "connecting") return;
+  state.reconnectAttempts += 1;
+  recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts, route: location.pathname });
   if (!state.socketPort) {
     try {
       state.socketPort = chrome.runtime.connect({ name: SOCKET_PORT_NAME });
     } catch {
-      renderStatus("Connection interrupted.");
-      scheduleReconnect();
+      void recoverChatConnection("port-connect-failed", { visible: true });
       return;
     }
     state.socketPort.onMessage.addListener(handleSocketPortMessage);
     state.socketPort.onDisconnect.addListener(() => {
       state.socketPort = null;
       state.socketState = "closed";
-      scheduleReconnect();
+      clearSocketStaleTimer();
+      void recoverChatConnection("port-disconnect", { visible: false });
     });
   }
   state.socketState = "connecting";
   state.socketPort.postMessage({ type: "connect" });
+  markSocketActivity("connect-request");
 }
 
 function closeSocket(): void {
   cancelReconnectTimer?.();
   cancelReconnectTimer = null;
   state.reconnectTimer = null;
+  clearSocketStaleTimer();
   if (state.socketPort) {
     try {
       state.socketPort.postMessage({ type: "close" });
@@ -1087,6 +1219,94 @@ function scheduleReconnect(): void {
     connectSocket();
   }, 2500);
   state.reconnectTimer = -1;
+}
+
+function markSocketActivity(reason: string): void {
+  state.lastSocketActivityAt = Date.now();
+  recordChatDiagnostic("socket.activity", { reason, socketState: state.socketState, at: state.lastSocketActivityAt });
+  scheduleSocketStaleTimer();
+}
+
+function scheduleSocketStaleTimer(): void {
+  clearSocketStaleTimer();
+  if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
+  const dueIn = Math.max(1_000, state.lastSocketActivityAt + SOCKET_STALE_TIMEOUT_MS - Date.now());
+  cancelStaleTimer = runtimeScheduler.timeout(() => {
+    cancelStaleTimer = null;
+    state.staleTimer = null;
+    if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
+    const idleMs = Date.now() - state.lastSocketActivityAt;
+    if (idleMs >= SOCKET_STALE_TIMEOUT_MS) {
+      void recoverChatConnection("socket-stale-timeout", { visible: false });
+    } else {
+      scheduleSocketStaleTimer();
+    }
+  }, dueIn);
+  state.staleTimer = -1;
+}
+
+function clearSocketStaleTimer(): void {
+  cancelStaleTimer?.();
+  cancelStaleTimer = null;
+  if (state.staleTimer !== null) {
+    state.staleTimer = null;
+  }
+}
+
+async function recoverChatConnection(
+  reason: string,
+  options: { visible?: boolean; force?: boolean } = {},
+): Promise<void> {
+  if (!lifecycleActive() || !isChatRoute()) return;
+  if (document.hidden && !options.force) return;
+  if (!options.force && state.recoveryInFlight) return;
+  const now = Date.now();
+  if (!options.force && now - state.lastRecoveryAt < SOCKET_RECOVERY_MIN_GAP_MS) return;
+  state.lastRecoveryAt = now;
+  state.recoveryInFlight = true;
+  if (options.visible) setRecoveryVisibleState("recovering", "Checking RemiNet session...");
+  else renderStatus("Reconnecting...");
+  recordChatDiagnostic("recovery.start", { reason, visible: Boolean(options.visible), socketState: state.socketState });
+
+  closeSocket();
+  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:recoveryAuthStatus")
+    .then(asRecord)
+    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  if (!lifecycleActive()) return;
+  const signedIn = Boolean(auth?.signedIn);
+  recordChatDiagnostic("recovery.auth", { reason, signedIn, ok: auth?.ok !== false, error: auth?.error });
+  state.signedIn = signedIn;
+  state.currentUser = signedIn ? normalizeCurrentUser(auth?.user) : null;
+  if (!signedIn) {
+    state.recoveryInFlight = false;
+    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
+    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required" });
+    render();
+    return;
+  }
+
+  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: RECENT_REFRESH_LIMIT }, "reminetChat:recoveryHistory")
+    .then(asRecord)
+    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  if (!lifecycleActive()) return;
+  if (history.ok) {
+    ingestApiPayload(history.data);
+    sortAndTrimMessages();
+    state.recoveryVisibleState = "none";
+    state.recoveryMessage = "";
+    connectSocket();
+    renderStatus("Live");
+    recordChatDiagnostic("recovery.finalState", { reason, state: "reconnected", messages: state.messages.length });
+  } else if (history.authRequired) {
+    state.signedIn = false;
+    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
+    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required-history" });
+  } else {
+    setRecoveryVisibleState("failed", "Reconnect / Retry session");
+    recordChatDiagnostic("recovery.finalState", { reason, state: "failed", error: history.error, status: history.status });
+  }
+  state.recoveryInFlight = false;
+  render();
 }
 
 function handleSocketFrame(data: unknown): void {
@@ -1194,25 +1414,57 @@ function handleSocketPortMessage(message: unknown): void {
   if (record.type === "socket:connecting") {
     state.socketState = "connecting";
     renderStatus("Connecting...");
+    markSocketActivity("connecting");
     return;
   }
   if (record.type === "socket:open") {
     state.socketState = "open";
+    state.reconnectAttempts = 0;
+    state.recoveryVisibleState = "none";
+    state.recoveryMessage = "";
+    markSocketActivity("open");
     renderStatus("Live");
+    render();
+    return;
+  }
+  if (record.type === "socket:heartbeat") {
+    if (record.ok === false) {
+      void recoverChatConnection(String(record.reason || "heartbeat-not-open"), { visible: false });
+      return;
+    }
+    markSocketActivity("heartbeat");
     return;
   }
   if (record.type === "socket:frame") {
+    markSocketActivity("frame");
     handleSocketFrame(record.data);
     return;
   }
   if (record.type === "socket:close") {
     state.socketState = "closed";
-    scheduleReconnect();
+    clearSocketStaleTimer();
+    recordChatDiagnostic("socket.close", {
+      code: record.code,
+      reason: record.reason,
+      wasClean: record.wasClean,
+    });
+    void recoverChatConnection("socket-close", { visible: false });
     return;
   }
   if (record.type === "socket:error") {
-    if (record.authRequired) state.signedIn = false;
-    renderStatus(typeof record.error === "string" ? record.error : "Connection interrupted.");
+    clearSocketStaleTimer();
+    recordChatDiagnostic("socket.error", {
+      error: record.error,
+      reason: record.reason,
+      authRequired: record.authRequired,
+    });
+    if (record.authRequired) {
+      state.signedIn = false;
+      setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
+      render();
+      return;
+    }
+    void recoverChatConnection(String(record.reason || "socket-error"), { visible: true });
   }
 }
 
@@ -1223,7 +1475,7 @@ function sendSocketPayload(payload: Record<string, unknown>): boolean {
     return true;
   } catch {
     state.socketState = "closed";
-    scheduleReconnect();
+    void recoverChatConnection("send-port-failed", { visible: true });
     return false;
   }
 }
@@ -1257,12 +1509,7 @@ function render(): void {
   send.disabled = !state.signedIn || state.sending;
 
   if (!state.signedIn) {
-    messages.innerHTML = `
-      <div class="milxdy-chat-empty">
-        <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
-        <span>to RemiliaNET, then refresh chat.</span>
-      </div>
-    `;
+    messages.innerHTML = renderReconnectState();
     attachments.hidden = true;
     error.hidden = true;
     reply.hidden = true;
@@ -1276,12 +1523,14 @@ function render(): void {
   }
 
   const atBottom = messages.scrollHeight - messages.scrollTop <= messages.clientHeight + 48;
-  loadOlder.hidden = !(state.hasMoreOlder || state.loadingOlder);
-  loadOlder.innerHTML = state.hasMoreOlder || state.loadingOlder ? renderLoadOlderButton() : "";
+  const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && state.messages.some((message) => message.id > 0));
+  loadOlder.hidden = true;
+  loadOlder.innerHTML = "";
   const messageHtml = groupMessages(state.messages.filter((message) => !message.isDeleted && !message.is_deleted))
     .map(renderMessageGroup)
     .join("");
-  messages.innerHTML = messageHtml || `<div class="milxdy-chat-empty">No messages yet.</div>`;
+  const recoveryHtml = state.recoveryVisibleState !== "none" ? renderReconnectState() : "";
+  messages.innerHTML = `${recoveryHtml}${canRequestOlder ? renderLoadOlderButton() : ""}${messageHtml || `<div class="milxdy-chat-empty">No messages yet.</div>`}`;
   attachments.hidden = state.pendingAttachments.length === 0;
   attachments.innerHTML = state.pendingAttachments.map(renderPendingAttachment).join("");
   error.hidden = !state.composerError;
@@ -1297,11 +1546,45 @@ function renderStatus(text: string): void {
   if (status) status.textContent = text;
 }
 
+function setRecoveryVisibleState(next: ChatState["recoveryVisibleState"], message: string): void {
+  state.recoveryVisibleState = next;
+  state.recoveryMessage = message;
+  renderStatus(message);
+  recordChatDiagnostic("visibleState", { state: next, message });
+}
+
+function renderReconnectState(): string {
+  const label = state.recoveryMessage || "Reconnect / Retry session";
+  const copy = state.recoveryVisibleState === "recovering"
+    ? "Checking your existing RemiliaNET browser session..."
+    : state.recoveryVisibleState === "failed"
+      ? "Chat connection stalled. Retry your current browser session."
+      : "RemiliaNET needs your browser session again. Sign in if prompted, then retry.";
+  const disabled = state.recoveryVisibleState === "recovering" ? " disabled" : "";
+  return `
+    <div class="milxdy-chat-empty milxdy-chat-reconnect">
+      <span>${escapeHtml(copy)}</span>
+      <button type="button" data-chat-action="retry-session"${disabled}>${escapeHtml(label)}</button>
+      <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Open RemiliaNET</a>
+    </div>
+  `;
+}
+
+function recordChatDiagnostic(key: string, value: Record<string, unknown>): void {
+  recordDiagnostic(key, {
+    ...value,
+    socketState: state.socketState,
+    signedIn: state.signedIn,
+    visibleState: state.recoveryVisibleState,
+    updatedAt: Date.now(),
+  });
+}
+
 function renderLoadOlderButton(): string {
   const disabled = state.loadingOlder ? " disabled" : "";
   const label = state.loadingOlder ? "Loading..." : "Show more";
   return `
-    <div>
+    <div class="milxdy-chat-load-older">
       <button type="button" data-chat-action="load-older"${disabled}>${label}</button>
     </div>
   `;
@@ -1404,7 +1687,7 @@ function messageFromSocketPayload(payload: unknown): ApiMessage | null {
 
 function reactionSignature(message: ApiMessage | undefined): string {
   return (message?.reactions || [])
-    .map((reaction) => `${reaction.emoji || ""}:${reaction.userId ?? reaction.user_id ?? reaction.username ?? reaction.handle ?? reaction.name ?? ""}`)
+    .map((reaction) => `${normalizeReactionEmoji(reaction.emoji) || ""}:${reaction.userId ?? reaction.user_id ?? reaction.username ?? reaction.handle ?? reaction.name ?? ""}`)
     .sort()
     .join("|");
 }
@@ -1871,14 +2154,16 @@ function renderReactionCounts(message: ApiMessage): string {
 function reactionCounts(message: ApiMessage): Map<string, number> {
   const counts = new Map<string, number>();
   for (const reaction of message.reactions || []) {
-    if (!reaction.emoji) continue;
-    counts.set(reaction.emoji, (counts.get(reaction.emoji) || 0) + 1);
+    const emoji = normalizeReactionEmoji(reaction.emoji);
+    if (!emoji) continue;
+    counts.set(emoji, (counts.get(emoji) || 0) + 1);
   }
   return counts;
 }
 
 function currentUserReacted(message: ApiMessage, emoji: string): boolean {
-  return (message.reactions || []).some((reaction) => reaction.emoji === emoji && reactionBelongsToCurrentUser(reaction));
+  const normalized = normalizeReactionEmoji(emoji);
+  return (message.reactions || []).some((reaction) => normalizeReactionEmoji(reaction.emoji) === normalized && reactionBelongsToCurrentUser(reaction));
 }
 
 function reactionBelongsToCurrentUser(reaction: Reaction): boolean {
@@ -1978,7 +2263,7 @@ function replyAuthorName(reply: ReplyReference): string {
 function reactionTooltip(message: ApiMessage, emoji: string, count: number): string {
   if (!count) return `React ${emoji}`;
   const names = (message.reactions || [])
-    .filter((reaction) => reaction.emoji === emoji)
+    .filter((reaction) => normalizeReactionEmoji(reaction.emoji) === normalizeReactionEmoji(emoji))
     .map(reactionAuthorName)
     .filter(Boolean);
   if (!names.length) return `${count} reacted ${emoji}`;
@@ -2005,10 +2290,11 @@ function compactText(value: string, maxLength: number): string {
 }
 
 function reactToMessage(messageId: number, emoji: string): void {
-  if (!Number.isFinite(messageId) || !emoji || state.socketState !== "open") return;
+  const normalizedEmoji = normalizeReactionEmoji(emoji);
+  if (!Number.isFinite(messageId) || !normalizedEmoji || state.socketState !== "open") return;
   const message = state.messages.find((item) => item.id === messageId);
-  const type = message && currentUserReacted(message, emoji) ? "unreact" : "react";
-  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: messageId, emoji } })) return;
+  const type = message && currentUserReacted(message, normalizedEmoji) ? "unreact" : "react";
+  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: messageId, emoji: normalizedEmoji } })) return;
   if (type === "react") playChatSound("react");
 }
 
@@ -2042,6 +2328,12 @@ async function pokeUser(username: string): Promise<void> {
   if (response.ok || cooldownMs > 0) {
     startPokeCooldownForUser(clean, cooldownMs || DEFAULT_POKE_COOLDOWN_MS);
     renderStatus("Poke sent.");
+    return;
+  }
+  if (isExplicitPokeCooldownResponse(response)) {
+    const message = stringOrUndefined(response.error) || stringOrUndefined(asRecord(response.data).error) || stringOrUndefined(asRecord(response.data).message) || "Already poked.";
+    if (button) setPokeButtonState(button, "error", message);
+    renderStatus(message);
     return;
   }
   if (button) setPokeButtonState(button, "error", String(response.error || "Poke failed."));
@@ -2212,6 +2504,28 @@ function extractPokeCooldownMs(response: RuntimeRecord): number {
     if (Number.isFinite(timestamp) && timestamp > Date.now()) return timestamp - Date.now();
   }
   return 0;
+}
+
+function isExplicitPokeCooldownResponse(response: RuntimeRecord): boolean {
+  if (!response || response.authRequired) return false;
+  const data = asRecord(response.data);
+  const nested = asRecord(data.data);
+  return [
+    response.error,
+    data.error,
+    data.message,
+    data.reason,
+    data.code,
+    nested.error,
+    nested.message,
+    nested.reason,
+    nested.code,
+  ].some((value) => {
+    const text = String(value || "");
+    return /already\s+poked|poke(?:\s+is)?\s+on\s+cool\s*down|poke\s+cool\s*down|cool\s*down/i.test(text)
+      || /try again(?:\s+\w+){0,4}\s+to\s+poke/i.test(text)
+      || /try again(?:\s+\w+){0,4}\s+(?:after|when|once)(?:\s+\w+){0,4}\s+cool\s*down/i.test(text);
+  });
 }
 
 function normalizeCooldownMs(value: unknown): number {

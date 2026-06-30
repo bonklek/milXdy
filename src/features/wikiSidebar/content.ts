@@ -393,12 +393,21 @@ function render(): void {
   readerSlot.className = "milxdy-wiki-sidebar-reader-slot";
   readerSlot.hidden = !state.readerActive;
 
-  const resize = document.createElement("button");
-  resize.className = "milxdy-wiki-sidebar-resize";
-  resize.type = "button";
-  resize.setAttribute("aria-label", "Resize Wiki sidebar");
-  resize.dataset.resizeAxis = "both";
-  resize.addEventListener("pointerdown", startResize);
+  const resizeLeft = document.createElement("button");
+  resizeLeft.className = "milxdy-wiki-sidebar-resize milxdy-wiki-sidebar-resize-left";
+  resizeLeft.type = "button";
+  resizeLeft.setAttribute("aria-label", "Resize Wiki sidebar");
+  resizeLeft.dataset.resizeAxis = "both";
+  resizeLeft.dataset.resizeSide = "left";
+  resizeLeft.addEventListener("pointerdown", startResize);
+
+  const resizeRight = document.createElement("button");
+  resizeRight.className = "milxdy-wiki-sidebar-resize milxdy-wiki-sidebar-resize-right";
+  resizeRight.type = "button";
+  resizeRight.setAttribute("aria-label", "Resize Wiki sidebar");
+  resizeRight.dataset.resizeAxis = "both";
+  resizeRight.dataset.resizeSide = "right";
+  resizeRight.addEventListener("pointerdown", startResize);
 
   const resizeSide = document.createElement("button");
   resizeSide.className = "milxdy-wiki-sidebar-resize-edge milxdy-wiki-sidebar-resize-edge-side";
@@ -472,7 +481,7 @@ function render(): void {
     });
   });
 
-  root.append(header, urlRow, viewer, readerSlot, resize, resizeSide, resizeBottom);
+  root.append(header, urlRow, viewer, readerSlot, resizeLeft, resizeRight, resizeSide, resizeBottom);
   applyLayout();
   scheduleFrameFallback(viewer);
   state.frame?.updateDock({ active: true, title: `Wiki: ${wikiPageLabel(state.currentUrl)}` });
@@ -938,34 +947,36 @@ function injectStyles(): void {
     .milxdy-wiki-sidebar-resize {
       position: absolute !important;
       z-index: 4;
-      right: 3px;
       bottom: 3px;
       width: 18px;
       height: 18px;
       border: 0;
       background: transparent;
+    }
+    .milxdy-wiki-sidebar-resize-left {
+      left: 3px;
+      cursor: nesw-resize;
+    }
+    .milxdy-wiki-sidebar-resize-right {
+      right: 3px;
       cursor: nwse-resize;
     }
     .milxdy-wiki-sidebar-resize::before {
       content: "";
       position: absolute;
-      right: 3px;
       bottom: 3px;
       width: 8px;
       height: 8px;
+    }
+    .milxdy-wiki-sidebar-resize-right::before {
+      right: 3px;
       border-right: 2px solid rgba(252, 224, 150, 0.56);
       border-bottom: 2px solid rgba(252, 224, 150, 0.56);
     }
-    #${ROOT_ID}[data-side="right"] .milxdy-wiki-sidebar-resize {
-      right: auto;
+    .milxdy-wiki-sidebar-resize-left::before {
       left: 3px;
-      cursor: nesw-resize;
-    }
-    #${ROOT_ID}[data-side="right"] .milxdy-wiki-sidebar-resize::before {
-      right: auto;
-      left: 3px;
-      border-right: 0;
       border-left: 2px solid rgba(252, 224, 150, 0.56);
+      border-bottom: 2px solid rgba(252, 224, 150, 0.56);
     }
     .milxdy-wiki-sidebar-resize-edge {
       position: absolute !important;

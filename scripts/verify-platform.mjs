@@ -50,7 +50,8 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes("abortAppWork(app.id)"), "disable path must abort app work signal");
   assert(scanner.includes("configureTwitterScanner"), "scanner must remain configurable by the runtime budget");
   assert(buildScript.includes('readFile("src/shared/firstPartyApps.json"'), "build must consume the shared app registry JSON");
-  assert(buildScript.includes("contents: JSON.stringify(registryApps)"), "profile builds must keep full app metadata in the runtime registry for unavailable app cards");
+  assert(buildScript.includes("const firstPartyApps = registryApps"), "profile builds must include every first-party app bundle");
+  assert(buildScript.includes("contents: JSON.stringify(registryApps)"), "profile builds must keep full app metadata in the runtime registry");
   assert(!existsSync("scripts/app-registry.mjs"), "legacy duplicated app-registry.mjs must not return");
   assert(performanceMode.includes("idlePreloadDelayMs: null"), "Fast/Balanced budgets must be able to disable idle preloads");
   assert(/fast:\s*{[\s\S]*?safetyScanIntervalMs:\s*null/.test(performanceMode), "Fast mode must disable safety scans");
@@ -59,13 +60,13 @@ async function verifyRuntimeOwnership() {
   assert(background.includes("chrome.runtime.onInstalled.addListener") && background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   assert(firstPartyAdapter.includes("defaultEnabledById") && firstPartyAdapter.includes("defaultAppEnabled") && firstPartyAdapter.includes("enabledFromStoredValue"), "first-party enablement adapters must derive fallback defaults from registry defaultEnabled metadata");
   for (const freshInstallDefault of [
-    '"milxdy.miladychan.enabled": false',
-    '"milxdy.music.enabled": false',
-    '"milxdy.reminetChat.enabled": false',
-    '"milxdy.remistats.beetol.enabled": false',
-    'mode: "off"',
+    '"milxdy.miladychan.enabled": true',
+    '"milxdy.music.enabled": true',
+    '"milxdy.reminetChat.enabled": true',
+    '"milxdy.remistats.beetol.enabled": true',
+    'mode: "milady"',
   ]) {
-    assert(background.includes(freshInstallDefault), `central background must seed conservative first-run default: ${freshInstallDefault}`);
+    assert(background.includes(freshInstallDefault), `central background must seed enabled first-run default: ${freshInstallDefault}`);
   }
   assert(existsSync("src/shared/urlAllowlist.ts"), "shared URL allowlist helper must exist");
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
@@ -81,7 +82,7 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions"') && runtime.includes("resetOverlayAppLayouts"), "content runtime must expose a dock settings action to reset overlay app positions");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions", null)'), "content runtime must unregister the reset app positions action on dispose");
-  assert(runtime.includes("app.available === false") && runtime.includes("unavailableReason") && runtime.includes("milxdy-app-hub-unavailable"), "content runtime must expose unavailable app state in the Apps Hub without importing excluded bundles");
+  assert(firstPartyAdapter.includes("available: true") && firstPartyAdapter.includes("isEnabled,") && firstPartyAdapter.includes("setEnabled,"), "first-party enablement adapters must expose every app in every build profile");
   assert(runtime.includes("loadedHeavyApps") && runtime.includes("loadedWorkerHeavyApps") && runtime.includes("loadedNetworkApps") && runtime.includes("loadedAppsByCost"), "runtime diagnostics must identify loaded heavy, worker-heavy, and network apps from registry cost metadata");
 
   const contentRoot = await readFile("src/content.ts", "utf8");

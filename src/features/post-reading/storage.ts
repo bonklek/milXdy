@@ -1,5 +1,5 @@
 import { DEFAULT_SETTINGS } from "./shared/defaults";
-import type { AutoplayMode, BodyHighlightMode, ButtonPlacement, CustomTtsTimingMode, FullQuoteDisplay, PlayerPosition, PostReadingSettings, TtsEngineChoice } from "./shared/types";
+import type { AutoplayMode, BodyHighlightMode, ButtonPlacement, CustomTtsTimingMode, FullQuoteDisplay, PlayerPosition, PostReadingSettings, TtsEngineChoice, VoiceGenderFilter } from "./shared/types";
 import type { BoundarySupport } from "./speech";
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof PostReadingSettings>;
@@ -48,6 +48,8 @@ export function normalizeSettings(value: unknown): PostReadingSettings {
     speed: clampNumber(raw.speed, 0.5, 10, DEFAULT_SETTINGS.speed),
     volume: clampNumber(raw.volume, 0, 1, DEFAULT_SETTINGS.volume),
     voiceURI: typeof raw.voiceURI === "string" && raw.voiceURI.length > 0 ? raw.voiceURI : null,
+    voiceLanguageFilter: normalizeVoiceLanguageFilter(raw.voiceLanguageFilter),
+    voiceGenderFilter: normalizeVoiceGenderFilter(raw.voiceGenderFilter),
     autoVoice: typeof raw.autoVoice === "boolean" ? raw.autoVoice : DEFAULT_SETTINGS.autoVoice,
     ttsEngine: isTtsEngineChoice(raw.ttsEngine) ? raw.ttsEngine : DEFAULT_SETTINGS.ttsEngine,
     customTtsEndpoint: typeof raw.customTtsEndpoint === "string" && raw.customTtsEndpoint.trim().length > 0 ? raw.customTtsEndpoint.trim() : null,
@@ -90,6 +92,17 @@ function isAutoplayMode(value: unknown): value is AutoplayMode {
 
 function isTtsEngineChoice(value: unknown): value is TtsEngineChoice {
   return value === "web-speech" || value === "custom-http";
+}
+
+function normalizeVoiceLanguageFilter(value: unknown): string {
+  if (typeof value !== "string") return DEFAULT_SETTINGS.voiceLanguageFilter;
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized === "all") return "all";
+  return /^[a-z]{2,3}$/.test(normalized) ? normalized : DEFAULT_SETTINGS.voiceLanguageFilter;
+}
+
+function normalizeVoiceGenderFilter(value: unknown): VoiceGenderFilter {
+  return value === "female" || value === "male" ? value : DEFAULT_SETTINGS.voiceGenderFilter;
 }
 
 function isCustomTtsTimingMode(value: unknown): value is CustomTtsTimingMode {

@@ -6,15 +6,15 @@ Current expected status:
 
 ```text
 errors:   0
-warnings: 33
-notices:  0
+warnings: 29
+notices:  1
 ```
 
-## Firefox Metadata Warning
+## Notice
 
 - `MISSING_DATA_COLLECTION_PERMISSIONS` in `manifest.json`.
 
-Mozilla now reports this as a warning. It supports `browser_specific_settings.gecko.data_collection_permissions`, but milXdy has optional browser-session and remote-service flows. Do not declare `required: ["none"]`. Pick the final Firefox data-collection categories only after the owner confirms the privacy language for RemiliaNET, RemiStats, Beetol, Miladychan, MusicBrainz, AcoustID, Ethereum RPC, local files, and diagnostics.
+Mozilla now supports `browser_specific_settings.gecko.data_collection_permissions`, but milXdy has optional browser-session and remote-service flows. Do not declare `required: ["none"]`. Pick the final Firefox data-collection categories only after the owner confirms the privacy language for RemiliaNET, RemiStats, Beetol, Miladychan, MusicBrainz, AcoustID, Ethereum RPC, local files, and diagnostics.
 
 ## Warnings
 
@@ -32,14 +32,12 @@ Expected platform/runtime warnings:
 
 First-party `innerHTML` warnings to reduce over time:
 
-- `wikiFrame.js`: 2.
-- `popup.js`: 2.
+- `popup.js`: 1.
 - `features/beetol.js`: 2.
-- `features/reminetChat.js`: 5.
+- `features/reminetChat.js`: 6.
 - `features/remistats.js`: 4.
 - `features/post-reading.js`: 6.
 - `features/miladymaxxer.js`: 2.
 - `features/wiki.js`: 1.
-- `features/music.js`: 1.
 
 These are existing UI-rendering patterns in bundled first-party code. Fix them when touching the owning UI, but do not block Firefox smoke on them while lint has zero errors.

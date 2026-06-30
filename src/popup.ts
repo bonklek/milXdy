@@ -3,12 +3,11 @@ type ControlKind = "boolean" | "number" | "string" | "nullableString" | "handleL
 type ThemeMode = "light" | "dark" | "system";
 type BuildProfile = "lite" | "balanced" | "full";
 type BuildTarget = "chromium" | "firefox";
-type PopupFeatureId = "rootVisuals" | "post-reading" | "wiki" | "remistats" | "miladymaxxer" | "beetol" | "reminetChat";
 
 declare const MILXDY_BUILD_PROFILE: string;
 declare const MILXDY_BUILD_TARGET: string;
 
-import type { AppPreset } from "./shared/appPlatform";
+import type { AppPreset, MilxdyAppManifest } from "./shared/appPlatform";
 import { FIRST_PARTY_APPS } from "./shared/firstPartyApps";
 import {
   PERFORMANCE_MODE_KEY,
@@ -48,6 +47,8 @@ const WIKI_AI_HELP_ZIP = "wiki-helper/remilia-wiki-article-writer.zip";
 const WIKITOOL_LATEST_RELEASE_API = "https://api.github.com/repos/remiliacorporation/remilia-wikitool/releases/latest";
 const WIKITOOL_RELEASES_URL = "https://github.com/remiliacorporation/remilia-wikitool/releases/latest";
 const UPDATE_STATUS_KEY = "milxdy.updateStatus";
+const UPDATE_LLM_PROVIDER_KEY = "milxdy.update.llmProvider";
+const UPDATE_LLM_CUSTOM_URL_KEY = "milxdy.update.llmCustomUrl";
 const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 const GITHUB_ISSUES_NEW_URL = "https://github.com/bonklek/milXdy/issues/new";
 const X_FEEDBACK_REPLY_URL = "https://x.com/intent/tweet";
@@ -61,13 +62,9 @@ const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
 const ONBOARDING_ACTIVE_KEY = "milxdy.onboarding.active";
 const ONBOARDING_TOOLBAR_PINNED_KEY = "milxdy.onboarding.toolbarPinned";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
+const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
 const BUILD_PROFILE = normalizeBuildProfile(MILXDY_BUILD_PROFILE);
 const BUILD_TARGET = normalizeBuildTarget(MILXDY_BUILD_TARGET);
-const PROFILE_FEATURES: Record<BuildProfile, readonly PopupFeatureId[]> = {
-  lite: ["rootVisuals", "post-reading"],
-  balanced: ["rootVisuals", "post-reading", "wiki", "remistats"],
-  full: ["rootVisuals", "post-reading", "wiki", "remistats", "miladymaxxer", "beetol", "reminetChat"],
-};
 
 type UpdateStatus = {
   checkedAt: number;
@@ -108,6 +105,7 @@ let activeWikiLaterSearchId: string | null = null;
 let visualDraft: VisualThemeSettings = DEFAULT_VISUAL_THEME;
 let visualMode: ReskinProfile | "custom" = "moderate";
 let visualSelectedThemeId = "new";
+let fullAppearanceWarningAccepted = false;
 
 const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
@@ -154,6 +152,7 @@ const bindings: Record<string, ControlBinding> = {
   "post-reading.keyPlayPause": { area: "sync", key: "keyPlayPause", kind: "string", fallback: "Ctrl+Alt+\\" },
   "remistats.enabled": { area: "sync", key: "milxdy.remistats.enabled", kind: "boolean", fallback: true },
   "remistats.showTooltips": { area: "sync", key: "showTooltips", kind: "boolean", fallback: true },
+  "remistats.pokeAutoLike": { area: "sync", key: "milxdy.remistats.pokeAutoLike", kind: "boolean", fallback: false },
   "remistats.soundsEnabled": { area: "sync", key: "soundsEnabled", kind: "boolean", fallback: true },
   "remistats.soundVolume": { area: "sync", key: "soundVolume", kind: "number", fallback: 0.6 },
   "reminetChat.sounds.enabled": { area: "sync", key: "milxdy.reminetChat.sounds.enabled", kind: "boolean", fallback: true },
@@ -176,7 +175,7 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
-  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
+  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: true },
 };
 
 void boot();
@@ -214,47 +213,8 @@ function normalizeBuildTarget(value: unknown): BuildTarget {
 function applyBuildProfileAvailability(): void {
   document.documentElement.dataset.milxdyBuildProfile = BUILD_PROFILE;
   document.documentElement.dataset.milxdyBuildTarget = BUILD_TARGET;
-  for (const control of Array.from(document.querySelectorAll<HTMLElement>("[data-control]"))) {
-    const feature = popupFeatureForControl(control.dataset.control || "");
-    if (feature && !profileHasFeature(feature)) hideUnavailableControl(control);
-  }
-  setPanelAvailability("wiki", profileHasFeature("wiki"));
-  setPanelAvailability("remistats", profileHasFeature("remistats") || profileHasFeature("beetol") || profileHasFeature("reminetChat"));
   hideEmptySettingGroups();
   ensureVisibleActivePanel();
-}
-
-function popupFeatureForControl(control: string): PopupFeatureId | null {
-  if (control.startsWith("post-reading.")) return "post-reading";
-  if (control.startsWith("wiki.")) return "wiki";
-  if (control.startsWith("remistats.beetol.")) return "beetol";
-  if (control.startsWith("remistats.")) return "remistats";
-  if (control.startsWith("milady.")) return "miladymaxxer";
-  if (control.startsWith("reminetChat.")) return "reminetChat";
-  return null;
-}
-
-function profileHasFeature(feature: PopupFeatureId): boolean {
-  return PROFILE_FEATURES[BUILD_PROFILE].includes(feature);
-}
-
-function hideUnavailableControl(control: HTMLElement): void {
-  const row = control.closest<HTMLElement>(".setting, .field, .setting-group-nested, .inline-actions") || control;
-  row.hidden = true;
-  row.dataset.profileUnavailable = "true";
-}
-
-function setPanelAvailability(panelId: string, available: boolean): void {
-  const tab = document.querySelector<HTMLElement>(`.tab[data-panel="${panelId}"]`);
-  const panel = document.querySelector<HTMLElement>(`.panel[data-panel="${panelId}"]`);
-  if (tab) {
-    tab.hidden = !available;
-    tab.dataset.profileUnavailable = String(!available);
-  }
-  if (panel) {
-    panel.hidden = !available;
-    panel.dataset.profileUnavailable = String(!available);
-  }
 }
 
 function hideEmptySettingGroups(): void {
@@ -315,13 +275,35 @@ function renderThemeChoice(buttons: HTMLButtonElement[], active: ThemeMode): voi
 
 function setupPerformanceModeControl(): void {
   const select = document.getElementById("performanceMode") as HTMLSelectElement | null;
+  const apply = document.getElementById("performanceModeApply") as HTMLButtonElement | null;
   const detail = document.getElementById("performanceModeDetail");
-  if (!select || !detail) return;
+  if (!select || !apply || !detail) return;
+  let appliedMode = normalizePerformanceMode(bindings.performanceMode.fallback);
   const render = () => {
     const mode = normalizePerformanceMode(select.value);
     detail.textContent = performanceModeSummary(mode);
+    apply.disabled = mode === appliedMode;
+    apply.textContent = mode === appliedMode ? "Applied" : "Apply";
   };
+  void chrome.storage.local.get({ [PERFORMANCE_MODE_KEY]: bindings.performanceMode.fallback }).then((stored) => {
+    appliedMode = normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
+    select.value = appliedMode;
+    render();
+  });
   select.addEventListener("change", render);
+  apply.addEventListener("click", () => {
+    const mode = normalizePerformanceMode(select.value);
+    apply.disabled = true;
+    void chrome.storage.local.set({ [PERFORMANCE_MODE_KEY]: mode })
+      .then(() => {
+        appliedMode = mode;
+        render();
+      })
+      .catch(() => {
+        apply.disabled = false;
+        apply.textContent = "Retry";
+      });
+  });
   render();
 }
 
@@ -426,7 +408,7 @@ async function renderOnboarding(): Promise<void> {
   const fullSetup = await isFullStartSetup(local);
   const toolbarPinned = toolbarPinnedByBrowser || local[ONBOARDING_TOOLBAR_PINNED_KEY] === true;
   const tasks = [
-    ["Full suite enabled", fullSetup, "Performance, Max appearance, app enablement, and rail pins."],
+    ["Full suite enabled", fullSetup, "Max appearance, app enablement, audio defaults, and rail pins."],
     ["RemiliaNET signed in", signedIn, signedIn ? "Browser session detected." : "Needed for Beetol, RemiStats pokes, and chat."],
     ["Toolbar pinned", toolbarPinned, "Keep milXdy one click away after install."],
     ["X opened or refreshed", hasXTab, "Open X so the side rail and enabled apps can mount."],
@@ -445,34 +427,52 @@ async function renderOnboarding(): Promise<void> {
 }
 
 async function isFullStartSetup(local: Record<string, unknown>): Promise<boolean> {
+  const performanceMode = normalizePerformanceMode(local[PERFORMANCE_MODE_KEY]);
   const pinned = Array.isArray(local[RAIL_PIN_KEY]) ? local[RAIL_PIN_KEY] as unknown[] : [];
-  const expectedPinned = railAppIdsForPreset("full");
+  const expectedPinned = railAppIdsForPreset("full")
+    .filter((id) => {
+      const app = FIRST_PARTY_APPS.find((candidate) => candidate.id === id);
+      return app && !appEnableBlockedByPerformance(app, performanceMode);
+    });
+  const expectedApps = FIRST_PARTY_APPS
+    .filter((app) => app.available !== false)
+    .filter((app) => !appEnableBlockedByPerformance(app, performanceMode));
   const appEnabledStates = await Promise.all(
-    FIRST_PARTY_APPS
-      .filter((app) => app.available !== false)
-      .map((app) => app.isEnabled()),
+    expectedApps.map((app) => app.isEnabled()),
   );
-  return normalizePerformanceMode(local[PERFORMANCE_MODE_KEY]) === "full"
-    && normalizeReskinProfile(local[RESKIN_PROFILE_KEY]) === "max"
+  return normalizeReskinProfile(local[RESKIN_PROFILE_KEY]) === "max"
     && appEnabledStates.every(Boolean)
     && expectedPinned.every((id) => pinned.includes(id));
 }
 
 async function applyFullStartSetup(): Promise<void> {
+  if (!await confirmFullAppearanceWarning()) {
+    showOnboardingMessage("Full setup canceled.");
+    return;
+  }
   showOnboardingMessage("Applying full setup...");
+  const performanceMode = await currentPerformanceMode();
+  const appsToEnable = FIRST_PARTY_APPS
+    .filter((app) => app.available !== false && app.setEnabled)
+    .filter((app) => !appEnableBlockedByPerformance(app, performanceMode));
+  const blockedApps = FIRST_PARTY_APPS
+    .filter((app) => app.available !== false && app.setEnabled)
+    .filter((app) => appEnableBlockedByPerformance(app, performanceMode));
   await Promise.all(
-    FIRST_PARTY_APPS
-      .filter((app) => app.available !== false && app.setEnabled)
-      .map((app) => app.setEnabled?.(true)),
+    appsToEnable.map((app) => app.setEnabled?.(true)),
   );
   const fullTheme = { ...VISUAL_PRESETS.max };
-  const railPinned = railAppIdsForPreset("full");
+  const railPinned = railAppIdsForPreset("full")
+    .filter((id) => {
+      const app = FIRST_PARTY_APPS.find((candidate) => candidate.id === id);
+      return app && !appEnableBlockedByPerformance(app, performanceMode);
+    });
   await Promise.all([
     persistVisualTheme(fullTheme),
     applyProfileAudioPreset(PROFILE_AUDIO_PRESETS.max),
     chrome.storage.local.set({
-      [PERFORMANCE_MODE_KEY]: "full",
       [RAIL_PIN_KEY]: railPinned,
+      [RAIL_UNPIN_KEY]: [],
       [FIRST_RUN_STATUS_KEY]: "complete",
       [ONBOARDING_ACTIVE_KEY]: true,
       [SETTINGS_THEME_KEY]: "system",
@@ -517,7 +517,6 @@ async function applyFullStartSetup(): Promise<void> {
       "milxdy.reminetChat.sounds.poke": true,
     }),
   ]);
-  setControlValue("performanceMode", "full");
   setControlValue("diagnosticsEnabled", false);
   setControlValue("wiki.enabled", true);
   setControlValue("wiki.previewsEnabled", true);
@@ -534,14 +533,37 @@ async function applyFullStartSetup(): Promise<void> {
   setControlValue("milady.includeRemiStatsBeetles", true);
   setControlValue("remistats.beetol.enabled", true);
   setControlValue("reminetChat.enabled", true);
-  const performanceSelect = document.getElementById("performanceMode");
-  performanceSelect?.dispatchEvent(new Event("change"));
   writeVisualEditor(fullTheme);
   renderVisualPresetButtons();
-  showOnboardingMessage("Full setup is on. Sign in to RemiliaNET and refresh X to finish.");
+  showOnboardingMessage(blockedApps.length
+    ? `Full suite applied for ${performanceMode}. ${blockedApps.length} heavy app${blockedApps.length === 1 ? "" : "s"} need a higher Performance setting.`
+    : "Full suite is on. Runtime performance stayed unchanged.");
   await refreshXTabs();
   await renderOnboarding();
   await renderStatus();
+}
+
+async function currentPerformanceMode(): Promise<PerformanceMode> {
+  const stored = await chrome.storage.local.get({ [PERFORMANCE_MODE_KEY]: bindings.performanceMode.fallback });
+  return normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
+}
+
+function appEnableBlockedByPerformance(app: MilxdyAppManifest, mode: PerformanceMode): boolean {
+  const budget = budgetForPerformanceMode(mode);
+  if (app.id === "reminetChat" && mode !== "fast") return false;
+  if (mode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app) && app.id !== "remistats") return true;
+  if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !budget.allowHeavyStartup) return true;
+  if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) return true;
+  if (app.cost.worker === "heavy" && mode !== "full" && mode !== "developer") return true;
+  if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) return true;
+  return false;
+}
+
+function isCheapSurfaceImport(app: MilxdyAppManifest): boolean {
+  return app.cost.perSurface === "cheap"
+    && app.cost.network === "none"
+    && app.cost.worker !== "heavy"
+    && app.cost.domWrite === "small";
 }
 
 function railAppIdsForPreset(preset: AppPreset): string[] {
@@ -655,18 +677,26 @@ async function setupVisualSettings(): Promise<void> {
   for (const button of presetButtons) {
     button.addEventListener("click", () => {
       const choice = button.dataset.visualPreset;
-      if (choice === "custom") {
-        visualMode = "custom";
-      } else {
-        const profile = normalizeReskinProfile(choice);
-        visualMode = profile;
-        visualDraft = { ...VISUAL_PRESETS[profile] };
-        visualSelectedThemeId = "new";
-        themeSelect.value = "new";
-        writeVisualEditor(visualDraft);
-      }
-      renderVisualPresetButtons();
+      void selectVisualPreset(choice || "custom", themeSelect);
     });
+  }
+
+  async function selectVisualPreset(choice: string, themeSelect: HTMLSelectElement): Promise<void> {
+    if (choice === "custom") {
+      visualMode = "custom";
+    } else {
+      const profile = normalizeReskinProfile(choice);
+      if (profile === "max" && !await confirmFullAppearanceWarning()) {
+        showVisualMessage("Full appearance canceled.", "warn");
+        return;
+      }
+      visualMode = profile;
+      visualDraft = { ...VISUAL_PRESETS[profile] };
+      visualSelectedThemeId = "new";
+      themeSelect.value = "new";
+      writeVisualEditor(visualDraft);
+    }
+    renderVisualPresetButtons();
   }
 
   themeSelect.addEventListener("change", () => {
@@ -771,6 +801,10 @@ async function deleteSelectedVisualTheme(): Promise<void> {
 }
 
 async function applyVisualTheme(settings: VisualThemeSettings, messageText: string, profileAudio?: ReskinProfile | null): Promise<void> {
+  if (normalizeVisualTheme(settings).profile === "max" && !await confirmFullAppearanceWarning()) {
+    showVisualMessage("Full appearance canceled.", "warn");
+    return;
+  }
   await persistVisualTheme(settings);
   if (profileAudio) {
     await applyProfileAudioPreset(PROFILE_AUDIO_PRESETS[profileAudio]);
@@ -779,13 +813,53 @@ async function applyVisualTheme(settings: VisualThemeSettings, messageText: stri
   await refreshXTabs();
 }
 
+function confirmFullAppearanceWarning(): Promise<boolean> {
+  if (fullAppearanceWarningAccepted) return Promise.resolve(true);
+  const dialog = document.getElementById("fullAppearanceWarningDialog");
+  const proceed = document.getElementById("fullAppearanceWarningProceed") as HTMLButtonElement | null;
+  const cancel = document.getElementById("fullAppearanceWarningCancel") as HTMLButtonElement | null;
+  const close = document.getElementById("fullAppearanceWarningClose") as HTMLButtonElement | null;
+  if (!dialog || !proceed || !cancel || !close) return Promise.resolve(false);
+
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (accepted: boolean) => {
+      if (settled) return;
+      settled = true;
+      dialog.hidden = true;
+      proceed.removeEventListener("click", accept);
+      cancel.removeEventListener("click", decline);
+      close.removeEventListener("click", decline);
+      dialog.removeEventListener("click", backdrop);
+      document.removeEventListener("keydown", keydown);
+      if (accepted) fullAppearanceWarningAccepted = true;
+      resolve(accepted);
+    };
+    const accept = () => finish(true);
+    const decline = () => finish(false);
+    const backdrop = (event: MouseEvent) => {
+      if (event.target === dialog) finish(false);
+    };
+    const keydown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") finish(false);
+    };
+
+    proceed.addEventListener("click", accept);
+    cancel.addEventListener("click", decline);
+    close.addEventListener("click", decline);
+    dialog.addEventListener("click", backdrop);
+    document.addEventListener("keydown", keydown);
+    dialog.hidden = false;
+    proceed.focus();
+  });
+}
+
 async function persistVisualTheme(settings: VisualThemeSettings): Promise<VisualThemeSettings> {
   const theme = normalizeVisualTheme(settings);
   visualDraft = theme;
   await chrome.storage.local.set({
     [RESKIN_PROFILE_KEY]: theme.profile,
     [VISUAL_THEME_KEY]: theme,
-    "milxdy.reminetChat.enabled": theme.reminetChatOverlay,
   });
   return theme;
 }
@@ -804,7 +878,8 @@ async function applyProfileAudioPreset(settings: ProfileAudioSettings): Promise<
 }
 
 function setControlValue(id: string, value: unknown): void {
-  const element = document.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[data-control="${cssEscape(id)}"]`);
+  const element = document.querySelector<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>(`[data-control="${cssEscape(id)}"]`)
+    || document.getElementById(id) as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | null;
   if (element) setElementValue(element, value);
 }
 
@@ -1616,9 +1691,17 @@ function setupUpdateStatus(): void {
   const refresh = document.getElementById("updateRefresh") as HTMLButtonElement | null;
   const download = document.getElementById("updateDownload") as HTMLButtonElement | null;
   const copySteps = document.getElementById("updateCopySteps") as HTMLButtonElement | null;
+  const llmProvider = document.getElementById("updateLlmProvider") as HTMLSelectElement | null;
+  const openLlm = document.getElementById("updateOpenLlm") as HTMLButtonElement | null;
   const reload = document.getElementById("updateReload") as HTMLButtonElement | null;
   const message = document.getElementById("updateMessage");
   void renderUpdateStatus();
+  void chrome.storage.local.get({ [UPDATE_LLM_PROVIDER_KEY]: "none" }).then((stored) => {
+    if (llmProvider) llmProvider.value = normalizeUpdateLlmProvider(stored[UPDATE_LLM_PROVIDER_KEY]);
+  });
+  llmProvider?.addEventListener("change", () => {
+    void saveUpdateLlmProvider(llmProvider.value);
+  });
   refresh?.addEventListener("click", () => {
     refresh.disabled = true;
     void chrome.runtime.sendMessage({ type: "milxdy:checkUpdate" })
@@ -1654,6 +1737,36 @@ function setupUpdateStatus(): void {
       });
     });
   });
+  openLlm?.addEventListener("click", () => {
+    void currentUpdateStatus().then(async (status) => {
+      const selectedProvider = llmProvider ? normalizeUpdateLlmProvider(llmProvider.value) : "none";
+      if (selectedProvider === "none") {
+        if (message) message.textContent = "Choose an LLM first.";
+        llmProvider?.focus();
+        return;
+      }
+      const provider = await saveUpdateLlmProvider(selectedProvider);
+      if (provider === "none") {
+        if (message) message.textContent = "Choose an LLM first.";
+        llmProvider?.focus();
+        return;
+      }
+      const prompt = updateStepsLlmPrompt(status);
+      try {
+        await navigator.clipboard.writeText(prompt);
+      } catch {
+        if (message) message.textContent = "Copy failed. Copy Steps first, then open your LLM manually.";
+        return;
+      }
+      const url = await updateLlmUrl(provider);
+      if (!url) {
+        if (message) message.textContent = "Custom LLM URL was not set.";
+        return;
+      }
+      openExternalUrl(url);
+      if (message) message.textContent = "LLM prompt copied. Paste it into the opened chat if the site does not accept prefilled text.";
+    });
+  });
   reload?.addEventListener("click", () => {
     if (message) message.textContent = "Reloading extension. Refresh X/Twitter tabs after it comes back.";
     window.setTimeout(() => chrome.runtime.reload(), 250);
@@ -1667,8 +1780,10 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   const link = document.getElementById("updateLink") as HTMLAnchorElement | null;
   const download = document.getElementById("updateDownload") as HTMLButtonElement | null;
   const copySteps = document.getElementById("updateCopySteps") as HTMLButtonElement | null;
+  const llmProvider = document.getElementById("updateLlmProvider") as HTMLSelectElement | null;
+  const openLlm = document.getElementById("updateOpenLlm") as HTMLButtonElement | null;
   const reload = document.getElementById("updateReload") as HTMLButtonElement | null;
-  if (!root || !title || !detail || !link || !download || !copySteps || !reload) return;
+  if (!root || !title || !detail || !link || !download || !copySteps || !llmProvider || !openLlm || !reload) return;
 
   const installedVersion = chrome.runtime.getManifest().version;
   const stored = status ? { [UPDATE_STATUS_KEY]: status } : await chrome.storage.local.get(UPDATE_STATUS_KEY);
@@ -1677,6 +1792,8 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   link.hidden = true;
   download.hidden = true;
   copySteps.hidden = true;
+  llmProvider.hidden = true;
+  openLlm.hidden = true;
   reload.hidden = true;
   link.removeAttribute("href");
 
@@ -1694,6 +1811,8 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
       : `Installed v${updateStatus.currentVersion}. Expected ${updateStatus.expectedAssetName || "this build's profile archive"}; open the release page if Download does not match.`;
     download.hidden = false;
     copySteps.hidden = false;
+    llmProvider.hidden = false;
+    openLlm.hidden = false;
     reload.hidden = false;
     if (updateStatus.latestUrl) {
       link.href = updateStatus.latestUrl;
@@ -1712,6 +1831,8 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   title.textContent = "milXdy is up to date";
   detail.textContent = `Installed v${updateStatus.currentVersion}. Last checked ${formatCheckedAt(updateStatus.checkedAt)}.`;
   copySteps.hidden = false;
+  llmProvider.hidden = false;
+  openLlm.hidden = false;
   reload.hidden = false;
 }
 
@@ -1734,7 +1855,7 @@ function updateStepsText(status: UpdateStatus | null): string {
     `Target: ${latest}${asset}`,
     expected,
     "",
-    "1. Download the latest milXdy prerelease zip:",
+    "1. Download the latest milXdy release zip:",
     downloadUrl,
     "2. Unzip it over the same folder this unpacked extension already uses.",
     "3. Do not remove milXdy from chrome://extensions.",
@@ -1744,6 +1865,50 @@ function updateStepsText(status: UpdateStatus | null): string {
     "",
     "Keeping the same loaded folder preserves Chrome extension storage, including Maxxer stats, settings, diagnostics, and RemiNet/Beetol login state.",
   ].join("\n");
+}
+
+function updateStepsLlmPrompt(status: UpdateStatus | null): string {
+  return [
+    "Help me update a Chrome unpacked extension named milXdy without losing local extension storage.",
+    "",
+    "Use these exact update steps as the source of truth. Turn them into a concise checklist, ask me before any destructive step, and remind me not to remove the existing extension or load a second folder.",
+    "",
+    updateStepsText(status),
+  ].join("\n");
+}
+
+type UpdateLlmProvider = "none" | "chatgpt" | "claude" | "grok" | "custom";
+
+function normalizeUpdateLlmProvider(value: unknown): UpdateLlmProvider {
+  return value === "chatgpt" || value === "claude" || value === "grok" || value === "custom" ? value : "none";
+}
+
+async function saveUpdateLlmProvider(value: string): Promise<UpdateLlmProvider> {
+  const provider = normalizeUpdateLlmProvider(value);
+  const updates: Record<string, string> = { [UPDATE_LLM_PROVIDER_KEY]: provider };
+  if (provider === "custom") {
+    const stored = await chrome.storage.local.get(UPDATE_LLM_CUSTOM_URL_KEY);
+    const current = typeof stored[UPDATE_LLM_CUSTOM_URL_KEY] === "string" ? stored[UPDATE_LLM_CUSTOM_URL_KEY] : "";
+    if (!current) {
+      const customUrl = window.prompt("Custom LLM chat URL", "https://chat.openai.com/")?.trim() || "";
+      if (customUrl) updates[UPDATE_LLM_CUSTOM_URL_KEY] = customUrl;
+    }
+  }
+  await chrome.storage.local.set(updates);
+  return provider;
+}
+
+async function updateLlmUrl(provider: UpdateLlmProvider): Promise<string | null> {
+  if (provider === "none") return null;
+  if (provider === "claude") return "https://claude.ai/new";
+  if (provider === "grok") return "https://x.com/i/grok";
+  if (provider === "custom") {
+    const stored = await chrome.storage.local.get(UPDATE_LLM_CUSTOM_URL_KEY);
+    return typeof stored[UPDATE_LLM_CUSTOM_URL_KEY] === "string" && stored[UPDATE_LLM_CUSTOM_URL_KEY].trim()
+      ? stored[UPDATE_LLM_CUSTOM_URL_KEY].trim()
+      : null;
+  }
+  return "https://chatgpt.com/";
 }
 
 function isUpdateStatus(value: unknown): value is UpdateStatus {

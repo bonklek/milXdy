@@ -19,3 +19,5 @@ Music indexes local music, enriches ISRC metadata, manages playlists, and create
 ## Notes
 
 Playlist and radio QR payloads share metadata, not audio files. ISRC enrichment may call MusicBrainz and AcoustID when configured by the user.
+
+The panel remembers layout state. Compact mode can resize narrower but has a capped height; use the full player when you want the larger controls.

@@ -67,15 +67,18 @@
           <div class="setting-group-header">
             <h3>Performance</h3>
           </div>
-          <label class="field">
+          <div class="field">
             <span>Runtime mode</span>
-            <select data-control="performanceMode" id="performanceMode">
-              <option value="fast">Fast</option>
-              <option value="balanced">Balanced</option>
-              <option value="full">Full</option>
-              <option value="developer">Developer</option>
-            </select>
-          </label>
+            <div class="performance-control-row">
+              <select id="performanceMode" data-control="performanceMode">
+                <option value="fast">Fast</option>
+                <option value="balanced">Balanced</option>
+                <option value="full">Full</option>
+                <option value="developer">Developer</option>
+              </select>
+              <button class="secondary-button performance-apply" id="performanceModeApply" type="button">Apply</button>
+            </div>
+          </div>
           <p class="message" id="performanceModeDetail"></p>
         </section>
         <div class="update-status" id="updateStatus">
@@ -85,8 +88,16 @@
           </div>
           <div class="update-actions">
             <button class="icon-button" id="updateRefresh" type="button" title="Check for updates" aria-label="Check for updates">&#8635;</button>
+            <select class="update-llm-select" id="updateLlmProvider" title="Preferred LLM" aria-label="Preferred LLM">
+              <option value="none">LLM: none</option>
+              <option value="chatgpt">ChatGPT</option>
+              <option value="claude">Claude</option>
+              <option value="grok">Grok</option>
+              <option value="custom">Custom</option>
+            </select>
             <button class="secondary-button update-link" id="updateDownload" type="button" hidden>Download</button>
             <button class="secondary-button update-link" id="updateCopySteps" type="button" hidden>Steps</button>
+            <button class="secondary-button update-link" id="updateOpenLlm" type="button" hidden>LLM</button>
             <button class="secondary-button update-link" id="updateReload" type="button" hidden>Reload</button>
             <a class="secondary-button update-link" id="updateLink" href="#" target="_blank" rel="noreferrer" hidden>Release</a>
           </div>
@@ -272,6 +283,7 @@
           </div>
           <label class="setting"><span><strong>Show RemiStats badges</strong><small>Display score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
           <label class="setting"><span><strong>Badge detail tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
+          <label class="setting"><span><strong>Like tweets when poking</strong><small>After a successful tweet poke, also click X's Like button for that tweet.</small></span><input type="checkbox" data-control="remistats.pokeAutoLike"></label>
         </section>
         <section class="setting-group" aria-label="Beetol">
           <div class="setting-group-header">
@@ -445,6 +457,19 @@
       </section>
 
     </main>
+    <div class="modal-backdrop" id="fullAppearanceWarningDialog" hidden>
+      <section class="modal full-appearance-warning" role="dialog" aria-modal="true" aria-labelledby="fullAppearanceWarningTitle">
+        <div class="modal-header">
+          <strong id="fullAppearanceWarningTitle">Full appearance warning</strong>
+          <button class="icon-button" id="fullAppearanceWarningClose" type="button" aria-label="Close">x</button>
+        </div>
+        <p><strong>WARNING:</strong> milXdy is in beta. The Full appearance settings are unstable and very laggy. Use with caution.</p>
+        <div class="modal-actions">
+          <button class="secondary-button" id="fullAppearanceWarningProceed" type="button">I have infinite RAM</button>
+          <button class="secondary-button full-appearance-warning-cancel" id="fullAppearanceWarningCancel" type="button">im scared</button>
+        </div>
+      </section>
+    </div>
     <div class="modal-backdrop" id="wikiAiHelpDialog" hidden>
       <section class="modal" role="dialog" aria-modal="true" aria-labelledby="wikiAiHelpTitle">
         <div class="modal-header">

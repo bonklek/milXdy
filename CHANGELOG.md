@@ -1,5 +1,32 @@
 # Changelog
 
+## 0.2.1
+
+Status: released.
+
+See [milXdy 0.2.1 release notes](docs/RELEASE_NOTES_0.2.1.md).
+
+Current release-gate state:
+
+- `typecheck`, profile builds, update-check verification, Post-reading hyperlink-offset verification, extension smoke, app smoke, and platform checks passed in this workspace.
+- Live QA is complete for the 0.2.1 release scope, including the Post-reading smooth-highlight freeze follow-up, RemiNet/RemiStats poke state, Beetol cooldown memory, notification tinting, and thread/reply visual behavior.
+- Release packaging, checksum verification, and reproducibility verification passed for the published 0.2.1 artifacts.
+
+Implemented highlights:
+
+- Repaired the normal GitHub update channel for published releases, profile-matching archive selection, and safe in-place update handoff.
+- Added update-step LLM handoff support so testers can copy the update prompt and open their configured assistant target.
+- Improved Apps Hub/profile behavior so setup choices preserve app availability, expanded cards expose enable/disable controls, and the app enable switch has stronger selected-state contrast.
+- Reduced runtime lag by moving more work through shared scanners, performance budgets, and cached RemiStats behavior in Fast mode.
+- Improved RemiStats/RemiNet poke state with cooldown fallback, local cooldown restoration, synchronized visible buttons for the same user, optional tweet-like-on-poke, sanitized score/beetle metrics, safer Remilia profile links, and clearer incoming-poke placement.
+- Preserved Beetol hunt cooldown/exhausted state across refreshes and restored ready charges when no cooldown remains.
+- Polished Post-reading with voice language/gender filters, smoother estimated highlighting on feed playback, hyperlink-skip offset correction, a stop control for voice-highlight testing, and removal of the extra bottom strip under the player/settings surface.
+- Polished Music panel sizing with compact-mode height limits, narrower width resizing, persisted layout state, simplified minimized controls, and volume control overflow fixes.
+- Added RemiNet Chat older-message loading and safer media preview behavior.
+- Restored stronger notification card tints and reply/thread connector hints for orphaned replies.
+- Classified Firefox CSP/PFP behavior and kept Firefox profile builds in the release matrix.
+- Updated `esbuild` to `0.28.1` and kept the release smoke verifier aligned with the active package/manifest version.
+
 ## 0.2.0
 
 Status: released.
@@ -98,5 +125,5 @@ Highlights:
 - Remilia Wiki Grok workflows and draggable new-page shortcut.
 - RemiStats poke cooldown and diagnostics improvements.
 - Post-reading OCR/custom TTS documentation.
-- Diag bug reporting with optional LLM assistance.
+- Health bug reporting with optional LLM assistance.
 - Expanded user documentation.

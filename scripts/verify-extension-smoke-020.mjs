@@ -5,12 +5,14 @@ import { contentScriptMatches, coreHostPermissions, releaseBuilds, webAccessible
 import { featureBundlesForProfile } from "./release-registry.mjs";
 
 const registry = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
+const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const expectedVersion = packageJson.version;
 
 for (const build of releaseBuilds) {
   await verifyBuild(build);
 }
 
-console.log("0.2.0 extension smoke verification passed.");
+console.log(`${expectedVersion} extension smoke verification passed.`);
 
 async function verifyBuild(build) {
   assert(existsSync(build.dir), `${build.dir}: build directory missing`);
@@ -29,7 +31,7 @@ async function verifyBuild(build) {
 
 function verifyManifest(build, manifest) {
   assert(manifest.manifest_version === 3, `${build.dir}: manifest must be MV3`);
-  assert(manifest.version === "0.2.0", `${build.dir}: manifest version must be 0.2.0`);
+  assert(manifest.version === expectedVersion, `${build.dir}: manifest version must be ${expectedVersion}`);
   assert(manifest.action?.default_popup === "popup.html", `${build.dir}: action popup missing`);
   const contentScript = (manifest.content_scripts || []).find((script) => (script.js || []).includes("content.js"));
   assert(contentScript, `${build.dir}: content script missing`);
@@ -77,7 +79,7 @@ function verifyRuntimeBundle(build, content, background) {
   assert(content.includes("milxdy.apps.firstRun.status"), `${build.dir}: first-run Apps Hub state missing`);
   assert(content.includes("milxdy.performance.mode"), `${build.dir}: Performance mode state missing`);
   assert(content.includes("milxdyVersion") && content.includes("milxdyBuildProfile") && content.includes("milxdyBuildTarget"), `${build.dir}: runtime build markers missing from content bundle`);
-  assert(content.includes('"0.2.0"'), `${build.dir}: runtime version marker value missing from content bundle`);
+  assert(content.includes(JSON.stringify(expectedVersion)), `${build.dir}: runtime version marker value missing from content bundle`);
   assert(content.includes(`"${build.profile}"`), `${build.dir}: runtime build profile marker value missing from content bundle`);
   assert(content.includes(`"${build.target}"`), `${build.dir}: runtime build target marker value missing from content bundle`);
   assert(background.includes("Unsupported music lookup URL"), `${build.dir}: music allowlist rejection missing`);
@@ -91,11 +93,6 @@ function verifyFeatureBundles(build) {
   const actual = readdirSync(featuresDir).filter((file) => file.endsWith(".js")).sort();
   const expected = featureBundlesForProfile(registry, build.profile);
   assertEqualList(actual, expected, `${build.dir}: feature bundle set mismatch`);
-  if (build.profile !== "full") {
-    for (const heavy of ["music.js", "miladychanSpotlight.js", "miladymaxxer.js", "beetol.js", "reminetChat.js"]) {
-      assert(!actual.includes(heavy), `${build.dir}: heavy full-profile app leaked into ${build.profile}`);
-    }
-  }
   if (build.profile !== "lite") {
     assert(actual.includes("wikiSidebar.js"), `${build.dir}: Wiki sidebar bundle missing from non-lite build`);
   }

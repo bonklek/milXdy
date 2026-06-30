@@ -136,17 +136,13 @@ function applyDebugState(tweet: HTMLElement): void {
   tweet.dataset.miladymaxxerEffect = "debug-miss";
 }
 
+function fullAppearanceActive(): boolean {
+  return document.documentElement.dataset.milxdyReskinProfile === "max";
+}
+
 // ---------------------------------------------------------------------------
 // Exported functions
 // ---------------------------------------------------------------------------
-
-export function updateBadge(count: number): void {
-  try {
-    chrome.runtime.sendMessage({ type: "milady:badge", count });
-  } catch {
-    // Service worker may not be available
-  }
-}
 
 export function clearVisualState(tweet: HTMLElement): void {
   delete tweet.dataset.miladymaxxerEffect;
@@ -480,6 +476,7 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
   const miladyOnly = document.documentElement.dataset.milxdyVisualMiladyOnly === "true";
   const disableSelfTracking = document.documentElement.dataset.milxdyVisualDisableSelfTracking === "true";
   const isSelf = tweet.dataset.miladymaxxerSelf === "true";
+  const allowPostHighlight = fullAppearanceActive();
 
   switch (ctx.settings.mode) {
     case "milady":
@@ -488,7 +485,7 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
       tweet.style.display = "";
       if (isMatch) {
         // Card theming off — skip visual effects but keep XP/catch
-        if (ctx.settings.cardTheme === "off") {
+        if (ctx.settings.cardTheme === "off" || !allowPostHighlight) {
           delete tweet.dataset.miladymaxxerEffect;
         } else {
           tweet.dataset.miladymaxxerEffect = "milady";
@@ -544,7 +541,6 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
           if (!countedLikes.has(tweet)) {
             countedLikes.add(tweet);
             miladyLikesThisSession += 1;
-            updateBadge(miladyLikesThisSession);
             // Only credit XP if we previously saw this tweet as unliked
             // (meaning the user clicked like during this session)
             if (!seenTweets.has(tweet)) {
@@ -572,7 +568,6 @@ export function applyMode(ctx: EffectsContext, tweet: HTMLElement, normalizedUrl
           if (countedLikes.has(tweet)) {
             countedLikes.delete(tweet);
             miladyLikesThisSession = Math.max(0, miladyLikesThisSession - 1);
-            updateBadge(miladyLikesThisSession);
             const handle = tweet.dataset.miladymaxxerHandle;
             const xpKey = handle ? xpKeyForTweet(handle, tweet) : null;
             if (handle && xpKey && !isTweetTooOldForXP(tweet) && xpCreditedKeys.has(xpKey)) {

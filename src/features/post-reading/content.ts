@@ -1,5 +1,6 @@
-import { extractReadablePost, formatReadablePost } from "./extractText";
-import { fetchEmbeddedQuote, fetchFullQuote } from "./fullQuote";
+import { extractReadablePost, formatReadablePost, isReadableHyperlink } from "./extractText";
+import { fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
+import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
 import { icon } from "./icons";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
@@ -36,13 +37,16 @@ let currentHighlightTargets: HighlightTarget[] = [];
 let currentOcrSpeechRanges: OcrSpeechRange[] = [];
 let activeHighlightTarget: HighlightTarget | null = null;
 let lastBoundaryAt: number | null = null;
+let lastBoundaryIntervalMs: number | null = null;
 let lastRelativeIndex: number | null = null;
 let lastChunkIndex: number | null = null;
 let calibratedCharsPerSecond = 13;
 let smoothAnimationFrame: number | null = null;
 let smoothAnimationTimer: number | null = null;
+let pendingSmoothAnimation: { tokens: HTMLElement[]; token: HTMLElement; toIndex: number } | null = null;
+let activeSmoothToken: HTMLElement | null = null;
 let smoothVisualIndex = 0;
-let estimatedHighlightFrame: number | null = null;
+let estimatedHighlightTimer: number | null = null;
 let estimatedHighlightKey = "";
 let estimatedHighlightStartedAt = 0;
 let estimatedHighlightPausedAt: number | null = null;
@@ -63,11 +67,18 @@ let cancelPendingScan: (() => void) | null = null;
 let recordRuntimeDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
+const highlightEngine = new TextHighlightEngine({
+  onSmoothAnimation: ({ tokenCount, animatedTokenCount, durationMs }) => {
+    recordSmoothAnimationDiagnostic(tokenCount, animatedTokenCount, durationMs);
+  },
+});
 
 type PostReadingPerformancePolicy = {
   batchSize: number;
   maxPendingTweets: number;
   maxTextCharsForButton: number;
+  maxHighlightChars: number;
+  maxHighlightTokens: number;
 };
 
 type HighlightTarget = {
@@ -113,6 +124,7 @@ type HighlightSpeechState = {
   chunkStart: number | null;
   charIndex: number | null;
   charLength: number | null;
+  boundaryElapsedTime: number | null;
   hasSyncedBoundaries: boolean;
 };
 
@@ -149,7 +161,9 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onSettingsChange: (next) => {
       settings = next;
       speech.applySettings(next);
+      wikiSpeech.applySettings(next);
       player.updateSettings(next);
+      wikiPlayer.updateSettings(next);
       void saveSettings(next);
     },
     onBoundarySupportChange: (results) => {
@@ -157,7 +171,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => speech.getVoices(),
     getPreferredVoice: () => speech.getPreferredVoice(),
-    probeBoundarySupport: (voice) => speech.probeBoundarySupport(voice),
+    probeBoundarySupport: (voice, signal) => speech.probeBoundarySupport(voice, signal),
   });
   wikiSpeech = new SpeechController(settings);
   wikiPlayer = new MiniPlayer(settings, {
@@ -191,7 +205,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => wikiSpeech.getVoices(),
     getPreferredVoice: () => wikiSpeech.getPreferredVoice(),
-    probeBoundarySupport: (voice) => wikiSpeech.probeBoundarySupport(voice),
+    probeBoundarySupport: (voice, signal) => wikiSpeech.probeBoundarySupport(voice, signal),
   });
   appFrame = createOverlayAppFrame({
     id: "post-reading",
@@ -405,15 +419,21 @@ function processTweet(
   policy = postReadingPerformancePolicy(),
   surfaceTextContainers: HTMLElement[] = [],
 ): void {
-  if (tweet.querySelector(POST_READING_BUTTON)) return;
   const textContainers = surfaceTextContainers.length > 0 && surfaceTextContainers.every((container) => container.isConnected)
     ? surfaceTextContainers
     : Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT))
       .filter((container) => !container.closest(QUOTE_TWEET));
   const signature = textContainers.map((container) => container.textContent || "").join("\n").trim();
   if (!signature) return;
-  if (processed.get(tweet) === signature) return;
-  if (signature.length > policy.maxTextCharsForButton) {
+
+  const existingButton = tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
+  const footer = surfaceActionRow || findLikelyActionRow(tweet);
+  const anchor = findButtonAnchor(tweet, footer);
+  if (processed.get(tweet) === signature && existingButton) {
+    placeReadButton(tweet, existingButton, anchor, footer);
+    return;
+  }
+  if (!existingButton && signature.length > policy.maxTextCharsForButton) {
     processed.set(tweet, signature);
     recordRuntimeDiagnostic("buttonSkipped", {
       reason: "performanceTextCap",
@@ -425,17 +445,35 @@ function processTweet(
   }
   processed.set(tweet, signature);
 
-  const button = createReadButton(tweet);
-  const footer = surfaceActionRow || findLikelyActionRow(tweet);
-  const anchor = findButtonAnchor(tweet, footer);
+  const button = existingButton || createReadButton(tweet);
+  placeReadButton(tweet, button, anchor, footer);
+}
+
+function placeReadButton(
+  tweet: HTMLElement,
+  button: HTMLButtonElement,
+  anchor: HTMLElement | null,
+  footer: HTMLElement | null,
+): void {
   if (settings.buttonPlacement === "actions") {
     insertActionOverlayButton(button, anchor, footer);
     return;
   }
   if (insertHeaderSlotButton(tweet, button)) return;
-  if (anchor?.parentElement) {
+  if (anchor?.parentElement && button.parentElement !== anchor.parentElement) {
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
     anchor.parentElement.insertBefore(button, anchor.nextSibling);
+    removeEmptyAdHocButtonSlot(previousSlot);
+  } else if (anchor?.parentElement && button.previousSibling !== anchor) {
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+    anchor.parentElement.insertBefore(button, anchor.nextSibling);
+    removeEmptyAdHocButtonSlot(previousSlot);
   }
+}
+
+function removeEmptyAdHocButtonSlot(slot: HTMLElement | null): void {
+  if (!slot || slot.dataset.milxdyTweetSlot || slot.childElementCount > 0) return;
+  slot.remove();
 }
 
 function currentPerformanceMode(): string {
@@ -445,15 +483,15 @@ function currentPerformanceMode(): string {
 function postReadingPerformancePolicy(): PostReadingPerformancePolicy {
   const mode = currentPerformanceMode();
   if (mode === "fast") {
-    return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900 };
+    return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900, maxHighlightChars: 700, maxHighlightTokens: 96 };
   }
   if (mode === "balanced") {
-    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800 };
+    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800, maxHighlightChars: 1400, maxHighlightTokens: 180 };
   }
   if (mode === "developer") {
-    return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY };
+    return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: Number.POSITIVE_INFINITY, maxHighlightTokens: Number.POSITIVE_INFINITY };
   }
-  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY };
+  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: 2600, maxHighlightTokens: 320 };
 }
 
 function createReadButton(tweet: HTMLElement): HTMLButtonElement {
@@ -477,14 +515,27 @@ function insertActionOverlayButton(button: HTMLButtonElement, anchor: HTMLElemen
     || anchor?.parentElement?.querySelector<HTMLElement>(RUNTIME_POST_READING_SLOT)
     || null;
   if (runtimeSlot) {
-    runtimeSlot.replaceChildren(button);
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+    if (button.parentElement !== runtimeSlot || runtimeSlot.childElementCount !== 1) {
+      runtimeSlot.replaceChildren(button);
+    }
+    removeEmptyAdHocButtonSlot(previousSlot);
     runtimeSlot.removeAttribute("aria-hidden");
+    return;
+  }
+  const existingSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+  if (existingSlot && !existingSlot.dataset.milxdyTweetSlot) {
+    if (anchor?.parentElement && (existingSlot.parentElement !== anchor.parentElement || existingSlot.previousSibling !== anchor)) {
+      anchor.parentElement.insertBefore(existingSlot, anchor.nextSibling);
+    } else if (!existingSlot.parentElement) {
+      footer?.append(existingSlot);
+    }
     return;
   }
   const slot = document.createElement("span");
   slot.dataset.postReadingButtonSlot = "true";
   slot.className = "post-reading-button-slot";
-  slot.append(button);
+  if (button.parentElement !== slot) slot.append(button);
   if (anchor?.parentElement) {
     anchor.parentElement.insertBefore(slot, anchor.nextSibling);
     return;
@@ -495,7 +546,11 @@ function insertActionOverlayButton(button: HTMLButtonElement, anchor: HTMLElemen
 function insertHeaderSlotButton(tweet: HTMLElement, button: HTMLButtonElement): boolean {
   const runtimeSlot = tweet.querySelector<HTMLElement>(RUNTIME_POST_READING_HEADER_SLOT);
   if (!runtimeSlot) return false;
-  runtimeSlot.replaceChildren(button);
+  const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+  if (button.parentElement !== runtimeSlot || runtimeSlot.childElementCount !== 1) {
+    runtimeSlot.replaceChildren(button);
+  }
+  removeEmptyAdHocButtonSlot(previousSlot);
   runtimeSlot.removeAttribute("aria-hidden");
   markHeaderControlHost(runtimeSlot);
   return true;
@@ -685,7 +740,7 @@ async function enrichFullQuote(readable: ReadablePost): Promise<void> {
   if (!shouldFetchFullQuote) return;
   let previewText = readable.quote?.text || "";
   if (readable.quote?.text) {
-    renderFullQuotePreview(readable.quote.text, "Quoted post preview");
+    renderFullQuotePreview(readable.quote.text, "Quoted post preview - preparing full fetch");
     recordFullQuoteDiagnostic("preview", {
       status: "fallback",
       textLength: readable.quote.text.length,
@@ -722,11 +777,25 @@ async function enrichFullQuote(readable: ReadablePost): Promise<void> {
       });
     }
     const directQuoteUrl = readable.quote.url;
+    if (!directQuoteUrl) {
+      keepTransientStatus = true;
+      const urlSummary = getLastEmbeddedQuoteDiagnostic() || (readable.url ? "quote url missing" : "tweet url missing");
+      showTransientOcrStatus("Using quoted post preview");
+      if (previewText || readable.quote.text) renderFullQuotePreview(previewText || readable.quote.text, "Quoted post preview");
+      console.info("Post-reading full quote fallback", { reason: urlSummary });
+      recordFullQuoteDiagnostic("direct", {
+        status: "fallback",
+        used: false,
+        reason: urlSummary.replace(/\s+/g, "-"),
+        mainUrl: readable.url,
+        quoteTextLength: readable.quote.text.length,
+      });
+    }
     const shouldFetchDirectQuote = Boolean(
       directQuoteUrl
       && (
         settings.fetchFullQuotes
-        || settings.fullQuoteDisplay === "scroll"
+        || settings.fullQuoteDisplay !== "hidden"
         || !embeddedQuote?.text
         || embeddedQuote.truncated
       ),
@@ -759,7 +828,10 @@ async function enrichFullQuote(readable: ReadablePost): Promise<void> {
         });
       } else if (directText) {
         keepTransientStatus = true;
+        const summary = summarizeFullQuoteFetch(result);
         showTransientOcrStatus(embeddedQuote?.truncated || !embeddedQuote?.text ? "Using quoted post preview" : "Using fetched quoted post text");
+        renderFullQuotePreview(previewText || readable.quote.text, "Quoted post preview");
+        console.info("Post-reading full quote fallback", { reason: summary || "not-better-than-preview", attempts: result.attempts || [] });
         recordFullQuoteDiagnostic("direct", {
           status: "fallback",
           used: false,
@@ -770,7 +842,10 @@ async function enrichFullQuote(readable: ReadablePost): Promise<void> {
         });
       } else {
         keepTransientStatus = true;
+        const summary = summarizeFullQuoteFetch(result);
         showTransientOcrStatus(previewText ? "Using quoted post preview" : fullQuoteStatusText(result.status));
+        if (previewText || readable.quote.text) renderFullQuotePreview(previewText || readable.quote.text, "Quoted post preview");
+        console.info("Post-reading full quote fallback", { reason: summary || result.status, attempts: result.attempts || [] });
         recordFullQuoteDiagnostic("direct", {
           status: result.status,
           used: false,
@@ -779,6 +854,22 @@ async function enrichFullQuote(readable: ReadablePost): Promise<void> {
           url: directQuoteUrl,
         });
       }
+    } else if (directQuoteUrl) {
+      keepTransientStatus = true;
+      const reason = settings.fullQuoteDisplay === "hidden" && !settings.fetchFullQuotes
+        ? "disabled"
+        : "skipped";
+      showTransientOcrStatus(reason === "disabled" ? "Full quote fetch disabled" : "Using quoted post preview");
+      if (previewText || readable.quote.text) renderFullQuotePreview(previewText || readable.quote.text, "Quoted post preview");
+      console.info("Post-reading full quote fallback", { reason: `direct-fetch-${reason}` });
+      recordFullQuoteDiagnostic("direct", {
+        status: "fallback",
+        used: false,
+        reason: `direct-fetch-${reason}`,
+        url: directQuoteUrl,
+        displayMode: settings.fullQuoteDisplay,
+        fetchFullQuotes: settings.fetchFullQuotes,
+      });
     } else if (readable.url && !embeddedQuote?.text) {
       keepTransientStatus = true;
       showTransientOcrStatus("Quoted post text unavailable");
@@ -819,6 +910,19 @@ function isBetterQuoteText(candidate: string, previous: string): boolean {
   if (normalizedNext.length > normalizedCurrent.length + 24) return true;
   if (looksTruncatedPreview(current) && normalizedNext.length > normalizedCurrent.length) return true;
   return false;
+}
+
+function summarizeFullQuoteFetch(result: FullQuoteFetchResult): string {
+  const attempts = result.attempts || [];
+  const graphQl = attempts.find((attempt) => attempt.source === "graphql");
+  if (graphQl && graphQl.status !== "ok") {
+    return `graphql ${graphQl.reason || graphQl.status}`;
+  }
+  const ok = attempts.find((attempt) => attempt.status === "ok");
+  if (ok) return `${ok.source} ${ok.textLength || 0} chars`;
+  const failed = attempts.find((attempt) => attempt.status === "error" || attempt.status === "http-error" || attempt.status === "unavailable");
+  if (failed) return `${failed.source} ${failed.reason || failed.status}`;
+  return result.status === "no-text" ? "no full text found" : result.status;
 }
 
 function looksTruncatedPreview(value: string): boolean {
@@ -1376,7 +1480,19 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   const relativeIndex = absoluteIndex - target.start;
   const targetChanged = activeHighlightTarget !== target;
   activateHighlightTarget(target);
-  const highlightMode = effectiveHighlightMode(target);
+  const highlightMode = state.hasSyncedBoundaries || state.charIndex !== null
+    ? effectiveHighlightMode(target)
+    : "word";
+
+  if (!canTokenizeHighlightTarget(target, highlightMode)) {
+    clearSmoothAnimation();
+    return;
+  }
+
+  if (!canTokenizeHighlightTarget(target, highlightMode)) {
+    clearSmoothAnimation();
+    return;
+  }
 
   if (highlightMode !== "smooth") {
     const words = prepareWordBody(body);
@@ -1387,11 +1503,13 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   }
 
   const words = prepareSmoothBody(body);
-  const currentWord = findNearestToken(words, relativeIndex);
+  const cursorIndex = smoothCursorIndex(words, relativeIndex, state.charLength);
+  const currentWord = findNearestToken(words, cursorIndex);
   const highlightJumped = targetChanged || didHighlightJump(relativeIndex, chunkChanged);
-  const previousIndex = highlightJumped ? null : lastRelativeIndex;
   updateBoundaryCalibration(relativeIndex);
-  paintSmoothTokens(words, currentWord, relativeIndex, previousIndex, target.text.length, highlightJumped);
+  highlightEngine.updateBaselineReadingSpeed(settings.speed);
+  if (highlightJumped) resetSmoothTokenFill(words);
+  paintSmoothAt(words, Math.min(target.text.length, cursorIndex));
   scrollFullQuoteWordIntoView(currentWord);
 }
 
@@ -1401,21 +1519,21 @@ function updateEstimatedHighlightLoop(state: HighlightSpeechState): void {
     return;
   }
   if (state.status !== "speaking") return;
-  if (estimatedHighlightFrame !== null) return;
-  estimatedHighlightFrame = window.requestAnimationFrame(() => {
-    estimatedHighlightFrame = null;
+  if (estimatedHighlightTimer !== null) return;
+  estimatedHighlightTimer = window.setTimeout(() => {
+    estimatedHighlightTimer = null;
     if (!speech || !lifecycleActive()) return;
     const nextState = speech.getState();
     if (nextState.status === "speaking" && !nextState.hasSyncedBoundaries && nextState.charIndex === null) {
       updateTweetHighlight(nextState);
     }
-  });
+  }, 140);
 }
 
 function clearEstimatedHighlightLoop(): void {
-  if (estimatedHighlightFrame !== null) {
-    window.cancelAnimationFrame(estimatedHighlightFrame);
-    estimatedHighlightFrame = null;
+  if (estimatedHighlightTimer !== null) {
+    window.clearTimeout(estimatedHighlightTimer);
+    estimatedHighlightTimer = null;
   }
   estimatedHighlightKey = "";
   estimatedHighlightStartedAt = 0;
@@ -1447,10 +1565,59 @@ function estimateUnsyncedHighlightIndex(state: HighlightSpeechState): number | n
 function findEstimatedChunkEnd(text: string, chunkStart: number): number {
   if (!text) return chunkStart;
   const remaining = text.slice(chunkStart);
-  if (remaining.length <= 220) return text.length;
-  const slice = remaining.slice(0, 220);
-  const boundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "), slice.lastIndexOf(", "));
-  return chunkStart + (boundary > 80 ? boundary + 1 : Math.min(220, remaining.length));
+  const maxChunkLength = 1200;
+  const minBoundaryLength = 650;
+  if (remaining.length <= maxChunkLength) return text.length;
+  const slice = remaining.slice(0, maxChunkLength);
+  const paragraphBoundary = slice.lastIndexOf("\n\n");
+  const sentenceBoundary = Math.max(slice.lastIndexOf(". "), slice.lastIndexOf("! "), slice.lastIndexOf("? "));
+  const softBoundary = Math.max(paragraphBoundary, sentenceBoundary);
+  const fallbackBoundary = slice.lastIndexOf(", ");
+  const boundary = softBoundary > minBoundaryLength
+    ? softBoundary
+    : fallbackBoundary > minBoundaryLength
+      ? fallbackBoundary
+      : Math.min(maxChunkLength, remaining.length);
+  return chunkStart + (boundary < maxChunkLength ? boundary + 1 : boundary);
+}
+
+function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlightMode): boolean {
+  if (mode === "off") return false;
+  const body = target.body;
+  const hasExistingTokens = Boolean(body.querySelector('[data-post-reading-word="true"], [data-post-reading-smooth-word="true"]'));
+  if (hasExistingTokens) return true;
+  const policy = postReadingPerformancePolicy();
+  if (target.text.length <= policy.maxHighlightChars) {
+    const tokenEstimate = estimateHighlightTokenCount(target.text);
+    if (tokenEstimate <= policy.maxHighlightTokens) return true;
+    recordHighlightTokenizationSkip(target, mode, "token-cap", tokenEstimate);
+    return false;
+  }
+  recordHighlightTokenizationSkip(target, mode, "char-cap", estimateHighlightTokenCount(target.text));
+  return false;
+}
+
+function recordHighlightTokenizationSkip(
+  target: HighlightTarget,
+  mode: BodyHighlightMode,
+  reason: "char-cap" | "token-cap",
+  tokenEstimate: number,
+): void {
+  const performanceMode = currentPerformanceMode();
+  const signature = `skip:${performanceMode}:${mode}:${target.kind}:${reason}:${Math.round(target.text.length / 100)}:${Math.round(tokenEstimate / 20)}`;
+  if (signature === lastHighlightDiagnosticSignature) return;
+  lastHighlightDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("highlight", {
+    configured: settings.bodyHighlightMode,
+    effective: "off",
+    skippedMode: mode,
+    performanceMode,
+    target: target.kind,
+    textLength: target.text.length,
+    tokenEstimate,
+    reason,
+    updatedAt: Date.now(),
+  });
 }
 
 function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
@@ -1462,10 +1629,10 @@ function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
   if (performanceMode === "fast") {
     mode = "word";
     reason = "fast-mode";
-  } else if (performanceMode === "balanced" && (target.text.length > 520 || tokenEstimate > 96)) {
+  } else if (performanceMode === "balanced" && (target.text.length > 1500 || tokenEstimate > 240)) {
     mode = "word";
     reason = "balanced-cap";
-  } else if (target.text.length > 1000 || tokenEstimate > 180) {
+  } else if (target.text.length > 2200 || tokenEstimate > 360) {
     mode = "word";
     reason = "long-text-cap";
   }
@@ -1615,6 +1782,7 @@ function clearBodyHighlight(): void {
 function clearHighlightVisuals(): void {
   clearEstimatedHighlightLoop();
   clearSmoothAnimation();
+  activeSmoothToken = null;
   for (const body of Array.from(highlightedBodies)) {
     if (!body.isConnected) {
       highlightedBodies.delete(body);
@@ -1634,12 +1802,17 @@ function clearHighlightVisuals(): void {
 
 function scrollFullQuoteWordIntoView(word: HTMLElement | null): void {
   if (!word) return;
-  const container = word.closest<HTMLElement>('.post-reading-full-quote[data-mode="scroll"] .post-reading-full-quote-body');
-  if (!container) return;
-  const wordRect = word.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  const offset = wordRect.top - containerRect.top - container.clientHeight / 2 + wordRect.height / 2;
-  container.scrollTop += offset;
+  const container = word.closest<HTMLElement>(".post-reading-full-quote-body");
+  const preview = container?.closest<HTMLElement>('.post-reading-full-quote[data-mode="scroll"]');
+  if (!container || !preview) return;
+  window.requestAnimationFrame(() => {
+    if (!word.isConnected || !container.isConnected) return;
+    const wordRect = word.getBoundingClientRect();
+    const containerRect = container.getBoundingClientRect();
+    const offset = wordRect.top - containerRect.top - container.clientHeight / 2 + wordRect.height / 2;
+    if (Math.abs(offset) < 2) return;
+    container.scrollTop += offset;
+  });
 }
 
 function saveOriginalBody(body: HTMLElement): void {
@@ -1652,62 +1825,27 @@ function saveOriginalBody(body: HTMLElement): void {
 function prepareSmoothBody(body: HTMLElement): HTMLElement[] {
   const existing = Array.from(body.querySelectorAll<HTMLElement>('[data-post-reading-smooth-word="true"]'));
   if (existing.length > 0) return existing;
-  return prepareTokenizedBody(body, "smooth");
+  return prepareTokenizedBody(body, "smooth", settings.includeHyperlinks);
 }
 
 function prepareWordBody(body: HTMLElement): HTMLElement[] {
   const existing = Array.from(body.querySelectorAll<HTMLElement>('[data-post-reading-word="true"]'));
   if (existing.length > 0) return existing;
-  return prepareTokenizedBody(body, "word");
+  return prepareTokenizedBody(body, "word", settings.includeHyperlinks);
 }
 
-function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth"): HTMLElement[] {
-  resetBodyTokenizationForMode(body, mode);
+function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth", includeHyperlinks: boolean): HTMLElement[] {
   saveOriginalBody(body);
-  body.dataset.postReadingHighlightMode = mode;
-  const words: HTMLElement[] = [];
-  let index = 0;
-  let textCursor = 0;
-  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT);
-  const textNodes: Text[] = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node.nodeType === Node.TEXT_NODE && node.textContent) textNodes.push(node as Text);
-  }
+  return highlightEngine.prepareTokens(body, mode, {
+    includeTextNode: (node) => !isSkippedReadableHyperlinkText(node, includeHyperlinks),
+  });
+}
 
-  for (const node of textNodes) {
-    if (!node.textContent?.trim()) {
-      textCursor += node.textContent?.length || 0;
-      continue;
-    }
-    const fragment = document.createDocumentFragment();
-    const parts = mode === "smooth"
-      ? buildSmoothParts(node.textContent || "")
-      : node.textContent?.match(/\S+|\s+/g) || [];
-    for (const part of parts) {
-      if (/^\s+$/.test(part) && mode === "word") {
-        fragment.appendChild(document.createTextNode(part));
-        textCursor += part.length;
-      } else {
-        const span = document.createElement("span");
-        if (mode === "word") {
-          span.dataset.postReadingWord = "true";
-        } else {
-          span.dataset.postReadingSmoothWord = "true";
-          span.dataset.postReadingTokenKind = /^\s+$/.test(part) ? "space" : "word";
-        }
-        span.dataset.postReadingWordIndex = String(index++);
-        span.dataset.postReadingStart = String(textCursor);
-        span.dataset.postReadingLength = String(part.length);
-        span.textContent = part;
-        words.push(span);
-        fragment.appendChild(span);
-        textCursor += part.length;
-      }
-    }
-    node.parentNode?.replaceChild(fragment, node);
-  }
-  return words;
+function isSkippedReadableHyperlinkText(node: Text, includeHyperlinks: boolean): boolean {
+  if (includeHyperlinks) return false;
+  const parent = node.parentElement;
+  const link = parent?.closest<HTMLAnchorElement>("a[href]");
+  return Boolean(link && isReadableHyperlink(link));
 }
 
 function resetBodyTokenizationForMode(body: HTMLElement, mode: "word" | "smooth"): void {
@@ -1843,7 +1981,7 @@ function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElem
     const start = Number(word.dataset.postReadingStart || 0);
     const length = Number(word.dataset.postReadingLength || word.textContent?.length || 0);
     const end = start + length;
-    if (relativeIndex >= start && relativeIndex <= end) return word;
+    if (relativeIndex >= start && relativeIndex < end) return word;
     const distance = relativeIndex < start ? start - relativeIndex : relativeIndex - end;
     if (distance < nearestDistance) {
       nearestDistance = distance;
@@ -1853,17 +1991,15 @@ function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElem
   return nearest || words[0] || null;
 }
 
+function smoothCursorIndex(tokens: HTMLElement[], relativeIndex: number, charLength: number | null): number {
+  if (charLength !== null && charLength > 0) return relativeIndex + charLength;
+  const token = findNearestToken(tokens, relativeIndex);
+  if (!token) return relativeIndex;
+  return tokenStart(token) + tokenLength(token);
+}
+
 function findCurrentWordToken(words: HTMLElement[], relativeIndex: number, charLength: number | null): HTMLElement | null {
-  if (words.length === 0) return null;
-  const sorted = [...words].sort((left, right) => tokenStart(left) - tokenStart(right));
-  if (charLength !== null && charLength > 0) {
-    const spokenMidpoint = relativeIndex + Math.max(0, Math.floor((charLength - 1) / 2));
-    const tokenAtMidpoint = findTokenContaining(sorted, spokenMidpoint);
-    if (tokenAtMidpoint) return tokenAtMidpoint;
-  }
-  const tokenAtBoundary = findTokenContaining(sorted, relativeIndex);
-  if (tokenAtBoundary) return tokenAtBoundary;
-  return sorted.find((token) => tokenStart(token) >= relativeIndex) || sorted[sorted.length - 1] || null;
+  return highlightEngine.findCurrentToken(words, relativeIndex, charLength);
 }
 
 function findTokenContaining(tokens: HTMLElement[], index: number): HTMLElement | null {
@@ -1878,32 +2014,22 @@ function paintSmoothTokens(
   tokens: HTMLElement[],
   currentToken: HTMLElement | null,
   relativeIndex: number,
-  previousRelativeIndex: number | null,
   textLength: number,
   snapToCurrent = false,
+  charLength: number | null = null,
+  boundaryElapsedTime: number | null = null,
 ): void {
-  clearSmoothAnimation();
-  if (snapToCurrent) {
-    smoothVisualIndex = relativeIndex;
-    resetSmoothTokenFill(tokens);
-    paintSmoothAt(tokens, relativeIndex);
-  }
-  const animationStart = previousRelativeIndex === null ? relativeIndex : Math.max(0, Math.min(previousRelativeIndex, relativeIndex));
-  const visualStart = Math.max(animationStart, Math.min(relativeIndex, smoothVisualIndex));
-  const predictedNextBoundary = findNextBoundaryIndex(tokens, relativeIndex);
-  const minimumLead = Math.round(calibratedCharsPerSecond * 0.18);
-  const animationEnd = Math.min(textLength, Math.max(visualStart, predictedNextBoundary, relativeIndex + minimumLead));
-  const duration = Math.max(80, estimateTokenDurationMs(Math.max(1, animationEnd - visualStart || tokenLength(currentToken))));
-  paintSmoothAt(tokens, visualStart);
-  animateSmoothRange(tokens, visualStart, animationEnd, duration);
+  if (!currentToken) return;
+  highlightEngine.paintSmooth(tokens, relativeIndex, {
+    charLength,
+    textLength,
+    snapToCurrent,
+    boundaryElapsedTime,
+  });
 }
 
 function resetSmoothTokenFill(tokens: HTMLElement[]): void {
-  for (const token of tokens) {
-    delete token.dataset.postReadingSmoothFilled;
-    token.style.removeProperty("--post-reading-fill");
-    token.style.removeProperty("--post-reading-fill-duration");
-  }
+  highlightEngine.resetSmoothTokenFill(tokens);
 }
 
 function paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
@@ -1915,8 +2041,8 @@ function paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
 
     if (end <= cursorIndex) {
       token.dataset.postReadingSmoothFilled = "true";
-      token.style.removeProperty("--post-reading-fill");
-      token.style.removeProperty("--post-reading-fill-duration");
+      token.style.setProperty("--post-reading-fill-duration", "0ms");
+      token.style.setProperty("--post-reading-fill", "100%");
       continue;
     }
 
@@ -1927,32 +2053,27 @@ function paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
       token.style.setProperty("--post-reading-fill-duration", "0ms");
       token.style.setProperty("--post-reading-fill", `${value}%`);
     } else {
-      token.style.removeProperty("--post-reading-fill-duration");
+      token.style.setProperty("--post-reading-fill-duration", "0ms");
       token.style.removeProperty("--post-reading-fill");
     }
   }
 }
 
-function animateSmoothRange(tokens: HTMLElement[], fromIndex: number, toIndex: number, durationMs: number): void {
-  clearSmoothAnimation();
+function animateSmoothRange(tokens: HTMLElement[], token: HTMLElement, fromIndex: number, toIndex: number, durationMs: number): void {
+  clearSmoothAnimation({ completePending: false });
+  pendingSmoothAnimation = { tokens, token, toIndex };
   const animatedTokenCount = paintSmoothTransition(tokens, fromIndex, toIndex, durationMs);
   recordSmoothAnimationDiagnostic(tokens.length, animatedTokenCount, durationMs);
   smoothAnimationTimer = window.setTimeout(() => {
     smoothAnimationTimer = null;
+    pendingSmoothAnimation = null;
     if (!tokens.some((token) => token.isConnected)) return;
     paintSmoothAt(tokens, toIndex);
   }, durationMs + 24);
 }
 
-function clearSmoothAnimation(): void {
-  if (smoothAnimationFrame !== null) {
-    window.cancelAnimationFrame(smoothAnimationFrame);
-    smoothAnimationFrame = null;
-  }
-  if (smoothAnimationTimer !== null) {
-    window.clearTimeout(smoothAnimationTimer);
-    smoothAnimationTimer = null;
-  }
+function clearSmoothAnimation(options: { completePending?: boolean } = {}): void {
+  highlightEngine.clearSmoothAnimation(options);
 }
 
 function paintSmoothTransition(tokens: HTMLElement[], fromIndex: number, toIndex: number, durationMs: number): number {
@@ -1994,6 +2115,7 @@ function updateBoundaryCalibration(relativeIndex: number): void {
   const now = performance.now();
   if (lastBoundaryAt !== null && lastRelativeIndex !== null && relativeIndex > lastRelativeIndex) {
     const elapsedSeconds = Math.max(0.05, (now - lastBoundaryAt) / 1000);
+    lastBoundaryIntervalMs = elapsedSeconds * 1000;
     const observed = (relativeIndex - lastRelativeIndex) / elapsedSeconds;
     if (Number.isFinite(observed) && observed > 1 && observed < 80) {
       calibratedCharsPerSecond = calibratedCharsPerSecond * 0.72 + observed * 0.28;
@@ -2005,14 +2127,25 @@ function updateBoundaryCalibration(relativeIndex: number): void {
 
 function resetBoundaryCalibration(): void {
   lastBoundaryAt = null;
+  lastBoundaryIntervalMs = null;
   lastRelativeIndex = null;
   calibratedCharsPerSecond = 13 * Math.max(0.5, settings.speed);
+  activeSmoothToken = null;
   smoothVisualIndex = 0;
+  highlightEngine.updateBaselineReadingSpeed(settings.speed);
+  highlightEngine.resetSmoothTracking();
 }
 
 function estimateTokenDurationMs(length: number): number {
   const cps = Math.max(4, calibratedCharsPerSecond);
   return Math.max(60, Math.min(1200, Math.round((Math.max(1, length) / cps) * 1000)));
+}
+
+function estimateSmoothFillDurationMs(length: number): number {
+  const tokenDuration = estimateTokenDurationMs(length);
+  if (lastBoundaryIntervalMs === null) return tokenDuration;
+  const cadenceDuration = Math.round(Math.max(35, Math.min(900, lastBoundaryIntervalMs * 0.86)));
+  return Math.max(35, Math.min(tokenDuration, cadenceDuration));
 }
 
 function buildSmoothParts(text: string): string[] {
@@ -2031,7 +2164,7 @@ function buildSmoothParts(text: string): string[] {
 }
 
 function estimateHighlightTokenCount(text: string): number {
-  return text.match(/\s*[\p{L}\p{N}_'-]+[^\s\p{L}\p{N}_'-]*|\s+|[^\s\p{L}\p{N}_'-]+/gu)?.length || 0;
+  return estimateSharedHighlightTokenCount(text);
 }
 
 function tokenStart(token: HTMLElement | null): number {
@@ -2048,15 +2181,3 @@ function rangeFillPercentForToken(token: HTMLElement, rangeIndex: number): numbe
   return Math.max(0, Math.min(100, ((rangeIndex - start) / length) * 100));
 }
 
-function findNextBoundaryIndex(tokens: HTMLElement[], relativeIndex: number): number {
-  const sorted = [...tokens].sort((left, right) => tokenStart(left) - tokenStart(right));
-  const current = findNearestToken(sorted, relativeIndex);
-  if (!current) return relativeIndex;
-  const currentIndex = sorted.indexOf(current);
-  for (const token of sorted.slice(currentIndex + 1)) {
-    if (token.dataset.postReadingTokenKind !== "space") {
-      return tokenStart(token);
-    }
-  }
-  return tokenStart(current) + tokenLength(current);
-}

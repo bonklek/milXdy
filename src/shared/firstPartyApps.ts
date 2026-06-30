@@ -9,8 +9,6 @@ import {
 import type { MilxdyAppId, MilxdyAppManifest } from "./appPlatform";
 import registryData from "./firstPartyApps.json";
 
-declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
-
 const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 
 type StaticFirstPartyAppManifest = Omit<MilxdyAppManifest, "isEnabled" | "package"> & {
@@ -126,25 +124,22 @@ const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | und
   },
 };
 
-const buildProfile = typeof MILXDY_BUILD_PROFILE === "string" ? MILXDY_BUILD_PROFILE : "full";
-
 export const FIRST_PARTY_APPS: readonly MilxdyAppManifest[] = registry.map((app) => {
   const { entryName: _entryName, entryPoint: _entryPoint, requiredOutputs, css, assets, ...manifest } = app;
   const isEnabled = isEnabledById[app.id];
   if (!isEnabled) throw new Error(`Missing first-party app enablement adapter for ${app.id}`);
-  const available = appIncludedInBuildProfile(app, buildProfile);
   const setEnabled = setEnabledById[app.id];
   return {
     ...manifest,
-    available,
-    unavailableReason: available ? undefined : unavailableReason(app, buildProfile),
+    available: true,
+    unavailableReason: undefined,
     css: css?.map((sheet) => ({ id: sheet.id, path: sheet.path })),
     package: {
       assets,
       webAccessibleAssets: requiredOutputs,
     },
-    isEnabled: available ? isEnabled : async () => false,
-    setEnabled: available ? setEnabled : undefined,
+    isEnabled,
+    setEnabled,
   };
 });
 
@@ -173,14 +168,4 @@ function defaultAppEnabled(id: string): boolean {
 
 function enabledFromStoredValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
-}
-
-function appIncludedInBuildProfile(app: StaticFirstPartyAppManifest, profile: "lite" | "balanced" | "full"): boolean {
-  if (profile === "full") return true;
-  return app.hub?.presets?.includes(profile) === true;
-}
-
-function unavailableReason(app: StaticFirstPartyAppManifest, profile: "lite" | "balanced" | "full"): string {
-  const presets = app.hub?.presets?.join(", ") || "Full";
-  return `${app.name} is not included in the ${profile} build. Choose a build profile that includes: ${presets}.`;
 }

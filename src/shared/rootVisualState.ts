@@ -13,9 +13,30 @@ type XTheme = "light" | "dim" | "dark";
 type SettingsTheme = "light" | "dark" | "system";
 
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
+const DIAGNOSTICS_ENABLED_KEY = "milxdy.diagnostics.enabled";
+const ROOT_VISUAL_DIAGNOSTICS_KEY = "milxdy.diagnostics.rootVisualState";
+
+const rootVisualDiagnostics = {
+  datasetWrites: 0,
+  datasetNoops: 0,
+  styleWrites: 0,
+  styleNoops: 0,
+  profileApplications: 0,
+  profileNoops: 0,
+  themeApplications: 0,
+  themeNoops: 0,
+  updatedAt: 0,
+};
+
+let lastReskinSignature: string | null = null;
+let diagnosticsWriteTimer: number | null = null;
+let diagnosticsEnabled = false;
 
 export async function setupRootVisualState(): Promise<void> {
+  resetRootVisualDiagnostics();
+  initializeRootDiagnosticsGate();
   injectReskinStyles();
+  applyReskinProfile(DEFAULT_RESKIN_PROFILE, DEFAULT_VISUAL_THEME);
   const stored = await chrome.storage.local.get({
     [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
     [VISUAL_THEME_KEY]: DEFAULT_VISUAL_THEME,
@@ -37,54 +58,131 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   const profile = normalizeReskinProfile(profileValue);
   const theme = normalizeVisualTheme(visualValue, profile);
   const root = document.documentElement;
-  root.dataset.milxdyReskinProfile = theme.profile;
-  root.dataset.milxdyVisualBackgroundFade = String(theme.backgroundFade);
-  root.dataset.milxdyVisualSquareMedia = String(theme.squareMedia);
-  root.dataset.milxdyVisualPfpShape = theme.pfpShape;
-  root.dataset.milxdyVisualPfpFeed = String(theme.pfpFeed);
-  root.dataset.milxdyVisualPfpNotifications = String(theme.pfpNotifications);
-  root.dataset.milxdyVisualPfpChat = String(theme.pfpChat);
-  root.dataset.milxdyVisualQuoteMediaGap = String(theme.quoteMediaGap);
-  root.dataset.milxdyVisualAppWindowStyle = theme.appWindowStyle;
-  root.dataset.milxdyVisualAppShadows = String(theme.appShadows);
-  root.dataset.milxdyVisualMaxMediaHeight = String(theme.maxMediaHeight);
-  root.dataset.milxdyVisualPostButton = theme.postButtonClickly ? "clickly" : "flat";
-  root.dataset.milxdyVisualPostSound = String(theme.postSound);
-  root.dataset.milxdyVisualSidebarBevel = String(theme.sidebarBevel);
-  root.dataset.milxdyVisualSidebarSound = String(theme.sidebarSound);
-  root.dataset.milxdyVisualNewPostsPill = String(theme.newPostsPill);
-  root.dataset.milxdyVisualNewPostsSound = String(theme.newPostsSound);
-  root.dataset.milxdyVisualNotificationUnreadTint = String(theme.notificationUnreadTint);
-  root.dataset.milxdyVisualRemistatsBox = String(theme.remistatsBox);
-  root.dataset.milxdyVisualIncomingPokeGold = String(theme.incomingPokeGold);
-  root.dataset.milxdyVisualPokePlacement = theme.pokePlacement;
-  root.dataset.milxdyVisualReminetChatOverlay = String(theme.reminetChatOverlay);
-  root.dataset.milxdyVisualMiladyOnly = String(theme.miladyOnly);
-  root.dataset.milxdyVisualDisableMaxxer = String(theme.disableMaxxer);
-  root.dataset.milxdyVisualDisableSelfTracking = String(theme.disableSelfTracking);
-  root.dataset.milxdyVisualMaxxerIntensity = theme.maxxerIntensity;
-  root.dataset.milxdyVisualMaxxerSeparators = theme.maxxerSeparators;
-  root.dataset.milxdyVisualMaxxerShimmer = String(theme.maxxerShimmer);
-  root.dataset.milxdyVisualTweetPngBorderPalette = theme.tweetPngBorderPalette;
-  root.style.setProperty("--milxdy-font-tweet", tweetFontStack(theme.tweetFont));
-  root.style.setProperty("--milxdy-font-ui", uiFontStack(theme.uiFont));
-  root.style.setProperty("--milxdy-font-mono", '"Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace');
-  root.style.setProperty("--milxdy-max-media-height", theme.maxMediaHeight > 0 ? `${theme.maxMediaHeight}px` : "none");
+  const signature = visualThemeSignature(theme);
+  if (signature === lastReskinSignature) {
+    rootVisualDiagnostics.profileNoops += 1;
+    rootVisualDiagnostics.updatedAt = Date.now();
+    scheduleRootVisualDiagnosticsWrite();
+    return;
+  }
+  lastReskinSignature = signature;
+  rootVisualDiagnostics.profileApplications += 1;
+  setDatasetValue(root, "milxdyReskinProfile", theme.profile);
+  setDatasetValue(root, "milxdyVisualBackgroundFade", String(theme.backgroundFade));
+  setDatasetValue(root, "milxdyVisualSquareMedia", String(theme.squareMedia));
+  setDatasetValue(root, "milxdyVisualPfpShape", theme.pfpShape);
+  setDatasetValue(root, "milxdyVisualPfpFeed", String(theme.pfpFeed));
+  setDatasetValue(root, "milxdyVisualPfpNotifications", String(theme.pfpNotifications));
+  setDatasetValue(root, "milxdyVisualPfpChat", String(theme.pfpChat));
+  setDatasetValue(root, "milxdyVisualQuoteMediaGap", String(theme.quoteMediaGap));
+  setDatasetValue(root, "milxdyVisualAppWindowStyle", theme.appWindowStyle);
+  setDatasetValue(root, "milxdyVisualAppShadows", String(theme.appShadows));
+  setDatasetValue(root, "milxdyVisualMaxMediaHeight", String(theme.maxMediaHeight));
+  setDatasetValue(root, "milxdyVisualPostButton", theme.postButtonClickly ? "clickly" : "flat");
+  setDatasetValue(root, "milxdyVisualPostSound", String(theme.postSound));
+  setDatasetValue(root, "milxdyVisualSidebarBevel", String(theme.sidebarBevel));
+  setDatasetValue(root, "milxdyVisualSidebarSound", String(theme.sidebarSound));
+  setDatasetValue(root, "milxdyVisualNewPostsPill", String(theme.newPostsPill));
+  setDatasetValue(root, "milxdyVisualNewPostsSound", String(theme.newPostsSound));
+  setDatasetValue(root, "milxdyVisualNotificationUnreadTint", String(theme.notificationUnreadTint));
+  setDatasetValue(root, "milxdyVisualRemistatsBox", String(theme.remistatsBox));
+  setDatasetValue(root, "milxdyVisualIncomingPokeGold", String(theme.incomingPokeGold));
+  setDatasetValue(root, "milxdyVisualPokePlacement", theme.pokePlacement);
+  setDatasetValue(root, "milxdyVisualReminetChatOverlay", String(theme.reminetChatOverlay));
+  setDatasetValue(root, "milxdyVisualMiladyOnly", String(theme.miladyOnly));
+  setDatasetValue(root, "milxdyVisualDisableMaxxer", String(theme.disableMaxxer));
+  setDatasetValue(root, "milxdyVisualDisableSelfTracking", String(theme.disableSelfTracking));
+  setDatasetValue(root, "milxdyVisualMaxxerIntensity", theme.maxxerIntensity);
+  setDatasetValue(root, "milxdyVisualMaxxerSeparators", theme.maxxerSeparators);
+  setDatasetValue(root, "milxdyVisualMaxxerShimmer", String(theme.maxxerShimmer));
+  setDatasetValue(root, "milxdyVisualTweetPngBorderPalette", theme.tweetPngBorderPalette);
+  setStyleValue(root, "--milxdy-font-tweet", tweetFontStack(theme.tweetFont));
+  setStyleValue(root, "--milxdy-font-ui", uiFontStack(theme.uiFont));
+  setStyleValue(root, "--milxdy-font-mono", '"Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace');
+  setStyleValue(root, "--milxdy-max-media-height", theme.maxMediaHeight > 0 ? `${theme.maxMediaHeight}px` : "none");
+}
+
+function visualThemeSignature(theme: VisualThemeSettings): string {
+  return JSON.stringify(theme);
+}
+
+function resetRootVisualDiagnostics(): void {
+  rootVisualDiagnostics.datasetWrites = 0;
+  rootVisualDiagnostics.datasetNoops = 0;
+  rootVisualDiagnostics.styleWrites = 0;
+  rootVisualDiagnostics.styleNoops = 0;
+  rootVisualDiagnostics.profileApplications = 0;
+  rootVisualDiagnostics.profileNoops = 0;
+  rootVisualDiagnostics.themeApplications = 0;
+  rootVisualDiagnostics.themeNoops = 0;
+  rootVisualDiagnostics.updatedAt = Date.now();
+  diagnosticsEnabled = false;
+  lastReskinSignature = null;
+  if (diagnosticsWriteTimer !== null) {
+    window.clearTimeout(diagnosticsWriteTimer);
+    diagnosticsWriteTimer = null;
+  }
+}
+
+function initializeRootDiagnosticsGate(): void {
+  void chrome.storage.local.get({ [DIAGNOSTICS_ENABLED_KEY]: false })
+    .then((stored) => {
+      diagnosticsEnabled = stored?.[DIAGNOSTICS_ENABLED_KEY] === true;
+      if (diagnosticsEnabled) scheduleRootVisualDiagnosticsWrite();
+    })
+    .catch(() => undefined);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "local" || !changes[DIAGNOSTICS_ENABLED_KEY]) return;
+    diagnosticsEnabled = changes[DIAGNOSTICS_ENABLED_KEY].newValue === true;
+    if (diagnosticsEnabled) scheduleRootVisualDiagnosticsWrite();
+  });
+}
+
+function scheduleRootVisualDiagnosticsWrite(): void {
+  rootVisualDiagnostics.updatedAt = Date.now();
+  if (!diagnosticsEnabled || diagnosticsWriteTimer !== null) return;
+  diagnosticsWriteTimer = window.setTimeout(() => {
+    diagnosticsWriteTimer = null;
+    if (!diagnosticsEnabled) return;
+    void chrome.storage.local.set({ [ROOT_VISUAL_DIAGNOSTICS_KEY]: { ...rootVisualDiagnostics } })
+      .catch(() => undefined);
+  }, 1000);
+}
+
+function setDatasetValue(element: HTMLElement, key: string, value: string): void {
+  if (element.dataset[key] === value) {
+    rootVisualDiagnostics.datasetNoops += 1;
+    scheduleRootVisualDiagnosticsWrite();
+    return;
+  }
+  element.dataset[key] = value;
+  rootVisualDiagnostics.datasetWrites += 1;
+  scheduleRootVisualDiagnosticsWrite();
 }
 
 function setupXThemeDetection(initialSettingsTheme: unknown): void {
   let queued = false;
   let lastAppliedTheme: XTheme | null = null;
+  let lastSettingsTheme: SettingsTheme | null = null;
   let settingsTheme = normalizeSettingsTheme(initialSettingsTheme);
   const update = () => {
     const root = document.documentElement;
     const detectedTheme = detectXTheme();
     const theme = resolveEffectiveXTheme(settingsTheme, detectedTheme);
-    root.dataset.milxdySettingsTheme = settingsTheme;
-    root.dataset.milxdyXTheme = theme;
+    if (settingsTheme === lastSettingsTheme && theme === lastAppliedTheme) {
+      applySidebarThemeOverride(theme, false);
+      rootVisualDiagnostics.themeNoops += 1;
+      scheduleRootVisualDiagnosticsWrite();
+      return;
+    }
+    setDatasetValue(root, "milxdySettingsTheme", settingsTheme);
+    setDatasetValue(root, "milxdyXTheme", theme);
     applyNativeThemeHints(settingsTheme);
     applySidebarThemeOverride(theme, theme !== lastAppliedTheme);
+    lastSettingsTheme = settingsTheme;
     lastAppliedTheme = theme;
+    rootVisualDiagnostics.themeApplications += 1;
+    scheduleRootVisualDiagnosticsWrite();
   };
   const scheduleUpdate = () => {
     if (queued) return;
@@ -124,11 +222,26 @@ function applyNativeThemeHints(settingsTheme: SettingsTheme): void {
 }
 
 function setStyleValue(element: HTMLElement, property: string, value: string): void {
+  const current = element.style.getPropertyValue(property);
   if (value) {
-    if (element.style.getPropertyValue(property) !== value) element.style.setProperty(property, value);
-  } else if (element.style.getPropertyValue(property)) {
-    element.style.removeProperty(property);
+    if (current === value) {
+      rootVisualDiagnostics.styleNoops += 1;
+      scheduleRootVisualDiagnosticsWrite();
+      return;
+    }
+    element.style.setProperty(property, value);
+    rootVisualDiagnostics.styleWrites += 1;
+    scheduleRootVisualDiagnosticsWrite();
+    return;
   }
+  if (!current) {
+    rootVisualDiagnostics.styleNoops += 1;
+    scheduleRootVisualDiagnosticsWrite();
+    return;
+  }
+  element.style.removeProperty(property);
+  rootVisualDiagnostics.styleWrites += 1;
+  scheduleRootVisualDiagnosticsWrite();
 }
 
 function findXBackgroundColor(): string | null {

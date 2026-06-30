@@ -131,7 +131,8 @@ function mountBeetolGame(context = {}) {
         </div>
         <div id="beetol-signed-out" class="beetol-signed-out-msg">
           <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
-          <span>to RemiliaNET, then refresh Beetol.</span>
+          <span>to RemiliaNET, then retry Beetol.</span>
+          <button id="beetol-retry-session" type="button">Retry session</button>
         </div>
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
@@ -153,6 +154,7 @@ function mountBeetolGame(context = {}) {
     next: root.querySelector('#beetol-next'),
     user: root.querySelector('#beetol-user'),
     signedOut: root.querySelector('#beetol-signed-out'),
+    retrySession: root.querySelector('#beetol-retry-session'),
     actions: root.querySelector('#beetol-actions'),
     crunchJunk: root.querySelector('#beetol-crunch-junk'),
     message: root.querySelector('#beetol-message'),
@@ -242,6 +244,7 @@ function mountBeetolGame(context = {}) {
     chrome.storage.local.set({
       [COOLDOWN_STATE_KEY]: {
         version: COOLDOWN_STATE_VERSION,
+        savedAt: Date.now(),
         expiresAt: state.cooldownExpiresAt,
         huntCharges: state.huntCharges,
       },
@@ -546,6 +549,10 @@ function mountBeetolGame(context = {}) {
     const now = Date.now();
     state.fetchedAt = now;
     const huntState = huntStateFromUser(user);
+    const serverSaysHuntReady = huntState.hasSignal && !huntState.explicitlyUnavailable && (
+      huntState.explicitlyReady
+      || (huntState.charges !== null && huntState.charges > 0)
+    );
     for (const key of Object.keys(state.cooldowns)) {
       const cooldown = cooldownFromUser(user, key);
       const cooldownMs = normalizeCooldownMs(cooldown);
@@ -555,7 +562,7 @@ function mountBeetolGame(context = {}) {
         clearActionCooldown(key);
       }
     }
-    if (huntState.explicitlyReady && (state.cooldownExpiresAt.beetleHunt ?? 0) <= now) {
+    if (serverSaysHuntReady) {
       clearActionCooldown('beetleHunt');
     }
     if (huntState.charges !== null) {
@@ -570,7 +577,7 @@ function mountBeetolGame(context = {}) {
     }
     if ((state.cooldownExpiresAt.beetleHunt ?? 0) > now) {
       state.huntCharges = 0;
-    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now && state.huntCharges <= 0 && huntState.charges !== 0 && !huntState.explicitlyUnavailable) {
+    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now && state.huntCharges <= 0 && serverSaysHuntReady) {
       state.huntCharges = 3;
     }
     saveCooldownState();
@@ -616,18 +623,28 @@ function mountBeetolGame(context = {}) {
 
   function applyStoredCooldownState(value) {
     if (!value || typeof value !== 'object') return;
-    const expiresAt = value.expiresAt || {};
+    const now = Date.now();
+    const expiresAt = value.expiresAt || value.cooldownExpiresAt || {};
+    const cooldowns = value.cooldowns || {};
+    const savedAt = Number(value.savedAt || value.updatedAt || value.fetchedAt || 0);
     for (const key of Object.keys(state.cooldownExpiresAt)) {
-      const expiry = Number(expiresAt[key]);
-      state.cooldownExpiresAt[key] = Number.isFinite(expiry) && expiry > Date.now() ? expiry : null;
+      let expiry = Number(expiresAt[key]);
+      if (!Number.isFinite(expiry)) {
+        const cooldownMs = normalizeCooldownMs(cooldowns[key]);
+        if (cooldownMs > 0) {
+          expiry = Number.isFinite(savedAt) && savedAt > 0 ? savedAt + cooldownMs : now + cooldownMs;
+        }
+      }
+      state.cooldownExpiresAt[key] = Number.isFinite(expiry) && expiry > now ? expiry : null;
     }
     const charges = value.version === COOLDOWN_STATE_VERSION ? Number(value.huntCharges) : Number.NaN;
     if (Number.isFinite(charges)) {
       state.huntCharges = clamp(Math.floor(charges), 0, 3);
-    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= Date.now()) {
+    } else if ((state.cooldownExpiresAt.beetleHunt ?? 0) <= now) {
       state.huntCharges = 3;
     }
-    if ((state.cooldownExpiresAt.beetleHunt ?? 0) > Date.now()) state.huntCharges = 0;
+    if ((state.cooldownExpiresAt.beetleHunt ?? 0) > now) state.huntCharges = 0;
+    else if (state.huntCharges <= 0) state.huntCharges = 3;
   }
 
   function render() {
@@ -669,7 +686,7 @@ function mountBeetolGame(context = {}) {
         const cooldownClass = cd > 0 ? ' is-cooldown' : '';
         const exhaustedClass = key === 'beetleHunt' && cd <= 0 && state.huntCharges <= 0 ? ' is-exhausted' : '';
         const huntClass = key === 'beetleHunt' ? ' is-hunt' : '';
-        const disabled = state.loading || cd > 0 || exhaustedClass ? ' disabled' : '';
+        const disabled = state.loading || cd > 0 ? ' disabled' : '';
         const iconUrl = ACTION_ICON_URLS[key];
         const cooldownLabel = fmtMs(cd);
         const huntStatus = cd > 0 ? cooldownLabel : `${state.huntCharges}/3`;
@@ -702,6 +719,26 @@ function mountBeetolGame(context = {}) {
     const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => key === 'beetleHunt' && state.huntCharges <= 0 && cds[key] <= 0 ? null : cds[key]);
     const next = tabCooldowns.filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
     return next ? fmtBadgeMs(next) : '';
+  }
+
+  async function checkAuthStatus(silent = false) {
+    if (!lifecycleActive()) return false;
+    state.loading = true;
+    if (!silent) setMessage('Checking session...');
+    render();
+    const response = await send({ type: 'beetol:authStatus' });
+    if (!lifecycleActive()) return false;
+    state.loading = false;
+    state.signedIn = Boolean(response?.signedIn);
+    if (!state.signedIn) {
+      setMessage(response?.error || 'No RemiliaNET browser session detected.', 'warn');
+      render();
+      return false;
+    }
+    setMessage('Session detected.');
+    render();
+    await refreshState(true);
+    return true;
   }
 
   async function refreshState(silent = false) {
@@ -811,6 +848,8 @@ function mountBeetolGame(context = {}) {
     } else if (action === 'beetleHunt' && !hasAuthoritativeHuntState) {
       const nextCharges = clamp(chargesBeforeAction - 1, 0, 3);
       state.huntCharges = nextCharges;
+    } else if (action === 'beetleHunt' && chargesBeforeAction <= 1 && currentCooldowns().beetleHunt <= 0) {
+      state.huntCharges = 0;
     }
     saveCooldownState();
 
@@ -861,7 +900,15 @@ function mountBeetolGame(context = {}) {
 
   els.refresh.addEventListener('click', () => {
     playActionSound();
-    refreshState();
+    if (state.signedIn) refreshState();
+    else checkAuthStatus();
+  });
+
+  els.retrySession?.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    playActionSound();
+    checkAuthStatus();
   });
 
   els.minimize?.addEventListener('click', () => {
@@ -1095,12 +1142,7 @@ function mountBeetolGame(context = {}) {
     applySettings(settings);
     render();
     if (!state.enabled) return;
-    send({ type: 'beetol:authStatus' }).then(response => {
-      if (!lifecycleActive()) return;
-      state.signedIn = Boolean(response?.signedIn);
-      render();
-      if (state.signedIn) refreshState(true);
-    });
+    checkAuthStatus(true);
   });
   render();
 }

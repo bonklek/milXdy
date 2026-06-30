@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>milXdy Remilia Font Comparison</title>
+  <style>
+    @font-face {
+      font-family: "Milxdy Sample Hei";
+      src: url("../public/remilia-fonts/Hei.ttf") format("truetype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Milxdy Sample Mincho";
+      src: url("../public/remilia-fonts/RemiliaMincho-Regular.otf") format("opentype");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    @font-face {
+      font-family: "Milxdy Sample Menlo";
+      src: url("../public/remilia-fonts/Menlo.woff2") format("woff2");
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      color-scheme: light;
+      --border: #cfd8dc;
+      --muted: #536471;
+      --tweet: #0f1419;
+      --green: #2f4d0c;
+    }
+
+    body {
+      margin: 0;
+      background: #f7f9f9;
+      color: var(--tweet);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    main {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    h1 {
+      margin: 0 0 6px;
+      font-size: 24px;
+      line-height: 1.2;
+    }
+
+    .note {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .sample {
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 0;
+      margin-bottom: 16px;
+      overflow: hidden;
+      width: 620px;
+      max-width: 100%;
+    }
+
+    .sample header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      background: #f4ffee;
+    }
+
+    .sample h2 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .sample code {
+      color: var(--green);
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tweet {
+      padding: 14px;
+    }
+
+    .name {
+      margin-bottom: 8px;
+      font-size: 15px;
+      line-height: 20px;
+      font-weight: 700;
+    }
+
+    .handle {
+      color: var(--muted);
+      font-weight: 400;
+    }
+
+    .body {
+      font-size: 15px;
+      line-height: 22px;
+      letter-spacing: 0;
+      white-space: normal;
+    }
+
+    .small {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 18px;
+    }
+
+    .hei {
+      font-family: "Milxdy Sample Hei", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .mincho {
+      font-family: "Milxdy Sample Mincho", Georgia, "Times New Roman", serif;
+    }
+
+    .menlo {
+      font-family: "Milxdy Sample Menlo", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    .system {
+      font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>milXdy Remilia Font Comparison</h1>
+    <p class="note">Same 15px tweet-style sample in every bundled font. The extension currently bundles Remilia Hei, Remilia Mincho, and Remilia Menlo.</p>
+    <section class="grid">
+      <article class="sample">
+        <header><h2>Remilia Hei</h2><code>Hei.ttf</code></header>
+        <div class="tweet hei">
+          <div class="name">Charlotte Fang <span class="handle">@CharlotteFang77 · Lv. 0</span></div>
+          <div class="body">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus. 2021 gave the network a strange little myth, and every reply became a room with another room inside it. Curabitur blandit tempus porttitor, sed posuere consectetur est at lobortis. The timeline remembers every small decision, every quote, every joke, and every long sentence that has to wrap without looking like it is wasting half the screen.</div>
+          <div class="small">abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789</div>
+        </div>
+      </article>
+
+      <article class="sample">
+        <header><h2>Remilia Mincho</h2><code>RemiliaMincho-Regular.otf</code></header>
+        <div class="tweet mincho">
+          <div class="name">Charlotte Fang <span class="handle">@CharlotteFang77 · Lv. 0</span></div>
+          <div class="body">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus. 2021 gave the network a strange little myth, and every reply became a room with another room inside it. Curabitur blandit tempus porttitor, sed posuere consectetur est at lobortis. The timeline remembers every small decision, every quote, every joke, and every long sentence that has to wrap without looking like it is wasting half the screen.</div>
+          <div class="small">abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789</div>
+        </div>
+      </article>
+
+      <article class="sample">
+        <header><h2>Remilia Menlo</h2><code>Menlo.woff2</code></header>
+        <div class="tweet menlo">
+          <div class="name">Charlotte Fang <span class="handle">@CharlotteFang77 · Lv. 0</span></div>
+          <div class="body">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus. 2021 gave the network a strange little myth, and every reply became a room with another room inside it. Curabitur blandit tempus porttitor, sed posuere consectetur est at lobortis. The timeline remembers every small decision, every quote, every joke, and every long sentence that has to wrap without looking like it is wasting half the screen.</div>
+          <div class="small">abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789</div>
+        </div>
+      </article>
+
+      <article class="sample">
+        <header><h2>X/System Baseline</h2><code>system sans</code></header>
+        <div class="tweet system">
+          <div class="name">Charlotte Fang <span class="handle">@CharlotteFang77 · Lv. 0</span></div>
+          <div class="body">Lorem ipsum dolor sit amet, consectetur adipiscing elit. Integer posuere erat a ante venenatis dapibus. 2021 gave the network a strange little myth, and every reply became a room with another room inside it. Curabitur blandit tempus porttitor, sed posuere consectetur est at lobortis. The timeline remembers every small decision, every quote, every joke, and every long sentence that has to wrap without looking like it is wasting half the screen.</div>
+          <div class="small">abcdefghijklmnopqrstuvwxyz ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789</div>
+        </div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>

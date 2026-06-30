@@ -1,6 +1,6 @@
 # milXdy 0.2.0 Chrome Live QA Handoff
 
-Use this validation guide when testing the rebuilt Chromium extension on a real X/Twitter tab. The automated release checks prove the build contents; this guide proves Chrome is actually running that build.
+Use this handoff when validating the rebuilt Chromium extension on a real X/Twitter tab. The automated release checks prove the build contents; this handoff proves Chrome is actually running that build.
 
 ## Reload The 0.2.0 Build
 
@@ -45,4 +45,6 @@ After the runtime probe passes:
 - Pin and open Wiki in a Balanced or Full build.
 - Pin and open Miladychan Portal and load at least one board plus one thread.
 - Pin and open Music in Chromium and confirm local folder handling reaches the folder picker or the expected browser limitation state.
-- Keep promotional planning outside this public QA guide.
+- Capture the four screenshots in [RELEASE_SCREENSHOTS_0.2.0.md](RELEASE_SCREENSHOTS_0.2.0.md).
+
+Do not use screenshots from a tab where the runtime probe is blocked when preparing optional release media.

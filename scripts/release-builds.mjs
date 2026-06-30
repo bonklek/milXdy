@@ -11,6 +11,7 @@ export const coreHostPermissions = [
   "https://api.github.com/*",
   "https://x.com/*",
   "https://twitter.com/*",
+  "https://abs.twimg.com/*",
   "https://pbs.twimg.com/*",
   "http://localhost/*",
   "http://127.0.0.1/*",

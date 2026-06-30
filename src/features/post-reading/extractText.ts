@@ -112,6 +112,7 @@ function extractQuoteUrl(quoteElement: HTMLElement, mainTweet: HTMLElement): str
     const url = new URL(href, window.location.origin);
     const quoteTweetId = getStatusId(url);
     if (!quoteTweetId || quoteTweetId === mainTweetId) return null;
+    if (url.hostname === "twitter.com") url.hostname = "x.com";
     url.search = "";
     url.hash = "";
     return url.toString();
@@ -135,6 +136,7 @@ function normalizeStatusUrl(value: string): string | null {
 
 function findQuoteStatusHref(quoteElement: HTMLElement, mainTweet: HTMLElement): string | null {
   if (quoteElement.matches('a[href*="/status/"]')) return (quoteElement as HTMLAnchorElement).href;
+  const mainTweetId = extractMainTweetId(mainTweet, quoteElement);
 
   const scopedLinks = Array.from(quoteElement.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'));
   const scopedStatusLink = scopedLinks.find((link) => /\/status\/\d+/.test(link.pathname));
@@ -143,10 +145,84 @@ function findQuoteStatusHref(quoteElement: HTMLElement, mainTweet: HTMLElement):
   const closestStatusLink = quoteElement.closest<HTMLAnchorElement>('a[href*="/status/"]');
   if (closestStatusLink && /\/status\/\d+/.test(closestStatusLink.pathname)) return closestStatusLink.href;
 
-  return findQuoteStatusLink(mainTweet, quoteElement)?.href || null;
+  const roleLink = quoteElement.closest<HTMLElement>('div[role="link"], [data-testid="quoteTweet"]');
+  const roleStatusLink = roleLink?.querySelector<HTMLAnchorElement>('a[href*="/status/"]');
+  if (roleStatusLink && /\/status\/\d+/.test(roleStatusLink.pathname)) return roleStatusLink.href;
+
+  const dataHref = quoteElement.closest<HTMLElement>("[data-href]")?.getAttribute("data-href")
+    || roleLink?.getAttribute("data-href");
+  if (dataHref && /\/status\/\d+/.test(dataHref)) return dataHref;
+
+  const attributeStatusHref = findStatusHrefInAttributes(quoteElement)
+    || (roleLink ? findStatusHrefInAttributes(roleLink) : null);
+  if (attributeStatusHref) return attributeStatusHref;
+
+  const textStatusHref = findStatusHrefInText(quoteElement.textContent || "")
+    || (roleLink ? findStatusHrefInText(roleLink.textContent || "") : null);
+  if (textStatusHref) return textStatusHref;
+
+  const quoteHandle = extractQuoteHandle(quoteElement, roleLink);
+  const handleStatusLink = quoteHandle ? findQuoteStatusLinkByHandle(mainTweet, quoteHandle, mainTweetId) : null;
+  if (handleStatusLink) return handleStatusLink.href;
+
+  const nonMainStatusLinks = uniqueStatusLinks(Array.from(mainTweet.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')))
+    .filter((link) => getStatusId(link) !== mainTweetId && !link.closest(USER_NAME));
+  if (nonMainStatusLinks.length === 1) return nonMainStatusLinks[0].href;
+
+  return findQuoteStatusLink(mainTweet, quoteElement, mainTweetId)?.href || null;
+}
+
+function extractQuoteHandle(quoteElement: HTMLElement, roleLink: HTMLElement | null): string | null {
+  const roots = [quoteElement, roleLink].filter((element): element is HTMLElement => Boolean(element));
+  for (const root of roots) {
+    const profileLink = Array.from(root.querySelectorAll<HTMLAnchorElement>('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))
+      .find((link) => {
+        const pathname = new URL(link.href, window.location.origin).pathname;
+        return /^\/[^/]+\/?$/.test(pathname) && !pathname.includes("/status/");
+      });
+    const linkHandle = profileLink ? new URL(profileLink.href, window.location.origin).pathname.match(/^\/([^/]+)\/?$/)?.[1] : null;
+    if (linkHandle && !isReservedXPath(linkHandle)) return linkHandle.toLowerCase();
+    const textHandle = (root.textContent || "").match(/@([A-Za-z0-9_]{1,15})/i)?.[1];
+    if (textHandle) return textHandle.toLowerCase();
+  }
+  return null;
+}
+
+function findQuoteStatusLinkByHandle(mainTweet: HTMLElement, handle: string, mainTweetId: string | null): HTMLAnchorElement | null {
+  return uniqueStatusLinks(Array.from(mainTweet.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')))
+    .find((link) => {
+      const url = new URL(link.href, window.location.origin);
+      const parts = url.pathname.split("/").filter(Boolean);
+      return parts[0]?.toLowerCase() === handle
+        && getStatusId(url) !== mainTweetId
+        && !link.closest(USER_NAME);
+    }) || null;
+}
+
+function findStatusHrefInAttributes(root: HTMLElement): string | null {
+  const attributes = ["href", "data-href", "data-url", "data-expanded-url", "aria-label", "title"];
+  const elements = [root, ...Array.from(root.querySelectorAll<HTMLElement>("a[href], [data-href], [data-url], [data-expanded-url], [aria-label], [title]"))];
+  for (const element of elements) {
+    for (const attribute of attributes) {
+      const value = element.getAttribute(attribute);
+      const href = value ? findStatusHrefInText(value) : null;
+      if (href) return href;
+    }
+  }
+  return null;
+}
+
+function findStatusHrefInText(value: string): string | null {
+  const absolute = value.match(/https?:\/\/(?:x|twitter)\.com\/[^/\s"'<>]+\/status\/\d+/i)?.[0];
+  if (absolute) return absolute;
+  const relative = value.match(/\/[^/\s"'<>]+\/status\/\d+/)?.[0];
+  if (relative) return relative;
+  return null;
 }
 
 function extractMainTweetId(mainTweet: HTMLElement, quoteElement: HTMLElement): string | null {
+  const routeId = window.location.pathname.match(/\/status\/(\d+)/)?.[1];
+  if (routeId) return routeId;
   const links = Array.from(mainTweet.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'));
   const ownLink = links.find((link) => !quoteElement.contains(link) && getStatusId(link));
   return ownLink ? getStatusId(ownLink) : null;
@@ -156,9 +232,10 @@ function getStatusId(value: URL | HTMLAnchorElement): string | null {
   return value.pathname.match(/\/status\/(\d+)/)?.[1] || null;
 }
 
-function findQuoteStatusLink(mainTweet: HTMLElement, quoteElement: HTMLElement): HTMLAnchorElement | null {
+function findQuoteStatusLink(mainTweet: HTMLElement, quoteElement: HTMLElement, mainTweetId: string | null): HTMLAnchorElement | null {
   const links = uniqueStatusLinks(Array.from(mainTweet.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]')));
   const overlapping = links.find((link) => {
+    if (getStatusId(link) === mainTweetId || link.closest(USER_NAME)) return false;
     if (link.contains(quoteElement) || quoteElement.contains(link)) return true;
     const rect = link.getBoundingClientRect();
     const quoteRect = quoteElement.getBoundingClientRect();
@@ -187,6 +264,10 @@ function uniqueStatusLinks(links: HTMLAnchorElement[]): HTMLAnchorElement[] {
 
 function normalizeStatusLinkKey(link: HTMLAnchorElement): string {
   return `${link.hostname}${link.pathname}`;
+}
+
+function isReservedXPath(value: string): boolean {
+  return /^(home|explore|notifications|messages|i|settings|compose|search|hashtag)$/i.test(value);
 }
 
 function sentenceClause(value: string): string {
@@ -261,7 +342,7 @@ function extractTweetTextNodeText(node: HTMLElement, includeHyperlinks: boolean)
   return clone.innerText || clone.textContent || "";
 }
 
-function isReadableHyperlink(link: HTMLAnchorElement): boolean {
+export function isReadableHyperlink(link: HTMLAnchorElement): boolean {
   const text = cleanText(link.innerText || link.textContent || "");
   const href = link.getAttribute("href") || "";
   if (/^(https?:\/\/|www\.|t\.co\/)/i.test(text)) return true;

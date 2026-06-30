@@ -20,7 +20,7 @@ export const UPDATE_CHECK_INTERVAL_MINUTES = 360;
 
 export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases?per_page=20";
 
-type GitHubRelease = {
+export type GitHubRelease = {
   tag_name?: string;
   html_url?: string;
   draft?: boolean;
@@ -54,16 +54,14 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       throw new Error("GitHub returned an unexpected releases response");
     }
 
-    const release = releases
-      .filter((candidate) => candidate.prerelease === true && candidate.draft !== true)
-      .sort((left, right) => dateValue(right.published_at) - dateValue(left.published_at))[0];
+    const release = selectLatestNormalRelease(releases);
     if (!release) {
-      throw new Error("GitHub did not return a published prerelease");
+      throw new Error("GitHub did not return a normal published release");
     }
 
     const latestVersion = normalizeVersion(release.tag_name);
     if (!latestVersion) {
-      throw new Error("Latest prerelease did not include a version tag");
+      throw new Error("Latest normal release did not include a version tag");
     }
 
     const expectedAssetName = expectedReleaseAssetName(latestVersion);
@@ -111,6 +109,19 @@ export function normalizeVersion(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/^v/i, "");
   return /^\d+(?:\.\d+){0,2}$/.test(normalized) ? normalized : null;
+}
+
+export function selectLatestNormalRelease(releases: readonly GitHubRelease[]): GitHubRelease | null {
+  // The normal update channel intentionally ignores drafts and prereleases.
+  // A future beta channel can opt into prereleases without changing stable users.
+  return releases
+    .filter((candidate) => candidate.draft !== true && candidate.prerelease !== true && normalizeVersion(candidate.tag_name))
+    .sort((left, right) => {
+      const versionDiff = compareVersions(normalizeVersion(right.tag_name) || "0", normalizeVersion(left.tag_name) || "0");
+      if (versionDiff !== 0) return versionDiff;
+      return dateValue(right.published_at) - dateValue(left.published_at);
+    })[0]
+    || null;
 }
 
 function parseVersion(value: string): number[] {

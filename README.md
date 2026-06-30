@@ -18,7 +18,7 @@ This project is intended for GitHub beta distribution and local browser testing.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
 - **Miladychan Portal**: docked Miladychan board, thread, post, and media browsing that keeps the native site as the primary posting surface.
 - **Music**: docked local music library, playlists, ISRC enrichment, QR import/export, and metadata-based local radio sessions.
-- **Diag**: beta diagnostics and bug-report actions for GitHub or X.
+- **Health**: beta diagnostics and bug-report actions for GitHub or X.
 
 ## Quick Install
 

@@ -5,6 +5,7 @@ import "./features/beetol/background.js";
 import "./features/reminetChat/background";
 import { initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "./shared/backgroundRouter";
 import { browserAction } from "./shared/browserAction";
+import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "./shared/performanceMode";
 import {
   ETHEREUM_RPC_URL,
   ENS_REGISTRY_ADDRESS,
@@ -49,6 +50,7 @@ import { parseAllowedUrl, type UrlAllowRule } from "./shared/urlAllowlist";
 type RemiStatsMessage = {
   type: "remistats:getUser";
   handle: string;
+  force?: boolean;
 };
 
 type ReminetIdentityMessage = {
@@ -214,7 +216,7 @@ setupBackgroundMessageRouter([
   {
     type: "remistats:getUser",
     matches: isRemiStatsMessage,
-    handle: (message) => fetchRemiStatsUser(message.handle),
+    handle: (message) => fetchRemiStatsUser(message.handle, message.force === true),
   },
   {
     type: "reminetIdentity:getProfile",
@@ -312,20 +314,57 @@ function isWikiSidebarReadAloudRequestMessage(message: unknown): message is Wiki
     && typeof record.text === "string";
 }
 
-async function fetchRemiStatsUser(handleValue: string): Promise<Record<string, unknown>> {
-  const handle = handleValue.trim().replace(/^@/, "").toLowerCase();
+async function fetchRemiStatsUser(handleValue: string, force = false): Promise<Record<string, unknown>> {
+  const handle = normalizeXHandle(handleValue);
   if (!/^[a-z0-9_]{1,15}$/i.test(handle)) {
     return { ok: false, status: 0, notFound: true };
   }
+
+  const [mode, cache] = await Promise.all([loadCurrentPerformanceMode(), loadIdentityCache()]);
+  const cached = force ? null : cachedRemiStatsResponse(cache, handle, remiStatsCacheTtlForMode(mode));
+  if (cached) return cached;
 
   try {
     const response = await budgetedFetch(`https://api.remistats.net/user/${encodeURIComponent(handle)}`, { credentials: "omit" }, "remistats:user");
     if (response.status === 404) return { ok: false, status: 404, notFound: true };
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
-    return { ok: true, data: await response.json() };
+    const data = await response.json();
+    const profile = mergeIdentityProfile(
+      emptyIdentityProfile(),
+      profileFromRemiStatsResponse(data, handle),
+      "remistats",
+    );
+    await rememberIdentityProfile(cache, profile, { xHandles: [handle] });
+    return { ok: true, cached: false, data };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function loadCurrentPerformanceMode(): Promise<PerformanceMode> {
+  const stored = await chrome.storage.local.get({ [PERFORMANCE_MODE_KEY]: "balanced" }).catch(() => ({})) as Record<string, unknown>;
+  return normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
+}
+
+function remiStatsCacheTtlForMode(mode: PerformanceMode): number {
+  if (mode === "fast") return REMINET_IDENTITY_CACHE_TTL_MS;
+  if (mode === "balanced") return 30 * 60 * 1000;
+  if (mode === "full") return 5 * 60 * 1000;
+  return 0;
+}
+
+function cachedRemiStatsResponse(cache: ReminetIdentityCache, handle: string, ttlMs: number): Record<string, unknown> | null {
+  if (ttlMs <= 0) return null;
+  const entry = cache[identityCacheKeyForXHandle(handle)];
+  if (!entry?.profile || typeof entry.cachedAt !== "number" || Date.now() - entry.cachedAt >= ttlMs) return null;
+  if (entry.profile.remiStatsScore === null && entry.profile.beetleCount === null) return null;
+  return {
+    ok: true,
+    cached: true,
+    data: {
+      user: remiStatsUserFromIdentityProfile(entry.profile, handle),
+    },
+  };
 }
 
 async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<Record<string, unknown>> {
@@ -348,7 +387,7 @@ async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<
   if (remiliaUsername) profile = mergeIdentityProfile(profile, { remiliaUsername }, "input");
 
   if (xHandle) {
-    const remiStatsResponse = await fetchRemiStatsUser(xHandle);
+    const remiStatsResponse = await fetchRemiStatsUser(xHandle, message.force === true);
     if (remiStatsResponse.ok) {
       profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, xHandle), "remistats");
     } else if (remiStatsResponse.notFound || remiStatsResponse.status === 404) {
@@ -535,6 +574,23 @@ function profileFromRemiStatsResponse(value: unknown, fallbackHandle: string): P
   };
 }
 
+function remiStatsUserFromIdentityProfile(profile: ReminetIdentityProfile, fallbackHandle: string): Record<string, unknown> {
+  return {
+    username: profile.remiliaUsername || fallbackHandle,
+    userHandle: profile.remiliaUsername || fallbackHandle,
+    handle: profile.remiliaUsername || fallbackHandle,
+    remiliaUsername: profile.remiliaUsername || null,
+    twitterHandle: normalizeXHandle(profile.xHandle) || fallbackHandle,
+    displayName: profile.displayName,
+    pfpProject: profile.pfpProject,
+    pfpId: profile.pfpId,
+    pfpUrl: profile.pfpUrl,
+    beetles: profile.beetleCount,
+    socialCreditScore: profile.remiStatsScore,
+    friendCount: profile.friendCount,
+  };
+}
+
 function profileFromRemiliaResponse(value: unknown, fallbackUsername: string): Partial<ReminetIdentityProfile> {
   const data = objectValue(value);
   const user = objectValue(data.user);
@@ -603,12 +659,16 @@ async function loadIdentityCache(): Promise<ReminetIdentityCache> {
   return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as ReminetIdentityCache : {};
 }
 
-async function rememberIdentityProfile(cache: ReminetIdentityCache, profile: ReminetIdentityProfile): Promise<void> {
+async function rememberIdentityProfile(
+  cache: ReminetIdentityCache,
+  profile: ReminetIdentityProfile,
+  aliases: { xHandles?: string[]; remiliaUsernames?: string[] } = {},
+): Promise<void> {
   const entry = { profile, cachedAt: Date.now() };
-  const xHandle = normalizeXHandle(profile.xHandle);
-  const remiliaUsername = normalizeRemiliaUsername(profile.remiliaUsername);
-  if (xHandle) cache[identityCacheKeyForXHandle(xHandle)] = entry;
-  if (remiliaUsername) cache[identityCacheKeyForRemiliaUsername(remiliaUsername)] = entry;
+  const xHandles = new Set([normalizeXHandle(profile.xHandle), ...(aliases.xHandles || []).map(normalizeXHandle)].filter(Boolean));
+  const remiliaUsernames = new Set([normalizeRemiliaUsername(profile.remiliaUsername), ...(aliases.remiliaUsernames || []).map(normalizeRemiliaUsername)].filter(Boolean));
+  for (const xHandle of xHandles) cache[identityCacheKeyForXHandle(xHandle)] = entry;
+  for (const remiliaUsername of remiliaUsernames) cache[identityCacheKeyForRemiliaUsername(remiliaUsername)] = entry;
   await chrome.storage.local.set({ [REMINET_IDENTITY_CACHE_KEY]: pruneIdentityCache(cache) }).catch(() => undefined);
 }
 
@@ -826,13 +886,13 @@ chrome.runtime.onInstalled.addListener((details) => {
   void chrome.storage.local.set({
     "milxdy.diagnostics.enabled": false,
     "milxdy.apps.firstRun.status": "pending",
-    "milxdy.miladychan.enabled": false,
-    "milxdy.music.enabled": false,
-    "milxdy.reminetChat.enabled": false,
-    "milxdy.remistats.beetol.enabled": false,
+    "milxdy.miladychan.enabled": true,
+    "milxdy.music.enabled": true,
+    "milxdy.reminetChat.enabled": true,
+    "milxdy.remistats.beetol.enabled": true,
   });
   void chrome.storage.sync.set({
-    mode: "off",
+    mode: "milady",
     showTooltips: true,
     soundsEnabled: true,
   });

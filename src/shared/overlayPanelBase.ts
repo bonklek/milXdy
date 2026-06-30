@@ -186,18 +186,38 @@ export function startOverlayPanelResize(event: PointerEvent, options: OverlayPan
   activePointerCleanup?.();
   const sessionTarget = pointerSessionTarget(event);
   capturePointer(sessionTarget, event.pointerId);
-  const move = (moveEvent: PointerEvent) => {
-    if (moveEvent.pointerId !== event.pointerId) return;
+  let latestClientX = startX;
+  let latestClientY = startY;
+  let raf = 0;
+  let pendingResize = false;
+  const applyResize = () => {
+    pendingResize = false;
     const next = clampOverlayPanelBox({
       ...startBox,
-      width: axis === "y" ? startBox.width : startBox.width + (moveEvent.clientX - startX) * direction,
-      height: axis === "x" ? startBox.height : startBox.height + moveEvent.clientY - startY,
+      width: axis === "y" ? startBox.width : startBox.width + (latestClientX - startX) * direction,
+      height: axis === "x" ? startBox.height : startBox.height + latestClientY - startY,
     }, options);
     options.setBox(next);
     options.apply();
   };
+  const move = (moveEvent: PointerEvent) => {
+    if (moveEvent.pointerId !== event.pointerId) return;
+    latestClientX = moveEvent.clientX;
+    latestClientY = moveEvent.clientY;
+    pendingResize = true;
+    if (raf) return;
+    raf = window.requestAnimationFrame(() => {
+      raf = 0;
+      applyResize();
+    });
+  };
   const up = (upEvent?: Event) => {
     if (eventHasPointerId(upEvent) && upEvent.pointerId !== event.pointerId) return;
+    if (raf) {
+      window.cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    if (pendingResize) applyResize();
     window.removeEventListener("pointermove", move);
     window.removeEventListener("pointerup", up);
     window.removeEventListener("pointercancel", up);
@@ -288,10 +308,15 @@ function startFreeformResize(event: PointerEvent, options: OverlayPanelPointerOp
   bringOverlayAppToFront(root, options.appId);
   const sessionTarget = pointerSessionTarget(event);
   capturePointer(sessionTarget, event.pointerId);
-  const move = (moveEvent: PointerEvent) => {
-    if (moveEvent.pointerId !== event.pointerId) return;
-    const dx = moveEvent.clientX - startX;
-    const dy = moveEvent.clientY - startY;
+  let latestClientX = startX;
+  let latestClientY = startY;
+  let latestAltKey = event.altKey;
+  let raf = 0;
+  let pendingResize = false;
+  const applyResize = () => {
+    pendingResize = false;
+    const dx = latestClientX - startX;
+    const dy = latestClientY - startY;
     const next: OverlayRect = { ...current };
     if (axis !== "y") {
       if (resizeFromLeft) {
@@ -312,13 +337,30 @@ function startFreeformResize(event: PointerEvent, options: OverlayPanelPointerOp
         zones,
       );
     }
-    const snapped = snapRectToGuides(current, zones, { disabled: moveEvent.altKey });
+    const snapped = snapRectToGuides(current, zones, { disabled: latestAltKey });
     renderOverlayGuideLines(snapped.guides);
     applyFreeformRect(snapped.rect, options);
     current = snapped.rect;
   };
+  const move = (moveEvent: PointerEvent) => {
+    if (moveEvent.pointerId !== event.pointerId) return;
+    latestClientX = moveEvent.clientX;
+    latestClientY = moveEvent.clientY;
+    latestAltKey = moveEvent.altKey;
+    pendingResize = true;
+    if (raf) return;
+    raf = window.requestAnimationFrame(() => {
+      raf = 0;
+      applyResize();
+    });
+  };
   const up = (upEvent?: Event) => {
     if (eventHasPointerId(upEvent) && upEvent.pointerId !== event.pointerId) return;
+    if (raf) {
+      window.cancelAnimationFrame(raf);
+      raf = 0;
+    }
+    if (pendingResize) applyResize();
     clearOverlayGuideLines();
     cleanupPointer(event, sessionTarget, move, up);
     if (activePointerCleanup === up) activePointerCleanup = null;
@@ -361,7 +403,11 @@ function rectToBox(rect: OverlayRect): OverlayPanelBox {
 }
 
 function resizeHandleIsLeft(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.getBoundingClientRect().left < window.innerWidth / 2;
+  if (!(target instanceof HTMLElement)) return false;
+  const explicitSide = target.dataset.resizeSide || target.dataset.resizeOrigin;
+  if (explicitSide === "left") return true;
+  if (explicitSide === "right") return false;
+  return target.getBoundingClientRect().left < window.innerWidth / 2;
 }
 
 function cleanupPointer(

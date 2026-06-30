@@ -16,8 +16,9 @@ Do not remove the extension or load a second unpacked folder unless you intend t
 
 The Suite tab provides a guided version of this flow:
 
-- **Download** opens the matching GitHub prerelease zip for the current browser target and build profile when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed target/profile.
+- **Download** opens the matching GitHub release zip for the current browser target and build profile when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed target/profile.
 - **Steps** copies the safe in-place update checklist.
+- **LLM** opens your configured assistant target after copying the update checklist so you can ask for guided help without losing the safe update steps.
 - **Reload** calls Chrome's extension reload after you have replaced the files in the same folder.
 
 ## Main, Apps, And Appearance
@@ -36,7 +37,7 @@ The shared side rail appears on X/Twitter and hosts dockable first-party apps su
 - Use **Enable** or **Disable** to control whether an app can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
-- On fresh installs, the Apps Hub opens once with Lite, Balanced, and Full setup choices. These choices apply app enablement, default rail pins, and the matching Performance mode. Skipping keeps the conservative fresh-install defaults, with heavier full-profile apps such as Music, Miladychan Portal, Beetol, RemiNet Chat, and Milady Maxxer left disabled until you enable them or choose Full.
+- On fresh installs, the Apps Hub opens once with Lite, Balanced, and Full setup choices. These choices apply default rail pins and the matching Performance mode while keeping every first-party app available and toggleable. The same setup choices remain available from the Apps Hub settings menu later.
 
 Enabled and pinned are different states: an app can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions.
 
@@ -113,13 +114,14 @@ The Reader tab controls post and Wiki read-aloud behavior.
 
 - Use **Post-reading controls** to show read buttons on posts.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
+- Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
 - **Include quote posts**, **Fetch full quotes**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
 - Use the Wiki sidebar read-aloud controls to read articles, move between paragraphs, and optionally auto-scroll the current spoken line into view.
 
-Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use an estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
+Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
 
 OCR runs locally and can miss stylized, low-resolution, or low-contrast text.
 
@@ -135,7 +137,9 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 
 ### Pokes
 
-The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter.
+The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter. When the same account appears multiple times on screen, visible poke buttons for that account update to the same cooldown state after a successful poke.
+
+**Like tweets when poking** is off by default. When enabled, a successful tweet poke also clicks X's Like button for that tweet if it is not already liked.
 
 Successful pokes count toward Miladymaxxer XP the same way likes do when milXdy can map the poked RemiNet account to a tracked Milady X/Twitter handle.
 
@@ -155,6 +159,7 @@ Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/T
 
 - The chat uses the same RemiNet connector login as pokes and Beetol Game.
 - It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
+- When you scroll to the oldest loaded messages, use **Show more** to load another batch of older chat history.
 - It supports reactions, pokes, attachments, media previews, profile lookups, and minimized mode.
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
@@ -211,6 +216,8 @@ Enable and pin **Music** from the Apps Hub to open the docked local music app.
 ISRC enrichment is local-first. milXdy can infer candidates from file metadata, query MusicBrainz, and optionally use AcoustID when the user provides a key. Playlist and radio QR payloads share title, artist, album, ISRC, duration, playlist name, and start time metadata, not audio files. Imports match local files by ISRC first and then by title, artist, album, and duration.
 
 Firefox support for local music folders is limited by browser folder-handle support; use Chromium for the full local library workflow.
+
+The docked Music panel remembers layout state. Compact mode can be made narrower but has a capped height; switch back to the full player when you need the larger layout.
 
 ## Maxxer
 

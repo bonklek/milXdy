@@ -7,6 +7,7 @@ import {
 import {
   clampOverlayPanelBox,
   observeOverlayPanelTheme,
+  type OverlayPanelBox,
   resolveOverlayPanelTheme,
   restoreOverlayPanelBox,
   startOverlayPanelDrag,
@@ -23,6 +24,7 @@ const STYLE_THEME_KEY = "milxdy.settings.theme";
 const WIDTH_KEY = "milxdy.music.width";
 const HEIGHT_KEY = "milxdy.music.height";
 const TOP_KEY = "milxdy.music.top";
+const LIBRARY_MINIMIZED_KEY = "milxdy.music.libraryMinimized";
 const ACOUSTID_CLIENT_KEY = "milxdy.music.acoustIdClientKey";
 const AUTO_ACCEPT_ISRC_KEY = "milxdy.music.autoAcceptHighConfidenceIsrc";
 const VOLUME_KEY = "milxdy.music.volume";
@@ -35,7 +37,9 @@ const FULL_MIN_WIDTH = 340;
 const FULL_MIN_HEIGHT = 350;
 const COMPACT_MIN_WIDTH = 260;
 const COMPACT_MIN_HEIGHT = 112;
+const COMPACT_MAX_WIDTH = 340;
 const COMPACT_DEFAULT_HEIGHT = 198;
+const COMPACT_MAX_HEIGHT = COMPACT_DEFAULT_HEIGHT;
 const COMPACT_HIDE_NOW_HEIGHT = 142;
 const COMPACT_TIGHT_HEIGHT = 172;
 const rowPlayButtonsByTrackId = new Map<string, Set<HTMLButtonElement>>();
@@ -340,15 +344,17 @@ function registerDockItem(): void {
 }
 
 async function loadLayoutSettings(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
+  const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY, LIBRARY_MINIMIZED_KEY]).catch(() => ({}));
   if (!lifecycleActive()) return;
+  state.libraryMinimized = stored[LIBRARY_MINIMIZED_KEY] === true;
   const width = Number(stored[WIDTH_KEY]);
   const height = Number(stored[HEIGHT_KEY]);
   const top = Number(stored[TOP_KEY]);
+  const minimum = panelMinimums();
   const layout = await restoreOverlayPanelBox("music", {
     side: state.side,
-    minWidth: FULL_MIN_WIDTH,
-    minHeight: FULL_MIN_HEIGHT,
+    minWidth: minimum.minWidth,
+    minHeight: minimum.minHeight,
     defaultWidth: state.width,
     defaultHeight: state.height,
     legacy: { width, height, topOffset: top },
@@ -359,6 +365,7 @@ async function loadLayoutSettings(): Promise<void> {
   state.topOffset = layout.topOffset;
   state.layoutReady = true;
   applyLayout();
+  render();
 }
 
 async function loadTheme(): Promise<void> {
@@ -405,6 +412,13 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
         if (audio) audio.volume = state.playback.volume;
         render();
       }
+    }
+    if (changes[LIBRARY_MINIMIZED_KEY]) {
+      state.libraryMinimized = changes[LIBRARY_MINIMIZED_KEY].newValue === true;
+      state.width = clampWidth(state.width);
+      state.height = clampHeight(state.height);
+      applyLayout();
+      render();
     }
   };
   chrome.storage.onChanged.addListener(storageListener);
@@ -547,7 +561,8 @@ function ensureRoot(): void {
       <div class="milxdy-music-error" data-role="error" hidden></div>
       <main class="milxdy-music-body" data-role="body"></main>
       <footer class="milxdy-music-player" data-role="player"></footer>
-      <div class="milxdy-music-resize-grip" data-role="resize" data-resize-axis="both" title="Drag to resize"></div>
+      <div class="milxdy-music-resize-grip milxdy-music-resize-grip-left" data-role="resize" data-resize-axis="both" data-resize-side="left" title="Drag to resize"></div>
+      <div class="milxdy-music-resize-grip milxdy-music-resize-grip-right" data-role="resize" data-resize-axis="both" data-resize-side="right" title="Drag to resize"></div>
       <div class="milxdy-music-resize-edge milxdy-music-resize-edge-side" data-role="resize" data-resize-axis="x" title="Drag to resize width"></div>
       <div class="milxdy-music-resize-edge milxdy-music-resize-edge-bottom" data-role="resize" data-resize-axis="y" title="Drag to resize height"></div>
     </div>
@@ -599,7 +614,7 @@ function toggleLibraryMinimized(): void {
     ? clampHeight(Math.min(state.height, COMPACT_DEFAULT_HEIGHT))
     : clampHeight(state.height);
   notePanelInteraction();
-  void chrome.storage.local.set({ [WIDTH_KEY]: state.width, [HEIGHT_KEY]: state.height });
+  void chrome.storage.local.set({ [LIBRARY_MINIMIZED_KEY]: state.libraryMinimized, [WIDTH_KEY]: state.width, [HEIGHT_KEY]: state.height });
   applyLayout();
   render();
 }
@@ -3237,11 +3252,12 @@ function applyLayout(): void {
   if (!root) return;
   registerOverlayAppRoot("music", root);
   const minimum = panelMinimums();
-  const box = clampOverlayPanelBox(panelBox(), { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side });
+  const box = constrainPanelBox(clampOverlayPanelBox(panelBox(), { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side }));
   state.x = box.x ?? state.x;
   state.width = box.width;
   state.height = box.height;
   state.topOffset = box.topOffset;
+  root.dataset.minimized = String(state.libraryMinimized);
   root.dataset.playerSize = compactPlayerSize();
   root.style.left = `${state.x}px`;
   root.style.right = "auto";
@@ -3295,10 +3311,11 @@ function panelPointerOptions() {
     side: () => state.side,
     box: panelBox,
     setBox: (box: Partial<ReturnType<typeof panelBox>>) => {
-      if (box.x !== undefined) state.x = box.x;
-      if (box.width !== undefined) state.width = box.width;
-      if (box.height !== undefined) state.height = box.height;
-      if (box.topOffset !== undefined) state.topOffset = box.topOffset;
+      const next = constrainPanelBox({ ...panelBox(), ...box });
+      state.x = next.x;
+      state.width = next.width;
+      state.height = next.height;
+      state.topOffset = next.topOffset;
     },
     apply: applyLayout,
     persist: () => undefined,
@@ -3307,17 +3324,17 @@ function panelPointerOptions() {
 
 function clampTopOffset(value: number): number {
   const minimum = panelMinimums();
-  return clampOverlayPanelBox({ ...panelBox(), topOffset: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side }).topOffset;
+  return constrainPanelBox(clampOverlayPanelBox({ ...panelBox(), topOffset: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side })).topOffset;
 }
 
 function clampWidth(value: number): number {
   const minimum = panelMinimums();
-  return clampOverlayPanelBox({ ...panelBox(), width: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side }).width;
+  return constrainPanelBox(clampOverlayPanelBox({ ...panelBox(), width: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side })).width;
 }
 
 function clampHeight(value: number): number {
   const minimum = panelMinimums();
-  return clampOverlayPanelBox({ ...panelBox(), height: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side }).height;
+  return constrainPanelBox(clampOverlayPanelBox({ ...panelBox(), height: value }, { minWidth: minimum.minWidth, minHeight: minimum.minHeight, dockSide: state.side })).height;
 }
 
 function panelMinimums(): { minWidth: number; minHeight: number } {
@@ -3337,6 +3354,16 @@ function compactPlayerSize(): "normal" | "tight" | "micro" {
 
 function panelBox() {
   return { x: state.x, width: state.width, height: state.height, topOffset: state.topOffset };
+}
+
+function constrainPanelBox(box: OverlayPanelBox): ReturnType<typeof panelBox> {
+  if (!state.libraryMinimized) return { ...box, x: box.x ?? state.x };
+  return {
+    ...box,
+    x: box.x ?? state.x,
+    width: Math.min(COMPACT_MAX_WIDTH, Math.max(COMPACT_MIN_WIDTH, box.width)),
+    height: Math.min(COMPACT_MAX_HEIGHT, Math.max(COMPACT_MIN_HEIGHT, box.height)),
+  };
 }
 
 function cssEscape(value: string | null): string {

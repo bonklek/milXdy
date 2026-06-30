@@ -75,9 +75,9 @@ Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.d
 
 Current first-party Hub-managed enablement keys include Post-reading `enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links/sidebar `remiliaWikiHyperlink.settings.enabled`, and Milady Maxxer `mode`.
 
-Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open the Apps Hub once on X. The background install seeder also writes conservative defaults for heavy full-profile apps so skipping first-run leaves Music, Miladychan Portal, Beetol, RemiNet Chat, and Milady Maxxer disabled until the user enables them or chooses Full. Choosing Lite, Balanced, or Full applies manifest `hub.presets`, `hub.rail.defaultPinned`, and the matching Performance mode without importing app bundles just to change settings.
+Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open the Apps Hub once on X. The background install seeder keeps first-party apps enabled by default. Choosing Lite, Balanced, or Full applies manifest `hub.presets`, `hub.rail.defaultPinned`, and the matching Performance mode without importing app bundles just to change settings. The same setup choices remain available from the Apps Hub settings menu after first-run.
 
-Profile builds keep full app metadata in the runtime registry while excluding unavailable feature bundles, assets, and host permissions. Apps outside the current profile appear in Apps Hub as unavailable with a build-profile explanation; they do not expose Enable, Pin, or Open controls, and diagnostics mark them as unavailable rather than disabled-by-user.
+Profile builds keep the full first-party app set, assets, and host permissions. Build profile metadata may tune defaults and release labels, but it must not make an app unavailable or remove its enable, pin, or open controls.
 
 Apps Hub cards derive their compact metadata chips from the same registry fields: cost profile, rail support, privacy labels, and remote services. Keep those fields accurate when adding an app because they are both release documentation and user-facing runtime disclosure.
 

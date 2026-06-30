@@ -14,6 +14,7 @@ Root Visual Enhancements provides the baseline milXdy X/Twitter polish: visual p
 - Reload open X/Twitter tabs after changing major visual settings.
 - Use **Performance mode** separately from Appearance when you want to reduce background work.
 - Leave **Performance diagnostics** off unless you are preparing a bug report.
+- Notification tinting and reply/thread connector hints are part of the root X/Twitter visual treatment.
 
 ## Notes
 

@@ -422,26 +422,43 @@ export function injectStyles(): void {
     .miladymaxxer-panel-resize-grip {
       position: absolute;
       z-index: 30 !important;
-      right: 0;
       bottom: 0;
       display: block;
       width: 24px;
       height: 24px;
-      cursor: nwse-resize !important;
       pointer-events: auto;
       touch-action: none;
+    }
+
+    .miladymaxxer-panel-resize-grip-left {
+      left: 0;
+      cursor: nesw-resize !important;
+    }
+
+    .miladymaxxer-panel-resize-grip-right {
+      right: 0;
+      cursor: nwse-resize !important;
     }
 
     .miladymaxxer-panel-resize-grip::before {
       content: "";
       position: absolute;
-      right: 3px;
       bottom: 3px;
       width: 9px;
       height: 9px;
+      opacity: 0.82;
+    }
+
+    .miladymaxxer-panel-resize-grip-right::before {
+      right: 3px;
       border-right: 2px solid var(--miladymaxxer-panel-accent);
       border-bottom: 2px solid var(--miladymaxxer-panel-accent);
-      opacity: 0.82;
+    }
+
+    .miladymaxxer-panel-resize-grip-left::before {
+      left: 3px;
+      border-left: 2px solid var(--miladymaxxer-panel-accent);
+      border-bottom: 2px solid var(--miladymaxxer-panel-accent);
     }
 
     .miladymaxxer-panel-resize-edge {
@@ -465,19 +482,6 @@ export function injectStyles(): void {
     .miladymaxxer-panel[data-side="right"] .miladymaxxer-panel-resize-edge-side {
       right: auto;
       left: 0;
-    }
-
-    .miladymaxxer-panel[data-side="right"] .miladymaxxer-panel-resize-grip {
-      right: auto;
-      left: 0;
-      cursor: nesw-resize !important;
-    }
-
-    .miladymaxxer-panel[data-side="right"] .miladymaxxer-panel-resize-grip::before {
-      right: auto;
-      left: 3px;
-      border-right: 0;
-      border-left: 2px solid var(--miladymaxxer-panel-accent);
     }
 
     .miladymaxxer-panel-resize-edge-bottom {
@@ -666,7 +670,7 @@ export function injectStyles(): void {
 
     /* Player level badge — right of logo */
     .miladymaxxer-player-level {
-      display: block !important;
+      display: none !important;
       color: #2f4d0c !important;
       font-size: 10px !important;
       font-weight: 600 !important;
@@ -2178,6 +2182,69 @@ export function injectStyles(): void {
     html[data-milxdy-reskin-profile="max"] [data-miladymaxxer-effect="milady"] [data-testid="Tweet-User-Avatar"] *,
     html[data-milxdy-reskin-profile="max"] [data-miladymaxxer-effect="milady"] img[src*="profile_images"] {
       border-radius: 7px !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] {
+      margin: 0 !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      outline: 0 !important;
+      outline-offset: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      filter: none !important;
+      transform: none !important;
+      overflow: visible !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"]:hover {
+      transform: none !important;
+      box-shadow: none !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"]::before,
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"]::after,
+    html:not([data-milxdy-reskin-profile="max"]) article [data-miladymaxxer-quote]::before,
+    html:not([data-milxdy-reskin-profile="max"]) article [data-miladymaxxer-quote]::after {
+      content: none !important;
+      display: none !important;
+      animation: none !important;
+      background: transparent !important;
+      border: 0 !important;
+      box-shadow: none !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article [data-miladymaxxer-quote],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="quoteTweet"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="tweetPhoto"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="videoPlayer"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="card.wrapper"] {
+      border-color: inherit !important;
+      border-radius: inherit !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      filter: none !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="Tweet-User-Avatar"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="Tweet-User-Avatar"] *,
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] img[src*="profile_images"] {
+      filter: none !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="like"] svg,
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="like"] span {
+      color: inherit !important;
+      transform: none !important;
+    }
+
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="downvote"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [data-testid="dislike"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [aria-label*="Downvote"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [aria-label*="downvote"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [aria-label*="Dislike"],
+    html:not([data-milxdy-reskin-profile="max"]) article[data-miladymaxxer-effect="milady"] [aria-label*="dislike"] {
+      display: revert !important;
     }
 
     @media (prefers-reduced-motion: reduce) {

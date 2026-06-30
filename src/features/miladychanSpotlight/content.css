@@ -511,16 +511,22 @@
 .milxdy-chan-resize-grip {
   position: absolute;
   z-index: 3;
-  right: 0;
   bottom: 0;
   width: 18px;
   height: 18px;
+}
+
+.milxdy-chan-resize-grip-left {
+  left: 0;
+  cursor: nesw-resize;
+}
+
+.milxdy-chan-resize-grip-right {
+  right: 0;
   cursor: nwse-resize;
 }
 
-#milxdy-miladychan-root[data-side="right"] .milxdy-chan-resize-grip {
-  right: auto;
-  left: 0;
+#milxdy-miladychan-root[data-side="right"] .milxdy-chan-resize-grip-left {
   cursor: nesw-resize;
 }
 

@@ -4,7 +4,6 @@ import { dirname, resolve } from "node:path";
 import { createRequire } from "node:module";
 import esbuild from "esbuild";
 import { commonAssetDirs, webAccessibleMatches } from "./release-builds.mjs";
-import { appIncludedInBuildProfile, hostPermissionsForProfile } from "./release-registry.mjs";
 
 const watch = process.argv.includes("--watch");
 const target = readTarget();
@@ -12,7 +11,7 @@ const buildProfile = readProfile();
 const outDir = buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`;
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const registryApps = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
-const firstPartyApps = registryApps.filter((app) => appIncludedInBuildProfile(app, buildProfile));
+const firstPartyApps = registryApps;
 const require = createRequire(import.meta.url);
 const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
 
@@ -168,8 +167,7 @@ async function writeManifest() {
 }
 
 function buildHostPermissions(existing) {
-  if (buildProfile === "full") return existing;
-  return hostPermissionsForProfile(registryApps, buildProfile);
+  return existing;
 }
 
 function buildWebAccessibleResources(existing) {

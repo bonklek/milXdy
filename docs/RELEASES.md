@@ -14,7 +14,7 @@ The public beta endpoint should be:
 export const GITHUB_RELEASES_API_URL = "https://api.github.com/repos/bonklek/milXdy/releases?per_page=20";
 ```
 
-Release tags should be semantic versions with an optional `v` prefix, such as `v0.1.3`. Beta releases should be published as GitHub prereleases with a predictable `milXdy*.zip` asset. The manifest version in `public/manifest.json` is the installed version used for comparison.
+Release tags should be semantic versions with an optional `v` prefix, such as `v0.2.1`. The normal in-extension update channel tracks normal published GitHub releases and ignores drafts/prereleases. Mark a release as a GitHub prerelease only when it is meant for an experimental channel or manual tester handoff outside the normal update path. Release assets should use predictable `milXdy*.zip` names. The manifest version in `public/manifest.json` is the installed version used for comparison.
 
 ## Build
 
@@ -68,14 +68,14 @@ Also verify:
 - SHA-256 checksum manifest in `release/milXdy-<version>-checksums.sha256`
 - reproducibility verification with `npm run verify:release:reproducible`
 - changelog entry
-- 0.2.0 QA checklist, when cutting a 0.2.x platform beta
-- 0.2.0 Chrome live QA guide, when cutting a platform beta
+- version-specific release notes, such as `docs/RELEASE_NOTES_0.2.1.md`
+- 0.2.x QA checklist or Chrome live QA guide, when cutting a platform beta
 - `window.__milxdy020LiveProbe` evidence from the live X/Twitter tab for 0.2.x platform betas
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
 - no local browser caches or machine-specific test output in source or release archives
 - `.gitignore` contains secret-file rules for `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`, `*.p12`, and `*.pfx`
-- GitHub release is marked as a prerelease for beta versions
+- GitHub release state matches the intended update channel: normal published releases for the normal updater, prereleases only for experimental tester builds
 
 ## Push Policy
 

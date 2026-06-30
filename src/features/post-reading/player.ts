@@ -1,7 +1,7 @@
 import { icon } from "./icons";
 import type { BoundarySupport } from "./speech";
 import type { OcrProgress } from "./ocr";
-import type { PostReadingSettings, SpeechState } from "./shared/types";
+import type { PostReadingSettings, SpeechState, VoiceGenderFilter } from "./shared/types";
 import { knownVoiceBoundarySupport } from "./voiceSupport";
 import type { OverlayAppFrame } from "../../shared/overlayAppFrame";
 import { animateOverlayAppClose, animateOverlayAppOpen, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../shared/overlayAppChrome";
@@ -25,7 +25,7 @@ type PlayerActions = {
   onBoundarySupportChange: (results: Record<string, BoundarySupport>) => void;
   getVoices: () => SpeechSynthesisVoice[];
   getPreferredVoice: () => SpeechSynthesisVoice | null;
-  probeBoundarySupport: (voice: SpeechSynthesisVoice) => Promise<boolean>;
+  probeBoundarySupport: (voice: SpeechSynthesisVoice, signal?: AbortSignal) => Promise<boolean>;
 };
 
 export class MiniPlayer {
@@ -55,16 +55,18 @@ export class MiniPlayer {
   private closing = false;
   private boundarySupport = new Map<string, BoundarySupport>();
   private probingVoices = false;
+  private probeAbort: AbortController | null = null;
 
   constructor(settings: PostReadingSettings, actions: PlayerActions) {
     this.settings = settings;
     this.actions = actions;
     ensureOverlayAppChromeStyles();
     this.root = document.createElement("div");
-    this.root.className = "post-reading-player milxdy-overlay-app-shell";
+    this.root.className = "post-reading-player";
     prepareOverlayAppRoot(this.root);
     this.root.dataset.visible = "false";
     this.root.dataset.position = settings.playerPosition;
+    this.root.dataset.settingsOpen = "false";
     this.root.setAttribute("role", "region");
     this.root.setAttribute("aria-label", "Post-reading controls");
     for (const type of ["click", "mousedown", "mouseup", "pointerdown", "pointerup"]) {
@@ -72,14 +74,15 @@ export class MiniPlayer {
     }
 
     const card = document.createElement("div");
-    card.className = "post-reading-box milxdy-overlay-app-card";
+    card.className = "post-reading-box";
     const resizeSide = resizeHandle("post-reading-resize-edge post-reading-resize-edge-side", "Drag to resize width", "x", (event) => this.startResize(event, "x"));
     const resizeBottom = resizeHandle("post-reading-resize-edge post-reading-resize-edge-bottom", "Drag to resize height", "y", (event) => this.startResize(event, "y"));
-    const resizeGrip = resizeHandle("post-reading-resize-grip", "Drag to resize", "both", (event) => this.startResize(event, "both"));
+    const resizeGripLeft = resizeHandle("post-reading-resize-grip post-reading-resize-grip-left", "Drag to resize", "both", (event) => this.startResize(event, "both"), "left");
+    const resizeGripRight = resizeHandle("post-reading-resize-grip post-reading-resize-grip-right", "Drag to resize", "both", (event) => this.startResize(event, "both"), "right");
     const shell = document.createElement("div");
     shell.className = "post-reading-shell";
     const header = document.createElement("div");
-    header.className = "post-reading-panel-header milxdy-overlay-app-header";
+    header.className = "post-reading-panel-header";
     this.header = header;
     header.addEventListener("pointerdown", (event) => this.startDrag(event));
     const heading = document.createElement("div");
@@ -122,6 +125,7 @@ export class MiniPlayer {
     const settingsButton = controlButton("Settings", "settings", () => {
       this.settingsPanel.hidden = !this.settingsPanel.hidden;
       this.root.dataset.settingsOpen = String(!this.settingsPanel.hidden);
+      this.applyFrameLayout();
       if (!this.settingsPanel.hidden) this.renderSettings();
     });
     const close = controlButton("Minimize player", "minimize", () => this.close());
@@ -158,7 +162,7 @@ export class MiniPlayer {
     header.append(heading, headerActions);
     controls.append(prev, prevChunk, this.playButton, nextChunk, next, this.skipOcrButton);
     shell.append(header, controls, this.ocrStatus);
-    card.append(shell, this.settingsPanel, resizeSide, resizeBottom, resizeGrip);
+    card.append(shell, this.settingsPanel, resizeSide, resizeBottom, resizeGripLeft, resizeGripRight);
     this.root.append(card);
     document.body.appendChild(this.root);
     this.originalParent = document.body;
@@ -255,8 +259,10 @@ export class MiniPlayer {
   }
 
   close(): void {
+    this.stopProbe();
     this.settingsPanel.hidden = true;
     this.root.dataset.settingsOpen = "false";
+    this.applyFrameLayout();
     this.closing = true;
     this.actions.onStop();
     animateOverlayAppClose(this.root, () => {
@@ -310,7 +316,8 @@ export class MiniPlayer {
     this.root.style.right = "auto";
     this.root.style.top = `${this.y}px`;
     this.root.style.width = `${this.width}px`;
-    this.root.style.height = `${this.height}px`;
+    this.root.style.height = this.settingsPanel.hidden ? "auto" : `${this.height}px`;
+    this.root.style.setProperty("--post-reading-settings-max-height", `${this.height}px`);
     this.root.dataset.panelSide = side;
     markOverlayAppLayoutReady(this.root, this.layoutReady);
   }
@@ -406,11 +413,52 @@ export class MiniPlayer {
     }
     this.settingsPanel.append(tabs, this.settingsBody);
 
-    const sortedVoices = sortVoicesByBoundarySupport(voices, this.boundarySupport);
+    const voiceLanguageOptions = languageFilterOptions(voices);
+    const voiceLanguageFilter = voiceLanguageOptions.some((option) => option.value === this.settings.voiceLanguageFilter)
+      ? this.settings.voiceLanguageFilter
+      : "all";
+    const voiceGenderFilter = normalizeVoiceGenderFilter(this.settings.voiceGenderFilter);
+    const filteredVoices = filterVoices(voices, voiceLanguageFilter, voiceGenderFilter);
+    const sortedVoices = sortVoicesByBoundarySupport(filteredVoices, this.boundarySupport);
+    const currentVoice = voices.find((voice) => voice.voiceURI === this.settings.voiceURI) || null;
+    const preferredVoice = this.actions.getPreferredVoice();
+    const probeVoices = voicesForProbe(currentVoice || preferredVoice, sortedVoices);
+    const voiceFilterRow = document.createElement("div");
+    voiceFilterRow.className = "post-reading-voice-row";
+    const languageLabel = document.createElement("label");
+    languageLabel.className = "post-reading-language-filter";
+    languageLabel.textContent = "Lang";
+    const languageSelect = document.createElement("select");
+    languageSelect.title = "Voice language filter";
+    for (const option of voiceLanguageOptions) languageSelect.append(new Option(option.label, option.value));
+    languageSelect.value = voiceLanguageFilter;
+    languageSelect.addEventListener("change", () => {
+      this.update({ voiceLanguageFilter: languageSelect.value });
+    });
+    languageLabel.append(languageSelect);
+    const genderLabel = document.createElement("label");
+    genderLabel.className = "post-reading-gender-filter";
+    genderLabel.textContent = "Gender";
+    const genderSelect = document.createElement("select");
+    genderSelect.title = "Voice gender filter";
+    genderSelect.append(
+      new Option("Any", "all"),
+      new Option("Female", "female"),
+      new Option("Male", "male"),
+    );
+    genderSelect.value = voiceGenderFilter;
+    genderSelect.addEventListener("change", () => {
+      this.update({ voiceGenderFilter: normalizeVoiceGenderFilter(genderSelect.value) });
+    });
+    genderLabel.append(genderSelect);
     const voiceLabel = document.createElement("label");
+    voiceLabel.className = "post-reading-voice-select";
     voiceLabel.textContent = "Voice";
     const voiceSelect = document.createElement("select");
     voiceSelect.append(new Option("System default", ""));
+    if (currentVoice && !sortedVoices.some((voice) => voice.voiceURI === currentVoice.voiceURI)) {
+      voiceSelect.append(new Option(`${currentVoice.name} (${currentVoice.lang})`, currentVoice.voiceURI));
+    }
     for (const voice of sortedVoices) {
       const support = this.boundarySupport.get(voice.voiceURI) ?? knownVoiceBoundarySupport(voice);
       const suffix = support === "supported" ? " - highlights" : support === "unsupported" ? " - no word sync" : "";
@@ -419,11 +467,13 @@ export class MiniPlayer {
     voiceSelect.value = this.settings.voiceURI || "";
     voiceSelect.addEventListener("change", () => this.update({ voiceURI: voiceSelect.value || null }));
     voiceLabel.append(voiceSelect);
+    voiceFilterRow.append(languageLabel, genderLabel, voiceLabel);
 
-    const selectedVoice = this.actions.getPreferredVoice();
     const voiceHint = document.createElement("div");
     voiceHint.className = "post-reading-hint";
-    voiceHint.textContent = selectedVoice ? `Default: ${selectedVoice.name}` : "Default: system voice";
+    voiceHint.textContent = preferredVoice
+      ? `Default: ${preferredVoice.name}`
+      : "Default: system voice";
     const engine = selectInput("Engine", this.settings.ttsEngine, [
       ["web-speech", "Browser Web Speech"],
       ["custom-http", "Custom HTTP endpoint"],
@@ -446,10 +496,11 @@ export class MiniPlayer {
     const probeButton = document.createElement("button");
     probeButton.type = "button";
     probeButton.className = "post-reading-secondary";
-    probeButton.textContent = this.probingVoices ? "Testing voices..." : "Test voice highlighting";
-    probeButton.disabled = this.probingVoices || voices.length === 0;
+    probeButton.textContent = this.probingVoices ? "Stop testing voices" : "Test voice highlighting";
+    probeButton.disabled = !this.probingVoices && probeVoices.length === 0;
     probeButton.addEventListener("click", () => {
-      void this.probeVoices(sortedVoices);
+      if (this.probingVoices) this.stopProbe();
+      else void this.probeVoices(probeVoices);
     });
 
     const speedLabel = document.createElement("label");
@@ -516,7 +567,7 @@ export class MiniPlayer {
       if (this.settings.ttsEngine === "custom-http") {
         body.append(customEndpoint, customTiming, customHint);
       } else {
-        body.append(voiceLabel, voiceHint, probeButton);
+        body.append(voiceFilterRow, voiceHint, probeButton);
       }
       body.append(speedLabel, volumeLabel, keyPlayPause, keyNextChunk, keyPreviousChunk);
       if (!isWikiAttached) body.append(keySkipOcr);
@@ -546,23 +597,36 @@ export class MiniPlayer {
   }
 
   private async probeVoices(voices: SpeechSynthesisVoice[]): Promise<void> {
+    if (this.probingVoices) return;
     this.probingVoices = true;
+    this.probeAbort = new AbortController();
+    const signal = this.probeAbort.signal;
     this.renderSettings();
-    for (const voice of voices) {
-      if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
-      if (knownVoiceBoundarySupport(voice) === "supported") {
-        this.boundarySupport.set(voice.voiceURI, "supported");
+    try {
+      for (const voice of voices) {
+        if (signal.aborted) break;
+        if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
+        if (knownVoiceBoundarySupport(voice) === "supported") {
+          this.boundarySupport.set(voice.voiceURI, "supported");
+          this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
+          this.renderSettings();
+          continue;
+        }
+        const supported = await this.actions.probeBoundarySupport(voice, signal);
+        if (signal.aborted) break;
+        this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");
         this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
         this.renderSettings();
-        continue;
       }
-      const supported = await this.actions.probeBoundarySupport(voice);
-      this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");
-      this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
+    } finally {
+      this.probingVoices = false;
+      this.probeAbort = null;
       this.renderSettings();
     }
-    this.probingVoices = false;
-    this.renderSettings();
+  }
+
+  private stopProbe(): void {
+    this.probeAbort?.abort();
   }
 }
 
@@ -585,6 +649,57 @@ function supportRank(value: BoundarySupport): number {
   if (value === "supported") return 0;
   if (value === "unknown") return 1;
   return 2;
+}
+
+function languageFilterOptions(voices: SpeechSynthesisVoice[]): Array<{ value: string; label: string }> {
+  const languages = Array.from(new Set(voices.map((voice) => languageFilterValue(voice.lang)).filter(Boolean))).sort();
+  return [
+    { value: "all", label: "ALL" },
+    ...languages.map((language) => ({ value: language, label: language.toUpperCase() })),
+  ];
+}
+
+function filterVoicesByLanguage(voices: SpeechSynthesisVoice[], language: string): SpeechSynthesisVoice[] {
+  if (!language || language === "all") return voices;
+  return voices.filter((voice) => languageFilterValue(voice.lang) === language);
+}
+
+function filterVoices(voices: SpeechSynthesisVoice[], language: string, gender: VoiceGenderFilter): SpeechSynthesisVoice[] {
+  return filterVoicesByGender(filterVoicesByLanguage(voices, language), gender);
+}
+
+function filterVoicesByGender(voices: SpeechSynthesisVoice[], gender: VoiceGenderFilter): SpeechSynthesisVoice[] {
+  if (gender === "all") return voices;
+  return voices.filter((voice) => inferVoiceGender(voice) === gender);
+}
+
+function normalizeVoiceGenderFilter(value: string): VoiceGenderFilter {
+  return value === "female" || value === "male" ? value : "all";
+}
+
+function inferVoiceGender(voice: SpeechSynthesisVoice): Exclude<VoiceGenderFilter, "all"> | "unknown" {
+  const name = voice.name.toLowerCase();
+  if (/\b(female|woman|girl|zira|susan|samantha|victoria|karen|moira|tessa|veena|fiona|serena|amelie|anna|paulina|luciana|joana|monica|mei-jia|ting-ting|yuna|kyoko|o-ren|sabina|helena|laura|alice|audrey)\b/i.test(name)) {
+    return "female";
+  }
+  if (/\b(male|man|boy|david|mark|daniel|alex|fred|tom|thomas|jorge|juan|diego|lekha|rishi|damayanti|nicolas|xander|oliver|arthur|albert)\b/i.test(name)) {
+    return "male";
+  }
+  return "unknown";
+}
+
+function voicesForProbe(primary: SpeechSynthesisVoice | null, voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
+  const ordered = primary ? [primary, ...voices] : voices;
+  const seen = new Set<string>();
+  return ordered.filter((voice) => {
+    if (seen.has(voice.voiceURI)) return false;
+    seen.add(voice.voiceURI);
+    return true;
+  });
+}
+
+function languageFilterValue(language: string): string {
+  return (language || "").split(/[-_]/)[0]?.trim().toLowerCase().slice(0, 3) || "";
 }
 
 function selectInput(labelText: string, value: string, options: Array<[string, string]>, onChange: (value: string) => void): HTMLLabelElement {
@@ -663,11 +778,13 @@ function resizeHandle(
   title: string,
   axis: "both" | "x" | "y",
   onPointerDown: (event: PointerEvent) => void,
+  side?: "left" | "right",
 ): HTMLDivElement {
   const handle = document.createElement("div");
   handle.className = className;
   handle.dataset.postReadingResize = "true";
   handle.dataset.resizeAxis = axis;
+  if (side) handle.dataset.resizeSide = side;
   handle.title = title;
   handle.addEventListener("pointerdown", onPointerDown);
   return handle;

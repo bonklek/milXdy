@@ -19,6 +19,7 @@ const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
 const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
 const SESSION_PROBE_PATH = '/api/beetle/user';
+const AUTH_SESSION_PROBE_PATH = '/api/profile/whoami';
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
   'beetol:logout',
@@ -73,18 +74,18 @@ async function clearStoredAuth() {
 }
 
 async function adoptBrowserSession(options = {}) {
-  return adoptRemiliaBrowserSession(SESSION_PROBE_PATH, options);
+  return adoptRemiliaBrowserSession(AUTH_SESSION_PROBE_PATH, options);
 }
 
 async function refreshAccessToken() {
-  const result = await renewRemiliaAuth(SESSION_PROBE_PATH);
+  const result = await renewRemiliaAuth(AUTH_SESSION_PROBE_PATH);
   return result.ok;
 }
 
 async function remiliaFetch(method, path, body, retry = true) {
   if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true };
   await migrateAuth();
-  const prepared = await prepareRemiliaAuth(SESSION_PROBE_PATH);
+  const prepared = await prepareRemiliaAuth(AUTH_SESSION_PROBE_PATH);
   const accessToken = prepared.token;
   if (!accessToken) return { ok: false, authRequired: true };
   await setRemiliaAuthCookie(accessToken);
@@ -262,11 +263,16 @@ async function pokeUser(username) {
   const cleanUsername = normalizeUsername(username);
   if (!cleanUsername) return { ok: false, error: 'MISSING_USERNAME' };
   const result = await remiliaPokeFetch(cleanUsername);
-  if (!result.ok) return result;
+  if (!result.ok) {
+    const cooldownMs = !result.authRequired && isExplicitPokeCooldownResponse(result)
+      ? extractCooldownMs(result.data)
+      : 0;
+    return cooldownMs > 0 ? { ...result, cooldownMs } : result;
+  }
 
   const data = result.data || {};
   const responseCooldownMs = extractCooldownMs(data);
-  if (data.success === false || data.ok === false) {
+  if (data.success === false || data.ok === false || isExplicitPokeCooldownResponse(result)) {
     return {
       ok: false,
       status: result.status,
@@ -427,17 +433,29 @@ async function remiliaPokeFetch(username) {
   for (const attempt of attempts) {
     const result = await remiliaRequest('POST', '/api/pokeUser', { username }, attempt);
     results.push(summarizeRequestResult(result));
-    if (result.ok && result.data?.success !== false && result.data?.ok !== false) {
+    if (result.ok && result.data?.success !== false && result.data?.ok !== false && !isExplicitPokeCooldownResponse(result)) {
       const accepted = {
         ...result,
         ok: true,
         username,
         authMethod: attempt.authMethod,
-        cooldownMs: extractCooldownMs(result.data) || POKE_COOLDOWN_MS,
+        cooldownMs: extractCooldownMs(result.data),
         attempts,
       };
       await storePokeDiagnostic(accepted);
       return accepted;
+    }
+    if (result.ok && isExplicitPokeCooldownResponse(result)) {
+      const rejected = {
+        ...result,
+        ok: false,
+        username,
+        authMethod: attempt.authMethod,
+        cooldownMs: extractCooldownMs(result.data),
+        error: result.data?.message || result.data?.error || 'POKE_COOLDOWN',
+      };
+      await storePokeDiagnostic(rejected);
+      return rejected;
     }
     if (result.status && result.status !== 401 && result.status !== 403) {
       await storePokeDiagnostic({ ok: false, username, attempts: results });
@@ -561,6 +579,31 @@ function isCooldownMessage(message) {
   return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
 }
 
+function isExplicitPokeCooldownResponse(response) {
+  if (!response || response.authRequired) return false;
+  const data = response.data || {};
+  const nested = data.data || {};
+  const fields = [
+    response.error,
+    data.error,
+    data.message,
+    data.reason,
+    data.code,
+    nested.error,
+    nested.message,
+    nested.reason,
+    nested.code,
+  ];
+  return fields.some(isExplicitPokeCooldownText);
+}
+
+function isExplicitPokeCooldownText(value) {
+  const text = String(value || '');
+  return /already\s+poked|poke(?:\s+is)?\s+on\s+cool\s*down|poke\s+cool\s*down|cool\s*down/i.test(text)
+    || /try again(?:\s+\w+){0,4}\s+to\s+poke/i.test(text)
+    || /try again(?:\s+\w+){0,4}\s+(?:after|when|once)(?:\s+\w+){0,4}\s+cool\s*down/i.test(text);
+}
+
 function normalizeCooldownMs(value) {
   if (value == null || value === false) return 0;
   if (typeof value === 'number') {
@@ -650,7 +693,7 @@ async function getAuthStatus() {
       method: adopted.token ? 'sso' : 'session',
     };
   }
-  const renewed = await renewRemiliaAuth(SESSION_PROBE_PATH);
+  const renewed = await renewRemiliaAuth(AUTH_SESSION_PROBE_PATH);
   if (renewed.ok) {
     return authStatusFromWhoami(renewed.method || 'token');
   }

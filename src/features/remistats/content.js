@@ -1,5 +1,6 @@
 import { safeRuntimeMessage } from "../../shared/extensionRuntime";
 import { recordFeatureTiming } from "../../shared/performanceDiagnostics";
+import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../shared/reskinProfile";
 import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
 
 // Content script for overlaying user scores on X.com.
@@ -37,6 +38,7 @@ const BANNERS_NFT_SUPPLY = 2000;
 const BANNERS_NFT_CONTRACT = '0x1352149Cd78D686043B504e7e7D96C5946b0C39c';
 const BANNER_MODES = ['original', 'shelf', 'nft'];
 const POKE_COOLDOWN_STORAGE_KEY = 'milxdy.remistats.pokeCooldowns';
+const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // Cache for user scores
 const scoreCache = new Map();
@@ -95,11 +97,42 @@ function usernameFromStatusHref(href) {
   return match ? cleanRouteUsername(match[1]) : null;
 }
 
+function surfaceOwnsNode(surface, node) {
+  if (!surface || !node || !surface.contains(node)) return false;
+  const owningTweet = node.closest?.('[data-testid="tweet"]');
+  if (owningTweet && owningTweet !== surface && surface.contains(owningTweet)) return false;
+  const quoteTweet = node.closest?.('[data-testid="quoteTweet"]');
+  if (quoteTweet && quoteTweet !== surface && surface.contains(quoteTweet)) return false;
+  return true;
+}
+
+function surfaceIsInsideQuoteTweet(surface) {
+  const quoteTweet = surface?.closest?.('[data-testid="quoteTweet"]');
+  return Boolean(quoteTweet && quoteTweet !== surface);
+}
+
+function findOwnedNode(surface, selector) {
+  return Array.from(surface?.querySelectorAll?.(selector) || [])
+    .find((node) => surfaceOwnsNode(surface, node)) || null;
+}
+
+function findOwnedUserName(surface) {
+  return findOwnedNode(surface, '[data-testid="User-Name"]');
+}
+
+function findOwnedHeaderTime(surface) {
+  const userName = findOwnedUserName(surface);
+  if (!userName) return null;
+  return Array.from(userName.querySelectorAll('time'))
+    .find((node) => surfaceOwnsNode(surface, node)) || null;
+}
+
 // Find the first profile-link username inside a container, skipping routes
 // like /messages/<id> that appear in DM cells before the avatar link.
 function findUsernameInLinks(container) {
   const links = container.querySelectorAll('a[href^="/"]');
   for (const link of links) {
+    if (!surfaceOwnsNode(container, link)) continue;
     const href = link.getAttribute('href');
     if (href.includes('/status/')) continue;
     const match = href.match(/^\/([^\/\?#]+)(?:\/|$)/);
@@ -113,7 +146,7 @@ function findUsernameInLinks(container) {
 
 function findTweetAuthorUsername(tweet) {
   const userNameContainer = Array.from(tweet.querySelectorAll('[data-testid="User-Name"]'))
-    .find((node) => !node.closest('[data-testid="quoteTweet"]'));
+    .find((node) => surfaceOwnsNode(tweet, node));
   if (userNameContainer) {
     for (const link of Array.from(userNameContainer.querySelectorAll('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))) {
       const href = link.getAttribute('href');
@@ -125,7 +158,7 @@ function findTweetAuthorUsername(tweet) {
   }
 
   const statusLink = Array.from(tweet.querySelectorAll('a[href*="/status/"]'))
-    .find((link) => !link.closest('[data-testid="quoteTweet"]'));
+    .find((link) => surfaceOwnsNode(tweet, link));
   const fromStatus = usernameFromStatusHref(statusLink?.getAttribute('href'));
   if (fromStatus) return fromStatus;
 
@@ -134,7 +167,7 @@ function findTweetAuthorUsername(tweet) {
 
 // Extract username from X's avatar testid convention: UserAvatar-Container-<username>
 function extractUsernameFromAvatar(container) {
-  const avatar = container.querySelector('[data-testid^="UserAvatar-Container-"]');
+  const avatar = findOwnedNode(container, '[data-testid^="UserAvatar-Container-"]');
   if (avatar) {
     const testid = avatar.getAttribute('data-testid');
     const candidate = cleanRouteUsername(testid.replace('UserAvatar-Container-', '').trim());
@@ -200,7 +233,8 @@ const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
 let incomingPokeCache = null;
-let visualTheme = {};
+let visualTheme = DEFAULT_VISUAL_THEME;
+let pokeAutoLikeEnabled = false;
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -219,6 +253,19 @@ function escapeHtml(value) {
     '"': '&quot;',
     "'": '&#39;',
   }[char]));
+}
+
+function finiteNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function nonNegativeNumber(value, fallback = 0) {
+  return Math.max(0, finiteNumber(value, fallback));
+}
+
+function formatMetric(value, fallback = 0) {
+  return String(nonNegativeNumber(value, fallback));
 }
 
 function cssEscape(value) {
@@ -243,6 +290,11 @@ async function loadIconSettings() {
   applyIconSettings();
 }
 
+async function loadPokeAutoLikeSetting() {
+  const settings = await chrome.storage.sync.get({ 'milxdy.remistats.pokeAutoLike': false });
+  pokeAutoLikeEnabled = settings['milxdy.remistats.pokeAutoLike'] === true;
+}
+
 async function loadPokeThemeSettings() {
   const settings = await chrome.storage.local.get({
     beetolColor: 'red',
@@ -256,13 +308,27 @@ function applyPokeThemeSettings(color, mode) {
   document.documentElement.dataset.reminetPokeMode = POKE_THEME_MODES.has(mode) ? mode : 'dark';
 }
 
+function normalizeRemistatsVisualTheme(value) {
+  const normalized = normalizeVisualTheme(value);
+  const record = value && typeof value === 'object' ? value : {};
+  const pokePlacement = record.pokePlacement === 'top' || record.pokePlacement === 'actions'
+    ? record.pokePlacement
+    : DEFAULT_VISUAL_THEME.pokePlacement;
+  return { ...normalized, pokePlacement };
+}
+
 async function loadVisualThemeSettings() {
-  const settings = await chrome.storage.local.get({ 'milxdy.settings.visualTheme': {} });
-  visualTheme = settings['milxdy.settings.visualTheme'] || {};
+  const settings = await chrome.storage.local.get({ 'milxdy.settings.visualTheme': DEFAULT_VISUAL_THEME });
+  const nextTheme = normalizeRemistatsVisualTheme(settings['milxdy.settings.visualTheme']);
+  const previousPlacement = visualTheme.pokePlacement;
+  visualTheme = nextTheme;
   document.documentElement.dataset.milxdyVisualRemistatsBox = String(visualTheme.remistatsBox === true);
-  document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement === 'actions' ? 'actions' : 'top';
+  document.documentElement.dataset.milxdyVisualPokePlacement = visualTheme.pokePlacement;
   document.documentElement.dataset.milxdyVisualIncomingPokeGold = String(visualTheme.incomingPokeGold !== false);
   patchExistingBadges();
+  if (previousPlacement !== visualTheme.pokePlacement) {
+    scheduleSurfaceReconciliation([450, 2200]);
+  }
 }
 
 function applyIconSettings() {
@@ -306,8 +372,8 @@ async function processBatch(usernames) {
       }
 
       const data = response.data || {};
-      if (data.max_beetles !== undefined) maxBeetles = data.max_beetles;
-      if (data.max_score !== undefined) maxScore = data.max_score;
+      if (data.max_beetles !== undefined) maxBeetles = Math.max(1, nonNegativeNumber(data.max_beetles, maxBeetles));
+      if (data.max_score !== undefined) maxScore = Math.max(1, nonNegativeNumber(data.max_score, maxScore));
 
       if (data.user) {
         const user = data.user;
@@ -357,7 +423,9 @@ function transformApiResponse(apiUser, fallbackHandle = '') {
 }
 
 function cleanUsername(value) {
-  return typeof value === 'string' ? value.replace(/^@/, '').trim() : '';
+  if (typeof value !== 'string') return '';
+  const match = value.replace(/^@/, '').trim().match(/[A-Za-z0-9_]{1,32}/);
+  return match ? match[0] : '';
 }
 
 // Fetch user score with batching
@@ -387,9 +455,10 @@ async function fetchUserScore(username) {
     }
     
     // Set new timeout to process batch
+    const policy = remistatsFetchPolicy();
     batchTimeout = setTimeout(async () => {
-      const usernamesToFetch = Array.from(batchQueue).slice(0, CONFIG.batchSize);
-      batchQueue.clear();
+      const usernamesToFetch = Array.from(batchQueue).slice(0, policy.batchSize);
+      for (const username of usernamesToFetch) batchQueue.delete(username);
       
       // Fetch batch
       const results = await processBatch(usernamesToFetch);
@@ -403,7 +472,14 @@ async function fetchUserScore(username) {
           batchPromises.delete(user);
         }
       });
-    }, CONFIG.batchDelay);
+      if (batchQueue.size > 0) {
+        for (const username of Array.from(batchQueue)) {
+          const resolvers = batchPromises.get(username);
+          if (resolvers) resolvers.forEach(resolve => resolve(fetchUserScore(username)));
+          batchPromises.delete(username);
+        }
+      }
+    }, policy.batchDelay);
   });
 }
 
@@ -820,9 +896,10 @@ function fillProfileBadgeFromScore(slot, group, scoreData, username) {
 
 function positionBadgeSlotNearTweetTime(element, slot) {
   if (!element || !slot || slot.dataset.reminetProfileSlot === 'true') return false;
-  const timeElement = Array.from(element.querySelectorAll('time')).find((time) => !time.closest('[data-testid="quoteTweet"]'));
+  const timeElement = findOwnedHeaderTime(element);
   if (!timeElement?.parentElement) return false;
   if (slot.parentElement !== timeElement.parentElement || slot.previousSibling !== timeElement) {
+    delete slot.dataset.reminetBadgeWrapped;
     timeElement.parentElement.insertBefore(slot, timeElement.nextSibling);
   }
   return true;
@@ -833,6 +910,78 @@ function markBadgeSlotEmpty(slot) {
   slot.replaceChildren();
   slot.dataset.reminetState = 'empty';
   slot.setAttribute('aria-hidden', 'true');
+  removeEmptyBadgeRow(slot.parentElement);
+}
+
+function stabilizeTweetBadgeSlot(element, slot) {
+  if (!element || !slot || slot.dataset.reminetProfileSlot === 'true') return;
+  const tweet = element.matches?.('[data-testid="tweet"]') ? element : element.closest?.('[data-testid="tweet"]');
+  if (!tweet || !surfaceOwnsNode(tweet, slot)) return;
+  requestAnimationFrame(() => {
+    if (!document.body.contains(tweet) || !document.body.contains(slot)) return;
+    if (tweetBadgeSlotNeedsWrap(tweet, slot)) moveBadgeSlotToRow(tweet, slot);
+  });
+}
+
+function tweetBadgeSlotNeedsWrap(tweet, slot) {
+  if (slot.dataset.reminetBadgeWrapped === 'true') return false;
+  const slotRect = slot.getBoundingClientRect();
+  if (slotRect.width <= 0 || slotRect.height <= 0) return false;
+
+  const row = slot.parentElement;
+  if (row && row.scrollWidth > row.clientWidth + 2) return true;
+
+  const controlHost = tweet.querySelector('[data-milxdy-post-reading-header-controls="true"]');
+  if (controlHost && rectsOverlap(slotRect, controlHost.getBoundingClientRect(), 4)) return true;
+
+  const controls = Array.from(tweet.querySelectorAll('[data-milxdy-tweet-slot="post-reading-header-action"], [aria-label*="Grok" i], [data-testid="caret"], [aria-label*="More" i], [aria-label*="more" i]'))
+    .filter((control) => surfaceOwnsNode(tweet, control));
+  return controls.some((control) => rectsOverlap(slotRect, control.getBoundingClientRect(), 3));
+}
+
+function rectsOverlap(left, right, pad = 0) {
+  return left.left < right.right + pad
+    && left.right + pad > right.left
+    && left.top < right.bottom + pad
+    && left.bottom + pad > right.top;
+}
+
+function moveBadgeSlotToRow(tweet, slot) {
+  const row = ensureTweetBadgeRow(tweet);
+  if (!row) return;
+  slot.dataset.reminetBadgeWrapped = 'true';
+  row.appendChild(slot);
+}
+
+function ensureTweetBadgeRow(tweet) {
+  const existing = Array.from(tweet.querySelectorAll('[data-reminet-badge-row]'))
+    .find((row) => surfaceOwnsNode(tweet, row));
+  if (existing) return existing;
+
+  const row = document.createElement('div');
+  row.className = 'reminet-badge-row';
+  row.dataset.reminetBadgeRow = 'true';
+  const tweetText = Array.from(tweet.querySelectorAll('[data-testid="tweetText"]'))
+    .find((node) => surfaceOwnsNode(tweet, node));
+  if (tweetText?.parentElement) {
+    tweetText.parentElement.insertBefore(row, tweetText);
+    return row;
+  }
+
+  const userName = Array.from(tweet.querySelectorAll('[data-testid="User-Name"]'))
+    .find((node) => surfaceOwnsNode(tweet, node));
+  const userNameBlock = userName?.parentElement;
+  if (userNameBlock?.parentElement) {
+    userNameBlock.parentElement.insertBefore(row, userNameBlock.nextSibling);
+    return row;
+  }
+
+  return null;
+}
+
+function removeEmptyBadgeRow(row) {
+  if (!row?.matches?.('[data-reminet-badge-row]')) return;
+  if (!row.querySelector('[data-reminet-badge-slot], [data-milxdy-tweet-slot="remistats-badge"]')) row.remove();
 }
 
 // Create score badge element
@@ -840,12 +989,17 @@ function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
   badge.className = 'reminet-score-badge';
   badge.setAttribute('data-reminet-badge', 'true');
-  const remiliaUsername = scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle || '';
+  const remiliaUsername = cleanUsername(scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle || '');
   if (remiliaUsername) {
     badge.dataset.reminetUsername = remiliaUsername;
   }
   
-  const beetleCount = scoreData.beetleCount || Math.floor(scoreData.score / 10);
+  const score = nonNegativeNumber(scoreData.score);
+  const beetleCount = nonNegativeNumber(scoreData.beetleCount, Math.floor(score / 10));
+  const scoreLabel = formatMetric(score);
+  const beetleLabel = formatMetric(beetleCount);
+  const maxScoreLabel = formatMetric(maxScore, 1000);
+  const maxBeetlesLabel = formatMetric(maxBeetles, 100);
   
   // Get extension URLs for images
   const beetleUrl = chrome.runtime.getURL('remistats/beetle.png');
@@ -855,11 +1009,11 @@ function createScoreBadge(scoreData, options = {}) {
     <div class="reminet-badge-content">
       <div class="reminet-badge-group" data-reminet-icon="score">
         <img src="${starUrl}" class="reminet-star" alt="" />
-        <span class="reminet-label">${scoreData.score}</span>
+        <span class="reminet-label">${scoreLabel}</span>
       </div>
       <div class="reminet-badge-group" data-reminet-icon="beetle">
         <img src="${beetleUrl}" class="reminet-beetle" alt="" />
-        <span class="reminet-label">${beetleCount}</span>
+        <span class="reminet-label">${beetleLabel}</span>
       </div>
     </div>
   `;
@@ -872,8 +1026,8 @@ function createScoreBadge(scoreData, options = {}) {
   }
   
   // Calculate progress percentages
-  const scorePercent = Math.min(100, (scoreData.score / maxScore) * 100);
-  const beetlePercent = Math.min(100, (beetleCount / maxBeetles) * 100);
+  const scorePercent = Math.min(100, (score / Math.max(1, finiteNumber(maxScore, 1000))) * 100);
+  const beetlePercent = Math.min(100, (beetleCount / Math.max(1, finiteNumber(maxBeetles, 100))) * 100);
   
   // Build PFP image URL if we have project and ID
   const pfpProject = scoreData.pfpProject ? String(scoreData.pfpProject) : '';
@@ -903,14 +1057,14 @@ function createScoreBadge(scoreData, options = {}) {
         <div class="metric-bar">
           <div class="metric-fill" style="width: ${scorePercent}%;"></div>
         </div>
-        <span class="metric-value">${scoreData.score} / ${maxScore}</span>
+        <span class="metric-value">${scoreLabel} / ${maxScoreLabel}</span>
       </div>
       <div class="metric">
         <span class="metric-label">Beetles</span>
         <div class="metric-bar">
           <div class="metric-fill" style="width: ${beetlePercent}%;"></div>
         </div>
-        <span class="metric-value">${beetleCount} / ${maxBeetles}</span>
+        <span class="metric-value">${beetleLabel} / ${maxBeetlesLabel}</span>
       </div>
     </div>
     <div class="reminet-tooltip-footer">
@@ -994,7 +1148,7 @@ async function handlePokeClick(button) {
 
   const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
   if (cooldownUntil > Date.now()) {
-    startPokeCooldown(button, username, cooldownUntil - Date.now());
+    startPokeCooldownForUsername(username, cooldownUntil - Date.now());
     return;
   }
 
@@ -1004,21 +1158,26 @@ async function handlePokeClick(button) {
   const response = await runtimeSendMessage({ type: 'beetol:poke', username }, 'beetol:poke');
   delete button.dataset.reminetPokeShaking;
 
-  if (response?.ok) {
+  if (response?.authRequired) {
+    setPokeButtonState(button, 'error', 'Sign in to remilia.net to poke');
+    return;
+  }
+
+  if (response?.ok && isSuccessfulPokeResponse(response)) {
     notifyMiladymaxxerPokeCredit(button, username);
-    const cooldownMs = extractPokeCooldownMs(response) || 24 * 60 * 60 * 1000;
-    startPokeCooldown(button, username, cooldownMs);
+    maybeLikePokedTweet(button);
+    startPokeCooldownForUsername(username, extractPokeCooldownMs(response) || DEFAULT_POKE_COOLDOWN_MS);
     return;
   }
 
   const cooldownMs = extractPokeCooldownMs(response);
-  if (cooldownMs > 0) {
-    startPokeCooldown(button, username, cooldownMs);
-    return;
-  }
-
-  if (response?.authRequired) {
-    setPokeButtonState(button, 'error', 'Sign in to remilia.net to poke');
+  if (cooldownMs > 0 || isExplicitPokeCooldownResponse(response)) {
+    if (cooldownMs > 0) {
+      startPokeCooldownForUsername(username, cooldownMs);
+    } else {
+      const message = response?.data?.error || response?.data?.message || response?.error || `Already poked ${username}`;
+      setPokeButtonState(button, 'error', message);
+    }
     return;
   }
 
@@ -1053,6 +1212,31 @@ function notifyMiladymaxxerPokeCredit(button, remiliaUsername) {
       source: 'reminet-poke',
     },
   }));
+}
+
+function isSuccessfulPokeResponse(response) {
+  const data = response?.data || {};
+  const nested = data?.data || {};
+  return response?.ok === true
+    && data.success !== false
+    && data.ok !== false
+    && nested.success !== false
+    && nested.ok !== false
+    && !isExplicitPokeCooldownResponse(response);
+}
+
+function maybeLikePokedTweet(button) {
+  if (!pokeAutoLikeEnabled) return;
+  const tweet = button.closest('[data-testid="tweet"]');
+  if (!tweet || !surfaceOwnsNode(tweet, button)) return;
+  const likeButton = Array.from(tweet.querySelectorAll('[data-testid="like"]'))
+    .find((candidate) => surfaceOwnsNode(tweet, candidate));
+  if (!likeButton || likeButton.disabled || likeButton.getAttribute('aria-disabled') === 'true') return;
+  try {
+    likeButton.click();
+  } catch (error) {
+    console.debug('RemiStats poke auto-like skipped:', error);
+  }
 }
 
 function findPokeXHandle(button) {
@@ -1124,6 +1308,31 @@ function extractPokeCooldownMs(response) {
   }
 
   return 0;
+}
+
+function isExplicitPokeCooldownResponse(response) {
+  if (!response || response.authRequired) return false;
+  const data = response?.data || {};
+  const nested = data?.data || {};
+  const fields = [
+    response?.error,
+    data?.error,
+    data?.message,
+    data?.reason,
+    data?.code,
+    nested?.error,
+    nested?.message,
+    nested?.reason,
+    nested?.code,
+  ];
+  return fields.some(isExplicitPokeCooldownText);
+}
+
+function isExplicitPokeCooldownText(value) {
+  const text = String(value || '');
+  return /already\s+poked|poke(?:\s+is)?\s+on\s+cool\s*down|poke\s+cool\s*down|cool\s*down/i.test(text)
+    || /try again(?:\s+\w+){0,4}\s+to\s+poke/i.test(text)
+    || /try again(?:\s+\w+){0,4}\s+(?:after|when|once)(?:\s+\w+){0,4}\s+cool\s*down/i.test(text);
 }
 
 function normalizeCooldownMs(value) {
@@ -1250,20 +1459,24 @@ async function updateIncomingPokeFlag(group, username) {
   if (!group || !clean) return;
   group.dataset.reminetUsername = clean;
 
-  const currentFlag = group.querySelector('[data-reminet-incoming-poke]');
+  const row = incomingPokeFlagContainer(group);
+  if (!row) return;
+  row.dataset.reminetUsername = clean;
+  const currentFlag = row.querySelector('[data-reminet-incoming-poke]');
   if (currentFlag && cleanUsername(currentFlag.dataset.reminetUsername).toLowerCase() !== clean.toLowerCase()) {
     currentFlag.remove();
   }
 
   const pokers = await getIncomingPokeHandles();
-  if (!document.body.contains(group) || cleanUsername(group.dataset.reminetUsername).toLowerCase() !== clean.toLowerCase()) {
+  if (!document.body.contains(group) || !document.body.contains(row) || cleanUsername(row.dataset.reminetUsername).toLowerCase() !== clean.toLowerCase()) {
     return;
   }
 
   const hasPokedYou = pokers.has(clean.toLowerCase());
-  const existingFlag = group.querySelector('[data-reminet-incoming-poke]');
+  const existingFlag = row.querySelector('[data-reminet-incoming-poke]');
   if (!hasPokedYou) {
     existingFlag?.remove();
+    removeEmptyIncomingPokeRow(row);
     return;
   }
 
@@ -1275,7 +1488,45 @@ async function updateIncomingPokeFlag(group, username) {
   flag.textContent = 'poked you!';
   flag.title = `${clean} poked you on RemiliaNET`;
   flag.setAttribute('aria-label', flag.title);
-  group.appendChild(flag);
+  row.appendChild(flag);
+}
+
+function incomingPokeFlagContainer(group) {
+  if (!group) return null;
+  const tweet = group.closest('[data-testid="tweet"]');
+  if (!tweet || !surfaceOwnsNode(tweet, group)) return group;
+  return ensureTweetIncomingPokeRow(tweet);
+}
+
+function ensureTweetIncomingPokeRow(tweet) {
+  const existing = Array.from(tweet.querySelectorAll('[data-reminet-incoming-poke-row]'))
+    .find((row) => surfaceOwnsNode(tweet, row));
+  if (existing) return existing;
+
+  const row = document.createElement('div');
+  row.className = 'reminet-incoming-poke-row';
+  row.dataset.reminetIncomingPokeRow = 'true';
+  const anchor = Array.from(tweet.querySelectorAll('[data-testid="tweetText"]'))
+    .find((node) => surfaceOwnsNode(tweet, node));
+  if (anchor?.parentElement) {
+    anchor.parentElement.insertBefore(row, anchor.nextSibling);
+    return row;
+  }
+
+  const timeElement = findOwnedNode(tweet, 'time');
+  const userName = timeElement?.closest('[data-testid="User-Name"]');
+  const userNameBlock = userName?.parentElement;
+  if (userNameBlock?.parentElement) {
+    userNameBlock.parentElement.insertBefore(row, userNameBlock.nextSibling);
+    return row;
+  }
+
+  return null;
+}
+
+function removeEmptyIncomingPokeRow(row) {
+  if (!row?.matches?.('[data-reminet-incoming-poke-row]')) return;
+  if (!row.querySelector('[data-reminet-incoming-poke]')) row.remove();
 }
 
 async function getIncomingPokeHandles() {
@@ -1365,17 +1616,17 @@ function scheduleHideSharedTooltip(delay = 120) {
 
 // Find a sensible anchor element next to which the badge should sit.
 // Order of preference:
-//   1. <time> element (tweets and user cells)
+//   1. <time> element inside the owned tweet header
 //   2. [data-testid="User-Name"] (tweets)
 //   3. Any [dir="ltr"][class*="css"] block as a last resort
 function insertBadgeIntoElement(element, badgeOrSlot) {
-  const timeElement = Array.from(element.querySelectorAll('time')).find((time) => !time.closest('[data-testid="quoteTweet"]'));
+  const timeElement = findOwnedHeaderTime(element);
   if (timeElement && timeElement.parentElement) {
     timeElement.parentElement.insertBefore(badgeOrSlot, timeElement.nextSibling);
     return true;
   }
 
-  const userNameContainer = Array.from(element.querySelectorAll('[data-testid="User-Name"]')).find((node) => !node.closest('[data-testid="quoteTweet"]'));
+  const userNameContainer = findOwnedUserName(element);
   if (userNameContainer) {
     const insertPoint = userNameContainer.querySelector('[dir="ltr"]') || userNameContainer;
     if (insertPoint.parentElement) {
@@ -1384,7 +1635,7 @@ function insertBadgeIntoElement(element, badgeOrSlot) {
     }
   }
 
-  const fallback = element.querySelector('[dir="ltr"][class*="css"]');
+  const fallback = findOwnedNode(element, '[dir="ltr"][class*="css"]');
   if (fallback && fallback.parentElement) {
     const insertPoint = fallback.querySelector('[dir="ltr"]') || fallback;
     insertPoint.parentElement.insertBefore(badgeOrSlot, insertPoint.nextSibling);
@@ -1396,13 +1647,20 @@ function insertBadgeIntoElement(element, badgeOrSlot) {
 
 // Insert badge into the DOM for tweets and user cells
 async function insertBadge(element, usernameOverride = null) {
-  if (element.closest('[data-testid="quoteTweet"]')) {
+  if (surfaceIsInsideQuoteTweet(element)) {
+    return markSurfaceResult(element, 'quote-skip');
+  }
+  const tweet = element.matches?.('[data-testid="tweet"]') ? element : element.closest?.('[data-testid="tweet"]');
+  if (tweet && !surfaceOwnsNode(tweet, element)) {
     return markSurfaceResult(element, 'quote-skip');
   }
   // Check if badge already exists
   const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
-    .some((badge) => !badge.closest('[data-testid="quoteTweet"]'));
+    .some((badge) => surfaceOwnsNode(element, badge));
   if (hasOwnBadge) {
+    const existingSlot = Array.from(element.querySelectorAll('[data-reminet-badge-slot], [data-milxdy-tweet-slot="remistats-badge"]'))
+      .find((slot) => surfaceOwnsNode(element, slot));
+    stabilizeTweetBadgeSlot(element, existingSlot);
     return markSurfaceResult(element, 'already-has-badge');
   }
   
@@ -1423,7 +1681,7 @@ async function insertBadge(element, usernameOverride = null) {
   element.dataset.reminetLookupHandle = username;
 
   const existingSlot = Array.from(element.querySelectorAll('[data-milxdy-tweet-slot="remistats-badge"], [data-reminet-badge-slot]'))
-    .find((slot) => !slot.closest('[data-testid="quoteTweet"]'));
+    .find((slot) => surfaceOwnsNode(element, slot));
   const badgeSlot = existingSlot
     ? prepareBadgeSlot(existingSlot, username, { actionPoke: visualTheme.pokePlacement !== 'actions' })
     : createBadgeSlot(username, { actionPoke: visualTheme.pokePlacement !== 'actions' });
@@ -1452,6 +1710,7 @@ async function insertBadge(element, usernameOverride = null) {
     clearReminetProcessing(element);
     
     fillBadgeSlot(badgeSlot, badge, scoreData.remiliaUsername || username);
+    stabilizeTweetBadgeSlot(element, badgeSlot);
     if (visualTheme.pokePlacement === 'actions') {
       insertActionPoke(element, scoreData.remiliaUsername || username, username);
     }
@@ -1480,13 +1739,14 @@ function surfaceProcessingIsStale(element) {
 
 function insertActionPoke(element, username, xHandle = '') {
   const clean = cleanUsername(username);
-  const existing = element.querySelector('[data-reminet-action-poke-group]');
+  const existing = Array.from(element.querySelectorAll('[data-reminet-action-poke-group]'))
+    .find((group) => surfaceOwnsNode(element, group));
   if (existing) {
     fillActionPokeSlot(existing, clean, xHandle || extractUsername(element));
     return;
   }
   if (!clean) return;
-  const actions = element.querySelector('[role="group"]');
+  const actions = findOwnedNode(element, '[role="group"]');
   if (!actions) return;
   const cluster = createPokeCluster(clean, xHandle || extractUsername(element));
   if (!cluster) return;
@@ -1494,8 +1754,8 @@ function insertActionPoke(element, username, xHandle = '') {
 }
 
 function reserveActionPoke(element, username, xHandle = '') {
-  if (element.querySelector('[data-reminet-action-poke-group]')) return null;
-  const actions = element.querySelector('[role="group"]');
+  if (Array.from(element.querySelectorAll('[data-reminet-action-poke-group]')).some((group) => surfaceOwnsNode(element, group))) return null;
+  const actions = findOwnedNode(element, '[role="group"]');
   if (!actions) return null;
   const cluster = createActionPokeSlot(username);
   insertActionPokeGroup(actions, cluster, xHandle);
@@ -1989,6 +2249,12 @@ const processedProfiles = new Set();
 let lastProfileUrl = location.href;
 let groupChatScanTimer = null;
 let routeProfileTimer = null;
+let reconciliationTimer = null;
+let reconciliationScheduled = false;
+let reconciliationDueAt = 0;
+let reconciliationRunning = false;
+let reconciliationFollowUp = false;
+let reconciliationFollowUpDelay = 900;
 let booted = false;
 let runtimeScheduleScan = () => undefined;
 let addRuntimeDisposable = () => undefined;
@@ -2154,13 +2420,13 @@ function createCompactBadge(scoreData) {
   const starUrl = chrome.runtime.getURL('remistats/star.svg');
   badge.innerHTML = `
     <img src="${starUrl}" class="reminet-compact-star" alt="" />
-    <span class="reminet-compact-score">${scoreData.score}</span>
+    <span class="reminet-compact-score">${formatMetric(scoreData.score)}</span>
   `;
 
   badge.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const remiliaUsername = scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle;
+    const remiliaUsername = cleanUsername(scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle);
     if (remiliaUsername) window.open(`https://remilia.net/~${remiliaUsername}`, '_blank');
   });
 
@@ -2245,37 +2511,114 @@ async function processSurfaceElement(element, username = null) {
   return { status: 'unsupported-surface', username: '' };
 }
 
-function reconcileMountedSurfaces(limit = 160) {
+function currentPerformanceMode() {
+  return document.documentElement.dataset.milxdyPerformanceMode || 'balanced';
+}
+
+function remistatsReconciliationPolicy() {
+  const mode = currentPerformanceMode();
+  if (mode === 'fast') return { limit: 48, batchSize: 3 };
+  if (mode === 'balanced') return { limit: 96, batchSize: 4 };
+  if (mode === 'developer') return { limit: 320, batchSize: 12 };
+  return { limit: 160, batchSize: 6 };
+}
+
+function remistatsFetchPolicy() {
+  const mode = currentPerformanceMode();
+  if (mode === 'fast') return { batchSize: 6, batchDelay: 350 };
+  if (mode === 'balanced') return { batchSize: 16, batchDelay: 180 };
+  if (mode === 'developer') return { batchSize: CONFIG.batchSize, batchDelay: 50 };
+  return { batchSize: 32, batchDelay: 100 };
+}
+
+function finishSurfaceReconciliation() {
+  reconciliationRunning = false;
+  if (!reconciliationFollowUp || !lifecycleActive() || !remistatsEnabled) return;
+  const delay = reconciliationFollowUpDelay;
+  reconciliationFollowUp = false;
+  reconciliationFollowUpDelay = 900;
+  scheduleSurfaceReconciliation([delay]);
+}
+
+function reconcileMountedSurfaces(limit = remistatsReconciliationPolicy().limit) {
   if (!lifecycleActive() || !remistatsEnabled) return;
+  if (reconciliationRunning) {
+    reconciliationFollowUp = true;
+    return;
+  }
+  reconciliationRunning = true;
+  const policy = remistatsReconciliationPolicy();
   const surfaces = Array.from(document.querySelectorAll('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]'))
     .filter(shouldReconcileSurface)
-    .slice(0, limit);
+    .slice(0, Math.max(1, limit));
   let index = 0;
   const processNext = () => {
-    if (!lifecycleActive() || !remistatsEnabled || index >= surfaces.length) return;
-    const batch = surfaces.slice(index, index + 6);
+    if (!lifecycleActive() || !remistatsEnabled) {
+      finishSurfaceReconciliation();
+      return;
+    }
+    if (index >= surfaces.length) {
+      finishSurfaceReconciliation();
+      return;
+    }
+    const batch = surfaces.slice(index, index + policy.batchSize);
     index += batch.length;
     for (const element of batch) {
       prepareSurfaceForReconcile(element);
       void processSurfaceElement(element);
     }
-    if (index < surfaces.length) runtimeScheduler.idle(processNext, { timeout: 1200 });
+    if (index < surfaces.length) {
+      runtimeScheduler.idle(processNext, { timeout: 1200 });
+    } else {
+      finishSurfaceReconciliation();
+    }
   };
   runtimeScheduler.idle(processNext, { timeout: 250 });
 }
 
+function normalizeReconciliationDelays(delays) {
+  const list = Array.isArray(delays) ? delays : [delays];
+  const normalized = list
+    .map((delay) => Number(delay))
+    .filter((delay) => Number.isFinite(delay) && delay >= 0)
+    .sort((left, right) => left - right);
+  return normalized.length > 0 ? normalized : [250];
+}
+
 function scheduleSurfaceReconciliation(delays = [250, 1500, 4000]) {
-  for (const delay of delays) {
-    const cancel = runtimeScheduler.timeout(() => reconcileMountedSurfaces(), delay);
-    addRuntimeDisposable(cancel);
+  if (!lifecycleActive() || !remistatsEnabled) return;
+  const normalized = normalizeReconciliationDelays(delays);
+  if (normalized.length > 1) {
+    reconciliationFollowUp = true;
+    reconciliationFollowUpDelay = Math.max(reconciliationFollowUpDelay, normalized[normalized.length - 1]);
   }
+  if (reconciliationRunning) {
+    reconciliationFollowUp = true;
+    return;
+  }
+  const dueAt = Date.now() + normalized[0];
+  if (reconciliationScheduled) {
+    reconciliationFollowUp = true;
+    if (reconciliationDueAt && reconciliationDueAt <= dueAt) return;
+    reconciliationTimer?.();
+  }
+  reconciliationScheduled = true;
+  reconciliationDueAt = dueAt;
+  reconciliationTimer = runtimeScheduler.timeout(() => {
+    reconciliationTimer = null;
+    reconciliationScheduled = false;
+    reconciliationDueAt = 0;
+    reconcileMountedSurfaces();
+  }, normalized[0]);
 }
 
 function shouldReconcileSurface(element) {
   if (!element?.isConnected) return false;
-  if (element.closest('[data-testid="quoteTweet"]')) return false;
+  if (surfaceIsInsideQuoteTweet(element)) return false;
+  const tweet = element.matches?.('[data-testid="tweet"]') ? element : element.closest?.('[data-testid="tweet"]');
+  if (tweet && !surfaceOwnsNode(tweet, element)) return false;
   const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
-    .some((badge) => !badge.closest('[data-testid="quoteTweet"]'));
+    .some((badge) => surfaceOwnsNode(element, badge));
   if (hasOwnBadge) return false;
   return Boolean(
     element.matches?.('[data-testid="tweet"], [data-testid="UserCell"], [data-testid="user-cell"]')
@@ -2287,7 +2630,7 @@ function prepareSurfaceForReconcile(element) {
     clearReminetProcessing(element);
   }
   for (const slot of Array.from(element.querySelectorAll('[data-reminet-badge-slot][data-reminet-state="empty"], [data-milxdy-tweet-slot="remistats-badge"][data-reminet-state="empty"]'))) {
-    if (slot.closest('[data-testid="quoteTweet"]')) continue;
+    if (!surfaceOwnsNode(element, slot)) continue;
     slot.dataset.reminetState = 'reserved';
     slot.removeAttribute('aria-hidden');
   }
@@ -2322,6 +2665,7 @@ function init() {
     chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
     loadStoredPokeCooldowns(),
     loadIconSettings(),
+    loadPokeAutoLikeSetting(),
     loadPokeThemeSettings(),
     loadVisualThemeSettings(),
   ]).then(([settings]) => {
@@ -2344,7 +2688,12 @@ function init() {
       return;
     }
     if (area === 'local' && changes['milxdy.settings.visualTheme']) {
-      void loadVisualThemeSettings();
+      void loadVisualThemeSettings().then(() => {
+        if (!lifecycleActive() || !remistatsEnabled) return;
+        runtimeScheduleScan();
+        scheduleSurfaceReconciliation([300, 2200]);
+        void insertProfileBadge();
+      });
       return;
     }
     if (area !== 'sync') return;
@@ -2359,6 +2708,9 @@ function init() {
         clearRemiStatsBadges();
       }
       return;
+    }
+    if (changes['milxdy.remistats.pokeAutoLike']) {
+      pokeAutoLikeEnabled = changes['milxdy.remistats.pokeAutoLike'].newValue === true;
     }
     if (iconSettingChanged(changes)) {
       void loadIconSettings().then(() => {
@@ -2427,6 +2779,15 @@ export function dispose() {
     routeProfileTimer();
     routeProfileTimer = null;
   }
+  if (reconciliationTimer) {
+    reconciliationTimer();
+    reconciliationTimer = null;
+  }
+  reconciliationScheduled = false;
+  reconciliationDueAt = 0;
+  reconciliationRunning = false;
+  reconciliationFollowUp = false;
+  reconciliationFollowUpDelay = 900;
   addRuntimeDisposable = () => undefined;
   lifecycleSignal = null;
   booted = false;

@@ -43,16 +43,17 @@ Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/mani
 
 ## Safe Manual Updates
 
-Manual installs do not auto-update by themselves. The Suite tab checks the latest GitHub prerelease and shows an update notice when the release tag is newer than the installed manifest version.
+Manual installs do not auto-update by themselves. The Suite tab checks the latest normal GitHub release and shows an update notice when the release tag is newer than the installed manifest version. Draft releases and prereleases are ignored on this normal update channel.
 
 When an update is available:
 
 1. Click **Download** in the Suite tab, or download the latest release archive from GitHub. The popup prefers the archive matching the installed browser target and build profile.
-2. Replace files in the same existing milXdy extension folder.
-3. Do not remove milXdy from `chrome://extensions` or Firefox's temporary add-on list unless you are intentionally resetting the install.
-4. Do not load a fresh folder as a second unpacked extension.
-5. Click **Reload** in the milXdy popup or reload the existing extension card.
-6. Refresh open X/Twitter tabs.
+2. Optional: use **LLM** after copying **Steps** if you want the checklist opened in your configured assistant target. The steps are still copied to the clipboard so you can paste them manually if the site or desktop app blocks automatic paste.
+3. Replace files in the same existing milXdy extension folder.
+4. Do not remove milXdy from `chrome://extensions` or Firefox's temporary add-on list unless you are intentionally resetting the install.
+5. Do not load a fresh folder as a second unpacked extension.
+6. Click **Reload** in the milXdy popup or reload the existing extension card.
+7. Refresh open X/Twitter tabs.
 
 Keeping the same loaded folder preserves extension storage, including settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state. Removing the extension, loading a different folder, or clearing extension storage can reset local data.
 

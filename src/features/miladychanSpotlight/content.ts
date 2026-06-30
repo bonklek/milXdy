@@ -306,7 +306,8 @@ function ensureRoot(): void {
       </header>
       <div class="milxdy-chan-error" data-role="error" hidden></div>
       <main class="milxdy-chan-body" data-role="body"></main>
-      <div class="milxdy-chan-resize-grip" data-role="resize" data-resize-axis="both" title="Drag to resize"></div>
+      <div class="milxdy-chan-resize-grip milxdy-chan-resize-grip-left" data-role="resize" data-resize-axis="both" data-resize-side="left" title="Drag to resize"></div>
+      <div class="milxdy-chan-resize-grip milxdy-chan-resize-grip-right" data-role="resize" data-resize-axis="both" data-resize-side="right" title="Drag to resize"></div>
       <div class="milxdy-chan-resize-edge milxdy-chan-resize-edge-side" data-role="resize" data-resize-axis="x" title="Drag to resize width"></div>
       <div class="milxdy-chan-resize-edge milxdy-chan-resize-edge-bottom" data-role="resize" data-resize-axis="y" title="Drag to resize height"></div>
     </div>
