@@ -236,11 +236,16 @@ async function downloadExport(): Promise<void> {
 async function uploadImport(): Promise<void> {
   const file = importFile?.files?.[0];
   if (!file) return;
-  const text = await file.text();
-  const data = JSON.parse(text) as TuningExport;
-  await importTuningData(data);
-  if (importFile) importFile.value = "";
-  await reload();
+  try {
+    const data = JSON.parse(await file.text()) as TuningExport;
+    await importTuningData(data);
+    await reload();
+  } catch (error) {
+    console.error("Wiki tuning import failed", error);
+  } finally {
+    // Always clear the input so a corrected file can be re-selected after a bad import.
+    if (importFile) importFile.value = "";
+  }
 }
 
 async function renderDiagnostics(): Promise<void> {
