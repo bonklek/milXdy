@@ -22,6 +22,8 @@ This project is intended for GitHub beta distribution and local browser testing.
 
 ## Quick Install
 
+Quickest Chrome path: [install milXdy in Chrome](docs/INSTALL_AND_UPDATE.md#install-from-a-github-release).
+
 For release builds:
 
 1. Download the latest profile-specific release zip from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
