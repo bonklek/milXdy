@@ -4,15 +4,11 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, most users should start with `milXdy-<version>-chromium-full.zip`.
+For Chrome, Brave, or Edge, download `milXdy-<version>-chromium.zip`.
 
-Profile choices:
+Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
-- **Full**: recommended for most Chrome users; starts with the richest default setup.
-- **Balanced**: lighter default pins and runtime budget while keeping all first-party apps available.
-- **Lite**: quietest default setup for lower-power browsers or users who want to turn apps on manually.
-
-1. Download the latest unpacked release archive from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
+1. Download the latest unpacked release archive from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium.zip` for Chrome, Brave, and Edge, or `milXdy-<version>-firefox.zip` for Firefox beta testing.
 2. Unzip it into a permanent folder. Do not install from Downloads if you clean that folder often.
 3. Open `chrome://extensions`.
 4. Enable **Developer mode**.
@@ -23,7 +19,7 @@ Profile choices:
 
 Firefox support is packaged for beta testing, but it still needs manual smoke testing before being advertised as fully supported.
 
-1. Download the latest `milXdy-<version>-firefox-full.zip`, `milXdy-<version>-firefox-balanced.zip`, or `milXdy-<version>-firefox-lite.zip` release archive.
+1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.
 3. Open Firefox and go to `about:debugging#/runtime/this-firefox`.
 4. Click **Load Temporary Add-on**.
@@ -47,7 +43,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from `about:debugging#/runtime/this-firefox`. The same command also builds Lite and Balanced profile outputs under `dist/chromium-lite`, `dist/chromium-balanced`, `dist/firefox-lite`, and `dist/firefox-balanced`.
+Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from `about:debugging#/runtime/this-firefox`.
 
 ## Safe Manual Updates
 
@@ -55,7 +51,7 @@ Manual installs do not auto-update by themselves. The Suite tab checks the lates
 
 When an update is available:
 
-1. Click **Download** in the Suite tab, or download the latest release archive from GitHub. The popup prefers the archive matching the installed browser target and build profile.
+1. Click **Download** in the Suite tab, or download the latest release archive from GitHub. The popup prefers the archive matching the installed browser target.
 2. Optional: use **LLM** after copying **Steps** if you want the checklist opened in your configured assistant target. The steps are still copied to the clipboard so you can paste them manually if the site or desktop app blocks automatic paste.
 3. Replace files in the same existing milXdy extension folder.
 4. Do not remove milXdy from `chrome://extensions` or Firefox's temporary add-on list unless you are intentionally resetting the install.

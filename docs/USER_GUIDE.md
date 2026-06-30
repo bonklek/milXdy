@@ -16,7 +16,7 @@ Do not remove the extension or load a second unpacked folder unless you intend t
 
 The Suite tab provides a guided version of this flow:
 
-- **Download** opens the matching GitHub release zip for the current browser target and build profile when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed target/profile.
+- **Download** opens the matching GitHub release zip for the current browser target when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed browser.
 - **Steps** copies the safe in-place update checklist.
 - **LLM** opens your configured assistant target after copying the update checklist so you can ask for guided help without losing the safe update steps.
 - **Reload** calls Chrome's extension reload after you have replaced the files in the same folder.

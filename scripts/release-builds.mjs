@@ -1,9 +1,5 @@
 export const releaseBuilds = [
-  { dir: "dist/chromium-lite", target: "chromium", profile: "lite" },
-  { dir: "dist/chromium-balanced", target: "chromium", profile: "balanced" },
   { dir: "dist/chromium", target: "chromium", profile: "full" },
-  { dir: "dist/firefox-lite", target: "firefox", profile: "lite" },
-  { dir: "dist/firefox-balanced", target: "firefox", profile: "balanced" },
   { dir: "dist/firefox", target: "firefox", profile: "full" },
 ];
 

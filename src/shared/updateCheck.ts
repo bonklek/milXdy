@@ -11,7 +11,6 @@ export type UpdateStatus = {
   error?: string;
 };
 
-declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
 declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
 
 export const UPDATE_STATUS_KEY = "milxdy.updateStatus";
@@ -149,6 +148,5 @@ function chooseReleaseAsset(release: GitHubRelease, expectedAssetName: string | 
 function expectedReleaseAssetName(version: string | null): string | null {
   if (!version) return null;
   const target = typeof MILXDY_BUILD_TARGET === "string" ? MILXDY_BUILD_TARGET : "chromium";
-  const profile = typeof MILXDY_BUILD_PROFILE === "string" ? MILXDY_BUILD_PROFILE : "full";
-  return `milXdy-${version}-${target}-${profile}.zip`;
+  return `milXdy-${version}-${target}.zip`;
 }

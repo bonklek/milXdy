@@ -27,7 +27,7 @@ For reproducible release archives, use the npm lockfile as the canonical depende
 
 `scripts/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, profile builds, copied assets, or archive metadata changes.
 
-The profile build emits browser-ready files under `dist/chromium-lite`, `dist/chromium-balanced`, `dist/chromium`, `dist/firefox-lite`, `dist/firefox-balanced`, and `dist/firefox`. The full Chromium build lives at `dist/chromium`; the full Firefox build lives at `dist/firefox`, with a Firefox-specific manifest generated from `public/manifest.json`.
+The release build emits browser-ready files under `dist/chromium` and `dist/firefox`. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
 
 Required outputs include:
 
@@ -64,7 +64,7 @@ Also verify:
 - `git status --short`
 - app version in `package.json`
 - extension version in `public/manifest.json`
-- release archives in `release/milXdy-<version>-<target>-<profile>.zip`
+- release archives in `release/milXdy-<version>-chromium.zip` and `release/milXdy-<version>-firefox.zip`
 - SHA-256 checksum manifest in `release/milXdy-<version>-checksums.sha256`
 - reproducibility verification with `npm run verify:release:reproducible`
 - changelog entry

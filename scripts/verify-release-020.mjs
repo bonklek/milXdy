@@ -126,7 +126,7 @@ function verifyDocsCoverage() {
   assert(files.qa.includes("canonical release readiness gate") && files.qa.includes("live Chrome proof and screenshots are optional manual QA evidence"), "0.2.0 QA checklist must keep live Chrome proof optional outside release readiness");
   assert(files.releases.includes("npm run verify:release:gates:020") && files.releases.includes("npm.cmd run verify:release:gates:020"), "release process must use the canonical non-live release gate runner");
   assert(files.releases.includes("Keep live Chrome proof separate and optional"), "release process must keep the live Chrome gate optional outside release readiness");
-  assert(files.releases.includes("dist/chromium-lite") && files.releases.includes("dist/firefox-balanced"), "release process must document profile build output directories");
+  assert(files.releases.includes("dist/chromium") && files.releases.includes("dist/firefox"), "release process must document browser build output directories");
   assert(files.qa.includes("extension smoke") && files.qa.includes("app smoke"), "0.2.0 QA checklist must describe smoke checks covered by the non-live gate runner");
   assert(files.qa.includes("URL allowlist checks"), "0.2.0 QA checklist must describe URL allowlist coverage in the non-live gate runner");
   assert(files.qa.includes("release packaging") && files.qa.includes("checksum verification"), "0.2.0 QA checklist must describe release archive packaging and checksum coverage in the non-live gate runner");
@@ -161,18 +161,18 @@ function verifyDocsCoverage() {
   assert(files.releaseNotes.includes("CHROME_LIVE_QA_0.2.0.md"), "0.2.0 release notes must link Chrome live QA handoff");
   assert(files.releaseNotes.includes("RELEASE_SCREENSHOTS_0.2.0.md"), "0.2.0 release notes must link release screenshot asks");
   assert(files.releaseNotes.includes("optional release-media screenshots"), "0.2.0 release notes must keep screenshots optional release media");
-  assert(files.readme.includes("npm run build:profiles") && files.readme.includes("dist/chromium-balanced") && !files.readme.includes("npm run build:all"), "README source-build instructions must use the 0.2.0 profile matrix");
-  assert(files.readme.includes("milXdy-<version>-chromium-full.zip") && files.readme.includes("milXdy-<version>-chromium-balanced.zip") && files.readme.includes("milXdy-<version>-chromium-lite.zip"), "README release install instructions must name profile-specific Chromium archives");
-  assert(files.readme.includes("firefox-full") && files.readme.includes("firefox-balanced") && files.readme.includes("firefox-lite"), "README release install instructions must name profile-specific Firefox archives");
+  assert(files.readme.includes("npm run build:profiles") && files.readme.includes("dist/chromium") && files.readme.includes("dist/firefox") && !files.readme.includes("npm run build:all"), "README source-build instructions must use the browser release build matrix");
+  assert(files.readme.includes("milXdy-<version>-chromium.zip") && !files.readme.includes("milXdy-<version>-chromium-full.zip") && !files.readme.includes("milXdy-<version>-chromium-balanced.zip") && !files.readme.includes("milXdy-<version>-chromium-lite.zip"), "README release install instructions must make Chromium a single download choice");
+  assert(files.readme.includes("milXdy-<version>-firefox.zip") && !files.readme.includes("firefox-full") && !files.readme.includes("firefox-balanced") && !files.readme.includes("firefox-lite"), "README release install instructions must make Firefox a single download choice");
   assert(files.userGuide.includes("Apps Hub And Side Rail"), "user guide must cover the 0.2.0 Apps Hub surface");
   assert(files.userGuide.includes("every first-party app available and toggleable") && files.userGuide.includes("setup choices remain available from the Apps Hub settings menu"), "user guide must document enabled first-run defaults and persistent setup controls");
-  assert(files.userGuide.includes("matching GitHub release zip") && files.userGuide.includes("target/profile"), "user guide update workflow must describe target/profile-aware downloads");
+  assert(files.userGuide.includes("matching GitHub release zip") && files.userGuide.includes("installed browser"), "user guide update workflow must describe browser-target-aware downloads");
   assert(files.releases.includes("npm run verify:release:gates:020"), "release process must document the canonical non-live gate runner");
   assert(files.releases.includes("SOURCE_DATE_EPOCH") && files.releases.includes("npm run verify:release:reproducible"), "release process must document deterministic release archive reproduction");
   assert(files.troubleshooting.includes("dist/chromium") && files.troubleshooting.includes("dist/firefox"), "troubleshooting must point users at generated browser output directories");
-  assert(files.installAndUpdate.includes("npm run build:profiles") && files.installAndUpdate.includes("dist/chromium-balanced") && !files.installAndUpdate.includes("npm run build:all"), "install/update source instructions must use the 0.2.0 profile matrix");
-  assert(files.installAndUpdate.includes("milXdy-<version>-chromium-full.zip") && files.installAndUpdate.includes("milXdy-<version>-firefox-balanced.zip"), "install/update release instructions must name profile-specific archives");
-  assert(files.installAndUpdate.includes("popup prefers the archive matching the installed browser target and build profile"), "install/update docs must describe target/profile-aware popup downloads");
+  assert(files.installAndUpdate.includes("npm run build:profiles") && files.installAndUpdate.includes("dist/chromium") && files.installAndUpdate.includes("dist/firefox") && !files.installAndUpdate.includes("npm run build:all"), "install/update source instructions must use the browser release build matrix");
+  assert(files.installAndUpdate.includes("milXdy-<version>-chromium.zip") && files.installAndUpdate.includes("milXdy-<version>-firefox.zip") && !files.installAndUpdate.includes("firefox-full") && !files.installAndUpdate.includes("firefox-balanced"), "install/update release instructions must name one archive per browser");
+  assert(files.installAndUpdate.includes("popup prefers the archive matching the installed browser target"), "install/update docs must describe browser-target-aware popup downloads");
   assert(files.qa.includes("checksums.sha256"), "0.2.0 QA checklist must include checksum manifest");
   assert(files.qa.includes("checksum verification"), "0.2.0 QA checklist must include checksum verifier coverage");
   assert(files.qa.includes("app smoke"), "0.2.0 QA checklist must include app smoke verifier coverage");
@@ -220,9 +220,9 @@ function verifyDocsCoverage() {
   assert(!files.liveSmokeProbeLogVerifier.includes("appHubRuntime === true") && !files.liveSmokeProbeLogVerifier.includes("counts?.appHubRuntime"), "live probe log verifier must not require Apps Hub panel-only markers for baseline runtime proof");
   assert(files.releaseGateVerifier.includes("node_modules/typescript/bin/tsc") && files.releaseGateVerifier.includes("scripts/build-profiles.mjs"), "0.2.0 gate runner must typecheck and rebuild profile outputs");
   assert(files.releaseGateVerifier.includes("node_modules/web-ext/bin/web-ext.js") && files.releaseGateVerifier.includes('"dist/firefox"'), "0.2.0 gate runner must run Firefox lint through the local web-ext dependency");
-  assert(files.updateCheck.includes("expectedReleaseAssetName") && files.updateCheck.includes("MILXDY_BUILD_TARGET") && files.updateCheck.includes("MILXDY_BUILD_PROFILE"), "update checker must derive profile-specific release archive names from build metadata");
-  assert(files.updateCheck.includes("matchedExpectedAsset") && files.updateCheck.includes("expectedAssetName"), "update checker must report whether it found the exact target/profile archive");
-  assert(files.popup.includes("matchedExpectedAsset") && files.popup.includes("Expected archive"), "popup update UI must disclose target/profile archive matching");
+  assert(files.updateCheck.includes("expectedReleaseAssetName") && files.updateCheck.includes("MILXDY_BUILD_TARGET") && !files.updateCheck.includes("MILXDY_BUILD_PROFILE"), "update checker must derive browser-specific release archive names from build metadata");
+  assert(files.updateCheck.includes("matchedExpectedAsset") && files.updateCheck.includes("expectedAssetName"), "update checker must report whether it found the exact browser archive");
+  assert(files.popup.includes("matchedExpectedAsset") && files.popup.includes("Expected archive"), "popup update UI must disclose browser archive matching");
   for (const gate of [
     "scripts/verify-release-020.mjs",
     "scripts/verify-platform.mjs",
@@ -316,7 +316,7 @@ function verifyDocsCoverage() {
   ]) {
     assert(files.screenshots.includes(phrase), `0.2.0 release screenshots missing ${phrase}`);
   }
-  assert(files.packageRelease.includes("milXdy-${version}-${build.target}-${build.profile}.zip"), "release packaging must use deterministic profile archive names");
+  assert(files.packageRelease.includes("milXdy-${version}-${build.target}.zip"), "release packaging must use deterministic browser archive names");
   assert(files.packageRelease.includes("createDeterministicZip"), "release packaging must use the deterministic Node zip writer");
   assert(files.packageRelease.includes("writeChecksumManifest") && files.packageRelease.includes("verifyReleaseChecksums"), "release packaging must generate and verify checksum manifest");
   assert(files.releaseChecksumVerifier.includes("createHash") && files.releaseChecksumVerifier.includes("sha256") && files.releaseChecksumVerifier.includes("releaseBuilds"), "checksum verifier must hash release archives from the shared build matrix");
@@ -334,9 +334,12 @@ function verifyDocsCoverage() {
   assert(files.packageRelease.includes("commonAssetDirs") && files.releaseBuilds.includes("commonAssetDirs"), "release packaging must share common asset roots");
   assert(files.releaseBuilds.includes("generatedAssetRoots"), "release build contract must define generated asset roots");
   assert(files.releaseRegistry.includes("appsForProfile") && files.releaseRegistry.includes("featureBundlesForProfile") && files.releaseRegistry.includes("hostPermissionsForProfile"), "release tooling must share registry profile helpers");
-  assert(files.packageRelease.includes("releaseBuilds") && files.buildProfiles.includes("releaseBuilds") && files.releaseNotes.includes("build:profiles"), "release profile matrix must be reusable and documented");
-  for (const needle of ["chromium-lite", "chromium-balanced", "dist/chromium", "firefox-lite", "firefox-balanced", "dist/firefox"]) {
+  assert(files.packageRelease.includes("releaseBuilds") && files.buildProfiles.includes("releaseBuilds") && files.releaseNotes.includes("build:profiles"), "release browser matrix must be reusable and documented");
+  for (const needle of ["dist/chromium", "dist/firefox"]) {
     assert(files.releaseBuilds.includes(needle), `release build matrix missing ${needle}`);
+  }
+  for (const needle of ["chromium-lite", "chromium-balanced", "firefox-lite", "firefox-balanced"]) {
+    assert(!files.releaseBuilds.includes(needle), `release build matrix should not publish ${needle}`);
   }
   assert(files.urlAllowlistVerifier.includes("parseAllowedUrl") && files.urlAllowlistVerifier.includes("isAllowedUrl"), "URL allowlist verifier must exercise shared helper exports");
   assert(files.urlAllowlistVerifier.includes("MUSICBRAINZ_JSON_RULES") && files.urlAllowlistVerifier.includes("REMILIA_MEDIA_RULES"), "URL allowlist verifier must cover central and RemiNet media contracts");

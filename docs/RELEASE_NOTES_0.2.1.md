@@ -9,7 +9,7 @@ Status: released. Automated release gates passed, release artifacts were verifie
 ### Update flow
 
 - The update checker now targets the latest normal published GitHub release and ignores drafts/prereleases on the normal user update channel.
-- The popup prefers the release archive matching the current browser target and build profile.
+- The popup prefers the release archive matching the current browser target.
 - Safe manual update steps were tightened around replacing files in the same loaded extension folder so settings, diagnostics, and RemiNet/Beetol login state are preserved.
 - The update flow can hand the copied checklist to a configured LLM target for testers who want guided instructions in ChatGPT, Claude, Grok, or a custom assistant URL.
 
@@ -18,7 +18,7 @@ Status: released. Automated release gates passed, release artifacts were verifie
 - Apps Hub setup choices now keep all first-party apps available and toggleable while applying the selected default pins and Performance mode.
 - Expanded app cards expose the enable/disable control, and the selected-state color has stronger contrast.
 - Runtime lag handling was improved through shared scanner behavior, performance budgets, and cached RemiStats work in Fast mode.
-- Profile builds continue to emit Lite, Balanced, and Full outputs for Chromium and Firefox.
+- Release packaging now keeps the public download choice to Chromium or Firefox while Lite, Balanced, and Full remain in-extension setup choices.
 - The extension smoke verifier now follows the active package/manifest version and the 0.2.1 build-profile model where first-party apps stay available across profiles.
 
 ### RemiStats, RemiNet, and Beetol

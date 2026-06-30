@@ -22,24 +22,20 @@ This project is intended for GitHub beta distribution and local browser testing.
 
 ## Quick Install
 
-Quickest Chrome install: [download the latest `milXdy-<version>-chromium-full.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
+Quickest Chrome install: [download the latest `milXdy-<version>-chromium.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
 
-Choose a release zip:
-
-- **Full**: recommended for most Chrome users; starts with the richest default setup.
-- **Balanced**: lighter default pins and runtime budget while keeping all first-party apps available.
-- **Lite**: quietest default setup for lower-power browsers or users who want to turn apps on manually.
+Lite, Balanced, and Full are setup choices inside milXdy, not separate install decisions.
 
 For release builds:
 
-1. Download the latest profile-specific release zip from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Start with `chromium-full` if you are not sure. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
+1. Download the latest browser-specific release zip from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium.zip` for Chrome, Brave, and Edge, or `milXdy-<version>-firefox.zip` for Firefox beta testing.
 2. Unzip it into a permanent folder.
 3. For Chrome, Brave, or Edge, open `chrome://extensions`.
 4. Enable **Developer mode**.
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-Firefox users should use a Firefox profile zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
+Firefox users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
 
 For source builds:
 
@@ -50,7 +46,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox's temporary add-on screen. The profile build also emits Lite and Balanced outputs under `dist/chromium-lite`, `dist/chromium-balanced`, `dist/firefox-lite`, and `dist/firefox-balanced`.
+Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox's temporary add-on screen.
 
 Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
 

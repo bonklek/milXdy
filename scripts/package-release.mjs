@@ -22,7 +22,7 @@ await rm(checksumFile, { force: true });
 
 for (const build of releaseBuilds) {
   await verifyBuildDir(build);
-  const archive = `${releaseDir}/milXdy-${version}-${build.target}-${build.profile}.zip`;
+  const archive = `${releaseDir}/milXdy-${version}-${build.target}.zip`;
   await rm(archive, { force: true });
   await createZip(build.dir, archive);
   await verifyArchive(archive, build);

@@ -14,7 +14,7 @@ await mkdir(tempRoot, { recursive: true });
 
 try {
   for (const build of releaseBuilds) {
-    const fileName = `milXdy-${version}-${build.target}-${build.profile}.zip`;
+    const fileName = `milXdy-${version}-${build.target}.zip`;
     const releaseArchive = `release/${fileName}`;
     const firstArchive = join(tempRoot, `first-${fileName}`);
     const secondArchive = join(tempRoot, `second-${fileName}`);

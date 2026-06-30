@@ -18,7 +18,7 @@ export async function verifyReleaseChecksums() {
   const manifestText = await readFile(checksumFile, "utf8");
   const actual = parseChecksumManifest(manifestText);
   const expectedArchives = releaseBuilds
-    .map((build) => `milXdy-${version}-${build.target}-${build.profile}.zip`)
+    .map((build) => `milXdy-${version}-${build.target}.zip`)
     .sort();
   assertEqualList(Array.from(actual.keys()).sort(), expectedArchives, `${checksumFile}: archive list mismatch`);
 
