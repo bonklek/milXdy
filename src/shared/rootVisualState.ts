@@ -7,6 +7,7 @@ import {
   normalizeVisualTheme,
   type VisualThemeSettings,
 } from "./reskinProfile";
+import { parseJsonObject } from "./json";
 import { injectReskinStyles } from "./reskinStyles";
 
 type XTheme = "light" | "dim" | "dark";
@@ -189,16 +190,6 @@ function normalizeStoredThemeValue(value: unknown): XTheme | null {
   if (normalized === "dim") return "dim";
   if (normalized === "dark" || normalized === "lights_out" || normalized === "black") return "dark";
   return null;
-}
-
-function parseJsonObject(value: string | null): Record<string, unknown> | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
 }
 
 function isUsableThemeColor(color: string | null | undefined): color is string {
