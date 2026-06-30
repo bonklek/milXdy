@@ -443,6 +443,43 @@ input[type="checkbox"] {
   font-size: 11px;
 }
 
+.setting-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.benchmark-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0;
+}
+
+.benchmark-message {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  min-height: 14px;
+}
+
+.benchmark-message[data-flag="over"] {
+  color: var(--danger, #d23);
+}
+
+#benchmarkReport:empty {
+  display: none;
+}
+
+.status-item.is-danger {
+  border-color: var(--danger, #d23);
+}
+
+.status-item.is-danger strong {
+  color: var(--danger, #d23);
+}
+
 .auth-box,
 .update-status,
 .report-box,

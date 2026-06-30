@@ -14,6 +14,7 @@
 - [RemiNet Chat guide](user-guides/reminet-chat.md)
 - [Miladychan Portal guide](user-guides/miladychan-portal.md)
 - [Music guide](user-guides/music.md)
+- [Max profile benchmark](MAX_PROFILE_BENCHMARK.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](APP_SDK.md)
