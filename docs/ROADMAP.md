@@ -99,16 +99,21 @@ Near-term platform work after `0.2.0` should therefore focus on:
 
 Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
 
-## Planned: 0.2.2 - Diagnostics And Windowing
+## Planned: 0.2.2 - Prepared App SDK
 
-Theme: performance measurement, scanner decisions, overlay positioning, and contributor UI guidance.
+Theme: prepare the local-first app SDK so first-party apps and future community apps have clearer package boundaries, lifecycle contracts, diagnostics, and contributor-facing UI guidance.
 
-- Add repeatable Max visual profile diagnostics.
-  - compare Max against lighter visual profiles with long-task, frame-gap, FPS, and feature timing data
+- Prepare app package boundaries.
+  - define the default app folder layout and package manifest shape
+  - document app metadata for surfaces, permissions, assets, dock behavior, privacy labels, background services, and performance cost
+  - keep external install/update support future-facing, but make first-party apps use the same concepts now
+- Stabilize app lifecycle hooks.
+  - clarify boot, enable, disable, route-change, surface-delivery, overlay open/close, and dispose behavior
+  - keep shared scanners, route handling, visual effects, storage, and background fetches centralized instead of duplicated inside each app
+- Add SDK-ready diagnostics.
+  - compare Max against lighter setup choices with long-task, frame-gap, FPS, and feature timing data
   - make performance reports usable without opening DevTools
-- Decide whether deeper scanner work is needed.
-  - base shared scanner rewrite scope on diagnostics rather than assumption
-  - identify affected app surfaces and measurable targets before committing to a rewrite
+  - base any deeper scanner rewrite on measured app/runtime data rather than assumption
 - Harden docked app window behavior.
   - audit snap guides, protected zones, restore behavior, and narrow-viewport recovery
   - keep controls inside app headers clickable and avoid accidental drags
