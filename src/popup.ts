@@ -10,6 +10,13 @@ declare const MILXDY_BUILD_TARGET: string;
 import type { AppPreset, MilxdyAppManifest } from "./shared/appPlatform";
 import { FIRST_PARTY_APPS } from "./shared/firstPartyApps";
 import {
+  BENCHMARK_RESULT_PREFIX,
+  BENCHMARK_START_MESSAGE,
+  DEFAULT_BENCHMARK_DURATION_MS,
+  TRACKED_FEATURE_TIMINGS,
+  type BenchmarkResult,
+} from "./shared/maxProfileBenchmark";
+import {
   PERFORMANCE_MODE_KEY,
   budgetForPerformanceMode,
   normalizePerformanceMode,
@@ -195,6 +202,7 @@ async function boot(): Promise<void> {
   setupWikiAiHelp();
   setupRemiStatsIconControls();
   setupReportActions();
+  setupBenchmarkControls();
   setupPostReadingVoiceSelect();
   await renderWikiLaterItems();
   observeWikiLaterItems();
@@ -1981,6 +1989,213 @@ async function renderStatus(): Promise<void> {
     node.innerHTML = `<strong>${escapeHtml(item[1])}</strong><span>${escapeHtml(item[0])}</span>`;
     statusGrid.appendChild(node);
   }
+}
+
+const BENCHMARK_PROFILE_ORDER: ReskinProfile[] = ["max", "moderate", "min"];
+const BENCHMARK_PROFILE_LABEL: Record<ReskinProfile, string> = {
+  max: "Max",
+  moderate: "Mod",
+  min: "Min",
+};
+
+function setupBenchmarkControls(): void {
+  const startButton = document.getElementById("benchmarkStart") as HTMLButtonElement | null;
+  const copyButton = document.getElementById("benchmarkCopy") as HTMLButtonElement | null;
+  const message = document.getElementById("benchmarkMessage");
+  const report = document.getElementById("benchmarkReport");
+  if (!startButton || !report) return;
+
+  let copyText = "";
+
+  const setMessage = (text: string, flag?: "over"): void => {
+    if (!message) return;
+    message.textContent = text;
+    if (flag) message.dataset.flag = flag;
+    else delete message.dataset.flag;
+  };
+
+  void renderBenchmarkReport(report).then((rendered) => {
+    copyText = rendered.copyText;
+    if (copyButton) copyButton.hidden = copyText.length === 0;
+    if (rendered.verdict?.over2x) setMessage(`Max is ${rendered.verdict.text} vs Moderate.`, "over");
+  });
+
+  startButton.addEventListener("click", async () => {
+    // Target the visible tab the user will scroll: rAF only runs at full rate on the
+    // foreground tab, so an arbitrary background X tab would record throttled garbage.
+    const [activeTab] = await chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .catch(() => [] as chrome.tabs.Tab[]);
+    const tabId = activeTab?.id;
+    const url = activeTab?.url ?? "";
+    if (typeof tabId !== "number" || !/^https:\/\/(x\.com|twitter\.com)\//.test(url)) {
+      setMessage("Switch to the X/Twitter tab you want to measure, then start the benchmark.");
+      return;
+    }
+    const enabled = await chrome.storage.local
+      .get({ "milxdy.diagnostics.enabled": false })
+      .catch(() => ({ "milxdy.diagnostics.enabled": false }));
+    if (enabled["milxdy.diagnostics.enabled"] !== true) {
+      setMessage("Enable “Collect performance counters” above so results are saved for comparison.");
+      return;
+    }
+
+    startButton.disabled = true;
+    const seconds = Math.round(DEFAULT_BENCHMARK_DURATION_MS / 1000);
+    setMessage(`Sampling for ${seconds}s — keep that X tab visible and scroll the feed until this finishes…`);
+    try {
+      const response = (await chrome.tabs.sendMessage(tabId, { type: BENCHMARK_START_MESSAGE })) as
+        | { ok?: boolean; busy?: boolean; result?: BenchmarkResult | null }
+        | undefined;
+      if (response?.busy) {
+        setMessage("A benchmark is already running on that tab — wait for it to finish.");
+      } else if (!response?.ok || !response.result) {
+        setMessage("No frames were sampled. Keep the X tab focused and scroll during the run, then retry.");
+      } else {
+        const rendered = await renderBenchmarkReport(report);
+        copyText = rendered.copyText;
+        if (copyButton) copyButton.hidden = copyText.length === 0;
+        showRunOutcome(response.result, rendered.verdict, setMessage);
+      }
+    } catch {
+      setMessage("Could not reach the X tab — reload it so the latest extension is loaded, then retry.");
+    } finally {
+      startButton.disabled = false;
+    }
+  });
+
+  copyButton?.addEventListener("click", () => {
+    if (!copyText) return;
+    void navigator.clipboard
+      .writeText(copyText)
+      .then(() => setMessage("Report copied to clipboard."))
+      .catch(() => setMessage("Copy failed. Select the report manually."));
+  });
+}
+
+function showRunOutcome(
+  result: BenchmarkResult,
+  verdict: BenchmarkVerdict | null,
+  setMessage: (text: string, flag?: "over") => void,
+): void {
+  if (verdict?.over2x) {
+    setMessage(`Recorded ${result.profile}. Max is ${verdict.text} vs Moderate.`, "over");
+    return;
+  }
+  setMessage(
+    `Recorded ${result.profile}: ${result.averageFps} fps avg, worst frame gap ${result.worstFrameGapMs} ms, ${result.longTasks} long tasks.`,
+  );
+}
+
+type BenchmarkReport = { copyText: string; verdict: BenchmarkVerdict | null };
+
+async function renderBenchmarkReport(container: HTMLElement): Promise<BenchmarkReport> {
+  const keys = BENCHMARK_PROFILE_ORDER.map((profile) => `${BENCHMARK_RESULT_PREFIX}${profile}`);
+  const stored = await chrome.storage.local.get(keys).catch(() => ({}) as Record<string, unknown>);
+  const results = new Map<ReskinProfile, BenchmarkResult>();
+  for (const profile of BENCHMARK_PROFILE_ORDER) {
+    const value = stored[`${BENCHMARK_RESULT_PREFIX}${profile}`];
+    if (value && typeof value === "object") results.set(profile, value as BenchmarkResult);
+  }
+
+  container.innerHTML = "";
+  if (results.size === 0) return { copyText: "", verdict: null };
+
+  const present = BENCHMARK_PROFILE_ORDER.filter((profile) => results.has(profile));
+  const rows: Array<[string, (r: BenchmarkResult) => string]> = [
+    ["Avg FPS", (r) => String(r.averageFps)],
+    ["Worst frame gap", (r) => `${r.worstFrameGapMs} ms`],
+    ["Frames >50ms", (r) => String(r.framesOver50ms)],
+    ["Frames >100ms", (r) => String(r.framesOver100ms)],
+    ["Long tasks", (r) => String(r.longTasks)],
+    ["Worst long task", (r) => `${r.worstLongTaskMs} ms`],
+  ];
+
+  const addItem = (label: string, value: string, danger = false): void => {
+    const node = document.createElement("div");
+    node.className = danger ? "status-item is-danger" : "status-item";
+    node.innerHTML = `<strong>${escapeHtml(value)}</strong><span>${escapeHtml(label)}</span>`;
+    container.appendChild(node);
+  };
+
+  for (const [label, read] of rows) {
+    const value = present.map((profile) => `${BENCHMARK_PROFILE_LABEL[profile]} ${read(results.get(profile)!)}`).join("  /  ");
+    addItem(label, value);
+  }
+  for (const key of TRACKED_FEATURE_TIMINGS) {
+    const cells = present
+      .map((profile) => {
+        const timing = results.get(profile)!.featureTimings?.[key];
+        return timing ? `${BENCHMARK_PROFILE_LABEL[profile]} ${timing.averageMs}ms×${timing.count}` : null;
+      })
+      .filter((cell): cell is string => cell !== null);
+    if (cells.length > 0) addItem(key, cells.join("  /  "));
+  }
+
+  const verdict = benchmarkVerdict(results);
+  if (verdict) addItem("Max vs Moderate", verdict.text, verdict.over2x);
+
+  return { copyText: buildBenchmarkReportText(results, verdict), verdict };
+}
+
+type BenchmarkVerdict = { text: string; over2x: boolean };
+
+function benchmarkVerdict(results: Map<ReskinProfile, BenchmarkResult>): BenchmarkVerdict | null {
+  const max = results.get("max");
+  const moderate = results.get("moderate");
+  if (!max || !moderate) return null;
+  const ratios: Array<[string, number]> = [];
+  // When Moderate's baseline is 0 but Max is not, that's a regression from nothing — the
+  // strongest signal — so treat it as Infinity rather than dropping the metric.
+  const ratio = (a: number, b: number): number | null => {
+    if (b > 0) return a / b;
+    return a > 0 ? Infinity : null;
+  };
+  const gap = ratio(max.worstFrameGapMs, moderate.worstFrameGapMs);
+  const over50 = ratio(max.framesOver50ms, moderate.framesOver50ms);
+  const tasks = ratio(max.longTasks, moderate.longTasks);
+  if (gap !== null) ratios.push(["worst frame gap", gap]);
+  if (over50 !== null) ratios.push(["frames >50ms", over50]);
+  if (tasks !== null) ratios.push(["long tasks", tasks]);
+  if (ratios.length === 0) return null;
+  const worst = ratios.reduce((a, b) => (b[1] > a[1] ? b : a));
+  const over2x = worst[1] > 2;
+  let text: string;
+  if (!Number.isFinite(worst[1])) {
+    text = `introducing ${worst[0]} Moderate never had — over 2×`;
+  } else if (worst[1] <= 1) {
+    text = "no worse than Moderate";
+  } else if (over2x) {
+    text = `${worst[1].toFixed(1)}× worse (${worst[0]}) — over 2×`;
+  } else {
+    text = `${worst[1].toFixed(1)}× worse (${worst[0]})`;
+  }
+  return { text, over2x };
+}
+
+function buildBenchmarkReportText(
+  results: Map<ReskinProfile, BenchmarkResult>,
+  verdict: BenchmarkVerdict | null,
+): string {
+  const lines: string[] = ["milXdy Max profile benchmark", `Build: ${BUILD_TARGET}/${BUILD_PROFILE}`, ""];
+  for (const profile of BENCHMARK_PROFILE_ORDER) {
+    const r = results.get(profile);
+    if (!r) continue;
+    lines.push(
+      `[${profile}] ${Math.round(r.durationMs / 1000)}s sample`,
+      `  avg FPS: ${r.averageFps}  worst frame gap: ${r.worstFrameGapMs}ms`,
+      `  frames >50ms: ${r.framesOver50ms}  >100ms: ${r.framesOver100ms}`,
+      `  long tasks: ${r.longTasks}  worst: ${r.worstLongTaskMs}ms  total: ${r.longTaskTotalMs}ms`,
+    );
+    const timings = TRACKED_FEATURE_TIMINGS.map((key) => {
+      const t = r.featureTimings?.[key];
+      return t ? `${key}=${t.averageMs}ms×${t.count}` : null;
+    }).filter(Boolean);
+    if (timings.length > 0) lines.push(`  feature timings: ${timings.join(", ")}`);
+    lines.push("");
+  }
+  if (verdict) lines.push(`Verdict: Max is ${verdict.text} vs Moderate.`);
+  return lines.join("\n").trimEnd();
 }
 
 function setupReportActions(): void {
