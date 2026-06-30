@@ -22,11 +22,17 @@ This project is intended for GitHub beta distribution and local browser testing.
 
 ## Quick Install
 
-Quickest Chrome install: [download the latest Chromium zip from GitHub Releases](https://github.com/bonklek/milXdy/releases), unzip it, then load the folder from `chrome://extensions`.
+Quickest Chrome install: [download the latest `milXdy-<version>-chromium-full.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
+
+Choose a release zip:
+
+- **Full**: recommended for most Chrome users; starts with the richest default setup.
+- **Balanced**: lighter default pins and runtime budget while keeping all first-party apps available.
+- **Lite**: quietest default setup for lower-power browsers or users who want to turn apps on manually.
 
 For release builds:
 
-1. Download the latest profile-specific release zip from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
+1. Download the latest profile-specific release zip from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Start with `chromium-full` if you are not sure. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
 2. Unzip it into a permanent folder.
 3. For Chrome, Brave, or Edge, open `chrome://extensions`.
 4. Enable **Developer mode**.

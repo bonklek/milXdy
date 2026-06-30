@@ -4,6 +4,14 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
+For Chrome, Brave, or Edge, most users should start with `milXdy-<version>-chromium-full.zip`.
+
+Profile choices:
+
+- **Full**: recommended for most Chrome users; starts with the richest default setup.
+- **Balanced**: lighter default pins and runtime budget while keeping all first-party apps available.
+- **Lite**: quietest default setup for lower-power browsers or users who want to turn apps on manually.
+
 1. Download the latest unpacked release archive from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium-full.zip`, `milXdy-<version>-chromium-balanced.zip`, or `milXdy-<version>-chromium-lite.zip` for Chrome, Brave, and Edge. Use the matching `firefox-full`, `firefox-balanced`, or `firefox-lite` zip for Firefox beta testing.
 2. Unzip it into a permanent folder. Do not install from Downloads if you clean that folder often.
 3. Open `chrome://extensions`.
