@@ -8,6 +8,7 @@ import {
   type VisualThemeSettings,
 } from "../../shared/reskinProfile";
 import type { MilxdyContentAppContext } from "../../shared/appPlatform";
+import { parseJsonObject } from "../../shared/json";
 
 let postSoundContext: AudioContext | null = null;
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
@@ -468,16 +469,6 @@ function isUsableAccentColor(value: string | null | undefined): value is string 
   if (red < 35 && green < 35 && blue < 35) return false;
   if (red > 220 && green > 220 && blue > 220) return false;
   return true;
-}
-
-function parseJsonObject(value: string | null): Record<string, unknown> | null {
-  if (!value) return null;
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null;
-  } catch {
-    return null;
-  }
 }
 
 function injectHomeLogoStyles(): void {
