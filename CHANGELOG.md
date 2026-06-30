@@ -8,7 +8,7 @@ See [milXdy 0.2.1 release notes](docs/RELEASE_NOTES_0.2.1.md).
 
 Current release-gate state:
 
-- `typecheck`, profile builds, update-check verification, Post-reading hyperlink-offset verification, extension smoke, app smoke, and platform checks passed in this workspace.
+- `typecheck`, browser release builds, update-check verification, Post-reading hyperlink-offset verification, extension smoke, app smoke, and platform checks passed in this workspace.
 - Live QA is complete for the 0.2.1 release scope, including the Post-reading smooth-highlight freeze follow-up, RemiNet/RemiStats poke state, Beetol cooldown memory, notification tinting, and thread/reply visual behavior.
 - Release packaging, checksum verification, and reproducibility verification passed for the published 0.2.1 artifacts.
 
@@ -24,7 +24,7 @@ Implemented highlights:
 - Polished Music panel sizing with compact-mode height limits, narrower width resizing, persisted layout state, simplified minimized controls, and volume control overflow fixes.
 - Added RemiNet Chat older-message loading and safer media preview behavior.
 - Restored stronger notification card tints and reply/thread connector hints for orphaned replies.
-- Classified Firefox CSP/PFP behavior and kept Firefox profile builds in the release matrix.
+- Classified Firefox CSP/PFP behavior and kept Firefox builds in the release matrix.
 - Updated `esbuild` to `0.28.1` and kept the release smoke verifier aligned with the active package/manifest version.
 
 ## 0.2.0

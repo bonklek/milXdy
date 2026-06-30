@@ -2,15 +2,27 @@
 
 milXdy first-party features now run through a shared app platform instead of each feature owning its own bootstrap path. The current SDK is intentionally local-first: built-in apps use the same manifest concepts future external packages should use, while external package loading, remote install/update UX, and a stable third-party API remain future work.
 
-## Developer Preview Status
+## Prepared SDK Status
 
-`0.2.0` is an app-platform preview. It is meant to show the direction, document the vocabulary, and give developers enough structure to begin designing milXdy apps, but it is not the final mod system.
+`0.2.0` shipped the first app-platform preview. `0.2.1` polished that platform for public beta distribution. The planned `0.2.2` release is the **Prepared App SDK** pass: it should make the local-first app contract clearer, make first-party apps conform to the contract more consistently, and document enough package shape that future app work has a stable target.
+
+This is still not the final remote community app system. Treat the APIs here as the current internal contract and public design direction, not a finalized third-party compatibility promise.
 
 The long-term goal is a complete composable app/mod system where default apps and community apps can live as packages in an apps folder. In that model, an app should declare its surfaces, permissions, assets, dock behavior, performance cost, privacy notes, and lifecycle hooks through a manifest instead of wiring itself directly into the extension root.
 
 That final shape needs more refactoring before it can be safe and efficient. Most milXdy apps touch the same expensive X/Twitter substrate: timeline scanning, user/profile detection, route changes, media surfaces, visual effects, background fetches, and overlay panels. The platform needs those systems to stay shared so every app does not bring its own observer, poller, scanner, animation layer, or network queue. Until that extraction is complete, first-party apps remain bundled in the extension while the registry, lifecycle, Apps Hub, and rail establish the contract future packages should target.
 
-Developers can use this document to plan app ideas now, especially around manifests, declared surfaces, load triggers, performance cost, Hub disclosure, and docked UI behavior. Treat the APIs here as the current internal contract and the public design direction, not a finalized third-party compatibility promise.
+Developers can use this document to plan app ideas now, especially around manifests, declared surfaces, load triggers, performance cost, Hub disclosure, settings schema, diagnostics, and docked UI behavior.
+
+For `0.2.2`, SDK preparation should focus on:
+
+- first-party app package boundaries and folder conventions
+- lifecycle hook stability
+- manifest metadata completeness
+- shared runtime/scanner usage instead of app-owned duplicate observers
+- settings/preset participation
+- dock/window behavior expected from app surfaces
+- diagnostics that can prove app runtime cost and scanner decisions
 
 ## App Manifest
 
@@ -77,7 +89,7 @@ Current first-party Hub-managed enablement keys include Post-reading `enabled`, 
 
 Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open the Apps Hub once on X. The background install seeder keeps first-party apps enabled by default. Choosing Lite, Balanced, or Full applies manifest `hub.presets`, `hub.rail.defaultPinned`, and the matching Performance mode without importing app bundles just to change settings. The same setup choices remain available from the Apps Hub settings menu after first-run.
 
-Profile builds keep the full first-party app set, assets, and host permissions. Build profile metadata may tune defaults and release labels, but it must not make an app unavailable or remove its enable, pin, or open controls.
+Release builds keep the full first-party app set, assets, and host permissions. Lite, Balanced, and Full are setup/preset choices inside milXdy; they must not make an app unavailable or remove its enable, pin, or open controls.
 
 Apps Hub cards derive their compact metadata chips from the same registry fields: cost profile, rail support, privacy labels, and remote services. Keep those fields accurate when adding an app because they are both release documentation and user-facing runtime disclosure.
 

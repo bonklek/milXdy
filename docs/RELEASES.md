@@ -25,7 +25,7 @@ npm run verify:release:gates:020
 
 For reproducible release archives, use the npm lockfile as the canonical dependency input (`npm ci` in clean release environments) and run packaging through the checked-in Node scripts. `scripts/package-release.mjs` writes ZIP files with sorted entries, normalized permissions, forward-slash paths, deterministic deflate output, and a fixed timestamp from `SOURCE_DATE_EPOCH` when set. If `SOURCE_DATE_EPOCH` is unset, the release tooling uses its built-in fixed timestamp so repeated packages from the same `dist` tree are byte-for-byte identical.
 
-`scripts/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, profile builds, copied assets, or archive metadata changes.
+`scripts/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, browser builds, copied assets, or archive metadata changes.
 
 The release build emits browser-ready files under `dist/chromium` and `dist/firefox`. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
 

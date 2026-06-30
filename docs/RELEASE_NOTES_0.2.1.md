@@ -58,7 +58,7 @@ Status: released. Automated release gates passed, release artifacts were verifie
 
 ### Firefox and permissions
 
-- Firefox profile builds remain part of the release matrix.
+- Firefox builds remain part of the release matrix.
 - X page CSP noise is classified separately from actionable extension-resource or RemiStats asset permission problems.
 - RemiStats tooltip PFP loading documents the required `https://pfp.remilia.net/*` permission behavior.
 - `esbuild` was updated to `0.28.1` while keeping release dependency overrides in place.

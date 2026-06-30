@@ -17,7 +17,7 @@ Theme: bug fixes, cooldown correctness, layout polish, and immediate usability r
 
 - Release update flow.
   - uses the latest normal GitHub release for the normal update channel
-  - prefers the matching browser/profile archive
+  - prefers the matching browser archive
   - keeps safe in-place update instructions visible and adds optional update assistant handoff
 - App platform polish.
   - preserves app availability across setup choices and build profiles
