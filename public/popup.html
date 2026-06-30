@@ -131,6 +131,16 @@
             <span><strong>Collect performance counters</strong><small>Store lightweight local counters for troubleshooting.</small></span>
             <input type="checkbox" data-control="diagnosticsEnabled">
           </label>
+          <div class="setting-group-header">
+            <h3>Max profile benchmark</h3>
+          </div>
+          <p class="setting-note">Compare Max against Moderate/Min on the same feed. Set Appearance, open X, start a run, then scroll for 30 seconds. Run again on each profile to compare.</p>
+          <div class="benchmark-actions">
+            <button type="button" id="benchmarkStart" class="secondary-button">Start 30s benchmark</button>
+            <button type="button" id="benchmarkCopy" class="secondary-button" hidden>Copy report</button>
+          </div>
+          <p class="benchmark-message" id="benchmarkMessage" role="status"></p>
+          <div class="status-grid" id="benchmarkReport"></div>
         </section>
       </section>
 
