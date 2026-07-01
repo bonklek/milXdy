@@ -913,6 +913,14 @@ function markBadgeSlotEmpty(slot) {
   removeEmptyBadgeRow(slot.parentElement);
 }
 
+function backfillActionPokeForExistingBadge(element, badge) {
+  if (visualTheme.pokePlacement !== 'actions') return;
+  const username = cleanUsername(badge?.dataset?.reminetUsername)
+    || cleanUsername(element?.dataset?.reminetLookupHandle)
+    || extractUsername(element);
+  if (username) insertActionPoke(element, username, extractUsername(element));
+}
+
 function stabilizeTweetBadgeSlot(element, slot) {
   if (!element || !slot || slot.dataset.reminetProfileSlot === 'true') return;
   const tweet = element.matches?.('[data-testid="tweet"]') ? element : element.closest?.('[data-testid="tweet"]');
@@ -1655,12 +1663,13 @@ async function insertBadge(element, usernameOverride = null) {
     return markSurfaceResult(element, 'quote-skip');
   }
   // Check if badge already exists
-  const hasOwnBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
-    .some((badge) => surfaceOwnsNode(element, badge));
-  if (hasOwnBadge) {
+  const ownBadge = Array.from(element.querySelectorAll('[data-reminet-badge]'))
+    .find((badge) => surfaceOwnsNode(element, badge));
+  if (ownBadge) {
     const existingSlot = Array.from(element.querySelectorAll('[data-reminet-badge-slot], [data-milxdy-tweet-slot="remistats-badge"]'))
       .find((slot) => surfaceOwnsNode(element, slot));
     stabilizeTweetBadgeSlot(element, existingSlot);
+    backfillActionPokeForExistingBadge(element, ownBadge);
     return markSurfaceResult(element, 'already-has-badge');
   }
   
