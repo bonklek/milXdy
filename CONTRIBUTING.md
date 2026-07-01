@@ -14,6 +14,16 @@ main -> feature branch -> pull request -> main -> release tag
 
 Use release branches only for stabilization or hotfixes, such as `release/0.2.2` or `maintenance/0.2.x`. Cherry-pick or merge accepted release fixes back to `main`.
 
+## Build Channels
+
+Pull requests run CI so reviewers can trust that a change builds and passes the core verification checks. PRs do not produce user-facing builds by default.
+
+Snapshot builds are manually triggered from GitHub Actions when accumulated changes on `main` are useful for power-user testing. Snapshots package Chromium and Firefox ZIPs as temporary workflow artifacts. They are not GitHub Releases and are not used by the normal updater.
+
+Release candidates are intentional prereleases, such as `v0.2.2-rc.1`, used when a release scope is nearly frozen and needs broader validation.
+
+Normal releases are tagged GitHub Releases, such as `v0.2.2`, and are the only builds the normal updater should follow.
+
 ## Agent Workflow
 
 When using Codex or another agent for repository changes:
