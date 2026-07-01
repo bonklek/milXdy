@@ -80,3 +80,7 @@ Also verify:
 ## Push Policy
 
 Do not push unless the repository owner explicitly approves the push.
+
+`main` is the shared integration branch and may be ahead of the latest public release. Contributors should branch from `main` and open pull requests back to `main`. Public releases are fixed by tags, release notes, and GitHub Release assets, not by holding `main` at the latest shipped version.
+
+Use release branches only when stabilizing or hotfixing a release line. Merge or cherry-pick accepted release fixes back to `main` so future feature work does not fork from stale release code.
