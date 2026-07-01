@@ -286,10 +286,6 @@ export function boot(context?: MilxdyContentAppContext): void {
   recordDiagnostic = context?.recordDiagnostic || recordDiagnostic;
   ensureOverlayAppChromeStyles();
   registerDockItem();
-  if (shouldAutoOpenMessagesChat()) {
-    state.messagesSelected = true;
-    state.minimized = false;
-  }
   ensureRoot();
   scheduleMountRetry();
   void loadLayoutSettings();
@@ -300,15 +296,13 @@ export function boot(context?: MilxdyContentAppContext): void {
   observeHostImageViewer();
   observeEnablement();
   observeMessagesSelection();
+  observeMessagesList();
   void refreshAuthAndHistory();
 }
 
 export function onRouteChange(_route: MilxdyRouteChange): void {
   if (!lifecycleActive()) return;
-  if (isMessagesRoute()) {
-    state.messagesSelected = shouldAutoOpenMessagesChat();
-    if (state.messagesSelected) state.minimized = false;
-  }
+  if (isMessagesRoute() && state.messagesSelected && isConversationHref(location.pathname)) clearMessagesSelection();
   ensureRoot();
   scheduleMountRetry();
   void refreshAuthAndHistory();
@@ -496,10 +490,6 @@ function isChatRoute(): boolean {
 
 function isMessagesRoute(): boolean {
   return location.pathname === "/messages" || location.pathname.startsWith("/messages/") || location.pathname.startsWith("/i/chat");
-}
-
-function shouldAutoOpenMessagesChat(): boolean {
-  return location.pathname === "/i/chat" || location.pathname === "/i/chat/";
 }
 
 function isProfileRoute(): boolean {
@@ -766,18 +756,59 @@ function observeMessagesSelection(): void {
     if (!state.messagesSelected || !isMessagesRoute()) return;
     const target = event.target instanceof Element ? event.target : null;
     if (!target || target.closest(`#${PSEUDO_ROW_ID}`) || target.closest(`#${ROOT_ID}`)) return;
-    const nativeDmLink = target.closest('a[href^="/messages/"], a[href^="/i/chat/"]');
-    if (!nativeDmLink) return;
-    state.messagesSelected = false;
-    closeSocket();
-    state.root?.remove();
-    state.root = null;
-    state.mountMode = null;
-    restoreNativeDmPane();
-    updatePseudoChatRowState();
+    if (!findNativeDmSelectionTarget(target)) return;
+    clearMessagesSelection();
   };
   document.addEventListener("click", selectionListener, true);
   addRuntimeDisposable(() => document.removeEventListener("click", selectionListener, true));
+}
+
+function observeMessagesList(): void {
+  let cancelCheckTimer: (() => void) | null = null;
+  const scheduleCheck = () => {
+    if (!lifecycleActive() || cancelCheckTimer) return;
+    cancelCheckTimer = runtimeScheduler.timeout(() => {
+      cancelCheckTimer = null;
+      if (!lifecycleActive()) return;
+      if (!isMessagesRoute()) {
+        removePseudoChatRow();
+        return;
+      }
+      ensurePseudoChatRow();
+    }, 150);
+  };
+  const observer = new MutationObserver(scheduleCheck);
+  observer.observe(document.documentElement, {
+    childList: true,
+    subtree: true,
+  });
+  window.addEventListener("scroll", scheduleCheck, true);
+  addRuntimeDisposable(() => {
+    cancelCheckTimer?.();
+    cancelCheckTimer = null;
+    observer.disconnect();
+    window.removeEventListener("scroll", scheduleCheck, true);
+  });
+}
+
+function findNativeDmSelectionTarget(target: Element): HTMLElement | null {
+  const link = target.closest<HTMLElement>('a[href^="/messages/"], a[href^="/i/chat/"]');
+  if (isConversationHref(link?.getAttribute("href") || null)) return link;
+  const row = target.closest<HTMLElement>('[data-testid="cellInnerDiv"], [role="link"], [role="button"], [data-testid="conversation"]');
+  if (!row || row.id === PSEUDO_ROW_ID || row.querySelector(`#${PSEUDO_ROW_ID}`)) return null;
+  return isLikelyDmConversationRow(row) ? row : null;
+}
+
+function clearMessagesSelection(): void {
+  state.messagesSelected = false;
+  state.minimized = true;
+  closeSocket();
+  state.root?.remove();
+  state.root = null;
+  state.mountMode = null;
+  restoreNativeDmPane();
+  updatePseudoChatRowState();
+  updateDockState();
 }
 
 function observeHostImageViewer(): void {
