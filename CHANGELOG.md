@@ -8,6 +8,7 @@ Post-`0.2.1` hotfix highlights:
 
 - Improved RemiNet Chat placement in X Messages so the RemiliaNET Chat row stays pinned above native conversations and message selection remains stable.
 - Fixed RemiStats action-row poke rendering and added an opt-in **Poke users when liking** setting that can poke a tweet author after the user clicks X's Like button.
+- Added a lightweight **Double dash to em dash** composer helper for X/Twitter post textboxes.
 - Improved Beetol/RemiStats RemiliaNET auth recovery by refreshing the existing browser session before retrying stale or failed poke requests.
 - Expanded Post-reading support for X Articles, improved long-text highlighting with segmented smooth rendering, made stop/quit distinct from minimize, improved OCR skip/status behavior, and tightened OCR quality filtering.
 - Hardened Post-reading OCR image loading so the OCR host accepts only `https://pbs.twimg.com/media/...` image URLs and continues to use credentialless fetches/background fallback.

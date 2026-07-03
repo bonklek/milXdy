@@ -85,7 +85,7 @@ The content runtime owns the lightweight Apps Hub rail item and stores explicit 
 
 Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.defaultPinned` is app-store metadata for first-run presets and future package install flows; it should not be confused with current-user pin state. The shared dock enforces hidden item IDs globally, so feature bundles cannot bypass Hub pinning by registering their own app frame after lazy import.
 
-Current first-party Hub-managed enablement keys include Post-reading `enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links/sidebar `remiliaWikiHyperlink.settings.enabled`, and Milady Maxxer `mode`.
+Current first-party Hub-managed enablement keys include Composer Tools `milxdy.composerTools.enabled`, Post-reading `enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links/sidebar `remiliaWikiHyperlink.settings.enabled`, and Milady Maxxer `mode`.
 
 Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open the Apps Hub once on X. The background install seeder keeps first-party apps enabled by default. Choosing Lite, Balanced, or Full applies manifest `hub.presets`, `hub.rail.defaultPinned`, and the matching Performance mode without importing app bundles just to change settings. The same setup choices remain available from the Apps Hub settings menu after first-run.
 
