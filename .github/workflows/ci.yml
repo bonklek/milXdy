@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build Chromium
+        run: npm run build:chromium
+
+      - name: Build Firefox
+        run: npm run build:firefox
+
+      - name: Verify update checks
+        run: npm run verify:update-check
+
+      - name: Verify URL allowlist
+        run: npm run verify:url-allowlist
+
+      - name: Verify platform
+        run: npm run verify:platform
+
+      - name: Verify extension smoke
+        run: npm run verify:smoke:020
+
+      - name: Verify app smoke
+        run: npm run verify:app-smoke:020

@@ -29,6 +29,14 @@ For reproducible release archives, use the npm lockfile as the canonical depende
 
 The release build emits browser-ready files under `dist/chromium` and `dist/firefox`. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
 
+## Snapshot Builds
+
+Use the `Snapshot Build` GitHub Actions workflow when accumulated changes on `main` are worth testing before the next release. Snapshots are temporary workflow artifacts for power users and reviewers; they are not GitHub Releases, are not part of the normal update channel, and should not be advertised as stable releases.
+
+Use a short label such as `0.2.2-snapshot-1` or `app-sdk-windowing`. The workflow packages Chromium and Firefox ZIPs plus the checksum manifest from the selected commit. Prefer running snapshots from `main` after the relevant pull requests have merged.
+
+Use release candidates, such as `v0.2.2-rc.1`, only when the release scope is nearly frozen and the build needs a stable prerelease page with notes.
+
 Required outputs include:
 
 - `dist/chromium/content.js`
@@ -80,3 +88,7 @@ Also verify:
 ## Push Policy
 
 Do not push unless the repository owner explicitly approves the push.
+
+`main` is the shared integration branch and may be ahead of the latest public release. Contributors should branch from `main` and open pull requests back to `main`. Public releases are fixed by tags, release notes, and GitHub Release assets, not by holding `main` at the latest shipped version.
+
+Use release branches only when stabilizing or hotfixing a release line. Merge or cherry-pick accepted release fixes back to `main` so future feature work does not fork from stale release code.
