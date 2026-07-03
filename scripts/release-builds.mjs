@@ -11,6 +11,7 @@ export const coreHostPermissions = [
   "https://pbs.twimg.com/*",
   "http://localhost/*",
   "http://127.0.0.1/*",
+  "https://*.wikipedia.org/*",
   "https://remilia.wiki/*",
   "https://wiki.remilia.org/*",
 ];
@@ -18,6 +19,7 @@ export const coreHostPermissions = [
 export const contentScriptMatches = [
   "https://x.com/*",
   "https://twitter.com/*",
+  "https://*.wikipedia.org/*",
 ];
 
 export const webAccessibleMatches = [

@@ -134,6 +134,56 @@
     "requiredOutputs": ["ocr.html", "ocrHost.js"]
   },
   {
+    "id": "wikipediaReader",
+    "name": "Wikipedia Reader",
+    "version": "0.1.0",
+    "description": "Adds Post-reading support to Wikipedia articles.",
+    "entryName": "features/wikipediaReader",
+    "entryPoint": "src/entries/wikipediaReaderContent.ts",
+    "contentEntry": "features/wikipediaReader.js",
+    "defaultEnabled": true,
+    "storageKeys": { "local": ["milxdy.wikipediaReader.enabled"] },
+    "surfaces": ["route"],
+    "cost": { "startup": "cheap", "perSurface": "cheap", "network": "none", "worker": "none", "domWrite": "small" },
+    "loadTriggers": ["startup"],
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Read Wikipedia article pages aloud with the Post-reading player.",
+      "rail": { "supported": false, "defaultPinned": false },
+      "presets": ["lite", "balanced", "full"],
+      "permissionNotes": ["Runs on wikipedia.org article pages."],
+      "dataNotes": ["Extracts visible article text locally after user action."],
+      "remoteServices": ["wikipedia.org"],
+      "localStorageNotes": ["Stores feature enablement only."],
+      "privacyLabels": ["local-only", "remote-api"]
+    }
+  },
+  {
+    "id": "linkBrowser",
+    "name": "Link Browser",
+    "version": "0.1.0",
+    "description": "Opens ordinary page links in a resizable in-page browser panel.",
+    "entryName": "features/linkBrowser",
+    "entryPoint": "src/entries/linkBrowserContent.ts",
+    "contentEntry": "features/linkBrowser.js",
+    "defaultEnabled": false,
+    "storageKeys": { "local": ["milxdy.linkBrowser.enabled", "milxdy.linkBrowser.lastUrl"] },
+    "surfaces": ["overlayApp"],
+    "cost": { "startup": "cheap", "perSurface": "cheap", "network": "none", "worker": "none", "domWrite": "small" },
+    "loadTriggers": ["startup", "dockOpen"],
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Keep link reading in a small overlay instead of leaving the current page.",
+      "rail": { "supported": true, "defaultPinned": false },
+      "presets": ["balanced", "full"],
+      "permissionNotes": ["Embeds clicked http and https links in an extension-owned panel when enabled."],
+      "dataNotes": ["Does not fetch page contents itself; the browser loads the selected link in an iframe."],
+      "localStorageNotes": ["Stores panel placement and the most recent link URL."],
+      "privacyLabels": ["local-only"]
+    },
+    "dock": { "label": "Links", "defaultSide": "right" }
+  },
+  {
     "id": "remistats",
     "name": "RemiStats",
     "version": "0.1.5",

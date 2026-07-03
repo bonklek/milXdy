@@ -39,6 +39,14 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
     const stored = await chrome.storage.sync.get("enabled");
     return enabledFromStoredValue(stored.enabled, defaultAppEnabled("post-reading"));
   },
+  wikipediaReader: async () => {
+    const stored = await chrome.storage.local.get("milxdy.wikipediaReader.enabled");
+    return enabledFromStoredValue(stored["milxdy.wikipediaReader.enabled"], defaultAppEnabled("wikipediaReader"));
+  },
+  linkBrowser: async () => {
+    const stored = await chrome.storage.local.get("milxdy.linkBrowser.enabled");
+    return enabledFromStoredValue(stored["milxdy.linkBrowser.enabled"], defaultAppEnabled("linkBrowser"));
+  },
   remistats: async () => {
     const stored = await chrome.storage.sync.get("milxdy.remistats.enabled");
     return enabledFromStoredValue(stored["milxdy.remistats.enabled"], defaultAppEnabled("remistats"));
@@ -103,6 +111,12 @@ const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | und
   },
   "post-reading": async (enabled) => {
     await chrome.storage.sync.set({ enabled });
+  },
+  wikipediaReader: async (enabled) => {
+    await chrome.storage.local.set({ "milxdy.wikipediaReader.enabled": enabled });
+  },
+  linkBrowser: async (enabled) => {
+    await chrome.storage.local.set({ "milxdy.linkBrowser.enabled": enabled });
   },
   remistats: async (enabled) => {
     await chrome.storage.sync.set({ "milxdy.remistats.enabled": enabled });

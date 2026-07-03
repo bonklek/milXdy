@@ -120,7 +120,7 @@ type WikiReadableDocument = {
   id: string;
   title: string;
   text: string;
-  source: "wiki";
+  source: "wiki" | "wikipedia" | "page";
 };
 
 type WikiHighlightMessage = {
@@ -679,7 +679,7 @@ function prepareInitialTweetHighlight(text: string, readRunId: number): void {
 }
 
 function playReadableDocument(target: WikiReadableDocument): void {
-  if (!lifecycleActive() || target.source !== "wiki") return;
+  if (!lifecycleActive()) return;
   const text = target.text.trim();
   if (!text) return;
   activeReadRunId += 1;
@@ -687,7 +687,7 @@ function playReadableDocument(target: WikiReadableDocument): void {
   pauseTweetReader();
   activeWikiDocument = { ...target, text };
   attachPlayerToWikiSlot();
-  wikiSpeech.speak(text, target.title || "Remilia Wiki");
+  wikiSpeech.speak(text, target.title || "Readable page");
   wikiPlayer.show();
   dispatchWikiReaderState(true);
 }
@@ -2004,7 +2004,7 @@ function dispatchWikiReaderState(active: boolean): void {
 function isWikiReadableDocument(value: unknown): value is WikiReadableDocument {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return record.source === "wiki"
+  return (record.source === "wiki" || record.source === "wikipedia" || record.source === "page")
     && typeof record.id === "string"
     && typeof record.title === "string"
     && typeof record.text === "string";
