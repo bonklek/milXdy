@@ -118,6 +118,7 @@ const bindings: Record<string, ControlBinding> = {
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
   performanceMode: { area: "local", key: PERFORMANCE_MODE_KEY, kind: "string", fallback: "balanced" },
   reskinProfile: { area: "local", key: RESKIN_PROFILE_KEY, kind: "string", fallback: DEFAULT_RESKIN_PROFILE },
+  "composerTools.enabled": { area: "local", key: "milxdy.composerTools.enabled", kind: "boolean", fallback: true },
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
   "wiki.previewsEnabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "previewsEnabled", kind: "boolean", fallback: true },
   "wiki.sidebarFollowDarkMode": { area: "local", key: WIKI_SETTINGS_KEY, property: "sidebarFollowDarkMode", kind: "boolean", fallback: true },

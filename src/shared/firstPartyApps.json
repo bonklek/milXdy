@@ -47,6 +47,29 @@
     }
   },
   {
+    "id": "composerTools",
+    "name": "Composer Tools",
+    "version": "0.1.0",
+    "description": "Adds lightweight typing helpers to X post composers.",
+    "entryName": "features/composerTools",
+    "entryPoint": "src/entries/composerToolsContent.ts",
+    "contentEntry": "features/composerTools.js",
+    "defaultEnabled": true,
+    "storageKeys": { "local": ["milxdy.composerTools.enabled"] },
+    "surfaces": [],
+    "cost": { "startup": "cheap", "perSurface": "cheap", "network": "none", "worker": "none", "domWrite": "small" },
+    "loadTriggers": ["startup"],
+    "hub": {
+      "category": "social",
+      "shortDescription": "Convert double dashes to em dashes while typing posts.",
+      "rail": { "supported": false, "defaultPinned": false },
+      "presets": ["lite", "balanced", "full"],
+      "dataNotes": ["Reads only the active X post composer text around the caret."],
+      "localStorageNotes": ["Stores composer helper enablement."],
+      "privacyLabels": ["local-only"]
+    }
+  },
+  {
     "id": "wiki",
     "name": "Remilia Wiki Hyperlinks",
     "version": "0.1.5",
