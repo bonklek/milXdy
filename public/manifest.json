@@ -12,7 +12,6 @@
     "https://pbs.twimg.com/*",
     "http://localhost/*",
     "http://127.0.0.1/*",
-    "https://*.wikipedia.org/*",
     "https://remilia.wiki/*",
     "https://wiki.remilia.org/*",
     "https://api.remistats.net/*",
@@ -34,7 +33,7 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://*.wikipedia.org/*"],
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://*.wikipedia.org/wiki/*"],
       "js": ["content.js"],
       "run_at": "document_start",
       "all_frames": true
@@ -72,7 +71,7 @@
         "generated/*",
         "models/*"
       ],
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://*.wikipedia.org/*", "https://remilia.wiki/*", "https://wiki.remilia.org/*"]
+      "matches": ["https://x.com/*", "https://twitter.com/*", "https://*.wikipedia.org/wiki/*", "https://remilia.wiki/*", "https://wiki.remilia.org/*"]
     }
   ],
   "options_page": "popup.html",

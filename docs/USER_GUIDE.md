@@ -268,7 +268,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 
 - RemiStats calls `https://api.remistats.net`.
 - Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org`.
-- Wikipedia Reader runs on `https://*.wikipedia.org` article pages and extracts visible article text locally after user action.
+- Wikipedia Reader runs on `https://*.wikipedia.org/wiki/*` article pages and extracts visible article text locally after user action.
 - Link Browser embeds user-clicked `http` and `https` links in a sandboxed iframe when the app is enabled.
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; chat live updates use `wss://www.remilia.net`.
