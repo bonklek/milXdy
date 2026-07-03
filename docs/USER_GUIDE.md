@@ -27,6 +27,7 @@ Use the Main tab for whole-extension controls, the in-page **Apps** rail item fo
 
 - **Update status** checks the configured GitHub release endpoint and exposes guided update buttons when needed.
 - **Performance mode** is separate from Appearance. Fast minimizes background work, Balanced is the default, Full preloads more app surfaces, and Developer records extra diagnostics.
+- **Double dash to em dash** turns `--` into an em dash while typing in supported X/Twitter post composers.
 - **Performance diagnostics** stores lightweight counters used by the Diag tab. Leave this off unless testing performance or preparing a bug report.
 
 ### Apps Hub And Side Rail
