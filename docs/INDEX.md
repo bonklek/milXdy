@@ -8,6 +8,7 @@
 - [Remilia Wiki Hyperlinks guide](user-guides/remilia-wiki-hyperlinks.md)
 - [Remilia Wiki Sidebar guide](user-guides/remilia-wiki-sidebar.md)
 - [Post-reading guide](user-guides/post-reading.md)
+- [Link Browser guide](user-guides/link-browser.md)
 - [RemiStats guide](user-guides/remistats.md)
 - [Milady Maxxer guide](user-guides/milady-maxxer.md)
 - [Beetol guide](user-guides/beetol.md)

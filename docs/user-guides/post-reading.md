@@ -1,6 +1,6 @@
 # Post-reading User Guide
 
-Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into the same reader, and provides docked playback surfaces for both flows.
+Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki and Wikipedia articles into the same reader, and provides docked playback surfaces for these flows.
 
 ## Where To Find It
 
@@ -8,11 +8,13 @@ Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into th
 - Use the **Reader** tab for read-aloud settings.
 - Open **Post-reading** from the side rail for docked playback.
 - Open the **Wiki** side rail app to use article read-aloud inside the Wiki sidebar.
+- On Wikipedia article pages, use the floating **Read page** button to read the article with Post-reading.
 
 ## Common Tasks
 
 - Enable **Post-reading controls** to show read buttons on posts.
 - Open a supported X Article page and use the Post-reading control near the article body to read long-form article text.
+- Open a Wikipedia article and use **Read page** to extract visible article text locally and play it through the same reader controls.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI**.
 - Use the compact voice language and gender filters to narrow the browser voices that selection and test highlighting will consider.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
@@ -25,7 +27,7 @@ Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into th
 
 ## Notes
 
-Tweet reading and Wiki reading share the reader runtime but pause each other so only one read-aloud session speaks at a time.
+Tweet, Wiki, and Wikipedia reading share the reader runtime but pause each other so only one read-aloud session speaks at a time.
 
 Word and paragraph highlighting is most accurate with browser voices that report stable speech boundaries. milXdy probes voices and prefers known boundary-capable voices; other voices use an estimated smooth-highlight fallback for both feed posts and Wiki playback.
 

@@ -8,6 +8,8 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - RemiStats calls `https://api.remistats.net` for public reputation data.
 - RemiNet identity cache may call `https://ethereum.publicnode.com` to resolve the current owner of a verified PFP NFT.
 - Remilia Wiki previews and the docked Wiki sidebar call `https://wiki.remilia.org`.
+- Wikipedia Reader runs on `https://*.wikipedia.org` article pages. It extracts visible article text locally only after the user clicks **Read page**.
+- Link Browser is off by default. When enabled, normal clicked `http` and `https` links load in a sandboxed in-page iframe; milXdy does not fetch those page contents through a background service.
 - Grok wiki prompts are pasted into X's native Grok interface from the current X/Twitter page.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
@@ -39,6 +41,12 @@ RemiNet Chat is off by default. When enabled, it fetches recent chat messages, o
 ## Miladychan Portal
 
 Miladychan Portal is a docked reader for public Miladychan board, thread, post, and media metadata. It does not post to Miladychan. Links and media open the native Miladychan site when users want the full upstream surface.
+
+## Wikipedia Reader And Link Browser
+
+The `https://*.wikipedia.org/*` host permission allows the shared content runtime to add the Wikipedia **Read page** control and to load Post-reading assets on Wikipedia article pages, including Wikipedia pages opened inside milXdy's Link Browser panel.
+
+Link Browser stores only panel placement and the most recent link URL in local extension storage. It preserves native browser behavior for modifier-clicks, middle-clicks, and downloads.
 
 ## Music
 

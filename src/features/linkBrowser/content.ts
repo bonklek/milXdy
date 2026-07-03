@@ -241,7 +241,7 @@ function render(): void {
   iframe.title = "Link Browser";
   iframe.src = state.currentUrl;
   iframe.referrerPolicy = "no-referrer";
-  iframe.sandbox.add("allow-forms", "allow-popups", "allow-same-origin", "allow-scripts", "allow-top-navigation-by-user-activation");
+  iframe.sandbox.add("allow-forms", "allow-popups", "allow-scripts", "allow-top-navigation-by-user-activation");
   iframe.addEventListener("load", () => {
     state.iframeLoaded = true;
     clearLoadTimer();

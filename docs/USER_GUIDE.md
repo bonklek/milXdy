@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
+milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Miladychan, local music, and lightweight reading surfaces. Open the extension icon for popup settings, and use the in-page side rail on supported pages for docked apps.
 
 ## Updating The Extension
 
@@ -31,7 +31,7 @@ Use the Main tab for whole-extension controls, the in-page **Apps** rail item fo
 
 ### Apps Hub And Side Rail
 
-The shared side rail appears on X/Twitter and hosts dockable first-party apps such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, and Maxxer.
+The shared side rail appears on supported pages and hosts dockable first-party apps such as Post-reading, Link Browser, RemiNet Chat, Beetol, Miladychan, Music, and Maxxer.
 
 - Click **Apps** to open the Apps Hub.
 - Use **Enable** or **Disable** to control whether an app can run.
@@ -112,10 +112,11 @@ Socratic mode is better for harder articles because it forces Grok to gather sou
 
 ## Post-reading
 
-The Reader tab controls post and Wiki read-aloud behavior.
+The Reader tab controls post, Wiki, and Wikipedia read-aloud behavior.
 
 - Use **Post-reading controls** to show read buttons on posts.
 - On supported X Article pages, Post-reading can read the article body from the page instead of only timeline posts.
+- On Wikipedia article pages, use the floating **Read page** button to extract visible article text locally and play it through Post-reading.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
@@ -125,9 +126,18 @@ The Reader tab controls post and Wiki read-aloud behavior.
 - Minimize hides the docked reader without stopping playback. Quit/stop ends active playback, OCR, quote previews, and highlighting cleanup.
 - Use the Wiki sidebar read-aloud controls to read articles, move between paragraphs, and optionally auto-scroll the current spoken line into view.
 
-Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
+Tweet, Wiki, and Wikipedia reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
 
 OCR runs locally and can miss stylized, low-resolution, or low-contrast text. Image OCR is limited to attached X/Twitter media URLs from `pbs.twimg.com/media` and does not send cookies with those image fetches.
+
+## Link Browser
+
+Enable **Link Browser** from the Apps Hub when you want normal page links to open in a small in-page browser panel instead of leaving the current page.
+
+- Plain primary-button link clicks open the panel.
+- Ctrl-click, Cmd-click, Shift-click, Alt-click, middle-click, and download links keep native browser behavior.
+- The panel can be dragged, resized, refreshed, minimized, or opened in a normal tab.
+- Some sites block embedded display; use **Open in new tab** for those pages.
 
 ## RemiNet Connector
 
@@ -258,6 +268,8 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 
 - RemiStats calls `https://api.remistats.net`.
 - Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org`.
+- Wikipedia Reader runs on `https://*.wikipedia.org` article pages and extracts visible article text locally after user action.
+- Link Browser embeds user-clicked `http` and `https` links in a sandboxed iframe when the app is enabled.
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`.
