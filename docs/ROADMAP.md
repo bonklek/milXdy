@@ -99,45 +99,48 @@ Near-term platform work after `0.2.0` should therefore focus on:
 
 Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
 
-## Planned: 0.2.2 - Prepared App SDK
+## Planned: 0.2.2 - Apps And Settings Cleanup
 
-Theme: prepare the local-first app SDK so first-party apps and future community apps have clearer package boundaries, lifecycle contracts, diagnostics, and contributor-facing UI guidance.
+Theme: make first-party apps easier to understand, configure, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, and first-party lifecycle compliance.
 
-- Prepare app package boundaries.
-  - define the default app folder layout and package manifest shape
-  - document app metadata for surfaces, permissions, assets, dock behavior, privacy labels, background services, and performance cost
-  - keep external install/update support future-facing, but make first-party apps use the same concepts now
-- Stabilize app lifecycle hooks.
-  - clarify boot, enable, disable, route-change, surface-delivery, overlay open/close, and dispose behavior
+- Clean up Apps and Features management.
+  - move app and feature settings into a clearer left-menu information architecture
+  - define settings schema, preset participation, storage compatibility, and reset behavior
+  - keep app cards, enablement, privacy notes, costs, and storage disclosures registry-driven
+- Make first-party apps comply with the current platform contract.
+  - clarify boot, enable, disable, route-change, surface-delivery, overlay open/close, and dispose behavior for bundled apps
   - keep shared scanners, route handling, visual effects, storage, and background fetches centralized instead of duplicated inside each app
 - Add SDK-ready diagnostics.
   - compare Max against lighter setup choices with long-task, frame-gap, FPS, and feature timing data
   - make performance reports usable without opening DevTools
   - base any deeper scanner rewrite on measured app/runtime data rather than assumption
-- Harden docked app window behavior.
-  - audit snap guides, protected zones, restore behavior, and narrow-viewport recovery
-  - keep controls inside app headers clickable and avoid accidental drags
-- Document contributor-facing app UI style.
-  - turn the classic utility-window direction into public guidance for future app surfaces
+- Standardize app presentation controls.
+  - define app chrome style presets, per-app overrides, root visual controls, and profile-pack participation
+  - document contributor-facing UI style for classic app surfaces
 
-## Planned: 0.2.3 - RemiNet Sharing
+## Planned: 0.2.3 - App Runtime And Distribution Prep
 
-Theme: make RemiNet feel more native inside X while keeping sharing explicit and reviewed.
+Theme: continue the app-platform split after Apps and Features cleanup by hardening runtime behavior, local package shape, and distribution groundwork.
 
-- Chats-tab RemiNet pseudo chat.
-  - add a pseudo chat entry to the X Chats tab with RemiNet chat pinned at the top
-  - keep it visually distinct from native X DMs so users understand what surface they are using
-  - reuse existing RemiNet Chat auth, background service, and docked chat handling where possible
-- Direct Tweet PNG upload to RemiNet.
-  - build on the local Tweet PNG exporter
-  - require endpoint/API confirmation and browser-session auth behavior
-  - require preview/review behavior before upload
-  - never send or upload PNGs automatically
+- Harden app runtime behavior beyond the first Apps and Features pass.
+  - expand app runtime expectations across RemiliaNET, Miladychan, Remilia Wiki, and related hosts where permissions and privacy disclosure are explicit
+  - keep site-aware app behavior tied to manifest metadata, lifecycle hooks, background services, and shared diagnostics
+- Prepare local app-package and distribution groundwork.
+  - define the future local apps-folder package shape and starter kit expectations
+  - keep marketplace, submission, and browser-distribution prep separate from the user-facing settings cleanup
+  - evaluate Safari desktop WebExtension support if it remains aligned with the release scope
+- Keep the former RemiNet Sharing work in Composer Kit.
+  - the X Messages RemiNet pseudo chat entry shipped in 0.2.0
+  - direct Tweet PNG upload to RemiNet and granular Tweet PNG metadata controls now belong with 0.2.4 reviewed sharing/composer media work
 
 ## Planned: 0.2.4 - Composer Kit
 
-Theme: Milady posting, reply media, phrase helpers, and AI-assisted metadata normalization.
+Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme-designer integrations, and AI-assisted metadata normalization.
 
+- Tweet PNG and RemiNet sharing.
+  - add granular Tweet PNG metadata and styling settings so users can choose which identity, date, source, RemiStats, and border details appear before copy, download, browser share, or upload
+  - support direct Tweet PNG upload to RemiNet only after endpoint/API and browser-session auth behavior are confirmed
+  - require preview/review behavior before upload and never send or upload PNGs automatically
 - Miladychan posting from the portal.
   - let users create posts on Miladychan from inside milXdy instead of only browsing and opening the native site
   - preserve pseudonymous board expectations and make posting destination/board/thread state explicit

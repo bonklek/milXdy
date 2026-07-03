@@ -745,7 +745,7 @@ html[data-milxdy-visual-remistats-box="true"][data-milxdy-x-theme="dim"] .remine
 [data-theme="dark"] .reminet-action-poke-group,
 html[data-milxdy-x-theme="dark"] .reminet-action-poke-group,
 html[data-milxdy-x-theme="dim"] .reminet-action-poke-group {
-  color: #f4ffe8;
+  color: rgb(113, 118, 123);
 }
 
 [data-theme="dark"] .reminet-action-poke-group .reminet-poke-button:not([data-reminet-poke-state="error"]):not([data-reminet-poke-state="cooldown"]),

@@ -22,6 +22,7 @@ import {
   type PerformanceModeBudget,
 } from "./performanceMode";
 import type {
+  AppIconAsset,
   AppDiagnostics,
   AppLoadState,
   AppPreset,
@@ -67,6 +68,7 @@ type RuntimeState = {
     pointerId: number;
     moved: boolean;
   } | null;
+  iconTheme: "light" | "dark";
   firstRunPending: boolean;
   railPinnedApps: Set<MilxdyAppId>;
   railUnpinnedApps: Set<MilxdyAppId>;
@@ -222,6 +224,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubExpandedApps: new Set(),
     hubDockSettingsOpen: false,
     hubAppDrag: null,
+    iconTheme: currentAppIconTheme(),
     firstRunPending: false,
     railPinnedApps: new Set(),
     railUnpinnedApps: new Set(),
@@ -335,6 +338,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeEnablement();
     observeRailPins();
     observePerformanceMode();
+    observeAppIconTheme();
     scheduleIdlePreloads();
     maybeOpenFirstRunHub();
     recordRuntimeDiagnostic("runtime.bootstrap", {
@@ -614,6 +618,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
   }
 
+  function observeAppIconTheme(): void {
+    const update = () => {
+      const nextTheme = currentAppIconTheme();
+      if (state.iconTheme === nextTheme) return;
+      state.iconTheme = nextTheme;
+      updateThemedAppIcons();
+      renderHubPanel();
+    };
+    const observer = new MutationObserver(update);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-milxdy-x-theme", "data-milxdy-settings-theme", "style", "class"],
+    });
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    media?.addEventListener?.("change", update);
+    state.runtimeDisposables.add(() => {
+      observer.disconnect();
+      media?.removeEventListener?.("change", update);
+    });
+  }
+
   function disableApp(app: MilxdyAppManifest): void {
     state.enabledApps.delete(app.id);
     updateScannerConfiguration();
@@ -743,7 +768,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     for (const app of state.apps) {
       if (!state.enabledApps.has(app.id)) continue;
       for (const surface of scannerSurfacesForApp(app)) {
-        if (surface === "tweet" || surface === "userCell" || surface === "notification" || surface === "directMessage" || surface === "profile") {
+        if (surface === "tweet" || surface === "xArticle" || surface === "userCell" || surface === "notification" || surface === "directMessage" || surface === "profile") {
           if (surfaceDeliveryBlockedByPerformance(app, surface)) continue;
           const appsForSurface = index.get(surface) || [];
           appsForSurface.push(app);
@@ -1161,7 +1186,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const registration = getOverlayDock().register({
       id: app.id,
       label: app.dock.label,
-      icon: app.dock.icon ? runtimeAssetUrl(app.dock.icon) : dockIconForApp(app),
+      icon: app.dock.icon ? runtimeAssetUrl(resolveAppIconAsset(app.dock.icon)) : dockIconForApp(app),
       title: app.name,
       active: false,
       onActivate: () => {
@@ -1175,6 +1200,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       },
     });
     state.dockRegistrations.set(app.id, registration);
+  }
+
+  function updateThemedAppIcons(): void {
+    for (const app of state.apps) {
+      const registration = state.dockRegistrations.get(app.id);
+      if (!registration || !app.dock?.icon) continue;
+      registration.update({ icon: runtimeAssetUrl(resolveAppIconAsset(app.dock.icon)) });
+    }
   }
 
   function updateDockRegistration(app: MilxdyAppManifest): void {
@@ -1769,7 +1802,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.dock?.icon) {
       const image = document.createElement("img");
       image.className = "milxdy-app-hub-icon-img";
-      image.src = runtimeAssetUrl(app.dock.icon);
+      image.src = runtimeAssetUrl(resolveAppIconAsset(app.dock.icon));
       image.alt = "";
       image.decoding = "async";
       icon.appendChild(image);
@@ -3466,6 +3499,21 @@ function dockIconForApp(app: MilxdyAppManifest): string {
     '</svg>',
   ].join("");
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
+
+function resolveAppIconAsset(icon: AppIconAsset): string {
+  if (typeof icon === "string") return icon;
+  return currentAppIconTheme() === "dark" ? icon.dark : icon.light;
+}
+
+function currentAppIconTheme(): "light" | "dark" {
+  const root = document.documentElement;
+  const xTheme = root.dataset.milxdyXTheme;
+  const settingsTheme = root.dataset.milxdySettingsTheme;
+  if (xTheme === "dark" || xTheme === "dim" || settingsTheme === "dark") return "dark";
+  if (xTheme === "light" || settingsTheme === "light") return "light";
+  if (root.style.colorScheme === "dark") return "dark";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
 function hubDockIcon(): string {

@@ -80,6 +80,8 @@ The Wiki tab controls inline Remilia Wiki links, the docked Wiki sidebar app, an
 
 **Wiki** in the Apps rail opens a docked Remilia Wiki sidebar. Normal clicks on inline wiki links and preview read-more links open this sidebar by default; modifier-clicks keep the browser's normal new-tab behavior. The sidebar accepts only `https://wiki.remilia.org` URLs and includes an open-in-tab control for the full wiki page.
 
+**Wiki browser follows dark mode** is enabled by default. When milXdy is using a dark or dim theme, the embedded Remilia Wiki page receives a dark sidebar theme. Turn this off in the Wiki tab if you prefer the native wiki page colors inside the docked sidebar.
+
 ### Link later
 
 Use **Link later** from the X/Twitter context menu to save selected phrases. In the Wiki tab, saved phrases can open:
@@ -113,17 +115,19 @@ Socratic mode is better for harder articles because it forces Grok to gather sou
 The Reader tab controls post and Wiki read-aloud behavior.
 
 - Use **Post-reading controls** to show read buttons on posts.
+- On supported X Article pages, Post-reading can read the article body from the page instead of only timeline posts.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running.
 - **Include quote posts**, **Fetch full quotes**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
+- Minimize hides the docked reader without stopping playback. Quit/stop ends active playback, OCR, quote previews, and highlighting cleanup.
 - Use the Wiki sidebar read-aloud controls to read articles, move between paragraphs, and optionally auto-scroll the current spoken line into view.
 
 Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
 
-OCR runs locally and can miss stylized, low-resolution, or low-contrast text.
+OCR runs locally and can miss stylized, low-resolution, or low-contrast text. Image OCR is limited to attached X/Twitter media URLs from `pbs.twimg.com/media` and does not send cookies with those image fetches.
 
 ## RemiNet Connector
 
@@ -140,6 +144,8 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter. When the same account appears multiple times on screen, visible poke buttons for that account update to the same cooldown state after a successful poke.
 
 **Like tweets when poking** is off by default. When enabled, a successful tweet poke also clicks X's Like button for that tweet if it is not already liked.
+
+**Poke users when liking** is off by default. When enabled, clicking X's Like button on a tweet also tries to poke that tweet's RemiliaNET user if a visible, eligible poke button is present.
 
 Successful pokes count toward Miladymaxxer XP the same way likes do when milXdy can map the poked RemiNet account to a tracked Milady X/Twitter handle.
 
@@ -178,6 +184,8 @@ The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunt
 - Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
 
 After **Retry session**, milXdy checks the RemiliaNET browser session and reuses or silently renews the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
+
+When a poke request fails because the stored connector auth appears stale, milXdy may briefly open RemiliaNET in an inactive tab, wait for the site session to settle, close that tab, and retry using the refreshed browser session.
 
 Clicking **Log out** disconnects milXdy from the RemiNet connector session. It does not necessarily sign the browser out of remilia.net; click **Retry session** again when you want milXdy to reuse the browser session.
 

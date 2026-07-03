@@ -12,6 +12,10 @@ export type AppLoadTrigger = "startup" | "surface" | "dockOpen" | "idle" | "user
 export type AppHubCategory = "appearance" | "reading" | "social" | "game" | "media" | "developer";
 export type AppPreset = "lite" | "balanced" | "full";
 export type AppPrivacyLabel = "local-only" | "browser-session" | "remote-api" | "local-files" | "diagnostics";
+export type AppIconAsset = string | {
+  light: string;
+  dark: string;
+};
 
 export type AppCostProfile = {
   startup: AppCostLevel;
@@ -32,7 +36,7 @@ export type MilxdyAppManifest = {
   css?: Array<{ id: string; path: string }>;
   dock?: {
     label: string;
-    icon?: string;
+    icon?: AppIconAsset;
     defaultSide?: "left" | "right";
   };
   defaultEnabled: boolean;

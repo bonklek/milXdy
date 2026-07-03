@@ -112,8 +112,8 @@ function setupMaxPostSound(context: MilxdyContentAppContext): void {
     lastPostSoundAt = now;
     playPostSendSound();
   };
+  const postSoundsEnabled = (): boolean => document.documentElement.dataset.milxdyVisualPostSound !== "false";
   const clickListener = (event: MouseEvent) => {
-    if (document.documentElement.dataset.milxdyReskinProfile !== "max") return;
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest<HTMLElement>('header[role="banner"] nav a, [data-testid^="AppTabBar_"]')) {
       if (document.documentElement.dataset.milxdyVisualSidebarSound !== "false") playPostSendSound(0.45);
@@ -124,7 +124,7 @@ function setupMaxPostSound(context: MilxdyContentAppContext): void {
       if (document.documentElement.dataset.milxdyVisualNewPostsSound !== "false") playPostSendSound(0.55);
       return;
     }
-    if (document.documentElement.dataset.milxdyVisualPostSound === "false") return;
+    if (!postSoundsEnabled()) return;
     const button = target?.closest<HTMLElement>('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
     if (!button || button.getAttribute("aria-disabled") === "true") return;
     playPostButtonSound(button);
@@ -132,8 +132,7 @@ function setupMaxPostSound(context: MilxdyContentAppContext): void {
   addRootVisualClickHandler(context, clickListener);
 
   const keydownListener = (event: KeyboardEvent) => {
-    if (document.documentElement.dataset.milxdyReskinProfile !== "max") return;
-    if (document.documentElement.dataset.milxdyVisualPostSound === "false") return;
+    if (!postSoundsEnabled()) return;
     if (event.key !== "Enter" && event.key !== " ") return;
     const target = event.target instanceof Element ? event.target : document.activeElement;
     const button = target?.closest<HTMLElement>('[data-testid="tweetButton"], [data-testid="tweetButtonInline"]');
