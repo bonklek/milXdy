@@ -25,6 +25,10 @@ const defaultEnabledById = new Map(registry.map((app) => [app.id, app.defaultEna
 const isEnabledById: Record<string, () => Promise<boolean>> = {
   rootVisuals: async () => defaultAppEnabled("rootVisuals"),
   tweetPng: async () => defaultAppEnabled("tweetPng"),
+  composerTools: async () => {
+    const stored = await chrome.storage.local.get("milxdy.composerTools.enabled");
+    return enabledFromStoredValue(stored["milxdy.composerTools.enabled"], defaultAppEnabled("composerTools"));
+  },
   wiki: async () => {
     const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
     const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
@@ -81,6 +85,9 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
 };
 
 const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | undefined> = {
+  composerTools: async (enabled) => {
+    await chrome.storage.local.set({ "milxdy.composerTools.enabled": enabled });
+  },
   wiki: async (enabled) => {
     const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
     const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
