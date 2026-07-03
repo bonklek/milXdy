@@ -21,6 +21,24 @@ type FetchBlobResponse = {
   base64?: unknown;
 };
 
+type OcrCandidate = {
+  text: string;
+  confidence: number;
+  validWords: string[];
+  tokenCount: number;
+  quality: OcrQuality;
+};
+
+type OcrQuality = {
+  score: number;
+  visibleCount: number;
+  letterOrDigitRatio: number;
+  validWordRatio: number;
+  weirdRatio: number;
+  oneCharacterTokenRatio: number;
+  averageTokenLength: number;
+};
+
 let workerPromise: Promise<TesseractWorker> | null = null;
 const canceledRequests = new Set<string>();
 
@@ -103,6 +121,9 @@ function announceReady(): void {
 }
 
 async function fetchImageBlob(src: string): Promise<Blob> {
+  if (!isAllowedOcrImageUrl(src)) {
+    throw new Error("Unsupported OCR image URL");
+  }
   try {
     const response = await fetch(src, { credentials: "omit" });
     if (!response.ok) throw new Error(`Could not load image for OCR: ${response.status}`);
@@ -122,6 +143,15 @@ async function fetchImageBlobViaBackground(src: string, originalError: unknown):
   return new Blob([base64ToArrayBuffer(response.base64)], { type: contentType });
 }
 
+function isAllowedOcrImageUrl(src: string): boolean {
+  try {
+    const url = new URL(src);
+    return url.protocol === "https:" && url.hostname === "pbs.twimg.com" && url.pathname.startsWith("/media/");
+  } catch {
+    return false;
+  }
+}
+
 function base64ToArrayBuffer(value: string): ArrayBuffer {
   const binary = atob(value);
   const buffer = new ArrayBuffer(binary.length);
@@ -139,26 +169,74 @@ function progress(target: Window, id: string, status: string, value: number | nu
 function filterOcrText(page: Tesseract.Page): string {
   const blocks = page.blocks || [];
   const accepted = blocks
-    .map((block) => ({
-      text: normalizeText(block.text || ""),
-      confidence: block.confidence ?? 0,
-      validWords: collectValidWords(block),
-    }))
-    .filter((block) => {
-      if (!block.text || block.confidence < 45) return false;
-      if (block.validWords.length < 2) return false;
-      return validWordRatio(block.text, block.validWords) >= 0.45;
-    });
+    .map(blockToCandidate)
+    .filter(isAcceptableBlockCandidate);
 
   const text = normalizeText(accepted.map((block) => block.text).join(" "));
   if (!isLikelyReadableOcr(text, accepted.flatMap((block) => block.validWords))) return fallbackOcrText(page);
+  if (!passesFinalQualityGate(text, accepted)) return fallbackOcrText(page);
   return text;
 }
 
 function fallbackOcrText(page: Tesseract.Page): string {
   const text = normalizeText(page.text || "");
   if (!isLikelyReadableRawOcr(text)) return "";
+  const blocks = page.blocks || [];
+  const validWords = blocks.flatMap((block) => collectValidWords(block));
+  const confidence = averageConfidence(blocks);
+  const quality = scoreOcrQuality(text, validWords);
+  if (!passesRawFallbackQualityGate(text, confidence, validWords, quality)) return "";
   return text;
+}
+
+function blockToCandidate(block: Tesseract.Block): OcrCandidate {
+  const text = normalizeText(block.text || "");
+  const validWords = collectValidWords(block);
+  const quality = scoreOcrQuality(text, validWords);
+  return {
+    text,
+    confidence: block.confidence ?? 0,
+    validWords,
+    tokenCount: tokenCount(text),
+    quality,
+  };
+}
+
+function isAcceptableBlockCandidate(candidate: OcrCandidate): boolean {
+  if (!candidate.text || candidate.confidence < 55) return false;
+  if (candidate.validWords.length < 2) return false;
+  if (candidate.quality.score < 0.58) return false;
+  if (candidate.quality.validWordRatio < 0.5) return false;
+  if (candidate.quality.letterOrDigitRatio < 0.55) return false;
+  if (candidate.quality.weirdRatio > 0.08) return false;
+  if (candidate.quality.oneCharacterTokenRatio > 0.25) return false;
+  return true;
+}
+
+function passesFinalQualityGate(text: string, candidates: OcrCandidate[]): boolean {
+  if (text.length < 8 || candidates.length === 0) return false;
+  const validWords = candidates.flatMap((candidate) => candidate.validWords);
+  const quality = scoreOcrQuality(text, validWords);
+  const weightedConfidence = weightedAverageConfidence(candidates);
+  if (weightedConfidence < 58) return false;
+  if (quality.score < 0.62) return false;
+  if (quality.validWordRatio < 0.52) return false;
+  if (quality.letterOrDigitRatio < 0.6) return false;
+  if (quality.weirdRatio > 0.06) return false;
+  if (quality.oneCharacterTokenRatio > 0.22) return false;
+  return true;
+}
+
+function passesRawFallbackQualityGate(text: string, confidence: number, validWords: string[], quality: OcrQuality): boolean {
+  if (text.length < 12) return false;
+  if (validWords.length < 3) return false;
+  if (confidence < 62) return false;
+  if (quality.score < 0.72) return false;
+  if (quality.validWordRatio < 0.65) return false;
+  if (quality.letterOrDigitRatio < 0.72) return false;
+  if (quality.weirdRatio > 0.03) return false;
+  if (quality.oneCharacterTokenRatio > 0.12) return false;
+  return true;
 }
 
 function collectValidWords(block: Tesseract.Block): string[] {
@@ -174,10 +252,56 @@ function collectValidWords(block: Tesseract.Block): string[] {
   return words;
 }
 
-function validWordRatio(text: string, validWords: string[]): number {
+function scoreOcrQuality(text: string, validWords: string[]): OcrQuality {
+  const tokens = splitTokens(text);
+  const visibleCount = (text.match(/[^\s]/g) || []).length;
+  const lettersOrDigits = (text.match(/[\p{L}\p{N}]/gu) || []).length;
+  const weird = (text.match(/[|{}[\]~^_=<>\\]/g) || []).length;
+  const oneCharacterTokens = tokens.filter((token) => token.length === 1).length;
+  const tokenCharacters = tokens.reduce((sum, token) => sum + token.length, 0);
+  const letterOrDigitRatio = visibleCount === 0 ? 0 : lettersOrDigits / visibleCount;
+  const validRatio = tokens.length === 0 ? 0 : Math.min(1, validWords.length / tokens.length);
+  const weirdRatio = visibleCount === 0 ? 1 : weird / visibleCount;
+  const oneCharacterTokenRatio = tokens.length === 0 ? 1 : oneCharacterTokens / tokens.length;
+  const averageTokenLength = tokens.length === 0 ? 0 : tokenCharacters / tokens.length;
+  const tokenLengthScore = Math.max(0, Math.min(1, averageTokenLength / 4));
+  const score = Math.max(0, Math.min(1,
+    letterOrDigitRatio * 0.32
+    + validRatio * 0.34
+    + tokenLengthScore * 0.16
+    + (1 - Math.min(1, weirdRatio / 0.12)) * 0.1
+    + (1 - Math.min(1, oneCharacterTokenRatio / 0.35)) * 0.08,
+  ));
+  return {
+    score,
+    visibleCount,
+    letterOrDigitRatio,
+    validWordRatio: validRatio,
+    weirdRatio,
+    oneCharacterTokenRatio,
+    averageTokenLength,
+  };
+}
+
+function tokenCount(text: string): number {
+  return splitTokens(text).length;
+}
+
+function splitTokens(text: string): string[] {
   const tokens = text.split(/\s+/).filter(Boolean);
-  if (tokens.length === 0) return 0;
-  return validWords.length / tokens.length;
+  return tokens.map((token) => token.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "")).filter(Boolean);
+}
+
+function weightedAverageConfidence(candidates: OcrCandidate[]): number {
+  const totalTokens = candidates.reduce((sum, candidate) => sum + candidate.tokenCount, 0);
+  if (totalTokens === 0) return 0;
+  return candidates.reduce((sum, candidate) => sum + candidate.confidence * candidate.tokenCount, 0) / totalTokens;
+}
+
+function averageConfidence(blocks: Tesseract.Block[]): number {
+  if (blocks.length === 0) return 0;
+  const values = blocks.map((block) => block.confidence ?? 0);
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 function isLikelyReadableOcr(text: string, validWords: string[]): boolean {

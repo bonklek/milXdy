@@ -53,6 +53,8 @@ export class MiniPlayer {
   private height = 220;
   private layoutReady = false;
   private closing = false;
+  private minimized = false;
+  private suppressNextSettingsRender = false;
   private boundarySupport = new Map<string, BoundarySupport>();
   private probingVoices = false;
   private probeAbort: AbortController | null = null;
@@ -128,11 +130,22 @@ export class MiniPlayer {
       this.applyFrameLayout();
       if (!this.settingsPanel.hidden) this.renderSettings();
     });
-    const close = controlButton("Minimize player", "minimize", () => this.close());
-    close.classList.add("post-reading-close");
-    close.addEventListener("pointerdown", (event) => {
+    const minimize = controlButton("Minimize player", "minimize", () => this.close());
+    minimize.classList.add("post-reading-close", "post-reading-minimize");
+    minimize.addEventListener("pointerdown", (event) => {
       event.preventDefault();
       event.stopPropagation();
+      this.close();
+    }, { capture: true });
+    const quit = controlButton("Quit reading", "quit", () => {
+      actions.onStop();
+      this.close();
+    });
+    quit.classList.add("post-reading-close", "post-reading-quit");
+    quit.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      actions.onStop();
       this.close();
     }, { capture: true });
 
@@ -158,7 +171,7 @@ export class MiniPlayer {
     const headerActions = document.createElement("div");
     headerActions.className = "post-reading-panel-actions";
     this.headerActions = headerActions;
-    headerActions.append(settingsButton, close);
+    headerActions.append(settingsButton, minimize, quit);
     header.append(heading, headerActions);
     controls.append(prev, prevChunk, this.playButton, nextChunk, next, this.skipOcrButton);
     shell.append(header, controls, this.ocrStatus);
@@ -181,7 +194,7 @@ export class MiniPlayer {
   }
 
   updateState(state: SpeechState): void {
-    if (!(this.closing && state.status === "idle" && !state.title)) {
+    if (!this.minimized && !(this.closing && state.status === "idle" && !state.title)) {
       this.setVisible(!(state.status === "idle" && !state.title));
     }
     const progress = state.chunkCount > 1 ? ` ${state.chunkIndex}/${state.chunkCount}` : "";
@@ -194,6 +207,10 @@ export class MiniPlayer {
     this.settings = settings;
     this.root.dataset.position = settings.playerPosition;
     this.applyFrameLayout();
+    if (this.suppressNextSettingsRender) {
+      this.suppressNextSettingsRender = false;
+      return;
+    }
     this.renderSettings();
   }
 
@@ -204,14 +221,16 @@ export class MiniPlayer {
   setOcrSkipAvailable(available: boolean): void {
     this.skipOcrButton.disabled = !available;
     this.skipOcrButton.dataset.active = String(available);
+    this.skipOcrButton.textContent = available ? "Skip OCR" : "OCR";
+    this.skipOcrButton.title = available ? "Skip OCR" : "OCR unavailable";
+    this.skipOcrButton.setAttribute("aria-label", available ? "Skip OCR" : "OCR unavailable");
   }
 
   updateOcrStatus(progress: OcrProgress | null): void {
     this.ocrStatus.hidden = !progress;
     const skippableOcrProgress = Boolean(progress
-      && typeof progress.progress === "number"
       && /\b(ocr|image)\b/i.test(progress.status)
-      && !/\bquoted\b/i.test(progress.status));
+      && !/\b(quoted|found no|failed|skipped)\b/i.test(progress.status));
     this.setOcrSkipAvailable(skippableOcrProgress);
     if (!progress) {
       this.ocrText.textContent = "";
@@ -237,6 +256,7 @@ export class MiniPlayer {
 
   show(): void {
     this.closing = false;
+    this.minimized = false;
     this.setVisible(true);
     this.applyFrameLayout();
   }
@@ -247,6 +267,7 @@ export class MiniPlayer {
     this.controls.append(this.headerActions);
     container.replaceChildren(this.root);
     this.closing = false;
+    this.minimized = false;
     this.setVisible(true);
   }
 
@@ -263,8 +284,8 @@ export class MiniPlayer {
     this.settingsPanel.hidden = true;
     this.root.dataset.settingsOpen = "false";
     this.applyFrameLayout();
+    this.minimized = true;
     this.closing = true;
-    this.actions.onStop();
     animateOverlayAppClose(this.root, () => {
       this.closing = false;
       this.root.dataset.visible = "false";
@@ -507,15 +528,30 @@ export class MiniPlayer {
     speedLabel.textContent = "Speed";
     const speed = document.createElement("input");
     speed.type = "number";
+    speed.className = "post-reading-speed-input";
     speed.min = "0.5";
     speed.max = "10";
-    speed.step = "0.05";
+    speed.step = "1";
     speed.value = String(this.settings.speed);
     speed.inputMode = "decimal";
+    speed.addEventListener("input", () => {
+      this.update({ speed: normalizeSpeedValue(speed.value) }, { render: false });
+    });
+    speed.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+      event.preventDefault();
+      event.stopPropagation();
+      adjustSpeedInput(speed, event.key === "ArrowUp" ? 1 : -1);
+      this.update({ speed: normalizeSpeedValue(speed.value) }, { render: false });
+    });
+    speed.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    }, { passive: false });
     speed.addEventListener("change", () => {
-      const next = Math.min(10, Math.max(0.5, Number(speed.value) || 1));
+      const next = normalizeSpeedValue(speed.value);
       speed.value = next.toFixed(2).replace(/\.00$/, "");
-      this.update({ speed: next });
+      this.update({ speed: next }, { render: false });
     });
     speedLabel.append(speed);
 
@@ -591,8 +627,9 @@ export class MiniPlayer {
     }
   }
 
-  private update(partial: Partial<PostReadingSettings>): void {
+  private update(partial: Partial<PostReadingSettings>, options: { render?: boolean } = {}): void {
     this.settings = { ...this.settings, ...partial };
+    this.suppressNextSettingsRender = options.render === false;
     this.actions.onSettingsChange(this.settings);
   }
 
@@ -771,6 +808,16 @@ function controlButton(label: string, iconName: Parameters<typeof icon>[0], onCl
     onClick();
   });
   return button;
+}
+
+function normalizeSpeedValue(value: string): number {
+  return Math.min(10, Math.max(0.5, Number(value) || 1));
+}
+
+function adjustSpeedInput(input: HTMLInputElement, direction: 1 | -1): void {
+  const current = normalizeSpeedValue(input.value);
+  const next = normalizeSpeedValue(String(current + direction));
+  input.value = next.toFixed(2).replace(/\.00$/, "");
 }
 
 function resizeHandle(

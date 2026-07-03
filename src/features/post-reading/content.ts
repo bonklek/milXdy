@@ -1,10 +1,10 @@
-import { extractReadablePost, formatReadablePost, isReadableHyperlink } from "./extractText";
+import { cleanText, extractReadablePost, formatReadablePost, isReadableHyperlink } from "./extractText";
 import { fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
 import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
 import { icon } from "./icons";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
-import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT } from "./selectors";
+import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
 import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./shared/types";
 import { playEndDing } from "./sounds";
 import { SpeechController } from "./speech";
@@ -24,7 +24,7 @@ let wikiSpeech: SpeechController;
 let wikiPlayer: MiniPlayer;
 let appFrame: OverlayAppFrame | null = null;
 let currentTweet: HTMLElement | null = null;
-const pendingTweets = new Map<HTMLElement, { actionRow: HTMLElement | null; textContainers: HTMLElement[] }>();
+const pendingTweets = new Map<HTMLElement, { kind: TwitterSurface["kind"]; actionRow: HTMLElement | null; textContainers: HTMLElement[] }>();
 const POST_READING_BUTTON_SLOT = '[data-post-reading-button-slot="true"]';
 const RUNTIME_POST_READING_SLOT = '[data-milxdy-tweet-slot="post-reading-action"]';
 const RUNTIME_POST_READING_HEADER_SLOT = '[data-milxdy-tweet-slot="post-reading-header-action"]';
@@ -36,22 +36,26 @@ const activeReadButtons = new Set<HTMLButtonElement>();
 let currentHighlightTargets: HighlightTarget[] = [];
 let currentOcrSpeechRanges: OcrSpeechRange[] = [];
 let activeHighlightTarget: HighlightTarget | null = null;
+let activeHighlightSegment: HighlightSegment | null = null;
 let lastBoundaryAt: number | null = null;
-let lastBoundaryIntervalMs: number | null = null;
 let lastRelativeIndex: number | null = null;
 let lastChunkIndex: number | null = null;
 let calibratedCharsPerSecond = 13;
-let smoothAnimationFrame: number | null = null;
-let smoothAnimationTimer: number | null = null;
-let pendingSmoothAnimation: { tokens: HTMLElement[]; token: HTMLElement; toIndex: number } | null = null;
-let activeSmoothToken: HTMLElement | null = null;
-let smoothVisualIndex = 0;
+let activeWordToken: HTMLElement | null = null;
 let estimatedHighlightTimer: number | null = null;
 let estimatedHighlightKey = "";
 let estimatedHighlightStartedAt = 0;
 let estimatedHighlightPausedAt: number | null = null;
+let pendingTweetHighlightState: HighlightSpeechState | null = null;
+let tweetHighlightFrame: number | null = null;
+let highlightWorkGeneration = 0;
+let resyncHighlightTimer: number | null = null;
+let deferNextIdleHighlightCleanup = false;
 let lastHighlightDiagnosticSignature = "";
+let lastHighlightPaintDiagnosticSignature = "";
 let lastSmoothAnimationDiagnosticSignature = "";
+let lastSmoothSegmentDiagnosticSignature = "";
+let lastHighlightTimingDiagnosticSignature = "";
 let currentOcrRunAbort: AbortController | null = null;
 let currentOcrImageAbort: AbortController | null = null;
 let currentQuoteFetchAbort: AbortController | null = null;
@@ -68,8 +72,8 @@ let recordRuntimeDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () =>
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
 const highlightEngine = new TextHighlightEngine({
-  onSmoothAnimation: ({ tokenCount, animatedTokenCount, durationMs }) => {
-    recordSmoothAnimationDiagnostic(tokenCount, animatedTokenCount, durationMs);
+  onSmoothAnimation: (diagnostic) => {
+    recordSmoothAnimationDiagnostic(diagnostic);
   },
 });
 
@@ -83,11 +87,27 @@ type PostReadingPerformancePolicy = {
 
 type HighlightTarget = {
   body: HTMLElement;
+  bodies?: HTMLElement[];
   kind: "quote" | "main";
   start: number;
   end: number;
   text: string;
+  segments?: HighlightSegment[];
+  segmentSurface?: HTMLElement;
+  activeSegment?: HighlightSegment;
 };
+
+type HighlightSegment = {
+  body: HTMLElement;
+  start: number;
+  end: number;
+  text: string;
+};
+
+const highlightTokenEstimateCache = new WeakMap<HighlightTarget, { text: string; value: number }>();
+const SMOOTH_SEGMENT_TEXT_THRESHOLD = 1400;
+const SMOOTH_SEGMENT_MAX_CHARS = 720;
+const SMOOTH_SEGMENT_MIN_BREAK_CHARS = 280;
 
 type OcrSpeechRange = {
   start: number;
@@ -149,9 +169,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
       speech.pauseOrResume();
     },
     onStop: () => {
-      cancelOcr();
-      clearFullQuotePreview();
-      speech.stop();
+      stopTweetReaderFromUi();
     },
     onNext: () => nextTweetOrQuotingText(),
     onPrevious: () => playAdjacent(-1),
@@ -210,7 +228,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   appFrame = createOverlayAppFrame({
     id: "post-reading",
     label: "Post-reading",
-    icon: postReadingDockIcon(),
+    icon: postReadingDockIcon,
     title: "Post-reading controls",
     isOpen: () => player.isVisible(),
     onOpen: () => {
@@ -232,7 +250,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   });
   addDisposable(speech.subscribe((state) => {
     player.updateState(state);
-    updateTweetHighlight(state);
+    scheduleTweetHighlight(state);
     updateDockState();
   }));
   addDisposable(wikiSpeech.subscribe((state) => {
@@ -309,10 +327,10 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
 }
 
 export function onSurface(surface: TwitterSurface): void {
-  if (!lifecycleActive() || surface.kind !== "tweet") return;
+  if (!lifecycleActive() || (surface.kind !== "tweet" && surface.kind !== "xArticle")) return;
   const policy = postReadingPerformancePolicy();
   if (pendingTweets.size >= policy.maxPendingTweets && !pendingTweets.has(surface.element)) return;
-  pendingTweets.set(surface.element, { actionRow: surface.actionRow, textContainers: surface.textContainers });
+  pendingTweets.set(surface.element, { kind: surface.kind, actionRow: surface.actionRow, textContainers: surface.textContainers });
   scheduleScan();
 }
 
@@ -357,7 +375,14 @@ function lifecycleActive(): boolean {
 }
 
 function postReadingDockIcon(): string {
-  return chrome.runtime.getURL("post-reading/post-reading-logo.png");
+  const root = document.documentElement;
+  const dark = root.dataset.milxdyXTheme === "dark"
+    || root.dataset.milxdyXTheme === "dim"
+    || root.dataset.milxdySettingsTheme === "dark"
+    || (root.dataset.milxdyXTheme !== "light"
+      && root.dataset.milxdySettingsTheme !== "light"
+      && (root.style.colorScheme === "dark" || window.matchMedia?.("(prefers-color-scheme: dark)").matches === true));
+  return chrome.runtime.getURL(dark ? "post-reading/post-reading-logo-outline.png" : "post-reading/post-reading-logo.png");
 }
 
 function updateDockState(): void {
@@ -396,7 +421,7 @@ function processTweets(): void {
   for (const [tweet, surface] of tweets) {
     if (!lifecycleActive() || !tweet.isConnected) continue;
     const startedAt = performance.now();
-    processTweet(tweet, surface.actionRow, policy, surface.textContainers);
+    processTweet(tweet, surface.kind, surface.actionRow, policy, surface.textContainers);
     recordFeatureTiming("post-reading", "processTweet", startedAt);
   }
   if (pendingTweets.size > 0) scheduleScan();
@@ -415,22 +440,25 @@ function removeReadButtons(): void {
 
 function processTweet(
   tweet: HTMLElement,
+  kind: TwitterSurface["kind"] = "tweet",
   surfaceActionRow: HTMLElement | null = null,
   policy = postReadingPerformancePolicy(),
   surfaceTextContainers: HTMLElement[] = [],
 ): void {
   const textContainers = surfaceTextContainers.length > 0 && surfaceTextContainers.every((container) => container.isConnected)
     ? surfaceTextContainers
-    : Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT))
-      .filter((container) => !container.closest(QUOTE_TWEET));
+    : kind === "xArticle"
+      ? getArticleBodies(tweet)
+      : Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT))
+        .filter((container) => !container.closest(QUOTE_TWEET));
   const signature = textContainers.map((container) => container.textContent || "").join("\n").trim();
   if (!signature) return;
 
   const existingButton = tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
-  const footer = surfaceActionRow || findLikelyActionRow(tweet);
+  const footer = kind === "tweet" ? surfaceActionRow || findLikelyActionRow(tweet) : null;
   const anchor = findButtonAnchor(tweet, footer);
   if (processed.get(tweet) === signature && existingButton) {
-    placeReadButton(tweet, existingButton, anchor, footer);
+    placeReadButton(tweet, existingButton, anchor, footer, kind);
     return;
   }
   if (!existingButton && signature.length > policy.maxTextCharsForButton) {
@@ -446,7 +474,7 @@ function processTweet(
   processed.set(tweet, signature);
 
   const button = existingButton || createReadButton(tweet);
-  placeReadButton(tweet, button, anchor, footer);
+  placeReadButton(tweet, button, anchor, footer, kind);
 }
 
 function placeReadButton(
@@ -454,7 +482,12 @@ function placeReadButton(
   button: HTMLButtonElement,
   anchor: HTMLElement | null,
   footer: HTMLElement | null,
+  kind: TwitterSurface["kind"] = "tweet",
 ): void {
+  if (kind === "xArticle") {
+    placeArticleReadButton(tweet, button);
+    return;
+  }
   if (settings.buttonPlacement === "actions") {
     insertActionOverlayButton(button, anchor, footer);
     return;
@@ -486,12 +519,27 @@ function postReadingPerformancePolicy(): PostReadingPerformancePolicy {
     return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900, maxHighlightChars: 700, maxHighlightTokens: 96 };
   }
   if (mode === "balanced") {
-    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800, maxHighlightChars: 1400, maxHighlightTokens: 180 };
+    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800, maxHighlightChars: 6000, maxHighlightTokens: 800 };
   }
   if (mode === "developer") {
     return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: Number.POSITIVE_INFINITY, maxHighlightTokens: Number.POSITIVE_INFINITY };
   }
-  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: 2600, maxHighlightTokens: 320 };
+  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: 9000, maxHighlightTokens: 1200 };
+}
+
+function placeArticleReadButton(article: HTMLElement, button: HTMLButtonElement): void {
+  const existingSlot = article.querySelector<HTMLElement>(POST_READING_BUTTON_SLOT);
+  const slot = existingSlot || document.createElement("span");
+  slot.dataset.postReadingButtonSlot = "true";
+  slot.className = "post-reading-button-slot post-reading-button-slot--header";
+  slot.removeAttribute("aria-hidden");
+  if (button.parentElement !== slot) slot.append(button);
+  if (!existingSlot) {
+    const anchor = article.querySelector<HTMLElement>('h1, [role="heading"], [data-testid*="article" i], [data-testid*="Article" i]')
+      || article.firstElementChild as HTMLElement | null;
+    if (anchor?.parentElement) anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+    else article.prepend(slot);
+  }
 }
 
 function createReadButton(tweet: HTMLElement): HTMLButtonElement {
@@ -505,6 +553,7 @@ function createReadButton(tweet: HTMLElement): HTMLButtonElement {
   button.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
+    player?.show();
     playTweet(tweet);
   });
   return button;
@@ -592,7 +641,41 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   currentHighlightTargets = findHighlightTargets(tweet, text, readable);
   currentOcrSpeechRanges = findOcrSpeechRanges(text, readable.imageTexts);
   speech.speak(text, readable.authorDisplayName);
+  scheduleInitialTweetHighlight(text, readRunId);
   tweet.scrollIntoView({ block: "nearest", inline: "nearest" });
+}
+
+function scheduleInitialTweetHighlight(text: string, readRunId: number): void {
+  window.requestAnimationFrame(() => {
+    if (!lifecycleActive() || readRunId !== activeReadRunId) return;
+    try {
+      prepareInitialTweetHighlight(text, readRunId);
+    } catch (error) {
+      console.warn("Post-reading initial highlight failed", error);
+      recordRuntimeDiagnostic("highlightPaint", {
+        reason: "initial-highlight-error",
+        error: error instanceof Error ? error.message : String(error),
+        updatedAt: Date.now(),
+      });
+    }
+  });
+}
+
+function prepareInitialTweetHighlight(text: string, readRunId: number): void {
+  if (!currentTweet || settings.bodyHighlightMode === "off" || currentHighlightTargets.length === 0) return;
+  if (!lifecycleActive() || readRunId !== activeReadRunId) return;
+  const firstTarget = currentHighlightTargets[0];
+  updateTweetHighlight({
+    status: "paused",
+    text,
+    chunkIndex: 0,
+    chunkCount: 1,
+    chunkStart: firstTarget.start,
+    charIndex: firstTarget.start,
+    charLength: null,
+    boundaryElapsedTime: null,
+    hasSyncedBoundaries: true,
+  });
 }
 
 function playReadableDocument(target: WikiReadableDocument): void {
@@ -614,7 +697,19 @@ function skipOcrLoadingOrActiveSpeech(): void {
     currentOcrImageAbort.abort();
     return;
   }
+  if (currentOcrRunAbort) {
+    currentOcrRunAbort.abort();
+    return;
+  }
   if (skipActiveOcrSpeechRange()) return;
+}
+
+function stopTweetReaderFromUi(): void {
+  cancelPendingHighlightWork();
+  deferNextIdleHighlightCleanup = true;
+  cancelOcr();
+  clearFullQuotePreview();
+  speech.stop();
 }
 
 function pauseTweetReader(): void {
@@ -669,17 +764,21 @@ function previousParagraphStart(text: string, currentIndex: number): number | nu
 }
 
 function resyncHighlightAfterSpeechJump(controller = speech): void {
-  clearSmoothAnimation();
+  cancelPendingHighlightWork();
   activeHighlightTarget = null;
   lastChunkIndex = null;
   lastBoundaryAt = null;
   lastRelativeIndex = null;
-  smoothVisualIndex = 0;
-  window.setTimeout(() => {
+  const generation = highlightWorkGeneration;
+  resyncHighlightTimer = window.setTimeout(() => {
+    resyncHighlightTimer = null;
     if (!lifecycleActive()) return;
-    if (controller === wikiSpeech) updateWikiDocumentHighlight(controller.getState());
-    else updateTweetHighlight(controller.getState());
-  }, 0);
+    if (generation !== highlightWorkGeneration) return;
+    const state = controller.getState();
+    if (state.status === "idle" || state.status === "error") return;
+    if (controller === wikiSpeech) updateWikiDocumentHighlight(state);
+    else updateTweetHighlight(state);
+  }, 32);
 }
 
 function skipActiveOcrSpeechRange(): boolean {
@@ -698,7 +797,7 @@ function skipActiveOcrSpeechRange(): boolean {
 }
 
 function updateOcrSkipAvailability(currentIndex: number | null): void {
-  if (currentOcrImageAbort) {
+  if (currentOcrRunAbort || currentOcrImageAbort) {
     player?.setOcrSkipAvailable(true);
     return;
   }
@@ -1086,16 +1185,18 @@ function clearFullQuotePreview(): void {
 async function extractOcrTexts(tweet: HTMLElement): Promise<string[]> {
   if (!lifecycleActive()) return [];
   if (!settings.includeImageOcr) return [];
+  const runAbort = new AbortController();
+  currentOcrRunAbort = runAbort;
+  const removeLifecycleAbort = abortOnLifecycleSignal(runAbort);
   player.updateOcrStatus({ imageIndex: 0, imageCount: 1, status: "Checking images for OCR", progress: 0.02 });
   const images = findOcrImages(tweet);
   if (images.length === 0) {
+    removeLifecycleAbort();
+    if (currentOcrRunAbort === runAbort) currentOcrRunAbort = null;
     showTransientOcrStatus("No attached image found for OCR");
     return [];
   }
 
-  const runAbort = new AbortController();
-  currentOcrRunAbort = runAbort;
-  const removeLifecycleAbort = abortOnLifecycleSignal(runAbort);
   const texts: string[] = [];
   let failureStatus: string | null = null;
   player.updateOcrStatus({ imageIndex: 0, imageCount: images.length, status: "Found image for OCR", progress: 0.04 });
@@ -1269,7 +1370,7 @@ function nextTweetOrQuotingText(): void {
 function jumpFromQuoteToMainText(): boolean {
   const state = speech.getState();
   if (state.status !== "speaking" && state.status !== "paused") return false;
-  const currentIndex = state.charIndex ?? state.chunkStart;
+  const currentIndex = currentSpeechAbsoluteIndex(state);
   if (currentIndex === null) return false;
   const active = currentHighlightTargets.find((target) => currentIndex >= target.start && currentIndex <= target.end);
   if (active?.kind !== "quote") return false;
@@ -1284,8 +1385,7 @@ function jumpFromQuoteToMainText(): boolean {
 function handleKeydown(event: KeyboardEvent): void {
   const target = event.target as HTMLElement | null;
   if (event.key === "Escape") {
-    cancelOcr();
-    speech.stop();
+    stopTweetReaderFromUi();
     event.preventDefault();
     event.stopPropagation();
     return;
@@ -1410,9 +1510,45 @@ async function expandTweetText(tweet: HTMLElement): Promise<void> {
     return text === "show more" || label === "show more";
   });
   if (!showMore) return;
+  const beforeSignature = tweetReadableTextSignature(tweet);
   showMore.click();
-  await new Promise<void>((resolve) => {
-    runtimeScheduler.timeout(resolve, 250);
+  await waitForTweetTextStabilization(tweet, beforeSignature);
+}
+
+function tweetReadableTextSignature(tweet: HTMLElement): string {
+  const bodies = getMainTweetBodies(tweet);
+  return bodies.map((body) => body.innerText || body.textContent || "").join("\n").replace(/\s+/g, " ").trim();
+}
+
+function waitForTweetTextStabilization(tweet: HTMLElement, beforeSignature: string): Promise<void> {
+  const startedAt = performance.now();
+  const minWaitMs = 120;
+  const stableMs = 140;
+  const timeoutMs = 1200;
+  let lastSignature = tweetReadableTextSignature(tweet);
+  let lastChangedAt = performance.now();
+  return new Promise((resolve) => {
+    const check = () => {
+      if (!tweet.isConnected) {
+        resolve();
+        return;
+      }
+      const now = performance.now();
+      const signature = tweetReadableTextSignature(tweet);
+      if (signature !== lastSignature) {
+        lastSignature = signature;
+        lastChangedAt = now;
+      }
+      const changedFromBefore = signature && signature !== beforeSignature;
+      const waitedEnough = now - startedAt >= minWaitMs;
+      const stableEnough = now - lastChangedAt >= stableMs;
+      if ((changedFromBefore && waitedEnough && stableEnough) || now - startedAt >= timeoutMs) {
+        resolve();
+        return;
+      }
+      runtimeScheduler.timeout(check, 50);
+    };
+    runtimeScheduler.timeout(check, 50);
   });
 }
 
@@ -1436,8 +1572,44 @@ function markActiveButton(tweet: HTMLElement): void {
   }
 }
 
+function scheduleTweetHighlight(state: HighlightSpeechState): void {
+  if (state.status === "idle" || state.status === "error") {
+    if (tweetHighlightFrame !== null) {
+      window.cancelAnimationFrame(tweetHighlightFrame);
+      tweetHighlightFrame = null;
+    }
+    pendingTweetHighlightState = null;
+    updateTweetHighlight(state);
+    return;
+  }
+  pendingTweetHighlightState = state;
+  if (tweetHighlightFrame !== null) return;
+  tweetHighlightFrame = window.requestAnimationFrame(() => {
+    tweetHighlightFrame = null;
+    const next = pendingTweetHighlightState;
+    pendingTweetHighlightState = null;
+    if (next) updateTweetHighlight(next);
+  });
+}
+
 function updateTweetHighlight(state: HighlightSpeechState): void {
   if (state.status === "idle") {
+    if (deferNextIdleHighlightCleanup) {
+      deferNextIdleHighlightCleanup = false;
+      cancelPendingHighlightWork();
+      clearEstimatedHighlightLoop();
+      clearSmoothAnimation();
+      activeHighlightTarget = null;
+      activeWordToken = null;
+      updateOcrSkipAvailability(null);
+      lastChunkIndex = null;
+      runtimeScheduler.timeout(() => {
+        if (!lifecycleActive() || speech.getState().status !== "idle") return;
+        clearBodyHighlight();
+        clearActiveTweets();
+      }, 120);
+      return;
+    }
     clearEstimatedHighlightLoop();
     clearBodyHighlight();
     clearActiveTweets();
@@ -1463,53 +1635,79 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     return;
   }
   if (currentHighlightTargets.length === 0) {
+    recordHighlightPaintDiagnostic("no-targets", state, null, null, null, null, null, settings.bodyHighlightMode);
     return;
   }
   updateEstimatedHighlightLoop(state);
   const chunkChanged = lastChunkIndex !== null && state.chunkIndex !== lastChunkIndex;
   lastChunkIndex = state.chunkIndex;
-  const absoluteIndex = state.charIndex ?? estimateUnsyncedHighlightIndex(state);
+  const absoluteIndex = currentSpeechAbsoluteIndex(state);
   updateOcrSkipAvailability(absoluteIndex);
   if (absoluteIndex === null) return;
 
   const target = findActiveHighlightTarget(absoluteIndex);
   if (!target) {
+    recordHighlightPaintDiagnostic("no-active-target", state, null, null, null, null, null, settings.bodyHighlightMode, absoluteIndex);
     return;
   }
-  const body = target.body;
-  const relativeIndex = absoluteIndex - target.start;
   const targetChanged = activeHighlightTarget !== target;
   activateHighlightTarget(target);
-  const highlightMode = state.hasSyncedBoundaries || state.charIndex !== null
-    ? effectiveHighlightMode(target)
-    : "word";
-
-  if (!canTokenizeHighlightTarget(target, highlightMode)) {
-    clearSmoothAnimation();
-    return;
-  }
-
-  if (!canTokenizeHighlightTarget(target, highlightMode)) {
-    clearSmoothAnimation();
-    return;
-  }
+  const body = target.body;
+  const relativeIndex = absoluteIndex - target.start;
+  const configuredHighlightMode = effectiveHighlightMode(target);
+  const highlightMode = configuredHighlightMode === "smooth" && !state.hasSyncedBoundaries && state.charIndex === null
+    ? "word"
+    : configuredHighlightMode;
+  if (highlightMode !== configuredHighlightMode) clearSmoothAnimation();
 
   if (highlightMode !== "smooth") {
+    if (!canTokenizeHighlightTarget(target, highlightMode)) {
+      clearSmoothAnimation();
+      recordHighlightPaintDiagnostic("word-tokenize-skip", state, target, null, null, null, null, highlightMode, absoluteIndex);
+      return;
+    }
     const words = prepareWordBody(body);
     const currentWord = findCurrentWordToken(words, relativeIndex, state.charLength);
-    for (const word of words) word.dataset.postReadingCurrentWord = String(word === currentWord);
+    paintCurrentWord(currentWord);
+    recordHighlightPaintDiagnostic(currentWord ? "word-painted" : "word-no-token", state, target, null, words, currentWord, null, highlightMode, absoluteIndex);
     scrollFullQuoteWordIntoView(currentWord);
     return;
   }
 
-  const words = prepareSmoothBody(body);
-  const cursorIndex = smoothCursorIndex(words, relativeIndex, state.charLength);
-  const currentWord = findNearestToken(words, cursorIndex);
-  const highlightJumped = targetChanged || didHighlightJump(relativeIndex, chunkChanged);
-  updateBoundaryCalibration(relativeIndex);
+  if (!canTokenizeHighlightTarget(target, highlightMode)) {
+    clearSmoothAnimation();
+      recordHighlightPaintDiagnostic("smooth-tokenize-skip", state, target, null, null, null, null, highlightMode, absoluteIndex);
+    return;
+  }
+
+  const paintTarget = resolveSmoothPaintTarget(target, absoluteIndex);
+  const segmentChanged = activeHighlightSegment !== paintTarget.segment;
+  if (segmentChanged) restorePreviousSmoothSegment(paintTarget.segment);
+  activeHighlightSegment = paintTarget.segment;
+
+  const tokenizeStartedAt = performance.now();
+  const words = prepareSmoothBody(paintTarget.body, paintTarget.text);
+  const tokenizeMs = performance.now() - tokenizeStartedAt;
+  const highlightJumped = targetChanged || segmentChanged || didHighlightDiscontinuity(paintTarget.relativeIndex, chunkChanged);
+  updateBoundaryCalibration(paintTarget.relativeIndex);
   highlightEngine.updateBaselineReadingSpeed(settings.speed);
-  if (highlightJumped) resetSmoothTokenFill(words);
-  paintSmoothAt(words, Math.min(target.text.length, cursorIndex));
+  if (highlightJumped) {
+    resetSmoothTokenFill(words);
+    highlightEngine.resetSmoothTracking(paintTarget.body);
+  }
+  if (state.status !== "speaking") {
+    highlightEngine.suspendSmoothTracking(paintTarget.relativeIndex);
+  }
+  const paintStartedAt = performance.now();
+  const currentWord = highlightEngine.paintSmooth(words, paintTarget.relativeIndex, {
+    charLength: state.charLength,
+    textLength: paintTarget.text.length,
+    snapToCurrent: highlightJumped || state.status !== "speaking",
+    boundaryElapsedTime: state.boundaryElapsedTime ?? null,
+  });
+  const paintMs = performance.now() - paintStartedAt;
+  recordHighlightTimingDiagnostic(target, paintTarget, words, tokenizeMs, paintMs);
+  recordHighlightPaintDiagnostic(currentWord ? "smooth-painted" : "smooth-no-token", state, target, null, words, currentWord, highlightJumped ? "reset" : null, highlightMode, absoluteIndex);
   scrollFullQuoteWordIntoView(currentWord);
 }
 
@@ -1587,14 +1785,37 @@ function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlight
   const hasExistingTokens = Boolean(body.querySelector('[data-post-reading-word="true"], [data-post-reading-smooth-word="true"]'));
   if (hasExistingTokens) return true;
   const policy = postReadingPerformancePolicy();
-  if (target.text.length <= policy.maxHighlightChars) {
-    const tokenEstimate = estimateHighlightTokenCount(target.text);
-    if (tokenEstimate <= policy.maxHighlightTokens) return true;
+  if (mode === "smooth" && target.segments && target.segments.length > 0) return true;
+  const charLimit = mode === "word" ? wordHighlightCharLimit(policy) : policy.maxHighlightChars;
+  const tokenEstimate = cachedHighlightTokenEstimate(target);
+  if (target.text.length > charLimit) {
+    recordHighlightTokenizationSkip(target, mode, "char-cap", tokenEstimate);
+    return false;
+  }
+  if (mode === "smooth" && tokenEstimate > policy.maxHighlightTokens) {
     recordHighlightTokenizationSkip(target, mode, "token-cap", tokenEstimate);
     return false;
   }
-  recordHighlightTokenizationSkip(target, mode, "char-cap", estimateHighlightTokenCount(target.text));
-  return false;
+  return true;
+}
+
+function currentSpeechAbsoluteIndex(state: HighlightSpeechState): number | null {
+  return state.charIndex ?? estimateUnsyncedHighlightIndex(state) ?? state.chunkStart;
+}
+
+function cachedHighlightTokenEstimate(target: HighlightTarget): number {
+  const cached = highlightTokenEstimateCache.get(target);
+  if (cached?.text === target.text) return cached.value;
+  const value = target.text.length > 4000
+    ? Math.ceil(target.text.length / 7)
+    : estimateHighlightTokenCount(target.text);
+  highlightTokenEstimateCache.set(target, { text: target.text, value });
+  return value;
+}
+
+function wordHighlightCharLimit(policy: PostReadingPerformancePolicy): number {
+  if (!Number.isFinite(policy.maxHighlightChars)) return Number.POSITIVE_INFINITY;
+  return Math.max(policy.maxHighlightChars * 8, 12000);
 }
 
 function recordHighlightTokenizationSkip(
@@ -1623,19 +1844,9 @@ function recordHighlightTokenizationSkip(
 function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
   if (settings.bodyHighlightMode !== "smooth") return settings.bodyHighlightMode;
   const performanceMode = document.documentElement.dataset.milxdyPerformanceMode || "balanced";
-  const tokenEstimate = estimateHighlightTokenCount(target.text);
+  const tokenEstimate = cachedHighlightTokenEstimate(target);
   let mode: BodyHighlightMode = "smooth";
   let reason = "configured";
-  if (performanceMode === "fast") {
-    mode = "word";
-    reason = "fast-mode";
-  } else if (performanceMode === "balanced" && (target.text.length > 1500 || tokenEstimate > 240)) {
-    mode = "word";
-    reason = "balanced-cap";
-  } else if (target.text.length > 2200 || tokenEstimate > 360) {
-    mode = "word";
-    reason = "long-text-cap";
-  }
   if (mode !== "smooth") clearSmoothAnimation();
   const diagnosticSignature = `${settings.bodyHighlightMode}:${mode}:${performanceMode}:${target.kind}:${reason}:${Math.round(target.text.length / 100)}`;
   if (diagnosticSignature !== lastHighlightDiagnosticSignature) {
@@ -1654,7 +1865,62 @@ function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
   return mode;
 }
 
-function didHighlightJump(relativeIndex: number, chunkChanged: boolean): boolean {
+function recordHighlightPaintDiagnostic(
+  reason: string,
+  state: HighlightSpeechState,
+  target: HighlightTarget | null,
+  window: { key: string; start: number; end: number; windowed: boolean } | null,
+  tokens: HTMLElement[] | null,
+  currentToken: HTMLElement | null,
+  resetReason: string | null,
+  mode: BodyHighlightMode,
+  absoluteIndex: number | null = state.charIndex ?? state.chunkStart,
+): void {
+  const tokenStartValue = currentToken ? Number(currentToken.dataset.postReadingStart || 0) : null;
+  const tokenLengthValue = currentToken ? Number(currentToken.dataset.postReadingLength || currentToken.textContent?.length || 0) : null;
+  const tokenEndValue = tokenStartValue !== null && tokenLengthValue !== null ? tokenStartValue + tokenLengthValue : null;
+  const signature = [
+    reason,
+    mode,
+    state.status,
+    state.hasSyncedBoundaries ? "synced" : "estimated",
+    target?.kind || "none",
+    Math.floor((absoluteIndex ?? -1) / 20),
+    window?.key || "none",
+    tokens?.length ?? -1,
+    tokenStartValue === null ? "none" : Math.floor(tokenStartValue / 20),
+    resetReason || "none",
+  ].join(":");
+  if (signature === lastHighlightPaintDiagnosticSignature) return;
+  lastHighlightPaintDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("highlightPaint", {
+    reason,
+    mode,
+    status: state.status,
+    hasSyncedBoundaries: state.hasSyncedBoundaries,
+    charIndex: state.charIndex,
+    chunkStart: state.chunkStart,
+    absoluteIndex,
+    charLength: state.charLength,
+    targetKind: target?.kind ?? null,
+    targetStart: target?.start ?? null,
+    targetEnd: target?.end ?? null,
+    targetTextLength: target?.text.length ?? null,
+    relativeIndex: target && absoluteIndex !== null ? absoluteIndex - target.start : null,
+    windowKey: window?.key ?? null,
+    windowStart: window?.start ?? null,
+    windowEnd: window?.end ?? null,
+    windowed: window?.windowed ?? null,
+    tokenCount: tokens?.length ?? null,
+    currentTokenStart: tokenStartValue,
+    currentTokenEnd: tokenEndValue,
+    currentTokenText: currentToken?.textContent?.slice(0, 40) ?? null,
+    resetReason,
+    updatedAt: Date.now(),
+  });
+}
+
+function didHighlightDiscontinuity(relativeIndex: number, chunkChanged: boolean): boolean {
   if (chunkChanged || lastRelativeIndex === null) return true;
   if (relativeIndex < lastRelativeIndex) return true;
   const expectedLead = Math.max(18, calibratedCharsPerSecond * 1.25);
@@ -1745,12 +2011,22 @@ function isWikiReadableDocument(value: unknown): value is WikiReadableDocument {
 }
 
 function getTweetBodies(tweet: HTMLElement): HTMLElement[] {
+  if (isXArticleContainer(tweet)) return getArticleBodies(tweet);
   return Array.from(tweet.querySelectorAll<HTMLElement>(TWEET_TEXT));
 }
 
 function getMainTweetBody(tweet: HTMLElement): HTMLElement | null {
+  return getMainTweetBodies(tweet)[0] || null;
+}
+
+function getMainTweetBodies(tweet: HTMLElement): HTMLElement[] {
+  if (isXArticleContainer(tweet)) {
+    const bodies = getArticleBodies(tweet);
+    return bodies;
+  }
   const bodies = getTweetBodies(tweet);
-  return bodies.find((body) => !body.closest(QUOTE_TWEET)) || bodies[0] || null;
+  const mainBodies = bodies.filter((body) => !body.closest(QUOTE_TWEET));
+  return mainBodies.length > 0 ? mainBodies : bodies.slice(0, 1);
 }
 
 function getQuoteTweetBody(tweet: HTMLElement): HTMLElement | null {
@@ -1765,24 +2041,52 @@ function getVisibleQuoteTweetBody(tweet: HTMLElement): HTMLElement | null {
 }
 
 function clearBodyHighlight(): void {
+  clearPendingTweetHighlight();
   clearEstimatedHighlightLoop();
   clearHighlightVisuals();
+  const removedSegmentSurfaces = removeAllSegmentSurfaces();
+  let restoredBodies = 0;
   for (const body of highlightedBodies) {
-    if (body.dataset.postReadingOriginalHtml) {
-      body.innerHTML = body.dataset.postReadingOriginalHtml;
-      delete body.dataset.postReadingOriginalHtml;
-    }
-    delete body.dataset.postReadingHighlightMode;
+    restoreHighlightedBody(body);
+    restoredBodies += 1;
   }
+  recordSegmentCleanupDiagnostic(restoredBodies, removedSegmentSurfaces);
   highlightedBodies = new Set();
   activeHighlightTarget = null;
+  activeHighlightSegment = null;
   currentHighlightTargets = [];
+}
+
+function removeAllSegmentSurfaces(): number {
+  let removed = 0;
+  for (const target of currentHighlightTargets) {
+    if (removeSegmentSurfaceForTarget(target)) removed += 1;
+  }
+  return removed;
+}
+
+function clearPendingTweetHighlight(): void {
+  if (tweetHighlightFrame !== null) {
+    window.cancelAnimationFrame(tweetHighlightFrame);
+    tweetHighlightFrame = null;
+  }
+  pendingTweetHighlightState = null;
+}
+
+function cancelPendingHighlightWork(): void {
+  highlightWorkGeneration += 1;
+  clearPendingTweetHighlight();
+  if (resyncHighlightTimer !== null) {
+    window.clearTimeout(resyncHighlightTimer);
+    resyncHighlightTimer = null;
+  }
+  clearSmoothAnimation();
 }
 
 function clearHighlightVisuals(): void {
   clearEstimatedHighlightLoop();
   clearSmoothAnimation();
-  activeSmoothToken = null;
+  activeWordToken = null;
   for (const body of Array.from(highlightedBodies)) {
     if (!body.isConnected) {
       highlightedBodies.delete(body);
@@ -1798,6 +2102,7 @@ function clearHighlightVisuals(): void {
     }
   }
   activeHighlightTarget = null;
+  activeHighlightSegment = null;
 }
 
 function scrollFullQuoteWordIntoView(word: HTMLElement | null): void {
@@ -1815,29 +2120,273 @@ function scrollFullQuoteWordIntoView(word: HTMLElement | null): void {
   });
 }
 
-function saveOriginalBody(body: HTMLElement): void {
-  if (!body.dataset.postReadingOriginalHtml) {
-    body.dataset.postReadingOriginalHtml = body.innerHTML;
+function saveOriginalBody(body: HTMLElement, bodies: HTMLElement[] = [body]): void {
+  for (const item of Array.from(new Set([body, ...bodies]))) {
+    highlightedBodies.add(item);
   }
-  highlightedBodies.add(body);
 }
 
-function prepareSmoothBody(body: HTMLElement): HTMLElement[] {
-  const existing = Array.from(body.querySelectorAll<HTMLElement>('[data-post-reading-smooth-word="true"]'));
-  if (existing.length > 0) return existing;
-  return prepareTokenizedBody(body, "smooth", settings.includeHyperlinks);
+function restoreHighlightedBody(body: HTMLElement): void {
+  removeSegmentSurfaceForBody(body);
+  highlightEngine.restoreOriginalElement(body);
+}
+
+function prepareSmoothBody(body: HTMLElement, textOverride?: string): HTMLElement[] {
+  return prepareTokenizedBody(body, "smooth", settings.includeHyperlinks, textOverride);
+}
+
+function isXArticleContainer(element: HTMLElement): boolean {
+  return /^\/i\/article\/\d+/.test(window.location.pathname)
+    && Boolean(element.matches('[data-testid="primaryColumn"], main, article') || element.querySelector(X_ARTICLE_BODY));
+}
+
+function getArticleBodies(article: HTMLElement): HTMLElement[] {
+  const candidates = Array.from(article.querySelectorAll<HTMLElement>(`${X_ARTICLE_BODY}, h1, h2, p`))
+    .filter(isReadableArticleBody);
+  return Array.from(new Set(candidates));
+}
+
+function isReadableArticleBody(element: HTMLElement): boolean {
+  if (element.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
+  const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
+  if (text.length < 2) return false;
+  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
+  return true;
 }
 
 function prepareWordBody(body: HTMLElement): HTMLElement[] {
-  const existing = Array.from(body.querySelectorAll<HTMLElement>('[data-post-reading-word="true"]'));
-  if (existing.length > 0) return existing;
   return prepareTokenizedBody(body, "word", settings.includeHyperlinks);
 }
 
-function prepareTokenizedBody(body: HTMLElement, mode: "word" | "smooth", includeHyperlinks: boolean): HTMLElement[] {
+function prepareTokenizedBody(
+  body: HTMLElement,
+  mode: "word" | "smooth",
+  includeHyperlinks: boolean,
+  textOverride?: string,
+): HTMLElement[] {
   saveOriginalBody(body);
   return highlightEngine.prepareTokens(body, mode, {
     includeTextNode: (node) => !isSkippedReadableHyperlinkText(node, includeHyperlinks),
+    textOverride,
+    smoothReadableLength: typeof textOverride === "string",
+  });
+}
+
+function resolveSmoothPaintTarget(
+  target: HighlightTarget,
+  absoluteIndex: number,
+): { body: HTMLElement; segment: HighlightSegment | null; relativeIndex: number; text: string } {
+  const segment = findActiveHighlightSegment(target, absoluteIndex);
+  if (!segment) {
+    return {
+      body: target.body,
+      segment: null,
+      relativeIndex: absoluteIndex - target.start,
+      text: target.text,
+    };
+  }
+  materializeSmoothSegment(target, segment);
+  return {
+    body: segment.body,
+    segment,
+    relativeIndex: Math.max(0, Math.min(segment.text.length, absoluteIndex - segment.start)),
+    text: segment.text,
+  };
+}
+
+function findActiveHighlightSegment(target: HighlightTarget, absoluteIndex: number): HighlightSegment | null {
+  if (!target.segments || target.segments.length === 0) return null;
+  return target.segments.find((segment) => absoluteIndex >= segment.start && absoluteIndex <= segment.end) || target.segments[0] || null;
+}
+
+function materializeSmoothSegment(target: HighlightTarget, segment: HighlightSegment): void {
+  if (!target.segments || target.segments.length === 0) return;
+  if (target.segmentSurface?.isConnected && target.activeSegment === segment && segment.body.isConnected) return;
+  saveOriginalBody(target.body, target.bodies);
+  if (target.activeSegment?.body.isConnected) {
+    highlightEngine.restoreOriginalElement(target.activeSegment.body);
+  }
+  const surface = target.segmentSurface?.isConnected ? target.segmentSurface : document.createElement("span");
+  if (!target.segmentSurface?.isConnected) {
+    surface.dataset.postReadingSegmentSurface = "true";
+    surface.dataset.postReadingSegmentSourceHidden = "false";
+    surface.className = "post-reading-segment-surface";
+    applySegmentSurfaceStyle(target.body, surface);
+    target.body.insertAdjacentElement("afterend", surface);
+    target.body.dataset.postReadingSegmentSourceHidden = "true";
+    target.segmentSurface = surface;
+  }
+  surface.textContent = "";
+  const fragment = document.createDocumentFragment();
+  const relativeStart = Math.max(0, segment.start - target.start);
+  const relativeEnd = Math.max(relativeStart, segment.end - target.start);
+  const before = target.text.slice(0, relativeStart);
+  const after = target.text.slice(relativeEnd);
+  if (before) fragment.append(document.createTextNode(before));
+  const wrapper = document.createElement("span");
+  wrapper.dataset.postReadingSegment = "true";
+  wrapper.dataset.postReadingSegmentStart = String(segment.start);
+  wrapper.dataset.postReadingSegmentEnd = String(segment.end);
+  wrapper.style.whiteSpace = "pre-wrap";
+  wrapper.textContent = segment.text;
+  segment.body = wrapper;
+  surface.append(fragment);
+  surface.append(wrapper);
+  if (after) surface.append(document.createTextNode(after));
+  target.activeSegment = segment;
+  recordSmoothSegmentDiagnostic(target);
+}
+
+function applySegmentSurfaceStyle(source: HTMLElement, surface: HTMLElement): void {
+  const style = window.getComputedStyle(source);
+  const properties = [
+    "box-sizing",
+    "color",
+    "direction",
+    "font-family",
+    "font-feature-settings",
+    "font-kerning",
+    "font-optical-sizing",
+    "font-size",
+    "font-size-adjust",
+    "font-stretch",
+    "font-style",
+    "font-synthesis",
+    "font-variant",
+    "font-variant-caps",
+    "font-variant-east-asian",
+    "font-variant-ligatures",
+    "font-variant-numeric",
+    "font-variation-settings",
+    "font-weight",
+    "letter-spacing",
+    "line-height",
+    "tab-size",
+    "text-align",
+    "text-decoration-color",
+    "text-decoration-line",
+    "text-decoration-style",
+    "text-decoration-thickness",
+    "text-indent",
+    "text-rendering",
+    "text-shadow",
+    "text-transform",
+    "unicode-bidi",
+    "word-break",
+    "word-spacing",
+  ];
+  for (const property of properties) {
+    const value = style.getPropertyValue(property);
+    if (value) surface.style.setProperty(property, value);
+  }
+  surface.style.setProperty("display", blockLikeDisplay(style.display));
+  surface.style.setProperty("white-space", style.whiteSpace === "normal" ? "pre-wrap" : style.whiteSpace);
+  surface.style.setProperty("overflow-wrap", style.overflowWrap || "anywhere");
+  surface.style.setProperty("width", style.width);
+  surface.style.setProperty("max-width", style.maxWidth);
+  if (source.getAttribute("dir")) surface.setAttribute("dir", source.getAttribute("dir") || "");
+  if (source.getAttribute("lang")) surface.setAttribute("lang", source.getAttribute("lang") || "");
+}
+
+function blockLikeDisplay(display: string): string {
+  if (display === "inline" || display === "contents") return "block";
+  if (display.includes("flex") || display.includes("grid") || display === "none") return "block";
+  return display || "block";
+}
+
+function restorePreviousSmoothSegment(nextSegment: HighlightSegment | null): void {
+  const previous = activeHighlightSegment;
+  if (!previous || previous === nextSegment || !previous.body.isConnected) return;
+  highlightEngine.restoreOriginalElement(previous.body);
+}
+
+function removeSegmentSurfaceForBody(body: HTMLElement): void {
+  delete body.dataset.postReadingSegmentSourceHidden;
+  const surface = body.nextElementSibling;
+  if (surface instanceof HTMLElement && surface.dataset.postReadingSegmentSurface === "true") {
+    surface.remove();
+  }
+}
+
+function removeSegmentSurfaceForTarget(target: HighlightTarget): boolean {
+  let removed = false;
+  if (target.segmentSurface?.isConnected) {
+    target.segmentSurface.remove();
+    removed = true;
+  }
+  target.segmentSurface = undefined;
+  target.activeSegment = undefined;
+  delete target.body.dataset.postReadingSegmentSourceHidden;
+  return removed;
+}
+
+function recordSmoothSegmentDiagnostic(target: HighlightTarget): void {
+  const segments = target.segments || [];
+  const active = activeHighlightSegment || segments[0] || null;
+  const activeTokenEstimate = active ? estimateHighlightTokenCount(active.text) : null;
+  const signature = [
+    "segment",
+    target.kind,
+    Math.round(target.text.length / 100),
+    segments.length,
+    active ? Math.round(active.text.length / 50) : "none",
+  ].join(":");
+  if (signature === lastSmoothSegmentDiagnosticSignature) return;
+  lastSmoothSegmentDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("highlightSegment", {
+    targetKind: target.kind,
+    targetTextLength: target.text.length,
+    targetTokenEstimate: cachedHighlightTokenEstimate(target),
+    segmentCount: segments.length,
+    activeSegmentTextLength: active?.text.length ?? null,
+    activeSegmentTokenEstimate: activeTokenEstimate,
+    renderSurface: "extension-owned-sibling-active-segment",
+    sourceDomStrategy: "hidden-not-replaced",
+    updatedAt: Date.now(),
+  });
+}
+
+function recordSegmentCleanupDiagnostic(restoredBodies: number, removedSegmentSurfaces: number): void {
+  if (restoredBodies <= 0 && removedSegmentSurfaces <= 0) return;
+  recordRuntimeDiagnostic("highlightCleanup", {
+    restoredBodies,
+    removedSegmentSurfaces,
+    remainingSegmentSurfaces: document.querySelectorAll('[data-post-reading-segment-surface="true"]').length,
+    remainingTokenCount: document.querySelectorAll('[data-post-reading-word="true"], [data-post-reading-smooth-word="true"]').length,
+    updatedAt: Date.now(),
+  });
+}
+
+function recordHighlightTimingDiagnostic(
+  target: HighlightTarget,
+  paintTarget: { body: HTMLElement; segment: HighlightSegment | null; relativeIndex: number; text: string },
+  tokens: HTMLElement[],
+  tokenizeMs: number,
+  paintMs: number,
+): void {
+  const signature = [
+    target.kind,
+    paintTarget.segment ? "segment" : "full",
+    Math.round(target.text.length / 200),
+    Math.round(paintTarget.text.length / 50),
+    Math.round(tokens.length / 10),
+    Math.round(paintTarget.relativeIndex / 40),
+  ].join(":");
+  if (signature === lastHighlightTimingDiagnosticSignature) return;
+  lastHighlightTimingDiagnosticSignature = signature;
+  recordRuntimeDiagnostic("highlightPaintTiming", {
+    targetKind: target.kind,
+    targetTextLength: target.text.length,
+    targetTokenEstimate: cachedHighlightTokenEstimate(target),
+    activeSegmentTextLength: paintTarget.text.length,
+    activeSegmentTokenCount: tokens.length,
+    segmented: Boolean(paintTarget.segment),
+    relativeIndex: paintTarget.relativeIndex,
+    tokenizeMs: Math.round(tokenizeMs * 10) / 10,
+    paintMs: Math.round(paintMs * 10) / 10,
+    forcedLayoutReads: 0,
+    detachedTokenCount: tokens.filter((token) => !token.isConnected).length,
+    updatedAt: Date.now(),
   });
 }
 
@@ -1850,13 +2399,12 @@ function isSkippedReadableHyperlinkText(node: Text, includeHyperlinks: boolean):
 
 function resetBodyTokenizationForMode(body: HTMLElement, mode: "word" | "smooth"): void {
   if (!body.dataset.postReadingHighlightMode || body.dataset.postReadingHighlightMode === mode) return;
-  if (body.dataset.postReadingOriginalHtml) {
-    body.innerHTML = body.dataset.postReadingOriginalHtml;
-  }
-  delete body.dataset.postReadingHighlightMode;
+  restoreHighlightedBody(body);
 }
 
 function findHighlightTargets(tweet: HTMLElement, spokenText: string, post: ReadablePost): HighlightTarget[] {
+  if (isXArticleContainer(tweet)) return findArticleHighlightTargets(tweet, spokenText, post);
+
   const targets: HighlightTarget[] = [];
   const quoteBody = post.quote ? getQuoteTweetBody(tweet) : null;
   const quoteRange = post.quote && quoteBody ? findBodyRange(spokenText, post.quote.text, "first") : null;
@@ -1864,12 +2412,78 @@ function findHighlightTargets(tweet: HTMLElement, spokenText: string, post: Read
     targets.push({ body: quoteBody, kind: "quote", ...quoteRange });
   }
 
-  const mainBody = post.text ? getMainTweetBody(tweet) : null;
+  const mainBodies = post.text ? getMainTweetBodies(tweet) : [];
+  const mainBody = mainBodies[0] || null;
   const mainRange = post.text && mainBody ? findBodyRange(spokenText, post.text, "last") : null;
   if (mainBody && mainRange) {
-    targets.push({ body: mainBody, kind: "main", ...mainRange });
+    const target: HighlightTarget = { body: mainBody, bodies: mainBodies, kind: "main", ...mainRange };
+    target.segments = buildSmoothHighlightSegments(target);
+    targets.push(target);
   }
 
+  return targets.sort((left, right) => left.start - right.start);
+}
+
+function buildSmoothHighlightSegments(target: HighlightTarget): HighlightSegment[] | undefined {
+  if (target.kind !== "main") return undefined;
+  if (target.text.length < SMOOTH_SEGMENT_TEXT_THRESHOLD && estimateHighlightTokenCount(target.text) <= postReadingPerformancePolicy().maxHighlightTokens) {
+    return undefined;
+  }
+  const segments: HighlightSegment[] = [];
+  let cursor = 0;
+  while (cursor < target.text.length) {
+    const end = nextSmoothSegmentEnd(target.text, cursor);
+    if (end <= cursor) break;
+    const text = target.text.slice(cursor, end);
+    if (text) {
+      segments.push({
+        body: target.body,
+        start: target.start + cursor,
+        end: target.start + end,
+        text,
+      });
+    }
+    cursor = end;
+  }
+  return segments.length > 1 ? segments : undefined;
+}
+
+function nextSmoothSegmentEnd(text: string, start: number): number {
+  const maxEnd = Math.min(text.length, start + SMOOTH_SEGMENT_MAX_CHARS);
+  if (maxEnd >= text.length) return text.length;
+  const minEnd = Math.min(maxEnd, start + SMOOTH_SEGMENT_MIN_BREAK_CHARS);
+  const slice = text.slice(start, maxEnd);
+  const candidates = [
+    slice.lastIndexOf("\n\n"),
+    slice.lastIndexOf(". "),
+    slice.lastIndexOf("! "),
+    slice.lastIndexOf("? "),
+    slice.lastIndexOf("; "),
+    slice.lastIndexOf(", "),
+  ].filter((index) => index >= SMOOTH_SEGMENT_MIN_BREAK_CHARS);
+  const boundary = candidates.length > 0 ? Math.max(...candidates) + 2 : -1;
+  if (boundary > 0) return start + boundary;
+  const whitespace = slice.lastIndexOf(" ");
+  if (whitespace >= minEnd - start) return start + whitespace + 1;
+  return maxEnd;
+}
+
+function findArticleHighlightTargets(article: HTMLElement, spokenText: string, post: ReadablePost): HighlightTarget[] {
+  const targets: HighlightTarget[] = [];
+  let cursor = 0;
+  for (const body of getArticleBodies(article)) {
+    const text = cleanText(body.innerText || body.textContent || "");
+    if (!text) continue;
+    const range = findBodyRange(spokenText, text, "first", cursor);
+    if (!range) continue;
+    targets.push({ body, kind: "main", ...range });
+    cursor = range.end;
+  }
+  if (targets.length === 0) {
+    const body = getMainTweetBody(article);
+    const range = post.text && body ? findBodyRange(spokenText, post.text, "last") : null;
+    if (body && range) targets.push({ body, kind: "main", ...range });
+  }
   return targets.sort((left, right) => left.start - right.start);
 }
 
@@ -1916,9 +2530,10 @@ function activateHighlightTarget(target: HighlightTarget): void {
   if (activeHighlightTarget === target) return;
   restoreInactiveHighlightBodies(target.body);
   activeHighlightTarget = target;
+  activeHighlightSegment = null;
+  activeWordToken = null;
   lastBoundaryAt = null;
   lastRelativeIndex = null;
-  smoothVisualIndex = 0;
   resetSmoothTokenFill(Array.from(target.body.querySelectorAll<HTMLElement>('[data-post-reading-smooth-word="true"]')));
 }
 
@@ -1932,10 +2547,7 @@ function restoreInactiveHighlightBodies(activeBody: HTMLElement): void {
       highlightedBodies.delete(body);
       continue;
     }
-    if (body.dataset.postReadingOriginalHtml) {
-      body.innerHTML = body.dataset.postReadingOriginalHtml;
-      delete body.dataset.postReadingOriginalHtml;
-    }
+    restoreHighlightedBody(body);
     highlightedBodies.delete(body);
   }
 }
@@ -1944,30 +2556,31 @@ function isFullQuoteBody(body: HTMLElement): boolean {
   return Boolean(body.closest('[data-post-reading-full-quote="true"]'));
 }
 
-function findBodyRange(spokenText: string, bodyText: string, occurrence: "first" | "last"): { start: number; end: number; text: string } | null {
+function findBodyRange(spokenText: string, bodyText: string, occurrence: "first" | "last", fromIndex = 0): { start: number; end: number; text: string } | null {
   const text = bodyText.trim();
   if (!text) return null;
   const quoted = `"${text}"`;
-  const quotedStart = occurrence === "first" ? spokenText.indexOf(quoted) : spokenText.lastIndexOf(quoted);
-  let start = quotedStart >= 0 ? quotedStart + 1 : occurrence === "first" ? spokenText.indexOf(text) : spokenText.lastIndexOf(text);
+  const quotedStart = occurrence === "first" ? spokenText.indexOf(quoted, fromIndex) : spokenText.lastIndexOf(quoted);
+  let start = quotedStart >= 0 ? quotedStart + 1 : occurrence === "first" ? spokenText.indexOf(text, fromIndex) : spokenText.lastIndexOf(text);
   if (start < 0) {
-    start = findNormalizedRangeStart(spokenText, text, occurrence);
+    start = findNormalizedRangeStart(spokenText, text, occurrence, fromIndex);
   }
   if (start < 0) return null;
   return { start, end: start + text.length, text };
 }
 
-function findNormalizedRangeStart(haystack: string, needle: string, occurrence: "first" | "last"): number {
+function findNormalizedRangeStart(haystack: string, needle: string, occurrence: "first" | "last", fromIndex = 0): number {
   const collapsedNeedle = needle.replace(/\s+/g, " ").trim();
   if (!collapsedNeedle) return -1;
   const pattern = collapsedNeedle
     .split(" ")
     .map((part) => escapeRegExp(part))
     .join("\\s+");
-  const match = haystack.match(new RegExp(pattern, "g"));
+  const match = Array.from(haystack.matchAll(new RegExp(pattern, "g")))
+    .filter((item) => occurrence !== "first" || (item.index ?? -1) >= fromIndex);
   if (!match || match.length === 0) return -1;
   const selected = occurrence === "first" ? match[0] : match[match.length - 1];
-  return occurrence === "first" ? haystack.indexOf(selected) : haystack.lastIndexOf(selected);
+  return selected.index ?? -1;
 }
 
 function escapeRegExp(value: string): string {
@@ -1991,114 +2604,44 @@ function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElem
   return nearest || words[0] || null;
 }
 
-function smoothCursorIndex(tokens: HTMLElement[], relativeIndex: number, charLength: number | null): number {
-  if (charLength !== null && charLength > 0) return relativeIndex + charLength;
-  const token = findNearestToken(tokens, relativeIndex);
-  if (!token) return relativeIndex;
-  return tokenStart(token) + tokenLength(token);
-}
-
 function findCurrentWordToken(words: HTMLElement[], relativeIndex: number, charLength: number | null): HTMLElement | null {
   return highlightEngine.findCurrentToken(words, relativeIndex, charLength);
-}
-
-function findTokenContaining(tokens: HTMLElement[], index: number): HTMLElement | null {
-  return tokens.find((token) => {
-    const start = tokenStart(token);
-    const end = start + tokenLength(token);
-    return index >= start && index < end;
-  }) || null;
-}
-
-function paintSmoothTokens(
-  tokens: HTMLElement[],
-  currentToken: HTMLElement | null,
-  relativeIndex: number,
-  textLength: number,
-  snapToCurrent = false,
-  charLength: number | null = null,
-  boundaryElapsedTime: number | null = null,
-): void {
-  if (!currentToken) return;
-  highlightEngine.paintSmooth(tokens, relativeIndex, {
-    charLength,
-    textLength,
-    snapToCurrent,
-    boundaryElapsedTime,
-  });
 }
 
 function resetSmoothTokenFill(tokens: HTMLElement[]): void {
   highlightEngine.resetSmoothTokenFill(tokens);
 }
 
-function paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
-  smoothVisualIndex = Math.max(smoothVisualIndex, cursorIndex);
-  for (const token of tokens) {
-    const start = Number(token.dataset.postReadingStart || 0);
-    const length = tokenLength(token);
-    const end = start + length;
-
-    if (end <= cursorIndex) {
-      token.dataset.postReadingSmoothFilled = "true";
-      token.style.setProperty("--post-reading-fill-duration", "0ms");
-      token.style.setProperty("--post-reading-fill", "100%");
-      continue;
-    }
-
-    delete token.dataset.postReadingSmoothFilled;
-
-    if (cursorIndex >= start && cursorIndex < end) {
-      const value = rangeFillPercentForToken(token, cursorIndex);
-      token.style.setProperty("--post-reading-fill-duration", "0ms");
-      token.style.setProperty("--post-reading-fill", `${value}%`);
-    } else {
-      token.style.setProperty("--post-reading-fill-duration", "0ms");
-      token.style.removeProperty("--post-reading-fill");
-    }
+function paintCurrentWord(currentWord: HTMLElement | null): void {
+  if (activeWordToken && activeWordToken !== currentWord) {
+    delete activeWordToken.dataset.postReadingCurrentWord;
   }
-}
-
-function animateSmoothRange(tokens: HTMLElement[], token: HTMLElement, fromIndex: number, toIndex: number, durationMs: number): void {
-  clearSmoothAnimation({ completePending: false });
-  pendingSmoothAnimation = { tokens, token, toIndex };
-  const animatedTokenCount = paintSmoothTransition(tokens, fromIndex, toIndex, durationMs);
-  recordSmoothAnimationDiagnostic(tokens.length, animatedTokenCount, durationMs);
-  smoothAnimationTimer = window.setTimeout(() => {
-    smoothAnimationTimer = null;
-    pendingSmoothAnimation = null;
-    if (!tokens.some((token) => token.isConnected)) return;
-    paintSmoothAt(tokens, toIndex);
-  }, durationMs + 24);
+  if (currentWord) currentWord.dataset.postReadingCurrentWord = "true";
+  activeWordToken = currentWord;
 }
 
 function clearSmoothAnimation(options: { completePending?: boolean } = {}): void {
   highlightEngine.clearSmoothAnimation(options);
 }
 
-function paintSmoothTransition(tokens: HTMLElement[], fromIndex: number, toIndex: number, durationMs: number): number {
-  const animatedTokens = tokens.filter((token) => {
-    const start = tokenStart(token);
-    const end = start + tokenLength(token);
-    return end > fromIndex && start < toIndex;
-  });
-  smoothAnimationFrame = window.requestAnimationFrame(() => {
-    smoothAnimationFrame = null;
-    if (!tokens.some((token) => token.isConnected)) return;
-    smoothVisualIndex = Math.max(smoothVisualIndex, toIndex);
-    for (const token of animatedTokens) {
-      const end = tokenStart(token) + tokenLength(token);
-      token.style.setProperty("--post-reading-fill-duration", `${durationMs}ms`);
-      token.style.setProperty("--post-reading-fill", `${rangeFillPercentForToken(token, toIndex)}%`);
-      if (end <= toIndex) token.dataset.postReadingSmoothFilled = "true";
-      else delete token.dataset.postReadingSmoothFilled;
-    }
-  });
-  return animatedTokens.length;
-}
-
-function recordSmoothAnimationDiagnostic(tokenCount: number, animatedTokenCount: number, durationMs: number): void {
-  const signature = `${document.documentElement.dataset.milxdyPerformanceMode || "balanced"}:${Math.round(tokenCount / 12)}:${Math.round(animatedTokenCount / 8)}:${Math.round(durationMs / 100)}`;
+function recordSmoothAnimationDiagnostic(diagnostic: {
+  tokenCount: number;
+  animatedTokenCount: number;
+  durationMs: number;
+  interrupted?: boolean;
+  pendingToIndex?: number;
+  boundaryIndex?: number;
+  catchUpActive?: boolean;
+}): void {
+  const { tokenCount, animatedTokenCount, durationMs, interrupted, pendingToIndex, boundaryIndex, catchUpActive } = diagnostic;
+  const signature = [
+    document.documentElement.dataset.milxdyPerformanceMode || "balanced",
+    Math.round(tokenCount / 12),
+    Math.round(animatedTokenCount / 8),
+    Math.round(durationMs / 100),
+    interrupted ? "interrupted" : "normal",
+    catchUpActive ? "catchup" : "steady",
+  ].join(":");
   if (signature === lastSmoothAnimationDiagnosticSignature) return;
   lastSmoothAnimationDiagnosticSignature = signature;
   recordRuntimeDiagnostic("highlightAnimation", {
@@ -2106,6 +2649,10 @@ function recordSmoothAnimationDiagnostic(tokenCount: number, animatedTokenCount:
     tokenCount,
     animatedTokenCount,
     durationMs,
+    interrupted: Boolean(interrupted),
+    pendingToIndex,
+    boundaryIndex,
+    catchUpActive: Boolean(catchUpActive),
     performanceMode: document.documentElement.dataset.milxdyPerformanceMode || "balanced",
     updatedAt: Date.now(),
   });
@@ -2115,7 +2662,6 @@ function updateBoundaryCalibration(relativeIndex: number): void {
   const now = performance.now();
   if (lastBoundaryAt !== null && lastRelativeIndex !== null && relativeIndex > lastRelativeIndex) {
     const elapsedSeconds = Math.max(0.05, (now - lastBoundaryAt) / 1000);
-    lastBoundaryIntervalMs = elapsedSeconds * 1000;
     const observed = (relativeIndex - lastRelativeIndex) / elapsedSeconds;
     if (Number.isFinite(observed) && observed > 1 && observed < 80) {
       calibratedCharsPerSecond = calibratedCharsPerSecond * 0.72 + observed * 0.28;
@@ -2127,25 +2673,10 @@ function updateBoundaryCalibration(relativeIndex: number): void {
 
 function resetBoundaryCalibration(): void {
   lastBoundaryAt = null;
-  lastBoundaryIntervalMs = null;
   lastRelativeIndex = null;
   calibratedCharsPerSecond = 13 * Math.max(0.5, settings.speed);
-  activeSmoothToken = null;
-  smoothVisualIndex = 0;
   highlightEngine.updateBaselineReadingSpeed(settings.speed);
   highlightEngine.resetSmoothTracking();
-}
-
-function estimateTokenDurationMs(length: number): number {
-  const cps = Math.max(4, calibratedCharsPerSecond);
-  return Math.max(60, Math.min(1200, Math.round((Math.max(1, length) / cps) * 1000)));
-}
-
-function estimateSmoothFillDurationMs(length: number): number {
-  const tokenDuration = estimateTokenDurationMs(length);
-  if (lastBoundaryIntervalMs === null) return tokenDuration;
-  const cadenceDuration = Math.round(Math.max(35, Math.min(900, lastBoundaryIntervalMs * 0.86)));
-  return Math.max(35, Math.min(tokenDuration, cadenceDuration));
 }
 
 function buildSmoothParts(text: string): string[] {
@@ -2165,19 +2696,5 @@ function buildSmoothParts(text: string): string[] {
 
 function estimateHighlightTokenCount(text: string): number {
   return estimateSharedHighlightTokenCount(text);
-}
-
-function tokenStart(token: HTMLElement | null): number {
-  return Number(token?.dataset.postReadingStart || 0);
-}
-
-function tokenLength(token: HTMLElement | null): number {
-  return Number(token?.dataset.postReadingLength || token?.textContent?.length || 0);
-}
-
-function rangeFillPercentForToken(token: HTMLElement, rangeIndex: number): number {
-  const start = tokenStart(token);
-  const length = Math.max(1, tokenLength(token));
-  return Math.max(0, Math.min(100, ((rangeIndex - start) / length) * 100));
 }
 

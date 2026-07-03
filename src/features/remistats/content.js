@@ -234,7 +234,9 @@ const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
 let incomingPokeCache = null;
 let visualTheme = DEFAULT_VISUAL_THEME;
+let likeAutoPokeEnabled = false;
 let pokeAutoLikeEnabled = false;
+const autoLikeClickTargets = new WeakSet();
 const DEFAULT_ICON_SETTINGS = {
   enabled: true,
   score: true,
@@ -291,7 +293,11 @@ async function loadIconSettings() {
 }
 
 async function loadPokeAutoLikeSetting() {
-  const settings = await chrome.storage.sync.get({ 'milxdy.remistats.pokeAutoLike': false });
+  const settings = await chrome.storage.sync.get({
+    'milxdy.remistats.likeAutoPoke': false,
+    'milxdy.remistats.pokeAutoLike': false,
+  });
+  likeAutoPokeEnabled = settings['milxdy.remistats.likeAutoPoke'] === true;
   pokeAutoLikeEnabled = settings['milxdy.remistats.pokeAutoLike'] === true;
 }
 
@@ -1118,6 +1124,12 @@ function installRemiStatsDelegation() {
       return;
     }
 
+    const likeButton = event.target.closest?.('[data-testid="like"]');
+    if (likeButton) {
+      maybePokeLikedTweet(likeButton);
+      return;
+    }
+
     const badge = event.target.closest?.('[data-reminet-badge]');
     if (!badge) return;
     const profileUrl = badge.dataset.reminetProfileUrl;
@@ -1241,10 +1253,27 @@ function maybeLikePokedTweet(button) {
     .find((candidate) => surfaceOwnsNode(tweet, candidate));
   if (!likeButton || likeButton.disabled || likeButton.getAttribute('aria-disabled') === 'true') return;
   try {
+    autoLikeClickTargets.add(likeButton);
     likeButton.click();
   } catch (error) {
     console.debug('RemiStats poke auto-like skipped:', error);
+  } finally {
+    queueMicrotask(() => autoLikeClickTargets.delete(likeButton));
   }
+}
+
+function maybePokeLikedTweet(likeButton) {
+  if (!likeAutoPokeEnabled || autoLikeClickTargets.has(likeButton)) return;
+  if (likeButton.disabled || likeButton.getAttribute('aria-disabled') === 'true') return;
+  const tweet = likeButton.closest('[data-testid="tweet"]');
+  if (!tweet || !surfaceOwnsNode(tweet, likeButton)) return;
+  const pokeButton = Array.from(tweet.querySelectorAll('[data-reminet-poke]'))
+    .find((candidate) => surfaceOwnsNode(tweet, candidate));
+  if (!pokeButton || pokeButton.disabled || pokeButton.getAttribute('aria-disabled') === 'true') return;
+  window.setTimeout(() => {
+    if (!document.contains(pokeButton)) return;
+    void handlePokeClick(pokeButton);
+  }, 0);
 }
 
 function findPokeXHandle(button) {
@@ -2717,6 +2746,9 @@ function init() {
         clearRemiStatsBadges();
       }
       return;
+    }
+    if (changes['milxdy.remistats.likeAutoPoke']) {
+      likeAutoPokeEnabled = changes['milxdy.remistats.likeAutoPoke'].newValue === true;
     }
     if (changes['milxdy.remistats.pokeAutoLike']) {
       pokeAutoLikeEnabled = changes['milxdy.remistats.pokeAutoLike'].newValue === true;

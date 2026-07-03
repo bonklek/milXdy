@@ -19,6 +19,10 @@ type SmoothAnimationDiagnostic = {
   tokenCount: number;
   animatedTokenCount: number;
   durationMs: number;
+  interrupted?: boolean;
+  pendingToIndex?: number;
+  boundaryIndex?: number;
+  catchUpActive?: boolean;
 };
 
 export type TextHighlightEngineOptions = {
@@ -32,6 +36,7 @@ type PendingSmoothAnimation = {
 };
 
 const CALIBRATION_SAMPLE_LIMIT = 5;
+const originalHtmlByElement = new WeakMap<HTMLElement, string>();
 
 export class TextHighlightEngine {
   private smoothVisualIndex = 0;
@@ -47,10 +52,17 @@ export class TextHighlightEngine {
   private baselineCharsPerSecond = 13;
   private calibrationSamples = 0;
   private calibrationLocked = false;
+  private catchUpUntil = 0;
   private readonly onSmoothAnimation?: (diagnostic: SmoothAnimationDiagnostic) => void;
 
   constructor(options: TextHighlightEngineOptions = {}) {
     this.onSmoothAnimation = options.onSmoothAnimation;
+  }
+
+  captureOriginalElement(element: HTMLElement): void {
+    if (originalHtmlByElement.has(element)) return;
+    originalHtmlByElement.set(element, element.innerHTML);
+    element.dataset.postReadingOriginalHtml = "true";
   }
 
   prepareTokens(element: HTMLElement, mode: HighlightTokenMode, options: PrepareTokenOptions = {}): HTMLElement[] {
@@ -58,7 +70,7 @@ export class TextHighlightEngine {
     const existing = Array.from(element.querySelectorAll<HTMLElement>(selector));
     if (existing.length > 0) return existing;
     this.resetTokenizationForMode(element, mode);
-    if (!element.dataset.postReadingOriginalHtml) element.dataset.postReadingOriginalHtml = element.innerHTML;
+    this.captureOriginalElement(element);
     element.dataset.postReadingHighlightMode = mode;
 
     if (typeof options.textOverride === "string") {
@@ -122,12 +134,14 @@ export class TextHighlightEngine {
   }
 
   restoreOriginalElement(element: HTMLElement): void {
-    if (element.dataset.postReadingOriginalHtml) {
-      element.innerHTML = element.dataset.postReadingOriginalHtml;
-      delete element.dataset.postReadingOriginalHtml;
+    const originalHtml = originalHtmlByElement.get(element);
+    if (originalHtml !== undefined) {
+      element.innerHTML = originalHtml;
+      originalHtmlByElement.delete(element);
     } else {
       this.clearElement(element);
     }
+    delete element.dataset.postReadingOriginalHtml;
     delete element.dataset.postReadingHighlightMode;
   }
 
@@ -178,6 +192,11 @@ export class TextHighlightEngine {
           ),
         )
       : currentTokenEnd;
+    const interrupted = this.recordBoundaryInterruption(relativeIndex);
+    if (interrupted) {
+      this.clearSmoothAnimation({ completePending: true });
+      this.activeSmoothToken = null;
+    }
 
     if (
       this.pendingSmoothAnimation?.token === currentToken
@@ -218,7 +237,7 @@ export class TextHighlightEngine {
     const duration = this.estimateSmoothFillDurationMs(animationEnd - visualStart);
     this.snapSmoothAt(tokens, visualStart);
     this.activeSmoothToken = currentToken;
-    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration);
+    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, interrupted, relativeIndex);
     return currentToken;
   }
 
@@ -257,6 +276,7 @@ export class TextHighlightEngine {
     this.calibratedCharsPerSecond = this.baselineCharsPerSecond;
     this.calibrationSamples = 0;
     this.calibrationLocked = false;
+    this.catchUpUntil = 0;
     void rangeElement;
   }
 
@@ -336,6 +356,14 @@ export class TextHighlightEngine {
       : null;
   }
 
+  private recordBoundaryInterruption(relativeIndex: number): { pendingToIndex: number; boundaryIndex: number } | null {
+    const pending = this.pendingSmoothAnimation;
+    if (!pending) return null;
+    if (relativeIndex < pending.toIndex) return null;
+    this.catchUpUntil = performance.now() + 1600;
+    return { pendingToIndex: pending.toIndex, boundaryIndex: relativeIndex };
+  }
+
   private isUsefulSpeedSample(observed: number, charDelta: number, elapsedMs: number): boolean {
     if (!Number.isFinite(observed) || observed <= 0) return false;
     if (charDelta < 3 || elapsedMs <= 0) return false;
@@ -354,6 +382,7 @@ export class TextHighlightEngine {
   }
 
   private snapSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
+    const previousCursor = this.smoothVisualIndex;
     const cursor = Math.max(this.smoothVisualIndex, cursorIndex);
     this.smoothVisualIndex = cursor;
     for (const token of tokens) {
@@ -362,6 +391,8 @@ export class TextHighlightEngine {
       const readableLength = Math.max(1, tokenReadableLength(token));
       const readableEnd = start + readableLength;
       const end = start + length;
+      if (end <= previousCursor && end <= cursor) continue;
+      if (start >= cursor && start >= previousCursor) continue;
       if (end <= cursor) {
         token.dataset.postReadingSmoothFilled = "true";
         setSmoothFillImmediate(token, 100);
@@ -381,6 +412,8 @@ export class TextHighlightEngine {
     fromIndex: number,
     toIndex: number,
     durationMs: number,
+    interrupted: { pendingToIndex: number; boundaryIndex: number } | null = null,
+    boundaryIndex: number | null = null,
   ): void {
     this.clearSmoothAnimation({ completePending: false });
     if (durationMs <= 0 || toIndex <= fromIndex) {
@@ -393,7 +426,15 @@ export class TextHighlightEngine {
       const end = start + tokenLength(item);
       return end > fromIndex && start < toIndex;
     });
-    this.onSmoothAnimation?.({ tokenCount: tokens.length, animatedTokenCount: animatedTokens.length, durationMs });
+    this.onSmoothAnimation?.({
+      tokenCount: tokens.length,
+      animatedTokenCount: animatedTokens.length,
+      durationMs,
+      interrupted: Boolean(interrupted),
+      pendingToIndex: interrupted?.pendingToIndex,
+      boundaryIndex: interrupted?.boundaryIndex ?? boundaryIndex ?? undefined,
+      catchUpActive: this.catchUpActive(),
+    });
 
     this.smoothAnimationFrame = window.requestAnimationFrame(() => {
       this.smoothAnimationFrame = null;
@@ -423,8 +464,13 @@ export class TextHighlightEngine {
   private estimateSmoothFillDurationMs(length: number): number {
     const tokenDuration = Math.max(35, Math.min(1200, this.estimateTokenDurationMs(length)));
     if (this.lastBoundaryIntervalMs === null) return tokenDuration;
-    const cadenceDuration = Math.round(Math.max(35, Math.min(900, this.lastBoundaryIntervalMs * 0.86)));
+    const cadenceRatio = this.catchUpActive() ? 0.52 : 0.72;
+    const cadenceDuration = Math.round(Math.max(24, Math.min(650, this.lastBoundaryIntervalMs * cadenceRatio)));
     return Math.max(35, Math.min(tokenDuration, cadenceDuration));
+  }
+
+  private catchUpActive(): boolean {
+    return this.catchUpUntil > performance.now();
   }
 }
 
@@ -543,7 +589,6 @@ function setSmoothFillImmediate(token: HTMLElement, percent: number | null): voi
   token.style.setProperty("--post-reading-fill-duration", "0ms");
   if (percent === null || !Number.isFinite(percent)) token.style.removeProperty("--post-reading-fill");
   else token.style.setProperty("--post-reading-fill", `${Math.max(0, Math.min(100, percent))}%`);
-  void token.offsetWidth;
   token.style.removeProperty("transition");
   if (percent === null || !Number.isFinite(percent)) token.style.removeProperty("--post-reading-fill-duration");
 }

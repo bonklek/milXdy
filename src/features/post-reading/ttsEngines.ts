@@ -78,6 +78,7 @@ export class WebSpeechEngine implements TtsEngine {
     let stopped = false;
     utterance.onboundary = (event) => {
       if (stopped) return;
+      if (!Number.isFinite(event.charIndex) || event.charIndex < 0) return;
       request.onBoundary({
         charIndex: event.charIndex,
         charLength: typeof event.charLength === "number" && event.charLength > 0 ? event.charLength : null,

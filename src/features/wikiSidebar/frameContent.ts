@@ -40,6 +40,12 @@ type WikiHighlightMessage = {
   status?: string;
 };
 
+type WikiThemeMessage = {
+  type: "wikiSidebar:theme";
+  theme: "light" | "dark";
+  enabled: boolean;
+};
+
 type ArticleRange = {
   element: HTMLElement;
   start: number;
@@ -59,6 +65,7 @@ const SPECIAL_PAGES_ALLOWED_IN_FRAME = new Set(["special:random", "special:searc
 const READ_BUTTON_ID = "milxdy-wiki-read-aloud";
 const READ_BUTTON_SLOT_ID = "milxdy-wiki-read-aloud-slot";
 const STYLE_ID = "milxdy-wiki-post-reading-style";
+const THEME_STYLE_ID = "milxdy-wiki-sidebar-theme-style";
 let activeArticle: ActiveArticle | null = null;
 let smoothVisualIndex = 0;
 let smoothAnimationFrame: number | null = null;
@@ -272,7 +279,11 @@ function normalizeBlockText(value: string): string {
 }
 
 function handleParentMessage(event: MessageEvent): void {
-  if (event.source !== window.parent || !isWikiHighlightMessage(event.data)) return;
+  if (event.source !== window.parent || !isWikiParentMessage(event.data)) return;
+  if (event.data.type === "wikiSidebar:theme") {
+    applySidebarTheme(event.data);
+    return;
+  }
   if (event.data.type === "wikiSidebar:clearReadHighlight") {
     clearReadHighlight();
     return;
@@ -583,10 +594,122 @@ function findNextBoundaryIndex(tokens: HTMLElement[], relativeIndex: number): nu
   return tokenStart(current) + tokenReadableLength(current);
 }
 
-function isWikiHighlightMessage(value: unknown): value is WikiHighlightMessage {
+function isWikiParentMessage(value: unknown): value is WikiHighlightMessage | WikiThemeMessage {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return record.type === "wikiSidebar:highlightBoundary" || record.type === "wikiSidebar:clearReadHighlight";
+  return record.type === "wikiSidebar:highlightBoundary"
+    || record.type === "wikiSidebar:clearReadHighlight"
+    || (record.type === "wikiSidebar:theme" && (record.theme === "light" || record.theme === "dark"));
+}
+
+function applySidebarTheme(message: WikiThemeMessage): void {
+  const dark = message.enabled === true && message.theme === "dark";
+  document.documentElement.dataset.milxdyWikiSidebarTheme = dark ? "dark" : "light";
+  if (dark) {
+    injectSidebarThemeStyles();
+  }
+}
+
+function injectSidebarThemeStyles(): void {
+  if (document.getElementById(THEME_STYLE_ID)) return;
+  if (!document.head) {
+    whenWikiDomReady(injectSidebarThemeStyles);
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = THEME_STYLE_ID;
+  style.textContent = `
+    html[data-milxdy-wiki-sidebar-theme="dark"],
+    html[data-milxdy-wiki-sidebar-theme="dark"] body {
+      color-scheme: dark !important;
+      background: #101116 !important;
+      color: #eef0ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-page-container,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-body,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .content,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-body-content,
+    html[data-milxdy-wiki-sidebar-theme="dark"] #content,
+    html[data-milxdy-wiki-sidebar-theme="dark"] #mw-content-text,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-parser-output,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .pre-content,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .page-heading,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .minerva__tab-container {
+      background: #101116 !important;
+      color: #eef0ff !important;
+      border-color: #34384c !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .header,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .minerva-header,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-header,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .vector-header-container,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .vector-page-titlebar {
+      background: #1b1d27 !important;
+      color: #eef0ff !important;
+      border-color: #34384c !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] h1,
+    html[data-milxdy-wiki-sidebar-theme="dark"] h2,
+    html[data-milxdy-wiki-sidebar-theme="dark"] h3,
+    html[data-milxdy-wiki-sidebar-theme="dark"] h4,
+    html[data-milxdy-wiki-sidebar-theme="dark"] h5,
+    html[data-milxdy-wiki-sidebar-theme="dark"] h6,
+    html[data-milxdy-wiki-sidebar-theme="dark"] p,
+    html[data-milxdy-wiki-sidebar-theme="dark"] li,
+    html[data-milxdy-wiki-sidebar-theme="dark"] td,
+    html[data-milxdy-wiki-sidebar-theme="dark"] th,
+    html[data-milxdy-wiki-sidebar-theme="dark"] figcaption {
+      color: #eef0ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] a {
+      color: #9cc2ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] a:visited {
+      color: #d4b7ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] input,
+    html[data-milxdy-wiki-sidebar-theme="dark"] textarea,
+    html[data-milxdy-wiki-sidebar-theme="dark"] select,
+    html[data-milxdy-wiki-sidebar-theme="dark"] button,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .cdx-button,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .cdx-text-input__input {
+      background-color: #222533 !important;
+      color: #eef0ff !important;
+      border-color: #484e69 !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] table,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .wikitable,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .infobox,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .thumbinner,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .toc,
+    html[data-milxdy-wiki-sidebar-theme="dark"] #toc {
+      background-color: #191b24 !important;
+      color: #eef0ff !important;
+      border-color: #3f445c !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-parser-output blockquote,
+    html[data-milxdy-wiki-sidebar-theme="dark"] code,
+    html[data-milxdy-wiki-sidebar-theme="dark"] pre {
+      background-color: #20232f !important;
+      color: #eef0ff !important;
+      border-color: #3f445c !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-editsection,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .reference,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .references,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .catlinks,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .printfooter,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .mw-footer {
+      color: #bac0d9 !important;
+      border-color: #34384c !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] img,
+    html[data-milxdy-wiki-sidebar-theme="dark"] video,
+    html[data-milxdy-wiki-sidebar-theme="dark"] canvas {
+      filter: none !important;
+    }
+  `;
+  document.head.append(style);
 }
 
 function hashString(value: string): string {

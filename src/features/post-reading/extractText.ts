@@ -1,7 +1,9 @@
-import { CARD_WRAPPER, QUOTE_TWEET, TWEET_PHOTO, TWEET_TEXT, USER_NAME } from "./selectors";
+import { CARD_WRAPPER, QUOTE_TWEET, TWEET_PHOTO, TWEET_TEXT, USER_NAME, X_ARTICLE_BODY } from "./selectors";
 import type { PostReadingSettings, ReadablePost } from "./shared/types";
 
 export function extractReadablePost(tweet: HTMLElement, settings: PostReadingSettings): ReadablePost | null {
+  if (isXArticleContainer(tweet)) return extractReadableArticle(tweet, settings);
+
   const mainTweet = tweet;
   const textElements = Array.from(mainTweet.querySelectorAll<HTMLElement>(TWEET_TEXT));
   const quoteElement = settings.includeQuotes ? findQuoteElement(mainTweet, textElements) : null;
@@ -80,6 +82,34 @@ export function formatReadablePost(post: ReadablePost, settings: PostReadingSett
 
 function sameDisplayName(left: string, right: string): boolean {
   return normalizeDisplayName(left) === normalizeDisplayName(right);
+}
+
+function isXArticleContainer(element: HTMLElement): boolean {
+  return /^\/i\/article\/\d+/.test(window.location.pathname)
+    && Boolean(element.matches('[data-testid="primaryColumn"], main, article') || element.querySelector(X_ARTICLE_BODY));
+}
+
+function getArticleBodyElements(container: HTMLElement): HTMLElement[] {
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>(`${X_ARTICLE_BODY}, h1, h2, p`))
+    .filter(isReadableArticleTextElement);
+  return Array.from(new Set(candidates));
+}
+
+function isReadableArticleTextElement(element: HTMLElement): boolean {
+  if (element.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
+  const text = cleanText(element.innerText || element.textContent || "");
+  if (text.length < 2) return false;
+  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
+  return true;
+}
+
+function extractArticleAuthorName(container: HTMLElement): string | null {
+  const link = Array.from(container.querySelectorAll<HTMLAnchorElement>('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))
+    .find((anchor) => {
+      const href = anchor.getAttribute("href") || "";
+      return !href.includes("/status/") && !href.includes("/i/article/") && /\/[A-Za-z0-9_]{1,15}/.test(href);
+    });
+  return cleanText(link?.textContent || "") || null;
 }
 
 function normalizeDisplayName(value: string): string {
@@ -275,7 +305,34 @@ function sentenceClause(value: string): string {
 }
 
 export function cleanText(value: string): string {
-  return value.replace(/\s+/g, " ").replace(/\s+([.,!?;:])/g, "$1").trim();
+  return value
+    .replace(/\r\n?/g, "\n")
+    .split(/\n+/)
+    .map((part) => part.replace(/[^\S\n]+/g, " ").replace(/\s+([.,!?;:])/g, "$1").trim())
+    .filter(Boolean)
+    .join("\n\n");
+}
+
+function extractReadableArticle(container: HTMLElement, settings: PostReadingSettings): ReadablePost | null {
+  const bodyElements = getArticleBodyElements(container);
+  const text = cleanText(bodyElements.map((element) => element.innerText || element.textContent || "").join("\n\n"));
+  const authorDisplayName = extractAuthorDisplayName(container, null) || extractArticleAuthorName(container) || "Someone";
+  const imageDescriptions = settings.includeImageAltText ? extractImageDescriptions(container) : [];
+  const hasOcrCandidateImages = settings.includeImageOcr && Boolean(container.querySelector(TWEET_PHOTO));
+  const linkPreviews = settings.includeLinkPreviews ? extractLinkPreviews(container) : [];
+
+  if (!text && imageDescriptions.length === 0 && !hasOcrCandidateImages && linkPreviews.length === 0) return null;
+
+  return {
+    authorDisplayName,
+    text,
+    url: window.location.href,
+    quote: null,
+    imageDescriptions,
+    imageTexts: [],
+    linkPreviews,
+    pollOptions: [],
+  };
 }
 
 function findQuoteElement(mainTweet: HTMLElement, textElements: HTMLElement[]): HTMLElement | null {

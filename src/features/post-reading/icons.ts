@@ -1,9 +1,10 @@
-export function icon(name: "speaker" | "play" | "pause" | "minimize" | "next" | "prev" | "nextChunk" | "prevChunk" | "settings"): string {
+export function icon(name: "speaker" | "play" | "pause" | "minimize" | "quit" | "next" | "prev" | "nextChunk" | "prevChunk" | "settings"): string {
   const paths: Record<typeof name, string> = {
     speaker: '<path d="M11 5 6 9H3v6h3l5 4V5Z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18 6a8 8 0 0 1 0 12"/>',
     play: '<path d="M8 5v14l11-7L8 5Z"/>',
     pause: '<path d="M7 5h4v14H7z"/><path d="M13 5h4v14h-4z"/>',
     minimize: '<path d="M6 18h12"/>',
+    quit: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
     next: '<path d="m6 5 8 7-8 7V5Z"/><path d="M16 5h2v14h-2z"/>',
     prev: '<path d="M6 5h2v14H6z"/><path d="m18 5-8 7 8 7V5Z"/>',
     nextChunk: '<path d="m7 6 6 6-6 6V6Z"/><path d="m13 6 6 6-6 6V6Z"/>',
