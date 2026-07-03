@@ -1,6 +1,6 @@
 import { safeLocalGet, safeLocalSet } from "./extensionRuntime";
 
-export type TwitterSurfaceKind = "tweet" | "userCell" | "notification" | "directMessage" | "profile";
+export type TwitterSurfaceKind = "tweet" | "xArticle" | "userCell" | "notification" | "directMessage" | "profile";
 
 export type TwitterSurface = {
   kind: TwitterSurfaceKind;
@@ -17,6 +17,7 @@ export type TwitterSurface = {
 type Listener = (surface: TwitterSurface) => void;
 
 const TWEET = 'article[data-testid="tweet"]';
+const X_ARTICLE = '[data-testid="primaryColumn"]';
 const USER_CELL = '[data-testid="UserCell"], [data-testid="user-cell"]';
 const NOTIFICATION = 'article[data-testid="notification"]';
 const DIRECT_MESSAGE = '[data-testid^="message-"]:not([data-testid^="message-text-"])';
@@ -48,7 +49,7 @@ let deferredFlushTimer: number | null = null;
 let removeVisibilityListener: (() => void) | null = null;
 let removeScrollListener: (() => void) | null = null;
 let removePointerMoveListener: (() => void) | null = null;
-let enabledSurfaceKinds = new Set<TwitterSurfaceKind>(["tweet", "userCell", "notification", "directMessage", "profile"]);
+let enabledSurfaceKinds = new Set<TwitterSurfaceKind>(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile"]);
 let lastNotificationPointerAt = 0;
 let fullScanNotificationHoverDeferred = false;
 const notificationPointerSettleMs = 120;
@@ -71,7 +72,7 @@ function createScannerCounters() {
   fullScanRequestsSkippedHidden: 0,
   fullScans: 0,
   lazyFieldsComputed: 0,
-  activeSurfaceKinds: 5,
+  activeSurfaceKinds: 6,
   maxSurfacesPerFlushBudget: 24,
   maxSurfacesPerScrollFlushBudget: 6,
   maxSurfacesPerFullScanBudget: 72,
@@ -356,6 +357,7 @@ function queueSurface(element: HTMLElement): void {
 
 function surfaceKind(element: HTMLElement): TwitterSurfaceKind | null {
   if (enabledSurfaceKinds.has("tweet") && element.matches(TWEET)) return "tweet";
+  if (enabledSurfaceKinds.has("xArticle") && isXArticleRoute() && element.matches(X_ARTICLE)) return "xArticle";
   if (enabledSurfaceKinds.has("userCell") && element.matches(USER_CELL)) return "userCell";
   if (enabledSurfaceKinds.has("notification") && element.matches(NOTIFICATION)) return "notification";
   if (enabledSurfaceKinds.has("directMessage") && element.matches(DIRECT_MESSAGE)) return "directMessage";
@@ -366,6 +368,7 @@ function surfaceKind(element: HTMLElement): TwitterSurfaceKind | null {
 function activeSurfaceSelector(): string {
   const selectors: string[] = [];
   if (enabledSurfaceKinds.has("tweet")) selectors.push(TWEET);
+  if (enabledSurfaceKinds.has("xArticle") && isXArticleRoute()) selectors.push(X_ARTICLE);
   if (enabledSurfaceKinds.has("userCell")) selectors.push(USER_CELL);
   if (enabledSurfaceKinds.has("notification")) selectors.push(NOTIFICATION);
   if (enabledSurfaceKinds.has("directMessage")) selectors.push(DIRECT_MESSAGE);
@@ -472,6 +475,10 @@ function isNotificationsRoute(): boolean {
   return location.pathname === "/notifications" || location.pathname.startsWith("/notifications/");
 }
 
+function isXArticleRoute(): boolean {
+  return /^\/i\/article\/\d+/.test(location.pathname);
+}
+
 function isNotificationPointerTarget(target: EventTarget | null): boolean {
   if (!(target instanceof Element)) return false;
   if (!isNotificationsRoute()) return false;
@@ -521,7 +528,8 @@ function buildSurface(kind: TwitterSurfaceKind, element: HTMLElement): TwitterSu
 }
 
 function extractHandle(kind: TwitterSurfaceKind, element: HTMLElement): string | null {
-  if (kind !== "tweet" && kind !== "userCell" && kind !== "profile") return null;
+  if (kind !== "tweet" && kind !== "xArticle" && kind !== "userCell" && kind !== "profile") return null;
+  if (kind === "xArticle") return articleAuthorFromPage(element);
   if (kind === "profile") return normalizeHandle(location.pathname.split("/")[1] ?? "");
 
   if (kind === "tweet") {
@@ -549,6 +557,16 @@ function extractHandle(kind: TwitterSurfaceKind, element: HTMLElement): string |
   const labelLink = element.querySelector<HTMLAnchorElement>('a[aria-label*="@"]');
   const labelMatch = labelLink?.getAttribute("aria-label")?.match(/@([a-z0-9_]{1,15})/i);
   return labelMatch ? normalizeHandle(labelMatch[1]) : null;
+}
+
+function articleAuthorFromPage(element: HTMLElement): string | null {
+  const authorLink = Array.from(element.querySelectorAll<HTMLAnchorElement>('a[href^="/"], a[href^="https://x.com/"], a[href^="https://twitter.com/"]'))
+    .find((link) => {
+      const href = link.getAttribute("href") || "";
+      if (href.includes("/status/") || href.includes("/i/article/")) return false;
+      return Boolean(normalizeHandle(href));
+    });
+  return normalizeHandle(authorLink?.getAttribute("href"));
 }
 
 function tweetAuthorFromStatusLink(element: HTMLElement): string | null {
@@ -585,12 +603,16 @@ function extractTextContainers(kind: TwitterSurfaceKind, element: HTMLElement): 
     return Array.from(element.querySelectorAll<HTMLElement>('[data-testid="tweetText"]'))
       .filter((node) => !node.closest('[data-testid="quoteTweet"]'));
   }
+  if (kind === "xArticle") {
+    return extractArticleTextContainers(element);
+  }
   if (kind === "directMessage") {
     return Array.from(element.querySelectorAll<HTMLElement>('[data-testid^="message-text-"], [dir="auto"]'))
       .slice(0, 6);
   }
   if (kind === "notification") {
     return Array.from(element.querySelectorAll<HTMLElement>('[dir="auto"], span'))
+      .filter(isReadableNotificationTextNode)
       .slice(0, 8);
   }
   if (kind === "profile") {
@@ -604,7 +626,52 @@ function extractTextContainers(kind: TwitterSurfaceKind, element: HTMLElement): 
   return Array.from(element.querySelectorAll<HTMLElement>('[dir="auto"], span')).slice(0, 8);
 }
 
+function extractArticleTextContainers(element: HTMLElement): HTMLElement[] {
+  const explicit = Array.from(element.querySelectorAll<HTMLElement>([
+    '[data-testid*="article" i] [dir="auto"]',
+    '[data-testid*="Article" i] [dir="auto"]',
+    '[data-testid*="article" i] p',
+    '[data-testid*="Article" i] p',
+    '[role="article"] [dir="auto"]',
+    'main [dir="auto"]',
+  ].join(","))).filter(isReadableArticleTextNode);
+  const unique = Array.from(new Set(explicit));
+  if (unique.length > 0) return unique;
+  return Array.from(element.querySelectorAll<HTMLElement>('h1, h2, p, [dir="auto"]'))
+    .filter(isReadableArticleTextNode);
+}
+
+function isReadableArticleTextNode(node: HTMLElement): boolean {
+  if (node.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
+  const text = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+  if (text.length < 2) return false;
+  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
+  return true;
+}
+
+function isReadableNotificationTextNode(node: HTMLElement): boolean {
+  if (node.closest([
+    '[data-testid="GrokDrawer"]',
+    '[data-testid*="grok" i]',
+    '[aria-label*="Grok" i]',
+    '[href*="/premium_sign_up"]',
+    '[href*="/i/premium_sign_up"]',
+    'button',
+    '[role="button"]',
+  ].join(","))) return false;
+
+  const text = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
+  if (text.length < 2) return false;
+  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
+  if (/\bask grok\b/i.test(text)) return false;
+  if (/\bsubscribe to unlock\b/i.test(text)) return false;
+  if (/\bpremium(?:\+| plus)? subscribers?\b/i.test(text)) return false;
+  if (/\/premium_sign_up\b/i.test(text)) return false;
+  return true;
+}
+
 function extractStatusUrl(kind: TwitterSurfaceKind, element: HTMLElement): string | null {
+  if (kind === "xArticle") return location.href;
   if (kind !== "tweet" && kind !== "notification") return null;
   const link = Array.from(element.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
     .find((anchor) => !anchor.closest('[data-testid="quoteTweet"]'));

@@ -24,6 +24,7 @@ const WIDTH_KEY = "milxdy.wikiSidebar.width";
 const HEIGHT_KEY = "milxdy.wikiSidebar.height";
 const TOP_KEY = "milxdy.wikiSidebar.top";
 const LAST_URL_KEY = "milxdy.wikiSidebar.lastUrl";
+const WIKI_SETTINGS_KEY = "remiliaWikiHyperlink.settings";
 const PENDING_URL_KEY = "__milxdyPendingWikiSidebarUrl";
 
 type SidebarState = {
@@ -44,6 +45,7 @@ type SidebarState = {
   layoutReady: boolean;
   readerActive: boolean;
   openedAt: number;
+  followDarkMode: boolean;
 };
 
 type WikiSidebarNavigatedMessage = {
@@ -81,6 +83,12 @@ type WikiReaderHighlightMessage = {
   status?: string;
 };
 
+type WikiSidebarThemeMessage = {
+  type: "wikiSidebar:theme";
+  theme: "light" | "dark";
+  enabled: boolean;
+};
+
 const state: SidebarState = {
   root: null,
   frame: null,
@@ -99,6 +107,7 @@ const state: SidebarState = {
   layoutReady: false,
   readerActive: false,
   openedAt: 0,
+  followDarkMode: true,
 };
 
 let booted = false;
@@ -123,6 +132,14 @@ export function boot(context?: MilxdyContentAppContext): void {
   };
   document.addEventListener("milxdy:wiki-sidebar-open", eventListener);
   addRuntimeDisposable(() => document.removeEventListener("milxdy:wiki-sidebar-open", eventListener));
+  const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+    if (area !== "local" || !changes[WIKI_SETTINGS_KEY]) return;
+    const settings = changes[WIKI_SETTINGS_KEY].newValue;
+    state.followDarkMode = wikiSidebarFollowsDarkMode(settings);
+    postWikiTheme();
+  };
+  chrome.storage.onChanged.addListener(storageListener);
+  addRuntimeDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
 }
 
 function registerNavigationSync(): void {
@@ -242,7 +259,9 @@ async function loadStoredState(initialPendingUrl?: string | null): Promise<void>
     [HEIGHT_KEY]: state.height,
     [TOP_KEY]: state.topOffset,
     [LAST_URL_KEY]: state.currentUrl,
+    [WIKI_SETTINGS_KEY]: { sidebarFollowDarkMode: true },
   });
+  state.followDarkMode = wikiSidebarFollowsDarkMode(stored[WIKI_SETTINGS_KEY]);
   const layout = await restoreOverlayPanelBox("wikiSidebar", {
     side: state.side,
     minWidth: 340,
@@ -269,6 +288,7 @@ async function loadStoredState(initialPendingUrl?: string | null): Promise<void>
   state.frame?.updateDock({ title: `Wiki: ${wikiPageLabel(state.currentUrl)}` });
   state.frame?.setSide(state.side);
   applyLayout();
+  postWikiTheme();
 }
 
 function consumePendingWikiSidebarUrl(): string | null {
@@ -299,6 +319,7 @@ function ensureRoot(): HTMLElement {
 
   addRuntimeDisposable(observeOverlayPanelTheme(() => {
     root.dataset.theme = resolveOverlayPanelTheme();
+    postWikiTheme();
   }));
   document.body.appendChild(root);
   state.root = root;
@@ -375,6 +396,7 @@ function render(): void {
     state.iframeLoaded = true;
     clearLoadTimer();
     viewer.dataset.loaded = "true";
+    postWikiTheme();
   });
   viewer.appendChild(iframe);
 
@@ -655,9 +677,22 @@ function stopWikiReading(): void {
   applyLayout();
 }
 
-function postToWikiFrame(message: WikiReaderHighlightMessage): void {
+function postToWikiFrame(message: WikiReaderHighlightMessage | WikiSidebarThemeMessage): void {
   const frame = state.root?.querySelector<HTMLIFrameElement>(".milxdy-wiki-sidebar-frame");
   frame?.contentWindow?.postMessage(message, "https://wiki.remilia.org");
+}
+
+function postWikiTheme(): void {
+  postToWikiFrame({
+    type: "wikiSidebar:theme",
+    theme: resolveOverlayPanelTheme(),
+    enabled: state.followDarkMode,
+  });
+}
+
+function wikiSidebarFollowsDarkMode(value: unknown): boolean {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return record.sidebarFollowDarkMode !== false;
 }
 
 function scheduleFrameFallback(viewer: HTMLElement): void {

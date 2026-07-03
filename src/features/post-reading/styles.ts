@@ -300,6 +300,9 @@ export function injectStyles(): void {
     .post-reading-close:hover {
       color: var(--post-reading-border-dark);
     }
+    .post-reading-quit:hover {
+      color: #b4233b;
+    }
     .post-reading-title {
       max-width: 220px;
       overflow: hidden;
@@ -484,6 +487,10 @@ export function injectStyles(): void {
       width: 100%;
       box-sizing: border-box;
     }
+    .post-reading-settings input.post-reading-speed-input {
+      width: 9ch;
+      justify-self: start;
+    }
     .post-reading-settings select,
     .post-reading-settings input[type="number"],
     .post-reading-settings input[type="text"],
@@ -611,6 +618,16 @@ export function injectStyles(): void {
       -webkit-box-decoration-break: clone;
       transition: background 80ms linear;
     }
+    [data-post-reading-segment-source-hidden="true"] {
+      display: none !important;
+    }
+    .post-reading-segment-surface {
+      display: block;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      color: inherit;
+      font: inherit;
+    }
     [data-post-reading-smooth-word="true"] {
       --post-reading-fill-color: rgba(199, 102, 147, 0.24);
       --post-reading-fill: 0%;
@@ -634,6 +651,14 @@ export function injectStyles(): void {
       margin-right: -0.02em;
     }
     @media (prefers-color-scheme: dark) {
+      .post-reading-button {
+        color: rgb(231, 233, 234);
+      }
+      .post-reading-button:hover,
+      .post-reading-button[aria-pressed="true"] {
+        color: rgb(255, 194, 210);
+        background: rgba(255, 194, 210, 0.14);
+      }
       .post-reading-player {
         --post-reading-surface-1: #242634;
         --post-reading-surface-2: #303345;

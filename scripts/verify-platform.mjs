@@ -147,7 +147,11 @@ function verifyRegistryShape() {
       assert(app.loadTriggers.includes("dockOpen"), `${app.id}: dock app must lazy-load on dock open`);
       assert(app.hub.rail.supported === true, `${app.id}: dock app must be rail-supported unless it has no dock metadata`);
       if (app.dock.defaultSide) assert(VALID_DOCK_SIDES.has(app.dock.defaultSide), `${app.id}: invalid dock defaultSide ${app.dock.defaultSide}`);
-      if (app.dock.icon) assert(/^data:image\//.test(app.dock.icon) || existsSync(path.join("public", app.dock.icon)), `${app.id}: dock icon does not exist: ${app.dock.icon}`);
+      if (app.dock.icon) {
+        for (const iconPath of dockIconPaths(app.dock.icon)) {
+          assert(/^data:image\//.test(iconPath) || existsSync(path.join("public", iconPath)), `${app.id}: dock icon does not exist: ${iconPath}`);
+        }
+      }
     } else {
       assert(app.hub.rail.defaultPinned === false, `${app.id}: non-dock app cannot be pinned by default`);
     }
@@ -169,6 +173,12 @@ function verifyRegistryShape() {
       assert(app.hub.privacyLabels?.includes("remote-api") || app.hub.privacyLabels?.includes("browser-session"), `${app.id}: remote apps must disclose a remote privacy label`);
     }
   }
+}
+
+function dockIconPaths(icon) {
+  if (typeof icon === "string") return [icon];
+  if (!icon || typeof icon !== "object") return [];
+  return [icon.light, icon.dark].filter((value) => typeof value === "string" && value.trim());
 }
 
 function assetRootIsAccountedFor(app, assetDir) {

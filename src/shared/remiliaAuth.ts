@@ -101,6 +101,27 @@ export async function getRemiliaAuthCookie(): Promise<string> {
   return typeof cookie?.value === "string" ? cookie.value : "";
 }
 
+export async function refreshRemiliaBrowserSessionTab(
+  sessionPath: string,
+  options: { timeoutMs?: number } = {},
+): Promise<RemiliaAuthResult> {
+  if (!chrome.tabs?.create || !chrome.tabs?.remove) return { ok: false, error: "TABS_UNAVAILABLE" };
+  if (await isRemiliaDisconnected()) return { ok: false, error: "DISCONNECTED" };
+
+  const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1000, Number(options.timeoutMs)) : 12000;
+  let tabId = 0;
+  try {
+    const tab = await chrome.tabs.create({ url: BASE_URL, active: false });
+    tabId = typeof tab.id === "number" ? tab.id : 0;
+    if (!tabId) return { ok: false, error: "TAB_CREATE_FAILED" };
+    await waitForTabLoad(tabId, timeoutMs);
+  } finally {
+    if (tabId) await chrome.tabs.remove(tabId).catch(() => undefined);
+  }
+
+  return adoptRemiliaBrowserSession(sessionPath);
+}
+
 export async function adoptRemiliaBrowserSession(
   sessionPath: string,
   options: { ignoreDisconnect?: boolean } = {},
@@ -217,6 +238,33 @@ async function remiliaSessionProbe(path: string): Promise<{ ok: boolean; data?: 
   if (!response?.ok) return { ok: false };
   const data = await response.json().catch(() => null);
   return { ok: true, data };
+}
+
+async function waitForTabLoad(tabId: number, timeoutMs: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    let done = false;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (settleTimer) clearTimeout(settleTimer);
+      clearTimeout(timeoutTimer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      resolve();
+    };
+    const settle = () => {
+      if (done || settleTimer) return;
+      settleTimer = setTimeout(finish, 750);
+    };
+    const listener = (updatedTabId: number, changeInfo: { status?: string }) => {
+      if (updatedTabId === tabId && changeInfo.status === "complete") settle();
+    };
+    const timeoutTimer = setTimeout(finish, timeoutMs);
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === "complete") settle();
+    }).catch(() => undefined);
+  });
 }
 
 function extractAuthCode(location: string, expectedState: string): string {

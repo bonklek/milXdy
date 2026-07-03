@@ -6,7 +6,7 @@ export const OVERLAY_APP_RESERVED_WIDTH_PX = 128;
 type OverlayAppFrameOptions = {
   id: string;
   label: string;
-  icon: string;
+  icon: string | (() => string);
   badgeText?: string;
   title?: string;
   initialSide?: OverlayDockSide;
@@ -39,7 +39,7 @@ export function createOverlayAppFrame(options: OverlayAppFrameOptions): OverlayA
   const registration = dock.register({
     id: options.id,
     label: options.label,
-    icon: options.icon,
+    icon: resolveIcon(),
     stackable: true,
     badgeText,
     title,
@@ -67,7 +67,12 @@ export function createOverlayAppFrame(options: OverlayAppFrameOptions): OverlayA
       active: update.active ?? options.isOpen(),
       badgeText,
       title,
+      icon: resolveIcon(),
     });
+  }
+
+  function resolveIcon(): string {
+    return typeof options.icon === "function" ? options.icon() : options.icon;
   }
 
   return {

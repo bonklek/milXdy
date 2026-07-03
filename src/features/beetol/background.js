@@ -10,6 +10,7 @@ import {
   setRemiliaAuthCookie,
   adoptRemiliaBrowserSession,
   migrateRemiliaAuth,
+  refreshRemiliaBrowserSessionTab,
 } from "../../shared/remiliaAuth";
 
 const BASE_URL = REMILIA_BASE_URL;
@@ -418,8 +419,29 @@ async function remiliaPokeFetch(username) {
   if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
   await migrateAuth();
   const prepared = await prepareRemiliaAuth(SESSION_PROBE_PATH);
-  const accessToken = prepared.token || '';
-  if (!accessToken && !prepared.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
+  if (!prepared.ok) {
+    const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH);
+    if (!refreshed.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED', sessionRefresh: refreshed };
+    return remiliaPokeFetchWithPrepared(username, refreshed);
+  }
+
+  const firstResult = await remiliaPokeFetchWithPrepared(username, prepared);
+  if (!pokeResultNeedsSessionRefresh(firstResult)) return firstResult;
+
+  await clearStoredAuth();
+  const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH);
+  if (!refreshed.ok) return firstResult;
+
+  const retryResult = await remiliaPokeFetchWithPrepared(username, refreshed);
+  if (!retryResult.ok && retryResult.authRequired) {
+    return { ...retryResult, sessionRefresh: { ok: true } };
+  }
+  return { ...retryResult, sessionRefresh: { ok: true } };
+}
+
+async function remiliaPokeFetchWithPrepared(username, prepared) {
+  const accessToken = prepared?.token || '';
+  if (!accessToken && !prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
 
   if (accessToken) await setRemiliaAuthCookie(accessToken);
   const attempts = [
@@ -472,6 +494,13 @@ async function remiliaPokeFetch(username) {
   };
   await storePokeDiagnostic(fallback);
   return fallback;
+}
+
+function pokeResultNeedsSessionRefresh(result) {
+  if (!result || result.ok || !result.authRequired) return false;
+  const attempts = Array.isArray(result.attempts) ? result.attempts : [];
+  if (attempts.some(attempt => attempt.status === 401 || attempt.status === 403)) return true;
+  return result.error === 'POKE_AUTH_FAILED' || result.error === 'REMILIA_LOGIN_REQUIRED';
 }
 
 function summarizeRequestResult(result) {

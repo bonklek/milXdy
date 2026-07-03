@@ -108,7 +108,7 @@
     "contentEntry": "features/post-reading.js",
     "defaultEnabled": true,
     "storageKeys": { "sync": ["enabled"] },
-    "surfaces": ["tweet", "overlayApp"],
+    "surfaces": ["tweet", "xArticle", "overlayApp"],
     "cost": { "startup": "moderate", "perSurface": "cheap", "network": "none", "worker": "optional", "domWrite": "small" },
     "loadTriggers": ["surface", "dockOpen"],
     "hub": {
@@ -121,7 +121,14 @@
       "localStorageNotes": ["Stores playback, voice, and reader settings."],
       "privacyLabels": ["local-only"]
     },
-    "dock": { "label": "Post-reading", "icon": "post-reading/post-reading-logo.png", "defaultSide": "right" },
+    "dock": {
+      "label": "Post-reading",
+      "icon": {
+        "light": "post-reading/post-reading-logo.png",
+        "dark": "post-reading/post-reading-logo-outline.png"
+      },
+      "defaultSide": "right"
+    },
     "background": { "messageTypes": ["post-reading:*"], "services": ["ocr", "tts"] },
     "assets": ["ocr", "post-reading"],
     "requiredOutputs": ["ocr.html", "ocrHost.js"]
@@ -135,7 +142,7 @@
     "entryPoint": "src/entries/remistatsContent.ts",
     "contentEntry": "features/remistats.js",
     "defaultEnabled": true,
-    "storageKeys": { "sync": ["milxdy.remistats.enabled", "milxdy.remistats.pokeAutoLike"] },
+    "storageKeys": { "sync": ["milxdy.remistats.enabled", "milxdy.remistats.likeAutoPoke", "milxdy.remistats.pokeAutoLike"] },
     "surfaces": ["tweet", "userCell", "profile", "route"],
     "cost": { "startup": "moderate", "perSurface": "moderate", "network": "batched", "worker": "none", "domWrite": "moderate" },
     "loadTriggers": ["surface", "idle"],

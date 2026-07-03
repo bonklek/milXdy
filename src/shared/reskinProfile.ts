@@ -160,7 +160,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     appShadows: true,
     maxMediaHeight: 560,
     postButtonClickly: true,
-    postSound: false,
+    postSound: true,
     sidebarBevel: false,
     sidebarSound: false,
     newPostsPill: true,

@@ -245,7 +245,7 @@ export class SpeechController {
       chunkIndex: this.chunks.length > 0 ? this.index + 1 : 0,
       chunkCount: this.chunks.length,
       chunkStart: this.chunks[this.index]?.offset ?? null,
-      charIndex,
+      charIndex: typeof charIndex === "number" && Number.isFinite(charIndex) && charIndex >= 0 ? charIndex : null,
       charLength,
       boundaryElapsedTime,
       hasSyncedBoundaries: this.hasSyncedBoundaries(),

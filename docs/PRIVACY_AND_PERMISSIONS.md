@@ -13,12 +13,13 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
-- Post-reading OCR and Maxxer avatar inference run locally in the extension context.
+- Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 
 ## RemiNet And Beetol Login
 
 - milXdy uses the user's RemiliaNET browser session for connector login. Direct username/password login is no longer supported by RemiliaNET for this extension path.
 - milXdy may silently renew a short-lived RemiliaNET access token through the site's existing Keycloak/OIDC browser session. It does not ask users to copy Keycloak cookies and does not store Keycloak SSO cookies.
+- If a RemiliaNET connector action fails because stored auth appears stale, milXdy may briefly open `https://www.remilia.net/` in an inactive tab, wait for the browser session to settle, close that tab, and retry the connector session check.
 - RemiNet login state stores only connector-local state and the short-lived RemiliaNET access token in Chrome extension local storage. Rotating OIDC refresh tokens are kept in extension background memory when available and are not intentionally persisted.
 - Login state should persist across browser restarts, extension reloads, and ordinary updates that keep the same extension identity.
 - Browser-session SSO depends on RemiliaNET cookies in the user's browser profile.
