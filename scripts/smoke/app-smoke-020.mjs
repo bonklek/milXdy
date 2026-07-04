@@ -2,11 +2,11 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
-const registry = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
+const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const files = {
-  miladychanSource: await readFile("src/features/miladychanSpotlight/content.ts", "utf8"),
-  musicSource: await readFile("src/features/music/content.ts", "utf8"),
-  background: await readFile("src/background.ts", "utf8"),
+  miladychanSource: await readFile("src/apps/miladychan-portal/content.ts", "utf8"),
+  musicSource: await readFile("src/apps/music/content.ts", "utf8"),
+  background: await readFile("src/extension/background/index.ts", "utf8"),
   docsQa: await readFile("docs/QA_0.2.0.md", "utf8"),
   docsReleaseNotes: await readFile("docs/RELEASE_NOTES_0.2.0.md", "utf8"),
 };

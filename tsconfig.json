@@ -16,7 +16,7 @@
   },
   "include": ["src/**/*", "scripts/**/*"],
   "exclude": [
-    "src/features/miladymaxxer/popup.tsx",
-    "src/features/miladymaxxer/shared/node-image.ts"
+    "src/apps/milady-maxxer/popup.tsx",
+    "src/apps/milady-maxxer/shared/node-image.ts"
   ]
 }

@@ -1,10 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { contentScriptMatches, coreHostPermissions, releaseBuilds, webAccessibleMatches } from "./release-builds.mjs";
-import { featureBundlesForProfile } from "./release-registry.mjs";
+import { contentScriptMatches, coreHostPermissions, releaseBuilds, webAccessibleMatches } from "../release/release-builds.mjs";
+import { featureBundlesForProfile } from "../release/release-registry.mjs";
 
-const registry = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
+const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const expectedVersion = packageJson.version;
 
