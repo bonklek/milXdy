@@ -13,6 +13,8 @@ tmp/
 *.p12
 *.pfx
 ideas/
+local-app-packages/
 *.log
 *.tmp
+.codex-review-notes-*.tmp.md
 *.map

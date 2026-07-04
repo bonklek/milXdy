@@ -19,10 +19,10 @@ await mkdir(`${outDir}/ocr/core`, { recursive: true });
 await mkdir(`${outDir}/ocr/lang`, { recursive: true });
 
 await writeManifest();
-await copyFile("public/ocr.html", `${outDir}/ocr.html`);
-await copyFile("public/post-reading-standalone/popup.html", `${outDir}/popup.html`);
-await copyFile("public/post-reading-standalone/popup.css", `${outDir}/popup.css`);
-if (existsSync("public/post-reading")) await cp("public/post-reading", `${outDir}/post-reading`, { recursive: true });
+await copyFile("assets/extension/frames/ocr.html", `${outDir}/ocr.html`);
+await copyFile("assets/distributions/post-reading/popup.html", `${outDir}/popup.html`);
+await copyFile("assets/distributions/post-reading/popup.css", `${outDir}/popup.css`);
+if (existsSync("assets/apps/post-reading")) await cp("assets/apps/post-reading", `${outDir}/post-reading`, { recursive: true });
 if (existsSync("node_modules/tesseract.js/dist/worker.min.js")) {
   await copyFile("node_modules/tesseract.js/dist/worker.min.js", `${outDir}/ocr/worker.min.js`);
 }
@@ -49,17 +49,17 @@ const common = {
 await buildOrWatch({
   ...common,
   entryPoints: {
-    content: resolve("src/standalone/post-reading/content.ts"),
-    background: resolve("src/standalone/post-reading/background.ts"),
-    popup: resolve("src/features/post-reading/popup.ts"),
-    ocrHost: resolve("src/features/post-reading/ocrHost.ts"),
+    content: resolve("src/distributions/post-reading/content.ts"),
+    background: resolve("src/distributions/post-reading/background.ts"),
+    popup: resolve("src/apps/post-reading/popup.ts"),
+    ocrHost: resolve("src/extension/frames/ocr-host.ts"),
   },
   outdir: outDir,
   format: "iife",
 });
 
 if (watch) {
-  console.log(`Watching standalone Post-reading ${target} extension files...`);
+  console.log(`Watching Post-reading ${target} distribution files...`);
 } else {
   const missing = [
     "manifest.json",
@@ -74,7 +74,7 @@ if (watch) {
     "ocr/lang/eng.traineddata.gz",
   ].filter((file) => !existsSync(`${outDir}/${file}`));
   if (missing.length > 0) {
-    throw new Error(`Missing standalone Post-reading output: ${missing.join(", ")}`);
+    throw new Error(`Missing Post-reading distribution output: ${missing.join(", ")}`);
   }
 }
 
@@ -98,8 +98,11 @@ async function writeManifest() {
       "https://twitter.com/*",
       "https://abs.twimg.com/*",
       "https://pbs.twimg.com/*",
+      "https://publish.twitter.com/*",
+      "https://cdn.syndication.twimg.com/*",
       "http://localhost/*",
       "http://127.0.0.1/*",
+      "http://[::1]/*",
     ],
     background: {
       service_worker: "background.js",

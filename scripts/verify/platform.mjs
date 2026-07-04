@@ -1,11 +1,11 @@
 import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { contentScriptMatches, generatedAssetRoots, releaseBuilds, webAccessibleMatches } from "./release-builds.mjs";
-import { appsForProfile, featureBundlesForProfile, hostPermissionsForProfile } from "./release-registry.mjs";
+import { contentScriptMatches, generatedAssetRoots, releaseBuilds, webAccessibleMatches } from "../release/release-builds.mjs";
+import { appsForProfile, featureBundlesForProfile, hostPermissionsForProfile } from "../release/release-registry.mjs";
 
-const registry = JSON.parse(await readFile("src/shared/firstPartyApps.json", "utf8"));
-const firstPartyAdapter = await readFile("src/shared/firstPartyApps.ts", "utf8");
+const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const firstPartyAdapter = await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8");
 const VALID_PRESETS = new Set(["lite", "balanced", "full"]);
 const VALID_LOAD_TRIGGERS = new Set(["startup", "surface", "dockOpen", "idle", "userAction"]);
 const VALID_STARTUP_COSTS = new Set(["cheap", "moderate", "heavy"]);
@@ -24,21 +24,21 @@ await verifyBuildOutputs();
 console.log("Platform verification passed.");
 
 async function verifySdkShape() {
-  const appPlatform = await readFile("src/shared/appPlatform.ts", "utf8");
+  const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
   assert(appPlatform.includes("export type MilxdyAppId = string;"), "MilxdyAppId must remain open for third-party apps");
   assert(appPlatform.includes("cost: AppCostProfile;"), "app manifests must declare cost metadata");
   assert(appPlatform.includes("loadTriggers: AppLoadTrigger[];"), "app manifests must declare load triggers");
 }
 
 async function verifyRuntimeOwnership() {
-  const runtime = await readFile("src/shared/contentRuntime.ts", "utf8");
-  const scanner = await readFile("src/shared/twitterScanner.ts", "utf8");
-  const buildScript = await readFile("scripts/build.mjs", "utf8");
-  const performanceMode = await readFile("src/shared/performanceMode.ts", "utf8");
-  const background = await readFile("src/background.ts", "utf8");
-  const overlayDock = await readFile("src/shared/overlayDock.ts", "utf8");
-  const overlayAppLayout = await readFile("src/shared/overlayAppLayout.ts", "utf8");
-  const overlayPanelBase = await readFile("src/shared/overlayPanelBase.ts", "utf8");
+  const runtime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+  const scanner = await readFile("src/platform/scanner/twitter-scanner.ts", "utf8");
+  const buildScript = await readFile("scripts/build/build-extension.mjs", "utf8");
+  const performanceMode = await readFile("src/platform/settings/performance-mode.ts", "utf8");
+  const background = await readFile("src/extension/background/index.ts", "utf8");
+  const overlayDock = await readFile("src/platform/overlay/dock.ts", "utf8");
+  const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
+  const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
 
   assert(runtime.includes("subscribeTwitterSurfaces(handleSurface)"), "runtime must own scanner subscription");
   assert(runtime.includes("patchHistory(notifyRoute)"), "runtime route service must patch history events");
@@ -49,7 +49,7 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes("clearSurfaceDeliveryQueueForApp(app.id)"), "disable path must clear app surface delivery work");
   assert(runtime.includes("abortAppWork(app.id)"), "disable path must abort app work signal");
   assert(scanner.includes("configureTwitterScanner"), "scanner must remain configurable by the runtime budget");
-  assert(buildScript.includes('readFile("src/shared/firstPartyApps.json"'), "build must consume the shared app registry JSON");
+  assert(buildScript.includes('readFile("src/platform/app-sdk/first-party-apps.json"'), "build must consume the shared app registry JSON");
   assert(buildScript.includes("const firstPartyApps = registryApps"), "profile builds must include every first-party app bundle");
   assert(buildScript.includes("contents: JSON.stringify(registryApps)"), "profile builds must keep full app metadata in the runtime registry");
   assert(!existsSync("scripts/app-registry.mjs"), "legacy duplicated app-registry.mjs must not return");
@@ -59,16 +59,20 @@ async function verifyRuntimeOwnership() {
   assert(background.includes("parseAllowedUrl"), "central background fetch services must use shared URL allowlist parsing");
   assert(background.includes("chrome.runtime.onInstalled.addListener") && background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   assert(firstPartyAdapter.includes("defaultEnabledById") && firstPartyAdapter.includes("defaultAppEnabled") && firstPartyAdapter.includes("enabledFromStoredValue"), "first-party enablement adapters must derive fallback defaults from registry defaultEnabled metadata");
+  assert(runtime.includes("const desiredEnabledAppIds = new Set<MilxdyAppId>"), "App presets must compute an exact desired enabled set");
+  assert(runtime.includes("const convergenceTasks = toggleableApps") && runtime.includes("await app.setEnabled?.(enabled)"), "App presets must explicitly enable and disable every toggleable app toward the selected preset");
+  assert(runtime.includes('preset === "lite" ? "fast"') && runtime.includes('preset === "full" ? "full" : "balanced"'), "Lite/Balanced/Full presets must apply matching Performance modes");
+  assert(runtime.includes("disabledTargetApps") && runtime.includes("disabledTargetCount"), "App preset diagnostics must report explicitly disabled preset targets");
   for (const freshInstallDefault of [
     '"milxdy.miladychan.enabled": true',
     '"milxdy.music.enabled": true',
-    '"milxdy.reminetChat.enabled": true',
+    '"milxdy.reminetChat.enabled": false',
     '"milxdy.remistats.beetol.enabled": true',
     'mode: "milady"',
   ]) {
     assert(background.includes(freshInstallDefault), `central background must seed enabled first-run default: ${freshInstallDefault}`);
   }
-  assert(existsSync("src/shared/urlAllowlist.ts"), "shared URL allowlist helper must exist");
+  assert(existsSync("src/platform/browser/url-allowlist.ts"), "shared URL allowlist helper must exist");
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
   assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("state.settingsActions"), "overlay dock settings panel must render registered settings actions");
   assert(overlayAppLayout.includes('OVERLAY_APP_LAYOUTS_KEY = "milxdy.overlayApps.layouts.v1"'), "overlay app layouts must persist through the shared local layout store");
@@ -78,6 +82,10 @@ async function verifyRuntimeOwnership() {
   assert(overlayAppLayout.includes("snapshotOpenAppGuideZones") && overlayAppLayout.includes('kind: "app"'), "overlay app layout manager must snapshot other open app edges as soft snap guides");
   assert(overlayPanelBase.includes("snapshotOverlayProtectedZones(side, options.appId)"), "freeform drag/resize must exclude the active app from app-to-app guide snapshots");
   assert(overlayPanelBase.includes("appId?: string") && overlayPanelBase.includes("startFreeformDrag") && overlayPanelBase.includes("saveOverlayAppLayout"), "overlay panel helper must route dock apps through shared freeform drag persistence");
+  assert(overlayPanelBase.includes("isInteractiveOverlayDragTarget") && overlayPanelBase.includes("allowInteractiveDragTarget"), "overlay drag helper must guard interactive header controls by default");
+  assert(/const finalRect = clampOverlayRectToSafeArea\(snapped\.rect,[\s\S]*?applyFreeformRect\(finalRect, options\)/.test(overlayPanelBase), "freeform resize must re-clamp snapped geometry before applying it");
+  const beetolContent = await readFile("src/apps/beetol/content.js", "utf8");
+  assert(beetolContent.includes("allowInteractiveDragTarget: true"), "Beetol must explicitly declare its tab drag-handle exception");
   assert(runtime.includes('setSettingsAction("milxdy.addApps"') && runtime.includes("onActivate: openHubPanel"), "content runtime must link dock settings to the Apps Hub through the dock settings action API");
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions"') && runtime.includes("resetOverlayAppLayouts"), "content runtime must expose a dock settings action to reset overlay app positions");
@@ -85,22 +93,22 @@ async function verifyRuntimeOwnership() {
   assert(firstPartyAdapter.includes("available: true") && firstPartyAdapter.includes("isEnabled,") && firstPartyAdapter.includes("setEnabled,"), "first-party enablement adapters must expose every app in every build profile");
   assert(runtime.includes("loadedHeavyApps") && runtime.includes("loadedWorkerHeavyApps") && runtime.includes("loadedNetworkApps") && runtime.includes("loadedAppsByCost"), "runtime diagnostics must identify loaded heavy, worker-heavy, and network apps from registry cost metadata");
 
-  const contentRoot = await readFile("src/content.ts", "utf8");
+  const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
   assert(contentRoot.includes("createContentRuntime(FIRST_PARTY_APPS)"), "root content script must bootstrap the shared runtime");
   assert(!contentRoot.includes("import("), "root content script must not directly import feature bundles");
 
-  for (const file of featureContentFiles("src/features")) {
+  for (const file of featureContentFiles("src/apps")) {
     const source = await readFile(file, "utf8");
     assert(!source.includes("subscribeTwitterSurfaces"), `${file}: feature bundle must not subscribe directly to scanner`);
     assert(!/\bvoid\s+boot\s*\(/.test(source), `${file}: feature content bundle must not self-boot`);
   }
 
-  for (const file of featureBackgroundFiles("src/features")) {
+  for (const file of featureBackgroundFiles("src/apps")) {
     const source = await readFile(file, "utf8");
     assert(!source.includes("chrome.runtime.onMessage.addListener"), `${file}: feature background must not install a separate onMessage listener`);
   }
-  const remistatsBackground = await readFile("src/features/remistats/background.js", "utf8");
-  assert(!remistatsBackground.includes("chrome.runtime.onInstalled.addListener"), "RemiStats install defaults must stay centralized in src/background.ts");
+  const remistatsBackground = await readFile("src/apps/remistats/background.js", "utf8");
+  assert(!remistatsBackground.includes("chrome.runtime.onInstalled.addListener"), "RemiStats install defaults must stay centralized in src/extension/background/index.ts");
 }
 
 function verifyRegistryShape() {
@@ -149,7 +157,7 @@ function verifyRegistryShape() {
       if (app.dock.defaultSide) assert(VALID_DOCK_SIDES.has(app.dock.defaultSide), `${app.id}: invalid dock defaultSide ${app.dock.defaultSide}`);
       if (app.dock.icon) {
         for (const iconPath of dockIconPaths(app.dock.icon)) {
-          assert(/^data:image\//.test(iconPath) || existsSync(path.join("public", iconPath)), `${app.id}: dock icon does not exist: ${iconPath}`);
+          assert(/^data:image\//.test(iconPath) || existsSync(sourceAssetPath(iconPath)), `${app.id}: dock icon does not exist: ${iconPath}`);
         }
       }
     } else {
@@ -182,9 +190,32 @@ function dockIconPaths(icon) {
 }
 
 function assetRootIsAccountedFor(app, assetDir) {
-  if (existsSync(path.join("public", assetDir))) return true;
+  if (existsSync(assetSourceDir(assetDir))) return true;
   if (GENERATED_ASSET_ROOTS.has(assetDir)) return true;
   return (app.css || []).some((sheet) => sheet.targetDir === assetDir);
+}
+
+function assetSourceDir(outputDir) {
+  const sourceByOutputDir = {
+    brand: "assets/brand",
+    icons: "assets/extension/icons",
+    "remilia-fonts": "assets/shared/fonts",
+    beetol: "assets/apps/beetol",
+    miladymaxxer: "assets/apps/milady-maxxer",
+    miladychanSpotlight: "assets/apps/miladychan-portal",
+    music: "assets/apps/music",
+    "post-reading": "assets/apps/post-reading",
+    remistats: "assets/apps/remistats",
+    wikiSidebar: "assets/apps/wiki-sidebar",
+    models: "assets/models",
+  };
+  return sourceByOutputDir[outputDir] || outputDir;
+}
+
+function sourceAssetPath(outputPath) {
+  const normalized = outputPath.replaceAll("\\", "/");
+  const [root, ...rest] = normalized.split("/");
+  return path.join(assetSourceDir(root), ...rest);
 }
 
 async function verifyBuildOutputs() {
@@ -206,6 +237,9 @@ async function verifyBuildOutputs() {
     assertEqualList([...(contentScript.matches || [])].sort(), [...contentScriptMatches].sort(), `${build.dir}: content script matches mismatch`);
     for (const block of manifest.web_accessible_resources || []) {
       assertEqualList([...(block.matches || [])].sort(), [...webAccessibleMatches].sort(), `${build.dir}: web accessible resource matches mismatch`);
+      for (const resource of block.resources || []) {
+        assert(!String(resource).startsWith("wiki-helper/"), `${build.dir}: wiki helper artifacts must not be web-accessible`);
+      }
     }
     const expectedHosts = new Set(hostPermissionsForProfile(registry, build.profile));
     for (const app of expectedApps) {

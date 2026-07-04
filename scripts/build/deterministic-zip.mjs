@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { deflateRawSync } from "node:zlib";
 
@@ -18,7 +19,8 @@ for (let index = 0; index < crcTable.length; index += 1) {
 }
 
 export async function createDeterministicZip(sourceDir, archive, options = {}) {
-  const entries = await collectFileEntries(sourceDir);
+  const beforeSnapshot = await snapshotSourceDirectory(sourceDir, "snapshotting");
+  const entries = beforeSnapshot.entries;
   const timestamp = zipTimestamp(options.sourceDateEpoch ?? readSourceDateEpoch());
   const localParts = [];
   const centralParts = [];
@@ -26,7 +28,7 @@ export async function createDeterministicZip(sourceDir, archive, options = {}) {
 
   for (const entry of entries) {
     const name = Buffer.from(entry.name, "utf8");
-    const input = await readFile(entry.path);
+    const input = entry.content;
     const compressed = deflateRawSync(input, { level: 9 });
     const crc = crc32(input);
 
@@ -81,6 +83,71 @@ export async function createDeterministicZip(sourceDir, archive, options = {}) {
   endOfCentralDirectory.writeUInt16LE(0, 20);
 
   await writeFile(archive, Buffer.concat([...localParts, centralDirectory, endOfCentralDirectory]));
+  const afterSnapshot = await snapshotSourceDirectory(sourceDir, "verifying");
+  assertStableSourceSnapshot(sourceDir, beforeSnapshot, afterSnapshot);
+}
+
+async function snapshotSourceDirectory(sourceDir, phase) {
+  let listedEntries;
+  try {
+    listedEntries = await collectFileEntries(sourceDir);
+  } catch (error) {
+    throw new Error(stabilityErrorMessage(sourceDir, phase, error.message));
+  }
+
+  const entries = [];
+  for (const entry of listedEntries) {
+    let content;
+    try {
+      content = await readFile(entry.path);
+    } catch (error) {
+      const detail = error?.code === "ENOENT"
+        ? `missing ${entry.name}`
+        : `unable to read ${entry.name}: ${error.message}`;
+      throw new Error(stabilityErrorMessage(sourceDir, phase, detail));
+    }
+    entries.push({
+      ...entry,
+      content,
+      size: content.length,
+      sha256: sha256Buffer(content),
+    });
+  }
+
+  return {
+    entries,
+    fingerprint: entries.map((entry) => `${entry.name}\0${entry.size}\0${entry.sha256}`).join("\n"),
+  };
+}
+
+function assertStableSourceSnapshot(sourceDir, beforeSnapshot, afterSnapshot) {
+  if (beforeSnapshot.fingerprint === afterSnapshot.fingerprint) return;
+  const detail = describeSnapshotDrift(beforeSnapshot.entries, afterSnapshot.entries);
+  throw new Error(stabilityErrorMessage(sourceDir, "zipping", detail));
+}
+
+function describeSnapshotDrift(beforeEntries, afterEntries) {
+  const beforeByName = new Map(beforeEntries.map((entry) => [entry.name, entry]));
+  const afterByName = new Map(afterEntries.map((entry) => [entry.name, entry]));
+  for (const name of beforeByName.keys()) {
+    if (!afterByName.has(name)) return `removed ${name}`;
+  }
+  for (const name of afterByName.keys()) {
+    if (!beforeByName.has(name)) return `added ${name}`;
+  }
+  for (const [name, before] of beforeByName) {
+    const after = afterByName.get(name);
+    if (before.size !== after.size || before.sha256 !== after.sha256) return `changed ${name}`;
+  }
+  return "file set changed";
+}
+
+function stabilityErrorMessage(sourceDir, phase, detail) {
+  return `Release source tree changed while ${phase} ${normalizePath(sourceDir)}: ${detail}. Rebuild dist and rerun packaging with no concurrent build, cleanup, or release verification process mutating that directory.`;
+}
+
+function sha256Buffer(buffer) {
+  return createHash("sha256").update(buffer).digest("hex");
 }
 
 export async function collectFileEntries(sourceDir) {
