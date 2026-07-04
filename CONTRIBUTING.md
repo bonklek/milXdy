@@ -60,8 +60,19 @@ npm run verify:app-smoke
 npm run verify:app-smoke:020
 ```
 
+Choose verification by the files and behavior touched. Most changes should run
+the nearest relevant checks instead of the whole release pipeline; for example,
+docs-only changes usually need focused link/text checks, shared TypeScript
+changes usually need `npm run typecheck`, and manifest or build-output changes
+usually need the affected browser build plus nearby contract verifiers.
+
 For final release readiness, use the release gate documented in [docs/RELEASES.md](docs/RELEASES.md):
 
 ```powershell
 npm run verify:release:gates
 ```
+
+Do not run the release gate as a routine post-commit check. It rebuilds and
+repackages release artifacts, so reserve it for release preparation, changes to
+release/build/package mechanics, or cases where the maintainer explicitly asks
+for full release readiness evidence.
