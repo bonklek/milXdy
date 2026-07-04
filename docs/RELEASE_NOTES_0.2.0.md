@@ -29,7 +29,7 @@ Developers should treat `0.2.0` as the app-platform preview and planning target:
 
 ## Implemented Platform Work
 
-- Added a shared first-party app registry in `src/shared/firstPartyApps.json`.
+- Added a shared first-party app registry in `src/platform/app-sdk/first-party-apps.json`.
 - Moved root content bootstrapping through the shared content runtime.
 - Added lifecycle hooks for app boot, enable, disable, route changes, surface delivery, open, close, and dispose.
 - Added app cost metadata, load triggers, package metadata, host permissions, dock metadata, Hub metadata, and privacy labels.
@@ -82,7 +82,7 @@ Developers should treat `0.2.0` as the app-platform preview and planning target:
 - Updated [Post-reading user guide](user-guides/post-reading.md) and [Post-reading standalone notes](POST_READING_STANDALONE.md) with Wiki read-aloud handoff, voice timing behavior, custom TTS timing support, and the extracted Chromium build scope.
 - Updated [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md) for Miladychan and Music data flows.
 - Updated [Troubleshooting](TROUBLESHOOTING.md) for Apps Hub, Miladychan, Music folders, enrichment, and QR import.
-- Updated the GitHub README presentation with the high-resolution full milXdy logo from `public/brand/milxdy-home-logo-wide.png`.
+- Updated the GitHub README presentation with the high-resolution full milXdy logo from `assets/brand/milxdy-home-logo-wide.png`.
 
 ## Code Freeze Notes
 

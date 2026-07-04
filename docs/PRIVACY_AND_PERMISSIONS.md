@@ -6,14 +6,47 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 
 - GitHub update checks call `https://api.github.com`.
 - RemiStats calls `https://api.remistats.net` for public reputation data.
+- RemiStats tooltip profile images load from `https://pfp.remilia.net` when a verified PFP has a displayable image.
+- RemiStats profile banner cycling requests image-only NFT banner files from `https://miladymaker.net/banners/nft/...` through the background image fetch allowlist. These banner requests are proxied without account credentials or cookies.
 - RemiNet identity cache may call `https://ethereum.publicnode.com` to resolve the current owner of a verified PFP NFT.
-- Remilia Wiki previews and the docked Wiki sidebar call `https://wiki.remilia.org`.
+- Remilia Wiki previews and the docked Wiki sidebar call `https://wiki.remilia.org` and `https://remilia.wiki`.
 - Grok wiki prompts are pasted into X's native Grok interface from the current X/Twitter page.
-- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`.
+- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
+- Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
+- Post-reading custom HTTP TTS is optional and local-only. When selected, milXdy sends the text being read plus speed, volume, and voice metadata only to a loopback endpoint such as `http://localhost`, `http://127.0.0.1`, or `http://[::1]`; remote custom TTS endpoints and returned remote audio URLs are rejected.
+
+## Site Runtime Scope
+
+The main milXdy content runtime currently runs on X/Twitter pages. RemiliaNET, Remilia Wiki, and Miladychan host permissions support declared background services, validated embedded Wiki frames, user-opened overlay apps, and web-accessible assets; they do not by themselves mean the full app runtime injects into those sites.
+
+## Local-Only Composer Helpers
+
+Composer Tools runs inside the existing X/Twitter content runtime and reads only the active post composer text around the caret to convert typed double dashes into em dashes. It does not add host permissions, network calls, background messages, or remote services, and it ignores DMs, search fields, native inputs, and textareas.
+
+## Firefox Data Collection Manifest
+
+Firefox builds declare required data collection categories for the documented
+flows that can send data outside the extension or local browser:
+authentication/session information, personal communications, personally
+identifying information, website activity, and website content. These categories
+cover RemiliaNET session reuse, RemiNet Chat messages and attachments,
+public/profile identity lookups, selected X/Twitter context, and requested media
+or metadata sent to the remote services listed above. milXdy should not declare
+`required: ["none"]` while those flows exist.
+
+## Future Local App Packages
+
+Future local app packages must declare host permissions, background message capabilities, background services, remote APIs, browser-session use, local-file access, workers, WASM, storage keys, and retention notes before the platform enables them. Local packages are privileged reviewed custom-build inputs, not sandboxed runtime plugins. A package copied into an `apps/` folder should stay disabled until validation and any required permission/data-use consent succeeds. Reviewed catalog entries and unreviewed local packages should remain visually distinct when package loading exists.
+
+Current custom local builds also fail closed at composition time. Missing or
+local review status requires an explicit developer acknowledgement, privileged
+package surfaces require a consent acknowledgement, and sensitive direct
+extension API use requires a reviewed exception before a local build plan can be
+emitted.
 
 ## RemiNet And Beetol Login
 
@@ -34,11 +67,15 @@ The incoming "poked you!" flag reads recent RemiliaNET notifications through the
 
 ## RemiNet Chat
 
-RemiNet Chat is off by default. When enabled, it fetches recent chat messages, opens a RemiliaNET WebSocket, fetches RemiliaNET-hosted media for previews, and uploads attachments only after the user selects a file in the chat composer.
+RemiNet Chat is off by default. When enabled, it fetches recent chat messages, opens a RemiliaNET WebSocket, fetches allowlisted RemiliaNET media and pfp.remilia.net avatars for previews, and uploads attachments only after the user selects a file in the chat composer.
+
+## RemiStats Images
+
+RemiStats may show profile images from pfp.remilia.net in tooltips and Milady Maker NFT banner images from miladymaker.net/banners/nft on profile surfaces. These are image-only requests. Milady Maker banner fetches are routed through the extension background allowlist and do not include account credentials or cookies.
 
 ## Miladychan Portal
 
-Miladychan Portal is a docked reader for public Miladychan board, thread, post, and media metadata. It does not post to Miladychan. Links and media open the native Miladychan site when users want the full upstream surface.
+Miladychan Portal is a docked reader for public Miladychan board, thread, post, and media metadata over HTTPS. It does not use a Miladychan WebSocket and does not post to Miladychan. Links and media open the native Miladychan site when users want the full upstream surface.
 
 ## Music
 

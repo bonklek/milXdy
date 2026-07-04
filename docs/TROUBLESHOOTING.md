@@ -4,7 +4,7 @@
 
 - **Extension does not appear**: make sure `npm run build` completed and that you selected `dist/chromium` for Chromium or `dist/firefox/manifest.json` for Firefox, not the repository root.
 - **Changes did not apply**: reload the extension on `chrome://extensions`, then refresh X/Twitter tabs.
-- **Update status fails**: confirm `src/shared/updateCheck.ts` points to the public GitHub releases endpoint and that the target version is a normal published release. Draft releases and prereleases are ignored by the normal update channel.
+- **Update status fails**: confirm `src/platform/background/update-check.ts` points to the public GitHub releases endpoint and that the target version is a normal published release. Draft releases and prereleases are ignored by the normal update channel.
 - **LLM update handoff opens but does not paste**: the update steps are copied before milXdy opens the selected assistant target. Some sites and desktop apps block automatic paste or prefilled prompts, so paste the clipboard content manually into the new chat.
 - **RemiNet connector badges missing**: confirm RemiNet connector badges are enabled and `https://api.remistats.net` is reachable.
 - **RemiStats tooltip PFP missing in Firefox**: reload the Firefox add-on after rebuilding and confirm the generated manifest includes `https://pfp.remilia.net/*`. RemiStats tooltip profile images are loaded from `https://pfp.remilia.net/pfp/...`; blocks for that host are extension-related and should be fixed in permissions.
@@ -15,7 +15,7 @@
 - **RemiNet Chat does not connect**: click **Open RemiliaNET**, click **Log in** on RemiliaNET, finish login in the RemiliaNET tab, return to milXdy, then click **Retry session**. milXdy will reuse the RemiliaNET browser session for connector auth; reload the X/Twitter tab after the session is detected.
 - **Apps rail is missing**: refresh the X/Twitter tab after reloading the extension. If it still does not appear, open the popup Main tab, confirm the extension is enabled, and check whether Performance diagnostics records app runtime data after visiting X/Twitter.
 - **Pinned app is missing from the rail**: open **Apps**, confirm the app is enabled, then click **Pin**. Enabled apps can be unpinned, so enablement alone does not guarantee a direct rail icon.
-- **Wiki sidebar does not open a page**: confirm the Wiki app is enabled and that the URL starts with `https://wiki.remilia.org`. If the embedded view is blocked by the wiki page, use the panel's open-in-tab control.
+- **Wiki sidebar does not open a page**: confirm the Wiki app is enabled and that the URL starts with `https://wiki.remilia.org` or `https://remilia.wiki`. The sidebar canonicalizes `remilia.wiki` into the embeddable wiki host. If the embedded view is blocked by the wiki page, use the panel's open-in-tab control.
 - **Miladychan Portal does not load boards**: confirm `https://boards.miladychan.org` is reachable and that the Miladychan app is enabled. The portal depends on public board JSON and does not replace the native Miladychan site.
 - **Music cannot add a folder**: use a Chromium browser with File System Access support. Firefox temporary add-ons can load milXdy, but local music folder handles are browser-limited. In Chromium, use **Settings > Music folders > Test** or **Rescan** to recover a revoked permission prompt.
 - **Music shows missing files**: run **Settings > Missing files > Repair** or rescan the folder. milXdy marks missing indexed files unavailable; it does not delete or modify local audio.
@@ -36,7 +36,7 @@ Run:
 npm run typecheck
 npm run build
 Get-ChildItem dist\chromium
-Get-Content public\manifest.json
+Get-Content assets\extension\manifest.json
 ```
 
 Then check:

@@ -10,7 +10,7 @@ Remilia Wiki opens Remilia Wiki pages in the shared side rail so you can read re
 
 ## Common Tasks
 
-- Pin or unpin **Remilia Wiki** from the Apps Hub.
+- Pin or unpin **Remilia Wiki** from Apps & Features.
 - Use the sidebar open-in-tab control when you want the full wiki page.
 - Modifier-click a wiki link when you prefer the browser's normal new-tab behavior.
 - Use **Link later** from the X/Twitter context menu to save selected phrases for future wiki work.

@@ -99,9 +99,9 @@ Near-term platform work after `0.2.0` should therefore focus on:
 
 Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
 
-## Planned: 0.2.2 - Apps And Settings Cleanup
+## In Stabilization: 0.2.2 - Prepared App SDK Update
 
-Theme: make first-party apps easier to understand, configure, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, and first-party lifecycle compliance.
+Theme: make first-party apps easier to understand, configure, package, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, local package groundwork, filesystem layout, and first-party lifecycle compliance.
 
 - Clean up Apps and Features management.
   - move app and feature settings into a clearer left-menu information architecture
@@ -117,17 +117,21 @@ Theme: make first-party apps easier to understand, configure, and maintain by cl
 - Standardize app presentation controls.
   - define app chrome style presets, per-app overrides, root visual controls, and profile-pack participation
   - document contributor-facing UI style for classic app surfaces
+- Prepare reviewed local package and custom-build groundwork.
+  - define the local package manifest schema and checked example package shapes
+  - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
+  - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
 
 ## Planned: 0.2.3 - App Runtime And Distribution Prep
 
-Theme: continue the app-platform split after Apps and Features cleanup by hardening runtime behavior, local package shape, and distribution groundwork.
+Theme: continue the app-platform split after Apps and Features cleanup by hardening runtime behavior, local package follow-through, and distribution groundwork.
 
 - Harden app runtime behavior beyond the first Apps and Features pass.
   - expand app runtime expectations across RemiliaNET, Miladychan, Remilia Wiki, and related hosts where permissions and privacy disclosure are explicit
   - keep site-aware app behavior tied to manifest metadata, lifecycle hooks, background services, and shared diagnostics
-- Prepare local app-package and distribution groundwork.
-  - define the future local apps-folder package shape and starter kit expectations
-  - keep marketplace, submission, and browser-distribution prep separate from the user-facing settings cleanup
+- Continue local app-package and distribution follow-through.
+  - evaluate package signatures, marketplace discovery, normal-user install/update UI, and starter-kit polish after the 0.2.2 reviewed custom-build groundwork
+  - keep marketplace, submission, and browser-distribution prep separate from the 0.2.2 release-branch stabilization work
   - evaluate Safari desktop WebExtension support if it remains aligned with the release scope
 - Keep the former RemiNet Sharing work in Composer Kit.
   - the X Messages RemiNet pseudo chat entry shipped in 0.2.0

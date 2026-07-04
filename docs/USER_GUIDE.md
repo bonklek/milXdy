@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
+milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Composer Tools, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
 
 ## Updating The Extension
 
@@ -23,24 +23,25 @@ The Suite tab provides a guided version of this flow:
 
 ## Main, Apps, And Appearance
 
-Use the Main tab for whole-extension controls, the in-page **Apps** rail item for app enablement and rail pinning, and the Appearance tab for visual presets.
+Use the Main tab for whole-extension controls, the in-page **Apps** rail item for Apps & Features, and the Appearance tab for visual presets.
 
 - **Update status** checks the configured GitHub release endpoint and exposes guided update buttons when needed.
 - **Performance mode** is separate from Appearance. Fast minimizes background work, Balanced is the default, Full preloads more app surfaces, and Developer records extra diagnostics.
-- **Double dash to em dash** turns `--` into an em dash while typing in supported X/Twitter post composers.
 - **Performance diagnostics** stores lightweight counters used by the Diag tab. Leave this off unless testing performance or preparing a bug report.
 
-### Apps Hub And Side Rail
+### Apps & Features And Side Rail
 
-The shared side rail appears on X/Twitter and hosts dockable first-party apps such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, and Maxxer.
+The shared side rail appears on X/Twitter and opens Apps & Features. This menu separates full app surfaces from smaller feature modules.
 
-- Click **Apps** to open the Apps Hub.
-- Use **Enable** or **Disable** to control whether an app can run.
+- Click **Apps** to open Apps & Features.
+- Full apps include docked or windowed surfaces such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, Wiki, and Maxxer.
+- Feature modules include smaller capabilities such as RemiStats, Tweet PNG, Composer Tools, wiki link highlighting, and page-level visual effects.
+- Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
-- On fresh installs, the Apps Hub opens once with Lite, Balanced, and Full setup choices. These choices apply default rail pins and the matching Performance mode while keeping every first-party app available and toggleable. The same setup choices remain available from the Apps Hub settings menu later.
+- On fresh installs, Apps & Features opens once with Lite, Balanced, and Full setup choices. These choices apply exact app enablement, default rail pins, and the matching Performance mode while keeping every first-party app available and toggleable. Apps excluded from the chosen setup are disabled, not removed. The same setup choices remain available from the Apps & Features settings menu later.
 
-Enabled and pinned are different states: an app can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions.
+Enabled and pinned are different states: an app or feature can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions. Whole-extension controls, global presets, and Performance mode remain in the popup rather than Apps & Features.
 
 ### Preset Decisions
 
@@ -52,7 +53,25 @@ The Appearance presets set both visual treatment and ambient audio so each profi
 
 Read-aloud itself stays independent of presets because it is a utility/accessibility feature rather than part of the aesthetic intensity.
 
+### App Chrome Style
+
+**App chrome style** controls the frame around milXdy app windows: borders, bevels, shadows, headers, panel surfaces, and window buttons. It does not change the content theme inside X/Twitter posts, and it is separate from Performance mode.
+
+- **Use app defaults** keeps each app's authored look.
+- **RemiliaNet** applies the shared soft retro internet frame where supported.
+- **Classic bevel** applies the late-90s utility-window frame where supported.
+
+Some apps keep app-specific controls for their content area, such as Beetol color/mode or wiki page dark-mode behavior. Those settings can coexist with the shared app chrome style.
+
+Use **Export pack** to save Appearance plus the current Performance mode as a shareable profile pack. **Import pack** previews the sections that will change and lets you cancel before any settings are written. The older Appearance **Export**, **Import**, **Copy string**, and **Paste string** controls still handle visual themes only.
+
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
+
+## Composer Tools
+
+Composer Tools is a lightweight feature module for X/Twitter post composers. When enabled from Apps & Features, or from the Main tab popup mirror during settings migration, typing `--` in a supported post composer is converted locally into an em dash.
+
+The helper ignores DMs, search fields, native inputs, textareas, and extension settings inputs. It reads only the active composer text around the caret and does not send composer text to a remote service.
 
 ## Platform Performance Modes
 
@@ -79,7 +98,7 @@ The Wiki tab controls inline Remilia Wiki links, the docked Wiki sidebar app, an
 
 ### Remilia Wiki Sidebar
 
-**Wiki** in the Apps rail opens a docked Remilia Wiki sidebar. Normal clicks on inline wiki links and preview read-more links open this sidebar by default; modifier-clicks keep the browser's normal new-tab behavior. The sidebar accepts only `https://wiki.remilia.org` URLs and includes an open-in-tab control for the full wiki page.
+**Wiki** in the Apps rail opens a docked Remilia Wiki sidebar. Normal clicks on inline wiki links and preview read-more links open this sidebar by default; modifier-clicks keep the browser's normal new-tab behavior. The sidebar accepts `https://wiki.remilia.org` and `https://remilia.wiki` URLs, canonicalizes `remilia.wiki` into the embeddable wiki host, and includes an open-in-tab control for the full wiki page.
 
 **Wiki browser follows dark mode** is enabled by default. When milXdy is using a dark or dim theme, the embedded Remilia Wiki page receives a dark sidebar theme. Turn this off in the Wiki tab if you prefer the native wiki page colors inside the docked sidebar.
 
@@ -119,14 +138,14 @@ The Reader tab controls post and Wiki read-aloud behavior.
 - On supported X Article pages, Post-reading can read the article body from the page instead of only timeline posts.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
-- Use **Custom HTTP endpoint** only when you have a local TTS service running.
-- **Include quote posts**, **Fetch full quotes**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output.
+- Use **Custom HTTP endpoint** only when you have a local TTS service running on `localhost`, `127.0.0.1`, or `[::1]`.
+- **Include quote posts**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output. **Fetch full quotes** is off by default; when you enable it, Post-reading uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without sending browser cookies or session tokens.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
 - Minimize hides the docked reader without stopping playback. Quit/stop ends active playback, OCR, quote previews, and highlighting cleanup.
 - Use the Wiki sidebar read-aloud controls to read articles, move between paragraphs, and optionally auto-scroll the current spoken line into view.
 
-Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and custom HTTP TTS can provide timing boundaries for synced playback.
+Tweet reading and Wiki reading pause each other so only one reader session speaks at a time. Highlight timing is best with browser voices that report speech boundaries; unsupported voices use a smooth estimated highlight fallback, and loopback-only custom HTTP TTS can provide timing boundaries for synced playback.
 
 OCR runs locally and can miss stylized, low-resolution, or low-contrast text. Image OCR is limited to attached X/Twitter media URLs from `pbs.twimg.com/media` and does not send cookies with those image fetches.
 
@@ -167,7 +186,7 @@ Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/T
 - The chat uses the same RemiNet connector login as pokes and Beetol Game.
 - It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
 - When you scroll to the oldest loaded messages, use **Show more** to load another batch of older chat history.
-- It supports reactions, pokes, attachments, media previews, profile lookups, and minimized mode.
+- It supports reactions, pokes, attachments, allowlisted media and pfp.remilia.net avatar previews, profile lookups, and minimized mode.
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
 
@@ -202,7 +221,7 @@ Enable **Show Beetol hunt panel** to mount the Beetol Game hover panel on X/Twit
 
 ## Miladychan Portal
 
-Enable and pin **Miladychan** from the Apps Hub to browse live Miladychan boards from the shared side rail.
+Enable and pin **Miladychan** from Apps & Features to browse live Miladychan boards from the shared side rail.
 
 - The portal shows active board summaries for the configured Miladychan boards.
 - Open a board to browse its thread list, sorted by sticky status, activity, connected users, posts, and update time.
@@ -214,7 +233,7 @@ The portal is a reader/browser surface. Deeper board deck, board-inspired radio,
 
 ## Music
 
-Enable and pin **Music** from the Apps Hub to open the docked local music app.
+Enable and pin **Music** from Apps & Features to open the docked local music app.
 
 - **Library** indexes user-selected local folders in Chromium browsers that support persistent folder handles. Rescans ask for permission again when needed, mark removed files as missing, normalize basic filename metadata, and flag likely duplicates without touching local audio files.
 - **Queue** controls local playback order, including reorder, shuffle, repeat, progress seek, and volume.
@@ -257,12 +276,13 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 
 ## Privacy And Persistence
 
-- RemiStats calls `https://api.remistats.net`.
-- Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org`.
+- RemiStats calls `https://api.remistats.net`, loads tooltip profile images from `https://pfp.remilia.net`, and may background-fetch image-only Milady Maker banner files from `https://miladymaker.net/banners/nft` without account credentials or cookies.
+- RemiNet identity checks may call `https://ethereum.publicnode.com` to resolve verified PFP ownership.
+- Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org` and `https://remilia.wiki`.
 - Grok prompts are pasted into X's native Grok interface.
-- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; chat live updates use `wss://www.remilia.net`.
+- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`.
-- Music enrichment may call MusicBrainz and AcoustID when the user starts enrichment. Local library indexing reads only folders the user selects.
+- Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.
 - RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.

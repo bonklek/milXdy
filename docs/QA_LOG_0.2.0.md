@@ -25,7 +25,7 @@ Additional 0.2.0 release asset evidence:
 
 - `npm run verify:release:gates:020` passed after spawning the build subprocesses outside the default sandbox. It ran TypeScript, release contract verification, profile builds, platform verification, URL allowlist verification, Music build verification, Firefox lint, extension smoke, app smoke, release packaging, and checksum verification.
 - Firefox lint was also run directly through the local `web-ext` dependency because `node` is not on PATH in this shell. Result: `0` errors, `29` warnings, `1` notice, matching [Firefox lint warning classification](FIREFOX_LINT_WARNINGS.md).
-- Remilia Wiki rail icon is packaged from `public/wikiSidebar/remilia-sun.webp`.
+- Remilia Wiki rail icon is packaged from `assets/apps/wiki-sidebar/remilia-sun.webp`.
 - Generated Chromium and Firefox Balanced/Full builds expose `wikiSidebar/*` as a web-accessible resource for the shared dock icon path.
 - Release archives and `release/milXdy-0.2.0-checksums.sha256` were regenerated after adding the Wiki sidebar icon asset.
 - The Wiki sidebar frame and header now resolve the same packaged icon through `chrome.runtime.getURL("wikiSidebar/remilia-sun.webp")`.
@@ -35,8 +35,8 @@ Additional 0.2.0 release asset evidence:
 - Generated Chromium and Firefox Lite/Balanced/Full content bundles include `setSettingsAction`, `Add Apps`, and `Open milXdy Apps Hub`; release archives and checksums were regenerated after this side-rail discovery update.
 - Profile builds now keep full app metadata, app bundles, assets, and permissions in every generated extension package.
 - Apps Hub keeps every first-party app available across build profiles, with Enable, Pin, and Open controls shown wherever that app supports them.
-- Fresh-install defaults for Apps Hub first-run state and RemiStats tooltip/sound defaults are centralized in `src/background.ts`; RemiStats no longer installs a duplicate `onInstalled` default seeder.
-- Apps Hub cards now render registry-driven metadata chips for cost, rail support, privacy labels, and remote services so app disclosure stays reusable and tied to `src/shared/firstPartyApps.json`.
+- Fresh-install defaults for Apps Hub first-run state and RemiStats tooltip/sound defaults are centralized in `src/extension/background/index.ts`; RemiStats no longer installs a duplicate `onInstalled` default seeder.
+- Apps Hub cards now render registry-driven metadata chips for cost, rail support, privacy labels, and remote services so app disclosure stays reusable and tied to `src/platform/app-sdk/first-party-apps.json`.
 - Apps Hub cards now include a registry-driven Details toggle that expands behavior, performance, load trigger, data, permission, storage, and build-availability disclosure without importing the app bundle.
 - Available Apps Hub cards with declared storage keys now expose a registry-driven Reset action that removes only the manifest local/sync keys, re-reads enablement, refreshes scanner/dock state, and records `hub.reset.<appId>` diagnostics without importing the app bundle solely for reset.
 - Fresh installs now keep first-party apps enabled by default before the Apps Hub opens, and setup choices tune performance plus default rail pins instead of hiding apps. `npm run verify:release:gates:020` should be rerun after regenerating profile archives/checksums.
@@ -45,7 +45,7 @@ Additional 0.2.0 release asset evidence:
 - Music now includes permission recovery status, rescans with missing-file marking, duplicate display, richer playlist metadata matching, unresolved-track recovery, queue reorder, active radio-session state, and Firefox folder limitation messaging. `pnpm.cmd run verify:release:gates:020` passed with the Codex runtime Node path prepended and regenerated all profile archives/checksums.
 - Code-freeze documentation now records the 0.2.0 platform-preview boundary, public-repo transfer hygiene, untracked release-file inclusion, local `tmp/` browser-profile exclusion, shared Wiki sidebar routing, shared Remilia auth, centralized install defaults, RemiStats tooltip hardening, and dependency override pins.
 - Final read-aloud documentation now records the Wiki sidebar article handoff, dock-attached Wiki reader, boundary highlight messages, optional Wiki auto-scroll, voice boundary support probing, estimated highlight fallback, custom HTTP TTS timing boundaries, and standalone Post-reading Chromium build scope.
-- Final reproducibility documentation now records `scripts/verify-reproducible-release.mjs`, `npm run verify:release:reproducible`, and deterministic release archive verification as part of the 0.2.0 release gate story.
+- Final reproducibility documentation now records `scripts/release/verify-reproducible-release.mjs`, `npm run verify:release:reproducible`, and deterministic release archive verification as part of the 0.2.0 release gate story.
 
 ## Release Screenshot Evidence
 
@@ -60,7 +60,7 @@ Optional screenshot evidence still pending:
 
 ## Live Probe Tooling
 
-Use [CHROME_LIVE_QA_0.2.0.md](CHROME_LIVE_QA_0.2.0.md) for the live browser handoff. Run `npm run print:live-probe:020` to print the browser-console probe from `scripts/live-smoke-probe-020.js`, then paste the resulting `window.__milxdy020LiveProbe` object into this log when the live smoke is rerun.
+Use [CHROME_LIVE_QA_0.2.0.md](CHROME_LIVE_QA_0.2.0.md) for the live browser handoff. Run `npm run print:live-probe:020` to print the browser-console probe from `scripts/smoke/live-smoke-probe-020.js`, then paste the resulting `window.__milxdy020LiveProbe` object into this log when the live smoke is rerun.
 
 Optional live gate: run `npm run verify:live-probe:020` after updating this log if live Chrome evidence is being collected. It is expected to fail while the latest probe has `status: "blocked"`.
 

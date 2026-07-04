@@ -1,6 +1,6 @@
 # Firefox Build QA
 
-Run this checklist before advertising Firefox support.
+Run this checklist in Firefox 142 or newer before advertising Firefox support.
 
 ## Automated
 

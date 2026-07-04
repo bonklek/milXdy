@@ -1,21 +1,24 @@
-# Apps Hub And Side Rail User Guide
+# Apps & Features And Side Rail User Guide
 
-The Apps Hub and side rail manage docked first-party milXdy apps on X/Twitter.
+Apps & Features and the side rail manage first-party milXdy apps and feature modules on X/Twitter.
 
 ## Where To Find It
 
 - Open X/Twitter.
-- Click **Apps** in the milXdy side rail.
+- Click **Apps** in the milXdy side rail to open Apps & Features.
 - Use the extension popup for suite-level setup and performance choices.
 
 ## Common Tasks
 
-- Use **Enable** or **Disable** to control whether an app can run.
+- Browse **Apps** for windowed or docked surfaces such as Music, Post-reading, RemiNet Chat, Beetol, Miladychan, Wiki, and Maxxer.
+- Browse **Features** for smaller modules such as RemiStats, Tweet PNG, Composer Tools, wiki link highlighting, and page-level visual effects.
+- Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right.
 - Reorder pinned app icons from the dock settings.
 - Use Lite, Balanced, or Full setup on fresh installs to choose a starting profile.
+- Use card details to review settings ownership, permissions, privacy/data notes, storage, runtime state, and reset actions.
 
 ## Notes
 
-Enabled and pinned are separate states. An app can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions.
+Enabled and pinned are separate states. An app or feature can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions. Global controls and presets remain in the extension popup; app-owned settings belong in app windows, while feature settings belong in Apps & Features as the settings renderer matures.
