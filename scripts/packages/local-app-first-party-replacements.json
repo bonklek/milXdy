@@ -5,14 +5,14 @@
       "id": "tweetPng",
       "sourceType": "folder",
       "root": "examples/packages/first-party-replacements/tweetPng",
-      "packageSha256": "01c098deacfd346dad8525e2b8b55c582ca813752d27f0dbdd4ed250baadb649",
+      "packageSha256": "28af8163308643905082a7a14ab5bda12f17aeef37f5f3cef1c7e4ffe50adbfa",
       "reason": "Checked-in first-party App SDK pilot fixture for Tweet PNG."
     },
     {
       "id": "wikiSidebar",
       "sourceType": "folder",
       "root": "examples/packages/first-party-replacements/wikiSidebar",
-      "packageSha256": "f4f94907c8d926a9c3927d38ffc0a25794b3f7aa78af8394094e737baf93b690",
+      "packageSha256": "c3f39b33dff32efd6331df400f9c8e5b3ecebf7b02068d1f1b8c424123ddcf7a",
       "reason": "Checked-in first-party App SDK pilot fixture for Remilia Wiki sidebar."
     }
   ]
