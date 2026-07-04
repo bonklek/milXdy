@@ -1,4 +1,4 @@
-import { getOverlayDock, type OverlayDockSide } from "./overlayDock";
+import { getOverlayDock, type OverlayDockSide } from "./dock";
 
 export const OVERLAY_APP_RAIL_CLEARANCE_PX = 104;
 export const OVERLAY_APP_RESERVED_WIDTH_PX = 128;

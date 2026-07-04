@@ -2,7 +2,7 @@ import {
   PERFORMANCE_MODE_KEY,
   budgetForPerformanceMode,
   normalizePerformanceMode,
-} from "./performanceMode";
+} from "../settings/performance-mode";
 
 export type BackgroundResponse = Record<string, unknown> | boolean | number | string | null | undefined;
 

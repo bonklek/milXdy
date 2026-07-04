@@ -6,13 +6,13 @@ import {
   subscribeTwitterSurfaces,
   type TwitterSurface,
   type TwitterSurfaceKind,
-} from "./twitterScanner";
-import { safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "./extensionRuntime";
+} from "../scanner/twitter-scanner";
+import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
-import { recordFeatureTiming } from "./performanceDiagnostics";
-import { getOverlayDock, type OverlayDockRegistration } from "./overlayDock";
-import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "./overlayAppChrome";
-import { resetOverlayAppLayouts } from "./overlayAppLayout";
+import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
+import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
+import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../overlay/app-chrome";
+import { resetOverlayAppLayouts } from "../overlay/app-layout";
 import {
   PERFORMANCE_MODE_KEY,
   budgetForPerformanceMode,
@@ -20,18 +20,21 @@ import {
   normalizePerformanceMode,
   type PerformanceMode,
   type PerformanceModeBudget,
-} from "./performanceMode";
+} from "../settings/performance-mode";
 import type {
   AppIconAsset,
   AppDiagnostics,
   AppLoadState,
   AppPreset,
   AppRuntimeScheduler,
+  AppSettingDefinition,
+  AppSiteId,
+  AppSiteScope,
   MilxdyAppId,
   MilxdyAppManifest,
   MilxdyContentAppModule,
   MilxdyRouteChange,
-} from "./appPlatform";
+} from "../app-sdk/app-platform";
 
 declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
 declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
@@ -177,6 +180,18 @@ type SurfaceImportDecision =
   | { mode: "blocked"; reason: string };
 
 type ScaffoldResult = "created" | "present" | "missing";
+type ResetStorageArea = "local" | "sync";
+type AppSettingUiValue = string | number | boolean | null;
+
+type AppResetPlan = {
+  localKeys: string[];
+  syncKeys: string[];
+  settingDefaults: Array<{ area: ResetStorageArea; key: string; value: unknown; settingId: string; behavior: string }>;
+  propertyDefaults: Array<{ area: ResetStorageArea; key: string; property: string; value: unknown; settingId: string; behavior: string }>;
+  propertyRemovals: Array<{ area: ResetStorageArea; key: string; property: string; settingId: string; behavior: string }>;
+  skippedSharedKeys: Array<{ area: ResetStorageArea; key: string; owners: string[]; reason: string }>;
+  skippedSettings: Array<{ settingId: string; area: ResetStorageArea; key: string; property?: string; behavior: string; reason: string }>;
+};
 
 type TweetScaffoldStats = {
   attempts: number;
@@ -338,6 +353,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeEnablement();
     observeRailPins();
     observePerformanceMode();
+    observeHubGeneratedSettings();
     observeAppIconTheme();
     scheduleIdlePreloads();
     maybeOpenFirstRunHub();
@@ -527,6 +543,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordImportAvoided(app, `message:${label}:disabled`);
       return Promise.resolve(null);
     }
+    const messageType = extractBackgroundMessageType(message);
+    if (!messageType || !appCanSendBackgroundMessage(app, messageType)) {
+      recordDeniedAppMessage(app, label, messageType);
+      return Promise.resolve(null);
+    }
     return new Promise<T | null>((resolve, reject) => {
       const task: NetworkTask = {
         id: state.networkStats.queued + 1,
@@ -613,6 +634,26 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       });
       drainNetworkQueue();
       scheduleIdlePreloads();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
+  }
+
+  function observeHubGeneratedSettings(): void {
+    const tracked = new Map<ResetStorageArea, Set<string>>([
+      ["local", new Set()],
+      ["sync", new Set()],
+    ]);
+    for (const app of state.apps) {
+      for (const setting of hubGeneratedFeatureSettings(app)) {
+        tracked.get(setting.storage.area)?.add(setting.storage.key);
+      }
+    }
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== "local" && area !== "sync") return;
+      const keys = tracked.get(area);
+      if (!keys || !Object.keys(changes).some((key) => keys.has(key))) return;
+      renderHubPanel();
     };
     chrome.storage.onChanged.addListener(listener);
     state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
@@ -1358,14 +1399,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function resetAppSettings(app: MilxdyAppManifest): void {
     if (app.available === false) return;
-    const keys = appStorageKeys(app);
-    if (keys.local.length === 0 && keys.sync.length === 0) return;
+    const plan = appResetPlan(app);
+    if (!hasResetWork(plan)) return;
     const startedAt = performance.now();
-    void Promise.all([
-      keys.local.length ? safeLocalRemove(keys.local) : Promise.resolve(true),
-      keys.sync.length ? safeSyncRemove(keys.sync) : Promise.resolve(true),
-    ])
-      .then(async ([localRemoved, syncRemoved]) => {
+    void executeAppResetPlan(plan)
+      .then(async (result) => {
         const isEnabled = await app.isEnabled();
         if (isEnabled) {
           state.enabledApps.add(app.id);
@@ -1384,18 +1422,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         renderHubPanel();
         recordRuntimeDiagnostic(`hub.reset.${app.id}`, {
           enabled: isEnabled,
-          localKeys: keys.local,
-          syncKeys: keys.sync,
-          localRemoved,
-          syncRemoved,
+          localKeys: plan.localKeys,
+          syncKeys: plan.syncKeys,
+          settingDefaults: plan.settingDefaults.map((entry) => settingResetDiagnostic(entry)),
+          propertyDefaults: plan.propertyDefaults.map((entry) => settingResetDiagnostic(entry)),
+          propertyRemovals: plan.propertyRemovals.map((entry) => settingResetDiagnostic(entry)),
+          skippedSharedKeys: plan.skippedSharedKeys,
+          skippedSettings: plan.skippedSettings,
+          localRemoved: result.localRemoved,
+          syncRemoved: result.syncRemoved,
+          localSet: result.localSet,
+          syncSet: result.syncSet,
           updateMs: Math.round((performance.now() - startedAt) * 10) / 10,
           updatedAt: Date.now(),
         });
       })
       .catch((error) => {
         recordRuntimeDiagnostic(`hub.reset.${app.id}`, {
-          localKeys: keys.local,
-          syncKeys: keys.sync,
+          localKeys: plan.localKeys,
+          syncKeys: plan.syncKeys,
+          skippedSharedKeys: plan.skippedSharedKeys,
+          skippedSettings: plan.skippedSettings,
           error: errorMessage(error),
           updatedAt: Date.now(),
         });
@@ -1419,29 +1466,34 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function applyAppPreset(preset: AppPreset): void {
     const startedAt = performance.now();
-    const presetApps = state.apps
-      .filter((app) => app.available !== false && app.setEnabled)
-      .filter((app) => preset === "full" || app.hub?.presets.includes(preset) === true);
+    const performanceMode: PerformanceMode = preset === "lite" ? "fast" : preset === "full" ? "full" : "balanced";
+    const performanceBudget = budgetForPerformanceMode(performanceMode);
+    const toggleableApps = state.apps
+      .filter((app) => app.available !== false && app.setEnabled);
+    const presetApps = toggleableApps
+      .filter((app) => app.hub?.presets.includes(preset) === true);
+    const desiredEnabledAppIds = new Set<MilxdyAppId>(presetApps.map((app) => app.id));
     const blockedApps = presetApps
-      .filter((app) => appEnableBlockedByPerformance(app));
-    const enabledTasks = state.apps
-      .filter((app) => app.available !== false && app.setEnabled)
-      .filter((app) => preset === "full" || app.hub?.presets.includes(preset) === true)
-      .filter((app) => !appEnableBlockedByPerformance(app))
+      .filter((app) => appEnableBlockedForPerformance(app, performanceMode, performanceBudget));
+    const blockedAppIds = new Set<MilxdyAppId>(blockedApps.map((app) => app.id));
+    const convergenceTasks = toggleableApps
       .map(async (app) => {
-        await app.setEnabled?.(true);
-        state.enabledApps.add(app.id);
+        const enabled = desiredEnabledAppIds.has(app.id) && !blockedAppIds.has(app.id);
+        await app.setEnabled?.(enabled);
+        if (enabled) state.enabledApps.add(app.id);
+        else state.enabledApps.delete(app.id);
         updateDockRegistration(app);
       });
+    const disabledTargetApps = toggleableApps
+      .filter((app) => !desiredEnabledAppIds.has(app.id) || blockedAppIds.has(app.id));
     const pinned = state.apps
-      .filter((app) => app.available !== false && app.dock && app.hub?.rail.supported !== false && app.hub?.rail.defaultPinned && app.hub.presets.includes(preset))
-      .filter((app) => !appEnableBlockedByPerformance(app))
+      .filter((app) => app.available !== false && app.setEnabled)
+      .filter((app) => app.dock && app.hub?.rail.supported !== false && app.hub?.rail.defaultPinned && desiredEnabledAppIds.has(app.id) && !blockedAppIds.has(app.id))
       .map((app) => app.id);
     state.railPinsExplicit = true;
     state.railPinnedApps = new Set(pinned);
     for (const appId of pinned) state.railUnpinnedApps.delete(appId);
-    const performanceMode: PerformanceMode = preset === "lite" ? "fast" : preset === "full" ? "full" : "balanced";
-    void Promise.all(enabledTasks)
+    void Promise.all(convergenceTasks)
       .then(() => safeLocalSet({
         [RAIL_PIN_KEY]: pinned,
         [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
@@ -1471,9 +1523,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         recordRuntimeDiagnostic("hub.preset", {
           preset,
           performanceMode: state.performanceMode,
-          enabledTargetCount: enabledTasks.length,
+          enabledTargetCount: desiredEnabledAppIds.size - blockedAppIds.size,
+          disabledTargetCount: disabledTargetApps.length,
           blockedTargetCount: blockedApps.length,
           blockedApps: blockedApps.map((app) => app.id),
+          disabledTargetApps: disabledTargetApps.map((app) => app.id),
           enabledApps: Array.from(state.enabledApps),
           railPinnedApps: pinned,
           updateMs: Math.round((performance.now() - startedAt) * 10) / 10,
@@ -1505,7 +1559,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       label: "Apps",
       icon: hubDockIcon(),
       stackable: false,
-      title: "milXdy Apps",
+      title: "Open Apps & Features",
       active: false,
       onActivate: () => {
         openHubPanel();
@@ -1515,8 +1569,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       },
     });
     getOverlayDock().setSettingsAction("milxdy.addApps", {
-      label: "Add Apps",
-      title: "Open milXdy Apps Hub",
+      label: "Apps & Features",
+      title: "Open Apps & Features",
       onActivate: openHubPanel,
     });
     getOverlayDock().setSettingsAction("milxdy.resetAppPositions", {
@@ -1571,7 +1625,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function openHubPanel(): void {
     ensureHubPanel();
     renderHubPanel();
-    state.hubDockRegistration?.update({ active: true, title: "milXdy Apps" });
+    state.hubDockRegistration?.update({ active: true, title: "Apps & Features" });
   }
 
   function closeHubPanel(): void {
@@ -1592,7 +1646,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       root.className = "milxdy-app-hub-panel milxdy-overlay-app-shell";
       prepareOverlayAppRoot(root);
       root.setAttribute("role", "region");
-      root.setAttribute("aria-label", "milXdy Apps");
+      root.setAttribute("aria-label", "Apps & Features");
     } else {
       root.classList.add("milxdy-overlay-app-shell");
     }
@@ -1612,7 +1666,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const header = document.createElement("div");
     header.className = "milxdy-app-hub-header";
     const title = document.createElement("strong");
-    title.textContent = "Apps";
+    title.textContent = "Apps & Features";
     const headerActions = document.createElement("div");
     headerActions.className = "milxdy-app-hub-header-actions";
     const settings = document.createElement("button");
@@ -1629,8 +1683,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const close = document.createElement("button");
     close.type = "button";
     close.textContent = "Minimize";
-    close.title = "Minimize Apps";
-    close.setAttribute("aria-label", "Minimize Apps");
+    close.title = "Minimize Apps & Features";
+    close.setAttribute("aria-label", "Minimize Apps & Features");
     close.addEventListener("click", closeHubPanel);
     headerActions.append(settings, close);
     header.append(title, headerActions);
@@ -1641,7 +1695,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const heading = document.createElement("strong");
       heading.textContent = "Light Start";
       const copy = document.createElement("p");
-      copy.textContent = "Choose a default app set and rail pins. Runtime performance stays controlled by the Performance setting.";
+      copy.textContent = "Choose an exact app set, default rail pins, and matching Performance mode.";
       const actions = presetActions();
       const skip = document.createElement("button");
       skip.type = "button";
@@ -1666,10 +1720,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const search = document.createElement("label");
     search.className = "milxdy-app-hub-search";
     const searchLabel = document.createElement("span");
-    searchLabel.textContent = "Search apps";
+    searchLabel.textContent = "Search apps and features";
     const searchInput = document.createElement("input");
     searchInput.type = "search";
-    searchInput.placeholder = "Search by name, category, data, or permissions";
+    searchInput.placeholder = "Search by name, category, setting, data, or permissions";
     searchInput.value = state.hubSearchQuery;
     searchInput.addEventListener("input", () => {
       state.hubSearchQuery = searchInput.value;
@@ -1687,14 +1741,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const hubApps = state.apps
       .filter((candidate) => candidate.hub)
       .filter((app) => appMatchesHubSearch(app, state.hubSearchQuery));
-    const railApps = orderedHubRailApps(hubApps);
-    const featureApps = hubApps.filter((app) => !isHubRailApp(app));
+    const railApps = orderedHubRailApps(hubApps.filter((app) => hubPackageKind(app) === "app"));
+    const featureApps = hubApps.filter((app) => hubPackageKind(app) === "feature");
+    const packageApps = hubApps.filter((app) => hubPackageKind(app) === "theme");
     appendHubSection(list, "Apps", railApps);
     appendHubSection(list, "Features", featureApps);
+    appendHubSection(list, "Themes", packageApps);
     if (hubApps.length === 0) {
       const empty = document.createElement("p");
       empty.className = "milxdy-app-hub-empty";
-      empty.textContent = "No apps match that search.";
+      empty.textContent = "No apps or features match that search.";
       list.append(empty);
     }
     root.append(list);
@@ -1738,6 +1794,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return Boolean(app.dock && app.hub?.rail.supported !== false);
   }
 
+  function hubPackageKind(app: MilxdyAppManifest): "app" | "feature" | "theme" {
+    if (app.packageKind === "theme") return "theme";
+    if (app.packageKind === "feature") return "feature";
+    if (app.packageKind === "app") return "app";
+    return isHubRailApp(app) ? "app" : "feature";
+  }
+
   function presetButton(label: string, preset: AppPreset): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
@@ -1763,7 +1826,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const title = document.createElement("strong");
     title.textContent = "Setup";
     const detail = document.createElement("span");
-    detail.textContent = "Reapply app enablement and default rail pins without changing runtime performance.";
+    detail.textContent = "Reapply exact app enablement, default rail pins, and matching Performance mode.";
     section.append(title, detail, presetActions());
     return section;
   }
@@ -1791,7 +1854,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const card = document.createElement("section");
     card.className = "milxdy-app-hub-card";
     card.dataset.hubAppId = app.id;
-    card.dataset.tier = isHubRailApp(app) ? "app" : "feature";
+    card.dataset.tier = hubPackageKind(app);
     card.dataset.available = String(app.available !== false);
     card.dataset.enabled = String(state.enabledApps.has(app.id));
     card.dataset.pinned = String(isRailPinned(app));
@@ -1841,7 +1904,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const description = document.createElement("p");
     description.textContent = app.hub?.shortDescription || app.description;
     const meta = document.createElement("span");
-    meta.textContent = `${app.hub?.category || "app"} | ${app.available === false ? "Unavailable in this build" : state.enabledApps.has(app.id) ? "On" : "Off"}`;
+    meta.textContent = `${packageKindLabel(app)} | ${app.hub?.category || "app"} | ${app.available === false ? "Unavailable in this build" : state.enabledApps.has(app.id) ? "On" : "Off"}`;
     const notes = appHubMetadataNotes(app);
     const runtime = document.createElement("span");
     runtime.className = "milxdy-app-hub-runtime-state";
@@ -1884,6 +1947,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       controls.append(reset);
     }
     body.append(appHubDetails(app));
+    const generatedSettings = appHubGeneratedFeatureSettings(app);
+    if (generatedSettings) body.append(generatedSettings);
 
     card.append(summary, body, controls);
     return card;
@@ -1942,6 +2007,243 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return row;
   }
 
+  function appHubGeneratedFeatureSettings(app: MilxdyAppManifest): HTMLElement | null {
+    const settings = hubGeneratedFeatureSettings(app);
+    if (!settings.length) return null;
+    const section = document.createElement("section");
+    section.className = "milxdy-app-hub-generated-settings";
+    const title = document.createElement("strong");
+    title.textContent = "Feature settings";
+    section.append(title);
+    for (const setting of settings) section.append(appHubGeneratedSettingRow(setting));
+    return section;
+  }
+
+  function hubGeneratedFeatureSettings(app: MilxdyAppManifest): AppSettingDefinition[] {
+    if (hubPackageKind(app) !== "feature" || app.packageKind !== "feature") return [];
+    return (app.settings || []).filter((setting) => (
+      setting.location === "appsAndFeatures"
+      && setting.advanced !== true
+      && setting.scope === "feature"
+      && setting.control.type !== "action"
+      && setting.control.type !== "status"
+    ));
+  }
+
+  function appHubGeneratedSettingRow(setting: AppSettingDefinition): HTMLElement {
+    const row = document.createElement("label");
+    row.className = "milxdy-app-hub-generated-setting";
+    row.dataset.settingId = setting.id;
+    const text = document.createElement("span");
+    text.className = "milxdy-app-hub-generated-setting-text";
+    const label = document.createElement("strong");
+    label.textContent = setting.label;
+    text.append(label);
+    if (setting.description) {
+      const description = document.createElement("small");
+      description.textContent = setting.description;
+      text.append(description);
+    }
+    const control = appHubGeneratedSettingControl(setting);
+    row.append(text, control);
+    void readManifestSettingValue(setting).then((value) => {
+      if (!row.isConnected) return;
+      setGeneratedControlValue(control, value);
+    });
+    return row;
+  }
+
+  function appHubGeneratedSettingControl(setting: AppSettingDefinition): HTMLElement {
+    switch (setting.control.type) {
+      case "toggle":
+        return appHubGeneratedToggle(setting);
+      case "select":
+      case "segmented":
+        return appHubGeneratedSelect(setting);
+      case "slider":
+      case "number":
+        return appHubGeneratedNumber(setting);
+      case "text":
+      case "textarea":
+        return appHubGeneratedText(setting);
+      default:
+        return appHubUnsupportedSetting(setting);
+    }
+  }
+
+  function appHubGeneratedToggle(setting: AppSettingDefinition): HTMLElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "milxdy-app-hub-switch milxdy-app-hub-generated-toggle";
+    button.dataset.checked = "false";
+    button.setAttribute("role", "switch");
+    button.setAttribute("aria-checked", "false");
+    button.setAttribute("aria-label", setting.label);
+    const knob = document.createElement("span");
+    knob.className = "milxdy-app-hub-switch-knob";
+    const text = document.createElement("span");
+    text.className = "milxdy-app-hub-switch-text";
+    text.textContent = "Off";
+    button.append(knob, text);
+    button.addEventListener("click", () => {
+      const next = button.dataset.checked !== "true";
+      setGeneratedControlValue(button, next);
+      void writeManifestSettingValue(setting, next).catch(() => {
+        setGeneratedControlValue(button, !next);
+      });
+    });
+    return button;
+  }
+
+  function appHubGeneratedSelect(setting: AppSettingDefinition): HTMLElement {
+    const select = document.createElement("select");
+    select.className = setting.control.type === "segmented"
+      ? "milxdy-app-hub-generated-segmented"
+      : "milxdy-app-hub-generated-select";
+    select.setAttribute("aria-label", setting.label);
+    for (const option of setting.control.options || []) {
+      const element = document.createElement("option");
+      element.value = settingOptionValue(option.value);
+      element.textContent = option.label;
+      select.append(element);
+    }
+    select.addEventListener("change", () => {
+      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, select));
+    });
+    return select;
+  }
+
+  function appHubGeneratedNumber(setting: AppSettingDefinition): HTMLElement {
+    const input = document.createElement("input");
+    input.className = "milxdy-app-hub-generated-number";
+    input.type = setting.control.type === "slider" ? "range" : "number";
+    input.setAttribute("aria-label", setting.label);
+    if (typeof setting.control.min === "number") input.min = String(setting.control.min);
+    if (typeof setting.control.max === "number") input.max = String(setting.control.max);
+    if (typeof setting.control.step === "number") input.step = String(setting.control.step);
+    input.addEventListener("change", () => {
+      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, input));
+    });
+    return input;
+  }
+
+  function appHubGeneratedText(setting: AppSettingDefinition): HTMLElement {
+    const input = setting.control.type === "textarea"
+      ? document.createElement("textarea")
+      : document.createElement("input");
+    input.className = "milxdy-app-hub-generated-text";
+    input.setAttribute("aria-label", setting.label);
+    if (input instanceof HTMLInputElement) input.type = "text";
+    if (setting.control.placeholder) input.placeholder = setting.control.placeholder;
+    input.addEventListener("change", () => {
+      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, input));
+    });
+    return input;
+  }
+
+  function appHubUnsupportedSetting(setting: AppSettingDefinition): HTMLElement {
+    const value = document.createElement("span");
+    value.className = "milxdy-app-hub-generated-unsupported";
+    value.textContent = `${setting.control.type} unsupported`;
+    return value;
+  }
+
+  async function readManifestSettingValue(setting: AppSettingDefinition): Promise<AppSettingUiValue> {
+    const stored = await safeStorageGet(setting.storage.area, { [setting.storage.key]: setting.storage.property ? {} : setting.defaultValue });
+    const raw = setting.storage.property
+      ? plainObjectValue(stored?.[setting.storage.key])[setting.storage.property]
+      : stored?.[setting.storage.key];
+    return normalizeSettingUiValue(raw === undefined ? setting.defaultValue : raw);
+  }
+
+  async function writeManifestSettingValue(setting: AppSettingDefinition, value: AppSettingUiValue): Promise<void> {
+    if (!setting.storage.property) {
+      await safeStorageSet(setting.storage.area, { [setting.storage.key]: value });
+      return;
+    }
+    const stored = await safeStorageGet(setting.storage.area, { [setting.storage.key]: {} });
+    await safeStorageSet(setting.storage.area, {
+      [setting.storage.key]: {
+        ...plainObjectValue(stored?.[setting.storage.key]),
+        [setting.storage.property]: value,
+      },
+    });
+  }
+
+  function extractBackgroundMessageType(message: unknown): string | null {
+    if (!message || typeof message !== "object" || Array.isArray(message)) return null;
+    const type = (message as Record<string, unknown>).type;
+    return typeof type === "string" && type.length > 0 ? type : null;
+  }
+
+  function appCanSendBackgroundMessage(app: MilxdyAppManifest, messageType: string): boolean {
+    return (app.background?.messageTypes || []).some((pattern) => backgroundMessagePatternMatches(pattern, messageType));
+  }
+
+  function backgroundMessagePatternMatches(pattern: string, messageType: string): boolean {
+    if (typeof pattern !== "string" || pattern.length === 0) return false;
+    if (pattern.endsWith(":*")) return messageType.startsWith(pattern.slice(0, -1));
+    return pattern === messageType;
+  }
+
+  function recordDeniedAppMessage(app: MilxdyAppManifest, label: string, messageType: string | null): void {
+    const reason = messageType ? "undeclaredBackgroundMessage" : "malformedBackgroundMessage";
+    const diagnostic = {
+      appId: app.id,
+      label,
+      messageType,
+      declaredPatterns: app.background?.messageTypes || [],
+      reason,
+      updatedAt: Date.now(),
+    };
+    recordRuntimeDiagnostic(`backgroundMessage.denied.${app.id}`, diagnostic);
+    console.warn("[milXdy] App SDK background message denied", diagnostic);
+  }
+
+  function safeStorageSet(area: ResetStorageArea, values: Record<string, unknown>): Promise<boolean> {
+    return area === "local" ? safeLocalSet(values) : safeSyncSet(values);
+  }
+
+  function normalizeSettingUiValue(value: unknown): AppSettingUiValue {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) return value;
+    return "";
+  }
+
+  function setGeneratedControlValue(control: HTMLElement, value: AppSettingUiValue): void {
+    if (control instanceof HTMLButtonElement && control.classList.contains("milxdy-app-hub-generated-toggle")) {
+      const checked = value === true;
+      control.dataset.checked = String(checked);
+      control.setAttribute("aria-checked", String(checked));
+      const text = control.querySelector(".milxdy-app-hub-switch-text");
+      if (text) text.textContent = checked ? "On" : "Off";
+      return;
+    }
+    if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
+      control.value = value == null ? "" : String(value);
+    }
+  }
+
+  function readGeneratedControlValue(setting: AppSettingDefinition, control: HTMLElement): AppSettingUiValue {
+    if (control instanceof HTMLInputElement && (setting.control.type === "number" || setting.control.type === "slider")) {
+      const value = Number(control.value);
+      return Number.isFinite(value) ? value : Number(setting.defaultValue || 0);
+    }
+    if (control instanceof HTMLSelectElement) {
+      const option = (setting.control.options || []).find((entry) => settingOptionValue(entry.value) === control.value);
+      return normalizeSettingUiValue(option?.value ?? control.value);
+    }
+    if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) return control.value;
+    return normalizeSettingUiValue(setting.defaultValue);
+  }
+
+  function settingOptionValue(value: string | number | boolean | null): string {
+    return value == null ? "" : String(value);
+  }
+
+  function plainObjectValue(value: unknown): Record<string, unknown> {
+    return isPlainObject(value) ? value : {};
+  }
+
   function startHubAppDrag(event: PointerEvent, appId: MilxdyAppId): void {
     if (event.button !== 0) return;
     event.preventDefault();
@@ -1998,6 +2300,20 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       ...(app.hub?.remoteServices || []),
       ...(app.hub?.localStorageNotes || []),
       ...(app.permissions?.hosts || []),
+      app.chrome?.nativeStyle,
+      ...(app.chrome?.supportedStyles || []),
+      ...(app.chrome?.notes || []),
+      ...(app.settings || []).flatMap((setting) => [
+        setting.id,
+        setting.label,
+        setting.description,
+        setting.scope,
+        setting.location,
+        setting.storage.key,
+        setting.storage.property,
+        setting.control.type,
+        ...(setting.presets || []),
+      ]),
       ...app.loadTriggers,
     ].filter(Boolean).join(" ").toLowerCase();
     return searchable.includes(normalized);
@@ -2010,6 +2326,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       appHubDetailRow("Does", app.hub?.longDescription || app.description),
       appHubDetailRow("Performance", `Startup ${app.cost.startup}; per-surface ${app.cost.perSurface}; network ${app.cost.network}; worker ${app.cost.worker}; DOM ${app.cost.domWrite}.`),
       appHubDetailRow("Loads", app.loadTriggers.join(", ")),
+      appHubDetailRow("Chrome", appChromeSummary(app)),
+      appHubDetailRow("Settings", appSettingsSummary(app)),
+      appHubDetailRow("Settings home", appSettingsHome(app)),
       appHubDetailRow("Data", listText(app.hub?.dataNotes)),
       appHubDetailRow("Permissions", listText(app.hub?.permissionNotes) || listText(app.permissions?.hosts)),
       appHubDetailRow("Storage", listText(app.hub?.localStorageNotes) || storageKeySummary(app)),
@@ -2034,8 +2353,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     notes.className = "milxdy-app-hub-notes";
     notes.append(
       appHubNote(`Cost ${app.cost.startup}/${app.cost.perSurface}`),
+      appHubNote(packageKindLabel(app)),
       appHubNote(app.dock && app.hub?.rail.supported !== false ? "Rail app" : "No rail"),
     );
+    if (app.chrome) notes.append(appHubNote(`Chrome ${chromeStyleLabel(app.chrome.nativeStyle)}`));
+    if (app.settings?.length) notes.append(appHubNote(`${app.settings.length} settings`));
     for (const label of app.hub?.privacyLabels || []) {
       notes.append(appHubNote(label.replace(/-/g, " ")));
     }
@@ -2043,6 +2365,105 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       notes.append(appHubNote(service));
     }
     return notes;
+  }
+
+  function appChromeSummary(app: MilxdyAppManifest): string {
+    if (!app.chrome) return "Not declared.";
+    const supported = app.chrome.supportedStyles.map(chromeStyleLabel).join(", ");
+    const notes = listText(app.chrome.notes);
+    return [
+      `Native ${chromeStyleLabel(app.chrome.nativeStyle)}.`,
+      supported ? `Supports ${supported}.` : "",
+      notes,
+    ].filter(Boolean).join(" ");
+  }
+
+  function chromeStyleLabel(style: string): string {
+    switch (style) {
+      case "native":
+        return "app defaults";
+      case "reminet":
+        return "RemiNet";
+      case "classic":
+        return "Classic bevel";
+      case "maxxer":
+        return "Maxxer";
+      case "reader":
+        return "Reader";
+      case "miladychan":
+        return "Miladychan";
+      case "music":
+        return "Music";
+      case "wiki":
+        return "Wiki";
+      default:
+        return style;
+    }
+  }
+
+  function appSettingsSummary(app: MilxdyAppManifest): string {
+    if (!app.settings?.length) return "No settings schema declared.";
+    const byLocation = app.settings.reduce<Record<string, number>>((summary, setting) => {
+      summary[setting.location] = (summary[setting.location] || 0) + 1;
+      return summary;
+    }, {});
+    const locationText = Object.entries(byLocation)
+      .map(([location, count]) => `${settingsLocationLabel(location)} ${count}`)
+      .join("; ");
+    const presetText = Array.from(new Set(app.settings.flatMap((setting) => setting.presets || [])))
+      .map(settingsPresetLabel)
+      .join(", ");
+    return [
+      locationText,
+      presetText ? `Preset participation: ${presetText}.` : "",
+    ].filter(Boolean).join(" ");
+  }
+
+  function appSettingsHome(app: MilxdyAppManifest): string {
+    if (hubPackageKind(app) === "feature") {
+      return "Feature settings should be exposed directly from Apps & Features when a generated settings renderer is available; global presets remain in the top-right settings menu.";
+    }
+    if (hubPackageKind(app) === "theme") {
+      return "Theme and texture packs belong in Appearance/profile-pack flows; Apps & Features should show package status, reset, and review metadata.";
+    }
+    return "App-owned settings belong inside the app window or its settings surface. Apps & Features keeps enablement, launch, pinning, reset, privacy, storage, and diagnostics here.";
+  }
+
+  function packageKindLabel(app: MilxdyAppManifest): string {
+    switch (hubPackageKind(app)) {
+      case "app":
+        return "App";
+      case "feature":
+        return "Feature";
+      case "theme":
+        return "Theme pack";
+    }
+  }
+
+  function settingsLocationLabel(location: string): string {
+    switch (location) {
+      case "appearance":
+        return "Appearance";
+      case "appsAndFeatures":
+        return "Apps & Features";
+      case "appSurface":
+        return "App surface";
+      case "advanced":
+        return "Advanced";
+      default:
+        return location;
+    }
+  }
+
+  function settingsPresetLabel(preset: string): string {
+    switch (preset) {
+      case "firstRun":
+        return "first run";
+      case "profilePack":
+        return "profile packs";
+      default:
+        return preset;
+    }
   }
 
   function appHubNote(text: string): HTMLElement {
@@ -2057,8 +2478,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function hasResettableStorage(app: MilxdyAppManifest): boolean {
-    const keys = appStorageKeys(app);
-    return keys.local.length > 0 || keys.sync.length > 0;
+    return hasResetWork(appResetPlan(app));
   }
 
   function appStorageKeys(app: MilxdyAppManifest): { local: readonly string[]; sync: readonly string[] } {
@@ -2075,6 +2495,189 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       ...storageKeys.sync.map((key) => `sync:${key}`),
     ];
     return keys.join("; ");
+  }
+
+  function appResetPlan(app: MilxdyAppManifest): AppResetPlan {
+    const storageKeys = appStorageKeys(app);
+    const plan: AppResetPlan = {
+      localKeys: [],
+      syncKeys: [],
+      settingDefaults: [],
+      propertyDefaults: [],
+      propertyRemovals: [],
+      skippedSharedKeys: [],
+      skippedSettings: [],
+    };
+    const representedKeys = new Set<string>();
+    for (const setting of app.settings || []) {
+      const area = setting.storage.area;
+      const keyId = storageKeyId(area, setting.storage.key);
+      representedKeys.add(keyId);
+      appendSettingReset(plan, setting);
+    }
+    for (const key of storageKeys.local) appendWholeKeyReset(plan, app, "local", key, representedKeys);
+    for (const key of storageKeys.sync) appendWholeKeyReset(plan, app, "sync", key, representedKeys);
+    return plan;
+  }
+
+  function appendSettingReset(plan: AppResetPlan, setting: AppSettingDefinition): void {
+    const area = setting.storage.area;
+    const key = setting.storage.key;
+    const property = setting.storage.property;
+    const behavior = setting.reset.behavior;
+    if (behavior === "custom") {
+      plan.skippedSettings.push({ settingId: setting.id, area, key, property, behavior, reason: "customResetBehavior" });
+      return;
+    }
+    if (property) {
+      if (behavior === "removeKey") {
+        plan.propertyRemovals.push({ area, key, property, settingId: setting.id, behavior });
+        return;
+      }
+      if (setting.defaultValue !== undefined) {
+        plan.propertyDefaults.push({ area, key, property, value: setting.defaultValue, settingId: setting.id, behavior });
+        return;
+      }
+      plan.skippedSettings.push({ settingId: setting.id, area, key, property, behavior, reason: "missingDefaultValue" });
+      return;
+    }
+    if (behavior === "removeKey") {
+      appendWholeKey(plan, area, key);
+      return;
+    }
+    if (setting.defaultValue !== undefined) {
+      plan.settingDefaults.push({ area, key, value: setting.defaultValue, settingId: setting.id, behavior });
+      return;
+    }
+    plan.skippedSettings.push({ settingId: setting.id, area, key, behavior, reason: "missingDefaultValue" });
+  }
+
+  function appendWholeKeyReset(
+    plan: AppResetPlan,
+    app: MilxdyAppManifest,
+    area: ResetStorageArea,
+    key: string,
+    representedKeys: Set<string>,
+  ): void {
+    if (representedKeys.has(storageKeyId(area, key))) return;
+    const owners = storageKeyOwners(area, key);
+    if (owners.length > 1) {
+      plan.skippedSharedKeys.push({ area, key, owners, reason: "sharedStorageKey" });
+      return;
+    }
+    appendWholeKey(plan, area, key);
+  }
+
+  function appendWholeKey(plan: AppResetPlan, area: ResetStorageArea, key: string): void {
+    const keys = area === "local" ? plan.localKeys : plan.syncKeys;
+    if (!keys.includes(key)) keys.push(key);
+  }
+
+  function storageKeyOwners(area: ResetStorageArea, key: string): string[] {
+    return state.apps
+      .filter((app) => {
+        const keys = appStorageKeys(app)[area];
+        const hasStorageKey = keys.includes(key);
+        const hasSettingStorage = app.settings?.some((setting) => setting.storage.area === area && setting.storage.key === key) === true;
+        return hasStorageKey || hasSettingStorage;
+      })
+      .map((app) => app.id)
+      .sort();
+  }
+
+  function storageKeyId(area: ResetStorageArea, key: string): string {
+    return `${area}:${key}`;
+  }
+
+  function hasResetWork(plan: AppResetPlan): boolean {
+    return plan.localKeys.length > 0
+      || plan.syncKeys.length > 0
+      || plan.settingDefaults.length > 0
+      || plan.propertyDefaults.length > 0
+      || plan.propertyRemovals.length > 0
+      || plan.skippedSharedKeys.length > 0
+      || plan.skippedSettings.length > 0;
+  }
+
+  async function executeAppResetPlan(plan: AppResetPlan): Promise<{
+    localRemoved: boolean;
+    syncRemoved: boolean;
+    localSet: boolean;
+    syncSet: boolean;
+  }> {
+    const localValues: Record<string, unknown> = {};
+    const syncValues: Record<string, unknown> = {};
+    for (const setting of plan.settingDefaults) {
+      (setting.area === "local" ? localValues : syncValues)[setting.key] = setting.value;
+    }
+    const localObjectUpdates = await objectStorageUpdates("local", plan);
+    const syncObjectUpdates = await objectStorageUpdates("sync", plan);
+    Object.assign(localValues, localObjectUpdates);
+    Object.assign(syncValues, syncObjectUpdates);
+    const [localRemoved, syncRemoved, localSet, syncSet] = await Promise.all([
+      plan.localKeys.length ? safeLocalRemove(plan.localKeys) : Promise.resolve(false),
+      plan.syncKeys.length ? safeSyncRemove(plan.syncKeys) : Promise.resolve(false),
+      Object.keys(localValues).length ? safeLocalSet(localValues) : Promise.resolve(false),
+      Object.keys(syncValues).length ? safeSyncSet(syncValues) : Promise.resolve(false),
+    ]);
+    return { localRemoved, syncRemoved, localSet, syncSet };
+  }
+
+  async function objectStorageUpdates(area: ResetStorageArea, plan: AppResetPlan): Promise<Record<string, unknown>> {
+    const propertyDefaults = plan.propertyDefaults.filter((entry) => entry.area === area);
+    const propertyRemovals = plan.propertyRemovals.filter((entry) => entry.area === area);
+    const keys = Array.from(new Set([...propertyDefaults, ...propertyRemovals].map((entry) => entry.key)));
+    if (keys.length === 0) return {};
+    const stored = await safeStorageGet(area, Object.fromEntries(keys.map((key) => [key, {}])));
+    const updates: Record<string, unknown> = {};
+    for (const key of keys) {
+      const current = isPlainObject(stored?.[key]) ? stored?.[key] as Record<string, unknown> : {};
+      const next = { ...current };
+      for (const entry of propertyDefaults.filter((candidate) => candidate.key === key)) {
+        next[entry.property] = entry.value;
+      }
+      for (const entry of propertyRemovals.filter((candidate) => candidate.key === key)) {
+        delete next[entry.property];
+      }
+      updates[key] = next;
+    }
+    return updates;
+  }
+
+  async function safeStorageGet(area: ResetStorageArea, defaults: Record<string, unknown>): Promise<Record<string, unknown> | null> {
+    if (area === "local") return safeLocalGet(defaults);
+    if (!hasExtensionRuntime()) return null;
+    try {
+      return await chrome.storage.sync.get(defaults as never);
+    } catch (error) {
+      if (!markExtensionInvalidated(error)) throw error;
+      return null;
+    }
+  }
+
+  async function safeSyncSet(values: Record<string, unknown>): Promise<boolean> {
+    if (!hasExtensionRuntime()) return false;
+    try {
+      await chrome.storage.sync.set(values);
+      return true;
+    } catch (error) {
+      if (!markExtensionInvalidated(error)) throw error;
+      return false;
+    }
+  }
+
+  function settingResetDiagnostic(entry: { area: ResetStorageArea; key: string; property?: string; settingId: string; behavior: string }): Record<string, unknown> {
+    return {
+      settingId: entry.settingId,
+      area: entry.area,
+      key: entry.key,
+      property: entry.property,
+      behavior: entry.behavior,
+    };
+  }
+
+  function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 
   function appRuntimeSummary(app: MilxdyAppManifest): string {
@@ -2095,22 +2698,26 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function appEnableBlockedByPerformance(app: MilxdyAppManifest): string | null {
+    return appEnableBlockedForPerformance(app, state.performanceMode, state.effectiveBudget);
+  }
+
+  function appEnableBlockedForPerformance(app: MilxdyAppManifest, mode: PerformanceMode, budget: PerformanceModeBudget): string | null {
     if (app.available === false || !app.setEnabled) return null;
-    if (app.id === "reminetChat" && state.performanceMode !== "fast") return null;
+    if (app.id === "reminetChat" && mode !== "fast") return null;
     if (allowsFastModerateSurfaceImport(app)) return null;
-    if (state.performanceMode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
+    if (mode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !state.effectiveBudget.allowHeavyStartup) {
+    if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !budget.allowHeavyStartup) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !state.effectiveBudget.allowHeavySurfaceImports) {
+    if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.worker === "heavy" && state.performanceMode !== "full" && state.performanceMode !== "developer") {
+    if (app.cost.worker === "heavy" && mode !== "full" && mode !== "developer") {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !state.effectiveBudget.allowHeavySurfaceImports) {
+    if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
     return null;
@@ -2260,16 +2867,43 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function shouldLoadForRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
     if (!state.enabledApps.has(app.id) || state.loaded.has(app.id) || state.loading.has(app.id)) return false;
     if (!app.surfaces.includes("route") || !app.loadTriggers.includes("surface")) return false;
-    if (app.id === "reminetChat") return isMessagesRoutePath(route.pathname);
+    return appRouteScopesMatchRoute(app, route);
+  }
+
+  function appRouteScopesMatchRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
+    const currentSite = currentAppSiteId();
+    if (!currentSite) return false;
+    for (const scope of app.siteScopes || []) {
+      if (!siteScopeMatchesCurrentHost(scope, currentSite)) continue;
+      for (const routePattern of scope.routes || []) {
+        if (routePattern.type === "exact" && routePattern.path === route.pathname) return true;
+        if (routePattern.type === "prefix" && route.pathname.startsWith(routePattern.path)) return true;
+      }
+    }
     return false;
   }
 
-  function isMessagesRoutePath(pathname: string): boolean {
-    return pathname === "/messages"
-      || pathname.startsWith("/messages/")
-      || pathname === "/i/chat"
-      || pathname === "/i/chat/"
-      || pathname.startsWith("/i/chat/");
+  function currentAppSiteId(): AppSiteId | null {
+    const host = window.location.hostname.toLowerCase();
+    if (host === "x.com" || host === "twitter.com") return "x";
+    if (host === "www.remilia.net" || host === "remilia.net") return "remiliaNet";
+    if (host === "wiki.remilia.org" || host === "remilia.wiki") return "remiliaWiki";
+    if (host === "boards.miladychan.org") return "miladychan";
+    return null;
+  }
+
+  function siteScopeMatchesCurrentHost(scope: AppSiteScope, currentSite: AppSiteId): boolean {
+    if (scope.site !== currentSite) return false;
+    const hosts = scope.hosts || [];
+    return hosts.length === 0 || hosts.some((host) => hostPatternMatchesCurrentLocation(host));
+  }
+
+  function hostPatternMatchesCurrentLocation(pattern: string): boolean {
+    const match = pattern.match(/^(https?|wss):\/\/([^/]+)\/\*$/);
+    if (!match) return false;
+    const [, protocol, host] = match;
+    if (`${protocol}:` !== window.location.protocol) return false;
+    return host.toLowerCase() === window.location.hostname.toLowerCase();
   }
 
   function recordImportAvoided(app: MilxdyAppManifest, reason: string): void {
@@ -3193,6 +3827,79 @@ function injectTweetScaffoldStyles(): void {
       overflow-wrap: anywhere;
       text-transform: none;
     }
+    .milxdy-app-hub-generated-settings {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+      padding-top: 7px;
+      border-top: 1px solid var(--milxdy-hub-row-line);
+    }
+    .milxdy-app-hub-generated-settings > strong {
+      color: var(--milxdy-hub-accent);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    .milxdy-app-hub-generated-setting {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(96px, 36%);
+      align-items: center;
+      gap: 8px;
+      min-height: 30px;
+    }
+    .milxdy-app-hub-generated-setting-text {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      text-transform: none;
+    }
+    .milxdy-app-hub-generated-setting-text strong {
+      color: var(--milxdy-hub-text);
+      font-size: 11px;
+      line-height: 1.2;
+      text-transform: none;
+    }
+    .milxdy-app-hub-generated-setting-text small {
+      color: var(--milxdy-hub-muted);
+      font-size: 10px;
+      line-height: 1.2;
+      overflow-wrap: anywhere;
+      text-transform: none;
+    }
+    .milxdy-app-hub-generated-setting select,
+    .milxdy-app-hub-generated-setting input,
+    .milxdy-app-hub-generated-setting textarea {
+      width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+      border: 1px solid var(--milxdy-hub-button-border);
+      border-radius: 0;
+      background: var(--milxdy-hub-input);
+      color: var(--milxdy-hub-text);
+      font: inherit;
+      font-size: 11px;
+      line-height: 1.2;
+      padding: 5px 6px;
+    }
+    .milxdy-app-hub-generated-setting input[type="range"] {
+      padding: 0;
+      accent-color: var(--milxdy-hub-accent);
+    }
+    .milxdy-app-hub-generated-setting textarea {
+      min-height: 54px;
+      resize: vertical;
+    }
+    .milxdy-app-hub-generated-setting .milxdy-app-hub-generated-toggle {
+      min-height: 30px;
+      padding: 5px 7px;
+    }
+    .milxdy-app-hub-generated-unsupported {
+      color: var(--milxdy-hub-muted);
+      font-size: 11px;
+      line-height: 1.2;
+      text-transform: none;
+    }
     .milxdy-app-hub-body span {
       color: var(--milxdy-hub-muted);
       font-size: 11px;
@@ -3255,7 +3962,8 @@ function injectTweetScaffoldStyles(): void {
       transform: none;
     }
     .milxdy-app-hub-enable-row .milxdy-app-hub-switch,
-    .milxdy-app-hub-controls .milxdy-app-hub-switch {
+    .milxdy-app-hub-controls .milxdy-app-hub-switch,
+    .milxdy-app-hub-generated-setting .milxdy-app-hub-switch {
       grid-column: 1 / -1;
       display: grid;
       grid-template-columns: 30px minmax(0, 1fr);
@@ -3268,7 +3976,8 @@ function injectTweetScaffoldStyles(): void {
       grid-column: auto;
     }
     .milxdy-app-hub-enable-row .milxdy-app-hub-switch[data-checked="true"],
-    .milxdy-app-hub-controls .milxdy-app-hub-switch[data-checked="true"] {
+    .milxdy-app-hub-controls .milxdy-app-hub-switch[data-checked="true"],
+    .milxdy-app-hub-generated-setting .milxdy-app-hub-switch[data-checked="true"] {
       border-color: var(--milxdy-hub-switch-on-border);
       background: var(--milxdy-hub-switch-on);
       color: var(--milxdy-hub-switch-on-text);

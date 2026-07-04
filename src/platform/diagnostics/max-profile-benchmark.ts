@@ -1,10 +1,10 @@
-import { hasExtensionRuntime, safeLocalGet, safeLocalSet } from "./extensionRuntime";
+import { hasExtensionRuntime, safeLocalGet, safeLocalSet } from "../background/extension-runtime";
 import {
   DEFAULT_RESKIN_PROFILE,
   RESKIN_PROFILE_KEY,
   normalizeReskinProfile,
   type ReskinProfile,
-} from "./reskinProfile";
+} from "../visuals/reskin-profile";
 
 const DIAGNOSTICS_ENABLED_KEY = "milxdy.diagnostics.enabled";
 const FEATURE_TIMINGS_KEY = "milxdy.diagnostics.featureTimings";
@@ -244,7 +244,7 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
 
 /**
  * Wire the content-script listener so the popup can start a run on the active tab.
- * Lives in the thin `src/content.ts` bootstrap (not contentRuntime.ts) to stay clear of
+ * Lives in the thin `src/extension/content/index.ts` bootstrap (not contentRuntime.ts) to stay clear of
  * the in-flight runtime rewrite.
  */
 export function setupMaxProfileBenchmark(): void {

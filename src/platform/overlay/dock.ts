@@ -1,4 +1,4 @@
-import { setOverlayAppStackOrder } from "./overlayAppLayout";
+import { setOverlayAppStackOrder } from "./app-layout";
 
 export type OverlayDockSide = "left" | "right";
 

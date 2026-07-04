@@ -1,0 +1,3163 @@
+[
+  {
+    "id": "rootVisuals",
+    "name": "Root Visual Enhancements",
+    "version": "0.1.5",
+    "description": "Adds lightweight X visual markers, notification state, sounds, and Tweet PNG actions.",
+    "packageKind": "feature",
+    "entryName": "features/rootVisuals",
+    "entryPoint": "src/apps/root-visuals/entry.ts",
+    "contentEntry": "features/rootVisuals.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.settings.reskinProfile",
+        "milxdy.settings.visualTheme"
+      ]
+    },
+    "settings": [
+      {
+        "id": "appearance.profile",
+        "label": "Appearance profile",
+        "description": "Global visual intensity for X/Twitter surfaces and supported milXdy UI.",
+        "scope": "global",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.reskinProfile"
+        },
+        "defaultValue": "moderate",
+        "control": {
+          "type": "segmented",
+          "options": [
+            {
+              "value": "min",
+              "label": "Minimal"
+            },
+            {
+              "value": "moderate",
+              "label": "Medium"
+            },
+            {
+              "value": "max",
+              "label": "Max"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "firstRun",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Applying a visual preset replaces the current appearance profile.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "appearance.appWindowStyle",
+        "label": "App chrome style",
+        "description": "Global app-window frame style used by supported docked app surfaces.",
+        "scope": "global",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "appWindowStyle"
+        },
+        "defaultValue": "reminet",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "native",
+              "label": "Use app defaults"
+            },
+            {
+              "value": "reminet",
+              "label": "RemiNet"
+            },
+            {
+              "value": "classic",
+              "label": "Classic"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "firstRun",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Applying a visual preset replaces the current app chrome style.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "appearance.appShadows",
+        "label": "App shadows",
+        "description": "Controls drop shadows on supported milXdy app windows.",
+        "scope": "global",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "appShadows"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "rootVisuals.tweetFont",
+        "label": "Post font",
+        "description": "Font family used for supported X/Twitter post text.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetFont"
+        },
+        "defaultValue": "twitter",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "twitter",
+              "label": "X default"
+            },
+            {
+              "value": "hei",
+              "label": "Hei"
+            },
+            {
+              "value": "mincho",
+              "label": "Mincho"
+            },
+            {
+              "value": "menlo",
+              "label": "Menlo"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "rootVisuals.pfpShape",
+        "label": "Profile picture shape",
+        "description": "Shape applied to supported profile pictures on X/Twitter surfaces.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "pfpShape"
+        },
+        "defaultValue": "rounded-square",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "circle",
+              "label": "Circle"
+            },
+            {
+              "value": "rounded-square",
+              "label": "Rounded square"
+            },
+            {
+              "value": "square",
+              "label": "Square"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "rootVisuals.squareMedia",
+        "label": "Square media",
+        "description": "Square off supported X/Twitter media previews.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "squareMedia"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "rootVisuals.notificationUnreadTint",
+        "label": "Notification unread tint",
+        "description": "Tint unread X/Twitter notifications when Root Visuals are active.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "notificationUnreadTint"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      }
+    ],
+    "surfaces": [
+      "tweet",
+      "notification"
+    ],
+    "deliverySurfaces": [
+      "notification"
+    ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet",
+          "notification"
+        ],
+        "notes": [
+          "Applies lightweight X/Twitter visual state and notification affordances through the shared scanner and route service."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "moderate",
+      "perSurface": "cheap",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "small"
+    },
+    "loadTriggers": [
+      "startup",
+      "surface",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native"
+      ],
+      "notes": [
+        "Page-level visual effects do not render an app window chrome."
+      ]
+    },
+    "hub": {
+      "category": "appearance",
+      "shortDescription": "Core X visual polish, notification state, sounds, and invoked Tweet PNG affordances.",
+      "rail": {
+        "supported": false,
+        "defaultPinned": false
+      },
+      "presets": [
+        "lite",
+        "balanced",
+        "full"
+      ],
+      "dataNotes": [
+        "Reads current X page surfaces only."
+      ],
+      "localStorageNotes": [
+        "Uses appearance profile and visual theme settings."
+      ],
+      "privacyLabels": [
+        "local-only"
+      ]
+    }
+  },
+  {
+    "id": "tweetPng",
+    "name": "Tweet PNG",
+    "version": "0.1.5",
+    "description": "Renders local PNG exports from X share actions when invoked by the user.",
+    "packageKind": "feature",
+    "entryName": "features/tweetPng",
+    "entryPoint": "src/apps/tweet-png/entry.ts",
+    "contentEntry": "features/tweetPng.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.settings.reskinProfile",
+        "milxdy.settings.visualTheme"
+      ]
+    },
+    "settings": [
+      {
+        "id": "tweetPng.includeImages",
+        "label": "Include post images",
+        "description": "Include post media in reviewed Tweet PNG exports.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeImages"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeQuoteText",
+        "label": "Include quote text",
+        "description": "Include quoted post text when a Tweet PNG export contains a quote.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeQuoteText"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeQuoteImages",
+        "label": "Include quote images",
+        "description": "Include quoted post media when a Tweet PNG export contains a quote.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeQuoteImages"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeDate",
+        "label": "Include date",
+        "description": "Show the visible post date in Tweet PNG exports.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeDate"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeStats",
+        "label": "Include stats",
+        "description": "Show visible reply, repost, like, and view counts in Tweet PNG exports.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeStats"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.border",
+        "label": "Export border",
+        "description": "Draw the configured visual border around Tweet PNG exports.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngBorder"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.borderPalette",
+        "label": "Border palette",
+        "description": "Palette used for Tweet PNG export borders.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngBorderPalette"
+        },
+        "defaultValue": "purple",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "purple",
+              "label": "Purple"
+            },
+            {
+              "value": "gray",
+              "label": "Gray"
+            },
+            {
+              "value": "blue",
+              "label": "Blue"
+            },
+            {
+              "value": "green",
+              "label": "Green"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [],
+    "lifecycle": {
+      "mode": "invoked",
+      "invokedBy": "userAction",
+      "ownerAppId": "rootVisuals",
+      "reason": "userAction:tweetPngShare",
+      "localOnly": true,
+      "notes": [
+        "Loaded by Root Visuals only after a user chooses the X share-menu Tweet PNG action."
+      ]
+    },
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet"
+        ],
+        "presentation": "userAction",
+        "notes": [
+          "Uses the selected X tweet element supplied by the user-initiated share menu; it is not scanner-delivered or preloaded."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "moderate",
+      "perSurface": "cheap",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "userAction"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native"
+      ],
+      "notes": [
+        "Invoked export UI should use its authored preview/export chrome."
+      ]
+    },
+    "hub": {
+      "category": "media",
+      "shortDescription": "Export a reviewed local PNG from a post share action.",
+      "rail": {
+        "supported": false,
+        "defaultPinned": false
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "dataNotes": [
+        "Renders selected post content locally after user action."
+      ],
+      "localStorageNotes": [
+        "Uses appearance settings for export styling."
+      ],
+      "privacyLabels": [
+        "local-only"
+      ]
+    }
+  },
+  {
+    "id": "wiki",
+    "name": "Remilia Wiki Hyperlinks",
+    "version": "0.1.5",
+    "description": "Links Remilia ecosystem terms on X to local wiki previews.",
+    "packageKind": "feature",
+    "entryName": "features/wiki",
+    "entryPoint": "src/apps/wiki-links/entry.ts",
+    "contentEntry": "features/wiki.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "remiliaWikiHyperlink.settings",
+        "remiliaWikiHyperlink.localAliases",
+        "remiliaWikiHyperlink.denyTerms"
+      ]
+    },
+    "settings": [
+      {
+        "id": "wiki.enabled",
+        "label": "Wiki links",
+        "description": "Link known Remilia terms on visible X/Twitter surfaces.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "wiki.previewsEnabled",
+        "label": "Wiki previews",
+        "description": "Show local preview cards for linked wiki terms.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "previewsEnabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "wiki.linkColor",
+        "label": "Wiki link color",
+        "description": "Accent color for inline Remilia Wiki links.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "linkColor"
+        },
+        "defaultValue": "#ff4fbf",
+        "control": {
+          "type": "text",
+          "placeholder": "#ff4fbf"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "wiki.maxLinksPerPostEnabled",
+        "label": "Limit links per post",
+        "description": "Cap the number of inline wiki links added to each post.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "maxLinksPerPostEnabled"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "wiki.maxLinksPerPost",
+        "label": "Maximum links",
+        "description": "Maximum number of inline wiki links added to each post when limits are enabled.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "maxLinksPerPost"
+        },
+        "defaultValue": 4,
+        "control": {
+          "type": "number",
+          "min": 1,
+          "max": 12,
+          "step": 1
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ],
+        "requires": [
+          "wiki.maxLinksPerPostEnabled"
+        ]
+      },
+      {
+        "id": "wiki.grokWorkflowMode",
+        "label": "Draft workflow",
+        "description": "Preferred Remilia Wiki drafting workflow prompt mode.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "grokWorkflowMode"
+        },
+        "defaultValue": "one-shot",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "one-shot",
+              "label": "One-shot"
+            },
+            {
+              "value": "socratic",
+              "label": "Socratic"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "wiki.debugMode",
+        "label": "Wiki debug mode",
+        "description": "Show developer diagnostics for wiki link matching.",
+        "scope": "feature",
+        "location": "advanced",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "debugMode"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "advanced": true
+      }
+    ],
+    "surfaces": [
+      "tweet",
+      "userCell",
+      "profile"
+    ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet",
+          "userCell",
+          "profile"
+        ],
+        "notes": [
+          "Scans visible X/Twitter text surfaces and opens Remilia Wiki links or previews through validated wiki URLs."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "moderate",
+      "perSurface": "moderate",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "moderate"
+    },
+    "loadTriggers": [
+      "surface",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native"
+      ],
+      "notes": [
+        "Inline link and preview surfaces inherit page and wiki-link styling."
+      ]
+    },
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Link Remilia ecosystem terms on X to local wiki previews.",
+      "rail": {
+        "supported": false,
+        "defaultPinned": false
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "dataNotes": [
+        "Scans visible post text for local term matches."
+      ],
+      "localStorageNotes": [
+        "Stores wiki hyperlink settings, aliases, and deny terms."
+      ],
+      "privacyLabels": [
+        "local-only"
+      ]
+    },
+    "background": {
+      "messageTypes": [
+        "wiki:fetchImageDataUrl"
+      ]
+    }
+  },
+  {
+    "id": "wikiSidebar",
+    "name": "Remilia Wiki",
+    "version": "0.2.0",
+    "description": "Opens Remilia Wiki pages in a docked sidebar surface.",
+    "packageKind": "app",
+    "entryName": "features/wikiSidebar",
+    "entryPoint": "src/apps/wiki-sidebar/entry.ts",
+    "contentEntry": "features/wikiSidebar.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "remiliaWikiHyperlink.settings",
+        "milxdy.wikiSidebar.lastUrl"
+      ]
+    },
+    "settings": [
+      {
+        "id": "wikiSidebar.enabled",
+        "label": "Wiki sidebar",
+        "description": "Show Remilia Wiki in the shared side rail.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "remiliaWikiHyperlink.settings",
+          "property": "sidebarEnabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [
+      "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "remiliaWiki",
+        "hosts": [
+          "https://remilia.wiki/*",
+          "https://wiki.remilia.org/*"
+        ],
+        "integration": "embeddedFrame",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "hostRouteOverlay",
+        "notes": [
+          "The X side-rail app embeds validated Remilia Wiki pages and uses the separate wiki frame script; it is not a general Remilia Wiki app runtime yet."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "cheap",
+      "perSurface": "cheap",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "small"
+    },
+    "loadTriggers": [
+      "dockOpen",
+      "userAction"
+    ],
+    "chrome": {
+      "nativeStyle": "wiki",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "wiki"
+      ],
+      "notes": [
+        "The sidebar maps shared overlay variables onto the wiki reader shell."
+      ]
+    },
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Open Remilia Wiki from the shared side rail and route wiki links into a docked panel.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "permissionNotes": [
+        "Displays pages from wiki.remilia.org and remilia.wiki when opened by the user."
+      ],
+      "dataNotes": [
+        "Navigates only to validated Remilia Wiki URLs."
+      ],
+      "remoteServices": [
+        "remilia.wiki",
+        "wiki.remilia.org"
+      ],
+      "localStorageNotes": [
+        "Stores sidebar placement and the most recent wiki URL."
+      ],
+      "privacyLabels": [
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Remilia Wiki",
+      "icon": "wikiSidebar/remilia-wiki-favicon.png",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "wikiSidebar:*"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*"
+      ]
+    },
+    "assets": [
+      "wikiSidebar"
+    ]
+  },
+  {
+    "id": "post-reading",
+    "name": "Post-reading",
+    "version": "0.1.5",
+    "description": "Reads posts aloud and adds a docked playback surface.",
+    "packageKind": "app",
+    "entryName": "features/post-reading",
+    "entryPoint": "src/apps/post-reading/entry.ts",
+    "contentEntry": "features/post-reading.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "sync": [
+        "enabled",
+        "speed",
+        "volume",
+        "voiceURI",
+        "voiceLanguageFilter",
+        "voiceGenderFilter",
+        "autoVoice",
+        "ttsEngine",
+        "customTtsEndpoint",
+        "customTtsTimingMode",
+        "autoplayNext",
+        "autoplayMode",
+        "skipPromotedPosts",
+        "endOfTweetDing",
+        "includeQuotes",
+        "fetchFullQuotes",
+        "fullQuoteDisplay",
+        "includeHyperlinks",
+        "includeImageAltText",
+        "includeImageOcr",
+        "includeLinkPreviews",
+        "expandShowMore",
+        "wikiAutoScroll",
+        "activeTweetHighlight",
+        "bodyHighlightMode",
+        "playerPosition",
+        "buttonPlacement",
+        "useHandles",
+        "keyNextTweet",
+        "keyPreviousTweet",
+        "keyNextChunk",
+        "keyPreviousChunk",
+        "keySkipOcr",
+        "keyPlayPause"
+      ]
+    },
+    "settings": [
+      {
+        "id": "post-reading.enabled",
+        "label": "Post-reading",
+        "description": "Show read-aloud controls on supported posts and articles.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "sync",
+          "key": "enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.speed",
+        "label": "Reading speed",
+        "description": "Default speech rate for read-aloud playback.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "speed"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0.5,
+          "max": 2,
+          "step": 0.05
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Applying an audio preset can replace reading speed, voice, and playback settings.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "post-reading.volume",
+        "label": "Reading volume",
+        "description": "Default speech volume for read-aloud playback.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "volume"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "post-reading.voiceURI",
+        "label": "Reading voice",
+        "description": "Preferred browser speech voice for local read-aloud playback.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "voiceURI"
+        },
+        "defaultValue": null,
+        "control": {
+          "type": "select",
+          "dynamicOptions": {
+            "provider": "webSpeechVoices",
+            "valueField": "voiceURI",
+            "labelField": "name",
+            "descriptionField": "lang",
+            "refreshEvent": "voiceschanged",
+            "portability": "browserProfile"
+          }
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Voice choices come from the current browser or operating system and may fall back when a profile pack is used elsewhere.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "post-reading.autoVoice",
+        "label": "Auto voice",
+        "description": "Automatically choose a compatible voice when the preferred voice is unavailable.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "autoVoice"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.ttsEngine",
+        "label": "TTS engine",
+        "description": "Speech engine used for local read-aloud playback.",
+        "scope": "app",
+        "location": "advanced",
+        "storage": {
+          "area": "sync",
+          "key": "ttsEngine"
+        },
+        "defaultValue": "web-speech",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "web-speech",
+              "label": "Web Speech"
+            },
+            {
+              "value": "custom-http",
+              "label": "Custom endpoint"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ],
+        "advanced": true
+      },
+      {
+        "id": "post-reading.customTtsEndpoint",
+        "label": "Custom TTS endpoint",
+        "description": "Advanced endpoint used only when the custom TTS engine is selected.",
+        "scope": "app",
+        "location": "advanced",
+        "storage": {
+          "area": "sync",
+          "key": "customTtsEndpoint"
+        },
+        "defaultValue": null,
+        "control": {
+          "type": "text",
+          "placeholder": "https://..."
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "advanced": true,
+        "requires": [
+          "post-reading.ttsEngine:custom-http"
+        ]
+      },
+      {
+        "id": "post-reading.autoplayNext",
+        "label": "Autoplay next post",
+        "description": "Continue to the next eligible post after playback finishes.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "autoplayNext"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.endOfTweetDing",
+        "label": "Completion ding",
+        "description": "Play a short sound when a post finishes reading.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "endOfTweetDing"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.includeImageOcr",
+        "label": "Read image text",
+        "description": "Use packaged local OCR assets to include visible image text when requested.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "includeImageOcr"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.includeLinkPreviews",
+        "label": "Read link previews",
+        "description": "Include visible link preview text in read-aloud content.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "includeLinkPreviews"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "post-reading.playerPosition",
+        "label": "Player position",
+        "description": "Default location for the compact read-aloud player.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "playerPosition"
+        },
+        "defaultValue": "top-right",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "top-right",
+              "label": "Top right"
+            },
+            {
+              "value": "bottom-right",
+              "label": "Bottom right"
+            },
+            {
+              "value": "top-left",
+              "label": "Top left"
+            },
+            {
+              "value": "bottom-left",
+              "label": "Bottom left"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [
+      "tweet",
+      "xArticle",
+      "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet",
+          "xArticle",
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Adds read-aloud controls to X/Twitter post and article surfaces while keeping the player in the shared overlay rail."
+        ]
+      },
+      {
+        "site": "remiliaWiki",
+        "hosts": [
+          "https://remilia.wiki/*",
+          "https://wiki.remilia.org/*"
+        ],
+        "integration": "embeddedFrame",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "notes": [
+          "Can read validated wiki-frame article text sent from the Wiki sidebar frame; it does not load the full app runtime directly on the wiki host."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "moderate",
+      "perSurface": "cheap",
+      "network": "batched",
+      "worker": "optional",
+      "domWrite": "small"
+    },
+    "loadTriggers": [
+      "surface",
+      "dockOpen"
+    ],
+    "chrome": {
+      "nativeStyle": "reader",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "reader"
+      ],
+      "notes": [
+        "The player maps Post-reading variables onto the shared overlay shell."
+      ]
+    },
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Read posts aloud from a docked playback surface.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "lite",
+        "balanced",
+        "full"
+      ],
+      "permissionNotes": [
+        "OCR uses packaged local worker assets when image text is requested.",
+        "Full-quote fetching uses public X/Twitter embed, syndication, or tweet HTML fallbacks without browser cookies or session tokens."
+      ],
+      "dataNotes": [
+        "Reads selected post text, quote text, and optional image text.",
+        "Full-quote fetching may request public X/Twitter tweet context from publish.twitter.com, cdn.syndication.twimg.com, x.com, or twitter.com without active browser-session material."
+      ],
+      "remoteServices": [
+        "x.com",
+        "twitter.com",
+        "pbs.twimg.com",
+        "publish.twitter.com",
+        "cdn.syndication.twimg.com"
+      ],
+      "localStorageNotes": [
+        "Stores playback, voice, and reader settings."
+      ],
+      "privacyLabels": [
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Post-reading",
+      "icon": {
+        "light": "post-reading/post-reading-logo.png",
+        "dark": "post-reading/post-reading-logo-outline.png"
+      },
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "post-reading:*"
+      ],
+      "services": [
+        "ocr",
+        "tts"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://pbs.twimg.com/*",
+        "https://publish.twitter.com/*",
+        "https://cdn.syndication.twimg.com/*"
+      ]
+    },
+    "assets": [
+      "ocr",
+      "post-reading"
+    ],
+    "requiredOutputs": [
+      "ocr.html",
+      "ocrHost.js"
+    ]
+  },
+  {
+    "id": "remistats",
+    "name": "RemiStats",
+    "version": "0.1.5",
+    "description": "Adds RemiStats profile and user metrics to X surfaces.",
+    "packageKind": "feature",
+    "entryName": "features/remistats",
+    "entryPoint": "src/apps/remistats/entry.ts",
+    "contentEntry": "features/remistats.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "sync": [
+        "milxdy.remistats.enabled",
+        "showTooltips",
+        "milxdy.remistats.icons.enabled",
+        "milxdy.remistats.icons.score",
+        "milxdy.remistats.icons.beetle",
+        "milxdy.remistats.icons.poke",
+        "milxdy.remistats.likeAutoPoke",
+        "milxdy.remistats.pokeAutoLike",
+        "soundsEnabled",
+        "soundVolume"
+      ],
+      "local": [
+        "milxdy.settings.visualTheme",
+        "milxdy.remistats.pokeCooldowns",
+        "milxdy.remistats.incomingPokeCache"
+      ]
+    },
+    "settings": [
+      {
+        "id": "remistats.enabled",
+        "label": "RemiStats badges",
+        "description": "Show RemiStats profile, post, and poke context on X.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "remistats.likeAutoPoke",
+        "label": "Like auto-poke",
+        "description": "Offer automatic poke behavior after eligible like actions.",
+        "scope": "feature",
+        "location": "advanced",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.likeAutoPoke"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ],
+        "advanced": true
+      },
+      {
+        "id": "remistats.showTooltips",
+        "label": "RemiStats tooltips",
+        "description": "Show explanatory tooltips for RemiStats profile and post metrics.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "showTooltips"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "remistats.icons.enabled",
+        "label": "Metric icons",
+        "description": "Show RemiStats metric icons on supported X surfaces.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.icons.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "pokes.autoLike",
+        "label": "Auto-like pokes",
+        "description": "Offer automatic like behavior for eligible incoming poke actions.",
+        "scope": "feature",
+        "location": "advanced",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.pokeAutoLike"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "advanced": true
+      },
+      {
+        "id": "remistats.sounds.enabled",
+        "label": "RemiStats sounds",
+        "description": "Audio feedback for RemiStats and poke events.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "soundsEnabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "remistats.sounds.volume",
+        "label": "RemiStats sound volume",
+        "description": "Volume for RemiStats and poke audio feedback.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "soundVolume"
+        },
+        "defaultValue": 0.6,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "remistats.visualBox",
+        "label": "RemiStats backing boxes",
+        "description": "Show visual backing boxes behind RemiStats badges.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "remistatsBox"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "pokes.incomingGold",
+        "label": "Gold poke alerts",
+        "description": "Use the gold visual treatment for recent incoming poke hints.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "incomingPokeGold"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "pokes.placement",
+        "label": "Poke button placement",
+        "description": "Where poke actions appear on supported X/Twitter posts.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "pokePlacement"
+        },
+        "defaultValue": "actions",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "actions",
+              "label": "Action row"
+            },
+            {
+              "value": "top",
+              "label": "Top"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [
+      "tweet",
+      "userCell",
+      "directMessage",
+      "profile",
+      "route"
+    ],
+    "lifecycle": {
+      "mode": "runtime"
+    },
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet",
+          "userCell",
+          "directMessage",
+          "profile",
+          "route"
+        ],
+        "presentation": "hostRouteOverlay",
+        "routes": [
+          {
+            "type": "exact",
+            "path": "/messages",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/messages/",
+            "surface": "directMessage"
+          },
+          {
+            "type": "exact",
+            "path": "/i/chat",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/i/chat/",
+            "surface": "directMessage"
+          }
+        ],
+        "notes": [
+          "Adds RemiStats badges and group-chat avatar support on X/Twitter timeline, profile, and Messages surfaces."
+        ]
+      },
+      {
+        "site": "remiliaNet",
+        "hosts": [
+          "https://www.remilia.net/*"
+        ],
+        "integration": "backgroundService",
+        "surfaces": [
+          "directMessage"
+        ],
+        "notes": [
+          "Uses routed RemiliaNET and RemiStats service calls for profile, poke, and trophy data; it does not inject into RemiliaNET pages."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "moderate",
+      "perSurface": "moderate",
+      "network": "batched",
+      "worker": "none",
+      "domWrite": "moderate"
+    },
+    "loadTriggers": [
+      "surface",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native"
+      ],
+      "notes": [
+        "Inline badges and tooltips do not render a docked app frame."
+      ]
+    },
+    "hub": {
+      "category": "social",
+      "shortDescription": "Show RemiStats profile, post, and poke context on X.",
+      "rail": {
+        "supported": false,
+        "defaultPinned": false
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "permissionNotes": [
+        "Fetches RemiStats and RemiliaNET profile data for visible handles, Remilia profile images for tooltips, and Milady Maker banner images for profile banners."
+      ],
+      "dataNotes": [
+        "Sends X handles to the RemiStats API when badge data is needed, may resolve verified PFP owners through Ethereum RPC, loads Remilia profile images from pfp.remilia.net, and background-proxies Milady Maker NFT banner images without account credentials or cookies."
+      ],
+      "remoteServices": [
+        "api.remistats.net",
+        "pfp.remilia.net",
+        "miladymaker.net",
+        "www.remilia.net",
+        "ethereum.publicnode.com"
+      ],
+      "localStorageNotes": [
+        "Stores badge, poke cooldown, and theme state."
+      ],
+      "privacyLabels": [
+        "remote-api"
+      ]
+    },
+    "background": {
+      "messageTypes": [
+        "remistats:getUser",
+        "reminetIdentity:getProfile",
+        "beetol:poke",
+        "beetol:incomingPokes",
+        "milxdy:fetchImageDataUrl"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://api.remistats.net/*",
+        "https://pfp.remilia.net/*",
+        "https://miladymaker.net/banners/nft/*",
+        "https://www.remilia.net/*",
+        "https://ethereum.publicnode.com/*"
+      ]
+    },
+    "css": [
+      {
+        "id": "milxdy-remistats-styles",
+        "path": "remistats/remistats.css",
+        "source": "src/apps/remistats/remistats.css",
+        "targetDir": "remistats",
+        "target": "remistats.css"
+      }
+    ],
+    "assets": [
+      "remistats"
+    ]
+  },
+  {
+    "id": "miladymaxxer",
+    "name": "Milady Maxxer",
+    "version": "0.1.5",
+    "description": "Applies Max mode styling and optional Milady image detection.",
+    "packageKind": "app",
+    "entryName": "features/miladymaxxer",
+    "entryPoint": "src/apps/milady-maxxer/entry.ts",
+    "contentEntry": "features/miladymaxxer.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "sync": [
+        "mode",
+        "soundEnabled",
+        "showLevelBadge",
+        "includeRemiStatsBeetles",
+        "hideNonMiladyOrBeetlePosts",
+        "cardTheme",
+        "whitelistHandles",
+        "miladyListHandles"
+      ],
+      "local": [
+        "milxdy.settings.reskinProfile",
+        "milxdy.settings.visualTheme"
+      ]
+    },
+    "settings": [
+      {
+        "id": "miladymaxxer.mode",
+        "label": "Max mode",
+        "description": "Legacy Maxxer mode key used for on/off behavior as well as Max mode intensity.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "sync",
+          "key": "mode"
+        },
+        "defaultValue": "milady",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "off",
+              "label": "Off"
+            },
+            {
+              "value": "milady",
+              "label": "Milady"
+            },
+            {
+              "value": "max",
+              "label": "Max"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "firstRun",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Applying a visual preset can change Max mode.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "miladymaxxer.soundEnabled",
+        "label": "Maxxer sounds",
+        "description": "Audio feedback for Maxxer matching and collection events.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "soundEnabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "miladymaxxer.showLevelBadge",
+        "label": "Level badges",
+        "description": "Show local Maxxer level badges on matched accounts.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "showLevelBadge"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "miladymaxxer.includeRemiStatsBeetles",
+        "label": "Include RemiStats beetles",
+        "description": "Treat RemiStats beetle context as eligible Maxxer context.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "includeRemiStatsBeetles"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "miladymaxxer.hideNonMiladyOrBeetlePosts",
+        "label": "Hide non-matches",
+        "description": "Minimize posts that are not recognized as Milady or beetle context.",
+        "scope": "app",
+        "location": "advanced",
+        "storage": {
+          "area": "sync",
+          "key": "hideNonMiladyOrBeetlePosts"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "advanced": true
+      },
+      {
+        "id": "miladymaxxer.cardTheme",
+        "label": "Card detail",
+        "description": "Amount of local Maxxer card detail shown in the app surface.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "cardTheme"
+        },
+        "defaultValue": "full",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "compact",
+              "label": "Compact"
+            },
+            {
+              "value": "full",
+              "label": "Full"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "miladymaxxer.disableMaxxer",
+        "label": "Disable Maxxer visuals",
+        "description": "Turn off Maxxer visual treatment while preserving stored Maxxer state.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "disableMaxxer"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "firstRun",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "overwriteWarning": "Applying a visual preset can change whether Maxxer visuals are active.",
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "miladymaxxer.intensity",
+        "label": "Maxxer intensity",
+        "description": "Visual intensity for Maxxer treatment on matched surfaces.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "maxxerIntensity"
+        },
+        "defaultValue": "marked",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "subtle",
+              "label": "Subtle"
+            },
+            {
+              "value": "marked",
+              "label": "Marked"
+            },
+            {
+              "value": "card",
+              "label": "Card"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "miladymaxxer.shimmer",
+        "label": "Maxxer shimmer",
+        "description": "Show shimmer treatment on eligible Maxxer surfaces.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "maxxerShimmer"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      }
+    ],
+    "surfaces": [
+      "tweet",
+      "userCell",
+      "notification",
+      "directMessage",
+      "profile",
+      "route",
+      "overlayApp"
+    ],
+    "lifecycle": {
+      "mode": "runtime"
+    },
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet",
+          "userCell",
+          "notification",
+          "directMessage",
+          "profile",
+          "route",
+          "overlayApp"
+        ],
+        "presentation": "hostRouteOverlay",
+        "routes": [
+          {
+            "type": "exact",
+            "path": "/messages",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/messages/",
+            "surface": "directMessage"
+          },
+          {
+            "type": "exact",
+            "path": "/i/chat",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/i/chat/",
+            "surface": "directMessage"
+          }
+        ],
+        "notes": [
+          "Processes X timeline, profile, notification, and direct-message surfaces for Maxxer matching; RemiliaNET lookups stay background-routed services, not RemiliaNET page injection."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "heavy",
+      "perSurface": "heavy",
+      "network": "batched",
+      "worker": "heavy",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "surface",
+      "dockOpen",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "maxxer",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "maxxer"
+      ],
+      "notes": [
+        "The Maxxer panel keeps its authored native panel style unless a shared chrome preset is selected."
+      ]
+    },
+    "hub": {
+      "category": "appearance",
+      "shortDescription": "Apply Max mode styling, collection detection, and the Maxxer side panel.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "full"
+      ],
+      "permissionNotes": [
+        "Runs packaged ONNX model assets for optional image detection."
+      ],
+      "dataNotes": [
+        "Processes visible profile/avatar/media images locally and may check cached Remilia identity, RemiStats beetle, and verified PFP owner context."
+      ],
+      "remoteServices": [
+        "api.remistats.net",
+        "pfp.remilia.net",
+        "www.remilia.net",
+        "ethereum.publicnode.com"
+      ],
+      "localStorageNotes": [
+        "Stores matched accounts, collected avatars, local player stats, and settings."
+      ],
+      "privacyLabels": [
+        "local-only",
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Maxxer",
+      "icon": "miladymaxxer/milady-logo.png",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "milady:*",
+        "reminetIdentity:getProfile"
+      ],
+      "services": [
+        "onnx"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://api.remistats.net/*",
+        "https://pfp.remilia.net/*",
+        "https://www.remilia.net/*",
+        "https://ethereum.publicnode.com/*"
+      ]
+    },
+    "assets": [
+      "miladymaxxer",
+      "models",
+      "generated",
+      "ort"
+    ],
+    "requiredOutputs": [
+      "worker.js"
+    ]
+  },
+  {
+    "id": "beetol",
+    "name": "Beetol",
+    "version": "0.1.5",
+    "description": "Adds the Beetol RemiStats game overlay.",
+    "packageKind": "app",
+    "entryName": "features/beetol",
+    "entryPoint": "src/apps/beetol/entry.ts",
+    "contentEntry": "features/beetol.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.remistats.beetol.enabled",
+        "milxdy.bextol.enabled",
+        "beetolColor",
+        "beetolMode"
+      ]
+    },
+    "settings": [
+      {
+        "id": "beetol.enabled",
+        "label": "Beetol",
+        "description": "Show the Beetol game in the shared side rail.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.remistats.beetol.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "beetol.color",
+        "label": "Beetol color",
+        "description": "Accent color for Beetol controls and app state.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "beetolColor"
+        },
+        "defaultValue": "red",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "red",
+              "label": "Red"
+            },
+            {
+              "value": "gold",
+              "label": "Gold"
+            },
+            {
+              "value": "green",
+              "label": "Green"
+            },
+            {
+              "value": "blue",
+              "label": "Blue"
+            },
+            {
+              "value": "purple",
+              "label": "Purple"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreAppDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      },
+      {
+        "id": "beetol.mode",
+        "label": "Beetol panel theme",
+        "description": "Default Beetol panel theme for the app surface.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "beetolMode"
+        },
+        "defaultValue": "settings",
+        "control": {
+          "type": "select",
+          "options": [
+            {
+              "value": "settings",
+              "label": "Settings"
+            },
+            {
+              "value": "dark",
+              "label": "Dark"
+            },
+            {
+              "value": "light",
+              "label": "Light"
+            }
+          ]
+        },
+        "reset": {
+          "behavior": "restoreAppDefault"
+        },
+        "presets": [
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
+      }
+    ],
+    "surfaces": [
+      "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "remiliaNet",
+        "hosts": [
+          "https://www.remilia.net/*"
+        ],
+        "integration": "backgroundService",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Uses the browser RemiliaNET session through routed background services after user interaction; no RemiliaNET content-script runtime loads today."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "heavy",
+      "perSurface": "moderate",
+      "network": "batched",
+      "worker": "none",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "dockOpen",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native",
+        "classic"
+      ],
+      "notes": [
+        "Beetol has its own color and light/dark mode controls; shared classic support should preserve those accents."
+      ]
+    },
+    "hub": {
+      "category": "game",
+      "shortDescription": "Play the Beetol RemiStats game from the shared side rail.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "full"
+      ],
+      "permissionNotes": [
+        "Uses the browser RemiliaNET session for authenticated game actions."
+      ],
+      "dataNotes": [
+        "Sends Beetol action requests to RemiliaNET after user interaction."
+      ],
+      "remoteServices": [
+        "www.remilia.net"
+      ],
+      "localStorageNotes": [
+        "Stores Beetol enablement, mode, color, and cooldown state."
+      ],
+      "privacyLabels": [
+        "browser-session",
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Beetol",
+      "icon": "beetol/icons/hunt-beetle.png",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "beetol:*"
+      ],
+      "services": [
+        "remiliaAuth"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://www.remilia.net/*"
+      ]
+    },
+    "css": [
+      {
+        "id": "milxdy-beetol-styles",
+        "path": "beetol/content.css",
+        "source": "src/apps/beetol/content.css",
+        "targetDir": "beetol",
+        "target": "content.css"
+      }
+    ],
+    "assets": [
+      "beetol"
+    ]
+  },
+  {
+    "id": "reminetChat",
+    "name": "RemiNet Chat",
+    "version": "0.1.5",
+    "description": "Provides a docked RemiliaNET chat client and X messages integration.",
+    "packageKind": "app",
+    "entryName": "features/reminetChat",
+    "entryPoint": "src/apps/reminet-chat/entry.ts",
+    "contentEntry": "features/reminetChat.js",
+    "defaultEnabled": false,
+    "storageKeys": {
+      "local": [
+        "milxdy.reminetChat.enabled",
+        "milxdy.settings.theme",
+        "milxdy.reminetChat.width",
+        "milxdy.reminetChat.height",
+        "milxdy.reminetChat.top",
+        "milxdy.reminetChat.profileCache.v3"
+      ],
+      "sync": [
+        "milxdy.reminetChat.sounds.enabled",
+        "milxdy.reminetChat.sounds.volume",
+        "milxdy.reminetChat.sounds.send",
+        "milxdy.reminetChat.sounds.react",
+        "milxdy.reminetChat.sounds.reactToMe",
+        "milxdy.reminetChat.sounds.message",
+        "milxdy.reminetChat.sounds.poke"
+      ]
+    },
+    "settings": [
+      {
+        "id": "reminetChat.enabled",
+        "label": "RemiNet Chat",
+        "description": "Use RemiliaNET chat from the shared side rail and X messages routes.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.reminetChat.enabled"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.enabled",
+        "label": "Chat sounds",
+        "description": "Audio feedback for RemiNet Chat events.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.volume",
+        "label": "Chat sound volume",
+        "description": "Volume for RemiNet Chat audio feedback.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.volume"
+        },
+        "defaultValue": 0.55,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.send",
+        "label": "Sent-message sounds",
+        "description": "Play audio feedback for sent chat messages.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.send"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.message",
+        "label": "Incoming-message sounds",
+        "description": "Play audio feedback for incoming chat messages.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.message"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [
+      "directMessage",
+      "route",
+      "overlayApp"
+    ],
+    "lifecycle": {
+      "mode": "runtime"
+    },
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "directMessage",
+          "route",
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "routes": [
+          {
+            "type": "exact",
+            "path": "/messages",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/messages/",
+            "surface": "directMessage"
+          },
+          {
+            "type": "exact",
+            "path": "/i/chat",
+            "surface": "directMessage"
+          },
+          {
+            "type": "prefix",
+            "path": "/i/chat/",
+            "surface": "directMessage"
+          }
+        ],
+        "notes": [
+          "Mounts the shared RemiNet Chat overlay into X Messages routes while preserving the side-rail app surface."
+        ]
+      },
+      {
+        "site": "remiliaNet",
+        "hosts": [
+          "https://www.remilia.net/*",
+          "wss://www.remilia.net/*"
+        ],
+        "integration": "backgroundService",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Uses RemiliaNET HTTP and WebSocket services through background routing and the browser session; it does not inject the app runtime into RemiliaNET pages yet."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "heavy",
+      "perSurface": "moderate",
+      "network": "eager",
+      "worker": "none",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "dockOpen",
+      "surface"
+    ],
+    "chrome": {
+      "nativeStyle": "reminet",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic"
+      ],
+      "notes": [
+        "RemiNet Chat is the reference RemiNet chrome surface."
+      ]
+    },
+    "hub": {
+      "category": "social",
+      "shortDescription": "Use RemiliaNET chat from the side rail and X messages routes.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "permissionNotes": [
+        "Uses the browser RemiliaNET session and a background WebSocket port."
+      ],
+      "dataNotes": [
+        "Sends chat reads, sends, reactions, RemiliaNET media fetches, pfp.remilia.net avatar fetches, and profile lookups to RemiliaNET."
+      ],
+      "remoteServices": [
+        "www.remilia.net",
+        "pfp.remilia.net"
+      ],
+      "localStorageNotes": [
+        "Stores chat enablement, profile cache, layout, and sound settings."
+      ],
+      "privacyLabels": [
+        "browser-session",
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "RemiNet Chat",
+      "icon": "remistats/star.svg",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "reminetChat:*",
+        "beetol:poke",
+        "remistats:getUser"
+      ],
+      "services": [
+        "remiliaAuth"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://www.remilia.net/*",
+        "https://pfp.remilia.net/*"
+      ]
+    },
+    "css": [
+      {
+        "id": "milxdy-reminet-chat-styles",
+        "path": "reminetChat/content.css",
+        "source": "src/apps/reminet-chat/content.css",
+        "targetDir": "reminetChat",
+        "target": "content.css"
+      }
+    ],
+    "assets": [
+      "reminetChat"
+    ]
+  },
+  {
+    "id": "miladychanSpotlight",
+    "name": "Miladychan Portal",
+    "version": "0.2.0",
+    "description": "Browses public Miladychan boards and threads from the shared side rail.",
+    "packageKind": "app",
+    "entryName": "features/miladychanSpotlight",
+    "entryPoint": "src/apps/miladychan-portal/entry.ts",
+    "contentEntry": "features/miladychanSpotlight.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.miladychan.enabled",
+        "milxdy.settings.theme",
+        "milxdy.miladychan.width",
+        "milxdy.miladychan.height",
+        "milxdy.miladychan.top"
+      ]
+    },
+    "settings": [
+      {
+        "id": "miladychan.enabled",
+        "label": "Miladychan Portal",
+        "description": "Show the Miladychan board browser in the shared side rail.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.miladychan.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [
+      "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "miladychan",
+        "hosts": [
+          "https://boards.miladychan.org/*"
+        ],
+        "integration": "backgroundService",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Fetches public Miladychan board and thread JSON through a routed background service for the X side-rail portal; no Miladychan content-script runtime loads today."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "heavy",
+      "perSurface": "cheap",
+      "network": "batched",
+      "worker": "none",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "dockOpen",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "miladychan",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "miladychan"
+      ],
+      "notes": [
+        "The portal keeps board-browser affordances while mapping shell colors to shared chrome variables."
+      ]
+    },
+    "hub": {
+      "category": "social",
+      "shortDescription": "Browse public Miladychan boards and threads from the shared side rail.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "full"
+      ],
+      "permissionNotes": [
+        "Fetches public board and thread JSON when opened."
+      ],
+      "dataNotes": [
+        "Requests selected board and thread data from Miladychan."
+      ],
+      "remoteServices": [
+        "boards.miladychan.org"
+      ],
+      "localStorageNotes": [
+        "Stores panel layout and theme settings."
+      ],
+      "privacyLabels": [
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Miladychan",
+      "icon": "miladychanSpotlight/notification-icon.png",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "miladychan:fetchJson"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://boards.miladychan.org/*"
+      ]
+    },
+    "css": [
+      {
+        "id": "milxdy-miladychan-spotlight-styles",
+        "path": "miladychanSpotlight/content.css",
+        "source": "src/apps/miladychan-portal/content.css",
+        "targetDir": "miladychanSpotlight",
+        "target": "content.css"
+      }
+    ],
+    "assets": [
+      "miladychanSpotlight"
+    ]
+  },
+  {
+    "id": "music",
+    "name": "Music",
+    "version": "0.2.0",
+    "description": "Indexes local music, enriches ISRCs, and manages playlists/radio.",
+    "packageKind": "app",
+    "entryName": "features/music",
+    "entryPoint": "src/apps/music/entry.ts",
+    "contentEntry": "features/music.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.music.enabled",
+        "milxdy.settings.theme",
+        "milxdy.music.width",
+        "milxdy.music.height",
+        "milxdy.music.top",
+        "milxdy.music.libraryMinimized",
+        "milxdy.music.volume",
+        "milxdy.music.autoAcceptHighConfidenceIsrc",
+        "milxdy.music.acoustIdClientKey"
+      ]
+    },
+    "settings": [
+      {
+        "id": "music.enabled",
+        "label": "Music",
+        "description": "Show the local music app in the shared side rail.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.music.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "music.volume",
+        "label": "Music volume",
+        "description": "Playback volume for the local music app.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.music.volume"
+        },
+        "defaultValue": 0.78,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 1,
+          "step": 0.05
+        },
+        "reset": {
+          "behavior": "restoreAppDefault"
+        },
+        "presets": [
+          "profilePack"
+        ]
+      },
+      {
+        "id": "music.autoAcceptHighConfidenceIsrc",
+        "label": "Auto-accept ISRC matches",
+        "description": "Accept high-confidence enrichment matches without opening the review step.",
+        "scope": "app",
+        "location": "advanced",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.music.autoAcceptHighConfidenceIsrc"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreAppDefault"
+        },
+        "advanced": true
+      }
+    ],
+    "surfaces": [
+      "overlayApp"
+    ],
+    "cost": {
+      "startup": "heavy",
+      "perSurface": "cheap",
+      "network": "batched",
+      "worker": "heavy",
+      "domWrite": "large"
+    },
+    "loadTriggers": [
+      "dockOpen",
+      "idle"
+    ],
+    "chrome": {
+      "nativeStyle": "music",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "music"
+      ],
+      "notes": [
+        "The music app keeps its authored playback/library chrome unless a shared preset is selected."
+      ]
+    },
+    "hub": {
+      "category": "media",
+      "shortDescription": "Index local music, enrich ISRCs, and manage playlists and radio.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": true
+      },
+      "presets": [
+        "full"
+      ],
+      "permissionNotes": [
+        "Requires user-selected local folder access for music indexing."
+      ],
+      "dataNotes": [
+        "Reads selected local audio files and may send fingerprints or metadata to enrichment services when configured."
+      ],
+      "remoteServices": [
+        "musicbrainz.org",
+        "api.acoustid.org"
+      ],
+      "localStorageNotes": [
+        "Stores music library metadata, playlists, layout, volume, and enrichment settings."
+      ],
+      "privacyLabels": [
+        "local-files",
+        "remote-api"
+      ]
+    },
+    "dock": {
+      "label": "Music",
+      "icon": "music/milxdy-music-logo.png",
+      "defaultSide": "right"
+    },
+    "background": {
+      "messageTypes": [
+        "music:*"
+      ],
+      "services": [
+        "musicBrainz",
+        "acoustId",
+        "imageProxy"
+      ]
+    },
+    "permissions": {
+      "hosts": [
+        "https://musicbrainz.org/*",
+        "https://api.acoustid.org/*"
+      ]
+    },
+    "css": [
+      {
+        "id": "milxdy-music-styles",
+        "path": "music/content.css",
+        "source": "src/apps/music/content.css",
+        "targetDir": "music",
+        "target": "content.css"
+      }
+    ],
+    "assets": [
+      "music"
+    ],
+    "requiredOutputs": [
+      "features/chromaprint.wasm"
+    ]
+  }
+]

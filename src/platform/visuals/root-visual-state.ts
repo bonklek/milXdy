@@ -6,9 +6,9 @@ import {
   normalizeReskinProfile,
   normalizeVisualTheme,
   type VisualThemeSettings,
-} from "./reskinProfile";
-import { parseJsonObject } from "./json";
-import { injectReskinStyles } from "./reskinStyles";
+} from "./reskin-profile";
+import { parseJsonObject } from "../browser/json";
+import { injectReskinStyles } from "./reskin-styles";
 
 type XTheme = "light" | "dim" | "dark";
 type SettingsTheme = "light" | "dark" | "system";
@@ -315,7 +315,7 @@ function applySidebarThemeOverride(theme: XTheme, force = false): void {
   const header = document.querySelector<HTMLElement>('header[role="banner"]');
   if (!header) return;
   const dark = theme === "dark" || theme === "dim";
-  const color = dark ? "#f4ffe8" : "";
+  const color = dark ? "var(--milxdy-sidebar-icon, #f4ffe8)" : "";
   if (!force && header.dataset.milxdySidebarThemeOverride === theme) {
     applyComposeButtonIconOverride(header);
     return;

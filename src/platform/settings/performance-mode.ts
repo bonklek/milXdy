@@ -1,4 +1,4 @@
-import { safeLocalGet, safeLocalSet } from "./extensionRuntime";
+import { safeLocalGet, safeLocalSet } from "../background/extension-runtime";
 
 export type PerformanceMode = "fast" | "balanced" | "full" | "developer";
 

@@ -1,4 +1,4 @@
-import type { AppRuntimeScheduler } from "./appPlatform";
+import type { AppRuntimeScheduler } from "../app-sdk/app-platform";
 
 export type FallbackRuntimeSchedulerOptions = {
   idleTimeoutMs?: number;
