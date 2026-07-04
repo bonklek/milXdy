@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Developer Note icon">
+  <rect width="64" height="64" rx="8" fill="#f6f7fb"/>
+  <path d="M18 16h28a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4Z" fill="#1f7a8c"/>
+  <path d="M22 25h20M22 33h14M22 41h18" stroke="#ffffff" stroke-width="4" stroke-linecap="round"/>
+</svg>

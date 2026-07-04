@@ -1,0 +1,143 @@
+{
+  "$schema": "../../../docs/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "dev-note",
+  "name": "Developer Note",
+  "version": "0.1.0",
+  "description": "A minimal third-party local package that records an SDK diagnostic when enabled.",
+  "packageKind": "feature",
+  "sdk": {
+    "minVersion": "0.2.2",
+    "targetVersion": "0.2.2",
+    "notes": [
+      "Novel package sample for local custom builds."
+    ]
+  },
+  "contentEntry": "dist/content.js",
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": [
+      "milxdy.local.dev-note.enabled"
+    ]
+  },
+  "settings": [
+    {
+      "id": "dev-note.enabled",
+      "label": "Developer Note",
+      "description": "Enable the sample diagnostic package in this custom build.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.dev-note.enabled"
+      },
+      "defaultValue": false,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      },
+      "presets": [
+        "firstRun"
+      ]
+    }
+  ],
+  "surfaces": [
+    "route"
+  ],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": [
+      "Exports boot() and relies on the shared content runtime for loading, enablement, and diagnostics."
+    ]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "integration": "contentScript",
+      "surfaces": [
+        "route"
+      ],
+      "presentation": "userAction",
+      "notes": [
+        "Uses only the existing X/Twitter content runtime; no additional host permission is requested."
+      ]
+    }
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": [
+    "startup"
+  ],
+  "chrome": {
+    "nativeStyle": "native",
+    "supportedStyles": [
+      "native"
+    ]
+  },
+  "hub": {
+    "category": "developer",
+    "shortDescription": "Minimal local package sample with generated enablement.",
+    "rail": {
+      "supported": false,
+      "defaultPinned": false
+    },
+    "presets": [
+      "full"
+    ],
+    "dataNotes": [
+      "Records a local SDK diagnostic only when enabled."
+    ],
+    "localStorageNotes": [
+      "Stores its generated enablement toggle."
+    ],
+    "privacyLabels": [
+      "local-only"
+    ]
+  },
+  "privacy": {
+    "permissionNotes": [],
+    "dataNotes": [
+      "Records a local SDK diagnostic only when enabled."
+    ],
+    "localStorageNotes": [
+      "Stores its generated enablement toggle."
+    ],
+    "remoteServices": [],
+    "privacyLabels": [
+      "local-only"
+    ],
+    "consentRequired": false
+  },
+  "package": {
+    "assets": [
+      {
+        "id": "dev-note.icon",
+        "path": "assets/icon.svg",
+        "kind": "icon",
+        "webAccessible": true
+      }
+    ],
+    "webAccessibleAssets": [
+      "assets/icon.svg"
+    ]
+  },
+  "review": {
+    "status": "local",
+    "notes": [
+      "Checked-in novel-package sample; pass --allow-local-review for local custom builds."
+    ]
+  }
+}

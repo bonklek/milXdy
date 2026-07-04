@@ -87,7 +87,7 @@ The roadmap should not contain:
 Before committing documentation changes, run targeted searches for stale terms:
 
 ```powershell
-rg -n "Postreader|Diag|browser-compat|prerelease|release candidate" README.md CHANGELOG.md docs public src
+rg -n "Postreader|postreader|Diag|browser-compat|prerelease|release candidate" README.md CHANGELOG.md docs assets src examples scripts
 rg -n "Planning Labels|Suggested GitHub milestones|^## Released:" docs/ROADMAP.md
 ```
 

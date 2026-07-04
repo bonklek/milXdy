@@ -6,15 +6,25 @@ Current expected status:
 
 ```text
 errors:   0
-warnings: 29
-notices:  1
+warnings: 31
+notices:  0
 ```
 
-## Notice
+## Mozilla Data-Collection Warning
 
-- `MISSING_DATA_COLLECTION_PERMISSIONS` in `manifest.json`.
+`MISSING_DATA_COLLECTION_PERMISSIONS` is no longer expected. Firefox builds
+declare `browser_specific_settings.gecko.data_collection_permissions` for the
+documented browser-session, remote-service, and site-content flows. The
+`lint:firefox` verifier fails if Mozilla's missing-data-collection warning
+reappears.
 
-Mozilla now supports `browser_specific_settings.gecko.data_collection_permissions`, but milXdy has optional browser-session and remote-service flows. Do not declare `required: ["none"]`. Pick the final Firefox data-collection categories only after the owner confirms the privacy language for RemiliaNET, RemiStats, Beetol, Miladychan, MusicBrainz, AcoustID, Ethereum RPC, local files, and diagnostics.
+The generated Firefox manifest declares required data collection for
+authentication/session information, personal communications, personally
+identifying information, website activity, and website content. This is
+intentionally conservative for the current package because features can fetch or
+transmit RemiliaNET session state, RemiNet Chat messages and attachments,
+public/profile identity data, selected X/Twitter context, and requested media or
+metadata to documented remote services.
 
 ## Warnings
 
@@ -32,12 +42,14 @@ Expected platform/runtime warnings:
 
 First-party `innerHTML` warnings to reduce over time:
 
-- `popup.js`: 1.
+- `wikiFrame.js`: 2.
+- `popup.js`: 3.
 - `features/beetol.js`: 2.
-- `features/reminetChat.js`: 6.
+- `features/reminetChat.js`: 5.
 - `features/remistats.js`: 4.
-- `features/post-reading.js`: 6.
+- `features/post-reading.js`: 4.
 - `features/miladymaxxer.js`: 2.
 - `features/wiki.js`: 1.
+- `features/music.js`: 1.
 
 These are existing UI-rendering patterns in bundled first-party code. Fix them when touching the owning UI, but do not block Firefox smoke on them while lint has zero errors.

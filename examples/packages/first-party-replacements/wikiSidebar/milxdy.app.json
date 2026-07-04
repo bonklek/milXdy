@@ -1,0 +1,195 @@
+{
+  "manifestVersion": 1,
+  "id": "wikiSidebar",
+  "name": "Remilia Wiki",
+  "version": "0.2.0",
+  "description": "Opens Remilia Wiki pages in a docked sidebar surface.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.2",
+    "targetVersion": "0.2.2",
+    "notes": [
+      "Pilot fixture for docked app package composition assumptions."
+    ]
+  },
+  "contentEntry": "dist/content.js",
+  "css": [
+    {
+      "id": "milxdy-wiki-sidebar-styles",
+      "path": "dist/content.css"
+    }
+  ],
+  "defaultEnabled": true,
+  "storageKeys": {
+    "local": [
+      "remiliaWikiHyperlink.settings",
+      "milxdy.wikiSidebar.lastUrl"
+    ]
+  },
+  "settings": [
+    {
+      "id": "wikiSidebar.enabled",
+      "label": "Wiki sidebar",
+      "description": "Show Remilia Wiki in the shared side rail.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.settings",
+        "property": "sidebarEnabled"
+      },
+      "defaultValue": true,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      },
+      "presets": [
+        "firstRun",
+        "profilePack"
+      ]
+    }
+  ],
+  "surfaces": [
+    "overlayApp"
+  ],
+  "lifecycle": {
+    "mode": "runtime",
+    "notes": [
+      "Shared runtime owns dock-open loading, open/close delivery, disposal, and diagnostics."
+    ]
+  },
+  "siteScopes": [
+    {
+      "site": "remiliaWiki",
+      "hosts": [
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*"
+      ],
+      "integration": "embeddedFrame",
+      "surfaces": [
+        "overlayApp"
+      ],
+      "presentation": "hostRouteOverlay",
+      "notes": [
+        "The X side-rail app embeds validated Remilia Wiki pages and uses a separate wiki frame script; it is not a general Remilia Wiki content-script runtime."
+      ]
+    }
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": [
+    "dockOpen",
+    "userAction"
+  ],
+  "chrome": {
+    "nativeStyle": "wiki",
+    "supportedStyles": [
+      "native",
+      "reminet",
+      "classic",
+      "wiki"
+    ],
+    "notes": [
+      "The sidebar maps shared overlay variables onto the wiki reader shell."
+    ]
+  },
+  "hub": {
+    "category": "reading",
+    "shortDescription": "Open Remilia Wiki from the shared side rail and route wiki links into a docked panel.",
+    "rail": {
+      "supported": true,
+      "defaultPinned": true
+    },
+    "presets": [
+      "balanced",
+      "full"
+    ],
+    "permissionNotes": [
+      "Displays pages from wiki.remilia.org when opened by the user."
+    ],
+    "dataNotes": [
+      "Navigates only to validated Remilia Wiki URLs."
+    ],
+    "remoteServices": [
+      "remilia.wiki",
+      "wiki.remilia.org"
+    ],
+    "localStorageNotes": [
+      "Stores sidebar placement and the most recent wiki URL."
+    ],
+    "privacyLabels": [
+      "remote-api"
+    ]
+  },
+  "permissions": {
+    "hosts": [
+      "https://remilia.wiki/*",
+      "https://wiki.remilia.org/*"
+    ]
+  },
+  "background": {
+    "messageTypes": [
+      "wikiSidebar:*"
+    ]
+  },
+  "dock": {
+    "label": "Remilia Wiki",
+    "icon": "assets/wiki-sidebar-icon.svg",
+    "defaultSide": "right"
+  },
+  "privacy": {
+    "permissionNotes": [
+      "Displays pages from wiki.remilia.org when opened by the user."
+    ],
+    "dataNotes": [
+      "Navigates only to validated Remilia Wiki URLs."
+    ],
+    "localStorageNotes": [
+      "Stores sidebar placement and the most recent wiki URL."
+    ],
+    "remoteServices": [
+      "remilia.wiki",
+      "wiki.remilia.org"
+    ],
+    "privacyLabels": [
+      "remote-api"
+    ],
+    "consentRequired": true
+  },
+  "package": {
+    "assets": [
+      {
+        "id": "wikiSidebar.icon",
+        "path": "assets/wiki-sidebar-icon.svg",
+        "kind": "icon",
+        "webAccessible": true
+      },
+      {
+        "id": "wikiSidebar.frame",
+        "path": "dist/wiki-frame.js",
+        "kind": "other",
+        "webAccessible": true
+      }
+    ],
+    "webAccessibleAssets": [
+      "assets/wiki-sidebar-icon.svg",
+      "dist/wiki-frame.js"
+    ]
+  },
+  "review": {
+    "status": "reviewed",
+    "reviewedBy": "milxdy-local-app-pilot",
+    "reviewedAt": "2026-07-03",
+    "notes": [
+      "First-party pilot fixture converted from src/platform/app-sdk/first-party-apps.json metadata."
+    ]
+  }
+}
