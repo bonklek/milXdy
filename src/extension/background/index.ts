@@ -1,11 +1,11 @@
-import "./features/wiki/background";
-import "./features/post-reading/background";
-import "./features/miladymaxxer/background";
-import "./features/beetol/background.js";
-import "./features/reminetChat/background";
-import { initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "./shared/backgroundRouter";
-import { browserAction } from "./shared/browserAction";
-import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "./shared/performanceMode";
+import "../../apps/wiki-links/background";
+import "../../apps/post-reading/background";
+import "../../apps/milady-maxxer/background";
+import "../../apps/beetol/background.js";
+import "../../apps/reminet-chat/background";
+import { initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
+import { browserAction } from "../../platform/background/browser-action";
+import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";
 import {
   ETHEREUM_RPC_URL,
   ENS_REGISTRY_ADDRESS,
@@ -37,15 +37,15 @@ import {
   type ReminetIdentityCache,
   type ReminetIdentityCacheEntry,
   type ReminetIdentityProfile,
-} from "./shared/reminetIdentity";
+} from "../../platform/auth/reminet-identity";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,
   UPDATE_STATUS_KEY,
   checkForUpdate,
   type UpdateStatus,
-} from "./shared/updateCheck";
-import { parseAllowedUrl, type UrlAllowRule } from "./shared/urlAllowlist";
+} from "../../platform/background/update-check";
+import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -142,6 +142,8 @@ const WIKI_IMAGE_RULES: readonly UrlAllowRule[] = [
   { origin: "https://wiki.remilia.org", pathPrefix: "/images/" },
   { origin: "https://remilia.wiki", pathPrefix: "/images/" },
 ];
+const MAX_IMAGE_RESPONSE_BYTES = 5 * 1024 * 1024;
+const IMAGE_TOO_LARGE_ERROR = "IMAGE_TOO_LARGE";
 const WIKI_SIDEBAR_OPEN_TAB_RULES: readonly UrlAllowRule[] = [
   { origin: "https://wiki.remilia.org" },
   { origin: "https://remilia.wiki" },
@@ -161,32 +163,32 @@ setupBackgroundMessageRouter([
   {
     type: "milxdy:fetchImageDataUrl",
     matches: isFetchImageDataUrlMessage,
-    handle: (message) => fetchImageDataUrl(message.url),
+    handle: (message, sender) => fetchImageDataUrlForSender(message.url, sender),
   },
   {
     type: "miladychan:fetchJson",
     matches: isMiladychanFetchJsonMessage,
-    handle: (message) => fetchMiladychanJson(message.url),
+    handle: (message, sender) => fetchMiladychanJsonForSender(message.url, sender),
   },
   {
     type: "music:fetchJson",
     matches: isMusicFetchJsonMessage,
-    handle: (message) => fetchMusicJson(message.url),
+    handle: (message, sender) => fetchMusicJsonForSender(message.url, sender),
   },
   {
     type: "music:postForm",
     matches: isMusicPostFormMessage,
-    handle: (message) => postMusicForm(message.url, message.form),
+    handle: (message, sender) => postMusicFormForSender(message.url, message.form, sender),
   },
   {
     type: "music:fetchImageDataUrl",
     matches: isMusicFetchImageDataUrlMessage,
-    handle: (message) => fetchMusicImageDataUrl(message.url),
+    handle: (message, sender) => fetchMusicImageDataUrlForSender(message.url, sender),
   },
   {
     type: "wiki:fetchImageDataUrl",
     matches: isWikiFetchImageDataUrlMessage,
-    handle: (message) => fetchWikiImageDataUrl(message.url),
+    handle: (message, sender) => fetchWikiImageDataUrlForSender(message.url, sender),
   },
   {
     type: "wikiSidebar:openTab",
@@ -216,12 +218,12 @@ setupBackgroundMessageRouter([
   {
     type: "remistats:getUser",
     matches: isRemiStatsMessage,
-    handle: (message) => fetchRemiStatsUser(message.handle, message.force === true),
+    handle: (message, sender) => fetchRemiStatsUserForSender(message.handle, message.force === true, sender),
   },
   {
     type: "reminetIdentity:getProfile",
     matches: isReminetIdentityMessage,
-    handle: (message) => resolveReminetIdentity(message),
+    handle: (message, sender) => resolveReminetIdentityForSender(message, sender),
   },
 ]);
 void initializeBackgroundNetworkBudget();
@@ -339,6 +341,16 @@ async function fetchRemiStatsUser(handleValue: string, force = false): Promise<R
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function fetchRemiStatsUserForSender(handleValue: string, force: boolean, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return fetchRemiStatsUser(handleValue, force);
+}
+
+async function resolveReminetIdentityForSender(message: ReminetIdentityMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return resolveReminetIdentity(message);
 }
 
 async function loadCurrentPerformanceMode(): Promise<PerformanceMode> {
@@ -723,6 +735,11 @@ async function fetchMusicJson(url: string): Promise<Record<string, unknown>> {
   }
 }
 
+async function fetchMusicJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return fetchMusicJson(url);
+}
+
 async function fetchMusicImageDataUrl(url: string): Promise<Record<string, unknown>> {
   const parsed = parseAllowedUrl(url, MUSIC_IMAGE_RULES);
   if (!parsed) return { ok: false, status: 0, error: "Unsupported image URL." };
@@ -731,11 +748,16 @@ async function fetchMusicImageDataUrl(url: string): Promise<Record<string, unkno
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
     const contentType = response.headers.get("content-type") || "image/png";
     if (!/^image\//i.test(contentType)) return { ok: false, status: response.status, error: "Unsupported image type." };
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
     return { ok: true, status: response.status, dataUrl: `data:${contentType};base64,${base64Encode(bytes)}` };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function fetchMusicImageDataUrlForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return fetchMusicImageDataUrl(url);
 }
 
 async function postMusicForm(url: string, form: Record<string, string>): Promise<Record<string, unknown>> {
@@ -762,6 +784,11 @@ async function postMusicForm(url: string, form: Record<string, string>): Promise
   }
 }
 
+async function postMusicFormForSender(url: string, form: Record<string, string>, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return postMusicForm(url, form);
+}
+
 async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>> {
   const parsed = parseAllowedUrl(url, MILADYCHAN_JSON_RULES);
   if (!parsed) {
@@ -777,6 +804,11 @@ async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>
   }
 }
 
+async function fetchMiladychanJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return fetchMiladychanJson(url);
+}
+
 async function fetchImageDataUrl(url: string): Promise<Record<string, unknown>> {
   const parsed = parseAllowedUrl(url, MILADY_MAKER_BANNER_RULES);
   if (!parsed) {
@@ -788,11 +820,16 @@ async function fetchImageDataUrl(url: string): Promise<Record<string, unknown>> 
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
     const contentType = response.headers.get("content-type") || "image/png";
     if (!/^image\/png\b/i.test(contentType)) return { ok: false, error: "UNSUPPORTED_IMAGE_TYPE" };
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
     return { ok: true, dataUrl: `data:${contentType};base64,${base64Encode(bytes)}` };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function fetchImageDataUrlForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return fetchImageDataUrl(url);
 }
 
 async function fetchWikiImageDataUrl(url: string): Promise<Record<string, unknown>> {
@@ -803,11 +840,16 @@ async function fetchWikiImageDataUrl(url: string): Promise<Record<string, unknow
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
     const contentType = response.headers.get("content-type") || "image/png";
     if (!/^image\//i.test(contentType)) return { ok: false, status: response.status, error: "Unsupported image type." };
-    const bytes = new Uint8Array(await response.arrayBuffer());
+    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
     return { ok: true, status: response.status, dataUrl: `data:${contentType};base64,${base64Encode(bytes)}` };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+async function fetchWikiImageDataUrlForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isWikiImageSender(sender)) return unsupportedSender();
+  return fetchWikiImageDataUrl(url);
 }
 
 async function openWikiSidebarTab(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -856,7 +898,8 @@ async function forwardWikiSidebarReadAloudRequest(message: WikiSidebarReadAloudR
 }
 
 function isWikiFrameSender(sender: chrome.runtime.MessageSender): boolean {
-  if (sender.frameId === 0) return false;
+  if (sender.id !== chrome.runtime.id || typeof sender.tab?.id !== "number") return false;
+  if (typeof sender.frameId !== "number" || sender.frameId <= 0) return false;
   const source = sender.url || sender.origin || "";
   try {
     const url = new URL(source);
@@ -866,6 +909,31 @@ function isWikiFrameSender(sender: chrome.runtime.MessageSender): boolean {
   }
 }
 
+function isWikiImageSender(sender: chrome.runtime.MessageSender): boolean {
+  return isXContentScriptSender(sender) || isWikiFrameSender(sender);
+}
+
+function isXContentScriptSender(sender: chrome.runtime.MessageSender): boolean {
+  return isSameExtensionTopFrameHttpsSender(sender, ["x.com", "twitter.com"]);
+}
+
+function isSameExtensionTopFrameHttpsSender(sender: chrome.runtime.MessageSender, allowedHosts: readonly string[]): boolean {
+  if (sender.id !== chrome.runtime.id) return false;
+  if (typeof sender.tab?.id !== "number") return false;
+  if (sender.frameId !== undefined && sender.frameId !== 0) return false;
+  const source = sender.url || sender.origin || sender.tab.url || "";
+  try {
+    const url = new URL(source);
+    return url.protocol === "https:" && allowedHosts.includes(url.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function unsupportedSender(): Record<string, unknown> {
+  return { ok: false, status: 0, error: "UNSUPPORTED_SENDER" };
+}
+
 function base64Encode(bytes: Uint8Array): string {
   let binary = "";
   const chunkSize = 0x8000;
@@ -873,6 +941,42 @@ function base64Encode(bytes: Uint8Array): string {
     binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
   }
   return btoa(binary);
+}
+
+async function readCappedResponseBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+  const declaredLength = response.headers.get("content-length");
+  if (declaredLength) {
+    const parsedLength = Number.parseInt(declaredLength, 10);
+    if (Number.isFinite(parsedLength) && parsedLength > maxBytes) throw new Error(IMAGE_TOO_LARGE_ERROR);
+  }
+  if (!response.body) throw new Error(IMAGE_TOO_LARGE_ERROR);
+
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error(IMAGE_TOO_LARGE_ERROR);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
 }
 
 function budgetedFetch(input: RequestInfo | URL, init?: RequestInit, label?: string): Promise<Response> {
@@ -888,7 +992,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     "milxdy.apps.firstRun.status": "pending",
     "milxdy.miladychan.enabled": true,
     "milxdy.music.enabled": true,
-    "milxdy.reminetChat.enabled": true,
+    "milxdy.reminetChat.enabled": false,
     "milxdy.remistats.beetol.enabled": true,
   });
   void chrome.storage.sync.set({
