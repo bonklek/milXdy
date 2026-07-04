@@ -1,8 +1,9 @@
 {
   "manifest_version": 3,
-  "name": "milXdy",
+  "name": "__MSG_extensionName__",
   "version": "0.2.2",
-  "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
+  "default_locale": "en",
+  "description": "__MSG_extensionDescription__",
   "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs"],
   "host_permissions": [
     "https://api.github.com/*",
@@ -77,7 +78,7 @@
   ],
   "options_page": "popup.html",
   "action": {
-    "default_title": "milXdy",
+    "default_title": "__MSG_extensionName__",
     "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",

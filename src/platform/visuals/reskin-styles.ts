@@ -49,6 +49,16 @@ export const RESKIN_CSS = `
     --milxdy-font-mono: "Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 
+  html[data-milxdy-locale-script="cyrillic"] {
+    --milxdy-font-ui: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --milxdy-font-tweet: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  html[data-milxdy-locale-script="cjk"] {
+    --milxdy-font-ui: "Milxdy Remilia Hei", "Yu Gothic", "Hiragino Sans", "Meiryo", "Noto Sans JP", sans-serif;
+    --milxdy-font-tweet: "Yu Gothic", "Hiragino Sans", "Meiryo", "Noto Sans JP", TwitterChirp, sans-serif;
+  }
+
   @media (prefers-color-scheme: dark) {
     :root {
       --milxdy-rn-blue: #9ea7ff;

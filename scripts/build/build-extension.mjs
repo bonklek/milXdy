@@ -36,6 +36,9 @@ await mkdir(`${outDir}/features`, { recursive: true });
 await writeManifest();
 await copyFile("assets/extension/popup/popup.html", `${outDir}/popup.html`);
 await copyFile("assets/extension/popup/popup.css", `${outDir}/popup.css`);
+if (existsSync("assets/extension/_locales")) {
+  await cp("assets/extension/_locales", `${outDir}/_locales`, { recursive: true });
+}
 if (appEnabled("post-reading")) {
   await copyFile("assets/extension/frames/ocr.html", `${outDir}/ocr.html`);
 }
