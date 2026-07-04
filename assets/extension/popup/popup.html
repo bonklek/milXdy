@@ -12,11 +12,11 @@
         <img src="icons/icon48.png" alt="" width="32" height="32">
         <div>
           <h1>milXdy</h1>
-          <p>X/Twitter toolkit settings</p>
+          <p>Global suite controls and synced app mirrors</p>
         </div>
       </header>
 
-      <nav class="tabs" aria-label="Feature settings">
+      <nav class="tabs" aria-label="milXdy settings">
         <button class="tab is-active" type="button" data-panel="suite"><span>Main</span></button>
         <button class="tab" type="button" data-panel="visual"><span>Appearance</span></button>
         <button class="tab" type="button" data-panel="audio"><span>Audio</span></button>
@@ -26,8 +26,8 @@
 
       <section class="panel is-active" data-panel="suite">
         <div class="panel-heading">
-          <h2>Main</h2>
-          <p>Theme, updates, reports, and diagnostics.</p>
+          <h2>Suite Controls</h2>
+          <p>Global theme, performance, updates, reports, and diagnostics.</p>
         </div>
         <section class="onboarding-start" id="onboardingStart" aria-labelledby="onboardingTitle" hidden>
           <div class="onboarding-header">
@@ -50,9 +50,9 @@
           </div>
           <p class="message" id="onboardingMessage"></p>
         </section>
-        <section class="setting-group" aria-label="Appearance">
+        <section class="setting-group" aria-label="Popup appearance">
           <div class="setting-group-header">
-            <h3>Appearance</h3>
+            <h3>Popup Theme</h3>
           </div>
           <div class="field compact-field">
             <span>Settings theme</span>
@@ -63,9 +63,9 @@
             </div>
           </div>
         </section>
-        <section class="setting-group" aria-label="Performance">
+        <section class="setting-group" aria-label="Global performance">
           <div class="setting-group-header">
-            <h3>Performance</h3>
+            <h3>Global Performance</h3>
           </div>
           <div class="field">
             <span>Runtime mode</span>
@@ -146,12 +146,12 @@
 
       <section class="panel" data-panel="wiki">
         <div class="panel-heading">
-          <h2>Wiki Links</h2>
-          <p>Inline wiki references, previews, and article drafts.</p>
+          <h2>Wiki Mirrors</h2>
+          <p>Wiki controls kept synced while app and feature settings migrate.</p>
         </div>
         <section class="setting-group" aria-label="Wiki behavior">
           <div class="setting-group-header">
-            <h3>Linking</h3>
+            <h3>Linking Mirror</h3>
           </div>
           <label class="setting"><span><strong>Auto-link Remilia concepts</strong><small>Turn recognized terms in posts into wiki links.</small></span><input type="checkbox" data-control="wiki.enabled"></label>
           <label class="setting"><span><strong>Hover previews</strong><small>Load wiki summaries only when a link is hovered.</small></span><input type="checkbox" data-control="wiki.previewsEnabled"></label>
@@ -160,7 +160,7 @@
         </section>
         <section class="setting-group" aria-label="Wiki limits and appearance">
           <div class="setting-group-header">
-            <h3>Limits and Style</h3>
+            <h3>Limits and Style Mirror</h3>
           </div>
           <div class="field checkbox-counter">
             <span>Limit links per post</span>
@@ -174,7 +174,7 @@
         </section>
         <section class="setting-group" aria-label="Wiki article workflow">
           <div class="setting-group-header">
-            <h3>Article Workflow</h3>
+            <h3>Article Workflow Mirror</h3>
           </div>
           <label class="field"><span>Grok draft mode</span><select data-control="wiki.grokWorkflowMode"><option value="one-shot">Quick draft</option><option value="socratic">Guided research</option></select></label>
         </section>
@@ -195,12 +195,12 @@
 
       <section class="panel" data-panel="audio">
         <div class="panel-heading">
-          <h2>Audio</h2>
-          <p>Read-aloud playback, voice, and interaction sounds.</p>
+          <h2>Audio Mirrors</h2>
+          <p>Read-aloud and app sound controls remain synced during migration.</p>
         </div>
         <section class="setting-group" aria-label="Audio quick controls">
           <div class="setting-group-header">
-            <h3>Most Used</h3>
+            <h3>Read-Aloud Mirror</h3>
           </div>
           <label class="setting"><span><strong>Show read-aloud controls</strong><small>Add playback buttons to posts.</small></span><input type="checkbox" data-control="post-reading.enabled"></label>
           <div class="field-grid">
@@ -211,7 +211,7 @@
         </section>
         <section class="setting-group" aria-label="Interaction sounds">
           <div class="setting-group-header">
-            <h3>Interaction Sounds</h3>
+            <h3>App Sound Mirrors</h3>
           </div>
           <label class="setting"><span><strong>Milady Maxxer sounds</strong><small>Play sounds for Milady Maxxer interactions.</small></span><input type="checkbox" data-control="milady.soundEnabled"></label>
           <label class="setting"><span><strong>RemiStats sounds</strong><small>Play sound effects for RemiStats actions and pokes.</small></span><input type="checkbox" data-control="remistats.soundsEnabled"></label>
@@ -229,7 +229,7 @@
         </section>
         <section class="setting-group" aria-label="Read aloud voice">
           <div class="setting-group-header">
-            <h3>Read Aloud Voice</h3>
+            <h3>Read-Aloud Voice Mirror</h3>
           </div>
           <label class="setting"><span><strong>Auto-select voice</strong><small>Choose a suitable installed voice automatically.</small></span><input type="checkbox" data-control="post-reading.autoVoice"></label>
           <label class="field"><span>Specific voice URI</span><select data-control="post-reading.voiceURI"><option value="">System default</option></select></label>
@@ -239,7 +239,7 @@
         </section>
         <section class="setting-group" aria-label="Read aloud playback">
           <div class="setting-group-header">
-            <h3>Read Aloud Playback</h3>
+            <h3>Read-Aloud Playback Mirror</h3>
           </div>
           <label class="field"><span>Autoplay source</span><select data-control="post-reading.autoplayMode"><option value="visible">Visible posts</option><option value="autoscroll">Autoscroll timeline</option></select></label>
           <label class="setting"><span><strong>Skip promoted posts</strong><small>Avoid reading ads.</small></span><input type="checkbox" data-control="post-reading.skipPromotedPosts"></label>
@@ -247,11 +247,11 @@
         </section>
         <section class="setting-group" aria-label="Read aloud content">
           <div class="setting-group-header">
-            <h3>Read Aloud Content</h3>
+            <h3>Read-Aloud Content Mirror</h3>
           </div>
           <label class="setting"><span><strong>Read quoted posts</strong><small>Include quote-post text in playback.</small></span><input type="checkbox" data-control="post-reading.includeQuotes"></label>
-          <label class="setting"><span><strong>Fetch hidden quote text</strong><small>Retrieve quote content when X hides it.</small></span><input type="checkbox" data-control="post-reading.fetchFullQuotes"></label>
-          <label class="field"><span>Fetched quote display</span><select data-control="post-reading.fullQuoteDisplay"><option value="scroll">Scroll into view</option><option value="expand">Expand inline</option><option value="hidden">Keep hidden</option></select></label>
+          <label class="setting"><span><strong>Fetch hidden quote text</strong><small>Off by default. Uses public X/Twitter quote sources without browser cookies or session tokens.</small></span><input type="checkbox" data-control="post-reading.fetchFullQuotes"></label>
+          <label class="field"><span>Fetched quote display</span><select data-control="post-reading.fullQuoteDisplay"><option value="hidden">Keep hidden</option><option value="expand">Expand inline</option><option value="scroll">Scroll into view</option></select></label>
           <label class="setting"><span><strong>Read hyperlinks</strong><small>Include link text and URLs.</small></span><input type="checkbox" data-control="post-reading.includeHyperlinks"></label>
           <label class="setting"><span><strong>Read image alt text</strong><small>Use alt text when it is available.</small></span><input type="checkbox" data-control="post-reading.includeImageAltText"></label>
           <label class="setting"><span><strong>OCR images during playback</strong><small>Scan images only after playback starts.</small></span><input type="checkbox" data-control="post-reading.includeImageOcr"></label>
@@ -260,7 +260,7 @@
         </section>
         <section class="setting-group" aria-label="Read aloud interface">
           <div class="setting-group-header">
-            <h3>Read Aloud Interface</h3>
+            <h3>Read-Aloud Interface Mirror</h3>
           </div>
           <label class="setting"><span><strong>Highlight active post</strong><small>Mark the post currently being read.</small></span><input type="checkbox" data-control="post-reading.activeTweetHighlight"></label>
           <label class="field"><span>Text highlight style</span><select data-control="post-reading.bodyHighlightMode"><option value="smooth">Smooth progress</option><option value="word">Word by word</option><option value="off">Off</option></select></label>
@@ -270,7 +270,7 @@
         </section>
         <section class="setting-group" aria-label="Read aloud keyboard shortcuts">
           <div class="setting-group-header">
-            <h3>Keyboard Shortcuts</h3>
+            <h3>Read-Aloud Shortcut Mirror</h3>
           </div>
           <div class="field-grid">
             <label class="field"><span>Next post</span><input type="text" data-control="post-reading.keyNextTweet"></label>
@@ -285,12 +285,12 @@
 
       <section class="panel" data-panel="remistats">
         <div class="panel-heading">
-          <h2>RemiNet</h2>
-          <p>RemiStats badges, poke actions, sounds, and Beetol access.</p>
+          <h2>RemiNet Mirrors</h2>
+          <p>RemiStats, poke, Beetol, and chat controls stay synced during migration.</p>
         </div>
         <section class="setting-group" aria-label="RemiNet badges">
           <div class="setting-group-header">
-            <h3>Badges</h3>
+            <h3>RemiStats Feature Mirror</h3>
           </div>
           <label class="setting"><span><strong>Show RemiStats badges</strong><small>Display score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
           <label class="setting"><span><strong>Badge detail tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
@@ -299,7 +299,7 @@
         </section>
         <section class="setting-group" aria-label="Beetol">
           <div class="setting-group-header">
-            <h3>Beetol</h3>
+            <h3>Beetol and Chat Mirrors</h3>
           </div>
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
           <label class="setting"><span><strong>Show RemiliaNET chat on X home</strong><small>Mount global chat in X's right sidebar when the home timeline is open.</small></span><input type="checkbox" data-control="reminetChat.enabled"></label>
@@ -327,13 +327,13 @@
 
       <section class="panel" data-panel="visual">
         <div class="panel-heading">
-          <h2>Appearance</h2>
-          <p>Visual treatment, presets, Milady Maxxer settings, and handle lists.</p>
+          <h2>Appearance Presets</h2>
+          <p>Global visual presets, profile packs, and synced feature mirrors.</p>
         </div>
         <label class="field appearance-search"><span>Search appearance settings</span><input id="appearanceSearch" type="search" placeholder="Search fonts, PFPs, RemiStats, Maxxer..."></label>
         <section class="setting-group" aria-label="Visual presets">
           <div class="setting-group-header">
-            <h3>Presets</h3>
+            <h3>Global Visual Presets</h3>
           </div>
           <div class="visual-preset-grid" id="visualPresetButtons" role="group" aria-label="Visual profile presets">
             <button type="button" data-visual-preset="max"><strong>Max</strong><small>Remilia client</small></button>
@@ -349,14 +349,15 @@
         </section>
         <section class="setting-group" id="visualCustomEditor" aria-label="Custom visual theme">
           <div class="setting-group-header">
-            <h3>Custom Theme</h3>
+            <h3>Global Custom Theme</h3>
           </div>
+          <p class="setting-note">Profile packs currently include Appearance and Performance. Mirrored controls below keep existing storage synced while app settings move.</p>
           <div class="field-grid">
             <label class="field"><span>Saved theme</span><select id="visualThemeSelect"><option value="new">New</option></select></label>
             <button class="secondary-button visual-delete-button" id="visualDeleteTheme" type="button">Delete theme</button>
           </div>
           <div class="appearance-subgroup" data-appearance-group="theme">
-            <div class="setting-group-header"><h3>Theme Base</h3></div>
+            <div class="setting-group-header"><h3>Global Theme Base</h3></div>
             <label class="field"><span>Theme name</span><input id="visualThemeName" type="text" placeholder="My theme"></label>
             <div class="field-grid">
               <label class="field"><span>Base profile</span><select id="visualProfile"><option value="max">Max</option><option value="moderate">Medium</option><option value="min">Minimal</option></select></label>
@@ -365,11 +366,11 @@
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="layout">
-            <div class="setting-group-header"><h3>Layout and Shape</h3></div>
+            <div class="setting-group-header"><h3>Global Layout and App Chrome</h3></div>
           <div class="field-grid">
             <label class="field"><span>PFP shape</span><select id="visualPfpShape"><option value="rounded-square">Rounded square</option><option value="square">Square</option><option value="circle">Circle</option></select></label>
             <label class="field"><span>Poke placement</span><select id="visualPokePlacement"><option value="actions">Action row</option><option value="top">Top metadata</option></select></label>
-            <label class="field"><span>App window style</span><select id="visualAppWindowStyle"><option value="reminet">RemiliaNet</option><option value="classic">Classic bevel</option></select></label>
+            <label class="field"><span>App chrome style</span><select id="visualAppWindowStyle"><option value="native">Use app defaults</option><option value="reminet">RemiliaNet</option><option value="classic">Classic bevel</option></select></label>
             <label class="field"><span>Max media height</span><input id="visualMaxMediaHeight" type="number" min="0" max="1200" step="20" placeholder="0 disables"></label>
           </div>
           <div class="visual-toggle-grid">
@@ -387,7 +388,7 @@
           </details>
           </div>
           <div class="appearance-subgroup" data-appearance-group="interaction">
-            <div class="setting-group-header"><h3>Buttons and Sounds</h3></div>
+            <div class="setting-group-header"><h3>Global Buttons and Sounds</h3></div>
             <div class="visual-toggle-grid">
               <label class="setting"><span><strong>Clickly post button</strong><small>Use a depressed button state.</small></span><input id="visualPostButtonClickly" type="checkbox"></label>
               <label class="setting"><span><strong>Sidebar bevel</strong><small>Give left navigation buttons a raised edge.</small></span><input id="visualSidebarBevel" type="checkbox"></label>
@@ -395,7 +396,7 @@
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="export">
-            <div class="setting-group-header"><h3>PNG Exporter</h3></div>
+            <div class="setting-group-header"><h3>Tweet PNG Feature Mirror</h3></div>
             <div class="field-grid">
               <label class="field"><span>Border palette</span><select id="visualTweetPngBorderPalette"><option value="purple">Purple</option><option value="gray">Gray</option><option value="blue">Blue</option><option value="green">Green</option></select></label>
             </div>
@@ -410,7 +411,7 @@
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="reminet">
-            <div class="setting-group-header"><h3>RemiNet Surfaces</h3></div>
+            <div class="setting-group-header"><h3>RemiNet Appearance Mirrors</h3></div>
             <div class="visual-toggle-grid">
               <label class="setting"><span><strong>RemiStats backing box</strong><small>Put a grey frame behind stats and poke controls.</small></span><input id="visualRemistatsBox" type="checkbox"></label>
               <label class="setting"><span><strong>Gold poke alerts</strong><small>Show incoming "poked you!" flags with a shiny gold finish.</small></span><input id="visualIncomingPokeGold" type="checkbox"></label>
@@ -418,7 +419,7 @@
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="maxxer">
-            <div class="setting-group-header"><h3>Maxxer Visuals</h3></div>
+            <div class="setting-group-header"><h3>Maxxer Visual Mirror</h3></div>
             <div class="field-grid">
               <label class="field"><span>Maxxer intensity</span><select id="visualMaxxerIntensity"><option value="subtle">Subtle</option><option value="marked">Marked rows</option><option value="card">Raised cards</option></select></label>
               <label class="field"><span>Maxxer barriers</span><select id="visualMaxxerSeparators"><option value="subtle">Subtle</option><option value="beveled">Beveled</option><option value="none">None</option></select></label>
@@ -432,7 +433,7 @@
         </section>
         <section class="setting-group" aria-label="RemiStats appearance">
           <div class="setting-group-header">
-            <h3>RemiStats and Poke</h3>
+            <h3>RemiStats Feature Mirrors</h3>
           </div>
           <label class="setting"><span><strong>Show metric icons</strong><small>Display icon buttons and badge metric icons.</small></span><input type="checkbox" data-control="remistats.icons.enabled"></label>
           <label class="setting"><span><strong>Score group</strong><small>Show the star score metric.</small></span><input type="checkbox" data-control="remistats.icons.score"></label>
@@ -443,12 +444,15 @@
             <button class="secondary-button" id="visualCopyShare" type="button">Copy string</button>
             <button class="secondary-button" id="visualImport" type="button">Import</button>
             <button class="secondary-button" id="visualImportShare" type="button">Paste string</button>
+            <button class="secondary-button" id="profilePackExport" type="button">Export pack</button>
+            <button class="secondary-button" id="profilePackImport" type="button">Import pack</button>
           </div>
           <input id="visualImportFile" type="file" accept="application/json,.json" hidden>
+          <input id="profilePackImportFile" type="file" accept="application/json,.json" hidden>
         </section>
         <section class="setting-group" aria-label="Milady Maxxer display">
           <div class="setting-group-header">
-            <h3>Maxxer Behavior</h3>
+            <h3>Maxxer App Mirror</h3>
           </div>
           <label class="field"><span>Milady Maxxer mode</span><select data-control="milady.mode"><option value="milady">Milady effects</option><option value="debug">Debug view</option><option value="off">Off</option></select></label>
           <label class="setting"><span><strong>Level badge</strong><small>Show each account's Milady Maxxer level badge.</small></span><input type="checkbox" data-control="milady.showLevelBadge"></label>
@@ -458,7 +462,7 @@
         </section>
         <section class="setting-group" aria-label="Milady Maxxer handle lists">
           <div class="setting-group-header">
-            <h3>Handle Lists</h3>
+            <h3>Maxxer Handle Mirrors</h3>
           </div>
           <label class="field tall"><span>Always-allowed handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.whitelistHandles"></textarea></label>
           <label class="field tall"><span>Manual Milady handles</span><textarea rows="4" placeholder="one handle per line" data-control="milady.miladyListHandles"></textarea></label>
