@@ -1,4 +1,4 @@
-import { OVERLAY_APP_RESERVED_WIDTH_PX } from "./overlayAppFrame";
+import { OVERLAY_APP_RESERVED_WIDTH_PX } from "./app-frame";
 import {
   bringOverlayAppToFront,
   clampOverlayRectToSafeArea,
@@ -12,8 +12,8 @@ import {
   type OverlayAppSnapRecord,
   type OverlayProtectedZone,
   type OverlayRect,
-} from "./overlayAppLayout";
-import type { OverlayDockSide } from "./overlayDock";
+} from "./app-layout";
+import type { OverlayDockSide } from "./dock";
 
 export type OverlayPanelBox = {
   x?: number;
@@ -36,6 +36,7 @@ export type OverlayPanelPointerOptions = OverlayPanelClampOptions & {
   apply: () => void;
   persist: (box: OverlayPanelBox) => void;
   disabled?: () => boolean;
+  allowInteractiveDragTarget?: boolean;
   appId?: string;
   root?: HTMLElement | null;
 };
@@ -132,6 +133,7 @@ export async function restoreOverlayPanelBox(
 
 export function startOverlayPanelDrag(event: PointerEvent, options: OverlayPanelPointerOptions): void {
   if (event.button !== 0 || options.disabled?.()) return;
+  if (!options.allowInteractiveDragTarget && isInteractiveOverlayDragTarget(event)) return;
   if (options.appId && options.root) {
     startFreeformDrag(event, options);
     return;
@@ -338,9 +340,10 @@ function startFreeformResize(event: PointerEvent, options: OverlayPanelPointerOp
       );
     }
     const snapped = snapRectToGuides(current, zones, { disabled: latestAltKey });
+    const finalRect = clampOverlayRectToSafeArea(snapped.rect, options.minWidth, options.minHeight, side, zones);
     renderOverlayGuideLines(snapped.guides);
-    applyFreeformRect(snapped.rect, options);
-    current = snapped.rect;
+    applyFreeformRect(finalRect, options);
+    current = finalRect;
   };
   const move = (moveEvent: PointerEvent) => {
     if (moveEvent.pointerId !== event.pointerId) return;
@@ -408,6 +411,29 @@ function resizeHandleIsLeft(target: EventTarget | null): boolean {
   if (explicitSide === "left") return true;
   if (explicitSide === "right") return false;
   return target.getBoundingClientRect().left < window.innerWidth / 2;
+}
+
+function isInteractiveOverlayDragTarget(event: PointerEvent): boolean {
+  const target = event.target instanceof Element ? event.target : null;
+  const boundary = event.currentTarget instanceof Element ? event.currentTarget : null;
+  if (!target || !boundary || target === boundary) return false;
+  const interactive = target.closest([
+    "button",
+    "a[href]",
+    "input",
+    "textarea",
+    "select",
+    "summary",
+    "[contenteditable='true']",
+    "[role='button']",
+    "[role='link']",
+    "[role='checkbox']",
+    "[role='switch']",
+    "[role='slider']",
+    "[role='textbox']",
+    "[data-milxdy-drag-ignore]",
+  ].join(","));
+  return Boolean(interactive && boundary.contains(interactive));
 }
 
 function cleanupPointer(

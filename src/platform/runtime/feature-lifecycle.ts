@@ -1,4 +1,4 @@
-import type { TwitterSurface } from "./twitterScanner";
+import type { TwitterSurface } from "../scanner/twitter-scanner";
 
 export type FeatureRuntimeContext = {
   featureId: string;

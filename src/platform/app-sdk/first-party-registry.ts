@@ -5,18 +5,24 @@ import {
   VISUAL_THEME_KEY,
   normalizeReskinProfile,
   normalizeVisualTheme,
-} from "./reskinProfile";
-import type { MilxdyAppId, MilxdyAppManifest } from "./appPlatform";
-import registryData from "./firstPartyApps.json";
+} from "../visuals/reskin-profile";
+import type { MilxdyAppId, MilxdyAppManifest } from "./app-platform";
+import registryData from "./first-party-apps.json";
 
 const LEGACY_BEETOL_PREFIX = "bex" + "tol";
 
 type StaticFirstPartyAppManifest = Omit<MilxdyAppManifest, "isEnabled" | "package"> & {
-  entryName: string;
-  entryPoint: string;
+  entryName?: string;
+  entryPoint?: string;
   css?: Array<{ id: string; path: string; source?: string; targetDir?: string; target?: string }>;
   assets?: string[];
   requiredOutputs?: string[];
+  package?: MilxdyAppManifest["package"];
+  localPackage?: {
+    root: string;
+    reviewStatus: "local" | "reviewed" | "blocked";
+    sourceVersion: string;
+  };
 };
 
 const registry = registryData as StaticFirstPartyAppManifest[];
@@ -33,7 +39,7 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
   wikiSidebar: async () => {
     const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
     const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
-    return enabledFromStoredValue(settings.enabled, defaultAppEnabled("wikiSidebar"));
+    return enabledFromStoredValue(settings.sidebarEnabled ?? settings.enabled, defaultAppEnabled("wikiSidebar"));
   },
   "post-reading": async () => {
     const stored = await chrome.storage.sync.get("enabled");
@@ -97,7 +103,7 @@ const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | und
     await chrome.storage.local.set({
       "remiliaWikiHyperlink.settings": {
         ...settings,
-        enabled,
+        sidebarEnabled: enabled,
       },
     });
   },
@@ -125,16 +131,16 @@ const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | und
 };
 
 export const FIRST_PARTY_APPS: readonly MilxdyAppManifest[] = registry.map((app) => {
-  const { entryName: _entryName, entryPoint: _entryPoint, requiredOutputs, css, assets, ...manifest } = app;
-  const isEnabled = isEnabledById[app.id];
-  if (!isEnabled) throw new Error(`Missing first-party app enablement adapter for ${app.id}`);
-  const setEnabled = setEnabledById[app.id];
+  const { entryName: _entryName, entryPoint: _entryPoint, requiredOutputs, css, assets, package: declaredPackage, ...manifest } = app;
+  const genericEnablement = genericEnablementAdapter(app);
+  const isEnabled = isEnabledById[app.id] ?? genericEnablement?.isEnabled ?? (async () => defaultAppEnabled(app.id));
+  const setEnabled = setEnabledById[app.id] ?? genericEnablement?.setEnabled;
   return {
     ...manifest,
     available: true,
     unavailableReason: undefined,
     css: css?.map((sheet) => ({ id: sheet.id, path: sheet.path })),
-    package: {
+    package: declaredPackage ?? {
       assets,
       webAccessibleAssets: requiredOutputs,
     },
@@ -168,4 +174,59 @@ function defaultAppEnabled(id: string): boolean {
 
 function enabledFromStoredValue(value: unknown, fallback: boolean): boolean {
   return typeof value === "boolean" ? value : fallback;
+}
+
+function genericEnablementAdapter(app: StaticFirstPartyAppManifest): {
+  isEnabled: () => Promise<boolean>;
+  setEnabled: (enabled: boolean) => Promise<void>;
+} | null {
+  const setting = app.settings?.find((candidate) => (
+    candidate.role === "enablement"
+    && candidate.control.type === "toggle"
+    && candidate.storage
+    && (candidate.storage.area === "local" || candidate.storage.area === "sync")
+    && typeof candidate.storage.key === "string"
+    && candidate.storage.key.length > 0
+  ));
+  if (!setting) return null;
+  const fallback = defaultAppEnabled(app.id);
+  return {
+    isEnabled: async () => {
+      const stored = await storageGet(setting.storage.area, setting.storage.property
+        ? { [setting.storage.key]: {} }
+        : setting.storage.key);
+      const raw = setting.storage.property
+        ? objectValue(stored[setting.storage.key])[setting.storage.property]
+        : stored[setting.storage.key];
+      return enabledFromStoredValue(raw, fallback);
+    },
+    setEnabled: async (enabled) => {
+      if (!setting.storage.property) {
+        await storageSet(setting.storage.area, { [setting.storage.key]: enabled });
+        return;
+      }
+      const stored = await storageGet(setting.storage.area, { [setting.storage.key]: {} });
+      await storageSet(setting.storage.area, {
+        [setting.storage.key]: {
+          ...objectValue(stored[setting.storage.key]),
+          [setting.storage.property]: enabled,
+        },
+      });
+    },
+  };
+}
+
+function storageGet(
+  area: "local" | "sync",
+  keys: string | Record<string, unknown>,
+): Promise<Record<string, unknown>> {
+  return area === "local"
+    ? chrome.storage.local.get(keys)
+    : chrome.storage.sync.get(keys);
+}
+
+function storageSet(area: "local" | "sync", values: Record<string, unknown>): Promise<void> {
+  return area === "local"
+    ? chrome.storage.local.set(values)
+    : chrome.storage.sync.set(values);
 }

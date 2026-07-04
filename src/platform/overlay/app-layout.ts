@@ -1,4 +1,4 @@
-import type { OverlayDockSide } from "./overlayDock";
+import type { OverlayDockSide } from "./dock";
 
 export const OVERLAY_APP_LAYOUTS_KEY = "milxdy.overlayApps.layouts.v1";
 

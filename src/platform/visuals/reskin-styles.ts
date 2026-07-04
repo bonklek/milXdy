@@ -42,6 +42,7 @@ export const RESKIN_CSS = `
     --milxdy-border-dark: #464a6c;
     --milxdy-text: #19191d;
     --milxdy-muted: rgba(0, 0, 0, 0.56);
+    --milxdy-sidebar-icon: var(--milxdy-green);
     --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.15);
     --milxdy-font-tweet: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --milxdy-font-ui: "Milxdy Remilia Hei", "Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -66,6 +67,7 @@ export const RESKIN_CSS = `
       --milxdy-border-dark: #858cc9;
       --milxdy-text: #f0f1f8;
       --milxdy-muted: rgba(240, 241, 248, 0.62);
+      --milxdy-sidebar-icon: var(--milxdy-cream);
       --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.42);
     }
   }
@@ -87,6 +89,7 @@ export const RESKIN_CSS = `
     --milxdy-border-dark: #464a6c;
     --milxdy-text: #19191d;
     --milxdy-muted: rgba(0, 0, 0, 0.56);
+    --milxdy-sidebar-icon: var(--milxdy-green);
     --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.15);
   }
 
@@ -112,6 +115,7 @@ export const RESKIN_CSS = `
     --milxdy-border-dark: #858cc9;
     --milxdy-text: #f0f1f8;
     --milxdy-muted: rgba(240, 241, 248, 0.62);
+    --milxdy-sidebar-icon: var(--milxdy-cream);
     --milxdy-frame-shadow: 0 5px 2.5px rgba(0, 0, 0, 0.42);
   }
 
@@ -763,7 +767,7 @@ export const RESKIN_CSS = `
     font-family: var(--milxdy-font-ui) !important;
     letter-spacing: 0 !important;
     border-radius: 5px !important;
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     transition: background 120ms ease, transform 120ms ease !important;
   }
 
@@ -773,7 +777,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] [data-testid^="AppTabBar_"] *,
   html[data-milxdy-reskin-profile="moderate"] header[role="banner"] svg,
   html[data-milxdy-reskin-profile="moderate"] header[role="banner"] svg * {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
 
@@ -787,7 +791,7 @@ export const RESKIN_CSS = `
     html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a *,
     html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"],
     html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"] * {
-      color: var(--milxdy-green) !important;
+      color: var(--milxdy-sidebar-icon) !important;
       fill: currentColor !important;
     }
   }
@@ -816,7 +820,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) header[role="banner"] nav a *,
   html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"],
   html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"] * {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
 
@@ -909,7 +913,7 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] header[role="banner"] svg {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
     stroke: currentColor !important;
   }
@@ -925,7 +929,7 @@ export const RESKIN_CSS = `
     html[data-milxdy-reskin-profile] header[role="banner"] svg g,
     html[data-milxdy-reskin-profile] header[role="banner"] svg circle,
     html[data-milxdy-reskin-profile] header[role="banner"] svg rect {
-      color: var(--milxdy-green) !important;
+      color: var(--milxdy-sidebar-icon) !important;
       fill: currentColor !important;
     }
   }
@@ -950,7 +954,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg g,
   html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg circle,
   html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] header[role="banner"] svg rect {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
 
@@ -959,7 +963,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] [data-testid^="AppTabBar_"] svg *,
   html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a svg,
   html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a svg * {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
 
@@ -975,7 +979,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] header[role="banner"] svg *,
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] svg,
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] svg * {
-    color: var(--milxdy-green) !important;
+    color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
 

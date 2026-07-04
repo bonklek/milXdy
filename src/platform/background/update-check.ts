@@ -137,7 +137,7 @@ function chooseReleaseAsset(release: GitHubRelease, expectedAssetName: string | 
   const assets = Array.isArray(release.assets) ? release.assets : [];
   if (expectedAssetName) {
     const exact = assets.find((asset) => asset.name === expectedAssetName);
-    if (exact) return exact;
+    return exact || null;
   }
   return assets.find((asset) => /milxdy.*\.zip$/i.test(asset.name || ""))
     || assets.find((asset) => /\.zip$/i.test(asset.name || ""))

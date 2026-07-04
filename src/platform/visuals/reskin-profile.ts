@@ -1,4 +1,5 @@
 export type ReskinProfile = "max" | "moderate" | "min";
+export type AppWindowStyle = "native" | "reminet" | "classic";
 
 export const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 export const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
@@ -16,7 +17,7 @@ export type VisualThemeSettings = {
   pfpNotifications: boolean;
   pfpChat: boolean;
   quoteMediaGap: boolean;
-  appWindowStyle: "reminet" | "classic";
+  appWindowStyle: AppWindowStyle;
   appShadows: boolean;
   maxMediaHeight: number;
   postButtonClickly: boolean;
@@ -270,7 +271,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     pfpNotifications: booleanValue(record.pfpNotifications, fallback.pfpNotifications),
     pfpChat: booleanValue(record.pfpChat, fallback.pfpChat),
     quoteMediaGap: booleanValue(record.quoteMediaGap, fallback.quoteMediaGap),
-    appWindowStyle: oneOf(record.appWindowStyle, ["reminet", "classic"], fallback.appWindowStyle),
+    appWindowStyle: oneOf(record.appWindowStyle, ["native", "reminet", "classic"], fallback.appWindowStyle),
     appShadows: booleanValue(record.appShadows, fallback.appShadows),
     maxMediaHeight: numberValue(record.maxMediaHeight, fallback.maxMediaHeight, 0, 1200),
     postButtonClickly: booleanValue(record.postButtonClickly, fallback.postButtonClickly),
