@@ -5,7 +5,7 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 ## Where To Find It
 
 - Open X/Twitter.
-- Enable and pin **Beetol** from the Apps Hub.
+- Enable and pin **Beetol** from Apps & Features.
 - Open **Beetol** from the side rail.
 
 ## Common Tasks

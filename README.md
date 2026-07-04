@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="public/brand/milxdy-home-logo-wide.png" alt="milXdy full logo" width="640">
+  <img src="assets/brand/milxdy-home-logo-wide.png" alt="milXdy full logo" width="640">
 </p>
 
 # milXdy
@@ -12,7 +12,7 @@ This project is intended for GitHub beta distribution and local browser testing.
 
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
-- **Apps Hub and side rail**: shared dock for first-party app panels, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
+- **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
 - **Beetol Game**: Beetol hunter panel and RemiliaNET login shared with RemiNet actions.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
@@ -35,7 +35,7 @@ For release builds:
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-Firefox users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
+Firefox 142 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
 
 For source builds:
 
@@ -46,7 +46,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox's temporary add-on screen.
+Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox 142 or newer's temporary add-on screen.
 
 Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
 
@@ -70,18 +70,18 @@ Start with the general docs, or jump directly to the guide for the app or featur
 
 | Guide | What it helps with |
 | --- | --- |
-| <img src="public/brand/milxdy-logo-square.png" alt="" width="20"> [Apps Hub and side rail](docs/user-guides/apps-hub-and-side-rail.md) | Enable apps, pin rail icons, choose Lite/Balanced/Full setup, and manage the dock. |
-| <img src="public/brand/milxdy-logo-square.png" alt="" width="20"> [Root Visual Enhancements](docs/user-guides/root-visual-enhancements.md) | Appearance presets, visual polish, sounds, notifications, and performance-related visual behavior. |
-| <img src="public/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Tweet PNG](docs/user-guides/tweet-png.md) | Export reviewed local PNG images from X/Twitter post actions. |
-| <img src="public/wikiSidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Hyperlinks](docs/user-guides/remilia-wiki-hyperlinks.md) | Inline wiki links, hover previews, match limits, debug mode, and link styling. |
-| <img src="public/wikiSidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Sidebar](docs/user-guides/remilia-wiki-sidebar.md) | Docked wiki browsing, Link Later, wiki link routing, and Grok-assisted article prompts. |
-| <img src="public/post-reading/post-reading-logo.png" alt="" width="20"> [Post-reading](docs/user-guides/post-reading.md) | Read-aloud controls, voices, quote reading, OCR, link previews, and docked playback. |
-| <img src="public/remistats/star.svg" alt="" width="20"> [RemiStats](docs/user-guides/remistats.md) | RemiStats badges, score context, beetle icons, poke icons, tooltips, sounds, and cooldowns. |
-| <img src="public/miladymaxxer/milady-logo.png" alt="" width="20"> [Milady Maxxer](docs/user-guides/milady-maxxer.md) | Maxxer effects, local detection, card themes, XP behavior, whitelist handles, and manual handles. |
-| <img src="public/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/user-guides/beetol.md) | Beetol panel setup, RemiliaNET login, hunt panel styling, and shared RemiNet auth. |
-| <img src="public/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/user-guides/reminet-chat.md) | Docked RemiliaNET chat, X Messages integration, reactions, attachments, live updates, and login checks. |
-| <img src="public/miladychanSpotlight/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/user-guides/miladychan-portal.md) | Board browsing, thread reading, media previews, and native Miladychan links. |
-| <img src="public/music/milxdy-music-logo.png" alt="" width="20"> [Music](docs/user-guides/music.md) | Local library indexing, playback queue, playlists, QR metadata sharing, ISRC enrichment, and radio sessions. |
+| <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Apps & Features and side rail](docs/user-guides/apps-hub-and-side-rail.md) | Enable apps/features, pin rail icons, choose Lite/Balanced/Full setup, and manage the dock. |
+| <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Root Visual Enhancements](docs/user-guides/root-visual-enhancements.md) | Appearance presets, visual polish, sounds, notifications, and performance-related visual behavior. |
+| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Tweet PNG](docs/user-guides/tweet-png.md) | Export reviewed local PNG images from X/Twitter post actions. |
+| <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Hyperlinks](docs/user-guides/remilia-wiki-hyperlinks.md) | Inline wiki links, hover previews, match limits, debug mode, and link styling. |
+| <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Sidebar](docs/user-guides/remilia-wiki-sidebar.md) | Docked wiki browsing, Link Later, wiki link routing, and Grok-assisted article prompts. |
+| <img src="assets/apps/post-reading/post-reading-logo.png" alt="" width="20"> [Post-reading](docs/user-guides/post-reading.md) | Read-aloud controls, voices, quote reading, OCR, link previews, and docked playback. |
+| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiStats](docs/user-guides/remistats.md) | RemiStats badges, score context, beetle icons, poke icons, tooltips, sounds, and cooldowns. |
+| <img src="assets/apps/milady-maxxer/milady-logo.png" alt="" width="20"> [Milady Maxxer](docs/user-guides/milady-maxxer.md) | Maxxer effects, local detection, card themes, XP behavior, whitelist handles, and manual handles. |
+| <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/user-guides/beetol.md) | Beetol panel setup, RemiliaNET login, hunt panel styling, and shared RemiNet auth. |
+| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/user-guides/reminet-chat.md) | Docked RemiliaNET chat, X Messages integration, reactions, attachments, live updates, and login checks. |
+| <img src="assets/apps/miladychan-portal/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/user-guides/miladychan-portal.md) | Board browsing, thread reading, media previews, and native Miladychan links. |
+| <img src="assets/apps/music/milxdy-music-logo.png" alt="" width="20"> [Music](docs/user-guides/music.md) | Local library indexing, playback queue, playlists, QR metadata sharing, ISRC enrichment, and radio sessions. |
 
 ## Development
 
