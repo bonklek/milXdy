@@ -983,6 +983,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     options: { headerMarkers: boolean; postReadingSlot: boolean; remistatsSlots: boolean },
   ): void {
     if (tweetSurfaceIsInsideQuote(surface)) return;
+    if (tweetSurfaceIsInsideComposerDialog(surface)) return;
     const placement = document.documentElement.dataset.milxdyPostReadingButtonPlacement === "actions" ? "actions" : "header";
     const pokePlacement = document.documentElement.dataset.milxdyVisualPokePlacement === "top" ? "top" : "actions";
     const requestedTokens = [
@@ -1065,6 +1066,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function tweetSurfaceIsInsideQuote(surface: { element: HTMLElement }): boolean {
     const quoteTweet = surface.element.closest<HTMLElement>('[data-testid="quoteTweet"]');
     return Boolean(quoteTweet && quoteTweet !== surface.element);
+  }
+
+  function tweetSurfaceIsInsideComposerDialog(surface: { element: HTMLElement }): boolean {
+    const dialog = surface.element.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]');
+    return Boolean(dialog?.querySelector('[data-testid^="tweetTextarea_"]'));
   }
 
   function findOwnedTweetNode<T extends HTMLElement = HTMLElement>(surface: TwitterSurface, selector: string): T | undefined {

@@ -525,6 +525,22 @@ export const RESKIN_CSS = `
     letter-spacing: 0 !important;
   }
 
+  html[data-milxdy-reskin-profile="max"] :is([role="dialog"], [aria-modal="true"]):has([data-testid^="tweetTextarea_"]) article[data-testid="tweet"] :is(
+    [data-testid="User-Name"],
+    [data-testid="User-Name"] *,
+    [data-testid="tweetText"],
+    [data-testid="tweetText"] *
+  ),
+  html[data-milxdy-reskin-profile="moderate"] :is([role="dialog"], [aria-modal="true"]):has([data-testid^="tweetTextarea_"]) article[data-testid="tweet"] :is(
+    [data-testid="User-Name"],
+    [data-testid="User-Name"] *,
+    [data-testid="tweetText"],
+    [data-testid="tweetText"] *
+  ) {
+    font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+    letter-spacing: 0 !important;
+  }
+
   html[data-milxdy-reskin-profile="moderate"] [data-testid="UserDescription"],
   html[data-milxdy-reskin-profile="moderate"] [data-testid="UserDescription"] * {
     font-family: var(--milxdy-font-tweet) !important;
