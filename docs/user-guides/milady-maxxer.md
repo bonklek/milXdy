@@ -6,7 +6,7 @@ Milady Maxxer applies Max mode styling, optional Milady image detection, XP beha
 
 - Open the extension popup.
 - Use the **Maxxer** tab for Maxxer behavior.
-- Enable and pin **Maxxer** from the Apps Hub to use the side panel.
+- Enable and pin **Maxxer** from Apps & Features to use the side panel.
 
 ## Common Tasks
 

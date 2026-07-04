@@ -65,7 +65,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 ## Known Limits
 
 - Firefox automated build/lint checks pass, but Firefox support should not be advertised broadly until manual Firefox smoke testing passes using [Firefox QA](FIREFOX_QA.md).
-- `web-ext` reports no Firefox lint errors. The current package still has reviewed warnings from bundled OCR/ONNX/Tesseract code and existing dynamic-rendering patterns, plus a future AMO notice for `browser_specific_settings.gecko.data_collection_permissions`.
+- `web-ext` reports no Firefox lint errors. The current package still has reviewed warnings from bundled OCR/ONNX/Tesseract code and existing dynamic-rendering patterns. Later release work added explicit Firefox data-collection metadata under `browser_specific_settings.gecko.data_collection_permissions`.
 - `npm audit --omit=dev` reports no production dependency vulnerabilities. `npm ci` still reports dev-tree audit findings, which should be reviewed separately from the frozen feature package.
 - Direct RemiNet upload/share for Tweet PNG exports is still blocked until a suitable endpoint and privacy behavior are confirmed.
 - X/Twitter DOM changes can affect share-menu injection, RemiNet surfaces, and profile banner rendering.

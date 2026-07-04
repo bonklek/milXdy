@@ -4,7 +4,7 @@ Music indexes local music, enriches ISRC metadata, manages playlists, and create
 
 ## Where To Find It
 
-- Enable and pin **Music** from the Apps Hub.
+- Enable and pin **Music** from Apps & Features.
 - Open **Music** from the side rail.
 - Use Chromium for the full local folder workflow.
 

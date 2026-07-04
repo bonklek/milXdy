@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Remilia Wiki">
+  <rect width="64" height="64" rx="10" fill="#f8fafc"/>
+  <path d="M18 14h24a6 6 0 0 1 6 6v30H22a6 6 0 0 0-6 6V20a6 6 0 0 1 6-6z" fill="#2563eb"/>
+  <path d="M24 24h16M24 32h16M24 40h10" stroke="#f8fafc" stroke-width="4" stroke-linecap="round"/>
+</svg>

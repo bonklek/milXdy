@@ -58,7 +58,7 @@ If `node` is unavailable on `PATH` in the test environment, run the same scripts
 - Click an inline wiki article link and confirm it opens the Wiki sidebar rather than a new tab.
 - Modifier-click the same link and confirm normal browser link behavior is preserved.
 - Hover a wiki link, click the preview read-more link, and confirm it routes into the Wiki sidebar.
-- Enter a non-`wiki.remilia.org` URL in the sidebar URL field and confirm it does not navigate the embedded panel away from the wiki.
+- Enter a URL outside `wiki.remilia.org` and `remilia.wiki` in the sidebar URL field and confirm it does not navigate the embedded panel away from the wiki.
 - Use the open-in-tab control and confirm it opens the current wiki page in a normal browser tab.
 - Start Wiki article read-aloud and confirm the reader docks to the Wiki sidebar, highlights the active article text, and follows the current line when Wiki auto-scroll is enabled.
 - While Wiki article read-aloud is active, start tweet Post-reading and confirm Wiki playback pauses; then restart Wiki playback and confirm tweet playback pauses.
@@ -109,7 +109,7 @@ If `node` is unavailable on `PATH` in the test environment, run the same scripts
 - Confirm `CHANGELOG.md` links the `0.2.0` release notes.
 - Confirm `docs/RELEASE_NOTES_0.2.0.md` has no stale "Remaining Before Release" item that has already shipped.
 - Confirm [RELEASE_SCREENSHOTS_0.2.0.md](RELEASE_SCREENSHOTS_0.2.0.md) has matching screenshot evidence for side rail, Performance modes, Miladychan Portal, and Music before publishing release media.
-- Confirm `package.json`, `public/manifest.json`, and generated Chromium/Firefox manifests report version `0.2.0`.
+- Confirm `package.json`, `assets/extension/manifest.json`, and generated Chromium/Firefox manifests report version `0.2.0`.
 - Confirm GitHub release assets include Chromium/Firefox Lite, Balanced, and Full zips plus `milXdy-0.2.0-checksums.sha256` from `npm run package:release`, then run `npm run verify:release:checksums` and `npm run verify:release:reproducible`, and confirm the GitHub release is published as a normal release.
 - Confirm generated release archives contain source-built extension output only, with local browser caches and machine-specific test output excluded.
 - Confirm `.gitignore` keeps secret-bearing files out of the repository while allowing `.env.example`.
