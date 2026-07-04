@@ -1,6 +1,7 @@
 import { setOverlayAppStackOrder } from "./app-layout";
 
 export type OverlayDockSide = "left" | "right";
+export type OverlayDockTranslator = (text: string) => string;
 
 export type OverlayDockItem = {
   id: string;
@@ -47,6 +48,7 @@ type DockState = {
   } | null;
   longPressTimer: number | null;
   suppressClick: boolean;
+  translate: OverlayDockTranslator;
 };
 
 type DockApi = {
@@ -59,6 +61,7 @@ type DockApi = {
   setAppOrder: (ids: readonly string[]) => void;
   createSettingsPanel: (onUpdate?: () => void) => HTMLElement;
   subscribeSide: (callback: (side: OverlayDockSide) => void) => () => void;
+  setTranslator: (translate: OverlayDockTranslator) => void;
 };
 
 const ROOT_ID = "milxdy-overlay-dock-root";
@@ -85,6 +88,7 @@ function createDockApi(): DockApi {
     drag: null,
     longPressTimer: null,
     suppressClick: false,
+    translate: (text) => text,
   };
 
   function register(item: OverlayDockItem): OverlayDockRegistration {
@@ -140,6 +144,11 @@ function createDockApi(): DockApi {
     sideListeners.add(callback);
     callback(state.side);
     return () => sideListeners.delete(callback);
+  }
+
+  function setTranslator(translate: OverlayDockTranslator): void {
+    state.translate = translate;
+    render();
   }
 
   function notifySide(): void {
@@ -471,18 +480,18 @@ function createDockApi(): DockApi {
     panel.className = "milxdy-overlay-dock-settings";
 
     const title = document.createElement("strong");
-    title.textContent = "Dock";
+    title.textContent = state.translate("Dock");
 
     const sideGroup = document.createElement("div");
     sideGroup.className = "milxdy-overlay-dock-segment";
     sideGroup.append(
-      sideButton("Left", "left", onUpdate),
-      sideButton("Right", "right", onUpdate),
+      sideButton(state.translate("Left"), "left", onUpdate),
+      sideButton(state.translate("Right"), "right", onUpdate),
     );
 
     const reorder = document.createElement("button");
     reorder.type = "button";
-    reorder.textContent = state.reorderMode ? "Done" : "Reorder";
+    reorder.textContent = state.reorderMode ? state.translate("Done") : state.translate("Reorder");
     reorder.addEventListener("click", () => {
       state.reorderMode = !state.reorderMode;
       if (!state.reorderMode) saveOrder();
@@ -492,7 +501,7 @@ function createDockApi(): DockApi {
 
     const reset = document.createElement("button");
     reset.type = "button";
-    reset.textContent = "Reset order";
+    reset.textContent = state.translate("Reset order");
     reset.addEventListener("click", () => {
       state.order = Array.from(state.items.keys());
       saveOrder();
@@ -501,18 +510,18 @@ function createDockApi(): DockApi {
       onUpdate?.();
     });
 
-    const appSection = settingsSection("Apps");
+    const appSection = settingsSection(state.translate("Apps"));
     for (const item of orderedItems().filter((item) => item.stackable !== false)) {
       appSection.append(settingsAppRow(item));
     }
     if (!appSection.querySelector(".milxdy-overlay-dock-settings-row")) {
       const empty = document.createElement("span");
       empty.className = "milxdy-overlay-dock-settings-empty";
-      empty.textContent = "No rail apps pinned.";
+      empty.textContent = state.translate("No rail apps pinned.");
       appSection.append(empty);
     }
 
-    const featureSection = settingsSection("Features");
+    const featureSection = settingsSection(state.translate("Features"));
     const actions = Array.from(state.settingsActions.entries())
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([, action]) => settingsActionButton(action, onUpdate));
@@ -574,7 +583,7 @@ function createDockApi(): DockApi {
     return button;
   }
 
-  return { register, getSide, setSide, setHiddenItems, setSettingsAction, getAppOrder, setAppOrder, createSettingsPanel, subscribeSide };
+  return { register, getSide, setSide, setHiddenItems, setSettingsAction, getAppOrder, setAppOrder, createSettingsPanel, subscribeSide, setTranslator };
 }
 
 function injectStyles(): void {

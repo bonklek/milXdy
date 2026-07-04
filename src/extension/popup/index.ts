@@ -44,6 +44,16 @@ import {
   type VisualThemeSettings,
   type ProfileAudioSettings,
 } from "../../platform/visuals/reskin-profile";
+import {
+  applyDocumentLocale,
+  applyLocalizedDom,
+  currentLocalePreference,
+  initializeLocalization,
+  normalizeLocalePreference,
+  setLocalePreference,
+  t,
+  tx,
+} from "../../platform/i18n";
 
 type ControlBinding = {
   area: Area;
@@ -198,6 +208,10 @@ const bindings: Record<string, ControlBinding> = {
 void boot();
 
 async function boot(): Promise<void> {
+  await initializeLocalization();
+  applyDocumentLocale(document);
+  applyLocalizedDom(document);
+  setupLocaleControl();
   applyBuildProfileAvailability();
   setupTabs();
   await setupThemeControls();
@@ -226,6 +240,16 @@ function normalizeBuildProfile(value: unknown): BuildProfile {
 
 function normalizeBuildTarget(value: unknown): BuildTarget {
   return value === "firefox" ? "firefox" : "chromium";
+}
+
+function setupLocaleControl(): void {
+  const select = document.getElementById("localePreference") as HTMLSelectElement | null;
+  if (!select) return;
+  select.value = currentLocalePreference();
+  select.addEventListener("change", () => {
+    const preference = normalizeLocalePreference(select.value);
+    void setLocalePreference(preference).then(() => window.location.reload());
+  });
 }
 
 function applyBuildProfileAvailability(): void {

@@ -35,6 +35,13 @@ import type {
   MilxdyContentAppModule,
   MilxdyRouteChange,
 } from "../app-sdk/app-platform";
+import {
+  applyDocumentLocale,
+  initializeLocalization,
+  observeLocalizationChanges,
+  t,
+  tx,
+} from "../i18n";
 
 declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
 declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
@@ -309,6 +316,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   async function boot(): Promise<void> {
     const bootStartedAt = performance.now();
+    await initializeLocalization();
+    applyDocumentLocale(document, { setLang: false });
+    getOverlayDock().setTranslator(tx);
+    state.runtimeDisposables.add(observeLocalizationChanges(() => {
+      applyDocumentLocale(document, { setLang: false });
+      getOverlayDock().setTranslator(tx);
+      for (const app of state.apps) updateDockRegistrationLabel(app);
+      registerHubDockMetadata();
+      renderHubPanel();
+    }));
     resetRuntimeCounters();
     resetTwitterScannerCounters();
     state.performanceMode = await loadPerformanceMode();
@@ -1240,9 +1257,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (!app.dock || app.available === false || state.dockRegistrations.has(app.id)) return;
     const registration = getOverlayDock().register({
       id: app.id,
-      label: app.dock.label,
+      label: appDockLabel(app),
       icon: app.dock.icon ? runtimeAssetUrl(resolveAppIconAsset(app.dock.icon)) : dockIconForApp(app),
-      title: app.name,
+      title: appDisplayName(app),
       active: false,
       onActivate: () => {
         void loadApp(app, "dockOpen").then((module) => {
@@ -1255,6 +1272,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       },
     });
     state.dockRegistrations.set(app.id, registration);
+  }
+
+  function updateDockRegistrationLabel(app: MilxdyAppManifest): void {
+    const registration = state.dockRegistrations.get(app.id);
+    if (!registration || !app.dock) return;
+    registration.update({
+      label: appDockLabel(app),
+      title: appDisplayName(app),
+    });
   }
 
   function updateThemedAppIcons(): void {
@@ -1567,13 +1593,31 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function registerHubDockMetadata(): void {
     registerHideAllDockMetadata();
-    if (state.hubDockRegistration) return;
+    const addAppsAction = {
+      label: t("appsHubAddApps", "Apps & Features"),
+      title: t("appsHubOpenTitle", "Open Apps & Features"),
+      onActivate: openHubPanel,
+    };
+    const resetPositionsAction = {
+      label: t("appsHubResetWindows", "Reset app positions"),
+      title: t("appsHubResetWindowsTitle", "Reset saved overlay app window placement"),
+      onActivate: () => void resetAppPositions(),
+    };
+    if (state.hubDockRegistration) {
+      state.hubDockRegistration.update({
+        label: t("appsHubLabel", "Apps"),
+        title: t("appsHubTitle", "Apps & Features"),
+      });
+      getOverlayDock().setSettingsAction("milxdy.addApps", addAppsAction);
+      getOverlayDock().setSettingsAction("milxdy.resetAppPositions", resetPositionsAction);
+      return;
+    }
     state.hubDockRegistration = getOverlayDock().register({
       id: "milxdyHub",
-      label: "Apps",
+      label: t("appsHubLabel", "Apps"),
       icon: hubDockIcon(),
       stackable: false,
-      title: "Open Apps & Features",
+      title: t("appsHubOpenTitle", "Open Apps & Features"),
       active: false,
       onActivate: () => {
         openHubPanel();
@@ -1582,29 +1626,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         closeHubPanel();
       },
     });
-    getOverlayDock().setSettingsAction("milxdy.addApps", {
-      label: "Apps & Features",
-      title: "Open Apps & Features",
-      onActivate: openHubPanel,
-    });
-    getOverlayDock().setSettingsAction("milxdy.resetAppPositions", {
-      label: "Reset app positions",
-      title: "Reset saved overlay app window placement",
-      onActivate: () => void resetAppPositions(),
-    });
+    getOverlayDock().setSettingsAction("milxdy.addApps", addAppsAction);
+    getOverlayDock().setSettingsAction("milxdy.resetAppPositions", resetPositionsAction);
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.addApps", null));
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.resetAppPositions", null));
   }
 
   function registerHideAllDockMetadata(): void {
-    if (state.hideAllDockRegistration) return;
+    if (state.hideAllDockRegistration) {
+      state.hideAllDockRegistration.update({
+        label: t("appsHubHideAll", "Hide all"),
+        title: t("appsHubHideAllTitle", "Hide all open milXdy apps"),
+      });
+      return;
+    }
     state.hideAllDockRegistration = getOverlayDock().register({
       id: "milxdyHideAll",
-      label: "Hide all",
+      label: t("appsHubHideAll", "Hide all"),
       icon: "hide all",
       stackable: false,
       beforeId: "milxdyHub",
-      title: "Hide all open milXdy apps",
+      title: t("appsHubHideAllTitle", "Hide all open milXdy apps"),
       active: false,
       onActivate: () => {
         void hideAllOverlayApps();
@@ -1639,7 +1681,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function openHubPanel(): void {
     ensureHubPanel();
     renderHubPanel();
-    state.hubDockRegistration?.update({ active: true, title: "Apps & Features" });
+    state.hubDockRegistration?.update({ active: true, title: t("appsHubTitle", "Apps & Features") });
   }
 
   function closeHubPanel(): void {
@@ -1660,7 +1702,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       root.className = "milxdy-app-hub-panel milxdy-overlay-app-shell";
       prepareOverlayAppRoot(root);
       root.setAttribute("role", "region");
-      root.setAttribute("aria-label", "Apps & Features");
+      root.setAttribute("aria-label", t("appsHubTitle", "Apps & Features"));
     } else {
       root.classList.add("milxdy-overlay-app-shell");
     }
@@ -1680,14 +1722,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const header = document.createElement("div");
     header.className = "milxdy-app-hub-header";
     const title = document.createElement("strong");
-    title.textContent = "Apps & Features";
+    title.textContent = t("appsHubTitle", "Apps & Features");
     const headerActions = document.createElement("div");
     headerActions.className = "milxdy-app-hub-header-actions";
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "milxdy-app-hub-settings-button";
-    settings.title = "Dock settings";
-    settings.setAttribute("aria-label", "Dock settings");
+    settings.title = t("appsHubDockSettings", "Dock settings");
+    settings.setAttribute("aria-label", t("appsHubDockSettings", "Dock settings"));
     settings.setAttribute("aria-expanded", String(state.hubDockSettingsOpen));
     settings.textContent = "\u2699";
     settings.addEventListener("click", () => {
@@ -1696,9 +1738,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     const close = document.createElement("button");
     close.type = "button";
-    close.textContent = "Minimize";
-    close.title = "Minimize Apps & Features";
-    close.setAttribute("aria-label", "Minimize Apps & Features");
+    close.textContent = t("appsHubMinimize", "Minimize");
+    close.title = t("appsHubMinimizeApps", "Minimize Apps & Features");
+    close.setAttribute("aria-label", t("appsHubMinimizeApps", "Minimize Apps & Features"));
     close.addEventListener("click", closeHubPanel);
     headerActions.append(settings, close);
     header.append(title, headerActions);
@@ -1707,13 +1749,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const firstRun = document.createElement("section");
       firstRun.className = "milxdy-app-hub-first-run";
       const heading = document.createElement("strong");
-      heading.textContent = "Light Start";
+      heading.textContent = t("appsHubLightStart", "Light Start");
       const copy = document.createElement("p");
-      copy.textContent = "Choose an exact app set, default rail pins, and matching Performance mode.";
+      copy.textContent = t("appsHubLightStartCopy", "Choose an exact app set, default rail pins, and matching Performance mode.");
       const actions = presetActions();
       const skip = document.createElement("button");
       skip.type = "button";
-      skip.textContent = "Keep defaults";
+      skip.textContent = t("appsHubKeepDefaults", "Keep defaults");
       skip.addEventListener("click", () => completeFirstRun("skipped"));
       actions.append(skip);
       firstRun.append(heading, copy, actions);
@@ -1734,10 +1776,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const search = document.createElement("label");
     search.className = "milxdy-app-hub-search";
     const searchLabel = document.createElement("span");
-    searchLabel.textContent = "Search apps and features";
+    searchLabel.textContent = t("appsHubSearchApps", "Search apps and features");
     const searchInput = document.createElement("input");
     searchInput.type = "search";
-    searchInput.placeholder = "Search by name, category, setting, data, or permissions";
+    searchInput.placeholder = t("appsHubSearchPlaceholder", "Search by name, category, setting, data, or permissions");
     searchInput.value = state.hubSearchQuery;
     searchInput.addEventListener("input", () => {
       state.hubSearchQuery = searchInput.value;
@@ -1764,7 +1806,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (hubApps.length === 0) {
       const empty = document.createElement("p");
       empty.className = "milxdy-app-hub-empty";
-      empty.textContent = "No apps or features match that search.";
+      empty.textContent = t("appsHubNoMatches", "No apps or features match that search.");
       list.append(empty);
     }
     root.append(list);
@@ -1792,11 +1834,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const heading = document.createElement("div");
     heading.className = "milxdy-app-hub-section-title";
     const headingLabel = document.createElement("strong");
-    headingLabel.textContent = label;
+    headingLabel.textContent = hubSectionLabel(label);
     heading.append(headingLabel);
     if (label === "Apps") {
       const hint = document.createElement("span");
-      hint.textContent = "reorder to change stacking priority";
+      hint.textContent = t("appsHubReorderHint", "reorder to change stacking priority");
       heading.append(hint);
     }
     section.append(heading);
@@ -1806,6 +1848,25 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function isHubRailApp(app: MilxdyAppManifest): boolean {
     return Boolean(app.dock && app.hub?.rail.supported !== false);
+  }
+
+  function appDisplayName(app: MilxdyAppManifest): string {
+    return tx(app.name);
+  }
+
+  function appDockLabel(app: MilxdyAppManifest): string {
+    return tx(app.dock?.label || app.name);
+  }
+
+  function appDescription(app: MilxdyAppManifest): string {
+    return tx(app.hub?.shortDescription || app.description);
+  }
+
+  function hubSectionLabel(label: string): string {
+    if (label === "Apps") return t("appsHubSectionApps", "Apps");
+    if (label === "Features") return t("appsHubSectionFeatures", "Features");
+    if (label === "Themes") return t("appsHubSectionThemes", "Themes");
+    return tx(label);
   }
 
   function hubPackageKind(app: MilxdyAppManifest): "app" | "feature" | "theme" {
@@ -1827,9 +1888,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const actions = document.createElement("div");
     actions.className = "milxdy-app-hub-preset-actions";
     actions.append(
-      presetButton("Lite apps", "lite"),
-      presetButton("Balanced apps", "balanced"),
-      presetButton("All apps", "full"),
+      presetButton(t("appsHubLiteApps", "Lite apps"), "lite"),
+      presetButton(t("appsHubBalancedApps", "Balanced apps"), "balanced"),
+      presetButton(t("appsHubAllApps", "All apps"), "full"),
     );
     return actions;
   }
@@ -1838,9 +1899,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const section = document.createElement("section");
     section.className = "milxdy-app-hub-setup-settings";
     const title = document.createElement("strong");
-    title.textContent = "Setup";
+    title.textContent = t("appsHubSetup", "Setup");
     const detail = document.createElement("span");
-    detail.textContent = "Reapply exact app enablement, default rail pins, and matching Performance mode.";
+    detail.textContent = t("appsHubSetupDetail", "Reapply exact app enablement, default rail pins, and matching Performance mode.");
     section.append(title, detail, presetActions());
     return section;
   }
@@ -1857,9 +1918,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const failedCount = diagnostics().filter((app) => app.state === "failed").length;
 
     const title = document.createElement("strong");
-    title.textContent = `Runtime: ${state.performanceMode}`;
+    title.textContent = t("appsHubRuntimeTitle", "Runtime: $1", [state.performanceMode]);
     const meta = document.createElement("span");
-    meta.textContent = `${enabledCount} enabled | ${pinnedCount} pinned | ${loadedCount} loaded | ${loadingCount} loading${failedCount ? ` | ${failedCount} failed` : ""}`;
+    meta.textContent = t("appsHubRuntimeMeta", "$1 enabled | $2 pinned | $3 loaded | $4 loading$5", [
+      enabledCount,
+      pinnedCount,
+      loadedCount,
+      loadingCount,
+      failedCount ? t("appsHubRuntimeFailed", " | $1 failed", [failedCount]) : "",
+    ]);
     summary.append(title, meta);
     return summary;
   }
@@ -1884,25 +1951,25 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       image.decoding = "async";
       icon.appendChild(image);
     } else {
-      icon.textContent = (app.dock?.label || app.name).slice(0, 1).toUpperCase();
+      icon.textContent = (appDockLabel(app) || appDisplayName(app)).slice(0, 1).toUpperCase();
     }
 
     const summary = document.createElement("button");
     summary.className = "milxdy-app-hub-card-summary";
     summary.type = "button";
     summary.setAttribute("aria-expanded", String(state.hubExpandedApps.has(app.id)));
-    summary.setAttribute("aria-label", `${state.hubExpandedApps.has(app.id) ? "Collapse" : "Expand"} ${app.name}`);
+    summary.setAttribute("aria-label", `${state.hubExpandedApps.has(app.id) ? t("appsHubCollapse", "Collapse") : t("appsHubExpand", "Expand")} ${appDisplayName(app)}`);
     if (isHubRailApp(app)) {
       const dragHandle = document.createElement("span");
       dragHandle.className = "milxdy-app-hub-drag-handle";
-      dragHandle.title = "Drag to reorder app stacking";
+      dragHandle.title = t("appsHubDragReorder", "Drag to reorder app stacking");
       dragHandle.setAttribute("aria-hidden", "true");
       dragHandle.textContent = "⋮⋮";
       dragHandle.addEventListener("pointerdown", (event) => startHubAppDrag(event, app.id));
       summary.append(dragHandle);
     }
     const summaryTitle = document.createElement("strong");
-    summaryTitle.textContent = app.name;
+    summaryTitle.textContent = appDisplayName(app);
     const expandIcon = document.createElement("span");
     expandIcon.className = "milxdy-app-hub-expand-icon";
     summary.append(icon, summaryTitle, expandIcon);
@@ -1916,9 +1983,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     body.className = "milxdy-app-hub-body";
     const enableControl = appHubEnableControl(app);
     const description = document.createElement("p");
-    description.textContent = app.hub?.shortDescription || app.description;
+    description.textContent = appDescription(app);
     const meta = document.createElement("span");
-    meta.textContent = `${packageKindLabel(app)} | ${app.hub?.category || "app"} | ${app.available === false ? "Unavailable in this build" : state.enabledApps.has(app.id) ? "On" : "Off"}`;
+    meta.textContent = `${packageKindLabel(app)} | ${tx(app.hub?.category || "app")} | ${app.available === false ? t("appsHubUnavailableBuild", "Unavailable in this build") : state.enabledApps.has(app.id) ? t("appsHubOn", "On") : t("appsHubOff", "Off")}`;
     const notes = appHubMetadataNotes(app);
     const runtime = document.createElement("span");
     runtime.className = "milxdy-app-hub-runtime-state";
@@ -1928,7 +1995,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available === false && app.unavailableReason) {
       const unavailable = document.createElement("span");
       unavailable.className = "milxdy-app-hub-unavailable";
-      unavailable.textContent = app.unavailableReason;
+      unavailable.textContent = tx(app.unavailableReason);
       body.append(unavailable);
     }
     body.append(runtime);
@@ -1938,7 +2005,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available !== false && app.dock && app.hub?.rail.supported !== false) {
       const pin = document.createElement("button");
       pin.type = "button";
-      pin.textContent = isRailPinned(app) ? "Unpin" : "Pin";
+      pin.textContent = isRailPinned(app) ? t("appsHubUnpin", "Unpin") : t("appsHubPin", "Pin");
       pin.disabled = !state.enabledApps.has(app.id);
       pin.addEventListener("click", () => setRailPinned(app.id, !isRailPinned(app)));
       controls.append(pin);
@@ -1946,7 +2013,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available !== false && app.dock && state.enabledApps.has(app.id)) {
       const open = document.createElement("button");
       open.type = "button";
-      open.textContent = "Open";
+      open.textContent = t("appsHubOpen", "Open");
       open.addEventListener("click", () => {
         void loadApp(app, "hubOpen").then((module) => Promise.resolve(module?.open?.()));
       });
@@ -1955,8 +2022,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available !== false && hasResettableStorage(app)) {
       const reset = document.createElement("button");
       reset.type = "button";
-      reset.textContent = "Reset";
-      reset.title = "Reset app settings";
+      reset.textContent = t("appsHubReset", "Reset");
+      reset.title = t("appsHubResetSettings", "Reset app settings");
       reset.addEventListener("click", () => resetAppSettings(app));
       controls.append(reset);
     }
@@ -1987,18 +2054,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       toggle.setAttribute("role", "switch");
       toggle.setAttribute("aria-checked", "false");
       toggle.setAttribute("aria-disabled", "true");
-      toggle.setAttribute("aria-label", `${app.name} unavailable in this build`);
-      switchText.textContent = "Unavailable";
-      detail.textContent = app.unavailableReason || "This app cannot be enabled right now.";
+      toggle.setAttribute("aria-label", t("appsHubAppUnavailableLabel", "$1 unavailable in this build", [appDisplayName(app)]));
+      switchText.textContent = t("appsHubUnavailable", "Unavailable");
+      detail.textContent = app.unavailableReason ? tx(app.unavailableReason) : t("appsHubCannotEnableNow", "This app cannot be enabled right now.");
     } else if (!app.setEnabled) {
       toggle.disabled = true;
       toggle.dataset.checked = "true";
       toggle.setAttribute("role", "switch");
       toggle.setAttribute("aria-checked", "true");
       toggle.setAttribute("aria-disabled", "true");
-      toggle.setAttribute("aria-label", `${app.name} is always on`);
-      switchText.textContent = "Always on";
-      detail.textContent = "Core feature";
+      toggle.setAttribute("aria-label", t("appsHubAlwaysOnLabel", "$1 is always on", [appDisplayName(app)]));
+      switchText.textContent = t("appsHubAlwaysOn", "Always on");
+      detail.textContent = t("appsHubCoreFeature", "Core feature");
     } else {
       const enabled = state.enabledApps.has(app.id);
       const performanceBlock = enabled ? null : appEnableBlockedByPerformance(app);
@@ -2009,10 +2076,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         toggle.dataset.performanceBlocked = "true";
         toggle.setAttribute("aria-disabled", "true");
       }
-      toggle.setAttribute("aria-label", performanceBlock || `${enabled ? "Disable" : "Enable"} ${app.name}`);
+      toggle.setAttribute("aria-label", performanceBlock || `${enabled ? t("appsHubDisable", "Disable") : t("appsHubEnable", "Enable")} ${appDisplayName(app)}`);
       toggle.title = performanceBlock || "";
-      switchText.textContent = enabled ? "On" : "Off";
-      detail.textContent = performanceBlock || (enabled ? "Click to disable this app." : "Click to enable this app.");
+      switchText.textContent = enabled ? t("appsHubOn", "On") : t("appsHubOff", "Off");
+      detail.textContent = performanceBlock || (enabled ? t("appsHubClickDisable", "Click to disable this app.") : t("appsHubClickEnable", "Click to enable this app."));
       toggle.addEventListener("click", () => setAppEnabled(app, !state.enabledApps.has(app.id)));
     }
 
@@ -2027,7 +2094,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const section = document.createElement("section");
     section.className = "milxdy-app-hub-generated-settings";
     const title = document.createElement("strong");
-    title.textContent = "Feature settings";
+    title.textContent = t("appsHubFeatureSettings", "Feature settings");
     section.append(title);
     for (const setting of settings) section.append(appHubGeneratedSettingRow(setting));
     return section;
@@ -2051,11 +2118,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const text = document.createElement("span");
     text.className = "milxdy-app-hub-generated-setting-text";
     const label = document.createElement("strong");
-    label.textContent = setting.label;
+    label.textContent = tx(setting.label);
     text.append(label);
     if (setting.description) {
       const description = document.createElement("small");
-      description.textContent = setting.description;
+      description.textContent = tx(setting.description);
       text.append(description);
     }
     const control = appHubGeneratedSettingControl(setting);
@@ -2092,12 +2159,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     button.dataset.checked = "false";
     button.setAttribute("role", "switch");
     button.setAttribute("aria-checked", "false");
-    button.setAttribute("aria-label", setting.label);
+    button.setAttribute("aria-label", tx(setting.label));
     const knob = document.createElement("span");
     knob.className = "milxdy-app-hub-switch-knob";
     const text = document.createElement("span");
     text.className = "milxdy-app-hub-switch-text";
-    text.textContent = "Off";
+    text.textContent = t("appsHubOff", "Off");
     button.append(knob, text);
     button.addEventListener("click", () => {
       const next = button.dataset.checked !== "true";
@@ -2114,11 +2181,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     select.className = setting.control.type === "segmented"
       ? "milxdy-app-hub-generated-segmented"
       : "milxdy-app-hub-generated-select";
-    select.setAttribute("aria-label", setting.label);
+    select.setAttribute("aria-label", tx(setting.label));
     for (const option of setting.control.options || []) {
       const element = document.createElement("option");
       element.value = settingOptionValue(option.value);
-      element.textContent = option.label;
+      element.textContent = tx(option.label);
       select.append(element);
     }
     select.addEventListener("change", () => {
@@ -2131,7 +2198,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const input = document.createElement("input");
     input.className = "milxdy-app-hub-generated-number";
     input.type = setting.control.type === "slider" ? "range" : "number";
-    input.setAttribute("aria-label", setting.label);
+    input.setAttribute("aria-label", tx(setting.label));
     if (typeof setting.control.min === "number") input.min = String(setting.control.min);
     if (typeof setting.control.max === "number") input.max = String(setting.control.max);
     if (typeof setting.control.step === "number") input.step = String(setting.control.step);
@@ -2146,9 +2213,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       ? document.createElement("textarea")
       : document.createElement("input");
     input.className = "milxdy-app-hub-generated-text";
-    input.setAttribute("aria-label", setting.label);
+    input.setAttribute("aria-label", tx(setting.label));
     if (input instanceof HTMLInputElement) input.type = "text";
-    if (setting.control.placeholder) input.placeholder = setting.control.placeholder;
+    if (setting.control.placeholder) input.placeholder = tx(setting.control.placeholder);
     input.addEventListener("change", () => {
       void writeManifestSettingValue(setting, readGeneratedControlValue(setting, input));
     });
@@ -2158,7 +2225,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function appHubUnsupportedSetting(setting: AppSettingDefinition): HTMLElement {
     const value = document.createElement("span");
     value.className = "milxdy-app-hub-generated-unsupported";
-    value.textContent = `${setting.control.type} unsupported`;
+    value.textContent = t("appsHubUnsupportedControl", "$1 unsupported", [setting.control.type]);
     return value;
   }
 
@@ -2229,7 +2296,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       control.dataset.checked = String(checked);
       control.setAttribute("aria-checked", String(checked));
       const text = control.querySelector(".milxdy-app-hub-switch-text");
-      if (text) text.textContent = checked ? "On" : "Off";
+      if (text) text.textContent = checked ? t("appsHubOn", "On") : t("appsHubOff", "Off");
       return;
     }
     if (control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement) {
@@ -2337,16 +2404,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const details = document.createElement("div");
     details.className = "milxdy-app-hub-details";
     details.append(
-      appHubDetailRow("Does", app.hub?.longDescription || app.description),
-      appHubDetailRow("Performance", `Startup ${app.cost.startup}; per-surface ${app.cost.perSurface}; network ${app.cost.network}; worker ${app.cost.worker}; DOM ${app.cost.domWrite}.`),
-      appHubDetailRow("Loads", app.loadTriggers.join(", ")),
-      appHubDetailRow("Chrome", appChromeSummary(app)),
-      appHubDetailRow("Settings", appSettingsSummary(app)),
-      appHubDetailRow("Settings home", appSettingsHome(app)),
-      appHubDetailRow("Data", listText(app.hub?.dataNotes)),
-      appHubDetailRow("Permissions", listText(app.hub?.permissionNotes) || listText(app.permissions?.hosts)),
-      appHubDetailRow("Storage", listText(app.hub?.localStorageNotes) || storageKeySummary(app)),
-      appHubDetailRow("Build", app.available === false ? app.unavailableReason || "Unavailable in this build." : "Included in this build."),
+      appHubDetailRow(t("appsHubDetailDoes", "Does"), tx(app.hub?.longDescription || app.description)),
+      appHubDetailRow(t("appsHubDetailPerformance", "Performance"), t("appsHubPerformanceSummary", "Startup $1; per-surface $2; network $3; worker $4; DOM $5.", [app.cost.startup, app.cost.perSurface, app.cost.network, app.cost.worker, app.cost.domWrite])),
+      appHubDetailRow(t("appsHubDetailLoads", "Loads"), listText(app.loadTriggers)),
+      appHubDetailRow(t("appsHubDetailChrome", "Chrome"), appChromeSummary(app)),
+      appHubDetailRow(t("appsHubDetailSettings", "Settings"), appSettingsSummary(app)),
+      appHubDetailRow(t("appsHubDetailSettingsHome", "Settings home"), appSettingsHome(app)),
+      appHubDetailRow(t("appsHubDetailData", "Data"), listText(app.hub?.dataNotes)),
+      appHubDetailRow(t("appsHubDetailPermissions", "Permissions"), listText(app.hub?.permissionNotes) || listText(app.permissions?.hosts)),
+      appHubDetailRow(t("appsHubDetailStorage", "Storage"), listText(app.hub?.localStorageNotes) || storageKeySummary(app)),
+      appHubDetailRow(t("appsHubDetailBuild", "Build"), app.available === false ? tx(app.unavailableReason || "Unavailable in this build.") : t("appsHubIncludedBuild", "Included in this build.")),
     );
     return details;
   }
@@ -2357,7 +2424,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const term = document.createElement("strong");
     term.textContent = label;
     const text = document.createElement("span");
-    text.textContent = value || "Not declared.";
+    text.textContent = value || t("appsHubNotDeclared", "Not declared.");
     row.append(term, text);
     return row;
   }
@@ -2366,28 +2433,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const notes = document.createElement("div");
     notes.className = "milxdy-app-hub-notes";
     notes.append(
-      appHubNote(`Cost ${app.cost.startup}/${app.cost.perSurface}`),
+      appHubNote(t("appsHubCostNote", "Cost $1/$2", [app.cost.startup, app.cost.perSurface])),
       appHubNote(packageKindLabel(app)),
-      appHubNote(app.dock && app.hub?.rail.supported !== false ? "Rail app" : "No rail"),
+      appHubNote(app.dock && app.hub?.rail.supported !== false ? t("appsHubRailApp", "Rail app") : t("appsHubNoRail", "No rail")),
     );
-    if (app.chrome) notes.append(appHubNote(`Chrome ${chromeStyleLabel(app.chrome.nativeStyle)}`));
-    if (app.settings?.length) notes.append(appHubNote(`${app.settings.length} settings`));
+    if (app.chrome) notes.append(appHubNote(t("appsHubChromeNote", "Chrome $1", [chromeStyleLabel(app.chrome.nativeStyle)])));
+    if (app.settings?.length) notes.append(appHubNote(t("appsHubSettingsCount", "$1 settings", [app.settings.length])));
     for (const label of app.hub?.privacyLabels || []) {
-      notes.append(appHubNote(label.replace(/-/g, " ")));
+      notes.append(appHubNote(tx(label.replace(/-/g, " "))));
     }
     for (const service of app.hub?.remoteServices || []) {
-      notes.append(appHubNote(service));
+      notes.append(appHubNote(tx(service)));
     }
     return notes;
   }
 
   function appChromeSummary(app: MilxdyAppManifest): string {
-    if (!app.chrome) return "Not declared.";
+    if (!app.chrome) return t("appsHubNotDeclared", "Not declared.");
     const supported = app.chrome.supportedStyles.map(chromeStyleLabel).join(", ");
     const notes = listText(app.chrome.notes);
     return [
-      `Native ${chromeStyleLabel(app.chrome.nativeStyle)}.`,
-      supported ? `Supports ${supported}.` : "",
+      t("appsHubNativeChrome", "Native $1.", [chromeStyleLabel(app.chrome.nativeStyle)]),
+      supported ? t("appsHubSupportsChrome", "Supports $1.", [supported]) : "",
       notes,
     ].filter(Boolean).join(" ");
   }
@@ -2395,11 +2462,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function chromeStyleLabel(style: string): string {
     switch (style) {
       case "native":
-        return "app defaults";
+        return t("appsHubChromeAppDefaults", "app defaults");
       case "reminet":
         return "RemiNet";
       case "classic":
-        return "Classic bevel";
+        return t("appsHubChromeClassicBevel", "Classic bevel");
       case "maxxer":
         return "Maxxer";
       case "reader":
@@ -2416,7 +2483,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function appSettingsSummary(app: MilxdyAppManifest): string {
-    if (!app.settings?.length) return "No settings schema declared.";
+    if (!app.settings?.length) return t("appsHubNoSettingsSchema", "No settings schema declared.");
     const byLocation = app.settings.reduce<Record<string, number>>((summary, setting) => {
       summary[setting.location] = (summary[setting.location] || 0) + 1;
       return summary;
@@ -2429,28 +2496,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .join(", ");
     return [
       locationText,
-      presetText ? `Preset participation: ${presetText}.` : "",
+      presetText ? t("appsHubPresetParticipation", "Preset participation: $1.", [presetText]) : "",
     ].filter(Boolean).join(" ");
   }
 
   function appSettingsHome(app: MilxdyAppManifest): string {
     if (hubPackageKind(app) === "feature") {
-      return "Feature settings should be exposed directly from Apps & Features when a generated settings renderer is available; global presets remain in the top-right settings menu.";
+      return t("appsHubFeatureSettingsHome", "Feature settings should be exposed directly from Apps & Features when a generated settings renderer is available; global presets remain in the top-right settings menu.");
     }
     if (hubPackageKind(app) === "theme") {
-      return "Theme and texture packs belong in Appearance/profile-pack flows; Apps & Features should show package status, reset, and review metadata.";
+      return t("appsHubThemeSettingsHome", "Theme and texture packs belong in Appearance/profile-pack flows; Apps & Features should show package status, reset, and review metadata.");
     }
-    return "App-owned settings belong inside the app window or its settings surface. Apps & Features keeps enablement, launch, pinning, reset, privacy, storage, and diagnostics here.";
+    return t("appsHubAppSettingsHome", "App-owned settings belong inside the app window or its settings surface. Apps & Features keeps enablement, launch, pinning, reset, privacy, storage, and diagnostics here.");
   }
 
   function packageKindLabel(app: MilxdyAppManifest): string {
     switch (hubPackageKind(app)) {
       case "app":
-        return "App";
+        return t("appsHubPackageApp", "App");
       case "feature":
-        return "Feature";
+        return t("appsHubPackageFeature", "Feature");
       case "theme":
-        return "Theme pack";
+        return t("appsHubPackageTheme", "Theme pack");
     }
   }
 
@@ -2459,11 +2526,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       case "appearance":
         return "Appearance";
       case "appsAndFeatures":
-        return "Apps & Features";
+        return t("appsHubTitle", "Apps & Features");
       case "appSurface":
-        return "App surface";
+        return t("appsHubAppSurface", "App surface");
       case "advanced":
-        return "Advanced";
+        return t("appsHubAdvanced", "Advanced");
       default:
         return location;
     }
@@ -2472,9 +2539,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function settingsPresetLabel(preset: string): string {
     switch (preset) {
       case "firstRun":
-        return "first run";
+        return t("appsHubFirstRun", "first run");
       case "profilePack":
-        return "profile packs";
+        return t("appsHubProfilePacks", "profile packs");
       default:
         return preset;
     }
@@ -2488,7 +2555,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function listText(values: readonly string[] | undefined): string {
-    return values?.filter(Boolean).join("; ") || "";
+    return values?.filter(Boolean).map((value) => tx(value)).join("; ") || "";
   }
 
   function hasResettableStorage(app: MilxdyAppManifest): boolean {
@@ -2720,19 +2787,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.id === "reminetChat" && mode !== "fast") return null;
     if (allowsFastModerateSurfaceImport(app)) return null;
     if (mode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
-      return "Please change your performance settings to enable";
+      return t("appsHubChangePerformanceToEnable", "Please change your performance settings to enable");
     }
     if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !budget.allowHeavyStartup) {
-      return "Please change your performance settings to enable";
+      return t("appsHubChangePerformanceToEnable", "Please change your performance settings to enable");
     }
     if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
-      return "Please change your performance settings to enable";
+      return t("appsHubChangePerformanceToEnable", "Please change your performance settings to enable");
     }
     if (app.cost.worker === "heavy" && mode !== "full" && mode !== "developer") {
-      return "Please change your performance settings to enable";
+      return t("appsHubChangePerformanceToEnable", "Please change your performance settings to enable");
     }
     if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
-      return "Please change your performance settings to enable";
+      return t("appsHubChangePerformanceToEnable", "Please change your performance settings to enable");
     }
     return null;
   }
@@ -3421,6 +3488,7 @@ function injectTweetScaffoldStyles(): void {
       --milxdy-hub-switch-on: #0f6b52;
       --milxdy-hub-switch-on-border: #69e0af;
       --milxdy-hub-switch-on-text: #ffffff;
+      --milxdy-hub-font-ui: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
       position: fixed;
       top: 16px;
       bottom: 136px;
@@ -3439,7 +3507,13 @@ function injectTweetScaffoldStyles(): void {
         inset 2px 2px 0 var(--milxdy-hub-border-light),
         inset -2px -2px 0 var(--milxdy-hub-border-dark),
         8px 8px 0 rgba(0, 0, 0, 0.34);
-      font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: var(--milxdy-hub-font-ui);
+    }
+    html[data-milxdy-locale-script="cyrillic"] #${HUB_PANEL_ID} {
+      --milxdy-hub-font-ui: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    html[data-milxdy-locale-script="cjk"] #${HUB_PANEL_ID} {
+      --milxdy-hub-font-ui: "Yu Gothic", "Hiragino Sans", "Meiryo", "Noto Sans JP", TwitterChirp, sans-serif;
     }
     #${HUB_PANEL_ID}[data-side="left"] { left: 76px; }
     #${HUB_PANEL_ID}[data-side="right"] { right: 76px; }
