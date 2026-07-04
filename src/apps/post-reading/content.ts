@@ -631,6 +631,7 @@ function markHeaderControlHost(slot: HTMLElement): void {
   for (let depth = 0; host && depth < 5; depth += 1, host = host.parentElement) {
     const buttons = Array.from(host.querySelectorAll<HTMLElement>('button, [role="button"]'));
     const hasTweetControl = buttons.some((button) => {
+      if (isShowMoreExpansionControl(button)) return false;
       const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
       return label.includes("grok") || label.includes("caret") || label.includes("more");
     });
@@ -1499,6 +1500,7 @@ function findTopControlButton(tweet: HTMLElement, footer: HTMLElement | null = n
     if (button.closest('[data-testid="quoteTweet"]')) return false;
     if (footer?.contains(button)) return false;
     if (button.closest(POST_READING_BUTTON)) return false;
+    if (isShowMoreExpansionControl(button)) return false;
     const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
     return label.includes("caret") || label.includes("more") || label.includes("grok");
   }) || null;
@@ -1519,9 +1521,7 @@ function findLikelyActionRow(tweet: HTMLElement): HTMLElement | null {
 async function expandTweetText(tweet: HTMLElement): Promise<void> {
   const buttons = Array.from(tweet.querySelectorAll<HTMLElement>('button, [role="button"]'));
   const showMore = buttons.find((button) => {
-    const text = (button.innerText || button.textContent || "").trim().toLowerCase();
-    const label = (button.getAttribute("aria-label") || "").trim().toLowerCase();
-    return text === "show more" || label === "show more";
+    return isShowMoreExpansionControl(button);
   });
   if (!showMore) return;
   const beforeSignature = tweetReadableTextSignature(tweet);
@@ -1532,6 +1532,12 @@ async function expandTweetText(tweet: HTMLElement): Promise<void> {
 function tweetReadableTextSignature(tweet: HTMLElement): string {
   const bodies = getMainTweetBodies(tweet);
   return bodies.map((body) => body.innerText || body.textContent || "").join("\n").replace(/\s+/g, " ").trim();
+}
+
+function isShowMoreExpansionControl(button: HTMLElement): boolean {
+  const text = (button.innerText || button.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+  const label = (button.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase();
+  return text === "show more" || label === "show more";
 }
 
 function waitForTweetTextStabilization(tweet: HTMLElement, beforeSignature: string): Promise<void> {
@@ -2711,4 +2717,3 @@ function buildSmoothParts(text: string): string[] {
 function estimateHighlightTokenCount(text: string): number {
   return estimateSharedHighlightTokenCount(text);
 }
-

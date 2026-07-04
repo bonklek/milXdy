@@ -1101,6 +1101,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         .find((button) => {
           if (button.closest('[data-testid="quoteTweet"]')) return false;
           if (actionRow?.contains(button)) return false;
+          if (isShowMoreExpansionControl(button)) return false;
           const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
           return label.includes("caret") || label.includes("more");
         });
@@ -1121,6 +1122,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     for (let depth = 0; host && depth < 5; depth += 1, host = host.parentElement) {
       const buttons = Array.from(host.querySelectorAll<HTMLElement>('button, [role="button"]'));
       const hasTweetControl = buttons.some((button) => {
+        if (isShowMoreExpansionControl(button)) return false;
         const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
         return label.includes("grok") || label.includes("caret") || label.includes("more");
       });
@@ -1194,6 +1196,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       marked = true;
     }
     return marked;
+  }
+
+  function isShowMoreExpansionControl(button: HTMLElement): boolean {
+    const text = (button.innerText || button.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+    const label = (button.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase();
+    return text === "show more" || label === "show more";
   }
 
   function findDisplayNameLink(userName: HTMLElement): HTMLElement | null {
