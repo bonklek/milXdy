@@ -122,6 +122,7 @@ let visualSelectedThemeId = "new";
 let fullAppearanceWarningAccepted = false;
 
 const bindings: Record<string, ControlBinding> = {
+  "composerTools.enabled": { area: "local", key: "milxdy.composerTools.enabled", kind: "boolean", fallback: true },
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
   performanceMode: { area: "local", key: PERFORMANCE_MODE_KEY, kind: "string", fallback: "balanced" },
   reskinProfile: { area: "local", key: RESKIN_PROFILE_KEY, kind: "string", fallback: DEFAULT_RESKIN_PROFILE },
@@ -535,6 +536,7 @@ async function applyFullStartSetup(): Promise<void> {
     }),
   ]);
   setControlValue("diagnosticsEnabled", false);
+  setControlValue("composerTools.enabled", true);
   setControlValue("wiki.enabled", true);
   setControlValue("wiki.previewsEnabled", true);
   setControlValue("wiki.debugMode", false);
