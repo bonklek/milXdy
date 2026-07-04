@@ -23,6 +23,10 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 
 The main milXdy content runtime currently runs on X/Twitter pages. RemiliaNET, Remilia Wiki, and Miladychan host permissions support declared background services, validated embedded Wiki frames, user-opened overlay apps, and web-accessible assets; they do not by themselves mean the full app runtime injects into those sites.
 
+## Local-Only Composer Helpers
+
+Composer Tools runs inside the existing X/Twitter content runtime and reads only the active post composer text around the caret to convert typed double dashes into em dashes. It does not add host permissions, network calls, background messages, or remote services, and it ignores DMs, search fields, native inputs, and textareas.
+
 ## Firefox Data Collection Manifest
 
 Firefox builds declare required data collection categories for the documented

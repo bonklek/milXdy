@@ -597,6 +597,112 @@
     }
   },
   {
+    "id": "composerTools",
+    "name": "Composer Tools",
+    "version": "0.1.0",
+    "description": "Adds lightweight typing helpers to X/Twitter post composers.",
+    "packageKind": "feature",
+    "entryName": "features/composerTools",
+    "entryPoint": "src/apps/composer-tools/entry.ts",
+    "contentEntry": "features/composerTools.js",
+    "defaultEnabled": true,
+    "storageKeys": {
+      "local": [
+        "milxdy.composerTools.enabled"
+      ]
+    },
+    "settings": [
+      {
+        "id": "composerTools.enabled",
+        "label": "Composer Tools",
+        "description": "Convert double dashes to em dashes while typing supported X/Twitter posts.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.composerTools.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      }
+    ],
+    "surfaces": [],
+    "lifecycle": {
+      "mode": "runtime",
+      "localOnly": true,
+      "notes": [
+        "Runs as a lightweight document input listener for supported X/Twitter post composer textboxes."
+      ]
+    },
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "tweet"
+        ],
+        "notes": [
+          "Listens only to active post composer input events and ignores DMs, search, native inputs, and textareas."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "cheap",
+      "perSurface": "cheap",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "small"
+    },
+    "loadTriggers": [
+      "startup"
+    ],
+    "chrome": {
+      "nativeStyle": "native",
+      "supportedStyles": [
+        "native"
+      ],
+      "notes": [
+        "Composer Tools does not render an app window chrome."
+      ]
+    },
+    "hub": {
+      "category": "social",
+      "shortDescription": "Convert double dashes to em dashes while typing posts.",
+      "rail": {
+        "supported": false,
+        "defaultPinned": false
+      },
+      "presets": [
+        "lite",
+        "balanced",
+        "full"
+      ],
+      "dataNotes": [
+        "Reads only the active X/Twitter post composer text around the caret."
+      ],
+      "localStorageNotes": [
+        "Stores Composer Tools enablement."
+      ],
+      "privacyLabels": [
+        "local-only"
+      ]
+    }
+  },
+  {
     "id": "wiki",
     "name": "Remilia Wiki Hyperlinks",
     "version": "0.1.5",
