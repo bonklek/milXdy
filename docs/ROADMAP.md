@@ -99,7 +99,7 @@ Near-term platform work after `0.2.0` should therefore focus on:
 
 Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
 
-## In Stabilization: 0.2.2 - Prepared App SDK Update
+## Shipped: 0.2.2 - Prepared App SDK Update
 
 Theme: make first-party apps easier to understand, configure, package, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, local package groundwork, filesystem layout, and first-party lifecycle compliance.
 
@@ -131,7 +131,7 @@ Theme: continue the app-platform split after Apps and Features cleanup by harden
   - keep site-aware app behavior tied to manifest metadata, lifecycle hooks, background services, and shared diagnostics
 - Continue local app-package and distribution follow-through.
   - evaluate package signatures, marketplace discovery, normal-user install/update UI, and starter-kit polish after the 0.2.2 reviewed custom-build groundwork
-  - keep marketplace, submission, and browser-distribution prep separate from the 0.2.2 release-branch stabilization work
+  - keep marketplace, submission, and browser-distribution prep separate from the shipped 0.2.2 scope
   - evaluate Safari desktop WebExtension support if it remains aligned with the release scope
 - Keep the former RemiNet Sharing work in Composer Kit.
   - the X Messages RemiNet pseudo chat entry shipped in 0.2.0
