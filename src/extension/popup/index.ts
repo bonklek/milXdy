@@ -7,21 +7,28 @@ type BuildTarget = "chromium" | "firefox";
 declare const MILXDY_BUILD_PROFILE: string;
 declare const MILXDY_BUILD_TARGET: string;
 
-import type { AppPreset, MilxdyAppManifest } from "./shared/appPlatform";
-import { FIRST_PARTY_APPS } from "./shared/firstPartyApps";
+import type { AppPreset, MilxdyAppManifest } from "../../platform/app-sdk/app-platform";
+import { FIRST_PARTY_APPS } from "../../platform/app-sdk/first-party-registry";
 import {
   BENCHMARK_RESULT_PREFIX,
   BENCHMARK_START_MESSAGE,
   DEFAULT_BENCHMARK_DURATION_MS,
   TRACKED_FEATURE_TIMINGS,
   type BenchmarkResult,
-} from "./shared/maxProfileBenchmark";
+} from "../../platform/diagnostics/max-profile-benchmark";
 import {
   PERFORMANCE_MODE_KEY,
   budgetForPerformanceMode,
   normalizePerformanceMode,
   type PerformanceMode,
-} from "./shared/performanceMode";
+} from "../../platform/settings/performance-mode";
+import {
+  createProfilePack,
+  ignoredProfilePackSections,
+  normalizeProfilePack,
+  profilePackPreviewLines,
+  type MilxdyProfilePack,
+} from "../../platform/settings/profile-packs";
 import {
   DEFAULT_RESKIN_PROFILE,
   DEFAULT_VISUAL_THEME,
@@ -36,7 +43,7 @@ import {
   type SavedVisualTheme,
   type VisualThemeSettings,
   type ProfileAudioSettings,
-} from "./shared/reskinProfile";
+} from "../../platform/visuals/reskin-profile";
 
 type ControlBinding = {
   area: Area;
@@ -140,8 +147,8 @@ const bindings: Record<string, ControlBinding> = {
   "post-reading.skipPromotedPosts": { area: "sync", key: "skipPromotedPosts", kind: "boolean", fallback: true },
   "post-reading.endOfTweetDing": { area: "sync", key: "endOfTweetDing", kind: "boolean", fallback: true },
   "post-reading.includeQuotes": { area: "sync", key: "includeQuotes", kind: "boolean", fallback: true },
-  "post-reading.fetchFullQuotes": { area: "sync", key: "fetchFullQuotes", kind: "boolean", fallback: true },
-  "post-reading.fullQuoteDisplay": { area: "sync", key: "fullQuoteDisplay", kind: "string", fallback: "scroll" },
+  "post-reading.fetchFullQuotes": { area: "sync", key: "fetchFullQuotes", kind: "boolean", fallback: false },
+  "post-reading.fullQuoteDisplay": { area: "sync", key: "fullQuoteDisplay", kind: "string", fallback: "hidden" },
   "post-reading.includeHyperlinks": { area: "sync", key: "includeHyperlinks", kind: "boolean", fallback: false },
   "post-reading.includeImageAltText": { area: "sync", key: "includeImageAltText", kind: "boolean", fallback: true },
   "post-reading.includeImageOcr": { area: "sync", key: "includeImageOcr", kind: "boolean", fallback: true },
@@ -184,7 +191,7 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
-  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: true },
+  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
 };
 
 void boot();
@@ -670,8 +677,25 @@ async function setupVisualSettings(): Promise<void> {
   const importButton = document.getElementById("visualImport") as HTMLButtonElement | null;
   const importShareButton = document.getElementById("visualImportShare") as HTMLButtonElement | null;
   const importFile = document.getElementById("visualImportFile") as HTMLInputElement | null;
+  const exportPackButton = document.getElementById("profilePackExport") as HTMLButtonElement | null;
+  const importPackButton = document.getElementById("profilePackImport") as HTMLButtonElement | null;
+  const importPackFile = document.getElementById("profilePackImportFile") as HTMLInputElement | null;
   const themeSelect = document.getElementById("visualThemeSelect") as HTMLSelectElement | null;
-  if (!presetButtons.length || !apply || !saveAs || !deleteTheme || !exportButton || !copyShareButton || !importButton || !importShareButton || !importFile || !themeSelect) return;
+  if (
+    !presetButtons.length
+    || !apply
+    || !saveAs
+    || !deleteTheme
+    || !exportButton
+    || !copyShareButton
+    || !importButton
+    || !importShareButton
+    || !importFile
+    || !exportPackButton
+    || !importPackButton
+    || !importPackFile
+    || !themeSelect
+  ) return;
 
   const stored = await chrome.storage.local.get({
     [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
@@ -742,10 +766,19 @@ async function setupVisualSettings(): Promise<void> {
   importShareButton.addEventListener("click", () => {
     void importVisualThemeString(window.prompt("Paste milXdy appearance string") || "");
   });
+  exportPackButton.addEventListener("click", () => {
+    void exportProfilePack(readVisualEditor());
+  });
+  importPackButton.addEventListener("click", () => importPackFile.click());
   importFile.addEventListener("change", () => {
     const file = importFile.files?.[0];
     if (file) void importVisualTheme(file);
     importFile.value = "";
+  });
+  importPackFile.addEventListener("change", () => {
+    const file = importPackFile.files?.[0];
+    if (file) void importProfilePack(file);
+    importPackFile.value = "";
   });
 }
 
@@ -928,13 +961,7 @@ function exportVisualTheme(settings: VisualThemeSettings): void {
     name,
     settings: normalizeVisualTheme(settings),
   };
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `${slugify(name)}.milxdy-theme.json`;
-  anchor.click();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  downloadJson(`${slugify(name)}.milxdy-theme.json`, payload);
   showVisualMessage("Exported theme file.");
 }
 
@@ -978,6 +1005,69 @@ async function importVisualTheme(file: File): Promise<void> {
   } catch {
     showVisualMessage("Import failed. Use a milXdy visual theme JSON file.", "warn");
   }
+}
+
+async function exportProfilePack(settings: VisualThemeSettings): Promise<void> {
+  const name = (document.getElementById("visualThemeName") as HTMLInputElement | null)?.value.trim() || "milxdy-profile-pack";
+  const pack = createProfilePack({
+    name,
+    visualTheme: settings,
+    performanceMode: await currentPerformanceMode(),
+  });
+  downloadJson(`${slugify(name)}.milxdy-profile-pack.json`, pack);
+  showVisualMessage("Exported profile pack.");
+}
+
+async function importProfilePack(file: File): Promise<void> {
+  try {
+    const pack = normalizeProfilePack(JSON.parse(await file.text()));
+    if (!pack) {
+      showVisualMessage("Import failed. Use a milXdy profile pack JSON file.", "warn");
+      return;
+    }
+    await applyImportedProfilePack(pack);
+  } catch {
+    showVisualMessage("Import failed. Use a milXdy profile pack JSON file.", "warn");
+  }
+}
+
+async function applyImportedProfilePack(pack: MilxdyProfilePack): Promise<void> {
+  const preview = profilePackPreviewLines(pack).join("\n");
+  if (!window.confirm(preview)) {
+    showVisualMessage("Profile pack import canceled.", "warn");
+    return;
+  }
+
+  const settings = pack.appearance?.visualTheme?.settings;
+  if (settings && normalizeVisualTheme(settings).profile === "max" && !await confirmFullAppearanceWarning()) {
+    showVisualMessage("Profile pack import canceled.", "warn");
+    return;
+  }
+
+  if (settings) {
+    const theme = await persistVisualTheme(settings);
+    writeVisualEditor(theme);
+    setInputValue("visualThemeName", pack.appearance?.visualTheme?.name || pack.name);
+    visualDraft = theme;
+    visualMode = "custom";
+    visualSelectedThemeId = "new";
+    await renderVisualThemeSelect();
+    renderVisualPresetButtons();
+  } else if (pack.appearance?.reskinProfile) {
+    await chrome.storage.local.set({ [RESKIN_PROFILE_KEY]: pack.appearance.reskinProfile });
+    setControlValue("reskinProfile", pack.appearance.reskinProfile);
+  }
+
+  if (pack.performance?.mode) {
+    await chrome.storage.local.set({ [PERFORMANCE_MODE_KEY]: pack.performance.mode });
+    setControlValue("performanceMode", pack.performance.mode);
+  }
+
+  const ignoredSections = ignoredProfilePackSections(pack);
+  showVisualMessage(ignoredSections.length
+    ? `Imported "${pack.name}". Ignored unsupported sections: ${ignoredSections.join(", ")}.`
+    : `Imported "${pack.name}".`);
+  await refreshXTabs();
 }
 
 async function loadSavedVisualThemes(): Promise<SavedVisualTheme[]> {
@@ -1197,6 +1287,16 @@ function numberInputValue(id: string): number {
 
 function slugify(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "milxdy-visual-theme";
+}
+
+function downloadJson(fileName: string, payload: unknown): void {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 async function encodeVisualThemeShareString(name: string, settings: VisualThemeSettings): Promise<string> {
@@ -1722,18 +1822,18 @@ function setupUpdateStatus(): void {
   });
   download?.addEventListener("click", () => {
     void currentUpdateStatus().then((status) => {
-      const url = status?.latestAssetUrl || status?.latestUrl;
+      const directAssetUrl = status?.matchedExpectedAsset === true ? status.latestAssetUrl : null;
+      const directAssetName = status?.matchedExpectedAsset === true ? status.latestAssetName : null;
+      const url = directAssetUrl || status?.latestUrl;
       if (!url) {
         if (message) message.textContent = "No release download is available yet. Try refresh first.";
         return;
       }
       openExternalUrl(url);
       if (message) {
-        message.textContent = status?.matchedExpectedAsset
-          ? `Opened ${status.latestAssetName}.`
-          : status?.latestAssetUrl
-            ? `Opened ${status.latestAssetName || "a release zip"}. Confirm it matches this build before replacing files.`
-            : "Opened the release page.";
+        message.textContent = directAssetUrl
+          ? `Opened ${directAssetName}.`
+          : "Opened the release page.";
       }
     });
   });
@@ -1818,7 +1918,7 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
     title.textContent = `Update available: v${updateStatus.latestVersion}`;
     detail.textContent = updateStatus.matchedExpectedAsset
       ? `Installed v${updateStatus.currentVersion}. Download ${updateStatus.latestAssetName}, replace files in the same folder, then reload to preserve settings and stats.`
-      : `Installed v${updateStatus.currentVersion}. Expected ${updateStatus.expectedAssetName || "this build's profile archive"}; open the release page if Download does not match.`;
+      : `Installed v${updateStatus.currentVersion}. Expected ${updateStatus.expectedAssetName || "this build's profile archive"}; Download opens the release page so you can choose the matching archive.`;
     download.hidden = false;
     copySteps.hidden = false;
     llmProvider.hidden = false;
@@ -1857,7 +1957,7 @@ function updateStepsText(status: UpdateStatus | null): string {
   const asset = status?.latestAssetName ? ` (${status.latestAssetName})` : "";
   const expected = status?.expectedAssetName ? `Expected archive: ${status.expectedAssetName}` : "";
   const releaseUrl = status?.latestUrl || "https://github.com/bonklek/milXdy/releases";
-  const downloadUrl = status?.latestAssetUrl || releaseUrl;
+  const downloadUrl = status?.matchedExpectedAsset === true && status.latestAssetUrl ? status.latestAssetUrl : releaseUrl;
   return [
     `milXdy in-place update steps`,
     "",

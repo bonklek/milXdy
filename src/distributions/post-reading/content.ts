@@ -1,9 +1,9 @@
-import { boot, onSurface } from "../../features/post-reading/content";
-import type { MilxdyContentAppContext } from "../../shared/appPlatform";
-import type { Disposable } from "../../shared/disposables";
-import { safeRuntimeMessage } from "../../shared/extensionRuntime";
-import { createFallbackRuntimeScheduler } from "../../shared/runtimeScheduler";
-import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../shared/twitterScanner";
+import { boot, onSurface } from "../../apps/post-reading/content";
+import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
+import type { Disposable } from "../../platform/runtime/disposables";
+import { safeRuntimeMessage } from "../../platform/background/extension-runtime";
+import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
+import { scheduleTwitterScan, subscribeTwitterSurfaces } from "../../platform/scanner/twitter-scanner";
 
 const controller = new AbortController();
 const disposables: Disposable[] = [];
