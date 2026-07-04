@@ -4,7 +4,7 @@ Miladychan Portal browses public Miladychan boards, threads, posts, and media fr
 
 ## Where To Find It
 
-- Enable and pin **Miladychan** from the Apps Hub.
+- Enable and pin **Miladychan** from Apps & Features.
 - Open **Miladychan** from the side rail on X/Twitter.
 
 ## Common Tasks

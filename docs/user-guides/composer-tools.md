@@ -4,16 +4,18 @@ Composer Tools adds small local helpers while writing X/Twitter posts.
 
 ## Where To Find It
 
-- Open the extension popup.
-- Use **Main**.
-- Turn **Double dash to em dash** on or off in the Composer section.
+- Open X/Twitter.
+- Click **Apps** in the milXdy side rail to open Apps & Features.
+- Find **Composer Tools** under feature modules.
+- Use **Enable** or **Disable** to control the helper.
+- You can also use the extension popup Main tab mirror while settings migration is in progress.
 - Refresh open X/Twitter tabs after changing the setting.
 
 ## Double Dash To Em Dash
 
 When enabled, typing `--` in an X/Twitter post composer is converted locally into an em dash.
 
-Composer Tools runs only in supported X/Twitter post textboxes. It does not run in DMs, search fields, or normal extension settings inputs.
+Composer Tools runs only in supported X/Twitter post textboxes. It does not run in DMs, search fields, native inputs, textareas, or normal extension settings inputs.
 
 ## Privacy
 

@@ -11,7 +11,7 @@ Tweet PNG exports a reviewed local PNG image from an X/Twitter post share action
 ## Common Tasks
 
 - Use Appearance presets to control the export styling.
-- Keep Tweet PNG enabled from the Apps Hub or suite settings when you want export actions available.
+- Keep Tweet PNG enabled from Apps & Features or suite settings when you want export actions available.
 - If an export looks stale after changing Appearance, refresh the X/Twitter tab and try again.
 
 ## Notes

@@ -2,20 +2,44 @@
 
 ## Unreleased
 
-Status: hotfix branch prepared.
+See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
+
+- Aligned the package and public manifest versions with the `0.2.2` App SDK
+  release metadata, and made the current release verifier fail on future
+  package/App SDK version drift.
+- Added a release archive Markdown payload allowlist so helper and OCR Markdown
+  files are explicit public archive contents instead of accidental payloads.
+- Finalized Firefox data-collection manifest metadata for the documented
+  browser-session, remote-service, and site-content flows, and made Firefox lint
+  fail if the missing-data-collection or unsupported-min-version warnings return.
+- Hardened local package composition so custom builds expose runtime-imported
+  package entries, reject untranspiled content entries and direct runtime API
+  bypass patterns without reviewed exceptions, preserve disabled-by-default
+  consent packages, and accept workspace absolute package paths consistently.
+- Made local package runtime message and port API findings fail closed even
+  under sensitive API review acknowledgement, including reflective
+  `Reflect.get(...).runtime.sendMessage` access patterns.
+- Added Composer Tools as a local-only X/Twitter post composer helper that
+  converts typed double dashes to em dashes and can be toggled from Apps &
+  Features without adding network access or permissions.
+
+Status: in release-branch stabilization.
 
 Post-`0.2.1` hotfix highlights:
 
 - Improved RemiNet Chat placement in X Messages so the RemiliaNET Chat row stays pinned above native conversations and message selection remains stable.
 - Fixed RemiStats action-row poke rendering and added an opt-in **Poke users when liking** setting that can poke a tweet author after the user clicks X's Like button.
-- Added a lightweight **Double dash to em dash** composer helper for X/Twitter post textboxes.
 - Improved Beetol/RemiStats RemiliaNET auth recovery by refreshing the existing browser session before retrying stale or failed poke requests.
 - Expanded Post-reading support for X Articles, improved long-text highlighting with segmented smooth rendering, made stop/quit distinct from minimize, improved OCR skip/status behavior, and tightened OCR quality filtering.
 - Hardened Post-reading OCR image loading so the OCR host accepts only `https://pbs.twimg.com/media/...` image URLs and continues to use credentialless fetches/background fallback.
+- Replaced the stale active release gate with the current release gate, version-neutral `npm run verify:release:gates`, including current app smoke and Post-reading distribution contract coverage; `verify:release:gates:020` remains a historical 0.2.0 evidence gate.
 - Added light/dark Post-reading dock icon support and refreshed app icon validation for themed assets.
 - Added a **Wiki browser follows dark mode** setting for the docked Remilia Wiki sidebar.
 - Polished visual behavior around post sounds, media height limits in modals, shaped PFP coverage, and unread notification tinting.
-- Updated roadmap scope so `0.2.2` emphasizes Apps and Settings cleanup, while runtime/distribution prep and reviewed sharing work move into later planned releases.
+- Updated roadmap scope so `0.2.2` emphasizes Apps and Settings cleanup,
+  App SDK preparation, local package/custom-build groundwork, and release-gate
+  hardening, while marketplace/distribution follow-through and reviewed sharing
+  work move into later planned releases.
 
 ## 0.2.1
 

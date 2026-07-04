@@ -4,7 +4,7 @@ milXdy is in public beta. The best contribution path depends on the kind of feed
 
 ## Bugs
 
-Use GitHub Issues or the in-extension Diag tab report flow for reproducible bugs.
+Use GitHub Issues or the in-extension diagnostics report flow for reproducible bugs.
 
 Good bug reports include:
 
@@ -40,6 +40,8 @@ npm run build
 ```
 
 4. Update docs when behavior changes.
+
+For app UI changes, follow the [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md).
 
 ## Performance Expectations
 
