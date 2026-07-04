@@ -20,7 +20,7 @@ See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
   under sensitive API review acknowledgement, including reflective
   `Reflect.get(...).runtime.sendMessage` access patterns.
 
-Status: prepared for pull-request review.
+Status: in release-branch stabilization.
 
 Post-`0.2.1` hotfix highlights:
 
@@ -33,7 +33,10 @@ Post-`0.2.1` hotfix highlights:
 - Added light/dark Post-reading dock icon support and refreshed app icon validation for themed assets.
 - Added a **Wiki browser follows dark mode** setting for the docked Remilia Wiki sidebar.
 - Polished visual behavior around post sounds, media height limits in modals, shaped PFP coverage, and unread notification tinting.
-- Updated roadmap scope so `0.2.2` emphasizes Apps and Settings cleanup, while runtime/distribution prep and reviewed sharing work move into later planned releases.
+- Updated roadmap scope so `0.2.2` emphasizes Apps and Settings cleanup,
+  App SDK preparation, local package/custom-build groundwork, and release-gate
+  hardening, while marketplace/distribution follow-through and reviewed sharing
+  work move into later planned releases.
 
 ## 0.2.1
 

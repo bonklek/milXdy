@@ -2,7 +2,7 @@
 
 milXdy `0.2.2`, **The Prepared App SDK Update**, is a platform beta update focused on making apps, settings, package metadata, and release gates easier to reason about before broader community app loading work continues.
 
-Status: prepared for pull-request review. Automated non-live release gates pass in this workspace, but final release publication still requires PR review, any required CI, live X/Twitter QA, and explicit maintainer approval.
+Status: in release-branch stabilization. Automated non-live release gates pass in this workspace, but final release publication still requires any required CI, live X/Twitter QA, and explicit maintainer approval.
 
 ## Highlights
 
@@ -55,7 +55,7 @@ Status: prepared for pull-request review. Automated non-live release gates pass 
 
 ## GitHub Issue Coverage
 
-This branch is the main `0.2.2` integration branch. After the PR is reviewed and merged, update or close the matching issues based on the final accepted scope.
+The `release/0.2.2` branch is the main stabilization branch for this scope. Update or close the matching issues based on the final accepted scope before publication.
 
 - `#42` Overlay positioning, snap, and restore behavior: covered by overlay geometry hardening and live rail/app probe coverage.
 - `#43` Contributor UI style guide: covered by the public contributor UI style guide for classic app surfaces.
