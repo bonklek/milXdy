@@ -13,6 +13,7 @@ Status: in release-branch stabilization. Automated non-live release gates pass i
 - First-party app and feature settings declare manifest metadata for location, storage, reset behavior, preset participation, and generated control expectations.
 - The settings migration audit records current storage ownership, popup mirrors, Apps & Features destinations, and profile-pack safety decisions.
 - App settings mirror verification keeps popup compatibility and generated Apps & Features metadata from drifting.
+- Composer Tools joins Apps & Features as a local-only feature module that converts typed double dashes into em dashes inside supported X/Twitter post composers.
 
 ### App SDK preparation
 
@@ -98,6 +99,7 @@ Manual QA still required before publishing:
 - Open Apps & Features from the side rail.
 - Confirm representative enabled and pinned apps open from the rail: Post-reading, RemiNet Chat, Beetol, Remilia Wiki Sidebar, Miladychan Portal, Music, and Milady Maxxer.
 - Confirm disabled or unpinned apps are absent or reachable exactly as expected.
+- Enable Composer Tools and confirm typing `--` in a post composer becomes an em dash, while DMs and search fields are ignored.
 - Check Post-reading feed controls, full-quote behavior, OCR skip/status, and highlight cleanup.
 - Check RemiNet/RemiStats poke state, Beetol cooldown memory, RemiNet Chat X Messages placement, and Wiki sidebar dark mode.
 - Exercise a local package dry run or custom local build when validating package/composer scope.

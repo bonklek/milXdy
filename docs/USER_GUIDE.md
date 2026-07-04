@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
+milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Composer Tools, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
 
 ## Updating The Extension
 
@@ -35,7 +35,7 @@ The shared side rail appears on X/Twitter and opens Apps & Features. This menu s
 
 - Click **Apps** to open Apps & Features.
 - Full apps include docked or windowed surfaces such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, Wiki, and Maxxer.
-- Feature modules include smaller capabilities such as RemiStats, Tweet PNG, wiki link highlighting, and page-level visual effects.
+- Feature modules include smaller capabilities such as RemiStats, Tweet PNG, Composer Tools, wiki link highlighting, and page-level visual effects.
 - Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
@@ -66,6 +66,12 @@ Some apps keep app-specific controls for their content area, such as Beetol colo
 Use **Export pack** to save Appearance plus the current Performance mode as a shareable profile pack. **Import pack** previews the sections that will change and lets you cancel before any settings are written. The older Appearance **Export**, **Import**, **Copy string**, and **Paste string** controls still handle visual themes only.
 
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
+
+## Composer Tools
+
+Composer Tools is a lightweight feature module for X/Twitter post composers. When enabled from Apps & Features, or from the Main tab popup mirror during settings migration, typing `--` in a supported post composer is converted locally into an em dash.
+
+The helper ignores DMs, search fields, native inputs, textareas, and extension settings inputs. It reads only the active composer text around the caret and does not send composer text to a remote service.
 
 ## Platform Performance Modes
 

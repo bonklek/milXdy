@@ -5,6 +5,7 @@
 - [Apps & Features and side rail guide](user-guides/apps-hub-and-side-rail.md)
 - [Root Visual Enhancements guide](user-guides/root-visual-enhancements.md)
 - [Tweet PNG guide](user-guides/tweet-png.md)
+- [Composer Tools guide](user-guides/composer-tools.md)
 - [Remilia Wiki Hyperlinks guide](user-guides/remilia-wiki-hyperlinks.md)
 - [Remilia Wiki Sidebar guide](user-guides/remilia-wiki-sidebar.md)
 - [Post-reading guide](user-guides/post-reading.md)

@@ -166,14 +166,14 @@ The content runtime owns the lightweight Apps & Features rail item and stores ex
 The menu is organized by manifest `packageKind`:
 
 - `app`: full app surfaces with a rail entry, pop-out, or major app window, such as Music, Post-reading, RemiNet Chat, Beetol, Miladychan, Wiki, and Maxxer
-- `feature`: non-app modules that extend X/Twitter surfaces without their own app window, such as RemiStats, Tweet PNG, injected controls, and page-level visual effects
+- `feature`: non-app modules that extend X/Twitter surfaces without their own app window, such as RemiStats, Tweet PNG, Composer Tools, injected controls, and page-level visual effects
 - `theme`: future texture, visual, or profile packages that should appear as installable packages without pretending to be launchable apps
 
 Full apps and features can share categories such as `reading`, `social`, `appearance`, `media`, or `game`, but category should not decide the IA section. Use `packageKind` for section placement and `hub.category` for filtering, chips, and search.
 
 Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.defaultPinned` is app-store metadata for first-run presets and future package install flows; it should not be confused with current-user pin state. The shared dock enforces hidden item IDs globally, so feature bundles cannot bypass Hub pinning by registering their own app frame after lazy import.
 
-Current first-party Apps & Features-managed enablement keys include Post-reading `enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links `remiliaWikiHyperlink.settings.enabled`, Wiki sidebar `remiliaWikiHyperlink.settings.sidebarEnabled` with fallback migration from the legacy Wiki links bit when unset, and Milady Maxxer `mode` as a legacy enablement/mode key.
+Current first-party Apps & Features-managed enablement keys include Post-reading `enabled`, Composer Tools `milxdy.composerTools.enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links `remiliaWikiHyperlink.settings.enabled`, Wiki sidebar `remiliaWikiHyperlink.settings.sidebarEnabled` with fallback migration from the legacy Wiki links bit when unset, and Milady Maxxer `mode` as a legacy enablement/mode key.
 
 Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open Apps & Features once on X. The background install seeder keeps first-party apps enabled by default until the user chooses a setup. Choosing Lite, Balanced, or Full converges toggleable apps to the exact manifest `hub.presets` set, disables toggleable apps excluded from that preset, applies `hub.rail.defaultPinned`, and applies the matching Performance mode without importing app bundles just to change settings. Core entries without enablement toggles are preserved. The same setup choices remain available from the Apps & Features settings menu after first-run.
 
@@ -282,6 +282,7 @@ Current first-party status:
 | RemiStats and Pokes | Transitional | Runtime uses shared surface delivery and background router. Some generated settings write local keys that are not yet listed in `storageKeys.local`; align reset/storage metadata before hiding old popup mirrors. |
 | Milady Maxxer | Mostly aligned, heavy app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work. Keep heavy model, remote identity, and cache disclosures explicit; app-owned settings should stay in app surfaces except enablement. |
 | Tweet PNG | Invoked-only | Declares `lifecycle.mode: "invoked"` and remains a local `userAction` package loaded by Root Visuals from the X share-menu action. If it becomes a runtime app, change the lifecycle mode, add real lifecycle exports, and keep PNG rendering local and user initiated. |
+| Composer Tools | Aligned lightweight feature | Runtime-loaded local-only feature with a metadata-backed Apps & Features enablement toggle. Its document input listeners are scoped to supported X/Twitter post composers and cleaned up through runtime disposables. |
 | Root Visuals | Core feature with bounded page-chrome observers | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, the home-logo observer attaches only to discovered header/h1 page-chrome roots with route/boot retries for late X SPA rendering, and the click-triggered Tweet PNG share-menu observer is scheduler-capped and cleaned up. A fuller shared page-chrome scanner/service remains deferred to #39/#90/#64. |
 
 Known schema and runtime limitations:
