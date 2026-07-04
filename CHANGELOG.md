@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.2
 
 See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
 
@@ -23,7 +23,7 @@ See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
   converts typed double dashes to em dashes and can be toggled from Apps &
   Features without adding network access or permissions.
 
-Status: in release-branch stabilization.
+Status: released.
 
 Post-`0.2.1` hotfix highlights:
 
