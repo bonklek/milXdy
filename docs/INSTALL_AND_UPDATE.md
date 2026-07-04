@@ -8,7 +8,7 @@ For Chrome, Brave, or Edge, download `milXdy-<version>-chromium.zip`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
-1. Download the latest unpacked release archive from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium.zip` for Chrome, Brave, and Edge, or `milXdy-<version>-firefox.zip` for Firefox beta testing.
+1. Download the latest unpacked release archive from [GitHub Releases](https://github.com/bonklek/milXdy/releases). Use `milXdy-<version>-chromium.zip` for Chrome, Brave, and Edge, or `milXdy-<version>-firefox.zip` for Firefox 142 or newer beta testing.
 2. Unzip it into a permanent folder. Do not install from Downloads if you clean that folder often.
 3. Open `chrome://extensions`.
 4. Enable **Developer mode**.
@@ -17,7 +17,7 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 
 ## Firefox Beta Install
 
-Firefox support is packaged for beta testing, but it still needs manual smoke testing before being advertised as fully supported.
+Firefox 142 or newer support is packaged for beta testing, but it still needs manual smoke testing before being advertised as fully supported.
 
 1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.
@@ -33,7 +33,7 @@ See [Firefox QA](FIREFOX_QA.md) for the smoke-test checklist.
 Prerequisites:
 
 - Node.js 20 or newer is recommended.
-- Chrome, Brave, Edge, another Chromium browser, or Firefox for beta testing.
+- Chrome, Brave, Edge, another Chromium browser, or Firefox 142 or newer for beta testing.
 - Git, if cloning directly.
 
 ```powershell
@@ -43,7 +43,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from `about:debugging#/runtime/this-firefox`.
+Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox 142 or newer's `about:debugging#/runtime/this-firefox`.
 
 ## Safe Manual Updates
 

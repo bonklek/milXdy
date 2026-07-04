@@ -54,12 +54,14 @@ npm run build:firefox
 npm run verify:update-check
 npm run verify:url-allowlist
 npm run verify:platform
+npm run verify:post-reading:standalone
 npm run verify:smoke:020
+npm run verify:app-smoke
 npm run verify:app-smoke:020
 ```
 
 For final release readiness, use the release gate documented in [docs/RELEASES.md](docs/RELEASES.md):
 
 ```powershell
-npm run verify:release:gates:020
+npm run verify:release:gates
 ```
