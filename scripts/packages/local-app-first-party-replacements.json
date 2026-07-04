@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "replacements": [
+    {
+      "id": "tweetPng",
+      "sourceType": "folder",
+      "root": "examples/packages/first-party-replacements/tweetPng",
+      "packageSha256": "01c098deacfd346dad8525e2b8b55c582ca813752d27f0dbdd4ed250baadb649",
+      "reason": "Checked-in first-party App SDK pilot fixture for Tweet PNG."
+    },
+    {
+      "id": "wikiSidebar",
+      "sourceType": "folder",
+      "root": "examples/packages/first-party-replacements/wikiSidebar",
+      "packageSha256": "f4f94907c8d926a9c3927d38ffc0a25794b3f7aa78af8394094e737baf93b690",
+      "reason": "Checked-in first-party App SDK pilot fixture for Remilia Wiki sidebar."
+    }
+  ]
+}
