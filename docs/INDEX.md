@@ -16,6 +16,7 @@
 - [Miladychan Portal guide](user-guides/miladychan-portal.md)
 - [Music guide](user-guides/music.md)
 - [Max profile benchmark](MAX_PROFILE_BENCHMARK.md)
+- [0.2.3 general X lag regression analysis](PERFORMANCE_REGRESSION_0.2.3.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](APP_SDK.md)
