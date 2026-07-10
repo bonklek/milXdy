@@ -21,3 +21,5 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 Beetol uses the same RemiNet connector login as RemiStats pokes and RemiNet Chat. Authenticated game actions are sent to RemiliaNET after user interaction.
 
 Cooldown and exhausted hunt state are restored locally after refresh so the panel does not incorrectly reset the visible hunt timer.
+
+On the final available hunt, Beetol keeps the found-item result visible briefly before showing a red **Done** status and the normal 90-minute cooldown countdown.
