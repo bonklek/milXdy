@@ -155,10 +155,9 @@ async function remiliaSessionFetch(method, path, body) {
 async function remiliaAuthedFetch(method, path, body, retry = true) {
   const tokenResult = await remiliaFetch(method, path, body, retry);
   if (tokenResult.ok) return tokenResult;
-  if (!tokenResult.authRequired) {
-    const sessionResult = await remiliaSessionFetch(method, path, body);
-    return sessionResult.ok ? sessionResult : tokenResult;
-  }
+  // A failed mutation may already have reached the server. Only retry using
+  // browser-session auth when the token path definitively rejected auth.
+  if (!tokenResult.authRequired) return tokenResult;
   return remiliaSessionFetch(method, path, body);
 }
 

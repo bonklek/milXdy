@@ -49,6 +49,7 @@ type NetworkQueueEntry<T> = {
 };
 
 const networkQueue: Array<NetworkQueueEntry<unknown>> = [];
+const BACKGROUND_NETWORK_DEADLINE_MS = 30_000;
 let activeNetworkTasks = 0;
 let networkConcurrency = budgetForPerformanceMode("balanced").networkConcurrency;
 let networkBudgetInitialized = false;
@@ -100,7 +101,7 @@ function drainNetworkQueue(): void {
     networkDiagnostics.maxActive = Math.max(networkDiagnostics.maxActive, activeNetworkTasks);
     networkDiagnostics.updatedAt = Date.now();
     scheduleNetworkDiagnosticsWrite();
-    entry.task()
+    withNetworkDeadline(entry.task(), entry.label)
       .then((value) => {
         recordNetworkTaskFinished(entry, true);
         entry.resolve(value);
@@ -113,6 +114,28 @@ function drainNetworkQueue(): void {
         drainNetworkQueue();
       });
   }
+}
+
+function withNetworkDeadline<T>(promise: Promise<T>, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`${label} timed out after ${BACKGROUND_NETWORK_DEADLINE_MS}ms`));
+    }, BACKGROUND_NETWORK_DEADLINE_MS);
+    promise.then((value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    }, (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      reject(error);
+    });
+  });
 }
 
 function recordNetworkTaskFinished(entry: NetworkQueueEntry<unknown>, ok: boolean): void {

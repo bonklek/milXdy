@@ -83,6 +83,7 @@ const BUILD_TARGET = normalizeBuildTarget(MILXDY_BUILD_TARGET);
 type UpdateStatus = {
   checkedAt: number;
   currentVersion: string;
+  buildTarget?: BuildTarget;
   latestVersion: string | null;
   latestUrl: string | null;
   latestAssetUrl?: string | null;
@@ -469,7 +470,7 @@ async function applyFullStartSetup(): Promise<void> {
     return;
   }
   showOnboardingMessage("Applying full setup...");
-  const performanceMode = await currentPerformanceMode();
+  const performanceMode: PerformanceMode = "full";
   const appsToEnable = FIRST_PARTY_APPS
     .filter((app) => app.available !== false && app.setEnabled)
     .filter((app) => !appEnableBlockedByPerformance(app, performanceMode));
@@ -494,6 +495,7 @@ async function applyFullStartSetup(): Promise<void> {
       [FIRST_RUN_STATUS_KEY]: "complete",
       [ONBOARDING_ACTIVE_KEY]: true,
       [SETTINGS_THEME_KEY]: "system",
+      [PERFORMANCE_MODE_KEY]: performanceMode,
       "milxdy.diagnostics.enabled": false,
       "milxdy.reminetChat.enabled": true,
       "milxdy.miladychan.enabled": true,
@@ -555,8 +557,8 @@ async function applyFullStartSetup(): Promise<void> {
   writeVisualEditor(fullTheme);
   renderVisualPresetButtons();
   showOnboardingMessage(blockedApps.length
-    ? `Full suite applied for ${performanceMode}. ${blockedApps.length} heavy app${blockedApps.length === 1 ? "" : "s"} need a higher Performance setting.`
-    : "Full suite is on. Runtime performance stayed unchanged.");
+    ? `Full setup applied, but ${blockedApps.length} app${blockedApps.length === 1 ? "" : "s"} remain unavailable in this build.`
+    : "Full suite and Full performance are on.");
   await refreshXTabs();
   await renderOnboarding();
   await renderStatus();
@@ -867,6 +869,7 @@ function confirmFullAppearanceWarning(): Promise<boolean> {
   if (!dialog || !proceed || !cancel || !close) return Promise.resolve(false);
 
   return new Promise((resolve) => {
+    const invoker = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let settled = false;
     const finish = (accepted: boolean) => {
       if (settled) return;
@@ -877,6 +880,7 @@ function confirmFullAppearanceWarning(): Promise<boolean> {
       close.removeEventListener("click", decline);
       dialog.removeEventListener("click", backdrop);
       document.removeEventListener("keydown", keydown);
+      invoker?.focus();
       if (accepted) fullAppearanceWarningAccepted = true;
       resolve(accepted);
     };
@@ -887,6 +891,7 @@ function confirmFullAppearanceWarning(): Promise<boolean> {
     };
     const keydown = (event: KeyboardEvent) => {
       if (event.key === "Escape") finish(false);
+      else trapModalFocus(event, dialog);
     };
 
     proceed.addEventListener("click", accept);
@@ -1590,9 +1595,27 @@ function setupWikiAiHelp(): void {
   const message = document.getElementById("wikiAiHelpMessage");
   if (!open || !dialog || !close || !download || !wikitoolDownload || !wikitoolRelease || !copy || !message) return;
 
+  let dialogInvoker: HTMLElement | null = null;
+  const hideDialog = () => {
+    dialog.hidden = true;
+    document.removeEventListener("keydown", onDialogKeydown);
+    dialogInvoker?.focus();
+    dialogInvoker = null;
+  };
+  const onDialogKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      hideDialog();
+      return;
+    }
+    trapModalFocus(event, dialog);
+  };
   const showDialog = () => {
+    dialogInvoker = document.activeElement instanceof HTMLElement ? document.activeElement : open;
     dialog.hidden = false;
     message.textContent = "Downloaded remilia-wiki-article-writer.zip.";
+    document.addEventListener("keydown", onDialogKeydown);
+    close.focus();
   };
 
   open.addEventListener("click", () => {
@@ -1629,11 +1652,33 @@ function setupWikiAiHelp(): void {
     });
   });
   close.addEventListener("click", () => {
-    dialog.hidden = true;
+    hideDialog();
   });
   dialog.addEventListener("click", (event) => {
-    if (event.target === dialog) dialog.hidden = true;
+    if (event.target === dialog) hideDialog();
   });
+}
+
+function trapModalFocus(event: KeyboardEvent, dialog: HTMLElement): void {
+  if (event.key !== "Tab") return;
+  const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(
+    'button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+  )).filter((element) => !element.hidden && element.getClientRects().length > 0);
+  if (!focusable.length) {
+    event.preventDefault();
+    dialog.focus();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || !dialog.contains(active))) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && (active === last || !dialog.contains(active))) {
+    event.preventDefault();
+    first.focus();
+  }
 }
 
 function downloadWikiAiHelpZip(): void {
@@ -1824,8 +1869,9 @@ function setupUpdateStatus(): void {
   });
   download?.addEventListener("click", () => {
     void currentUpdateStatus().then((status) => {
-      const directAssetUrl = status?.matchedExpectedAsset === true ? status.latestAssetUrl : null;
-      const directAssetName = status?.matchedExpectedAsset === true ? status.latestAssetName : null;
+      const safeDirectAsset = isDirectUpdateAssetSafe(status) ? status : null;
+      const directAssetUrl = safeDirectAsset?.latestAssetUrl || null;
+      const directAssetName = safeDirectAsset?.latestAssetName || null;
       const url = directAssetUrl || status?.latestUrl;
       if (!url) {
         if (message) message.textContent = "No release download is available yet. Try refresh first.";
@@ -1918,7 +1964,7 @@ async function renderUpdateStatus(status?: UpdateStatus): Promise<void> {
   if (updateStatus.updateAvailable && updateStatus.latestVersion) {
     root.dataset.state = "available";
     title.textContent = `Update available: v${updateStatus.latestVersion}`;
-    detail.textContent = updateStatus.matchedExpectedAsset
+    detail.textContent = isDirectUpdateAssetSafe(updateStatus)
       ? `Installed v${updateStatus.currentVersion}. Download ${updateStatus.latestAssetName}, replace files in the same folder, then reload to preserve settings and stats.`
       : `Installed v${updateStatus.currentVersion}. Expected ${updateStatus.expectedAssetName || "this build's profile archive"}; Download opens the release page so you can choose the matching archive.`;
     download.hidden = false;
@@ -1959,7 +2005,7 @@ function updateStepsText(status: UpdateStatus | null): string {
   const asset = status?.latestAssetName ? ` (${status.latestAssetName})` : "";
   const expected = status?.expectedAssetName ? `Expected archive: ${status.expectedAssetName}` : "";
   const releaseUrl = status?.latestUrl || "https://github.com/bonklek/milXdy/releases";
-  const downloadUrl = status?.matchedExpectedAsset === true && status.latestAssetUrl ? status.latestAssetUrl : releaseUrl;
+  const downloadUrl = isDirectUpdateAssetSafe(status) ? status.latestAssetUrl : releaseUrl;
   return [
     `milXdy in-place update steps`,
     "",
@@ -1980,8 +2026,9 @@ function updateStepsText(status: UpdateStatus | null): string {
 }
 
 function updateStepsLlmPrompt(status: UpdateStatus | null): string {
+  const browserName = BUILD_TARGET === "firefox" ? "Firefox temporary add-on" : "Chrome unpacked extension";
   return [
-    "Help me update a Chrome unpacked extension named milXdy without losing local extension storage.",
+    `Help me update a ${browserName} named milXdy without losing local extension storage.`,
     "",
     "Use these exact update steps as the source of truth. Turn them into a concise checklist, ask me before any destructive step, and remind me not to remove the existing extension or load a second folder.",
     "",
@@ -2028,11 +2075,25 @@ function isUpdateStatus(value: unknown): value is UpdateStatus {
   const record = value as Record<string, unknown>;
   return typeof record.checkedAt === "number"
     && typeof record.currentVersion === "string"
+    && (record.buildTarget === "chromium" || record.buildTarget === "firefox" || record.buildTarget == null)
     && (typeof record.latestAssetUrl === "string" || record.latestAssetUrl == null)
     && (typeof record.latestAssetName === "string" || record.latestAssetName == null)
     && (typeof record.expectedAssetName === "string" || record.expectedAssetName == null)
     && (typeof record.matchedExpectedAsset === "boolean" || record.matchedExpectedAsset == null)
     && typeof record.updateAvailable === "boolean";
+}
+
+function isDirectUpdateAssetSafe(status: UpdateStatus | null): status is UpdateStatus & {
+  latestAssetUrl: string;
+  latestAssetName: string;
+} {
+  return Boolean(
+    status
+      && status.buildTarget === BUILD_TARGET
+      && status.matchedExpectedAsset === true
+      && typeof status.latestAssetUrl === "string"
+      && typeof status.latestAssetName === "string",
+  );
 }
 
 function formatCheckedAt(value: number): string {
@@ -2067,6 +2128,7 @@ async function renderStatus(): Promise<void> {
   const scanner = objectValue(local["milxdy.diagnostics.scanner"]);
   const miladyDetection = objectValue(local["milxdy.diagnostics.miladyDetection"]);
   const runtime = objectValue(local["milxdy.diagnostics.runtime"]);
+  const surfaceDelivery = objectValue(runtime.surfaceDelivery);
   const wikiPerformance = objectValue(local["remiliaWikiHyperlink.performance"]);
   const performanceMode = normalizePerformanceMode(local[PERFORMANCE_MODE_KEY]);
   const profile = typeof local[RESKIN_PROFILE_KEY] === "string" ? local[RESKIN_PROFILE_KEY] : DEFAULT_RESKIN_PROFILE;
@@ -2085,6 +2147,9 @@ async function renderStatus(): Promise<void> {
     ["Cache hits", String(stats.cacheHits ?? 0)],
     ["Scanner emitted", String(scanner.surfacesEmitted ?? 0)],
     ["Scanner flush", `${String(scanner.lastFlushMs ?? 0)} ms`],
+    ["Scanner observer", String(scanner.activeObserverCount ?? 0)],
+    ["Delivery queue", `${String(surfaceDelivery.maxQueueDepth ?? 0)} max / ${String(surfaceDelivery.maxDrainMs ?? 0)} ms`],
+    ["Runtime observers", String(runtime.performanceObserverCount ?? 0)],
     ["Detection queue", `${String(miladyDetection.active ?? 0)} active / ${String(miladyDetection.queued ?? 0)} queued`],
     ["Wiki links", String(wikiPerformance.linksCreated ?? 0)],
   ]) {

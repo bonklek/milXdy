@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const builder = await readFile("scripts/build/build-post-reading-distribution.mjs", "utf8");
 const releaseGate = await readFile("scripts/release/verify-release-gates.mjs", "utf8");
 const fullQuoteSource = await readFile("src/apps/post-reading/fullQuote.ts", "utf8");
@@ -16,7 +17,7 @@ assert(typeof packageJson.scripts?.["verify:post-reading:standalone"] === "strin
 assert(packageJson.scripts["verify:post-reading:standalone"] === packageJson.scripts["verify:post-reading:distribution"], "verify:post-reading:standalone must remain a compatibility alias for verify:post-reading:distribution");
 assert(releaseGate.includes("scripts/verify/post-reading-distribution.mjs"), "current release gate must verify the Post-reading distribution contract");
 assert(builder.includes("MILXDY_BUILD_PROFILE: JSON.stringify(\"post-reading\")"), "Post-reading distribution build must define the Post-reading build profile");
-assert(builder.includes("MILXDY_VERSION: JSON.stringify(packageJson.version)"), "Post-reading distribution build must use package.json version");
+assert(builder.includes("MILXDY_VERSION: JSON.stringify(extensionVersion)"), "Post-reading distribution build must use the browser extension version");
 assert(!/\bct0\b/.test(fullQuoteSource), "Post-reading full quotes must not read X/Twitter ct0 session cookies");
 assert(!/TweetResultByRestId|\/i\/api\/graphql|queryId\s*:|x-csrf-token|x-twitter-auth-type|OAuth2Session/.test(fullQuoteSource), "Post-reading full quotes must not reconstruct authenticated X GraphQL requests");
 assert(!/extractBearerToken|authorization:\s*`?Bearer|Bearer\s+\[/.test(fullQuoteSource), "Post-reading full quotes must not extract or reuse X/Twitter bearer material");
@@ -50,7 +51,7 @@ for (const permission of [
 
 if (existsSync(chromiumOutput)) {
   const manifest = JSON.parse(await readFile(path.join(chromiumOutput, "manifest.json"), "utf8"));
-  assert(manifest.version === packageJson.version, "Post-reading distribution manifest version must match package.json version");
+  assert(manifest.version === extensionVersion, "Post-reading distribution manifest version must match the browser extension version");
   assert(manifest.name === "Post-reading", "Post-reading distribution manifest must keep the Post-reading product name");
   assert(manifest.permissions?.includes("storage"), "Post-reading distribution manifest must include storage permission");
   assert(manifest.permissions?.includes("unlimitedStorage"), "Post-reading distribution manifest must include unlimitedStorage permission");
@@ -59,7 +60,7 @@ if (existsSync(chromiumOutput)) {
   }
 }
 
-console.log(`Post-reading distribution contract verification passed for ${packageJson.version}.`);
+console.log(`Post-reading distribution contract verification passed for ${extensionVersion}.`);
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);

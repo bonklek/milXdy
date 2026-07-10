@@ -41,6 +41,7 @@ const MAX_ACTIVE_DETECTIONS = 1;
 
 let modelMetadataPromise: Promise<ResolvedModel> | null = null;
 let workerPromise: Promise<Worker> | null = null;
+let activeWorker: Worker | null = null;
 let pendingWorker = new Map<string, { resolve: (score: number) => void; reject: (error: Error) => void }>();
 let activeDetections = 0;
 const detectionQueue: Array<() => void> = [];
@@ -63,7 +64,17 @@ export async function detectAvatar(
 
   const task = enqueueDetection(() => detectAvatarUncached(image, normalizedUrl, callbacks));
   cache.set(normalizedUrl, task);
-  return task;
+  const result = await task;
+  if (result.debugLabel === "err") cache.delete(normalizedUrl);
+  return result;
+}
+
+export function disposeDetection(): void {
+  resetWorker(new Error("Milady detection stopped"));
+  cache.clear();
+  detectionQueue.length = 0;
+  if (diagnosticsTimer !== null) window.clearTimeout(diagnosticsTimer);
+  diagnosticsTimer = null;
 }
 
 export function formatProbabilityDebugLabel(score: number, threshold: number): string {
@@ -182,6 +193,7 @@ async function getWorker(resolvedModel: ResolvedModel): Promise<Worker> {
       }),
     );
     const worker = new Worker(bootstrapUrl);
+    activeWorker = worker;
     URL.revokeObjectURL(bootstrapUrl);
     worker.addEventListener("message", (event: MessageEvent<WorkerResponse>) => {
       const pending = pendingWorker.get(event.data.id);
@@ -199,12 +211,21 @@ async function getWorker(resolvedModel: ResolvedModel): Promise<Worker> {
       }
       pending.resolve(event.data.score);
     });
+    const onWorkerFailure = (event: ErrorEvent | MessageEvent) => {
+      const detail = event instanceof ErrorEvent ? event.message : "Worker message channel failed";
+      resetWorker(new Error(detail || "Milady detection worker failed"));
+    };
+    worker.addEventListener("error", onWorkerFailure);
+    worker.addEventListener("messageerror", onWorkerFailure);
     worker.postMessage({
       modelUrl: resolvedModel.modelUrl,
       wasmPath: chrome.runtime.getURL("ort/"),
       positiveIndex: resolvedModel.positiveIndex,
     });
     return worker;
+  }).catch((error) => {
+    workerPromise = null;
+    throw error;
   });
 
   return workerPromise;
@@ -221,7 +242,21 @@ async function scoreWithOnnx(
       (input, index) =>
         new Promise<number>((resolve, reject) => {
           const id = `${seed}:${index}:${crypto.randomUUID()}`;
-          pendingWorker.set(id, { resolve, reject });
+          const timeout = window.setTimeout(() => {
+            pendingWorker.delete(id);
+            reject(new Error("Milady detection worker timed out"));
+            resetWorker(new Error("Milady detection worker timed out"));
+          }, 15000);
+          pendingWorker.set(id, {
+            resolve: (score) => {
+              window.clearTimeout(timeout);
+              resolve(score);
+            },
+            reject: (error) => {
+              window.clearTimeout(timeout);
+              reject(error);
+            },
+          });
           const payload: WorkerRequest = {
             id,
             tensor: input,
@@ -232,4 +267,13 @@ async function scoreWithOnnx(
     ),
   );
   return Math.max(...scores);
+}
+
+function resetWorker(error: Error): void {
+  const worker = activeWorker;
+  activeWorker = null;
+  workerPromise = null;
+  worker?.terminate();
+  for (const pending of pendingWorker.values()) pending.reject(error);
+  pendingWorker.clear();
 }

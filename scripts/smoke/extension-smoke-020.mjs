@@ -6,7 +6,7 @@ import { featureBundlesForProfile } from "../release/release-registry.mjs";
 
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
-const expectedVersion = packageJson.version;
+const expectedVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 
 for (const build of releaseBuilds) {
   await verifyBuild(build);

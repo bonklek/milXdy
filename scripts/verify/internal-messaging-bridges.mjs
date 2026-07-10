@@ -143,7 +143,7 @@ function verifyReminetUploadCaps() {
   const background = files.reminetChatBackground;
   const upload = functionBody(background, "uploadAttachment");
   assertIncludes(background, "MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet uploads must cap image attachments");
-  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 100 * 1024 * 1024", "RemiNet uploads must cap video attachments");
+  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet uploads must cap video attachments");
   assertIncludes(background, "ALLOWED_ATTACHMENT_IMAGE_TYPES", "RemiNet uploads must enumerate allowed image MIME types");
   assertIncludes(background, "ALLOWED_ATTACHMENT_VIDEO_TYPES", "RemiNet uploads must enumerate allowed video MIME types");
   assertIncludes(upload, "isAllowedAttachmentMimeType(declaredMimeType)", "RemiNet upload handler must validate declared MIME type before decoding");

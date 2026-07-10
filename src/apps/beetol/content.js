@@ -115,7 +115,7 @@ function mountBeetolGame(context = {}) {
   root.id = 'beetol-hunter-root';
   root.dataset.version = ROOT_VERSION;
   root.innerHTML = `
-    <div class="beetol-shell" aria-live="polite">
+    <div class="beetol-shell">
       <button class="beetol-tab" type="button" title="Beetol Game">
         <span class="beetol-icon">🪲</span>
         <span id="beetol-next">--</span>
@@ -137,7 +137,7 @@ function mountBeetolGame(context = {}) {
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
         <div class="beetol-footer">
-          <span id="beetol-message"></span>
+          <span id="beetol-message" role="status" aria-live="polite" aria-atomic="true"></span>
         </div>
       </section>
     </div>
@@ -254,7 +254,12 @@ function mountBeetolGame(context = {}) {
   function send(message) {
     if (!lifecycleActive()) return Promise.resolve(null);
     const label = message?.type || 'beetol:message';
-    if (appSdkSendMessage) return appSdkSendMessage(message, label);
+    if (appSdkSendMessage) {
+      return appSdkSendMessage(message, label).catch((error) => ({
+        ok: false,
+        error: error instanceof Error ? error.message : String(error || 'Request failed'),
+      }));
+    }
     return Promise.resolve(null);
   }
 

@@ -4,7 +4,7 @@ This document is the short planning handoff for the current public beta. Keep du
 
 ## Current Baseline
 
-The current public baseline is `0.2.1`, **The Polish Patch**. It shipped as a normal GitHub release with two public browser archives:
+The current public baseline is `0.2.2`, **Prepared App SDK Update**. It shipped as a normal GitHub release with two public browser archives:
 
 - `milXdy-<version>-chromium.zip`
 - `milXdy-<version>-firefox.zip`
@@ -13,20 +13,18 @@ Lite, Balanced, and Full are setup choices inside milXdy. They should not be tre
 
 ## Near-Term Release Identity
 
-The next planned release is `0.2.2`, **Prepared App SDK**.
+The next planned release is `0.2.3`, a focused user-experience and feature-reliability update.
 
-The purpose of `0.2.2` is to turn the current local-first app platform into a clearer SDK preparation layer. This does not mean shipping remote community app installation yet. It means first-party apps should be shaped like future SDK apps:
+The purpose of `0.2.3` is to harden the existing first-party app platform before adding more surface area. Its release work is driven by the codebase-wide UX and reliability audit in `docs/UX_RELIABILITY_AUDIT.md`, especially:
 
-- clear app/package boundaries
-- stable lifecycle hooks
-- manifest-owned metadata
-- shared scanner/runtime services
-- consistent dock/window behavior
-- app settings schema expectations
-- reviewable privacy, permission, storage, and performance disclosures
-- diagnostics that show whether the platform is actually cheaper and more maintainable
+- failure-isolated runtime lifecycle, bootstrap, scanners, and network queues
+- cancelable and latest-intent-owned asynchronous feature work
+- reversible feature teardown and bounded caches/resources
+- honest error, clipboard, storage, authentication, and recovery states
+- keyboard-operable app management, modal focus, labels, and reduced motion
+- regression coverage for the specific audit findings
 
-Diagnostics, app rail/windowing, and settings IA belong in `0.2.2` when they support SDK readiness. They should not displace the release identity.
+This is not a `0.2.2.1` hotfix line. Unpublished hotfix work is folded into `0.2.3`; release notes and version metadata must use `0.2.3` consistently.
 
 ## Planning Source Of Truth
 
@@ -38,47 +36,37 @@ Diagnostics, app rail/windowing, and settings IA belong in `0.2.2` when they sup
 
 Do not let this file become a second roadmap or issue registry.
 
-## 0.2.2 Planning Buckets
+## 0.2.3 Planning Buckets
 
-### App Package Boundaries
+### Runtime And Recovery
 
-- Define the default first-party app folder/package layout.
-- Keep app metadata in the registry where possible instead of scattering app descriptions across UI, docs, and build scripts.
-- Preserve shared runtime services for expensive X/Twitter work instead of letting apps reintroduce independent observers, pollers, or network queues.
+- Isolate lifecycle, surface-delivery, and scheduler failures so one app cannot stall the suite.
+- Make document-start bootstrap and scanner installation retryable and observable.
+- Bound shared network work and release queue capacity after timeouts.
 
-### Lifecycle And Runtime Contract
+### Feature Reliability
 
-- Stabilize app hooks for boot, enable, disable, route changes, surface delivery, overlay open/close, and dispose.
-- Require async work to respect runtime abort signals.
-- Keep invoked-only tools such as export/render actions lazy.
-- Make app enablement and rail pinning separate concepts.
+- Give long-running work cancellation, deadlines, and stale-response guards.
+- Make disable/dispose fully restore DOM and stop speech, workers, frames, sockets, and media.
+- Bound caches and large in-memory payload paths.
 
-### Settings And Presets
+### UX And Accessibility
 
-- Treat Lite, Balanced, and Full as setup/settings presets inside milXdy.
-- Keep browser downloads simple: Chromium or Firefox.
-- Move app and feature settings toward an Apps and Features information architecture.
-- Make settings export/import/profile packs a user-facing follow-up only after the schema is coherent.
+- Keep visible controls reconciled with persisted storage after errors.
+- Confirm destructive resets and preserve user-authored content unless explicitly chosen.
+- Provide keyboard reorder controls, modal focus containment/restoration, accessible names, and reduced-motion behavior.
 
-### App Chrome, Rail, And Windowing
+### Verification And Release Evidence
 
-- Harden docked app layout, protected zones, snap behavior, restore behavior, and narrow-viewport recovery.
-- Keep app header controls clickable and distinguish drag handles from controls.
-- Make the rail scalable when the number of app surfaces grows.
-- Document contributor-facing utility-window style so future apps feel native to milXdy.
+- Add focused regression checks for every repaired audit contract.
+- Run strict TypeScript, platform/app verifiers, current and historical smoke, Chromium/Firefox builds, Firefox lint, and release-current verification.
+- Keep authenticated X/RemiliaNET and permission-gated Music scenarios explicitly listed for manual release QA.
 
-### Diagnostics
-
-- Keep diagnostics tied to release decisions.
-- Measure Max and other heavy app paths with long-task, frame-gap, FPS, feature timing, queue depth, and scanner counters.
-- Use those measurements before committing to deeper scanner rewrites.
-- Make reports useful from the Health panel without requiring DevTools.
-
-## Out Of Scope For 0.2.2 Unless Rescheduled
+## Out Of Scope For 0.2.3 Unless Rescheduled
 
 - Remote app marketplace installation.
 - Store-style app review and automated trust infrastructure.
-- Major new social/media features whose main value is not SDK preparation.
+- Major new social/media features whose main value is not reliability.
 - `0.3.0` front-door onboarding, screenshots, and non-technical walkthrough work.
 
 ## Planning Hygiene

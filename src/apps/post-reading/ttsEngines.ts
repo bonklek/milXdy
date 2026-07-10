@@ -16,6 +16,7 @@ export type TtsEngineCapabilities = {
 export type TtsRequest = {
   text: string;
   settings: PostReadingSettings;
+  signal?: AbortSignal;
   onBoundary: (boundary: TtsBoundary) => void;
   onEnd: () => void;
   onError: (message: string) => void;
@@ -79,6 +80,11 @@ export class WebSpeechEngine implements TtsEngine {
     const startsWithKnownSyncedBoundaries = hasKnownSyncedBoundaries(voice);
 
     let stopped = false;
+    const abortPlayback = () => {
+      stopped = true;
+      window.speechSynthesis.cancel();
+    };
+    request.signal?.addEventListener("abort", abortPlayback, { once: true });
     utterance.onboundary = (event) => {
       if (stopped) return;
       if (!Number.isFinite(event.charIndex) || event.charIndex < 0) return;
@@ -89,9 +95,11 @@ export class WebSpeechEngine implements TtsEngine {
       });
     };
     utterance.onend = () => {
+      request.signal?.removeEventListener("abort", abortPlayback);
       if (!stopped) request.onEnd();
     };
     utterance.onerror = () => {
+      request.signal?.removeEventListener("abort", abortPlayback);
       if (!stopped) request.onError("Speech playback failed.");
     };
 
@@ -103,6 +111,7 @@ export class WebSpeechEngine implements TtsEngine {
       resume: () => window.speechSynthesis.resume(),
       stop: () => {
         stopped = true;
+        request.signal?.removeEventListener("abort", abortPlayback);
         window.speechSynthesis.cancel();
       },
     };
@@ -128,7 +137,12 @@ export class CustomHttpTtsEngine implements TtsEngine {
     if (!endpoint) throw new Error("Custom TTS endpoint is not configured.");
 
     const abort = new AbortController();
-    const response = await fetch(endpoint, {
+    const onRequestAbort = () => abort.abort();
+    request.signal?.addEventListener("abort", onRequestAbort, { once: true });
+    const deadline = window.setTimeout(() => abort.abort(), 30_000);
+    let payload: ReturnType<typeof normalizeCustomResponse>;
+    try {
+      const response = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -138,10 +152,17 @@ export class CustomHttpTtsEngine implements TtsEngine {
         voiceURI: request.settings.voiceURI,
       }),
       signal: abort.signal,
-    });
-    if (!response.ok) throw new Error(`Custom TTS endpoint returned HTTP ${response.status}.`);
-
-    const payload = normalizeCustomResponse(await response.json());
+      });
+      if (!response.ok) throw new Error(`Custom TTS endpoint returned HTTP ${response.status}.`);
+      payload = normalizeCustomResponse(await response.json());
+    } finally {
+      window.clearTimeout(deadline);
+      request.signal?.removeEventListener("abort", onRequestAbort);
+    }
+    if (request.signal?.aborted) {
+      if (payload.revokeUrl) URL.revokeObjectURL(payload.audioUrl);
+      throw new DOMException("Speech canceled", "AbortError");
+    }
     const audio = new Audio(payload.audioUrl);
     audio.volume = request.settings.volume;
     const timers = new Set<number>();
@@ -179,7 +200,35 @@ export class CustomHttpTtsEngine implements TtsEngine {
       request.onError("Custom TTS audio playback failed.");
     });
 
-    await audio.play();
+    const cancelPendingPlayback = () => {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      if (payload.revokeUrl) URL.revokeObjectURL(payload.audioUrl);
+    };
+    let startDeadline: number | null = null;
+    let rejectPendingPlayback: (() => void) | null = null;
+    const pendingPlaybackAbort = new Promise<never>((_, reject) => {
+      const rejectCanceled = () => {
+        cancelPendingPlayback();
+        reject(new DOMException("Speech canceled", "AbortError"));
+      };
+      rejectPendingPlayback = rejectCanceled;
+      request.signal?.addEventListener("abort", rejectCanceled, { once: true });
+      startDeadline = window.setTimeout(() => {
+        cancelPendingPlayback();
+        reject(new Error("Custom TTS audio playback timed out"));
+      }, 15_000);
+    });
+    try {
+      await Promise.race([audio.play(), pendingPlaybackAbort]);
+    } catch (error) {
+      cancelPendingPlayback();
+      throw error;
+    } finally {
+      if (startDeadline !== null) window.clearTimeout(startDeadline);
+      if (rejectPendingPlayback) request.signal?.removeEventListener("abort", rejectPendingPlayback);
+    }
     scheduleBoundaries(0);
 
     return {
