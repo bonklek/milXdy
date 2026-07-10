@@ -16,6 +16,7 @@ Apps & Features and the side rail manage first-party milXdy apps and feature mod
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right.
 - Reorder pinned app icons from the dock settings.
+- Follow the arrow above or below an overflowing rail to see whether more pinned apps are available in that direction.
 - Use Lite, Balanced, or Full setup on fresh installs to choose a starting profile.
 - Use card details to review settings ownership, permissions, privacy/data notes, storage, runtime state, and reset actions.
 

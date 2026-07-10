@@ -887,10 +887,15 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 }
 
 .milxdy-chat-reaction-counts button[data-active="true"],
+.milxdy-chat-reaction-counts button[aria-pressed="true"],
 .milxdy-chat-message-actions button[data-active="true"] {
   border-color: var(--rn-accent);
-  background: rgba(98, 107, 178, 0.18);
+  border-right-color: color-mix(in srgb, var(--rn-accent) 72%, #000000);
+  border-bottom-color: color-mix(in srgb, var(--rn-accent) 72%, #000000);
+  background: rgba(54, 62, 132, 0.34);
   color: var(--rn-link);
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.2);
+  transform: translate(1px, 1px);
 }
 
 .milxdy-chat-message-actions button {
@@ -1278,6 +1283,19 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
     4px 4px 0 rgba(0, 0, 0, 0.42);
 }
 
+#milxdy-reminet-chat-root[data-theme="dark"][data-mount="rail"],
+#milxdy-reminet-chat-root[data-theme="dark"][data-mount="left"] {
+  background: transparent;
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"][data-mount="rail"] .milxdy-chat-card,
+#milxdy-reminet-chat-root[data-theme="dark"][data-mount="left"] .milxdy-chat-card {
+  outline: 0;
+  border-color: #252838;
+  border-right-color: #080a10;
+  border-bottom-color: #06070c;
+}
+
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-card::before {
   background:
     repeating-linear-gradient(0deg, rgba(143, 151, 232, 0.035), rgba(143, 151, 232, 0.035) 1px, transparent 1px, transparent 8px),
@@ -1390,6 +1408,21 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button:hover,
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button:hover {
   background: #ffffff;
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[data-active="true"],
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[aria-pressed="true"] {
+  border-color: #767fc9;
+  border-right-color: #343961;
+  border-bottom-color: #292d4e;
+  background: #34395f;
+  color: #ffffff;
+  box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.48);
+}
+
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[data-active="true"]:hover,
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[aria-pressed="true"]:hover {
+  background: #414875;
 }
 
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button {
