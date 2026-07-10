@@ -14,11 +14,17 @@ const SOCKET_URL = "wss://www.remilia.net/api/ws";
 const SOCKET_PORT_NAME = "reminetChat:socket";
 const SESSION_PROBE_PATH = "/api/profile/whoami";
 const SOCKET_HEARTBEAT_MS = 25_000;
+const SOCKET_AUTH_TIMEOUT_MS = 12_000;
+const SOCKET_OPEN_TIMEOUT_MS = 12_000;
+const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 const MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024;
 const ALLOWED_ATTACHMENT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const ALLOWED_ATTACHMENT_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
+
+let socketAuthReadyUntil = 0;
+let socketAuthPromise: Promise<{ ok: boolean; signedIn: boolean; error?: string }> | null = null;
 
 type DecodedAttachment = {
   contentType: string;
@@ -97,13 +103,25 @@ chrome.runtime.onConnect.addListener((port) => {
     const ready = await prepareSocketAuth();
     if (closed || generation !== connectGeneration) return;
     if (!ready.ok) {
-      post({ type: "socket:error", error: ready.error || "AUTH_REQUIRED", authRequired: true });
+      const authRequired = ready.error === "AUTH_REQUIRED";
+      post({
+        type: "socket:error",
+        error: authRequired ? "AUTH_REQUIRED" : "Live chat authentication timed out.",
+        reason: authRequired ? "auth-required" : "socket-auth-timeout",
+        authRequired,
+      });
       return;
     }
     const nextSocket = new WebSocket(SOCKET_URL);
     socket = nextSocket;
     post({ type: "socket:connecting" });
+    const openTimer = setTimeout(() => {
+      if (socket !== nextSocket || closed || nextSocket.readyState === WebSocket.OPEN) return;
+      post({ type: "socket:error", error: "Live chat connection timed out.", reason: "socket-open-timeout" });
+      nextSocket.close();
+    }, SOCKET_OPEN_TIMEOUT_MS);
     nextSocket.addEventListener("open", () => {
+      clearTimeout(openTimer);
       if (socket !== nextSocket || closed) return;
       nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
       startHeartbeat(nextSocket);
@@ -114,11 +132,13 @@ chrome.runtime.onConnect.addListener((port) => {
       post({ type: "socket:frame", data: event.data });
     });
     nextSocket.addEventListener("close", (event) => {
+      clearTimeout(openTimer);
       stopHeartbeat();
       if (socket === nextSocket) socket = null;
       post({ type: "socket:close", code: event.code, reason: event.reason, wasClean: event.wasClean });
     });
     nextSocket.addEventListener("error", () => {
+      clearTimeout(openTimer);
       post({ type: "socket:error", error: "Connection interrupted.", reason: "socket-error" });
     });
   };
@@ -226,10 +246,21 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; error?: string }> {
-  const auth = await prepareRemiliaAuth(SESSION_PROBE_PATH);
-  if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-  if (auth.token) await setRemiliaAuthCookie(auth.token);
-  return { ok: true, signedIn: true };
+  if (Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
+  if (socketAuthPromise) return socketAuthPromise;
+  socketAuthPromise = withDeadline(
+    prepareRemiliaAuth(SESSION_PROBE_PATH).then(async (auth) => {
+      if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
+      if (auth.token) await setRemiliaAuthCookie(auth.token);
+      socketAuthReadyUntil = Date.now() + SOCKET_AUTH_CACHE_MS;
+      return { ok: true, signedIn: true };
+    }),
+    SOCKET_AUTH_TIMEOUT_MS,
+    { ok: false, signedIn: false, error: "AUTH_TIMEOUT" },
+  ).finally(() => {
+    socketAuthPromise = null;
+  });
+  return socketAuthPromise;
 }
 
 async function authStatus(): Promise<Record<string, unknown>> {
@@ -246,14 +277,30 @@ async function remiliaAuthedFetch(method: string, path: string): Promise<Record<
   if (!ready.ok) return { ok: false, authRequired: true };
   const result = await remiliaRequest(method, path, null);
   if ((result.status === 401 || result.status === 403) && await refreshAccessToken()) {
+    socketAuthReadyUntil = 0;
     await prepareSocketAuth();
     return remiliaRequest(method, path, null);
   }
   if (result.status === 401 || result.status === 403) {
+    socketAuthReadyUntil = 0;
     const adopted = await adoptRemiliaBrowserSession(SESSION_PROBE_PATH);
     if (adopted.ok) return remiliaRequest(method, path, null);
   }
   return result;
+}
+
+async function withDeadline<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((resolve) => {
+        timer = setTimeout(() => resolve(fallback), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== null) clearTimeout(timer);
+  }
 }
 
 async function remiliaRequest(method: string, path: string, body: unknown): Promise<Record<string, unknown>> {

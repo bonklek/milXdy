@@ -174,25 +174,30 @@ async function getState() {
 
 async function runAction(action) {
   if (!ACTIONS.has(action)) return { ok: false, error: 'UNKNOWN_ACTION' };
-  const before = await remiliaAuthedFetch('GET', '/api/beetle/user');
-  const inventoryBefore = before.ok ? before.data?.inventory || {} : {};
+  // Do not surround the mutation with two state reads. The shared runtime
+  // deadline applies to the whole message handler, and a successful action
+  // used to time out while waiting for the trailing GET. Use the last known
+  // snapshot for best-effort reward labels and let the content panel reconcile
+  // state in a separate, non-blocking request after it receives this result.
+  const stored = await getStored({ lastUser: null });
+  const inventoryBefore = stored.lastUser?.inventory || {};
   const result = await remiliaAuthedFetch('POST', `/api/beetle/action/${action}`, {});
 
   if (!result.ok) return result;
   const cooldownMs = extractActionCooldownMs(result.data, action);
+  const responseUser = result.data?.user || null;
   if (result.data?.success === false) {
-    const after = await getState();
     return {
       ok: true,
       actionResult: result.data,
       cooldownMs,
-      user: after.ok ? after.user : null,
-      fetchedAt: after.ok ? after.fetchedAt : Date.now(),
+      user: responseUser,
+      fetchedAt: Date.now(),
+      needsRefresh: true,
     };
   }
 
-  const after = await getState();
-  const inventoryAfter = after.ok ? after.user?.inventory || {} : {};
+  const inventoryAfter = responseUser?.inventory || result.data?.inventory || {};
   const gained = Object.entries(inventoryAfter)
     .map(([key, qty]) => [key, qty - (inventoryBefore[key] || 0)])
     .filter(([, diff]) => diff > 0)
@@ -202,9 +207,10 @@ async function runAction(action) {
     ok: true,
     actionResult: result.data,
     cooldownMs,
-    user: after.ok ? after.user : null,
-    fetchedAt: after.ok ? after.fetchedAt : Date.now(),
+    user: responseUser,
+    fetchedAt: Date.now(),
     gained,
+    needsRefresh: true,
   };
 }
 
