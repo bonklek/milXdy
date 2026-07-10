@@ -17,7 +17,7 @@ Status: in development.
 - Show when more pinned apps are available above or below the visible side rail.
 - Keep rail settings compact and separate from the Apps & Features catalog, with one-row ordering controls and advanced app presets collapsed by default.
 - Preserve responsive native Like animation while keeping lightweight Maxxer catch and level-up feedback.
-- Remove duplicate full-page mutation scanning, recurring per-tweet diagnostics work, and repeated cache sweeps that could make normal X navigation and interaction laggy.
+- Remove two suspected reliability-audit lag contributors: replace mutation-driven main-column button rescans with a disabled-aware, capped visible-page check every five seconds, and replace the dock's root-level relational dialog selector with a static left-rail safe area.
 - Show the final Beetle Hunt reward before the red Done state and normal persisted 90-minute cooldown.
 - Open supported Wiki tabs, details, and collapsible sections before read-aloud highlights and scrolls their text.
 - Show poke controls only for accounts with a confirmed RemiliaNET identity while retaining independent score and beetle badges.
