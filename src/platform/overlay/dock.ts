@@ -75,6 +75,7 @@ const globalKey = "__milxdyOverlayDock";
 const sideListeners = new Set<(side: OverlayDockSide) => void>();
 
 function createDockApi(): DockApi {
+  let railIndicatorFrame = 0;
   const state: DockState = {
     root: null,
     items: new Map(),
@@ -273,10 +274,10 @@ function createDockApi(): DockApi {
       rail.className = "milxdy-overlay-dock-rail";
       root.prepend(rail);
       const createdRail = rail;
-      createdRail.addEventListener("scroll", () => updateRailScrollIndicators(root, createdRail), { passive: true });
-      window.addEventListener("resize", () => updateRailScrollIndicators(root, createdRail), { passive: true });
+      createdRail.addEventListener("scroll", () => scheduleRailScrollIndicatorUpdate(root, createdRail), { passive: true });
+      window.addEventListener("resize", () => scheduleRailScrollIndicatorUpdate(root, createdRail), { passive: true });
       if (typeof ResizeObserver === "function") {
-        new ResizeObserver(() => updateRailScrollIndicators(root, createdRail)).observe(createdRail);
+        new ResizeObserver(() => scheduleRailScrollIndicatorUpdate(root, createdRail)).observe(createdRail);
       }
     }
 
@@ -299,7 +300,15 @@ function createDockApi(): DockApi {
     for (const extra of Array.from(rail.querySelectorAll<HTMLElement>(":scope > :not(.milxdy-overlay-dock-item)"))) {
       extra.remove();
     }
-    requestAnimationFrame(() => updateRailScrollIndicators(root, rail));
+    scheduleRailScrollIndicatorUpdate(root, rail);
+  }
+
+  function scheduleRailScrollIndicatorUpdate(root: HTMLElement, rail: HTMLElement): void {
+    if (railIndicatorFrame) return;
+    railIndicatorFrame = requestAnimationFrame(() => {
+      railIndicatorFrame = 0;
+      updateRailScrollIndicators(root, rail);
+    });
   }
 
   function updateRailScrollIndicators(root: HTMLElement, rail: HTMLElement): void {
