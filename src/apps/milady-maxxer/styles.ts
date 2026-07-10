@@ -573,34 +573,34 @@ export function injectStyles(): void {
 
     @keyframes milady-catch-pulse {
       0% {
-        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0.6);
+        transform: scale(1);
       }
-      50% {
-        box-shadow: 0 0 20px 4px rgba(212, 175, 55, 0.4);
+      42% {
+        transform: scale(1.006);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(212, 175, 55, 0);
+        transform: scale(1);
       }
     }
 
     @keyframes milady-levelup-pulse {
       0% {
-        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.7);
+        transform: scale(1);
       }
       40% {
-        box-shadow: 0 0 24px 6px rgba(255, 215, 0, 0.5);
+        transform: scale(1.008);
       }
       100% {
-        box-shadow: 0 0 0 0 rgba(255, 215, 0, 0);
+        transform: scale(1);
       }
     }
 
     [data-miladymaxxer-catch-anim="catch"] {
-      animation: milady-catch-pulse 0.5s ease-out !important;
+      animation: milady-catch-pulse 0.28s ease-out !important;
     }
 
     [data-miladymaxxer-catch-anim="levelup"] {
-      animation: milady-levelup-pulse 0.6s ease-out !important;
+      animation: milady-levelup-pulse 0.36s ease-out !important;
     }
 
     .miladymaxxer-add-btn {
@@ -727,7 +727,7 @@ export function injectStyles(): void {
         0 4px 8px rgba(0, 0, 0, 0.1),
         0 8px 24px rgba(212, 175, 55, 0.2),
         inset 0 1px 0 rgba(255, 215, 0, 0.15) !important;
-      transition: transform 0.3s ease, box-shadow 0.3s ease !important;
+      transition: transform 120ms ease !important;
     }
 
     /* Subtle centered float on hover */
@@ -747,7 +747,7 @@ export function injectStyles(): void {
     /* Faded pink heart and count on milady posts to encourage liking */
     [data-miladymaxxer-effect="milady"] [data-testid="like"] svg {
       color: rgba(249, 24, 128, 0.4) !important;
-      transition: color 0.2s ease, transform 0.2s ease !important;
+      transition: color 80ms ease !important;
     }
 
     [data-miladymaxxer-effect="milady"] [data-testid="like"] span {
@@ -756,7 +756,6 @@ export function injectStyles(): void {
 
     [data-miladymaxxer-effect="milady"] [data-testid="like"]:hover svg {
       color: rgba(249, 24, 128, 0.7) !important;
-      transform: scale(1.1) !important;
     }
 
     [data-miladymaxxer-effect="milady"] [data-testid="like"]:hover span {
