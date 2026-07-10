@@ -3,7 +3,7 @@ import "../../apps/post-reading/background";
 import "../../apps/milady-maxxer/background";
 import "../../apps/beetol/background.js";
 import "../../apps/reminet-chat/background";
-import { initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
+import { createBackgroundNetworkDeadlineSignal, initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
 import { browserAction } from "../../platform/background/browser-action";
 import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";
 import {
@@ -980,7 +980,13 @@ async function readCappedResponseBytes(response: Response, maxBytes: number): Pr
 }
 
 function budgetedFetch(input: RequestInfo | URL, init?: RequestInit, label?: string): Promise<Response> {
-  return runNetworkTask((signal) => fetch(input, { ...init, signal: combineAbortSignals(init?.signal, signal) }), label);
+  return runNetworkTask((signal) => fetch(input, {
+    ...init,
+    signal: combineAbortSignals(
+      combineAbortSignals(init?.signal, signal),
+      createBackgroundNetworkDeadlineSignal(),
+    ),
+  }), label);
 }
 
 function combineAbortSignals(existing: AbortSignal | null | undefined, deadline: AbortSignal): AbortSignal {

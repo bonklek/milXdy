@@ -4,7 +4,6 @@ import {
   REMILIA_BASE_URL,
   prepareRemiliaAuth,
   renewRemiliaAuth,
-  setRemiliaAuthCookie,
   adoptRemiliaBrowserSession,
   isRemiliaDisconnected,
 } from "../../platform/auth/remilia-auth";
@@ -257,19 +256,20 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
   if (Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
   if (socketAuthPromise) return socketAuthPromise;
   const generation = ++socketAuthGeneration;
+  const abort = new AbortController();
   const pending = withDeadline(
-    prepareRemiliaAuth(SESSION_PROBE_PATH).then(async (auth) => {
+    prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }).then(async (auth) => {
       if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
         return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
       }
       if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-      if (auth.token) await setRemiliaAuthCookie(auth.token);
       socketAuthReadyUntil = Date.now() + SOCKET_AUTH_CACHE_MS;
       return { ok: true, signedIn: true };
     }),
     SOCKET_AUTH_TIMEOUT_MS,
     { ok: false, signedIn: false, error: "AUTH_TIMEOUT" },
     () => {
+      abort.abort(new DOMException("Remilia chat authentication timed out", "TimeoutError"));
       if (generation === socketAuthGeneration) socketAuthGeneration += 1;
     },
   );

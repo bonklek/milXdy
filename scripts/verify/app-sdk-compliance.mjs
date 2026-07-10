@@ -581,7 +581,8 @@ function verifyInternalBridgeValidation() {
   if (/document\.cookie|\bct0\b|\bBearer\b|\bx-csrf-token\b|\bauthorization\b|\bTweetResultByRestId\b|\/i\/api\/graphql\/|\bqueryId\b|\bfetchGraphQl|\bdiscoverGraphQl|\bextractGraphQl|\bgraphQlFeatures\b|\bgraphQlFieldToggles\b|credentials:\s*["']include["']|createElement\(["']iframe["']\)|frame\.src\s*=/i.test(postReadingFullQuote)) {
     fail("post-reading full-quote fetch path must not read or reuse X/Twitter session material, bearer tokens, CSRF cookies, GraphQL query IDs, hidden session-bearing frames, or credentialed fetches");
   }
-  requireIncludes(postReadingBackground, "fetch(message.url, { credentials: \"omit\", signal })", "post-reading background bridge must omit credentials and honor shared deadline cancellation for public full-quote fetches");
+  requireIncludes(postReadingBackground, 'credentials: "omit"', "post-reading background bridge must omit credentials for public full-quote fetches");
+  requireIncludes(postReadingBackground, "AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])", "post-reading background bridge must honor queue cancellation and response-read deadlines for public full-quote fetches");
   if (/url\.pathname\s*===\s*["']\/home["']|abs\.twimg\.com|endsWith\(["']\.twimg\.com["']\)|responsive-web\/client-web/.test(postReadingBackground)) {
     fail("post-reading background bridge must not fetch active X shell or script bundles for full-quote discovery");
   }
