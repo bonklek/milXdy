@@ -15,6 +15,8 @@ let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
 const xUnreadNotifications = new WeakSet<HTMLElement>();
 const clickedNotificationKeys = new WeakMap<HTMLElement, string>();
 const SHOW_NEW_POSTS_RE = /show\s+\d+\s+posts?/i;
+const SHOW_NEW_POST_SCAN_INTERVAL_MS = 5000;
+const SHOW_NEW_POST_SCAN_LIMIT = 120;
 const HOME_LOGO_REPLACEMENT_CLASS = "milady-logo-replacement";
 const HOME_LOGO_BACKGROUND_CLASS = "milxdy-home-logo-background";
 const HOME_LOGO_LINK_SELECTOR = 'h1 a[href="/home"], h1 a[aria-label="X"][role="link"]';
@@ -546,46 +548,31 @@ function injectHomeLogoStyles(): void {
 }
 
 function setupShowNewPostsMarkers(context: MilxdyContentAppContext): void {
-  let observer: MutationObserver | null = null;
-  let scanFrame = 0;
-  const pendingRoots = new Set<HTMLElement>();
-  const scanRoot = (root: HTMLElement) => {
-    if (root.matches('[role="button"], button')) markShowNewPostsButton(root);
-    for (const button of Array.from(root.querySelectorAll<HTMLElement>('[role="button"], button')).slice(0, 16)) {
-      markShowNewPostsButton(button);
-    }
-  };
-  const scheduleScan = () => {
-    if (scanFrame || context.signal.aborted) return;
-    scanFrame = requestAnimationFrame(() => {
-      scanFrame = 0;
-      for (const root of pendingRoots) scanRoot(root);
-      pendingRoots.clear();
-    });
-  };
-  const attach = () => {
-    if (observer || context.signal.aborted) return;
+  let cancelNextScan: (() => void) | null = null;
+  const scan = () => {
+    if (!visualTheme.newPostsPill || document.visibilityState !== "visible") return;
     const main = document.querySelector<HTMLElement>('main[role="main"], main');
-    if (!main) {
-      context.scheduler.timeout(attach, 1000);
-      return;
+    if (!main) return;
+    let scanned = 0;
+    for (const button of main.querySelectorAll<HTMLElement>('[role="button"], button')) {
+      markShowNewPostsButton(button);
+      scanned += 1;
+      if (scanned >= SHOW_NEW_POST_SCAN_LIMIT) break;
     }
-    scanRoot(main);
-    observer = new MutationObserver((mutations) => {
-      for (const mutation of mutations) {
-        for (const node of mutation.addedNodes) {
-          if (node instanceof HTMLElement && pendingRoots.size < 24) pendingRoots.add(node);
-        }
-      }
-      if (pendingRoots.size) scheduleScan();
-    });
-    observer.observe(main, { childList: true, subtree: true });
   };
-  attach();
+  const scheduleNextScan = () => {
+    cancelNextScan = context.scheduler.timeout(() => {
+      cancelNextScan = null;
+      if (context.signal.aborted) return;
+      scan();
+      scheduleNextScan();
+    }, SHOW_NEW_POST_SCAN_INTERVAL_MS);
+  };
+  scan();
+  scheduleNextScan();
   context.addDisposable(() => {
-    observer?.disconnect();
-    if (scanFrame) cancelAnimationFrame(scanFrame);
-    pendingRoots.clear();
+    cancelNextScan?.();
+    cancelNextScan = null;
   });
 }
 
