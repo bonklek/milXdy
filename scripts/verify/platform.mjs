@@ -82,6 +82,9 @@ async function verifyRuntimeOwnership() {
   assert(existsSync("src/platform/browser/url-allowlist.ts"), "shared URL allowlist helper must exist");
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
   assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("state.settingsActions"), "overlay dock settings panel must render registered settings actions");
+  assert(overlayDock.includes("grid-template-columns: 22px minmax(0, 1fr) 28px 28px"), "overlay dock settings rows must keep icons, labels, and both move controls on one line");
+  assert(runtime.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
+  assert(runtime.includes('document.createElement("details")') && runtime.includes('title.textContent = "Change app preset"'), "Apps & Features presets must stay collapsed behind an explicit disclosure");
   assert(overlayAppLayout.includes('OVERLAY_APP_LAYOUTS_KEY = "milxdy.overlayApps.layouts.v1"'), "overlay app layouts must persist through the shared local layout store");
   assert(overlayAppLayout.includes("chrome.storage.local") && !overlayAppLayout.includes("chrome.storage.sync"), "overlay app pixel layouts must use chrome.storage.local only");
   assert(overlayAppLayout.includes("snapshotOverlayProtectedZones") && overlayAppLayout.includes("detectHostRailZones"), "overlay app layout manager must snapshot milXdy and host rail guide zones");

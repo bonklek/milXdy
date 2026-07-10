@@ -27,6 +27,10 @@ export type OverlayDockSettingsAction = {
   onActivate: () => void;
 };
 
+export type OverlayDockSettingsOptions = {
+  excludeActionIds?: readonly string[];
+};
+
 type DockState = {
   root: HTMLElement | null;
   items: Map<string, OverlayDockItem>;
@@ -57,7 +61,7 @@ type DockApi = {
   setSettingsAction: (id: string, action: OverlayDockSettingsAction | null) => void;
   getAppOrder: () => string[];
   setAppOrder: (ids: readonly string[]) => void;
-  createSettingsPanel: (onUpdate?: () => void) => HTMLElement;
+  createSettingsPanel: (onUpdate?: () => void, options?: OverlayDockSettingsOptions) => HTMLElement;
   subscribeSide: (callback: (side: OverlayDockSide) => void) => () => void;
 };
 
@@ -480,19 +484,21 @@ function createDockApi(): DockApi {
     void chrome.storage.local.set({ [ORDER_KEY]: state.order });
   }
 
-  function createSettingsPanel(onUpdate?: () => void): HTMLElement {
+  function createSettingsPanel(onUpdate?: () => void, options: OverlayDockSettingsOptions = {}): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "milxdy-overlay-dock-settings";
 
     const title = document.createElement("strong");
-    title.textContent = "Dock";
+    title.textContent = "Rail settings";
 
+    const sideSection = settingsSection("Rail side");
     const sideGroup = document.createElement("div");
     sideGroup.className = "milxdy-overlay-dock-segment";
     sideGroup.append(
       sideButton("Left", "left", onUpdate),
       sideButton("Right", "right", onUpdate),
     );
+    sideSection.append(sideGroup);
 
     const reorder = document.createElement("button");
     reorder.type = "button";
@@ -515,7 +521,11 @@ function createDockApi(): DockApi {
       onUpdate?.();
     });
 
-    const appSection = settingsSection("Apps");
+    const appSection = settingsSection("App order");
+    const orderActions = document.createElement("div");
+    orderActions.className = "milxdy-overlay-dock-settings-actions";
+    orderActions.append(reorder, reset);
+    appSection.append(orderActions);
     for (const item of orderedItems().filter((item) => item.stackable !== false)) {
       appSection.append(settingsAppRow(item, onUpdate));
     }
@@ -526,13 +536,16 @@ function createDockApi(): DockApi {
       appSection.append(empty);
     }
 
-    const featureSection = settingsSection("Features");
+    const featureSection = settingsSection("Utilities");
+    const excludedActions = new Set(options.excludeActionIds || []);
     const actions = Array.from(state.settingsActions.entries())
+      .filter(([id]) => !excludedActions.has(id))
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([, action]) => settingsActionButton(action, onUpdate));
     featureSection.append(...actions);
 
-    panel.append(title, sideGroup, reorder, reset, appSection, featureSection);
+    panel.append(title, sideSection, appSection);
+    if (actions.length) panel.append(featureSection);
     return panel;
   }
 
@@ -562,7 +575,7 @@ function createDockApi(): DockApi {
     const index = order.findIndex((entry) => entry.id === item.id);
     const moveUp = settingsMoveButton(item, -1, index <= 0, onUpdate);
     const moveDown = settingsMoveButton(item, 1, index < 0 || index >= order.length - 1, onUpdate);
-    row.append(handle, icon, label, moveUp, moveDown);
+    row.append(icon, label, moveUp, moveDown);
     return row;
   }
 
@@ -933,18 +946,21 @@ function injectStyles(): void {
     }
     .milxdy-overlay-dock-settings-row {
       display: grid;
-      grid-template-columns: 14px 22px minmax(0, 1fr);
+      grid-template-columns: 22px minmax(0, 1fr) 28px 28px;
       align-items: center;
       gap: 5px;
-      min-height: 24px;
+      min-height: 28px;
       color: inherit;
       font-size: 11px;
       line-height: 1.2;
     }
     .milxdy-overlay-dock-settings-drag {
-      color: rgba(255, 244, 207, 0.62);
-      font-size: 11px;
-      line-height: 1;
+      display: none;
+    }
+    .milxdy-overlay-dock-settings-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
     }
     .milxdy-overlay-dock-settings-icon,
     .milxdy-overlay-dock-settings-icon img {
