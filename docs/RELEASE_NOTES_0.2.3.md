@@ -16,6 +16,8 @@ Status: in development.
 
 ## Release Gate
 
-This release is not ready for publication. The implementation, automated regression coverage, full release gate, and manual authenticated X/RemiliaNET QA remain required.
+The canonical non-live release gate passed on 2026-07-10 after the reliability and RemiliaNET recovery fixes were integrated. This includes strict TypeScript, Chromium and Firefox builds, platform and messaging contracts, local-package trust tests, Firefox lint classification, extension/app smoke, release packaging, checksums, and reproducibility.
+
+This release is not ready for publication until manual authenticated X/RemiliaNET QA covers the changed runtime, Beetol Hunt, RemiNet Chat live connection and sending, Post-reading, Wiki, rail/settings, and representative feed/notification surfaces.
 
 Expected release assets are `milXdy-0.2.3-chromium.zip` and `milXdy-0.2.3-firefox.zip`.
