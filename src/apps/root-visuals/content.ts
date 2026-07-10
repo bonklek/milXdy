@@ -9,7 +9,6 @@ import {
 } from "../../platform/visuals/reskin-profile";
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
 import { parseJsonObject } from "../../platform/browser/json";
-import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
 
 let postSoundContext: AudioContext | null = null;
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
@@ -547,32 +546,46 @@ function injectHomeLogoStyles(): void {
 }
 
 function setupShowNewPostsMarkers(context: MilxdyContentAppContext): void {
-  for (const button of document.querySelectorAll<HTMLElement>('[role="button"], button')) {
-    markShowNewPostsButton(button);
-  }
-  const observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      const target = mutation.target instanceof HTMLElement ? mutation.target : mutation.target.parentElement;
-      const directButton = target?.closest<HTMLElement>('[role="button"], button');
-      if (directButton) markShowNewPostsButton(directButton);
-      for (const node of Array.from(mutation.addedNodes).slice(0, 24)) {
-        if (!(node instanceof HTMLElement)) continue;
-        if (node.matches('[role="button"], button')) markShowNewPostsButton(node);
-        for (const button of Array.from(node.querySelectorAll<HTMLElement>('[role="button"], button')).slice(0, 24)) {
-          markShowNewPostsButton(button);
+  let observer: MutationObserver | null = null;
+  let scanFrame = 0;
+  const pendingRoots = new Set<HTMLElement>();
+  const scanRoot = (root: HTMLElement) => {
+    if (root.matches('[role="button"], button')) markShowNewPostsButton(root);
+    for (const button of Array.from(root.querySelectorAll<HTMLElement>('[role="button"], button')).slice(0, 16)) {
+      markShowNewPostsButton(button);
+    }
+  };
+  const scheduleScan = () => {
+    if (scanFrame || context.signal.aborted) return;
+    scanFrame = requestAnimationFrame(() => {
+      scanFrame = 0;
+      for (const root of pendingRoots) scanRoot(root);
+      pendingRoots.clear();
+    });
+  };
+  const attach = () => {
+    if (observer || context.signal.aborted) return;
+    const main = document.querySelector<HTMLElement>('main[role="main"], main');
+    if (!main) {
+      context.scheduler.timeout(attach, 1000);
+      return;
+    }
+    scanRoot(main);
+    observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of mutation.addedNodes) {
+          if (node instanceof HTMLElement && pendingRoots.size < 24) pendingRoots.add(node);
         }
       }
-    }
-  });
-  const observeBody = () => {
-    if (!document.body || context.signal.aborted) return;
-    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+      if (pendingRoots.size) scheduleScan();
+    });
+    observer.observe(main, { childList: true, subtree: true });
   };
-  if (document.body) observeBody();
-  else document.addEventListener("DOMContentLoaded", observeBody, { once: true });
+  attach();
   context.addDisposable(() => {
-    observer.disconnect();
-    document.removeEventListener("DOMContentLoaded", observeBody);
+    observer?.disconnect();
+    if (scanFrame) cancelAnimationFrame(scanFrame);
+    pendingRoots.clear();
   });
 }
 
@@ -850,17 +863,12 @@ function setupOrphanReplyMarkers(context: MilxdyContentAppContext): void {
 
 function markOrphanReply(tweet: HTMLElement): void {
   if (!tweet.isConnected) return;
-  const startedAt = performance.now();
-  try {
-    const hasReplyContext = REPLY_CONTEXT_RE.test(tweet.textContent || "");
-    if (!hasReplyContext) {
-      setOrphanReplyState(tweet, false);
-      return;
-    }
-    setOrphanReplyState(tweet, !tweet.querySelector(NATIVE_REPLY_CONNECTOR_SELECTOR));
-  } finally {
-    recordFeatureTiming("rootVisuals", "orphanReply", startedAt);
+  const hasReplyContext = REPLY_CONTEXT_RE.test(tweet.textContent || "");
+  if (!hasReplyContext) {
+    setOrphanReplyState(tweet, false);
+    return;
   }
+  setOrphanReplyState(tweet, !tweet.querySelector(NATIVE_REPLY_CONNECTOR_SELECTOR));
 }
 
 function setOrphanReplyState(tweet: HTMLElement, orphan: boolean): void {
