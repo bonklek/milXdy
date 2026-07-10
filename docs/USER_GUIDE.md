@@ -65,6 +65,8 @@ Some apps keep app-specific controls for their content area, such as Beetol colo
 
 Use **Export pack** to save Appearance plus the current Performance mode as a shareable profile pack. **Import pack** previews the sections that will change and lets you cancel before any settings are written. The older Appearance **Export**, **Import**, **Copy string**, and **Paste string** controls still handle visual themes only.
 
+Custom Appearance groups separate Root X controls from mirrors. Root X controls cover page fade, typography, PFP surfaces, media/card treatment, notifications, navigation, post buttons, and show-new-posts bars. App chrome, Tweet PNG, RemiStats/poke, and Maxxer controls are still preserved in the same visual theme object for compatibility, but remain labeled as app or feature mirrors.
+
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
 
 ## Composer Tools
