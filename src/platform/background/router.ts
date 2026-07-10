@@ -49,7 +49,7 @@ type NetworkQueueEntry<T> = {
 };
 
 const networkQueue: Array<NetworkQueueEntry<unknown>> = [];
-const BACKGROUND_NETWORK_DEADLINE_MS = 30_000;
+export const BACKGROUND_NETWORK_DEADLINE_MS = 30_000;
 let activeNetworkTasks = 0;
 let networkConcurrency = budgetForPerformanceMode("balanced").networkConcurrency;
 let networkBudgetInitialized = false;
@@ -90,6 +90,10 @@ export function runNetworkTask<T>(task: (signal: AbortSignal) => Promise<T>, lab
     scheduleNetworkDiagnosticsWrite();
     drainNetworkQueue();
   });
+}
+
+export function createBackgroundNetworkDeadlineSignal(): AbortSignal {
+  return AbortSignal.timeout(BACKGROUND_NETWORK_DEADLINE_MS);
 }
 
 function drainNetworkQueue(): void {
