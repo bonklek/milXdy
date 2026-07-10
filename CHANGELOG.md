@@ -10,6 +10,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.
 - Passes the complete non-live 0.2.3 release gate, including both browser builds, package/security contracts, smoke tests, archive checksums, and reproducibility; authenticated live QA remains the publication gate.
 - Invalidates cached Chat authentication across connector logout/timeouts and propagates shared background deadlines into fetch abort signals so expired work cannot continue consuming privileged network resources.
+- Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction and dark pop-out states, darkens Post/Reply controls in the dark preset, and matches the Wiki read-aloud button to the square Wiki control family.
 
 Status: in development.
 
