@@ -12,6 +12,7 @@ Remilia Wiki opens Remilia Wiki pages in the shared side rail so you can read re
 
 - Pin or unpin **Remilia Wiki** from Apps & Features.
 - Use the sidebar open-in-tab control when you want the full wiki page.
+- Use the square speaker control on a Wiki article to start or pause read-aloud playback.
 - Modifier-click a wiki link when you prefer the browser's normal new-tab behavior.
 - Use **Link later** from the X/Twitter context menu to save selected phrases for future wiki work.
 - Use **Create Wiki entry with Grok** from the context menu when drafting a new Remilia Wiki article prompt.

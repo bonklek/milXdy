@@ -268,6 +268,12 @@ function createDockApi(): DockApi {
       rail = document.createElement("div");
       rail.className = "milxdy-overlay-dock-rail";
       root.prepend(rail);
+      const createdRail = rail;
+      createdRail.addEventListener("scroll", () => updateRailScrollIndicators(root, createdRail), { passive: true });
+      window.addEventListener("resize", () => updateRailScrollIndicators(root, createdRail), { passive: true });
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(() => updateRailScrollIndicators(root, createdRail)).observe(createdRail);
+      }
     }
 
     const items = orderedItems();
@@ -289,6 +295,14 @@ function createDockApi(): DockApi {
     for (const extra of Array.from(rail.querySelectorAll<HTMLElement>(":scope > :not(.milxdy-overlay-dock-item)"))) {
       extra.remove();
     }
+    requestAnimationFrame(() => updateRailScrollIndicators(root, rail));
+  }
+
+  function updateRailScrollIndicators(root: HTMLElement, rail: HTMLElement): void {
+    const edgeTolerance = 2;
+    const canScroll = rail.scrollHeight > rail.clientHeight + edgeTolerance;
+    root.dataset.canScrollUp = String(canScroll && rail.scrollTop > edgeTolerance);
+    root.dataset.canScrollDown = String(canScroll && rail.scrollTop + rail.clientHeight < rail.scrollHeight - edgeTolerance);
   }
 
   function findItemButton(rail: HTMLElement, id: string): HTMLButtonElement | null {
@@ -674,6 +688,37 @@ function injectStyles(): void {
     }
     #${ROOT_ID}[data-side="left"] { left: 8px; }
     #${ROOT_ID}[data-side="right"] { right: 8px; }
+    #${ROOT_ID}::before,
+    #${ROOT_ID}::after {
+      pointer-events: none;
+      position: absolute;
+      left: 19px;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 14px;
+      border: 1px solid var(--milxdy-dock-border);
+      background: var(--milxdy-dock-panel);
+      color: var(--milxdy-dock-active);
+      font-size: 10px;
+      line-height: 1;
+      opacity: 0;
+      box-shadow: 2px 2px 0 var(--milxdy-dock-shadow);
+      transition: opacity 120ms ease;
+    }
+    #${ROOT_ID}::before {
+      content: "▲";
+      top: -16px;
+    }
+    #${ROOT_ID}::after {
+      content: "▼";
+      bottom: -16px;
+    }
+    #${ROOT_ID}[data-can-scroll-up="true"]::before,
+    #${ROOT_ID}[data-can-scroll-down="true"]::after {
+      opacity: 1;
+    }
     html:has(body [role="dialog"] [aria-label="Close"]) #${ROOT_ID}[data-side="left"] {
       --milxdy-dock-top: 72px;
       --milxdy-dock-bottom-clearance: 80px;

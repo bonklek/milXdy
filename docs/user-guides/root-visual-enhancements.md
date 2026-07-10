@@ -16,6 +16,7 @@ Root Visual Enhancements provides the baseline milXdy X/Twitter polish: visual p
 - Use **Performance mode** separately from Appearance when you want to reduce background work.
 - Leave **Performance diagnostics** off unless you are preparing a bug report.
 - Notification tinting and reply/thread connector hints are part of the root X/Twitter visual treatment.
+- The Max preset uses a darker primary Post/Reply treatment when X is in dark or dim mode, while preserving distinct hover, pressed, and disabled states.
 - App chrome, Tweet PNG, RemiStats/poke, and Maxxer controls in Appearance are mirrors that keep their current storage compatibility while app-owned settings continue moving to their own surfaces.
 
 ## Sharing Profiles

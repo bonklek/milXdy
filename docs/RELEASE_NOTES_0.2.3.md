@@ -13,6 +13,10 @@ Status: in development.
 - Keep Beetol hunts responsive by returning the mutation result before a separate background state reconciliation.
 - Recover RemiNet Chat from stalled authentication or WebSocket opening instead of leaving the composer permanently disconnected on Connecting.
 - Keep connector logout authoritative over cached/in-flight Chat authentication and abort background fetches when their shared deadline expires.
+- Group Root Visual controls by their actual X/app ownership while preserving existing visual-theme storage and profile-pack compatibility.
+- Show when more pinned apps are available above or below the visible side rail.
+- Make active Chat reaction counts visibly pressed, keep dark Chat pop-outs free of bright outer edges, and use darker Post/Reply buttons in the dark default preset.
+- Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 
 ## Release Gate
