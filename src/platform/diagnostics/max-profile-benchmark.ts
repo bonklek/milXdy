@@ -18,7 +18,6 @@ const FEATURE_TIMING_FLUSH_WAIT_MS = 1700;
 
 /** Feature timing keys the benchmark surfaces in its report. Others are still captured. */
 export const TRACKED_FEATURE_TIMINGS = [
-  "rootVisuals.orphanReply",
   "miladymaxxer.idleSurface",
   "remistats.insertBadge",
   "wiki.processTweet",

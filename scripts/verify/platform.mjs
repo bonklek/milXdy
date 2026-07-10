@@ -111,8 +111,14 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes("maxQueueDepth") && runtime.includes("maxDrainMs") && runtime.includes("performanceObserverCount"), "runtime diagnostics must expose surface delivery depth/timing and performance observer count");
   const rootVisuals = await readFile("src/apps/root-visuals/content.ts", "utf8");
   const benchmark = await readFile("src/platform/diagnostics/max-profile-benchmark.ts", "utf8");
-  assert(rootVisuals.includes('recordFeatureTiming("rootVisuals", "orphanReply"') && benchmark.includes('"rootVisuals.orphanReply"'), "Max profile benchmark must attribute Root Visual orphan-reply surface work");
+  assert(!rootVisuals.includes("characterData: true"), "Root Visuals must not install a full-page character-data mutation observer");
+  assert(rootVisuals.includes("observer.observe(main, { childList: true, subtree: true })") && rootVisuals.includes("pendingRoots.size < 24") && rootVisuals.includes(".slice(0, 16)"), "Show-new-post markers must use a bounded main-column observer");
+  assert(!rootVisuals.includes('recordFeatureTiming("rootVisuals", "orphanReply"') && !benchmark.includes('"rootVisuals.orphanReply"'), "Root Visual orphan-reply work must not keep diagnostics timers hot during ordinary browsing");
   assert(rootVisuals.includes("NATIVE_REPLY_CONNECTOR_SELECTOR") && rootVisuals.includes("setOrphanReplyState(tweet, false)"), "Root Visual orphan-reply marker must skip connector scans for non-reply tweets");
+  assert(!overlayDock.includes("new ResizeObserver(() => updateRailScrollIndicators"), "rail ResizeObserver work must use the coalesced scheduler");
+  assert(overlayDock.includes("scheduleRailScrollIndicatorUpdate") && overlayDock.includes("if (railIndicatorFrame) return"), "rail indicator geometry reads must be coalesced to one animation frame");
+  const remistats = await readFile("src/apps/remistats/content.js", "utf8");
+  assert(!remistats.includes("for (const [cachedKey, cached] of scoreCache)"), "RemiStats score insertion must not sweep the entire cache for every result");
 
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
   assert(contentRoot.includes("createContentRuntime(FIRST_PARTY_APPS)"), "root content script must bootstrap the shared runtime");

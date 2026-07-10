@@ -248,10 +248,6 @@ const POKE_THEME_COLORS = new Set(['red', 'green', 'gold', 'blue', 'purple']);
 const POKE_THEME_MODES = new Set(['dark', 'light']);
 
 function setScoreCache(key, value) {
-  const now = Date.now();
-  for (const [cachedKey, cached] of scoreCache) {
-    if (!cached || now - cached.timestamp >= CONFIG.cacheTimeout) scoreCache.delete(cachedKey);
-  }
   if (scoreCache.has(key)) scoreCache.delete(key);
   scoreCache.set(key, value);
   while (scoreCache.size > SCORE_CACHE_LIMIT) {
