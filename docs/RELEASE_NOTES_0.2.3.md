@@ -18,6 +18,7 @@ Status: in development.
 - Keep rail settings compact and separate from the Apps & Features catalog, with one-row ordering controls and advanced app presets collapsed by default.
 - Preserve responsive native Like animation while keeping lightweight Maxxer catch and level-up feedback.
 - Remove duplicate full-page mutation scanning, recurring per-tweet diagnostics work, and repeated cache sweeps that could make normal X navigation and interaction laggy.
+- Show the final Beetle Hunt reward before the red Done state and normal persisted 90-minute cooldown.
 - Make active Chat reaction counts visibly pressed, keep dark Chat pop-outs free of bright outer edges, and use darker Post/Reply buttons in the dark default preset.
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.

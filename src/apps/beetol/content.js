@@ -35,6 +35,8 @@ function mountBeetolGame(context = {}) {
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
+  const FINAL_HUNT_COOLDOWN_MS = 90 * 60 * 1000;
+  const FINAL_HUNT_RESULT_HOLD_MS = 2400;
   const ENABLED_KEY = 'milxdy.remistats.beetol.enabled';
   const SETTINGS_THEME_KEY = 'milxdy.settings.theme';
   const LEGACY_PREFIX = 'bex' + 'tol';
@@ -81,6 +83,8 @@ function mountBeetolGame(context = {}) {
     appFrame: null,
   };
   const disposables = [];
+  let cancelFinalHuntDone = null;
+  let messageRevision = 0;
   function addDisposable(disposable) {
     disposables.push(disposable);
   }
@@ -110,6 +114,22 @@ function mountBeetolGame(context = {}) {
       }
     }
   }
+
+  function cancelFinalHuntTransition() {
+    cancelFinalHuntDone?.();
+    cancelFinalHuntDone = null;
+  }
+
+  function scheduleFinalHuntDone() {
+    cancelFinalHuntTransition();
+    const expectedMessageRevision = messageRevision;
+    cancelFinalHuntDone = runtimeScheduler.timeout(() => {
+      cancelFinalHuntDone = null;
+      if (!lifecycleActive() || messageRevision !== expectedMessageRevision) return;
+      setMessage('Done', 'done');
+    }, FINAL_HUNT_RESULT_HOLD_MS);
+  }
+  addDisposable(cancelFinalHuntTransition);
 
   const root = document.createElement('div');
   root.id = 'beetol-hunter-root';
@@ -453,6 +473,7 @@ function mountBeetolGame(context = {}) {
   }
 
   function setMessage(text, kind = '') {
+    messageRevision += 1;
     state.message = text;
     state.messageKind = kind;
     render();
@@ -786,6 +807,7 @@ function mountBeetolGame(context = {}) {
 
   async function runAction(action, button = null) {
     if (!lifecycleActive()) return;
+    cancelFinalHuntTransition();
     const label = ACTIONS.find(([key]) => key === action)?.[1] || action;
     const chargesBeforeAction = action === 'beetleHunt' ? displayedHuntCharges(button) : state.huntCharges;
     if (action === 'beetleHunt') state.huntCharges = chargesBeforeAction;
@@ -859,6 +881,10 @@ function mountBeetolGame(context = {}) {
     } else if (action === 'beetleHunt' && chargesBeforeAction <= 1 && currentCooldowns().beetleHunt <= 0) {
       state.huntCharges = 0;
     }
+    const finalHunt = action === 'beetleHunt' && state.huntCharges <= 0;
+    if (finalHunt && currentCooldowns().beetleHunt <= 0) {
+      setActionCooldown('beetleHunt', FINAL_HUNT_COOLDOWN_MS);
+    }
     saveCooldownState();
 
     const gained = (response.gained || []).map(({ key, diff }) => (
@@ -866,6 +892,7 @@ function mountBeetolGame(context = {}) {
     ));
     setMessage(gained.length ? `${label}: ${gained.join(', ')}` : `${label}: done.`);
     render();
+    if (finalHunt) scheduleFinalHuntDone();
     if (response.needsRefresh) void reconcileStateAfterAction();
   }
 
