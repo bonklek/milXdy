@@ -1979,9 +1979,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article,
   html[data-milxdy-reskin-profile="max"] header[role="banner"],
   html[data-milxdy-reskin-profile="max"] header[role="banner"] nav,
-  html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a,
-  html[data-milxdy-reskin-profile="max"] [role="button"],
-  html[data-milxdy-reskin-profile="max"] button {
+  html[data-milxdy-reskin-profile="max"] header[role="banner"] nav a {
     transition-property: background-color, color, opacity, filter, transform, box-shadow, border-color !important;
   }
 
