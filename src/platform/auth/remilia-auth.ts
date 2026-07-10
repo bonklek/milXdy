@@ -14,6 +14,9 @@ const LEGACY_ACCESS_TOKEN_KEY = `${LEGACY_PREFIX}.accessToken`;
 const LEGACY_REFRESH_TOKEN_KEY = `${LEGACY_PREFIX}.refreshToken`;
 
 let memoryRefreshToken = "";
+let authGeneration = 0;
+let disconnectRequested = false;
+let authMutationQueue: Promise<void> = Promise.resolve();
 
 export type RemiliaAuthResult = {
   ok: boolean;
@@ -26,6 +29,7 @@ export type RemiliaAuthResult = {
 type RemiliaAuthOptions = {
   ignoreDisconnect?: boolean;
   signal?: AbortSignal;
+  generation?: number;
 };
 
 export const REMILIA_BASE_URL = BASE_URL;
@@ -49,48 +53,58 @@ async function removeStored(keys: readonly string[]): Promise<void> {
   await chrome.storage.local.remove([...keys]);
 }
 
-export async function migrateRemiliaAuth(signal?: AbortSignal): Promise<void> {
+export async function migrateRemiliaAuth(signal?: AbortSignal, generation = authGeneration): Promise<void> {
   throwIfAuthAborted(signal);
   const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  throwIfAuthAborted(signal);
   const next: Record<string, unknown> = {};
   if (!stored[ACCESS_TOKEN_KEY] && stored[LEGACY_ACCESS_TOKEN_KEY]) next[ACCESS_TOKEN_KEY] = stored[LEGACY_ACCESS_TOKEN_KEY];
-  if (!memoryRefreshToken && typeof stored[REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[REFRESH_TOKEN_KEY];
-  if (!memoryRefreshToken && typeof stored[LEGACY_REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[LEGACY_REFRESH_TOKEN_KEY];
-  if (Object.keys(next).length) {
-    throwIfAuthAborted(signal);
-    await setStored(next);
-  }
-  if (stored[REFRESH_TOKEN_KEY] || stored[LEGACY_REFRESH_TOKEN_KEY]) {
-    throwIfAuthAborted(signal);
-    await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  }
+  await mutateRemiliaAuth(generation, signal, async () => {
+    if (!memoryRefreshToken && typeof stored[REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[REFRESH_TOKEN_KEY];
+    if (!memoryRefreshToken && typeof stored[LEGACY_REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[LEGACY_REFRESH_TOKEN_KEY];
+    if (Object.keys(next).length) await setStored(next);
+    if (stored[REFRESH_TOKEN_KEY] || stored[LEGACY_REFRESH_TOKEN_KEY]) {
+      await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+    }
+  });
 }
 
 export async function clearRemiliaAuth(): Promise<void> {
-  memoryRefreshToken = "";
-  await clearRemiliaAuthCookie();
-  await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  await setStored({ [DISCONNECTED_KEY]: true });
+  authGeneration += 1;
+  disconnectRequested = true;
+  await queueAuthMutation(async () => {
+    memoryRefreshToken = "";
+    await clearRemiliaAuthCookieRaw();
+    await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+    await setStored({ [DISCONNECTED_KEY]: true });
+  });
 }
 
 export async function clearStoredRemiliaAuth(): Promise<void> {
-  memoryRefreshToken = "";
-  await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+  authGeneration += 1;
+  await queueAuthMutation(async () => {
+    memoryRefreshToken = "";
+    await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+  });
 }
 
 export async function isRemiliaDisconnected(): Promise<boolean> {
+  if (disconnectRequested) return true;
   const stored = await getStored([DISCONNECTED_KEY]);
-  return stored[DISCONNECTED_KEY] === true;
+  if (stored[DISCONNECTED_KEY] === true) disconnectRequested = true;
+  return disconnectRequested;
 }
 
 export async function allowRemiliaSessionAuth(signal?: AbortSignal): Promise<void> {
-  throwIfAuthAborted(signal);
-  await chrome.storage.local.remove([DISCONNECTED_KEY]);
+  const generation = authGeneration;
+  await mutateRemiliaAuth(generation, signal, () => allowRemiliaSessionAuthRaw(generation));
 }
 
 export async function setRemiliaAuthCookie(accessToken: string, signal?: AbortSignal): Promise<void> {
-  throwIfAuthAborted(signal);
+  const generation = authGeneration;
+  await mutateRemiliaAuth(generation, signal, () => setRemiliaAuthCookieRaw(accessToken));
+}
+
+async function setRemiliaAuthCookieRaw(accessToken: string): Promise<void> {
   if (!accessToken || !chrome.cookies?.set) return;
   await chrome.cookies.set({
     url: BASE_URL,
@@ -104,6 +118,10 @@ export async function setRemiliaAuthCookie(accessToken: string, signal?: AbortSi
 }
 
 export async function clearRemiliaAuthCookie(): Promise<void> {
+  await queueAuthMutation(clearRemiliaAuthCookieRaw);
+}
+
+async function clearRemiliaAuthCookieRaw(): Promise<void> {
   if (!chrome.cookies?.remove) return;
   await chrome.cookies.remove({ url: BASE_URL, name: AUTH_COOKIE_NAME }).catch(() => undefined);
 }
@@ -139,6 +157,8 @@ export async function adoptRemiliaBrowserSession(
   sessionPath: string,
   options: RemiliaAuthOptions = {},
 ): Promise<RemiliaAuthResult> {
+  const generation = options.generation ?? authGeneration;
+  options = { ...options, generation };
   throwIfAuthAborted(options.signal);
   if (!options.ignoreDisconnect && await isRemiliaDisconnected()) return { ok: false, error: "DISCONNECTED" };
   throwIfAuthAborted(options.signal);
@@ -147,22 +167,22 @@ export async function adoptRemiliaBrowserSession(
   if (!session.ok) return { ok: false, error: "NO_BROWSER_SESSION" };
 
   const cookieToken = await getRemiliaAuthCookie();
-  throwIfAuthAborted(options.signal);
-  if (cookieToken) {
-    throwIfAuthAborted(options.signal);
-    await setStored({ [ACCESS_TOKEN_KEY]: cookieToken });
-    throwIfAuthAborted(options.signal);
-    await removeStored([REFRESH_TOKEN_KEY]);
-  }
-
-  await allowRemiliaSessionAuth(options.signal);
+  await mutateRemiliaAuth(generation, options.signal, async () => {
+    if (cookieToken) {
+      await setStored({ [ACCESS_TOKEN_KEY]: cookieToken });
+      await removeStored([REFRESH_TOKEN_KEY]);
+    }
+    await allowRemiliaSessionAuthRaw(generation);
+  });
   return { ok: true, token: cookieToken, user: session.data, method: cookieToken ? "session" : "session" };
 }
 
 export async function prepareRemiliaAuth(sessionPath: string, options: RemiliaAuthOptions = {}): Promise<RemiliaAuthResult> {
+  const generation = options.generation ?? authGeneration;
+  options = { ...options, generation };
   throwIfAuthAborted(options.signal);
   if (await isRemiliaDisconnected()) return { ok: false, error: "AUTH_REQUIRED" };
-  await migrateRemiliaAuth(options.signal);
+  await migrateRemiliaAuth(options.signal, options.generation);
 
   const adopted = await adoptRemiliaBrowserSession(sessionPath, options);
   if (adopted.ok && adopted.token) return adopted;
@@ -171,7 +191,7 @@ export async function prepareRemiliaAuth(sessionPath: string, options: RemiliaAu
   throwIfAuthAborted(options.signal);
   const accessToken = typeof stored[ACCESS_TOKEN_KEY] === "string" ? stored[ACCESS_TOKEN_KEY] : "";
   if (accessToken) {
-    await setRemiliaAuthCookie(accessToken, options.signal);
+    await mutateRemiliaAuth(generation, options.signal, () => setRemiliaAuthCookieRaw(accessToken));
     return { ok: true, token: accessToken, method: "stored" };
   }
 
@@ -181,24 +201,27 @@ export async function prepareRemiliaAuth(sessionPath: string, options: RemiliaAu
 }
 
 export async function renewRemiliaAuth(sessionPath: string, options: RemiliaAuthOptions = {}): Promise<RemiliaAuthResult> {
+  options = { ...options, generation: options.generation ?? authGeneration };
   throwIfAuthAborted(options.signal);
   if (await isRemiliaDisconnected()) return { ok: false, error: "AUTH_REQUIRED" };
-  await migrateRemiliaAuth(options.signal);
+  await migrateRemiliaAuth(options.signal, options.generation);
 
   if (memoryRefreshToken) {
-    const refreshed = await oidcToken({ grant_type: "refresh_token", refresh_token: memoryRefreshToken }, "refresh", options.signal);
+    const refreshed = await oidcToken({ grant_type: "refresh_token", refresh_token: memoryRefreshToken }, "refresh", options);
     if (refreshed.ok) return refreshed;
-    throwIfAuthAborted(options.signal);
-    memoryRefreshToken = "";
+    await mutateRemiliaAuth(options.generation ?? authGeneration, options.signal, async () => {
+      memoryRefreshToken = "";
+    });
   }
 
-  const bootstrapped = await bootstrapRemiliaAuth(options.signal);
+  const bootstrapped = await bootstrapRemiliaAuth(options);
   if (bootstrapped.ok) return bootstrapped;
 
   return adoptRemiliaBrowserSession(sessionPath, options);
 }
 
-async function bootstrapRemiliaAuth(signal?: AbortSignal): Promise<RemiliaAuthResult> {
+async function bootstrapRemiliaAuth(options: RemiliaAuthOptions): Promise<RemiliaAuthResult> {
+  const { signal } = options;
   throwIfAuthAborted(signal);
   const verifier = randomBase64Url(32);
   const challenge = await sha256Base64Url(verifier);
@@ -232,10 +255,12 @@ async function bootstrapRemiliaAuth(signal?: AbortSignal): Promise<RemiliaAuthRe
     code,
     redirect_uri: OIDC_REDIRECT_URI,
     code_verifier: verifier,
-  }, "silent-sso", signal);
+  }, "silent-sso", options);
 }
 
-async function oidcToken(params: Record<string, string>, method: RemiliaAuthResult["method"], signal?: AbortSignal): Promise<RemiliaAuthResult> {
+async function oidcToken(params: Record<string, string>, method: RemiliaAuthResult["method"], options: RemiliaAuthOptions): Promise<RemiliaAuthResult> {
+  const { signal } = options;
+  const generation = options.generation ?? authGeneration;
   throwIfAuthAborted(signal);
   const response = await fetch(OIDC_TOKEN_URL, {
     method: "POST",
@@ -249,14 +274,13 @@ async function oidcToken(params: Record<string, string>, method: RemiliaAuthResu
     return { ok: false, error: typeof data.error === "string" ? data.error : "TOKEN_EXCHANGE_FAILED" };
   }
 
-  throwIfAuthAborted(signal);
-  memoryRefreshToken = typeof data.refresh_token === "string" ? data.refresh_token : memoryRefreshToken;
-  await setRemiliaAuthCookie(data.access_token, signal);
-  throwIfAuthAborted(signal);
-  await setStored({ [ACCESS_TOKEN_KEY]: data.access_token });
-  throwIfAuthAborted(signal);
-  await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  await allowRemiliaSessionAuth(signal);
+  await mutateRemiliaAuth(generation, signal, async () => {
+    memoryRefreshToken = typeof data.refresh_token === "string" ? data.refresh_token : memoryRefreshToken;
+    await setRemiliaAuthCookieRaw(data.access_token);
+    await setStored({ [ACCESS_TOKEN_KEY]: data.access_token });
+    await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+    await allowRemiliaSessionAuthRaw(generation);
+  });
   return { ok: true, token: data.access_token, method };
 }
 
@@ -279,6 +303,29 @@ function throwIfAuthAborted(signal?: AbortSignal): void {
   if (!signal?.aborted) return;
   if (signal.reason instanceof Error) throw signal.reason;
   throw new DOMException("Remilia authentication was cancelled", "AbortError");
+}
+
+function throwIfAuthInvalidated(generation: number, signal?: AbortSignal): void {
+  throwIfAuthAborted(signal);
+  if (generation !== authGeneration) throw new DOMException("Remilia authentication was invalidated", "AbortError");
+}
+
+async function mutateRemiliaAuth(generation: number, signal: AbortSignal | undefined, mutation: () => Promise<void>): Promise<void> {
+  await queueAuthMutation(async () => {
+    throwIfAuthInvalidated(generation, signal);
+    await mutation();
+  });
+}
+
+async function queueAuthMutation(mutation: () => Promise<void>): Promise<void> {
+  const pending = authMutationQueue.then(mutation, mutation);
+  authMutationQueue = pending.then(() => undefined, () => undefined);
+  await pending;
+}
+
+async function allowRemiliaSessionAuthRaw(generation: number): Promise<void> {
+  await chrome.storage.local.remove([DISCONNECTED_KEY]);
+  if (generation === authGeneration) disconnectRequested = false;
 }
 
 async function waitForTabLoad(tabId: number, timeoutMs: number): Promise<void> {

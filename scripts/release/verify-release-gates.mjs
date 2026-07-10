@@ -10,6 +10,7 @@ const gates = [
   ["URL allowlist contracts", ["scripts/verify/url-allowlist.mjs"]],
   ["App SDK compliance", ["scripts/verify/app-sdk-compliance.mjs"]],
   ["Internal messaging bridges", ["scripts/verify/internal-messaging-bridges.mjs"]],
+  ["Remilia auth logout concurrency", ["node_modules/vitest/vitest.mjs", "run", "src/platform/auth/remilia-auth.test.ts"]],
   ["RemiStats tooltip escaping", ["scripts/verify/remistats-tooltip-escaping.mjs"]],
   ["Local app package metadata", ["scripts/packages/verify-local-app-packages.mjs"]],
   ["Local app trust gates", ["scripts/packages/verify-local-app-trust-gates.mjs"]],

@@ -6,8 +6,6 @@ import {
   clearRemiliaAuth,
   clearStoredRemiliaAuth,
   isRemiliaDisconnected,
-  allowRemiliaSessionAuth,
-  setRemiliaAuthCookie,
   adoptRemiliaBrowserSession,
   migrateRemiliaAuth,
   refreshRemiliaBrowserSessionTab,
@@ -89,7 +87,6 @@ async function remiliaFetch(method, path, body, retry = true) {
   const prepared = await prepareRemiliaAuth(AUTH_SESSION_PROBE_PATH);
   const accessToken = prepared.token;
   if (!accessToken) return { ok: false, authRequired: true };
-  await setRemiliaAuthCookie(accessToken);
 
   const result = await remiliaRequest(method, path, body, {
     credentials: 'include',
@@ -448,7 +445,6 @@ async function remiliaPokeFetchWithPrepared(username, prepared) {
   const accessToken = prepared?.token || '';
   if (!accessToken && !prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
 
-  if (accessToken) await setRemiliaAuthCookie(accessToken);
   const attempts = [
     { authMethod: 'cookie', credentials: 'include' },
     ...(accessToken ? [
@@ -691,7 +687,6 @@ async function handleBeetolMessage(message, sender) {
     return getAuthStatus();
   }
   if (message?.type === 'beetol:sessionStatus') {
-    await allowRemiliaSessionAuth();
     const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
     return {
       ok: true,
