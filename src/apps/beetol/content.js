@@ -842,6 +842,7 @@ function mountBeetolGame(context = {}) {
         setMessage(message, 'warn');
       }
       render();
+      if (response.needsRefresh) void reconcileStateAfterAction();
       return;
     }
 
@@ -864,6 +865,15 @@ function mountBeetolGame(context = {}) {
       diff > 1 ? `${itemName(key)} x${diff}` : itemName(key)
     ));
     setMessage(gained.length ? `${label}: ${gained.join(', ')}` : `${label}: done.`);
+    render();
+    if (response.needsRefresh) void reconcileStateAfterAction();
+  }
+
+  async function reconcileStateAfterAction() {
+    const response = await send({ type: 'beetol:getState' });
+    if (!lifecycleActive() || !response?.ok || state.loading) return;
+    state.user = response.user;
+    mergeCooldowns(response.user);
     render();
   }
 

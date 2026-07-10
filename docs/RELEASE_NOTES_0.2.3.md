@@ -10,6 +10,8 @@ Status: in development.
 - Make startup, network, storage, worker, speech, and local-file workflows cancelable and recoverable.
 - Restore reversible feature teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan.
 - Improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior across the popup and in-page app surfaces.
+- Keep Beetol hunts responsive by returning the mutation result before a separate background state reconciliation.
+- Recover RemiNet Chat from stalled authentication or WebSocket opening instead of leaving the composer permanently disconnected on Connecting.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 
 ## Release Gate
