@@ -16,6 +16,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Removes a duplicate page-wide mutation observer and other unbounded hot-path work introduced during the reliability audit, restoring responsive scrolling and general X interaction.
 - Keeps the final Beetle Hunt reward visible before transitioning to a red Done status and the persisted 90-minute cooldown.
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
+- Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
 
 Status: in development.
 
