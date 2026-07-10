@@ -43,6 +43,7 @@ async function verifyRuntimeOwnership() {
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
   const maxxerStyles = await readFile("src/apps/milady-maxxer/styles.ts", "utf8");
   const reskinStyles = await readFile("src/platform/visuals/reskin-styles.ts", "utf8");
+  const wikiFrame = await readFile("src/apps/wiki-sidebar/frameContent.ts", "utf8");
 
   assert(runtime.includes("subscribeTwitterSurfaces(handleSurface)"), "runtime must own scanner subscription");
   assert(runtime.includes("patchHistory(notifyRoute)"), "runtime route service must patch history events");
@@ -68,6 +69,11 @@ async function verifyRuntimeOwnership() {
   assert(postReadingBackground.includes("AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])"), "Post-reading response bodies must retain queue cancellation and a read deadline");
   assert(!reskinStyles.includes('html[data-milxdy-reskin-profile="max"] [role="button"],'), "Root Visuals must not override transition properties on every native X button");
   assert(!maxxerStyles.includes("transition: transform 0.3s ease, box-shadow 0.3s ease"), "Maxxer cards must not animate large multi-layer shadows during Like state changes");
+  assert(wikiFrame.includes("revealWikiReadingRange(range.element)") && wikiFrame.includes("EXPANDABLE_WIKI_CONTAINER_SELECTOR"), "Wiki read-aloud must reveal supported collapsed/tabbed containers before highlighting");
+  assert(wikiFrame.includes("container && wikiContainerIsHidden(container) && wikiContainerController(container)"), "Wiki read-aloud must skip hidden content that has no hidden expandable container and recoverable controller");
+  assert(wikiFrame.includes("if (isWikiDisclosureControl(link)) return"), "Wiki frame navigation interception must leave tab and collapse controls to the Wiki runtime");
+  assert(wikiFrame.includes("safeWikiControllerCandidate(candidate, id, hash)"), "Wiki read-aloud must reject external or non-control DOM nodes before synthetic activation");
+  assert(wikiFrame.includes("safeWikiControllerElement(toggle)") && wikiFrame.includes("safeWikiControllerElement(label)") && wikiFrame.includes("safeWikiControllerElement(candidate)"), "Every Wiki synthetic-click controller path must enforce the same safe element boundary");
   assert(maxxerStyles.includes("animation: milady-catch-pulse 0.28s ease-out"), "Maxxer catch feedback must remain short and bounded");
   assert(background.includes("chrome.runtime.onInstalled.addListener") && background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   assert(firstPartyAdapter.includes("defaultEnabledById") && firstPartyAdapter.includes("defaultAppEnabled") && firstPartyAdapter.includes("enabledFromStoredValue"), "first-party enablement adapters must derive fallback defaults from registry defaultEnabled metadata");
