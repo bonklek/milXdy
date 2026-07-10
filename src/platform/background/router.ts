@@ -41,7 +41,7 @@ export function objectMessage<T extends string>(type: T): (message: unknown) => 
 }
 
 type NetworkQueueEntry<T> = {
-  task: () => Promise<T>;
+  task: (signal: AbortSignal) => Promise<T>;
   resolve: (value: T) => void;
   reject: (error: unknown) => void;
   queuedAt: number;
@@ -80,7 +80,7 @@ export async function initializeBackgroundNetworkBudget(): Promise<void> {
   drainNetworkQueue();
 }
 
-export function runNetworkTask<T>(task: () => Promise<T>, label = "network"): Promise<T> {
+export function runNetworkTask<T>(task: (signal: AbortSignal) => Promise<T>, label = "network"): Promise<T> {
   void initializeBackgroundNetworkBudget();
   return new Promise<T>((resolve, reject) => {
     networkQueue.push({ task, resolve: resolve as (value: unknown) => void, reject, queuedAt: performance.now(), label });
@@ -101,7 +101,8 @@ function drainNetworkQueue(): void {
     networkDiagnostics.maxActive = Math.max(networkDiagnostics.maxActive, activeNetworkTasks);
     networkDiagnostics.updatedAt = Date.now();
     scheduleNetworkDiagnosticsWrite();
-    withNetworkDeadline(entry.task(), entry.label)
+    const abort = new AbortController();
+    withNetworkDeadline(entry.task(abort.signal), entry.label, abort)
       .then((value) => {
         recordNetworkTaskFinished(entry, true);
         entry.resolve(value);
@@ -116,12 +117,13 @@ function drainNetworkQueue(): void {
   }
 }
 
-function withNetworkDeadline<T>(promise: Promise<T>, label: string): Promise<T> {
+function withNetworkDeadline<T>(promise: Promise<T>, label: string, abort: AbortController): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     let settled = false;
     const timer = setTimeout(() => {
       if (settled) return;
       settled = true;
+      abort.abort(new DOMException(`${label} timed out`, "TimeoutError"));
       reject(new Error(`${label} timed out after ${BACKGROUND_NETWORK_DEADLINE_MS}ms`));
     }, BACKGROUND_NETWORK_DEADLINE_MS);
     promise.then((value) => {

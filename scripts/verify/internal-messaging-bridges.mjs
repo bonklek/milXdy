@@ -51,6 +51,9 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(auth, "socketAuthPromise", "RemiNet socket setup must share an in-flight auth preparation");
   assertIncludes(auth, "SOCKET_AUTH_TIMEOUT_MS", "RemiNet socket auth preparation must have a deadline");
   assertIncludes(auth, 'error: "AUTH_TIMEOUT"', "RemiNet socket auth timeout must return a typed recovery error");
+  assertIncludes(auth, "await isRemiliaDisconnected()", "RemiNet socket auth cache must honor explicit connector logout before reuse");
+  assertIncludes(auth, "socketAuthGeneration", "RemiNet socket auth must reject late results after logout or timeout");
+  assertIncludes(auth, "generation !== socketAuthGeneration", "RemiNet socket auth must check request generation before caching credentials");
 
   assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\"])", "RemiNet socket sender policy must restrict to X/Twitter hosts");
   verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");

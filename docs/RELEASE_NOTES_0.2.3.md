@@ -12,6 +12,7 @@ Status: in development.
 - Improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior across the popup and in-page app surfaces.
 - Keep Beetol hunts responsive by returning the mutation result before a separate background state reconciliation.
 - Recover RemiNet Chat from stalled authentication or WebSocket opening instead of leaving the composer permanently disconnected on Connecting.
+- Keep connector logout authoritative over cached/in-flight Chat authentication and abort background fetches when their shared deadline expires.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 
 ## Release Gate
