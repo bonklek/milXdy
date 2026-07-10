@@ -1,7 +1,8 @@
 {
   "name": "milxdy",
-  "version": "0.2.2",
-  "appSdkVersion": "0.2.2",
+  "version": "0.2.3",
+  "extensionVersion": "0.2.3",
+  "appSdkVersion": "0.2.3",
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",

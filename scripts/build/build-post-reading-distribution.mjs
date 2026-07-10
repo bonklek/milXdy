@@ -8,6 +8,7 @@ const watch = process.argv.includes("--watch");
 const target = readTarget();
 const outDir = target === "chromium" ? "dist/post-reading-chromium" : `dist/post-reading-${target}`;
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const contexts = [];
 const require = createRequire(import.meta.url);
 const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
@@ -42,7 +43,7 @@ const common = {
   define: {
     MILXDY_BUILD_PROFILE: JSON.stringify("post-reading"),
     MILXDY_BUILD_TARGET: JSON.stringify(target),
-    MILXDY_VERSION: JSON.stringify(packageJson.version),
+    MILXDY_VERSION: JSON.stringify(extensionVersion),
   },
 };
 
@@ -90,7 +91,7 @@ async function writeManifest() {
   const manifest = {
     manifest_version: 3,
     name: "Post-reading",
-    version: packageJson.version,
+    version: extensionVersion,
     description: "Read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.",
     permissions: ["storage", "unlimitedStorage"],
     host_permissions: [

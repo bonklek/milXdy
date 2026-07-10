@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.3
+
+See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
+
+- Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
+- Completes the code-level reliability and accessibility remediation pass for all 43 findings documented in the UX and feature reliability audit.
+
+Status: in development.
+
 ## 0.2.2
 
 See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).

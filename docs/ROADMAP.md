@@ -205,6 +205,10 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - use X/Twitter's existing follow graph to bootstrap friend discovery and recommendations
   - keep graph-derived behavior opt-in, explainable, and privacy-conscious
   - distinguish local-only possibilities from anything requiring an external service
+- RemiNet friend affordances on X profiles.
+  - show whether the viewed profile is already a RemiNet friend when the identity can be resolved
+  - offer an explicit add-friend action only after RemiNet endpoint and browser-session behavior are confirmed
+  - keep RemiNet friendship visually distinct from native X following and avoid automatic relationship changes
 
 ## Planned: 0.2.7 - Activity Arcade
 
@@ -239,6 +243,7 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - connect board-inspired stations to a music-oriented Miladychan board if upstream data supports it, including followed/selected-user filtering where privacy and identity boundaries are clear
 - Music discovery and fallback research.
   - add legitimate, user-authorized discovery and fallback paths for missing local music
+  - provide a lightweight public-domain/ad-free source path with preselected links or collections users can review before importing locally
   - keep local library playback as the baseline
   - avoid automatic file sharing, scraping, downloading, or transmitting audio files
 - Books and reading.

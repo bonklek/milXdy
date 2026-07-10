@@ -22,14 +22,29 @@ export function attachPreviewHandlers(link: HTMLAnchorElement, settingsProvider:
   installPreviewDelegation();
 }
 
-export function installPreviewDismissHandlers(): void {
-  if (dismissHandlersInstalled) return;
+export function installPreviewDismissHandlers(): () => void {
+  if (dismissHandlersInstalled) return disposePreviewHandlers;
   dismissHandlersInstalled = true;
   installPreviewDelegation();
   window.addEventListener("scroll", hidePreview, { passive: true });
-  window.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") hidePreview();
-  });
+  window.addEventListener("keydown", handlePreviewKeydown);
+  return disposePreviewHandlers;
+}
+
+function handlePreviewKeydown(event: KeyboardEvent): void {
+  if (event.key === "Escape") hidePreview();
+}
+
+export function disposePreviewHandlers(): void {
+  hidePreview();
+  window.removeEventListener("scroll", hidePreview);
+  window.removeEventListener("keydown", handlePreviewKeydown);
+  document.removeEventListener("mouseover", handlePreviewMouseOver);
+  document.removeEventListener("mouseout", handlePreviewMouseOut);
+  document.removeEventListener("focusin", handlePreviewFocusIn);
+  document.removeEventListener("focusout", handlePreviewFocusOut);
+  dismissHandlersInstalled = false;
+  previewDelegationInstalled = false;
 }
 
 function installPreviewDelegation(): void {
@@ -64,7 +79,12 @@ function handlePreviewFocusIn(event: FocusEvent): void {
 }
 
 function handlePreviewFocusOut(event: FocusEvent): void {
-  if (previewLinkFromEvent(event)) hidePreview();
+  if (!previewLinkFromEvent(event)) return;
+  const next = event.relatedTarget;
+  if (next instanceof Node && activeCard?.contains(next)) return;
+  window.setTimeout(() => {
+    if (!activeCard?.contains(document.activeElement)) hidePreview();
+  }, 0);
 }
 
 function previewLinkFromEvent(event: Event): HTMLAnchorElement | null {
@@ -213,7 +233,8 @@ function renderPreview(data: PreviewData): HTMLElement {
   const card = document.createElement("aside");
   card.className = "remilia-wiki-preview";
   card.dataset.theme = isDarkTheme() ? "dark" : "light";
-  card.setAttribute("role", "tooltip");
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-label", `Remilia Wiki preview: ${data.title}`);
 
   if (data.thumbnail) {
     const image = document.createElement("img");
@@ -253,7 +274,13 @@ function renderPreview(data: PreviewData): HTMLElement {
   });
   body.appendChild(footer);
 
-  card.addEventListener("mouseleave", hidePreview);
+  card.addEventListener("mouseleave", () => {
+    if (!card.contains(document.activeElement)) hidePreview();
+  });
+  card.addEventListener("focusout", (event) => {
+    if (event.relatedTarget instanceof Node && (card.contains(event.relatedTarget) || activeLink?.contains(event.relatedTarget))) return;
+    hidePreview();
+  });
   card.appendChild(body);
   return card;
 }

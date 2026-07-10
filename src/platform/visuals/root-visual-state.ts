@@ -33,7 +33,17 @@ let lastReskinSignature: string | null = null;
 let diagnosticsWriteTimer: number | null = null;
 let diagnosticsEnabled = false;
 
-export async function setupRootVisualState(): Promise<void> {
+let setupPromise: Promise<void> | null = null;
+
+export function setupRootVisualState(): Promise<void> {
+  setupPromise ??= setupRootVisualStateOnce().catch((error) => {
+    setupPromise = null;
+    throw error;
+  });
+  return setupPromise;
+}
+
+async function setupRootVisualStateOnce(): Promise<void> {
   resetRootVisualDiagnostics();
   initializeRootDiagnosticsGate();
   injectReskinStyles();

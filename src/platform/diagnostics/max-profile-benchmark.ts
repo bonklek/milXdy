@@ -18,6 +18,7 @@ const FEATURE_TIMING_FLUSH_WAIT_MS = 1700;
 
 /** Feature timing keys the benchmark surfaces in its report. Others are still captured. */
 export const TRACKED_FEATURE_TIMINGS = [
+  "rootVisuals.orphanReply",
   "miladymaxxer.idleSurface",
   "remistats.insertBadge",
   "wiki.processTweet",
@@ -59,6 +60,7 @@ type BenchmarkStartMessage = {
 };
 
 let running = false;
+let benchmarkListenerInstalled = false;
 
 function isBenchmarkStartMessage(value: unknown): value is BenchmarkStartMessage {
   return (
@@ -249,6 +251,8 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
  */
 export function setupMaxProfileBenchmark(): void {
   if (!hasExtensionRuntime() || typeof chrome?.runtime?.onMessage?.addListener !== "function") return;
+  if (benchmarkListenerInstalled) return;
+  benchmarkListenerInstalled = true;
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!isBenchmarkStartMessage(message)) return undefined;
     if (running) {

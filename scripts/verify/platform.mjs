@@ -92,6 +92,12 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions", null)'), "content runtime must unregister the reset app positions action on dispose");
   assert(firstPartyAdapter.includes("available: true") && firstPartyAdapter.includes("isEnabled,") && firstPartyAdapter.includes("setEnabled,"), "first-party enablement adapters must expose every app in every build profile");
   assert(runtime.includes("loadedHeavyApps") && runtime.includes("loadedWorkerHeavyApps") && runtime.includes("loadedNetworkApps") && runtime.includes("loadedAppsByCost"), "runtime diagnostics must identify loaded heavy, worker-heavy, and network apps from registry cost metadata");
+  assert(scanner.includes("activeObserverCount"), "scanner diagnostics must expose active shared observer count");
+  assert(runtime.includes("maxQueueDepth") && runtime.includes("maxDrainMs") && runtime.includes("performanceObserverCount"), "runtime diagnostics must expose surface delivery depth/timing and performance observer count");
+  const rootVisuals = await readFile("src/apps/root-visuals/content.ts", "utf8");
+  const benchmark = await readFile("src/platform/diagnostics/max-profile-benchmark.ts", "utf8");
+  assert(rootVisuals.includes('recordFeatureTiming("rootVisuals", "orphanReply"') && benchmark.includes('"rootVisuals.orphanReply"'), "Max profile benchmark must attribute Root Visual orphan-reply surface work");
+  assert(rootVisuals.includes("NATIVE_REPLY_CONNECTOR_SELECTOR") && rootVisuals.includes("setOrphanReplyState(tweet, false)"), "Root Visual orphan-reply marker must skip connector scans for non-reply tweets");
 
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
   assert(contentRoot.includes("createContentRuntime(FIRST_PARTY_APPS)"), "root content script must bootstrap the shared runtime");

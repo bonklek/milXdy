@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const manifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
+const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const releases = await readFile("docs/RELEASES.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
 const contributing = await readFile("CONTRIBUTING.md", "utf8");
@@ -10,10 +11,14 @@ const packageRelease = await readFile("scripts/release/package-release.mjs", "ut
 const releaseChecksums = await readFile("scripts/release/verify-release-checksums.mjs", "utf8");
 const releaseReproducible = await readFile("scripts/release/verify-reproducible-release.mjs", "utf8");
 const releaseLock = await readFile("scripts/release/release-artifact-lock.mjs", "utf8");
+const planning = await readFile("PLANNING.md", "utf8");
+const roadmap = await readFile("docs/ROADMAP.md", "utf8");
+const releaseNotes = await readFile(`docs/RELEASE_NOTES_${packageJson.version}.md`, "utf8");
 
 assertSemver(packageJson.version, "package.json version");
 assertSemver(packageJson.appSdkVersion, "package.json appSdkVersion");
-assert(manifest.version === packageJson.version, "extension manifest template version must match package.json version");
+assertExtensionVersion(extensionVersion, "package.json extensionVersion");
+assert(manifest.version === extensionVersion, "extension manifest template version must match package.json extensionVersion");
 assert(packageJson.version === packageJson.appSdkVersion, "SDK-bearing release package version must match package.json appSdkVersion");
 assert(typeof packageJson.scripts?.["verify:release"] === "string", "package scripts must include verify:release");
 assert(typeof packageJson.scripts?.["verify:release:gates"] === "string", "package scripts must include verify:release:gates");
@@ -50,11 +55,19 @@ assert(releases.includes("npm.cmd run verify:release:gates"), "release docs must
 assert(!releases.includes("`verify:release:gates:020` is the canonical release readiness gate"), "release docs must not call the historical 0.2.0 gate canonical");
 assert(changelog.includes("verify:release:gates") && changelog.includes("current release gate") && changelog.includes("Post-reading distribution"), "changelog must summarize the current release gate and Post-reading distribution coverage");
 assert(contributing.includes("npm run verify:release:gates"), "contributing docs must point release prep at the current release gate");
+assert(planning.includes(`next planned release is \`${packageJson.version}\``), "planning must identify the package version as the next planned release");
+assert(roadmap.includes(`Planned: ${packageJson.version}`), "roadmap must include the package version as a planned release");
+assert(releaseNotes.includes(`# milXdy ${packageJson.version}`), "current release notes heading must match package version");
+assert(changelog.includes(`## ${packageJson.version}`), "changelog must include the package version heading");
 
-console.log(`Current release contract verification passed for ${packageJson.version} (App SDK ${packageJson.appSdkVersion}).`);
+console.log(`Current release contract verification passed for extension ${extensionVersion} (package ${packageJson.version}, App SDK ${packageJson.appSdkVersion}).`);
 
 function assertSemver(value, label) {
   assert(typeof value === "string" && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value), `${label} must be semver-like`);
+}
+
+function assertExtensionVersion(value, label) {
+  assert(typeof value === "string" && /^\d+(?:\.\d+){0,3}$/.test(value), `${label} must be a browser extension version`);
 }
 
 function assert(condition, message) {

@@ -15,7 +15,8 @@ A fixed 30-second sample, captured on the X/Twitter tab's main thread:
 - **Frames >50ms** and **frames >100ms** — counts of janky frames.
 - **Long tasks** — main-thread tasks over 50ms via `PerformanceObserver`, with count, total, and worst.
 - **Feature timings** — existing milXdy counters from `milxdy.diagnostics.featureTimings`, when present:
-  `miladymaxxer.idleSurface`, `remistats.insertBadge`, `wiki.processTweet`, `post-reading.processTweet`.
+  `rootVisuals.orphanReply`, `miladymaxxer.idleSurface`, `remistats.insertBadge`, `wiki.processTweet`,
+  `post-reading.processTweet`.
 
 Each run is tagged with the active Appearance profile (Max / Moderate / Min) and stored under
 `milxdy.diagnostics.benchmark.<profile>` so two runs can be compared side by side.

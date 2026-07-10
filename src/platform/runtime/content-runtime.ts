@@ -94,8 +94,10 @@ type RuntimeState = {
     dedupedByKey: number;
     keyCacheSize: number;
     drains: number;
+    maxQueueDepth: number;
     lastDrainBatchSize: number;
     lastDrainMs: number;
+    maxDrainMs: number;
   };
   tweetScaffoldSignatures: WeakMap<HTMLElement, string>;
   tweetScaffoldStats: TweetScaffoldStats;
@@ -114,6 +116,7 @@ type RuntimeState = {
 };
 
 const DIAGNOSTIC_FLUSH_MS = 1200;
+const CONTENT_NETWORK_DEADLINE_MS = 35_000;
 const RUNTIME_IMPORT_FLAG = "__milxdyContentRuntimeLoading";
 const TWEET_SCAFFOLD_STYLE_ID = "milxdy-tweet-scaffold-style";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
@@ -262,8 +265,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       dedupedByKey: 0,
       keyCacheSize: 0,
       drains: 0,
+      maxQueueDepth: 0,
       lastDrainBatchSize: 0,
       lastDrainMs: 0,
+      maxDrainMs: 0,
     },
     tweetScaffoldSignatures: new WeakMap(),
     tweetScaffoldStats: createTweetScaffoldStats(),
@@ -515,10 +520,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
     for (const appId of Array.from(state.appAbortControllers.keys())) abortAppWork(appId);
-    await Promise.all(Array.from(state.loaded.values()).map(async (module) => {
-      await Promise.resolve(module.disable?.());
-      await Promise.resolve(module.dispose?.());
+    const teardownResults = await Promise.allSettled(Array.from(state.loaded.entries()).map(async ([appId, module]) => {
+      try {
+        await Promise.resolve(module.disable?.());
+      } finally {
+        await Promise.resolve(module.dispose?.());
+      }
+      return appId;
     }));
+    for (const result of teardownResults) {
+      if (result.status === "rejected") console.error("milXdy app teardown failed", result.reason);
+    }
     for (const disposables of state.appDisposables.values()) disposables.dispose();
     state.appDisposables.clear();
     state.appAbortControllers.clear();
@@ -738,8 +750,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       dedupedByKey: 0,
       keyCacheSize: 0,
       drains: 0,
+      maxQueueDepth: 0,
       lastDrainBatchSize: 0,
       lastDrainMs: 0,
+      maxDrainMs: 0,
     };
     state.tweetScaffoldSignatures = new WeakMap();
     state.tweetScaffoldStats = createTweetScaffoldStats();
@@ -903,6 +917,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     queue.deliveries.push(delivery);
     state.surfaceDeliveryStats.queued += 1;
+    state.surfaceDeliveryStats.maxQueueDepth = Math.max(state.surfaceDeliveryStats.maxQueueDepth, queue.deliveries.length);
     scheduleSurfaceDeliveryDrain(delivery.app.id, queue);
   }
 
@@ -930,16 +945,23 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           recordSurfaceSkip(delivery.app, delivery.surface, "disconnected");
           continue;
         }
-        await Promise.resolve(delivery.module.onSurface?.(delivery.surface))
-          .finally(() => {
-            recordFeatureTiming(delivery.app.id, `surface.${delivery.surface.kind}`, delivery.startedAt);
-            recordSurfaceHeightChange(delivery.app, delivery.surface, delivery.heightBefore);
+        try {
+          await Promise.resolve(delivery.module.onSurface?.(delivery.surface));
+        } catch (error) {
+          console.error(`milXdy ${delivery.app.id} surface handler failed`, error);
+          updateAppDiagnostics(delivery.app, "failed", {
+            error: error instanceof Error ? error.message : String(error),
           });
+        } finally {
+          recordFeatureTiming(delivery.app.id, `surface.${delivery.surface.kind}`, delivery.startedAt);
+          recordSurfaceHeightChange(delivery.app, delivery.surface, delivery.heightBefore);
+        }
       }
     } finally {
       state.surfaceDeliveryStats.drains += 1;
       state.surfaceDeliveryStats.lastDrainBatchSize = batch.length;
       state.surfaceDeliveryStats.lastDrainMs = Math.round((performance.now() - startedAt) * 10) / 10;
+      state.surfaceDeliveryStats.maxDrainMs = Math.max(state.surfaceDeliveryStats.maxDrainMs, state.surfaceDeliveryStats.lastDrainMs);
       flushDiagnosticsSoon();
     }
     if (queue.deliveries.length > 0) scheduleSurfaceDeliveryDrain(appId, queue);
@@ -1415,6 +1437,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available === false) return;
     const plan = appResetPlan(app);
     if (!hasResetWork(plan)) return;
+    const authoredDataWarning = app.id === "wikiLinks" || app.id === "miladymaxxer"
+      ? " This also resets user-authored aliases, deny terms, and handle lists for this app."
+      : "";
+    if (!window.confirm(`Reset ${app.name} settings to their defaults?${authoredDataWarning}`)) return;
     const startedAt = performance.now();
     void executeAppResetPlan(plan)
       .then(async (result) => {
@@ -1952,6 +1978,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       });
       controls.append(open);
     }
+    if (isHubRailApp(app)) {
+      const order = getOverlayDock().getAppOrder();
+      const index = order.indexOf(app.id);
+      for (const [label, delta] of [["Move up", -1], ["Move down", 1]] as const) {
+        const move = document.createElement("button");
+        move.type = "button";
+        move.textContent = label;
+        move.setAttribute("aria-label", `${label} ${app.name}`);
+        move.disabled = index < 0 || index + delta < 0 || index + delta >= order.length;
+        move.addEventListener("click", () => moveHubAppBy(app.id, delta, label));
+        controls.append(move);
+      }
+    }
     if (app.available !== false && hasResettableStorage(app)) {
       const reset = document.createElement("button");
       reset.type = "button";
@@ -2122,7 +2161,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       select.append(element);
     }
     select.addEventListener("change", () => {
-      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, select));
+      void persistGeneratedControl(setting, select);
     });
     return select;
   }
@@ -2136,7 +2175,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (typeof setting.control.max === "number") input.max = String(setting.control.max);
     if (typeof setting.control.step === "number") input.step = String(setting.control.step);
     input.addEventListener("change", () => {
-      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, input));
+      void persistGeneratedControl(setting, input);
     });
     return input;
   }
@@ -2150,7 +2189,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (input instanceof HTMLInputElement) input.type = "text";
     if (setting.control.placeholder) input.placeholder = setting.control.placeholder;
     input.addEventListener("change", () => {
-      void writeManifestSettingValue(setting, readGeneratedControlValue(setting, input));
+      void persistGeneratedControl(setting, input);
     });
     return input;
   }
@@ -2182,6 +2221,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         [setting.storage.property]: value,
       },
     });
+  }
+
+  async function persistGeneratedControl(setting: AppSettingDefinition, control: HTMLElement): Promise<void> {
+    control.removeAttribute("aria-invalid");
+    control.removeAttribute("data-write-error");
+    try {
+      await writeManifestSettingValue(setting, readGeneratedControlValue(setting, control));
+    } catch (error) {
+      setGeneratedControlValue(control, await readManifestSettingValue(setting));
+      control.setAttribute("aria-invalid", "true");
+      control.dataset.writeError = "true";
+      control.title = `Could not save ${setting.label}: ${errorMessage(error)}`;
+    }
   }
 
   function extractBackgroundMessageType(message: unknown): string | null {
@@ -2269,6 +2321,21 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     window.addEventListener("pointermove", moveHubAppDrag);
     window.addEventListener("pointerup", endHubAppDrag);
     window.addEventListener("pointercancel", endHubAppDrag);
+  }
+
+  function moveHubAppBy(appId: MilxdyAppId, delta: -1 | 1, label: string): void {
+    const order = getOverlayDock().getAppOrder();
+    const from = order.indexOf(appId);
+    const to = from + delta;
+    if (from < 0 || to < 0 || to >= order.length) return;
+    [order[from], order[to]] = [order[to], order[from]];
+    getOverlayDock().setAppOrder(order);
+    renderHubPanel();
+    window.requestAnimationFrame(() => {
+      const card = state.hubPanelRoot?.querySelector<HTMLElement>(`[data-hub-app-id="${appId}"]`);
+      Array.from<HTMLButtonElement>(card?.querySelectorAll<HTMLButtonElement>(".milxdy-app-hub-controls button") || [])
+        .find((button) => button.textContent === label)?.focus();
+    });
   }
 
   function moveHubAppDrag(event: PointerEvent): void {
@@ -3020,7 +3087,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       state.activeNetworkTasks += 1;
       state.networkStats.started += 1;
       state.networkStats.maxActive = Math.max(state.networkStats.maxActive, state.activeNetworkTasks);
-      safeRuntimeMessage(task.message)
+      withRuntimeMessageDeadline(safeRuntimeMessage(task.message), task.label)
         .then((response) => {
           finishNetworkTask(task, true);
           task.resolve(response);
@@ -3033,6 +3100,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           drainNetworkQueue();
         });
     }
+  }
+
+  function withRuntimeMessageDeadline<T>(promise: Promise<T>, label: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const timer = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error(`${label} timed out after ${CONTENT_NETWORK_DEADLINE_MS}ms`));
+      }, CONTENT_NETWORK_DEADLINE_MS);
+      promise.then((value) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        resolve(value);
+      }, (error) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        reject(error);
+      });
+    });
   }
 
   function finishNetworkTask(task: NetworkTask, ok: boolean): void {
@@ -3122,6 +3211,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           },
           longTasks: state.longTasks.slice(-25),
           layoutShifts: state.layoutShifts.slice(-25),
+          performanceObserverCount: activePerformanceObserverCount(),
           tweetHeightChanges: state.tweetHeightChanges.slice(-25),
           routeSurfaceImports: state.routeSurfaceImports,
           scanner: getTwitterScannerCounters(),
@@ -3187,6 +3277,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     } catch {
       state.layoutShiftObserver = null;
     }
+  }
+
+  function activePerformanceObserverCount(): number {
+    return (state.longTaskObserver ? 1 : 0) + (state.layoutShiftObserver ? 1 : 0);
   }
 
   return { boot, loadApp, notifyRoute, dispose, diagnostics };
@@ -3283,6 +3377,8 @@ function createRuntimeScheduler(
       stats.started += 1;
       try {
         task.callback();
+      } catch (error) {
+        console.error("milXdy idle task failed", error);
       } finally {
         stats.completed += 1;
       }

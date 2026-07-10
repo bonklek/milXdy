@@ -364,6 +364,8 @@ export function dispose(): void {
   cancelPendingScan?.();
   cancelPendingScan = null;
   pendingTweets.clear();
+  player?.dispose();
+  wikiPlayer?.dispose();
   appFrame?.remove();
   appFrame = null;
   recordRuntimeDiagnostic = () => undefined;
@@ -643,7 +645,8 @@ function markHeaderControlHost(slot: HTMLElement): void {
 
 async function playTweet(tweet: HTMLElement): Promise<void> {
   if (!lifecycleActive()) return;
-  pauseWikiReader();
+  wikiSpeech.stop();
+  clearWikiDocumentSession();
   clearBodyHighlight();
   clearFullQuotePreview();
   resetBoundaryCalibration();
@@ -706,7 +709,8 @@ function playReadableDocument(target: WikiReadableDocument): void {
   if (!text) return;
   activeReadRunId += 1;
   cancelOcr();
-  pauseTweetReader();
+  speech.stop();
+  clearBodyHighlight();
   activeWikiDocument = { ...target, text };
   attachPlayerToWikiSlot();
   wikiSpeech.speak(text, target.title || "Remilia Wiki");

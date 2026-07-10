@@ -263,6 +263,7 @@ let renderQueued = false;
 let lastMusicBrainzLookupAt = 0;
 let lastAudibleVolume = state.playback.volume;
 let chromaprintModulePromise: Promise<typeof import("@unimusic/chromaprint")> | null = null;
+let playbackGeneration = 0;
 let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
@@ -296,6 +297,7 @@ export function close(): void {
 }
 
 export function disable(): void {
+  playbackGeneration += 1;
   state.scanCancel = true;
   state.enrichCancel = true;
   closePanel();
@@ -631,13 +633,26 @@ function closePanel(): void {
 }
 
 async function loadLibrary(): Promise<void> {
-  const db = await openDb();
-  const [folders, tracks, playlists, radioSessions] = await Promise.all([
-    getAll<MusicFolder>(db, "folders"),
-    getAll<MusicTrack>(db, "tracks"),
-    getAll<MusicPlaylist>(db, "playlists"),
-    getAll<RadioSession>(db, "radio"),
-  ]);
+  let folders: MusicFolder[];
+  let tracks: MusicTrack[];
+  let playlists: MusicPlaylist[];
+  let radioSessions: RadioSession[];
+  try {
+    const db = await openDb();
+    [folders, tracks, playlists, radioSessions] = await Promise.all([
+      getAll<MusicFolder>(db, "folders"),
+      getAll<MusicTrack>(db, "tracks"),
+      getAll<MusicPlaylist>(db, "playlists"),
+      getAll<RadioSession>(db, "radio"),
+    ]);
+  } catch (error) {
+    if (lifecycleActive()) {
+      state.error = `Music library could not be opened: ${errorMessage(error)}`;
+      state.status = "Library unavailable";
+      render();
+    }
+    return;
+  }
   if (!lifecycleActive()) return;
   state.folders = folders.sort((a, b) => a.name.localeCompare(b.name));
   state.tracks = withDefaultAchievementTrack(tracks.sort(compareTracks));
@@ -670,6 +685,7 @@ async function addFolder(): Promise<void> {
     if (!lifecycleActive()) return;
     state.folders.push(folder);
     render();
+    state.scanCancel = false;
     await scanFolder(folder);
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return;
@@ -686,16 +702,20 @@ async function rescanFolders(): Promise<void> {
     render();
     return;
   }
-  for (const folder of state.folders) {
-    if (state.scanCancel || !lifecycleActive()) break;
-    await scanFolder(folder);
+  state.scanCancel = false;
+  try {
+    for (const folder of state.folders) {
+      if (state.scanCancel || !lifecycleActive()) break;
+      await scanFolder(folder);
+    }
+  } finally {
+    state.scanCancel = false;
   }
 }
 
 async function scanFolder(folder: MusicFolder): Promise<void> {
   if (state.scanActive || !lifecycleActive()) return;
   state.scanActive = true;
-  state.scanCancel = false;
   state.error = "";
   let indexed = 0;
   const seenPaths = new Set<string>();
@@ -724,7 +744,7 @@ async function scanFolder(folder: MusicFolder): Promise<void> {
       indexed += 1;
       if (indexed % 8 === 0) render();
     }
-    if (lifecycleActive()) {
+    if (lifecycleActive() && !state.scanCancel) {
       const removed = await markRemovedTracks(db, folder, seenPaths);
       await refreshDuplicateGroups(db);
       folder.lastScannedAt = Date.now();
@@ -732,11 +752,10 @@ async function scanFolder(folder: MusicFolder): Promise<void> {
       folder.lastError = "";
       await putItem(db, "folders", folder);
       const duplicates = state.tracks.filter((track) => (track.duplicateGroupSize ?? 0) > 1).length;
-      state.status = state.scanCancel
-        ? `Scan stopped after ${indexed} tracks`
-        : `Indexed ${indexed} tracks; ${removed} missing; ${duplicates} duplicates`;
+      state.status = `Indexed ${indexed} tracks; ${removed} missing; ${duplicates} duplicates`;
+    } else if (lifecycleActive()) {
+      state.status = `Scan stopped after ${indexed} tracks; existing tracks were preserved`;
     }
-    state.scanCancel = false;
   } catch (error) {
     if (lifecycleActive()) {
       folder.lastStatus = "error";
@@ -1314,6 +1333,7 @@ function runtimeMessageLabel(message: unknown): string {
 }
 
 async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
+  const generation = ++playbackGeneration;
   const track = state.tracks.find((candidate) => candidate.id === trackId);
   if (!track) return;
   state.selectedTrackId = trackId;
@@ -1322,6 +1342,10 @@ async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
   render();
   const source = await resolveTrackAudioSource(track);
   if (!source) return;
+  if (!lifecycleActive() || generation !== playbackGeneration) {
+    if (source.revoke) URL.revokeObjectURL(source.url);
+    return;
+  }
   if (!audio) setupAudio();
   if (!audio) return;
   if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -1335,8 +1359,9 @@ async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
   state.playback.currentIndex = Math.max(0, state.playback.queueTrackIds.indexOf(trackId));
   state.currentTrackId = trackId;
   await audio.play().catch((error) => {
-    state.error = errorMessage(error);
+    if (generation === playbackGeneration) state.error = errorMessage(error);
   });
+  if (!lifecycleActive() || generation !== playbackGeneration) return;
   state.playback.playing = !audio.paused;
   state.status = state.playback.playing ? `Playing ${track.title}` : "Playback blocked";
   render();
@@ -1800,18 +1825,21 @@ function currentRadioPosition(session: RadioSession): { label: string; track: Mu
   const start = new Date(session.start).getTime();
   const elapsed = Date.now() - start;
   if (elapsed < 0) return { label: `Starts in ${formatDuration(-elapsed)}`, track: null, offsetMs: 0 };
-  const tracks = session.playlist.trackRefs
-    .map((ref) => resolveTrackRef(ref))
-    .filter((track): track is MusicTrack => Boolean(track?.durationMs));
-  const total = tracks.reduce((sum, track) => sum + (track.durationMs ?? 0), 0);
-  if (!tracks.length || total <= 0) return { label: "No matched timed tracks", track: null, offsetMs: 0 };
+  const timeline = session.playlist.trackRefs
+    .map((ref) => ({ ref, durationMs: Number(ref.durationMs) || resolveTrackRef(ref)?.durationMs || 0 }))
+    .filter((entry) => entry.durationMs > 0);
+  const total = timeline.reduce((sum, entry) => sum + entry.durationMs, 0);
+  if (!timeline.length || total <= 0) return { label: "No timed tracks", track: null, offsetMs: 0 };
   let cursor = elapsed % total;
-  for (const track of tracks) {
-    const duration = track.durationMs ?? 0;
-    if (cursor <= duration) return { label: `${track.title} +${formatDuration(cursor)}`, track, offsetMs: cursor };
-    cursor -= duration;
+  for (const entry of timeline) {
+    if (cursor <= entry.durationMs) {
+      const track = resolveTrackRef(entry.ref);
+      const title = track?.title || entry.ref.title || "Unavailable track";
+      return { label: `${title} +${formatDuration(cursor)}`, track, offsetMs: cursor };
+    }
+    cursor -= entry.durationMs;
   }
-  return { label: "Ready", track: tracks[0], offsetMs: 0 };
+  return { label: "Ready", track: resolveTrackRef(timeline[0].ref), offsetMs: 0 };
 }
 
 async function joinRadio(session: RadioSession): Promise<void> {
@@ -3402,7 +3430,7 @@ function folderAccessErrorMessage(error: unknown): string {
 
 function openDb(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve, reject) => {
+  const pending = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
@@ -3412,8 +3440,12 @@ function openDb(): Promise<IDBDatabase> {
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("IndexedDB failed"));
+  }).catch((error) => {
+    dbPromise = null;
+    throw error;
   });
-  return dbPromise;
+  dbPromise = pending;
+  return pending;
 }
 
 function getAll<T>(db: IDBDatabase, store: string): Promise<T[]> {

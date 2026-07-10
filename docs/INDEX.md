@@ -30,6 +30,7 @@
 - [0.2.0 QA checklist](QA_0.2.0.md)
 - [0.2.0 QA evidence log](QA_LOG_0.2.0.md)
 - [0.2.0 release screenshots](RELEASE_SCREENSHOTS_0.2.0.md)
+- [0.2.3 release notes](RELEASE_NOTES_0.2.3.md)
 - [0.2.2 release notes](RELEASE_NOTES_0.2.2.md)
 - [0.2.1 release notes](RELEASE_NOTES_0.2.1.md)
 - [0.2.0 release notes](RELEASE_NOTES_0.2.0.md)

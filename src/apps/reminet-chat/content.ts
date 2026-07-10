@@ -30,7 +30,7 @@ const WIDTH_KEY = "milxdy.reminetChat.width";
 const HEIGHT_KEY = "milxdy.reminetChat.height";
 const TOP_KEY = "milxdy.reminetChat.top";
 const PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
-const MAX_MESSAGES = 300;
+const MAX_MESSAGES = 1200;
 const HISTORY_PAGE_SIZE = 30;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const PROFILE_CACHE_MAX_ENTRIES = 250;
@@ -1559,6 +1559,7 @@ function render(): void {
     return;
   }
 
+  const focusedMessageControl = captureFocusedMessageControl(messages);
   const atBottom = messages.scrollHeight - messages.scrollTop <= messages.clientHeight + 48;
   const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && state.messages.some((message) => message.id > 0));
   loadOlder.hidden = true;
@@ -1575,7 +1576,32 @@ function render(): void {
   renderReplyPreview(reply);
   if (atBottom) messages.scrollTop = messages.scrollHeight;
   hydrateInlineMedia(messages);
+  restoreFocusedMessageControl(messages, focusedMessageControl);
   syncPokeCooldownButtons(root);
+}
+
+type FocusedMessageControl = { action: string; messageId: string; emoji: string; username: string };
+
+function captureFocusedMessageControl(messages: HTMLElement): FocusedMessageControl | null {
+  const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (!active || !messages.contains(active)) return null;
+  return {
+    action: active.dataset.chatAction || "",
+    messageId: active.dataset.messageId || active.closest<HTMLElement>("[data-message-id]")?.dataset.messageId || "",
+    emoji: active.dataset.emoji || "",
+    username: active.dataset.username || "",
+  };
+}
+
+function restoreFocusedMessageControl(messages: HTMLElement, focused: FocusedMessageControl | null): void {
+  if (!focused) return;
+  const selectors = [
+    focused.action ? `[data-chat-action="${cssEscape(focused.action)}"]` : "",
+    focused.messageId ? `[data-message-id="${cssEscape(focused.messageId)}"]` : "",
+    focused.emoji ? `[data-emoji="${cssEscape(focused.emoji)}"]` : "",
+    focused.username ? `[data-username="${cssEscape(focused.username)}"]` : "",
+  ].filter(Boolean).join("");
+  messages.querySelector<HTMLElement>(selectors)?.focus({ preventScroll: true });
 }
 
 function renderStatus(text: string): void {
@@ -2641,7 +2667,7 @@ async function addPendingFiles(files: FileList | File[] | null): Promise<void> {
 function validateAttachment(file: File): string {
   if (!IMAGE_TYPES.has(file.type) && !VIDEO_TYPES.has(file.type)) return "Unsupported attachment type.";
   if (IMAGE_TYPES.has(file.type) && file.size > 10 * 1024 * 1024) return "Images must be 10 MB or smaller.";
-  if (VIDEO_TYPES.has(file.type) && file.size > 100 * 1024 * 1024) return "Videos must be 100 MB or smaller.";
+  if (VIDEO_TYPES.has(file.type) && file.size > 32 * 1024 * 1024) return "Videos must be 32 MB or smaller.";
   if (VIDEO_TYPES.has(file.type) && state.pendingAttachments.length > 0) return "Send videos by themselves.";
   if (state.pendingAttachments.some((item) => VIDEO_TYPES.has(item.mimeType))) return "Send videos by themselves.";
   return "";
@@ -3045,11 +3071,9 @@ function removeOptimisticForServerEcho(serverMessageId: number): void {
   });
 }
 
-function sortAndTrimMessages(anchor: "newest" | "oldest" = "newest"): void {
+function sortAndTrimMessages(_anchor: "newest" | "oldest" = "newest"): void {
   state.messages.sort((left, right) => messageTime(left) - messageTime(right));
-  state.messages = anchor === "oldest"
-    ? state.messages.slice(0, MAX_MESSAGES)
-    : state.messages.slice(-MAX_MESSAGES);
+  state.messages = state.messages.slice(-MAX_MESSAGES);
 }
 
 function oldestMessageId(): number | null {

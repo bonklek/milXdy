@@ -1,6 +1,6 @@
 import { loadDenyTerms, loadLocalAliases, localAliasesToEntries, savePerformanceStats } from "./localData";
 import { createMatcher } from "./matcher";
-import { attachPreviewHandlers, configurePreviewSidebarOpener, installPreviewDismissHandlers } from "./preview";
+import { attachPreviewHandlers, configurePreviewSidebarOpener, disposePreviewHandlers, installPreviewDismissHandlers } from "./preview";
 import { loadSettings, observeSettings } from "./settings";
 import { injectStyles } from "./styles";
 import type { Settings, WikiMatch } from "./types";
@@ -72,6 +72,9 @@ let lastScrollAt = 0;
 let lastWikiModeDiagnosticSignature = "";
 let cachedDocumentActionControls: HTMLElement[] = [];
 let cachedDocumentActionControlsAt = 0;
+let lifecycleSignal: AbortSignal | null = null;
+let grokWorkflowAbort: AbortController | null = null;
+let cancelGrokOneShot: (() => void) | null = null;
 
 export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
@@ -80,11 +83,12 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
   loadRuntimeAppById = context?.loadAppById || loadRuntimeAppById;
+  lifecycleSignal = context?.signal || null;
   const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
   configurePreviewSidebarOpener(openWikiSidebarUrl);
   addDisposable(() => configurePreviewSidebarOpener(null));
-  installPreviewDismissHandlers();
+  addDisposable(installPreviewDismissHandlers());
   settings = await loadSettings();
   await reloadLocalMatcher();
   applySettings(settings);
@@ -150,6 +154,12 @@ export function onSurface(surface: TwitterSurface): void {
 
 export function disable(): void {
   if (settings) settings = { ...settings, enabled: false };
+  grokWorkflowAbort?.abort();
+  grokWorkflowAbort = null;
+  cancelGrokOneShot?.();
+  cancelGrokOneShot = null;
+  document.getElementById(GROK_WIKI_CTA_ID)?.remove();
+  disposePreviewHandlers();
   clearWikiLinks();
 }
 
@@ -163,6 +173,7 @@ export function dispose(): void {
     statsFlushTimer = null;
   }
   booted = false;
+  lifecycleSignal = null;
   loadRuntimeAppById = () => Promise.resolve(null);
   cachedDocumentActionControls = [];
   cachedDocumentActionControlsAt = 0;
@@ -195,11 +206,25 @@ function isCreateWithGrokMessage(value: unknown): value is CreateWithGrokMessage
 async function createWikiEntryWithGrok(selectedText?: string, sourceUrl?: string, mode: GrokWikiPromptMode = "post-seed"): Promise<void> {
   const context = buildTweetResearchContext(selectedText, sourceUrl);
   await openGrokFromTweet(mode);
+  if (lifecycleSignal?.aborted || settings.enabled === false) return;
+  grokWorkflowAbort?.abort();
+  const controller = new AbortController();
+  grokWorkflowAbort = controller;
+  const onLifecycleAbort = () => controller.abort();
+  lifecycleSignal?.addEventListener("abort", onLifecycleAbort, { once: true });
   if (settings.grokWorkflowMode === "socratic") {
-    void runSocraticGrokWorkflow(context, mode);
+    void runSocraticGrokWorkflow(context, mode, controller.signal).catch((error) => {
+      if (!(error instanceof DOMException && error.name === "AbortError")) console.warn("Grok Wiki workflow failed", error);
+    }).finally(() => {
+      lifecycleSignal?.removeEventListener("abort", onLifecycleAbort);
+      if (grokWorkflowAbort === controller) grokWorkflowAbort = null;
+    });
   } else {
     const prompt = buildGrokWikiPrompt(context, mode);
-    window.setTimeout(() => {
+    cancelGrokOneShot?.();
+    cancelGrokOneShot = runtimeScheduler.timeout(() => {
+      cancelGrokOneShot = null;
+      if (controller.signal.aborted || lifecycleSignal?.aborted || settings.enabled === false) return;
       void copyText(prompt).then(() => seedGrokComposer(prompt)).catch(() => seedGrokComposer(prompt));
       showGrokWikiCta(context.topic);
     }, 900);
@@ -349,17 +374,20 @@ function buildGrokWikiPrompt(context: TweetResearchContext, mode: GrokWikiPrompt
   ].join("\n");
 }
 
-async function runSocraticGrokWorkflow(context: TweetResearchContext, mode: GrokWikiPromptMode): Promise<void> {
-  await delay(1200);
+async function runSocraticGrokWorkflow(context: TweetResearchContext, mode: GrokWikiPromptMode, signal: AbortSignal): Promise<void> {
+  await delay(1200, signal);
+  throwIfGrokAborted(signal);
   activateOpenConversationButton();
-  await waitForGrokIdle(45000);
+  await waitForGrokIdle(45000, signal);
   const prompts = buildSocraticGrokPrompts(context, mode);
   for (const prompt of prompts) {
+    throwIfGrokAborted(signal);
     await copyText(prompt).catch(() => undefined);
     const beforeText = document.body.innerText || "";
-    await submitGrokPrompt(prompt);
-    await waitForGrokResponseCycle(beforeText, 120000);
+    await submitGrokPrompt(prompt, signal);
+    await waitForGrokResponseCycle(beforeText, 120000, signal);
   }
+  throwIfGrokAborted(signal);
   showGrokWikiCta(context.topic);
 }
 
@@ -439,10 +467,10 @@ function buildSocraticGrokPrompts(context: TweetResearchContext, mode: GrokWikiP
 
 function showGrokWikiCta(topic: string): void {
   document.getElementById(GROK_WIKI_CTA_ID)?.remove();
-  const root = document.createElement("button");
+  const root = document.createElement("div");
   root.id = GROK_WIKI_CTA_ID;
-  root.type = "button";
-  root.setAttribute("aria-label", "Open a new Remilia Wiki page");
+  root.setAttribute("role", "region");
+  root.setAttribute("aria-label", "Remilia Wiki draft helper");
   root.innerHTML = "";
   Object.assign(root.style, {
     position: "fixed",
@@ -534,9 +562,9 @@ function showGrokWikiCta(topic: string): void {
     fontWeight: "500",
   });
   copy.append(title, body, titleInput, hint);
-  const close = document.createElement("span");
-  close.textContent = "x";
-  close.setAttribute("role", "button");
+  const close = document.createElement("button");
+  close.type = "button";
+  close.textContent = "×";
   close.setAttribute("aria-label", "Close Remilia Wiki prompt");
   close.dataset.grokWikiClose = "true";
   Object.assign(close.style, {
@@ -565,6 +593,14 @@ function showGrokWikiCta(topic: string): void {
     alignItems: "center",
     gap: "10px",
   });
+  const openButton = document.createElement("button");
+  openButton.type = "button";
+  openButton.textContent = "Open page";
+  openButton.addEventListener("click", (event) => {
+    event.stopPropagation();
+    window.open(wikiNewPageUrl(titleInput.value), "_blank", "noopener,noreferrer");
+  });
+  copy.append(openButton);
   root.append(logo, copy, close);
   let dragStart: { pointerId: number; x: number; y: number; left: number; top: number; width: number; height: number; moved: boolean } | null = null;
   root.addEventListener("pointerdown", (event) => {
@@ -607,13 +643,6 @@ function showGrokWikiCta(topic: string): void {
         delete root.dataset.dragged;
       }, 0);
     }
-  });
-  root.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (root.dataset.dragged === "true") return;
-    if ((event.target as HTMLElement | null)?.closest("[data-grok-wiki-title-input='true']")) return;
-    window.open(wikiNewPageUrl(titleInput.value), "_blank", "noopener,noreferrer");
   });
   document.body.append(root);
   positionGrokWikiCta(root);
@@ -812,9 +841,10 @@ async function seedGrokComposer(prompt: string): Promise<void> {
   document.execCommand("insertText", false, prompt);
 }
 
-async function submitGrokPrompt(prompt: string): Promise<void> {
+async function submitGrokPrompt(prompt: string, signal: AbortSignal): Promise<void> {
+  throwIfGrokAborted(signal);
   await seedGrokComposer(prompt);
-  const sendButton = await waitForGrokSendButton(2500);
+  const sendButton = await waitForGrokSendButton(2500, signal);
   if (sendButton) {
     activateElement(sendButton);
     return;
@@ -833,12 +863,12 @@ async function submitGrokPrompt(prompt: string): Promise<void> {
   }
 }
 
-async function waitForGrokSendButton(timeoutMs: number): Promise<HTMLElement | null> {
+async function waitForGrokSendButton(timeoutMs: number, signal: AbortSignal): Promise<HTMLElement | null> {
   const startedAt = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
     const button = findGrokSendButton();
     if (button) return button;
-    await delay(120);
+    await delay(120, signal);
   }
   return null;
 }
@@ -875,11 +905,11 @@ function isVoiceModeControl(element: HTMLElement): boolean {
   return /voice mode|voice note|audio/i.test(label);
 }
 
-async function waitForGrokResponseCycle(beforeText: string, timeoutMs: number): Promise<void> {
+async function waitForGrokResponseCycle(beforeText: string, timeoutMs: number, signal: AbortSignal): Promise<void> {
   const startedAt = Date.now();
   let sawResponseStart = false;
   while (Date.now() - startedAt < Math.min(18000, timeoutMs)) {
-    await delay(450);
+    await delay(450, signal);
     const currentText = document.body.innerText || "";
     const busy = isGrokBusy();
     if (busy || currentText.length > beforeText.length + 20 || currentText !== beforeText) {
@@ -888,15 +918,15 @@ async function waitForGrokResponseCycle(beforeText: string, timeoutMs: number): 
     }
   }
   if (!sawResponseStart) return;
-  await waitForGrokIdle(Math.max(1000, timeoutMs - (Date.now() - startedAt)));
+  await waitForGrokIdle(Math.max(1000, timeoutMs - (Date.now() - startedAt)), signal);
 }
 
-async function waitForGrokIdle(timeoutMs: number): Promise<void> {
+async function waitForGrokIdle(timeoutMs: number, signal: AbortSignal): Promise<void> {
   const startedAt = Date.now();
   let lastText = "";
   let stableSince = Date.now();
   while (Date.now() - startedAt < timeoutMs) {
-    await delay(900);
+    await delay(900, signal);
     const text = normalizePromptLine(document.body.innerText || "");
     const busy = isGrokBusy();
     if (text !== lastText) {
@@ -914,8 +944,25 @@ function isGrokBusy(): boolean {
   ));
 }
 
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+function delay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (signal?.aborted) return Promise.reject(new DOMException("Grok workflow canceled", "AbortError"));
+  return new Promise((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      signal?.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      window.clearTimeout(timer);
+      reject(new DOMException("Grok workflow canceled", "AbortError"));
+    };
+    signal?.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+function throwIfGrokAborted(signal: AbortSignal): void {
+  if (signal.aborted || lifecycleSignal?.aborted || settings.enabled === false) {
+    throw new DOMException("Grok workflow canceled", "AbortError");
+  }
 }
 
 function findEditableComposer(): HTMLElement | null {

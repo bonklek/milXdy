@@ -41,6 +41,7 @@ const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // Cache for user scores
 const scoreCache = new Map();
+const SCORE_CACHE_LIMIT = 1000;
 const trophyBannerCache = new Map();
 const trophyBannerPending = new Map();
 let prefetchedBannersNft = null;
@@ -246,6 +247,20 @@ let iconSettings = { ...DEFAULT_ICON_SETTINGS };
 const POKE_THEME_COLORS = new Set(['red', 'green', 'gold', 'blue', 'purple']);
 const POKE_THEME_MODES = new Set(['dark', 'light']);
 
+function setScoreCache(key, value) {
+  const now = Date.now();
+  for (const [cachedKey, cached] of scoreCache) {
+    if (!cached || now - cached.timestamp >= CONFIG.cacheTimeout) scoreCache.delete(cachedKey);
+  }
+  if (scoreCache.has(key)) scoreCache.delete(key);
+  scoreCache.set(key, value);
+  while (scoreCache.size > SCORE_CACHE_LIMIT) {
+    const oldest = scoreCache.keys().next().value;
+    if (oldest === undefined) break;
+    scoreCache.delete(oldest);
+  }
+}
+
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;',
@@ -370,7 +385,7 @@ async function processBatch(usernames) {
     for (const [requestedHandle, response] of responses) {
       if (!response?.ok) {
         if (response?.notFound || response?.status === 404) {
-          scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+          setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
           results[requestedHandle] = null;
         }
         continue;
@@ -384,14 +399,14 @@ async function processBatch(usernames) {
         const user = data.user;
         const userData = transformApiResponse(user, requestedHandle);
         const normalized = cleanUsername(user.twitterHandle || requestedHandle).toLowerCase();
-        scoreCache.set(requestedHandle, { data: userData, timestamp: Date.now() });
+        setScoreCache(requestedHandle, { data: userData, timestamp: Date.now() });
         results[requestedHandle] = userData;
         if (normalized && normalized !== requestedHandle) {
-          scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
+          setScoreCache(normalized, { data: userData, timestamp: Date.now() });
           results[normalized] = userData;
         }
       } else {
-        scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+        setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
         results[requestedHandle] = null;
       }
     }
@@ -442,6 +457,7 @@ async function fetchUserScore(username) {
   if (cached && Date.now() - cached.timestamp < CONFIG.cacheTimeout) {
     return cached.data;
   }
+  if (cached) scoreCache.delete(normalizedUsername);
   
   // Add to batch queue
   return new Promise((resolve) => {
@@ -881,7 +897,11 @@ function cachedScoreData(username) {
   const clean = cleanUsername(username).toLowerCase();
   if (!clean) return undefined;
   const cached = scoreCache.get(clean);
-  if (!cached || Date.now() - cached.timestamp >= CONFIG.cacheTimeout) return undefined;
+  if (!cached) return undefined;
+  if (Date.now() - cached.timestamp >= CONFIG.cacheTimeout) {
+    scoreCache.delete(clean);
+    return undefined;
+  }
   return cached.data;
 }
 
@@ -1002,6 +1022,8 @@ function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
   badge.className = 'reminet-score-badge';
   badge.setAttribute('data-reminet-badge', 'true');
+  badge.tabIndex = 0;
+  badge.setAttribute('role', 'link');
   const remiliaUsername = cleanUsername(scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle || '');
   if (remiliaUsername) {
     badge.dataset.reminetUsername = remiliaUsername;
@@ -1056,6 +1078,9 @@ function createScoreBadge(scoreData, options = {}) {
   const tooltipPfpInfo = escapeHtml(pfpInfo);
   
   badge.dataset.reminetProfileUrl = remiliaUsername ? `https://remilia.net/~${remiliaUsername}` : '';
+  badge.setAttribute('aria-label', remiliaUsername
+    ? `Open ${displayName || remiliaUsername} on Remilia`
+    : `RemiStats for ${displayName || twitterHandle}`);
   badge.dataset.reminetTooltipHtml = `
     <div class="reminet-tooltip-header">
       <span class="reminet-tooltip-displayname">${displayName}</span>
@@ -1115,6 +1140,28 @@ function installRemiStatsDelegation() {
     scheduleHideSharedTooltip();
   };
 
+  const focusinHandler = (event) => {
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    if (!badge) return;
+    showSharedTooltip(badge);
+  };
+
+  const focusoutHandler = (event) => {
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    if (!badge || (event.relatedTarget instanceof Node && badge.contains(event.relatedTarget))) return;
+    scheduleHideSharedTooltip();
+  };
+
+  const keydownHandler = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    const profileUrl = badge?.dataset.reminetProfileUrl;
+    if (!profileUrl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(profileUrl, '_blank', 'noopener');
+  };
+
   const clickHandler = (event) => {
     const pokeButton = event.target.closest?.('[data-reminet-poke]');
     if (pokeButton) {
@@ -1148,12 +1195,18 @@ function installRemiStatsDelegation() {
   document.addEventListener('mouseover', mouseoverHandler, true);
   document.addEventListener('mouseout', mouseoutHandler, true);
   document.addEventListener('click', clickHandler, true);
+  document.addEventListener('focusin', focusinHandler, true);
+  document.addEventListener('focusout', focusoutHandler, true);
+  document.addEventListener('keydown', keydownHandler, true);
   window.addEventListener('scroll', scrollHandler, { passive: true, capture: true });
 
   removeRemiStatsDelegation = () => {
     document.removeEventListener('mouseover', mouseoverHandler, true);
     document.removeEventListener('mouseout', mouseoutHandler, true);
     document.removeEventListener('click', clickHandler, true);
+    document.removeEventListener('focusin', focusinHandler, true);
+    document.removeEventListener('focusout', focusoutHandler, true);
+    document.removeEventListener('keydown', keydownHandler, true);
     window.removeEventListener('scroll', scrollHandler, { capture: true });
     reminetDelegationInstalled = false;
     removeRemiStatsDelegation = null;
@@ -2848,4 +2901,3 @@ function clearRemiStatsBadges() {
     clearReminetProcessing(node);
   }
 }
-

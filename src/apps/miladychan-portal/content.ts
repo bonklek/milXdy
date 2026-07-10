@@ -154,6 +154,9 @@ let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
+let boardsGeneration = 0;
+let boardGeneration = 0;
+let threadGeneration = 0;
 
 export function boot(context?: MilxdyContentAppContext): void {
   if (booted) return;
@@ -185,6 +188,9 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  boardsGeneration += 1;
+  boardGeneration += 1;
+  threadGeneration += 1;
   disable();
   state.appFrame?.remove();
   state.appFrame = null;
@@ -347,11 +353,12 @@ async function loadBoards(force = false): Promise<void> {
   const fresh = Date.now() - state.lastLoadedAt < 45_000;
   if (!force && fresh && state.boards.some((board) => board.threads.length)) return;
   state.loadingBoards = true;
+  const generation = ++boardsGeneration;
   state.error = "";
   render();
   try {
     const boardList = await fetchJson<BoardInfo[]>(`${API_ROOT}/json/board-list`);
-    if (!lifecycleActive()) return;
+    if (!lifecycleActive() || generation !== boardsGeneration) return;
     const boardInfos = boardList
       .filter((board) => DEFAULT_BOARDS.includes(board.id))
       .sort((a, b) => DEFAULT_BOARDS.indexOf(a.id) - DEFAULT_BOARDS.indexOf(b.id));
@@ -369,7 +376,7 @@ async function loadBoards(force = false): Promise<void> {
         return { ...board, loading: false, error: errorMessage(error), threads: [] };
       }
     }));
-    if (!lifecycleActive()) return;
+    if (!lifecycleActive() || generation !== boardsGeneration) return;
     state.boards = summaries.sort((a, b) => {
       if (a.id === "all") return 1;
       if (b.id === "all") return -1;
@@ -377,15 +384,17 @@ async function loadBoards(force = false): Promise<void> {
     });
     state.lastLoadedAt = Date.now();
   } catch (error) {
-    if (lifecycleActive()) state.error = errorMessage(error);
+    if (lifecycleActive() && generation === boardsGeneration) state.error = errorMessage(error);
   } finally {
-    state.loadingBoards = false;
-    if (lifecycleActive()) render();
+    if (generation === boardsGeneration) state.loadingBoards = false;
+    if (lifecycleActive() && generation === boardsGeneration) render();
   }
 }
 
 async function openBoard(boardId: string, force = false): Promise<void> {
   if (!lifecycleActive()) return;
+  const generation = ++boardGeneration;
+  threadGeneration += 1;
   state.selectedBoard = boardId;
   state.view = "threads";
   state.selectedThread = null;
@@ -399,7 +408,7 @@ async function openBoard(boardId: string, force = false): Promise<void> {
   render();
   try {
     const payload = await fetchJson<BoardPayload>(`${API_ROOT}/json/boards/${boardId}/catalog`);
-    if (!lifecycleActive()) return;
+    if (!lifecycleActive() || generation !== boardGeneration || state.selectedBoard !== boardId) return;
     const threads = sortThreads(payload.threads || []);
     state.boards = upsertBoard(state.boards, summarizeBoard({
       ...(summary || emptyBoard(boardId, boardId)),
@@ -408,15 +417,16 @@ async function openBoard(boardId: string, force = false): Promise<void> {
       threads,
     }));
   } catch (error) {
-    if (lifecycleActive()) state.error = errorMessage(error);
+    if (lifecycleActive() && generation === boardGeneration) state.error = errorMessage(error);
   } finally {
-    state.loadingThreads = false;
-    if (lifecycleActive()) render();
+    if (generation === boardGeneration) state.loadingThreads = false;
+    if (lifecycleActive() && generation === boardGeneration) render();
   }
 }
 
 async function openThread(boardId: string, threadId: number, force = false): Promise<void> {
   if (!lifecycleActive()) return;
+  const generation = ++threadGeneration;
   const existing = state.selectedThread?.id === threadId ? state.selectedThread : null;
   if (!force && existing?.posts !== null && existing?.posts !== undefined) {
     state.view = "thread";
@@ -431,13 +441,13 @@ async function openThread(boardId: string, threadId: number, force = false): Pro
   render();
   try {
     const thread = await fetchJson<ChanThread>(`${API_ROOT}/json/boards/${boardId}/${threadId}`);
-    if (!lifecycleActive()) return;
+    if (!lifecycleActive() || generation !== threadGeneration || state.selectedThread?.id !== threadId) return;
     state.selectedThread = thread;
   } catch (error) {
-    if (lifecycleActive()) state.error = errorMessage(error);
+    if (lifecycleActive() && generation === threadGeneration) state.error = errorMessage(error);
   } finally {
-    state.loadingThread = false;
-    if (lifecycleActive()) render();
+    if (generation === threadGeneration) state.loadingThread = false;
+    if (lifecycleActive() && generation === threadGeneration) render();
   }
 }
 

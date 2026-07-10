@@ -35,7 +35,7 @@ For release builds:
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-Firefox 142 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
+Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
 
 For source builds:
 
@@ -46,7 +46,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox 142 or newer's temporary add-on screen.
+Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen.
 
 Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
 

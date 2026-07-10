@@ -503,7 +503,7 @@ function createDockApi(): DockApi {
 
     const appSection = settingsSection("Apps");
     for (const item of orderedItems().filter((item) => item.stackable !== false)) {
-      appSection.append(settingsAppRow(item));
+      appSection.append(settingsAppRow(item, onUpdate));
     }
     if (!appSection.querySelector(".milxdy-overlay-dock-settings-row")) {
       const empty = document.createElement("span");
@@ -531,7 +531,7 @@ function createDockApi(): DockApi {
     return section;
   }
 
-  function settingsAppRow(item: OverlayDockItem): HTMLElement {
+  function settingsAppRow(item: OverlayDockItem, onUpdate?: () => void): HTMLElement {
     const row = document.createElement("div");
     row.className = "milxdy-overlay-dock-settings-row";
     const handle = document.createElement("span");
@@ -544,8 +544,32 @@ function createDockApi(): DockApi {
     const label = document.createElement("span");
     label.className = "milxdy-overlay-dock-settings-label";
     label.textContent = item.label;
-    row.append(handle, icon, label);
+    const order = orderedItems().filter((entry) => entry.stackable !== false);
+    const index = order.findIndex((entry) => entry.id === item.id);
+    const moveUp = settingsMoveButton(item, -1, index <= 0, onUpdate);
+    const moveDown = settingsMoveButton(item, 1, index < 0 || index >= order.length - 1, onUpdate);
+    row.append(handle, icon, label, moveUp, moveDown);
     return row;
+  }
+
+  function settingsMoveButton(item: OverlayDockItem, delta: -1 | 1, disabled: boolean, onUpdate?: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = delta < 0 ? "↑" : "↓";
+    button.title = `${delta < 0 ? "Move up" : "Move down"} ${item.label}`;
+    button.setAttribute("aria-label", button.title);
+    button.disabled = disabled;
+    button.addEventListener("click", () => {
+      const from = state.order.indexOf(item.id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= state.order.length) return;
+      [state.order[from], state.order[to]] = [state.order[to], state.order[from]];
+      saveOrder();
+      syncStackOrder();
+      render();
+      onUpdate?.();
+    });
+    return button;
   }
 
   function settingsActionButton(action: OverlayDockSettingsAction, onUpdate?: () => void): HTMLButtonElement {
@@ -759,6 +783,11 @@ function injectStyles(): void {
     #${ROOT_ID}[data-reorder="true"] .milxdy-overlay-dock-item {
       cursor: grab;
       animation: milxdy-dock-wiggle 150ms infinite alternate ease-in-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #${ROOT_ID}[data-reorder="true"] .milxdy-overlay-dock-item {
+        animation: none;
+      }
     }
     .milxdy-overlay-dock-icon,
     .milxdy-overlay-dock-icon img {
