@@ -37,7 +37,7 @@ async function fetchPostReadingResource(message: BackgroundMessage, sender: chro
       return { ok: false, status: 0, error: "UNSUPPORTED_URL" };
     }
     const response = await runNetworkTask(
-      () => fetch(message.url, { credentials: "omit" }),
+      (signal) => fetch(message.url, { credentials: "omit", signal }),
       message.type,
     );
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };

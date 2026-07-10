@@ -36,6 +36,8 @@ async function verifyRuntimeOwnership() {
   const buildScript = await readFile("scripts/build/build-extension.mjs", "utf8");
   const performanceMode = await readFile("src/platform/settings/performance-mode.ts", "utf8");
   const background = await readFile("src/extension/background/index.ts", "utf8");
+  const backgroundRouter = await readFile("src/platform/background/router.ts", "utf8");
+  const postReadingBackground = await readFile("src/apps/post-reading/background.ts", "utf8");
   const overlayDock = await readFile("src/platform/overlay/dock.ts", "utf8");
   const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
@@ -57,6 +59,10 @@ async function verifyRuntimeOwnership() {
   assert(/fast:\s*{[\s\S]*?safetyScanIntervalMs:\s*null/.test(performanceMode), "Fast mode must disable safety scans");
   assert(/balanced:\s*{[\s\S]*?safetyScanIntervalMs:\s*null/.test(performanceMode), "Balanced mode must disable safety scans");
   assert(background.includes("parseAllowedUrl"), "central background fetch services must use shared URL allowlist parsing");
+  assert(backgroundRouter.includes("task: (signal: AbortSignal)") && backgroundRouter.includes("new AbortController()"), "background network queue must own an abort signal for active work");
+  assert(backgroundRouter.includes("abort.abort(new DOMException") && backgroundRouter.includes('"TimeoutError"'), "background network deadlines must abort underlying fetch work");
+  assert(background.includes("combineAbortSignals(init?.signal, signal)"), "central budgeted fetches must compose caller and queue cancellation");
+  assert(postReadingBackground.includes('fetch(message.url, { credentials: "omit", signal })'), "Post-reading background fetches must accept queue cancellation");
   assert(background.includes("chrome.runtime.onInstalled.addListener") && background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   assert(firstPartyAdapter.includes("defaultEnabledById") && firstPartyAdapter.includes("defaultAppEnabled") && firstPartyAdapter.includes("enabledFromStoredValue"), "first-party enablement adapters must derive fallback defaults from registry defaultEnabled metadata");
   assert(runtime.includes("const desiredEnabledAppIds = new Set<MilxdyAppId>"), "App presets must compute an exact desired enabled set");

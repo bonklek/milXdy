@@ -6,6 +6,7 @@ import {
   renewRemiliaAuth,
   setRemiliaAuthCookie,
   adoptRemiliaBrowserSession,
+  isRemiliaDisconnected,
 } from "../../platform/auth/remilia-auth";
 
 const BASE_URL = REMILIA_BASE_URL;
@@ -25,6 +26,7 @@ const ALLOWED_ATTACHMENT_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "vide
 
 let socketAuthReadyUntil = 0;
 let socketAuthPromise: Promise<{ ok: boolean; signedIn: boolean; error?: string }> | null = null;
+let socketAuthGeneration = 0;
 
 type DecodedAttachment = {
   contentType: string;
@@ -246,10 +248,20 @@ async function refreshAccessToken(): Promise<boolean> {
 }
 
 async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; error?: string }> {
+  if (await isRemiliaDisconnected()) {
+    socketAuthReadyUntil = 0;
+    socketAuthGeneration += 1;
+    socketAuthPromise = null;
+    return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
+  }
   if (Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
   if (socketAuthPromise) return socketAuthPromise;
-  socketAuthPromise = withDeadline(
+  const generation = ++socketAuthGeneration;
+  const pending = withDeadline(
     prepareRemiliaAuth(SESSION_PROBE_PATH).then(async (auth) => {
+      if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
+        return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
+      }
       if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
       if (auth.token) await setRemiliaAuthCookie(auth.token);
       socketAuthReadyUntil = Date.now() + SOCKET_AUTH_CACHE_MS;
@@ -257,10 +269,16 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
     }),
     SOCKET_AUTH_TIMEOUT_MS,
     { ok: false, signedIn: false, error: "AUTH_TIMEOUT" },
-  ).finally(() => {
-    socketAuthPromise = null;
-  });
-  return socketAuthPromise;
+    () => {
+      if (generation === socketAuthGeneration) socketAuthGeneration += 1;
+    },
+  );
+  socketAuthPromise = pending;
+  try {
+    return await pending;
+  } finally {
+    if (socketAuthPromise === pending) socketAuthPromise = null;
+  }
 }
 
 async function authStatus(): Promise<Record<string, unknown>> {
@@ -289,13 +307,16 @@ async function remiliaAuthedFetch(method: string, path: string): Promise<Record<
   return result;
 }
 
-async function withDeadline<T>(promise: Promise<T>, timeoutMs: number, fallback: T): Promise<T> {
+async function withDeadline<T>(promise: Promise<T>, timeoutMs: number, fallback: T, onTimeout?: () => void): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((resolve) => {
-        timer = setTimeout(() => resolve(fallback), timeoutMs);
+        timer = setTimeout(() => {
+          onTimeout?.();
+          resolve(fallback);
+        }, timeoutMs);
       }),
     ]);
   } finally {
