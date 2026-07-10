@@ -790,15 +790,16 @@ function injectPostReadingStyles(): void {
   style.textContent = `
     .milxdy-wiki-read-aloud,
     .milxdy-wiki-read-aloud-heading-slot .milxdy-wiki-read-aloud {
-      width: 34px;
-      height: 34px;
-      border: 0;
-      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      border: 1px solid rgba(32, 35, 54, 0.22);
+      border-radius: 7px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       color: #54595d;
-      background: transparent;
+      background: rgba(255, 255, 255, 0.72);
       cursor: pointer;
       padding: 0;
       vertical-align: middle;
@@ -813,6 +814,24 @@ function injectPostReadingStyles(): void {
     .milxdy-wiki-read-aloud:focus-visible {
       color: rgb(199, 102, 147);
       background: rgba(199, 102, 147, 0.12);
+    }
+    .milxdy-wiki-read-aloud:active {
+      transform: translate(1px, 1px);
+      box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .milxdy-wiki-read-aloud:focus-visible {
+      outline: 2px solid rgb(199, 102, 147);
+      outline-offset: 2px;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud {
+      border-color: #484e69 !important;
+      background: #222533 !important;
+      color: #eef0ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:hover,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:focus-visible {
+      border-color: #9d78df !important;
+      background: #342a4a !important;
     }
     .milxdy-wiki-read-aloud svg {
       width: 18px;

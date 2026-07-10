@@ -1055,6 +1055,31 @@ export const RESKIN_CSS = `
     filter: brightness(0.96) !important;
   }
 
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]),
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButton"]:not([aria-disabled="true"]),
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]),
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButton"]:not([aria-disabled="true"]) {
+    background: #4a5288 !important;
+    border-color: #858cc9 !important;
+    border-right-color: #34395f !important;
+    border-bottom-color: #292d4e !important;
+    color: #ffffff !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]):hover,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButton"]:not([aria-disabled="true"]):hover,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]):hover,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButton"]:not([aria-disabled="true"]):hover {
+    background: #59639e !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]):active,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="tweetButton"]:not([aria-disabled="true"]):active,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButtonInline"]:not([aria-disabled="true"]):active,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="tweetButton"]:not([aria-disabled="true"]):active {
+    background: #363d69 !important;
+  }
+
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-post-button="flat"] [data-testid="SideNav_NewTweet_Button"],
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-post-button="flat"] [data-testid="tweetButtonInline"],
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-post-button="flat"] [data-testid="tweetButton"] {
