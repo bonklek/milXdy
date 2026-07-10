@@ -1671,6 +1671,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function closeHubPanel(): void {
     const root = state.hubPanelRoot;
     state.hubPanelRoot = null;
+    state.hubDockSettingsOpen = false;
     state.hubDockRegistration?.update({ active: false });
     animateOverlayAppClose(root, () => root?.remove());
   }
@@ -1712,10 +1713,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const settings = document.createElement("button");
     settings.type = "button";
     settings.className = "milxdy-app-hub-settings-button";
-    settings.title = "Dock settings";
-    settings.setAttribute("aria-label", "Dock settings");
+    settings.title = state.hubDockSettingsOpen ? "Back to apps and features" : "Rail settings";
+    settings.setAttribute("aria-label", settings.title);
     settings.setAttribute("aria-expanded", String(state.hubDockSettingsOpen));
-    settings.textContent = "\u2699";
+    settings.setAttribute("aria-pressed", String(state.hubDockSettingsOpen));
+    settings.textContent = state.hubDockSettingsOpen ? "\u2190" : "\u2699";
     settings.addEventListener("click", () => {
       state.hubDockSettingsOpen = !state.hubDockSettingsOpen;
       renderHubPanel();
@@ -1749,10 +1751,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
 
     if (state.hubDockSettingsOpen) {
-      const dockSettings = getOverlayDock().createSettingsPanel(renderHubPanel);
+      const dockSettings = getOverlayDock().createSettingsPanel(renderHubPanel, {
+        excludeActionIds: ["milxdy.addApps"],
+      });
       dockSettings.classList.add("milxdy-app-hub-dock-settings");
       dockSettings.append(appHubSetupSettings());
       root.append(dockSettings);
+      markOverlayAppLayoutReady(root, true);
+      return;
     }
 
     root.append(appHubRuntimeSummary());
@@ -1861,10 +1867,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function appHubSetupSettings(): HTMLElement {
-    const section = document.createElement("section");
+    const section = document.createElement("details");
     section.className = "milxdy-app-hub-setup-settings";
-    const title = document.createElement("strong");
-    title.textContent = "Setup";
+    const title = document.createElement("summary");
+    title.textContent = "Change app preset";
     const detail = document.createElement("span");
     detail.textContent = "Reapply exact app enablement, default rail pins, and matching Performance mode.";
     section.append(title, detail, presetActions());
@@ -3578,7 +3584,9 @@ function injectTweetScaffoldStyles(): void {
       position: static;
       display: grid;
       width: auto;
+      min-height: 0;
       box-sizing: border-box;
+      overflow: auto;
       padding: 10px;
       border: 2px solid var(--milxdy-hub-outline);
       border-radius: 0;
@@ -3598,6 +3606,25 @@ function injectTweetScaffoldStyles(): void {
       font: inherit;
       font-size: 12px;
       line-height: 1;
+    }
+    #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings .milxdy-overlay-dock-settings-row {
+      grid-template-columns: 24px minmax(0, 1fr) 30px 30px;
+      min-height: 30px;
+    }
+    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings {
+      display: grid;
+      gap: 8px;
+      padding-top: 7px;
+      border-top: 1px solid var(--milxdy-hub-button-border);
+    }
+    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings summary {
+      cursor: pointer;
+      color: var(--milxdy-hub-accent);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings:not([open]) > :not(summary) {
+      display: none;
     }
     .milxdy-app-hub-list {
       display: flex;
