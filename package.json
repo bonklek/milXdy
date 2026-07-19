@@ -77,7 +77,6 @@
     "web-ext": "^10.4.0"
   },
   "overrides": {
-    "ajv": "8.20.0",
     "shell-quote": "1.8.4",
     "tmp": "0.2.7"
   }

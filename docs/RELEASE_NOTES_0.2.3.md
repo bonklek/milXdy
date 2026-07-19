@@ -2,7 +2,7 @@
 
 milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It incorporates the unpublished browser fixes that were briefly prepared as `0.2.2.1` and expands the release into a full cross-feature remediation pass.
 
-Status: in development.
+Status: release candidate. Automated release gates pass; authenticated Chromium and Firefox/Waterfox runtime QA remain before publication.
 
 ## Included Fixes
 
@@ -29,6 +29,6 @@ Status: in development.
 
 The canonical non-live release gate passed on 2026-07-10 after the reliability and RemiliaNET recovery fixes were integrated. This includes strict TypeScript, Chromium and Firefox builds, platform and messaging contracts, local-package trust tests, Firefox lint classification, extension/app smoke, release packaging, checksums, and reproducibility.
 
-This release is not ready for publication until manual authenticated X/RemiliaNET QA covers the changed runtime, Beetol Hunt, RemiNet Chat live connection and sending, Post-reading, Wiki, rail/settings, and representative feed/notification surfaces.
+This release is not ready for publication until the final closeout commit passes the canonical release gate and manual authenticated X/RemiliaNET QA covers the changed runtime, Beetol Hunt, RemiNet Chat live connection and sending, Post-reading, Wiki, rail/settings, and representative feed/notification surfaces. Track that evidence in the [0.2.3 QA checklist](QA_0.2.3.md).
 
 Expected release assets are `milXdy-0.2.3-chromium.zip` and `milXdy-0.2.3-firefox.zip`.
