@@ -25,6 +25,76 @@ Status: release candidate. Automated release gates pass; authenticated Chromium 
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 
+## The 43 Audit Findings
+
+The reliability and accessibility audit identified the following concrete failure modes. Version `0.2.3` includes code-level remediation for each one; authenticated browser QA remains the final confirmation of their behavior in live X and RemiliaNET sessions.
+
+### Shared runtime, startup, settings, and networking
+
+1. One app failing during disable or disposal could prevent cleanup of every other app.
+2. One rejected X-surface handler could strand the rest of that app's delivery queue.
+3. One throwing idle task could pause already-queued shared work.
+4. Starting before `document.body` existed could leave the shared X scanner uninstalled.
+5. A bootstrap failure had no suite-level failure state, containment, or recovery path.
+6. Resetting diagnostics could incorrectly report that the active scanner observer was gone.
+7. Resetting an app could silently delete user-authored Wiki and Maxxer lists.
+8. A failed settings write could leave a control showing a value that was never saved.
+9. Popup Full setup could enable apps that its selected performance mode said were blocked.
+10. Shared network work had no consistent deadline or way to cancel active requests.
+
+### RemiNet Chat
+
+11. Closing Chat during socket authentication could leave an orphan WebSocket.
+12. Loading older history at the retention limit could discard the newest messages.
+13. Live updates rebuilt message actions and dropped keyboard focus.
+14. The media size cap was enforced only after buffering the full response.
+15. An allowed large video could be duplicated into several simultaneous in-memory copies.
+
+### Root visuals, Tweet PNG, and Wiki
+
+16. Dynamic new-post pills were missing their enabled visual styling.
+17. Tweet PNG bypassed the documented review-before-copy step.
+18. Tweet PNG could report a successful copy when clipboard support was unavailable.
+19. Disabling Wiki could leave preview globals and an open preview behind.
+20. Keyboard focus could close a Wiki preview before its Read link was reachable.
+21. Disabling Wiki or changing routes could not cancel Grok's multi-stage workflow.
+22. Grok's completion action used invalid nested interactive controls.
+
+### Music and Miladychan
+
+23. Stopping a Music folder scan could mark unvisited tracks missing and continue into other folders.
+24. A stale track-selection request could start playback after a newer choice or after disable.
+25. Radio synchronization could produce different queues based on each participant's local matches.
+26. One IndexedDB-open failure could break Music for the rest of the tab.
+27. An older Miladychan thread response could replace the newer thread the user selected.
+
+### Beetol, Maxxer, and RemiStats
+
+28. Some Beetol server failures could submit the same action twice.
+29. A rejected Beetol request could leave the game panel permanently busy.
+30. The entire frequently updating Beetol panel acted as a disruptive live announcement region.
+31. Disabling Maxxer could leave filtered posts hidden.
+32. One Maxxer worker failure could stall all later avatar inference in the tab.
+33. Expired RemiStats score entries remained in an unbounded long-session cache.
+34. RemiStats score badges behaved like links but could not be focused or opened by keyboard.
+
+### Post-reading and OCR
+
+35. Switching between Wiki and tweet reading could deadlock the browser's shared speech queue.
+36. A pending custom HTTP speech request could not be canceled after Quit, disable, or a source change.
+37. One silent OCR-host startup failure could prevent every later OCR retry in the tab.
+38. Disposing and re-enabling Post-reading could leave old hidden player trees mounted.
+
+### Keyboard, motion, dialogs, and release consistency
+
+39. The popup Runtime mode selector had no accessible name.
+40. Rail and app reordering was pointer-only.
+41. Rail reorder animation ignored the user's reduced-motion preference.
+42. Popup dialogs did not contain keyboard focus or restore it after closing.
+43. Active release-planning documents contradicted the package and manifest version.
+
+The evidence, severity, reproduction conditions, root-cause analysis, and regression recommendation for every item are recorded in the [full UX and feature reliability audit](UX_RELIABILITY_AUDIT.md).
+
 ## Release Gate
 
 The canonical non-live release gate passed on 2026-07-10 after the reliability and RemiliaNET recovery fixes were integrated. This includes strict TypeScript, Chromium and Firefox builds, platform and messaging contracts, local-package trust tests, Firefox lint classification, extension/app smoke, release packaging, checksums, and reproducibility.
