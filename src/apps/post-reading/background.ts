@@ -1,4 +1,4 @@
-import { registerBackgroundMessageHandlers, runNetworkTask } from "../../platform/background/router";
+import { createBackgroundNetworkDeadlineSignal, registerBackgroundMessageHandlers, runNetworkTask } from "../../platform/background/router";
 import { isAllowedPublishTwitterOembedUrl, isAllowedXStatusUrl } from "./urlPolicy";
 
 type FetchJsonMessage = {
@@ -37,7 +37,10 @@ async function fetchPostReadingResource(message: BackgroundMessage, sender: chro
       return { ok: false, status: 0, error: "UNSUPPORTED_URL" };
     }
     const response = await runNetworkTask(
-      () => fetch(message.url, { credentials: "omit" }),
+      (signal) => fetch(message.url, {
+        credentials: "omit",
+        signal: AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()]),
+      }),
       message.type,
     );
     if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };

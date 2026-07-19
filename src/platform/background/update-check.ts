@@ -1,6 +1,7 @@
 export type UpdateStatus = {
   checkedAt: number;
   currentVersion: string;
+  buildTarget: "chromium" | "firefox";
   latestVersion: string | null;
   latestUrl: string | null;
   latestAssetUrl: string | null;
@@ -63,12 +64,14 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
       throw new Error("Latest normal release did not include a version tag");
     }
 
-    const expectedAssetName = expectedReleaseAssetName(latestVersion);
+    const buildTarget = currentBuildTarget();
+    const expectedAssetName = expectedReleaseAssetName(latestVersion, buildTarget);
     const asset = chooseReleaseAsset(release, expectedAssetName);
 
     return {
       checkedAt,
       currentVersion,
+      buildTarget,
       latestVersion,
       latestUrl: typeof release.html_url === "string" ? release.html_url : null,
       latestAssetUrl: typeof asset?.browser_download_url === "string" ? asset.browser_download_url : null,
@@ -81,11 +84,12 @@ export async function checkForUpdate(): Promise<UpdateStatus> {
     return {
       checkedAt,
       currentVersion,
+      buildTarget: currentBuildTarget(),
       latestVersion: null,
       latestUrl: null,
       latestAssetUrl: null,
       latestAssetName: null,
-      expectedAssetName: expectedReleaseAssetName(null),
+      expectedAssetName: expectedReleaseAssetName(null, currentBuildTarget()),
       matchedExpectedAsset: false,
       updateAvailable: false,
       error: error instanceof Error ? error.message : String(error),
@@ -107,7 +111,7 @@ export function compareVersions(left: string, right: string): number {
 export function normalizeVersion(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().replace(/^v/i, "");
-  return /^\d+(?:\.\d+){0,2}$/.test(normalized) ? normalized : null;
+  return /^\d+(?:\.\d+){0,3}$/.test(normalized) ? normalized : null;
 }
 
 export function selectLatestNormalRelease(releases: readonly GitHubRelease[]): GitHubRelease | null {
@@ -145,8 +149,11 @@ function chooseReleaseAsset(release: GitHubRelease, expectedAssetName: string | 
     || null;
 }
 
-function expectedReleaseAssetName(version: string | null): string | null {
+function currentBuildTarget(): "chromium" | "firefox" {
+  return typeof MILXDY_BUILD_TARGET === "string" && MILXDY_BUILD_TARGET === "firefox" ? "firefox" : "chromium";
+}
+
+function expectedReleaseAssetName(version: string | null, target = currentBuildTarget()): string | null {
   if (!version) return null;
-  const target = typeof MILXDY_BUILD_TARGET === "string" ? MILXDY_BUILD_TARGET : "chromium";
   return `milXdy-${version}-${target}.zip`;
 }

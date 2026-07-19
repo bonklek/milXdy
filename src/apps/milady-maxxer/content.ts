@@ -31,7 +31,7 @@ import type {
 } from "./shared/types";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
 
-import { detectAvatar } from "./detection";
+import { detectAvatar, disposeDetection } from "./detection";
 import { applyMode, clearEffects, revealed, triggerLevelUpAnimation } from "./effects";
 import type { EffectsContext } from "./effects";
 import {
@@ -399,6 +399,7 @@ export function close(): void {
 
 export function dispose(): void {
   disable();
+  disposeDetection();
   clearRecoveryTimers();
   clearScheduledScan();
   clearScheduledVisualRefresh();
@@ -1347,7 +1348,7 @@ function disableMaxxerRuntime(): void {
   visibilityObserver = null;
   clearProfileMaxxerState();
   for (const element of Array.from(maxxerMutatedElements)) {
-    clearElementMaxxerState(element);
+    clearMaxxerSurface(element);
     delete element.dataset.miladymaxxerProfile;
     delete element.dataset.miladymaxxerQuote;
   }

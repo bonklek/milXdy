@@ -6,8 +6,8 @@
   "description": "Opens Remilia Wiki pages in a docked sidebar surface.",
   "packageKind": "app",
   "sdk": {
-    "minVersion": "0.2.2",
-    "targetVersion": "0.2.2",
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
     "notes": [
       "Pilot fixture for docked app package composition assumptions."
     ]

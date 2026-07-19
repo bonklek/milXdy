@@ -1,7 +1,6 @@
 import { setOverlayAppStackOrder } from "./app-layout";
 
 export type OverlayDockSide = "left" | "right";
-export type OverlayDockTranslator = (text: string) => string;
 
 export type OverlayDockItem = {
   id: string;
@@ -28,6 +27,10 @@ export type OverlayDockSettingsAction = {
   onActivate: () => void;
 };
 
+export type OverlayDockSettingsOptions = {
+  excludeActionIds?: readonly string[];
+};
+
 type DockState = {
   root: HTMLElement | null;
   items: Map<string, OverlayDockItem>;
@@ -48,7 +51,6 @@ type DockState = {
   } | null;
   longPressTimer: number | null;
   suppressClick: boolean;
-  translate: OverlayDockTranslator;
 };
 
 type DockApi = {
@@ -59,9 +61,8 @@ type DockApi = {
   setSettingsAction: (id: string, action: OverlayDockSettingsAction | null) => void;
   getAppOrder: () => string[];
   setAppOrder: (ids: readonly string[]) => void;
-  createSettingsPanel: (onUpdate?: () => void) => HTMLElement;
+  createSettingsPanel: (onUpdate?: () => void, options?: OverlayDockSettingsOptions) => HTMLElement;
   subscribeSide: (callback: (side: OverlayDockSide) => void) => () => void;
-  setTranslator: (translate: OverlayDockTranslator) => void;
 };
 
 const ROOT_ID = "milxdy-overlay-dock-root";
@@ -74,6 +75,7 @@ const globalKey = "__milxdyOverlayDock";
 const sideListeners = new Set<(side: OverlayDockSide) => void>();
 
 function createDockApi(): DockApi {
+  let railIndicatorFrame = 0;
   const state: DockState = {
     root: null,
     items: new Map(),
@@ -88,7 +90,6 @@ function createDockApi(): DockApi {
     drag: null,
     longPressTimer: null,
     suppressClick: false,
-    translate: (text) => text,
   };
 
   function register(item: OverlayDockItem): OverlayDockRegistration {
@@ -144,11 +145,6 @@ function createDockApi(): DockApi {
     sideListeners.add(callback);
     callback(state.side);
     return () => sideListeners.delete(callback);
-  }
-
-  function setTranslator(translate: OverlayDockTranslator): void {
-    state.translate = translate;
-    render();
   }
 
   function notifySide(): void {
@@ -277,6 +273,12 @@ function createDockApi(): DockApi {
       rail = document.createElement("div");
       rail.className = "milxdy-overlay-dock-rail";
       root.prepend(rail);
+      const createdRail = rail;
+      createdRail.addEventListener("scroll", () => scheduleRailScrollIndicatorUpdate(root, createdRail), { passive: true });
+      window.addEventListener("resize", () => scheduleRailScrollIndicatorUpdate(root, createdRail), { passive: true });
+      if (typeof ResizeObserver === "function") {
+        new ResizeObserver(() => scheduleRailScrollIndicatorUpdate(root, createdRail)).observe(createdRail);
+      }
     }
 
     const items = orderedItems();
@@ -298,6 +300,22 @@ function createDockApi(): DockApi {
     for (const extra of Array.from(rail.querySelectorAll<HTMLElement>(":scope > :not(.milxdy-overlay-dock-item)"))) {
       extra.remove();
     }
+    scheduleRailScrollIndicatorUpdate(root, rail);
+  }
+
+  function scheduleRailScrollIndicatorUpdate(root: HTMLElement, rail: HTMLElement): void {
+    if (railIndicatorFrame) return;
+    railIndicatorFrame = requestAnimationFrame(() => {
+      railIndicatorFrame = 0;
+      updateRailScrollIndicators(root, rail);
+    });
+  }
+
+  function updateRailScrollIndicators(root: HTMLElement, rail: HTMLElement): void {
+    const edgeTolerance = 2;
+    const canScroll = rail.scrollHeight > rail.clientHeight + edgeTolerance;
+    root.dataset.canScrollUp = String(canScroll && rail.scrollTop > edgeTolerance);
+    root.dataset.canScrollDown = String(canScroll && rail.scrollTop + rail.clientHeight < rail.scrollHeight - edgeTolerance);
   }
 
   function findItemButton(rail: HTMLElement, id: string): HTMLButtonElement | null {
@@ -475,23 +493,25 @@ function createDockApi(): DockApi {
     void chrome.storage.local.set({ [ORDER_KEY]: state.order });
   }
 
-  function createSettingsPanel(onUpdate?: () => void): HTMLElement {
+  function createSettingsPanel(onUpdate?: () => void, options: OverlayDockSettingsOptions = {}): HTMLElement {
     const panel = document.createElement("div");
     panel.className = "milxdy-overlay-dock-settings";
 
     const title = document.createElement("strong");
-    title.textContent = state.translate("Dock");
+    title.textContent = "Rail settings";
 
+    const sideSection = settingsSection("Rail side");
     const sideGroup = document.createElement("div");
     sideGroup.className = "milxdy-overlay-dock-segment";
     sideGroup.append(
-      sideButton(state.translate("Left"), "left", onUpdate),
-      sideButton(state.translate("Right"), "right", onUpdate),
+      sideButton("Left", "left", onUpdate),
+      sideButton("Right", "right", onUpdate),
     );
+    sideSection.append(sideGroup);
 
     const reorder = document.createElement("button");
     reorder.type = "button";
-    reorder.textContent = state.reorderMode ? state.translate("Done") : state.translate("Reorder");
+    reorder.textContent = state.reorderMode ? "Done" : "Reorder";
     reorder.addEventListener("click", () => {
       state.reorderMode = !state.reorderMode;
       if (!state.reorderMode) saveOrder();
@@ -501,7 +521,7 @@ function createDockApi(): DockApi {
 
     const reset = document.createElement("button");
     reset.type = "button";
-    reset.textContent = state.translate("Reset order");
+    reset.textContent = "Reset order";
     reset.addEventListener("click", () => {
       state.order = Array.from(state.items.keys());
       saveOrder();
@@ -510,24 +530,31 @@ function createDockApi(): DockApi {
       onUpdate?.();
     });
 
-    const appSection = settingsSection(state.translate("Apps"));
+    const appSection = settingsSection("App order");
+    const orderActions = document.createElement("div");
+    orderActions.className = "milxdy-overlay-dock-settings-actions";
+    orderActions.append(reorder, reset);
+    appSection.append(orderActions);
     for (const item of orderedItems().filter((item) => item.stackable !== false)) {
-      appSection.append(settingsAppRow(item));
+      appSection.append(settingsAppRow(item, onUpdate));
     }
     if (!appSection.querySelector(".milxdy-overlay-dock-settings-row")) {
       const empty = document.createElement("span");
       empty.className = "milxdy-overlay-dock-settings-empty";
-      empty.textContent = state.translate("No rail apps pinned.");
+      empty.textContent = "No rail apps pinned.";
       appSection.append(empty);
     }
 
-    const featureSection = settingsSection(state.translate("Features"));
+    const featureSection = settingsSection("Utilities");
+    const excludedActions = new Set(options.excludeActionIds || []);
     const actions = Array.from(state.settingsActions.entries())
+      .filter(([id]) => !excludedActions.has(id))
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([, action]) => settingsActionButton(action, onUpdate));
     featureSection.append(...actions);
 
-    panel.append(title, sideGroup, reorder, reset, appSection, featureSection);
+    panel.append(title, sideSection, appSection);
+    if (actions.length) panel.append(featureSection);
     return panel;
   }
 
@@ -540,7 +567,7 @@ function createDockApi(): DockApi {
     return section;
   }
 
-  function settingsAppRow(item: OverlayDockItem): HTMLElement {
+  function settingsAppRow(item: OverlayDockItem, onUpdate?: () => void): HTMLElement {
     const row = document.createElement("div");
     row.className = "milxdy-overlay-dock-settings-row";
     const handle = document.createElement("span");
@@ -553,8 +580,32 @@ function createDockApi(): DockApi {
     const label = document.createElement("span");
     label.className = "milxdy-overlay-dock-settings-label";
     label.textContent = item.label;
-    row.append(handle, icon, label);
+    const order = orderedItems().filter((entry) => entry.stackable !== false);
+    const index = order.findIndex((entry) => entry.id === item.id);
+    const moveUp = settingsMoveButton(item, -1, index <= 0, onUpdate);
+    const moveDown = settingsMoveButton(item, 1, index < 0 || index >= order.length - 1, onUpdate);
+    row.append(icon, label, moveUp, moveDown);
     return row;
+  }
+
+  function settingsMoveButton(item: OverlayDockItem, delta: -1 | 1, disabled: boolean, onUpdate?: () => void): HTMLButtonElement {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = delta < 0 ? "↑" : "↓";
+    button.title = `${delta < 0 ? "Move up" : "Move down"} ${item.label}`;
+    button.setAttribute("aria-label", button.title);
+    button.disabled = disabled;
+    button.addEventListener("click", () => {
+      const from = state.order.indexOf(item.id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= state.order.length) return;
+      [state.order[from], state.order[to]] = [state.order[to], state.order[from]];
+      saveOrder();
+      syncStackOrder();
+      render();
+      onUpdate?.();
+    });
+    return button;
   }
 
   function settingsActionButton(action: OverlayDockSettingsAction, onUpdate?: () => void): HTMLButtonElement {
@@ -583,7 +634,7 @@ function createDockApi(): DockApi {
     return button;
   }
 
-  return { register, getSide, setSide, setHiddenItems, setSettingsAction, getAppOrder, setAppOrder, createSettingsPanel, subscribeSide, setTranslator };
+  return { register, getSide, setSide, setHiddenItems, setSettingsAction, getAppOrder, setAppOrder, createSettingsPanel, subscribeSide };
 }
 
 function injectStyles(): void {
@@ -657,11 +708,42 @@ function injectStyles(): void {
         color-scheme: light;
       }
     }
-    #${ROOT_ID}[data-side="left"] { left: 8px; }
-    #${ROOT_ID}[data-side="right"] { right: 8px; }
-    html:has(body [role="dialog"] [aria-label="Close"]) #${ROOT_ID}[data-side="left"] {
+    #${ROOT_ID}[data-side="left"] {
       --milxdy-dock-top: 72px;
       --milxdy-dock-bottom-clearance: 80px;
+      left: 8px;
+    }
+    #${ROOT_ID}[data-side="right"] { right: 8px; }
+    #${ROOT_ID}::before,
+    #${ROOT_ID}::after {
+      pointer-events: none;
+      position: absolute;
+      left: 19px;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 14px;
+      border: 1px solid var(--milxdy-dock-border);
+      background: var(--milxdy-dock-panel);
+      color: var(--milxdy-dock-active);
+      font-size: 10px;
+      line-height: 1;
+      opacity: 0;
+      box-shadow: 2px 2px 0 var(--milxdy-dock-shadow);
+      transition: opacity 120ms ease;
+    }
+    #${ROOT_ID}::before {
+      content: "▲";
+      top: -16px;
+    }
+    #${ROOT_ID}::after {
+      content: "▼";
+      bottom: -16px;
+    }
+    #${ROOT_ID}[data-can-scroll-up="true"]::before,
+    #${ROOT_ID}[data-can-scroll-down="true"]::after {
+      opacity: 1;
     }
     .milxdy-overlay-dock-rail {
       display: grid;
@@ -769,6 +851,11 @@ function injectStyles(): void {
       cursor: grab;
       animation: milxdy-dock-wiggle 150ms infinite alternate ease-in-out;
     }
+    @media (prefers-reduced-motion: reduce) {
+      #${ROOT_ID}[data-reorder="true"] .milxdy-overlay-dock-item {
+        animation: none;
+      }
+    }
     .milxdy-overlay-dock-icon,
     .milxdy-overlay-dock-icon img {
       display: block;
@@ -868,18 +955,21 @@ function injectStyles(): void {
     }
     .milxdy-overlay-dock-settings-row {
       display: grid;
-      grid-template-columns: 14px 22px minmax(0, 1fr);
+      grid-template-columns: 22px minmax(0, 1fr) 28px 28px;
       align-items: center;
       gap: 5px;
-      min-height: 24px;
+      min-height: 28px;
       color: inherit;
       font-size: 11px;
       line-height: 1.2;
     }
     .milxdy-overlay-dock-settings-drag {
-      color: rgba(255, 244, 207, 0.62);
-      font-size: 11px;
-      line-height: 1;
+      display: none;
+    }
+    .milxdy-overlay-dock-settings-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
     }
     .milxdy-overlay-dock-settings-icon,
     .milxdy-overlay-dock-settings-icon img {
@@ -928,6 +1018,10 @@ function injectStyles(): void {
       #${ROOT_ID} {
         --milxdy-dock-top: 8px;
         --milxdy-dock-bottom-clearance: 96px;
+      }
+      #${ROOT_ID}[data-side="left"] {
+        --milxdy-dock-top: 72px;
+        --milxdy-dock-bottom-clearance: 80px;
       }
     }
   `;

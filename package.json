@@ -1,7 +1,8 @@
 {
   "name": "milxdy",
-  "version": "0.2.2",
-  "appSdkVersion": "0.2.2",
+  "version": "0.2.3",
+  "extensionVersion": "0.2.3",
+  "appSdkVersion": "0.2.3",
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
@@ -32,6 +33,7 @@
     "verify:app-smoke": "node scripts/smoke/app-smoke.mjs",
     "verify:app-smoke:020": "node scripts/smoke/app-smoke-020.mjs",
     "verify:filesystem-layout": "node scripts/verify/filesystem-layout.mjs",
+    "verify:locales": "node scripts/verify/locales.mjs",
     "verify:app-sdk-compliance": "node scripts/verify/app-sdk-compliance.mjs",
     "verify:internal-messaging-bridges": "node scripts/verify/internal-messaging-bridges.mjs",
     "verify:remistats-tooltip-escaping": "node scripts/verify/remistats-tooltip-escaping.mjs",
@@ -76,7 +78,6 @@
     "web-ext": "^10.4.0"
   },
   "overrides": {
-    "ajv": "8.20.0",
     "shell-quote": "1.8.4",
     "tmp": "0.2.7"
   }

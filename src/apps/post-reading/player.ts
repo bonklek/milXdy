@@ -292,6 +292,13 @@ export class MiniPlayer {
     });
   }
 
+  dispose(): void {
+    this.stopProbe();
+    this.appFrame = null;
+    this.root.remove();
+    this.originalParent = null;
+  }
+
   isVisible(): boolean {
     return this.root.dataset.visible === "true" && !this.closing;
   }

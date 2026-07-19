@@ -8,6 +8,7 @@ const files = {
   postReadingOcrHost: await readFile("src/extension/frames/ocr-host.ts", "utf8"),
   reminetChatBackground: await readFile("src/apps/reminet-chat/background.ts", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
+  beetolContent: await readFile("src/apps/beetol/content.js", "utf8"),
   miladyMaxxerBackground: await readFile("src/apps/milady-maxxer/background.ts", "utf8"),
   appSdkDocs: await readFile("docs/APP_SDK.md", "utf8"),
 };
@@ -40,6 +41,21 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(onConnect, "if (!isReminetChatSocketSender(port.sender))", "RemiNet socket bridge must validate sender before socket setup");
   assertIncludes(onConnect, "port.disconnect();", "RemiNet socket bridge must disconnect invalid senders");
   assertOrder(onConnect, "if (!isReminetChatSocketSender(port.sender))", "let socket: WebSocket | null = null;", "RemiNet socket bridge must validate before allocating socket state");
+  assertIncludes(onConnect, "SOCKET_OPEN_TIMEOUT_MS", "RemiNet socket bridge must bound the WebSocket opening phase");
+  assertIncludes(onConnect, 'reason: "socket-open-timeout"', "RemiNet socket bridge must expose a recoverable open-timeout reason");
+  assertIncludes(onConnect, 'reason: authRequired ? "auth-required" : "socket-auth-timeout"', "RemiNet socket auth timeouts must remain recoverable instead of falsely signing the user out");
+  assertIncludes(onConnect, "generation !== connectGeneration", "RemiNet socket bridge must ignore authentication that completes after close");
+
+  const auth = files.reminetChatBackground;
+  assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
+  assertIncludes(auth, "socketAuthPromise", "RemiNet socket setup must share an in-flight auth preparation");
+  assertIncludes(auth, "SOCKET_AUTH_TIMEOUT_MS", "RemiNet socket auth preparation must have a deadline");
+  assertIncludes(auth, 'error: "AUTH_TIMEOUT"', "RemiNet socket auth timeout must return a typed recovery error");
+  assertIncludes(auth, "await isRemiliaDisconnected()", "RemiNet socket auth cache must honor explicit connector logout before reuse");
+  assertIncludes(auth, "socketAuthGeneration", "RemiNet socket auth must reject late results after logout or timeout");
+  assertIncludes(auth, "generation !== socketAuthGeneration", "RemiNet socket auth must check request generation before caching credentials");
+  assertIncludes(auth, "prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
+  assertIncludes(auth, "abort.abort(new DOMException", "RemiNet socket auth timeout must abort underlying authentication work");
 
   assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\"])", "RemiNet socket sender policy must restrict to X/Twitter hosts");
   verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");
@@ -75,6 +91,16 @@ function verifyBeetolRuntimeBridge() {
   assertIncludes(contentScriptPolicy, "url.hostname === 'x.com'", "Beetol content-script sender policy must allow supported X pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'twitter.com'", "Beetol content-script sender policy must allow supported Twitter pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'www.remilia.net'", "Beetol content-script sender policy must allow supported RemiliaNET pages");
+
+  const action = functionBody(files.beetolBackground, "runAction");
+  assertIncludes(action, "remiliaAuthedFetch('POST'", "Beetol actions must submit through the authenticated mutation path");
+  assertIncludes(action, "getStored({ lastUser: null })", "Beetol actions may use the last snapshot for reward comparison without a blocking preflight GET");
+  assertNotIncludes(action, "remiliaAuthedFetch('GET'", "Beetol actions must not spend their shared message deadline on a preflight state GET");
+  assertNotIncludes(action, "await getState()", "Beetol actions must return the mutation result before trailing state reconciliation");
+  assertIncludes(action, "needsRefresh: true", "Beetol action responses must request non-blocking state reconciliation");
+  const reconciliation = functionBody(files.beetolContent, "reconcileStateAfterAction");
+  assertIncludes(reconciliation, "type: 'beetol:getState'", "Beetol content must reconcile state after an action in a separate request");
+  assertIncludes(files.beetolContent, "if (response.needsRefresh) void reconcileStateAfterAction()", "Beetol action UI must launch reconciliation without keeping the action pending");
 }
 
 function verifyPostReadingOcrBridge() {
@@ -143,7 +169,7 @@ function verifyReminetUploadCaps() {
   const background = files.reminetChatBackground;
   const upload = functionBody(background, "uploadAttachment");
   assertIncludes(background, "MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet uploads must cap image attachments");
-  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 100 * 1024 * 1024", "RemiNet uploads must cap video attachments");
+  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet uploads must cap video attachments");
   assertIncludes(background, "ALLOWED_ATTACHMENT_IMAGE_TYPES", "RemiNet uploads must enumerate allowed image MIME types");
   assertIncludes(background, "ALLOWED_ATTACHMENT_VIDEO_TYPES", "RemiNet uploads must enumerate allowed video MIME types");
   assertIncludes(upload, "isAllowedAttachmentMimeType(declaredMimeType)", "RemiNet upload handler must validate declared MIME type before decoding");

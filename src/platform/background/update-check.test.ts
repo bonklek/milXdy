@@ -47,6 +47,7 @@ describe("compareVersions", () => {
     expect(compareVersions("0.2.0", "0.1.5")).toBe(1);
     expect(compareVersions("0.2.0", "0.2.0")).toBe(0);
     expect(compareVersions("0.1.5", "0.2.0")).toBe(-1);
+    expect(compareVersions("0.2.2.1", "0.2.2")).toBe(1);
   });
 });
 
@@ -63,6 +64,7 @@ describe("checkForUpdate", () => {
 
     const status = await checkForUpdate();
 
+    expect(status.buildTarget).toBe("chromium");
     expect(status.expectedAssetName).toBe("milXdy-0.2.2-chromium.zip");
     expect(status.matchedExpectedAsset).toBe(false);
     expect(status.latestAssetName).toBeNull();
@@ -84,6 +86,7 @@ describe("checkForUpdate", () => {
 
     const status = await checkForUpdate();
 
+    expect(status.buildTarget).toBe("firefox");
     expect(status.expectedAssetName).toBe("milXdy-0.2.2-firefox.zip");
     expect(status.matchedExpectedAsset).toBe(false);
     expect(status.latestAssetName).toBeNull();

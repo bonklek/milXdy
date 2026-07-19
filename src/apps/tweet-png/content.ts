@@ -70,7 +70,7 @@ function findStatusUrl(tweet: HTMLElement): string | null {
   return link?.href || null;
 }
 
-async function openTweetPngReview(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
+export async function openTweetPngReviewFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
   await loadVisualTheme();
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
@@ -133,6 +133,11 @@ type TweetPngRenderAssets = {
 };
 
 const TWEET_PNG_FONT_FALLBACK = 'TwitterChirp, Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
+const TWEET_PNG_BODY_FONT_SIZE = 34;
+const TWEET_PNG_BODY_LINE_HEIGHT = 48;
+const TWEET_PNG_QUOTE_FONT_SIZE = 26;
+const TWEET_PNG_QUOTE_LINE_HEIGHT = 38;
+const TWEET_PNG_WRAP_SAFETY_PX = 16;
 
 function extractTweetPngData(tweet: HTMLElement, statusUrl: string | null): TweetPngData {
   const settings = visualTheme;
@@ -289,9 +294,10 @@ function normalizeTweetStatusHref(value: string): string {
 }
 
 async function renderTweetPng(data: TweetPngData): Promise<Blob> {
+  await waitForTweetPngFonts();
   const scale = 2;
   const width = 1200;
-  const maxHeight = Math.round(width * 5 / 3);
+  const maxHeight = Math.round(width * 2);
   const padding = 56;
   const footerHeight = data.date ? 42 : 0;
   const avatarSize = 96;
@@ -302,19 +308,19 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
   if (!context) throw new Error("Canvas unavailable");
   const palette = tweetPngPalette(visualTheme.tweetPngBorderPalette);
 
-  context.font = `34px ${TWEET_PNG_FONT_FALLBACK}`;
-  const textLines = wrapCanvasText(context, data.text || data.date || data.handle, bodyWidth, 16);
-  context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
-  const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, 8) : [];
+  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
+  const textLines = wrapCanvasText(context, data.text || data.date || data.handle, bodyWidth, 48);
+  context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
+  const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, 16) : [];
   const mediaImages = await Promise.all(data.images.map(loadImageForCanvas));
   const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadImageForCanvas)) : [];
   const assets = await loadTweetPngRenderAssets();
   const avatarImage = data.avatarUrl ? await loadImageForCanvas(data.avatarUrl).catch(() => null) : null;
   const mediaHeight = measureTweetPngMediaHeight(mediaImages, bodyWidth, 520);
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
-  const textHeight = textLines.length * 44;
+  const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
   const quoteHeight = data.quote
-    ? 30 + (quoteTextLines.length ? quoteTextLines.length * 34 + 14 : 0) + (quoteMediaHeight ? quoteMediaHeight + 14 : 0) + 34
+    ? 30 + (quoteTextLines.length ? quoteTextLines.length * TWEET_PNG_QUOTE_LINE_HEIGHT + 14 : 0) + (quoteMediaHeight ? quoteMediaHeight + 14 : 0) + 34
     : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
@@ -360,14 +366,15 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
   drawTweetPngHeaderStats(context, data.stats, assets, bodyX, padding + 34, bodyWidth);
 
   context.fillStyle = "#1b1324";
-  context.font = `34px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
   const maxContentY = data.date ? footerY - footerHeight : height - padding;
-  for (const line of textLines) {
-    if (y > maxContentY - 34) break;
+  const textAreaBottom = maxContentY - (mediaHeight || quoteHeight ? TWEET_PNG_BODY_LINE_HEIGHT : 0);
+  const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, Math.max(y, textAreaBottom), TWEET_PNG_BODY_LINE_HEIGHT);
+  for (const line of drawableTextLines) {
     context.fillText(line, bodyX, y);
-    y += 44;
+    y += TWEET_PNG_BODY_LINE_HEIGHT;
   }
 
   if (mediaImages.some(Boolean)) {
@@ -456,7 +463,17 @@ function tweetPngPalette(value: VisualThemeSettings["tweetPngBorderPalette"]): T
   }
 }
 
+async function waitForTweetPngFonts(): Promise<void> {
+  const fonts = document.fonts;
+  if (!fonts?.ready) return;
+  await Promise.race([
+    fonts.ready.catch(() => undefined),
+    new Promise((resolve) => window.setTimeout(resolve, 250)),
+  ]);
+}
+
 function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+  const safeWidth = Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX);
   const paragraphs = text.replace(/\r\n?/g, "\n").split("\n");
   const lines: string[] = [];
   let truncated = false;
@@ -479,7 +496,7 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
         break;
       }
       const next = line ? `${line} ${word}` : word;
-      if (context.measureText(next).width <= maxWidth) {
+      if (canvasTextWidth(context, next) <= safeWidth) {
         line = next;
         continue;
       }
@@ -491,11 +508,11 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
         truncated = true;
         break;
       }
-      if (context.measureText(word).width <= maxWidth) {
+      if (canvasTextWidth(context, word) <= safeWidth) {
         line = word;
         continue;
       }
-      const segments = splitCanvasTextByWidth(context, word, maxWidth);
+      const segments = splitCanvasTextByWidth(context, word, safeWidth);
       for (const segment of segments) {
         if (lines.length >= maxLines) {
           truncated = true;
@@ -509,7 +526,7 @@ function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidt
 
   while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
   if (truncated && lines.length) {
-    lines[lines.length - 1] = ellipsizeCanvasText(context, lines[lines.length - 1], maxWidth);
+    lines[lines.length - 1] = ellipsizeCanvasText(context, lines[lines.length - 1], safeWidth);
   }
   return lines.length ? lines : [""];
 }
@@ -519,7 +536,7 @@ function splitCanvasTextByWidth(context: CanvasRenderingContext2D, text: string,
   let line = "";
   for (const segment of canvasTextSegments(text)) {
     const next = line + segment;
-    if (!line || context.measureText(next).width <= maxWidth) {
+    if (!line || canvasTextWidth(context, next) <= maxWidth) {
       line = next;
       continue;
     }
@@ -533,10 +550,32 @@ function splitCanvasTextByWidth(context: CanvasRenderingContext2D, text: string,
 function ellipsizeCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string {
   const ellipsis = "...";
   const segments = canvasTextSegments(text.trim());
-  while (segments.length > 0 && context.measureText(`${segments.join("")}${ellipsis}`).width > maxWidth) {
+  while (segments.length > 0 && canvasTextWidth(context, `${segments.join("")}${ellipsis}`) > maxWidth) {
     segments.pop();
   }
   return `${segments.join("").trim()}${ellipsis}`;
+}
+
+function canvasTextWidth(context: CanvasRenderingContext2D, text: string): number {
+  const metrics = context.measureText(text);
+  const bounds = Math.abs(metrics.actualBoundingBoxLeft || 0) + Math.abs(metrics.actualBoundingBoxRight || 0);
+  return Math.max(metrics.width, bounds);
+}
+
+function visibleCanvasTextLines(
+  context: CanvasRenderingContext2D,
+  lines: readonly string[],
+  maxWidth: number,
+  startY: number,
+  maxY: number,
+  lineHeight: number,
+): string[] {
+  const availableLines = Math.max(0, Math.floor((maxY - startY + 1) / lineHeight));
+  if (lines.length <= availableLines) return [...lines];
+  if (availableLines <= 0) return [];
+  const visible = lines.slice(0, availableLines);
+  visible[visible.length - 1] = ellipsizeCanvasText(context, visible[visible.length - 1], Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX));
+  return visible;
 }
 
 function canvasTextSegments(text: string): string[] {
@@ -779,7 +818,9 @@ function showTweetPngModal(blob: Blob, data: TweetPngData): void {
 }
 
 async function copyTweetPng(blob: Blob): Promise<void> {
-  if (!navigator.clipboard || typeof ClipboardItem === "undefined") return;
+  if (!navigator.clipboard || typeof ClipboardItem === "undefined") {
+    throw new Error("Image clipboard is unavailable in this browser. Use Download instead.");
+  }
   await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 

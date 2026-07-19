@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.2.3
+
+See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
+
+- Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
+- Adds native English and contributor-provided Russian extension metadata, with deterministic locale coverage checks and documented fallback/contribution rules. In-app controls remain English until each catalog has fluent review and focused UI coverage.
+- Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.
+- Protects user-authored settings during reset, restores controls after failed saves, and keeps onboarding presets consistent with the selected performance mode.
+- Repairs stuck or stale states across Chat, Wiki, Music, Miladychan, Beetol, Maxxer, RemiStats, and Post-reading, including socket cleanup, history retention, cancelable work, bounded caches, retryable workers, and reversible disable/re-enable behavior.
+- Adds the audit's keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete 43-item inventory is in the [0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md#the-43-audit-findings).
+- Returns Beetol hunt results immediately after the action request and reconciles inventory/cooldowns separately, preventing successful hunts from appearing stuck behind sequential state refreshes.
+- Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.
+- Passes the complete non-live 0.2.3 release gate, including both browser builds, package/security contracts, smoke tests, archive checksums, and reproducibility; authenticated live QA remains the publication gate.
+- Invalidates cached Chat authentication across connector logout/timeouts and propagates shared background deadlines into fetch abort signals so expired work cannot continue consuming privileged network resources.
+- Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction and dark pop-out states, darkens Post/Reply controls in the dark preset, and matches the Wiki read-aloud button to the square Wiki control family.
+- Restores a compact Apps & Features rail-settings view with single-line ordering controls, removes the redundant self-link, and keeps app presets collapsed until requested.
+- Keeps X's native Like feedback responsive by removing broad button-transition overrides and replacing Maxxer's full-card shadow animation with short compositor-friendly feedback.
+- Removes two suspected reliability-audit lag contributors: main-column mutation-driven button rescans are replaced by a disabled-aware, capped visible-page check every five seconds, and the root-level relational dock selector is replaced by a static left-rail safe area.
+- Keeps the final Beetle Hunt reward visible before transitioning to a red Done status and the persisted 90-minute cooldown.
+- Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
+- Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
+
+Status: release candidate. Automated release gates pass; authenticated Chromium and Firefox/Waterfox runtime QA remain before publication.
+
 ## 0.2.2
 
 See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).

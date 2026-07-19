@@ -59,6 +59,7 @@ type BenchmarkStartMessage = {
 };
 
 let running = false;
+let benchmarkListenerInstalled = false;
 
 function isBenchmarkStartMessage(value: unknown): value is BenchmarkStartMessage {
   return (
@@ -249,6 +250,8 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
  */
 export function setupMaxProfileBenchmark(): void {
   if (!hasExtensionRuntime() || typeof chrome?.runtime?.onMessage?.addListener !== "function") return;
+  if (benchmarkListenerInstalled) return;
+  benchmarkListenerInstalled = true;
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!isBenchmarkStartMessage(message)) return undefined;
     if (running) {

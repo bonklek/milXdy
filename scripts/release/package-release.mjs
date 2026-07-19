@@ -10,9 +10,9 @@ import { publishFileAtomically, withReleaseArtifactLock, writeFileAtomically } f
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
-const version = String(packageJson.version || "").trim();
-if (!/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(version)) {
-  throw new Error(`package.json version must be a semver release version, got "${version}"`);
+const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
+if (!isExtensionVersion(version)) {
+  throw new Error(`package.json extensionVersion must be a browser extension version, got "${version}"`);
 }
 
 const releaseDir = "release";
@@ -40,7 +40,7 @@ async function verifyBuildDir(build) {
   const manifestPath = `${build.dir}/manifest.json`;
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   if (manifest.version !== version) {
-    throw new Error(`${manifestPath} version ${manifest.version} does not match package version ${version}`);
+    throw new Error(`${manifestPath} version ${manifest.version} does not match extension version ${version}`);
   }
   if (build.target === "firefox") {
     assertFirefoxGeckoSettings(manifest, manifestPath);
@@ -66,7 +66,7 @@ async function verifyArchive(archive, build) {
   const zip = await readFile(archive);
   const manifest = JSON.parse(readZipText(zip, "manifest.json"));
   if (manifest.version !== version) {
-    throw new Error(`${archive} manifest version ${manifest.version} does not match package version ${version}`);
+    throw new Error(`${archive} manifest version ${manifest.version} does not match extension version ${version}`);
   }
   assertArchiveManifestShape(archive, build, manifest);
   assertArchiveFeatureSet(zip, archive, build);
@@ -207,9 +207,13 @@ function assertArchiveFiles(zip, archive, build) {
 
 function assertFirefoxGeckoSettings(manifest, label) {
   const gecko = manifest.browser_specific_settings?.gecko;
+  const geckoAndroid = manifest.browser_specific_settings?.gecko_android;
   if (!gecko?.id) throw new Error(`${label}: Firefox manifest missing gecko id`);
-  if (gecko.strict_min_version !== "142.0") {
+  if (gecko.strict_min_version !== "140.0") {
     throw new Error(`${label}: Firefox strict_min_version must cover data_collection_permissions support`);
+  }
+  if (geckoAndroid?.strict_min_version !== "142.0") {
+    throw new Error(`${label}: Firefox for Android strict_min_version must cover data_collection_permissions support`);
   }
   const required = gecko.data_collection_permissions?.required || [];
   assertEqualList([...required].sort(), [
@@ -291,6 +295,10 @@ async function checksumArchive(archive) {
     fileName: basename(archive),
     hash: createHash("sha256").update(buffer).digest("hex"),
   };
+}
+
+function isExtensionVersion(value) {
+  return /^\d+(?:\.\d+){0,3}$/.test(value);
 }
 
 async function writeChecksumManifest(entries) {

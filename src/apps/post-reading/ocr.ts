@@ -67,19 +67,25 @@ export async function recognizeImageText(
 
   throwIfAborted(signal);
   onProgress({ imageIndex, imageCount, status: "Loading OCR host", progress: 0.05 });
-  const frame = await withAbort(withTimeout(ensureHostFrameReady(), 15000, "OCR host did not load"), signal);
+  const frame = await withAbort(withTimeout(
+    ensureHostFrameReady(),
+    15000,
+    "OCR host did not load",
+    resetHostFrame,
+  ), signal);
   throwIfAborted(signal);
   const id = `ocr-${Date.now()}-${++requestCounter}`;
   const authToken = authTokenForFrame(frame);
   let lastProgress = 0.05;
 
+  let cleanupRequest = () => undefined;
   const text = await withTimeout(new Promise<string>((resolve, reject) => {
-    const cleanup = () => {
+    cleanupRequest = () => {
       window.removeEventListener("message", onMessage);
       signal.removeEventListener("abort", onAbort);
     };
     const onAbort = () => {
-      cleanup();
+      cleanupRequest();
       postToHost(frame, { type: "post-reading-ocr-cancel", id, authToken });
       reject(new DOMException("OCR skipped", "AbortError"));
     };
@@ -91,7 +97,7 @@ export async function recognizeImageText(
         onProgress({ imageIndex, imageCount, status: event.data.status, progress: value });
         return;
       }
-      cleanup();
+      cleanupRequest();
       if (event.data.type === "post-reading-ocr-result") {
         resolve(cleanOcrText(event.data.text));
       } else {
@@ -103,7 +109,10 @@ export async function recognizeImageText(
     signal.addEventListener("abort", onAbort);
     throwIfAborted(signal);
     postToHost(frame, { type: "post-reading-ocr-request", id, authToken, src: image.src });
-  }), 45000, "OCR timed out");
+  }), 45000, "OCR timed out", () => {
+    cleanupRequest();
+    postToHost(frame, { type: "post-reading-ocr-cancel", id, authToken });
+  });
 
   cache.set(image.src, text);
   return text;
@@ -152,6 +161,13 @@ function ensureHostFrameReady(): Promise<HTMLIFrameElement> {
   return hostReadyPromise;
 }
 
+function resetHostFrame(): void {
+  const frame = hostFrame;
+  hostFrame = null;
+  hostReadyPromise = null;
+  frame?.remove();
+}
+
 function postToHost(frame: HTMLIFrameElement, request: OcrInitMessage | OcrRequest | OcrCancelRequest): void {
   frame.contentWindow?.postMessage(request, extensionOrigin());
 }
@@ -177,13 +193,21 @@ function extensionOrigin(): string {
   return new URL(chrome.runtime.getURL("")).origin;
 }
 
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  message: string,
+  onTimeout?: () => void,
+): Promise<T> {
   let timeout: number | null = null;
   try {
     return await Promise.race([
       promise,
       new Promise<T>((_, reject) => {
-        timeout = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+        timeout = window.setTimeout(() => {
+          onTimeout?.();
+          reject(new Error(message));
+        }, timeoutMs);
       }),
     ]);
   } finally {

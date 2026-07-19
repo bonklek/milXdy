@@ -15,10 +15,23 @@ let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
 const xUnreadNotifications = new WeakSet<HTMLElement>();
 const clickedNotificationKeys = new WeakMap<HTMLElement, string>();
 const SHOW_NEW_POSTS_RE = /show\s+\d+\s+posts?/i;
+const SHOW_NEW_POST_SCAN_INTERVAL_MS = 5000;
+const SHOW_NEW_POST_SCAN_LIMIT = 120;
 const HOME_LOGO_REPLACEMENT_CLASS = "milady-logo-replacement";
 const HOME_LOGO_BACKGROUND_CLASS = "milxdy-home-logo-background";
 const HOME_LOGO_LINK_SELECTOR = 'h1 a[href="/home"], h1 a[aria-label="X"][role="link"]';
 const HOME_LOGO_PAGE_CHROME_SELECTOR = 'header[role="banner"], h1';
+const REPLY_CONTEXT_RE = /\breplying to\b/i;
+const NATIVE_REPLY_CONNECTOR_SELECTOR = [
+  'div[style*="background-color: rgb(207, 217, 222)"]',
+  'div[style*="background-color: rgb(239, 243, 244)"]',
+  'div[style*="background-color: rgb(196, 207, 214)"]',
+  'div[style*="background-color: rgb(56, 68, 77)"]',
+  'div[style*="background-color: rgb(61, 73, 82)"]',
+  'div[style*="background-color: rgb(51, 54, 57)"]',
+  'div[style*="background-color: rgb(47, 51, 54)"]',
+  'div[style*="background-color: rgb(66, 83, 100)"]',
+].join(", ");
 let booted = false;
 let loadUserActionApp: MilxdyContentAppContext["loadAppById"] = async () => null;
 let queueNotificationSurface: ((notification: HTMLElement) => void) | null = null;
@@ -62,7 +75,7 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
   setupMaxPostSound(context);
   injectHomeLogoStyles();
   setupHomeLogoReplacement(context);
-  setupShowNewPostsMarkers();
+  setupShowNewPostsMarkers(context);
   setupTweetPngShareActions(context);
   setupNotificationUnreadMarkers(context);
   setupOrphanReplyMarkers(context);
@@ -534,10 +547,33 @@ function injectHomeLogoStyles(): void {
   document.documentElement.appendChild(style);
 }
 
-function setupShowNewPostsMarkers(): void {
-  for (const button of document.querySelectorAll<HTMLElement>('[role="button"], button')) {
-    markShowNewPostsButton(button);
-  }
+function setupShowNewPostsMarkers(context: MilxdyContentAppContext): void {
+  let cancelNextScan: (() => void) | null = null;
+  const scan = () => {
+    if (!visualTheme.newPostsPill || document.visibilityState !== "visible") return;
+    const main = document.querySelector<HTMLElement>('main[role="main"], main');
+    if (!main) return;
+    let scanned = 0;
+    for (const button of main.querySelectorAll<HTMLElement>('[role="button"], button')) {
+      markShowNewPostsButton(button);
+      scanned += 1;
+      if (scanned >= SHOW_NEW_POST_SCAN_LIMIT) break;
+    }
+  };
+  const scheduleNextScan = () => {
+    cancelNextScan = context.scheduler.timeout(() => {
+      cancelNextScan = null;
+      if (context.signal.aborted) return;
+      scan();
+      scheduleNextScan();
+    }, SHOW_NEW_POST_SCAN_INTERVAL_MS);
+  };
+  scan();
+  scheduleNextScan();
+  context.addDisposable(() => {
+    cancelNextScan?.();
+    cancelNextScan = null;
+  });
 }
 
 function markShowNewPostsButton(button: HTMLElement): void {
@@ -616,7 +652,7 @@ function injectTweetPngShareMenuItem(
   item.dataset.milxdyTweetPngMenuItem = "true";
   item.setAttribute("role", "menuitem");
   item.setAttribute("tabindex", "0");
-  setTweetPngMenuItemState(item, "Copy tweet as PNG");
+  setTweetPngMenuItemState(item, "Review tweet PNG");
   item.addEventListener("click", async (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -624,15 +660,15 @@ function injectTweetPngShareMenuItem(
     item.dataset.milxdyTweetPngBusy = "true";
     setTweetPngMenuItemState(item, "Copying...");
     try {
-      await copyTweetPngFromTweet(shareContext.tweet, shareContext.statusUrl);
-      setTweetPngMenuItemState(item, "Copied PNG");
+      await openTweetPngReviewFromTweet(shareContext.tweet, shareContext.statusUrl);
+      setTweetPngMenuItemState(item, "Preview opened");
     } catch {
       setTweetPngMenuItemState(item, "Copy failed");
     } finally {
       const reset = () => {
         if (runtimeContext.signal.aborted) return;
         delete item.dataset.milxdyTweetPngBusy;
-        if (item.isConnected) setTweetPngMenuItemState(item, "Copy tweet as PNG");
+        if (item.isConnected) setTweetPngMenuItemState(item, "Review tweet PNG");
       };
       scheduleTimeout(reset, 1400);
     }
@@ -658,9 +694,10 @@ function tweetPngMenuIcon(): SVGSVGElement {
   return svg;
 }
 
-async function copyTweetPngFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
+async function openTweetPngReviewFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
   const module = await loadUserActionApp("tweetPng", "userAction:tweetPngShare");
-  await (module as { copyTweetPngFromTweet: (tweet: HTMLElement, statusUrl: string | null) => Promise<void> }).copyTweetPngFromTweet(tweet, statusUrl);
+  if (!module || !("openTweetPngReviewFromTweet" in module)) throw new Error("Tweet PNG preview is unavailable");
+  await (module as { openTweetPngReviewFromTweet: (tweet: HTMLElement, statusUrl: string | null) => Promise<void> }).openTweetPngReviewFromTweet(tweet, statusUrl);
 }
 
 function findStatusUrl(tweet: HTMLElement): string | null {
@@ -813,18 +850,17 @@ function setupOrphanReplyMarkers(context: MilxdyContentAppContext): void {
 
 function markOrphanReply(tweet: HTMLElement): void {
   if (!tweet.isConnected) return;
-  const hasReplyContext = /\breplying to\b/i.test(tweet.textContent || "");
-  const hasNativeConnector = Boolean(tweet.querySelector([
-    'div[style*="background-color: rgb(207, 217, 222)"]',
-    'div[style*="background-color: rgb(239, 243, 244)"]',
-    'div[style*="background-color: rgb(196, 207, 214)"]',
-    'div[style*="background-color: rgb(56, 68, 77)"]',
-    'div[style*="background-color: rgb(61, 73, 82)"]',
-    'div[style*="background-color: rgb(51, 54, 57)"]',
-    'div[style*="background-color: rgb(47, 51, 54)"]',
-    'div[style*="background-color: rgb(66, 83, 100)"]',
-  ].join(", ")));
-  tweet.dataset.milxdyOrphanReply = String(hasReplyContext && !hasNativeConnector);
+  const hasReplyContext = REPLY_CONTEXT_RE.test(tweet.textContent || "");
+  if (!hasReplyContext) {
+    setOrphanReplyState(tweet, false);
+    return;
+  }
+  setOrphanReplyState(tweet, !tweet.querySelector(NATIVE_REPLY_CONNECTOR_SELECTOR));
+}
+
+function setOrphanReplyState(tweet: HTMLElement, orphan: boolean): void {
+  const value = String(orphan);
+  if (tweet.dataset.milxdyOrphanReply !== value) tweet.dataset.milxdyOrphanReply = value;
 }
 
 function injectOrphanReplyStyles(): void {

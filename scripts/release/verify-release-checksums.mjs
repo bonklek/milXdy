@@ -6,7 +6,7 @@ import { releaseBuilds } from "./release-builds.mjs";
 import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
-const version = String(packageJson.version || "").trim();
+const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const releaseDir = "release";
 const checksumFile = `${releaseDir}/milXdy-${version}-checksums.sha256`;
 

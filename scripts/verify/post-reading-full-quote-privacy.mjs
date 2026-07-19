@@ -37,7 +37,8 @@ forbid(fullQuote, /fetch\s*\(\s*endpoint\.toString\(\)/, "fullQuote must not fet
 requireIncludes(fullQuote, "https://publish.twitter.com/oembed", "fullQuote should fetch public oEmbed from publish.twitter.com");
 requireIncludes(fullQuote, "https://cdn.syndication.twimg.com/tweet-result", "fullQuote should fetch public syndication JSON from cdn.syndication.twimg.com");
 
-requireIncludes(background, 'fetch(message.url, { credentials: "omit" })', "post-reading background fetch bridge must omit credentials for all resource fetches");
+requireIncludes(background, 'credentials: "omit"', "post-reading background fetch bridge must omit credentials for all resource fetches");
+requireIncludes(background, "AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])", "post-reading background fetch bridge must cancel queued fetches and stalled response reads");
 requireIncludes(background, 'url.hostname === "cdn.syndication.twimg.com"', "post-reading background bridge must allow the public syndication JSON endpoint");
 requireIncludes(background, 'url.pathname === "/tweet-result"', "post-reading background bridge must pin the public syndication JSON path");
 requireIncludes(background, 'url.hostname === "publish.twitter.com"', "post-reading background bridge must allow the public oEmbed JSON endpoint");

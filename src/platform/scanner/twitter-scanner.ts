@@ -52,6 +52,7 @@ let removePointerMoveListener: (() => void) | null = null;
 let enabledSurfaceKinds = new Set<TwitterSurfaceKind>(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile"]);
 let lastNotificationPointerAt = 0;
 let fullScanNotificationHoverDeferred = false;
+let bodyReadyListenerInstalled = false;
 const notificationPointerSettleMs = 120;
 
 function createScannerCounters() {
@@ -64,6 +65,7 @@ function createScannerCounters() {
   safetyScans: 0,
   scrollEvents: 0,
   notificationPointerEvents: 0,
+  activeObserverCount: 0,
   fullScanRequestsDeferredForNotificationHover: 0,
   flushesDeferredForNotificationHover: 0,
   fullScanRequestsDeferredForScroll: 0,
@@ -115,6 +117,7 @@ export function getTwitterScannerCounters(): typeof counters {
 
 export function resetTwitterScannerCounters(): void {
   Object.assign(counters, createScannerCounters(), {
+    activeObserverCount: observer ? 1 : 0,
     activeSurfaceKinds: enabledSurfaceKinds.size,
     maxSurfacesPerFlushBudget: maxSurfacesPerFlush,
     maxSurfacesPerScrollFlushBudget: maxSurfacesPerScrollFlush,
@@ -163,13 +166,22 @@ export function configureTwitterScanner(options: {
 }
 
 function ensureScanner(): void {
-  if (observer || !document.body) return;
+  if (observer || listeners.size === 0) return;
+  if (!document.body) {
+    if (!bodyReadyListenerInstalled) {
+      bodyReadyListenerInstalled = true;
+      document.addEventListener("DOMContentLoaded", handleBodyReady, { once: true });
+    }
+    return;
+  }
   observer = new MutationObserver((mutations) => {
     counters.mutations += mutations.length;
     collectMutations(mutations);
     debounceFlush();
   });
   observer.observe(document.body, { childList: true, subtree: true });
+  counters.activeObserverCount = 1;
+  counters.updatedAt = Date.now();
   restartSafetyTimer();
   const visibilityListener = () => {
     if (!document.hidden) scheduleFullScan();
@@ -193,9 +205,17 @@ function ensureScanner(): void {
   removePointerMoveListener = () => window.removeEventListener("pointermove", pointerMoveListener);
 }
 
+function handleBodyReady(): void {
+  bodyReadyListenerInstalled = false;
+  ensureScanner();
+  scheduleFullScan();
+}
+
 function stopScanner(): void {
   observer?.disconnect();
   observer = null;
+  counters.activeObserverCount = 0;
+  counters.updatedAt = Date.now();
   pending.clear();
   scanScheduled = false;
   removeVisibilityListener?.();

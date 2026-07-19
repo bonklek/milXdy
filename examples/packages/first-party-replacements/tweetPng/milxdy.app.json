@@ -6,8 +6,8 @@
   "description": "Renders local PNG exports from X share actions when invoked by the user.",
   "packageKind": "feature",
   "sdk": {
-    "minVersion": "0.2.2",
-    "targetVersion": "0.2.2",
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
     "notes": [
       "Pilot fixture for the prepared local App SDK package shape."
     ]

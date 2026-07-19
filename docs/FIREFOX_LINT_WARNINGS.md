@@ -6,7 +6,7 @@ Current expected status:
 
 ```text
 errors:   0
-warnings: 31
+warnings: 32
 notices:  0
 ```
 
@@ -51,5 +51,10 @@ First-party `innerHTML` warnings to reduce over time:
 - `features/miladymaxxer.js`: 2.
 - `features/wiki.js`: 1.
 - `features/music.js`: 1.
+- `features/tweetPng.js`: 1.
 
 These are existing UI-rendering patterns in bundled first-party code. Fix them when touching the owning UI, but do not block Firefox smoke on them while lint has zero errors.
+
+## Development Toolchain Audit
+
+`npm.cmd audit --omit=dev` reports no production dependency vulnerabilities. The full development-tree audit currently reports the upstream `web-ext -> firefox-profile -> adm-zip` ZIP memory-allocation advisory. That chain is used only by Firefox development tooling and is not included in release archives. Upstream currently offers no nonbreaking remediation, so the finding remains classified as a development-tooling issue rather than a shipped extension vulnerability.

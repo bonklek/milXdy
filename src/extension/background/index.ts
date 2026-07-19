@@ -3,7 +3,7 @@ import "../../apps/post-reading/background";
 import "../../apps/milady-maxxer/background";
 import "../../apps/beetol/background.js";
 import "../../apps/reminet-chat/background";
-import { initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
+import { createBackgroundNetworkDeadlineSignal, initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
 import { browserAction } from "../../platform/background/browser-action";
 import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";
 import {
@@ -980,7 +980,30 @@ async function readCappedResponseBytes(response: Response, maxBytes: number): Pr
 }
 
 function budgetedFetch(input: RequestInfo | URL, init?: RequestInit, label?: string): Promise<Response> {
-  return runNetworkTask(() => fetch(input, init), label);
+  return runNetworkTask((signal) => fetch(input, {
+    ...init,
+    signal: combineAbortSignals(
+      combineAbortSignals(init?.signal, signal),
+      createBackgroundNetworkDeadlineSignal(),
+    ),
+  }), label);
+}
+
+function combineAbortSignals(existing: AbortSignal | null | undefined, deadline: AbortSignal): AbortSignal {
+  if (!existing) return deadline;
+  if (typeof AbortSignal.any === "function") return AbortSignal.any([existing, deadline]);
+  const combined = new AbortController();
+  const abort = (event: Event) => {
+    const source = event.target instanceof AbortSignal ? event.target : null;
+    combined.abort(source?.reason);
+  };
+  if (existing.aborted) combined.abort(existing.reason);
+  else if (deadline.aborted) combined.abort(deadline.reason);
+  else {
+    existing.addEventListener("abort", abort, { once: true });
+    deadline.addEventListener("abort", abort, { once: true });
+  }
+  return combined.signal;
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
@@ -1037,4 +1060,3 @@ async function renderUpdateBadge(status: UpdateStatus): Promise<void> {
   }
   await browserAction.setBadgeText({ text: "" });
 }
-

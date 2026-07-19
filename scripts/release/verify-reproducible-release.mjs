@@ -7,7 +7,7 @@ import { createDeterministicZip } from "../build/deterministic-zip.mjs";
 import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
-const version = String(packageJson.version || "").trim();
+const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const tempRoot = join(tmpdir(), `milxdy-reproducible-${process.pid}`);
 
 await withReleaseArtifactLock("verify release reproducibility", async () => {
