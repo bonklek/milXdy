@@ -414,6 +414,10 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
   vertical-align: middle;
 }
 
+.reminet-profile-action-poke-slot:empty {
+  display: none;
+}
+
 .reminet-profile-action-poke-slot .reminet-poke-button {
   width: 36px;
   height: 36px;
@@ -1240,4 +1244,3 @@ html[data-milxdy-visual-incoming-poke-gold="true"][data-reminet-poke-mode="dark"
     animation: none;
   }
 }
-

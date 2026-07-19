@@ -41,6 +41,7 @@ const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // Cache for user scores
 const scoreCache = new Map();
+const SCORE_CACHE_LIMIT = 1000;
 const trophyBannerCache = new Map();
 const trophyBannerPending = new Map();
 let prefetchedBannersNft = null;
@@ -231,6 +232,7 @@ let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
 const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
+const confirmedPokeIdentities = new Set();
 let incomingPokeCache = null;
 let visualTheme = DEFAULT_VISUAL_THEME;
 let likeAutoPokeEnabled = false;
@@ -245,6 +247,33 @@ const DEFAULT_ICON_SETTINGS = {
 let iconSettings = { ...DEFAULT_ICON_SETTINGS };
 const POKE_THEME_COLORS = new Set(['red', 'green', 'gold', 'blue', 'purple']);
 const POKE_THEME_MODES = new Set(['dark', 'light']);
+
+function setScoreCache(key, value) {
+  if (scoreCache.has(key)) scoreCache.delete(key);
+  scoreCache.set(key, value);
+  while (scoreCache.size > SCORE_CACHE_LIMIT) {
+    const oldest = scoreCache.keys().next().value;
+    if (oldest === undefined) break;
+    scoreCache.delete(oldest);
+  }
+}
+
+function confirmPokeIdentity(username) {
+  const key = cleanUsername(username).toLowerCase();
+  if (!key) return;
+  if (confirmedPokeIdentities.has(key)) confirmedPokeIdentities.delete(key);
+  confirmedPokeIdentities.add(key);
+  while (confirmedPokeIdentities.size > SCORE_CACHE_LIMIT) {
+    const oldest = confirmedPokeIdentities.values().next().value;
+    if (oldest === undefined) break;
+    confirmedPokeIdentities.delete(oldest);
+  }
+}
+
+function isConfirmedPokeIdentity(username) {
+  const key = cleanUsername(username).toLowerCase();
+  return Boolean(key && confirmedPokeIdentities.has(key));
+}
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (char) => ({
@@ -370,7 +399,7 @@ async function processBatch(usernames) {
     for (const [requestedHandle, response] of responses) {
       if (!response?.ok) {
         if (response?.notFound || response?.status === 404) {
-          scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+          setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
           results[requestedHandle] = null;
         }
         continue;
@@ -382,16 +411,17 @@ async function processBatch(usernames) {
 
       if (data.user) {
         const user = data.user;
-        const userData = transformApiResponse(user, requestedHandle);
+        const userData = transformApiResponse(user, requestedHandle, response.cached !== true);
+        if (userData.remiliaUsername) confirmPokeIdentity(userData.remiliaUsername);
         const normalized = cleanUsername(user.twitterHandle || requestedHandle).toLowerCase();
-        scoreCache.set(requestedHandle, { data: userData, timestamp: Date.now() });
+        setScoreCache(requestedHandle, { data: userData, timestamp: Date.now() });
         results[requestedHandle] = userData;
         if (normalized && normalized !== requestedHandle) {
-          scoreCache.set(normalized, { data: userData, timestamp: Date.now() });
+          setScoreCache(normalized, { data: userData, timestamp: Date.now() });
           results[normalized] = userData;
         }
       } else {
-        scoreCache.set(requestedHandle, { data: null, timestamp: Date.now() });
+        setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
         results[requestedHandle] = null;
       }
     }
@@ -405,18 +435,21 @@ async function processBatch(usernames) {
 }
 
 // Transform API response to extension format
-function transformApiResponse(apiUser, fallbackHandle = '') {
-  const remiliaUsername = cleanUsername(
+function transformApiResponse(apiUser, fallbackHandle = '', allowLegacyIdentityFields = false) {
+  const explicitRemiliaUsername = cleanUsername(
+    apiUser.remiliaUsername
+    || apiUser.profile?.username
+    || (allowLegacyIdentityFields ? apiUser.username || apiUser.userHandle || apiUser.handle : '')
+  );
+  const displayUsername = explicitRemiliaUsername || cleanUsername(
     apiUser.username
     || apiUser.userHandle
     || apiUser.handle
-    || apiUser.remiliaUsername
-    || apiUser.profile?.username
     || fallbackHandle
   );
   return {
-    username: remiliaUsername,
-    remiliaUsername,
+    username: displayUsername,
+    remiliaUsername: explicitRemiliaUsername || null,
     twitterHandle: apiUser.twitterHandle,
     displayName: apiUser.displayName,
     score: apiUser.socialCreditScore,
@@ -440,8 +473,10 @@ async function fetchUserScore(username) {
   // Check cache first
   const cached = scoreCache.get(normalizedUsername);
   if (cached && Date.now() - cached.timestamp < CONFIG.cacheTimeout) {
+    if (cached.data?.remiliaUsername) confirmPokeIdentity(cached.data.remiliaUsername);
     return cached.data;
   }
+  if (cached) scoreCache.delete(normalizedUsername);
   
   // Add to batch queue
   return new Promise((resolve) => {
@@ -490,7 +525,7 @@ async function fetchUserScore(username) {
 
 function createPokeButton(username, standalone = false, xHandle = '') {
   const clean = cleanUsername(username);
-  if (!clean) return null;
+  if (!clean || !isConfirmedPokeIdentity(clean)) return null;
 
   const button = document.createElement('button');
   button.className = standalone
@@ -611,7 +646,7 @@ async function removeStoredPokeCooldown(username) {
 }
 
 function ensureStandalonePokeButton(badge, username) {
-  const clean = cleanUsername(username || badge.dataset.reminetUsername || profileUsernameFromUrl());
+  const clean = cleanUsername(badge.dataset.reminetUsername);
   if (!clean || !badge.parentElement || badge.dataset.reminetCompact === 'true') return;
 
   badge.dataset.reminetUsername = clean;
@@ -627,23 +662,6 @@ function ensureStandalonePokeButton(badge, username) {
   if (button) {
     badge.parentElement.insertBefore(button, badge.nextSibling);
   }
-}
-
-function createProfileBadgeGroup(badge, username) {
-  const clean = cleanUsername(username);
-  const group = document.createElement('span');
-  group.className = 'reminet-profile-badge-group';
-  group.dataset.reminetProfileBadgeGroup = 'true';
-  if (clean) group.dataset.reminetUsername = clean;
-  group.appendChild(badge);
-
-  const pokeButton = createPokeButton(clean, true);
-  if (pokeButton) {
-    group.appendChild(pokeButton);
-  }
-
-  void updateIncomingPokeFlag(group, clean);
-  return group;
 }
 
 function createProfilePokeSlot(username = '') {
@@ -737,7 +755,7 @@ function ensureProfileActionPokeSlot(userNameSection, username = '') {
   const existing = document.querySelector('[data-reminet-profile-action-poke-slot="true"]');
   const slot = existing || createProfileActionPokeSlot(clean);
   if (clean) slot.dataset.reminetUsername = clean;
-  fillProfilePokeSlot(slot, clean);
+  fillProfilePokeSlot(slot, '');
   attachProfileActionPokeSlot(userNameSection, slot);
   return slot;
 }
@@ -745,16 +763,21 @@ function ensureProfileActionPokeSlot(userNameSection, username = '') {
 function normalizeProfilePokeGroup(badge, username) {
   const group = badge?.closest?.('[data-reminet-profile-badge-group]');
   if (!group) return false;
-  const clean = cleanUsername(username || badge.dataset.reminetUsername || profileUsernameFromUrl());
+  const clean = cleanUsername(badge.dataset.reminetUsername);
 
   for (const child of Array.from(badge.parentElement?.children || [])) {
     if (child.matches?.('[data-reminet-standalone-poke]')) child.remove();
   }
 
   group.querySelector('[data-reminet-profile-poke-slot]')?.remove();
-  ensureProfileActionPokeSlot(document.querySelector('[data-testid="UserName"]'), clean);
-  if (clean) group.dataset.reminetUsername = clean;
-  void updateIncomingPokeFlag(group, clean);
+  const slot = ensureProfileActionPokeSlot(document.querySelector('[data-testid="UserName"]'), clean);
+  fillProfilePokeSlot(slot, clean);
+  if (clean) {
+    group.dataset.reminetUsername = clean;
+    void updateIncomingPokeFlag(group, clean);
+  } else {
+    delete group.dataset.reminetUsername;
+  }
   return true;
 }
 
@@ -881,7 +904,12 @@ function cachedScoreData(username) {
   const clean = cleanUsername(username).toLowerCase();
   if (!clean) return undefined;
   const cached = scoreCache.get(clean);
-  if (!cached || Date.now() - cached.timestamp >= CONFIG.cacheTimeout) return undefined;
+  if (!cached) return undefined;
+  if (Date.now() - cached.timestamp >= CONFIG.cacheTimeout) {
+    scoreCache.delete(clean);
+    return undefined;
+  }
+  if (cached.data?.remiliaUsername) confirmPokeIdentity(cached.data.remiliaUsername);
   return cached.data;
 }
 
@@ -892,10 +920,12 @@ function fillProfileBadgeFromScore(slot, group, scoreData, username) {
   badge.style.display = 'inline-flex';
   badge.style.verticalAlign = 'middle';
   badge.setAttribute('data-profile-badge', username);
-  const remiliaUsername = scoreData.remiliaUsername || scoreData.username || username;
-  group.dataset.reminetUsername = remiliaUsername;
-  fillBadgeSlot(slot, badge, remiliaUsername);
-  void updateIncomingPokeFlag(group, remiliaUsername);
+  const remiliaUsername = cleanUsername(scoreData.remiliaUsername || '');
+  const displayUsername = remiliaUsername || cleanUsername(scoreData.username || username);
+  if (remiliaUsername) group.dataset.reminetUsername = remiliaUsername;
+  else delete group.dataset.reminetUsername;
+  fillBadgeSlot(slot, badge, displayUsername);
+  if (remiliaUsername) void updateIncomingPokeFlag(group, remiliaUsername);
   return { badge, remiliaUsername };
 }
 
@@ -920,9 +950,7 @@ function markBadgeSlotEmpty(slot) {
 
 function backfillActionPokeForExistingBadge(element, badge) {
   if (visualTheme.pokePlacement !== 'actions') return;
-  const username = cleanUsername(badge?.dataset?.reminetUsername)
-    || cleanUsername(element?.dataset?.reminetLookupHandle)
-    || extractUsername(element);
+  const username = cleanUsername(badge?.dataset?.reminetUsername);
   if (username) insertActionPoke(element, username, extractUsername(element));
 }
 
@@ -1002,7 +1030,9 @@ function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
   badge.className = 'reminet-score-badge';
   badge.setAttribute('data-reminet-badge', 'true');
-  const remiliaUsername = cleanUsername(scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle || '');
+  badge.tabIndex = 0;
+  badge.setAttribute('role', 'link');
+  const remiliaUsername = cleanUsername(scoreData.remiliaUsername || '');
   if (remiliaUsername) {
     badge.dataset.reminetUsername = remiliaUsername;
   }
@@ -1051,11 +1081,14 @@ function createScoreBadge(scoreData, options = {}) {
     : '';
   
   const pfpInfo = pfpProject ? `${pfpProject} #${pfpId}` : '';
-  const displayName = escapeHtml(scoreData.displayName || remiliaUsername);
-  const twitterHandle = escapeHtml(scoreData.twitterHandle || remiliaUsername);
+  const displayName = escapeHtml(scoreData.displayName || remiliaUsername || scoreData.username);
+  const twitterHandle = escapeHtml(scoreData.twitterHandle || scoreData.username || remiliaUsername);
   const tooltipPfpInfo = escapeHtml(pfpInfo);
   
   badge.dataset.reminetProfileUrl = remiliaUsername ? `https://remilia.net/~${remiliaUsername}` : '';
+  badge.setAttribute('aria-label', remiliaUsername
+    ? `Open ${displayName || remiliaUsername} on Remilia`
+    : `RemiStats for ${displayName || twitterHandle}`);
   badge.dataset.reminetTooltipHtml = `
     <div class="reminet-tooltip-header">
       <span class="reminet-tooltip-displayname">${displayName}</span>
@@ -1115,6 +1148,28 @@ function installRemiStatsDelegation() {
     scheduleHideSharedTooltip();
   };
 
+  const focusinHandler = (event) => {
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    if (!badge) return;
+    showSharedTooltip(badge);
+  };
+
+  const focusoutHandler = (event) => {
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    if (!badge || (event.relatedTarget instanceof Node && badge.contains(event.relatedTarget))) return;
+    scheduleHideSharedTooltip();
+  };
+
+  const keydownHandler = (event) => {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    const badge = event.target.closest?.('[data-reminet-badge]');
+    const profileUrl = badge?.dataset.reminetProfileUrl;
+    if (!profileUrl) return;
+    event.preventDefault();
+    event.stopPropagation();
+    window.open(profileUrl, '_blank', 'noopener');
+  };
+
   const clickHandler = (event) => {
     const pokeButton = event.target.closest?.('[data-reminet-poke]');
     if (pokeButton) {
@@ -1148,12 +1203,18 @@ function installRemiStatsDelegation() {
   document.addEventListener('mouseover', mouseoverHandler, true);
   document.addEventListener('mouseout', mouseoutHandler, true);
   document.addEventListener('click', clickHandler, true);
+  document.addEventListener('focusin', focusinHandler, true);
+  document.addEventListener('focusout', focusoutHandler, true);
+  document.addEventListener('keydown', keydownHandler, true);
   window.addEventListener('scroll', scrollHandler, { passive: true, capture: true });
 
   removeRemiStatsDelegation = () => {
     document.removeEventListener('mouseover', mouseoverHandler, true);
     document.removeEventListener('mouseout', mouseoutHandler, true);
     document.removeEventListener('click', clickHandler, true);
+    document.removeEventListener('focusin', focusinHandler, true);
+    document.removeEventListener('focusout', focusoutHandler, true);
+    document.removeEventListener('keydown', keydownHandler, true);
     window.removeEventListener('scroll', scrollHandler, { capture: true });
     reminetDelegationInstalled = false;
     removeRemiStatsDelegation = null;
@@ -1467,6 +1528,7 @@ function clearAllPokeCountdowns() {
   }
   pokeCountdownTimers.clear();
   pokeButtonsByUsername.clear();
+  confirmedPokeIdentities.clear();
 }
 
 function restorePokeButtonIcon(button) {
@@ -1747,12 +1809,12 @@ async function insertBadge(element, usernameOverride = null) {
     // Remove processing flag since we're about to insert the badge
     clearReminetProcessing(element);
     
-    fillBadgeSlot(badgeSlot, badge, scoreData.remiliaUsername || username);
+    fillBadgeSlot(badgeSlot, badge, scoreData.remiliaUsername || scoreData.username || username);
     stabilizeTweetBadgeSlot(element, badgeSlot);
     if (visualTheme.pokePlacement === 'actions') {
-      insertActionPoke(element, scoreData.remiliaUsername || username, username);
+      insertActionPoke(element, scoreData.remiliaUsername || '', username);
     }
-    return markSurfaceResult(element, 'rendered', scoreData.remiliaUsername || username);
+    return markSurfaceResult(element, 'rendered', scoreData.remiliaUsername || scoreData.username || username);
   } catch (error) {
     console.error('Error inserting badge:', error);
     markBadgeSlotEmpty(badgeSlot);
@@ -2354,7 +2416,7 @@ async function insertProfileBadge() {
       const existingUsername = existingBadge.dataset.reminetUsername || username;
       const group = existingBadge.closest('[data-reminet-profile-badge-group]');
       if (group) attachProfileBadgeGroup(userNameSection, group);
-      void upgradeProfileTrophyBanner(existingUsername, window.location.pathname);
+      if (existingBadge.dataset.reminetUsername) void upgradeProfileTrophyBanner(existingUsername, window.location.pathname);
       if (!normalizeProfilePokeGroup(existingBadge, existingUsername)) {
         ensureStandalonePokeButton(existingBadge, existingUsername);
       }
@@ -2377,7 +2439,9 @@ async function insertProfileBadge() {
         const group = existingSlot.closest('[data-reminet-profile-badge-group]');
         const slotUsername = existingSlotUsername || username;
         if (group) attachProfileBadgeGroup(userNameSection, group);
-        ensureProfileActionPokeSlot(userNameSection, slotUsername);
+        const existingPokeSlot = ensureProfileActionPokeSlot(userNameSection, slotUsername);
+        const confirmedUsername = cleanUsername(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetUsername);
+        if (confirmedUsername) fillProfilePokeSlot(existingPokeSlot, confirmedUsername);
         return;
       }
     }
@@ -2437,7 +2501,7 @@ async function insertProfileBadge() {
     processedProfiles.add(profileKey);
 
     clearReminetProcessing(userNameSection);
-    void upgradeProfileTrophyBanner(scoreData.remiliaUsername || scoreData.username || username, window.location.pathname);
+    if (scoreData.remiliaUsername) void upgradeProfileTrophyBanner(scoreData.remiliaUsername, window.location.pathname);
     const filled = fillProfileBadgeFromScore(profileBadgeSlot, profileBadgeGroup, scoreData, username);
     if (filled) fillProfilePokeSlot(profilePokeSlot, filled.remiliaUsername);
   } catch (error) {
@@ -2465,7 +2529,7 @@ function createCompactBadge(scoreData) {
   badge.addEventListener('click', (e) => {
     e.preventDefault();
     e.stopPropagation();
-    const remiliaUsername = cleanUsername(scoreData.remiliaUsername || scoreData.username || scoreData.twitterHandle);
+    const remiliaUsername = cleanUsername(scoreData.remiliaUsername || '');
     if (remiliaUsername) window.open(`https://remilia.net/~${remiliaUsername}`, '_blank');
   });
 
@@ -2848,4 +2912,3 @@ function clearRemiStatsBadges() {
     clearReminetProcessing(node);
   }
 }
-

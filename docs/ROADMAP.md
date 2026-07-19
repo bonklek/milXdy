@@ -11,95 +11,7 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 For older shipped details, see the descending [changelog](../CHANGELOG.md).
 
-## Released: 0.2.1 - The Polish Patch
-
-Theme: bug fixes, cooldown correctness, layout polish, and immediate usability repairs.
-
-- Release update flow.
-  - uses the latest normal GitHub release for the normal update channel
-  - prefers the matching browser archive
-  - keeps safe in-place update instructions visible and adds optional update assistant handoff
-- App platform polish.
-  - preserves app availability across setup choices and build profiles
-  - improves Apps Hub enable/disable affordance contrast and expanded-card controls
-  - reduces runtime lag with shared scanner and cached RemiStats behavior
-  - keeps release smoke checks aligned with active package/manifest versions
-- RemiStats, RemiNet, and Beetol cooldown correctness.
-  - keeps poke cooldown state synchronized across visible copies of the same user
-  - sanitizes RemiStats score/beetle metrics and Remilia profile handles before rendering badge state or links
-  - restores cooldown fallback state after refresh
-  - preserves Beetol hunt cooldown/exhausted state and restores ready charges when no cooldown remains
-- Post-reading polish.
-  - keeps feed highlights synced when hyperlinks are skipped
-  - ports smoother estimated highlighting to main-feed playback
-  - adds compact language/gender voice filters
-  - adds a stop control for voice-highlight testing and tightens runtime lag handling around highlight work
-  - removes the extra bottom strip under the player/settings surface
-- Music and panel polish.
-  - remembers player layout state
-  - caps compact-mode height and allows narrower width resizing
-  - fixes full-player volume control overflow
-- RemiNet Chat and visual polish.
-  - adds older-message loading from chat history
-  - keeps media preview close controls reachable
-  - restores notification tinting, orphan-reply connector hints, and faster notification hover cards
-
-## Previous Release
-
-## Released: 0.2.0 - The Platform Update
-
-Theme: app platform refactor, side-rail apps, performance modes, and new first-party app surfaces.
-
-- First-party app platform.
-  - moved feature loading onto a shared app registry and lifecycle contract
-  - made build entries, copied assets, host permissions, dock metadata, and runtime cost metadata registry-driven
-  - documented the local-first app SDK and future GitHub app-package path
-  - presented this as the first platform/mod-system pass, not the completed external app layer
-  - gave developers enough manifest, lifecycle, surface, and Hub vocabulary to begin designing future milXdy apps
-- Shared runtime and performance modes.
-  - shrank the root content bootstrap
-  - added one shared scanner, route service, lifecycle owner, and idle scheduler
-  - separated Appearance intensity from Performance mode: Fast, Balanced, Full, and Developer
-  - kept disabled or unopened heavy apps lazy wherever possible
-- Shared overlay dock and app panels.
-  - gave dockable apps one shared side-rail, frame, drag/resize behavior, theme resolution, and panel persistence model
-  - moved RemiNet Chat, Post-reading, Beetol, Miladychan, Music, and Maxxer-style panels toward a consistent app shell
-- Background service consolidation.
-  - centralized background message routing and strict fetch allowlists
-  - kept RemiStats, RemiliaNET, Miladychan, music, image proxy, and upload-style services on typed message paths
-- Miladychan Portal.
-  - added a docked Miladychan board/thread browser and portal surface
-  - kept the native Miladychan site primary and preserved pseudonymous board culture
-  - left deeper board/deck/radio expansion as future follow-up
-- Music MVP and local radio foundation.
-  - added a docked local music app with library/playlists/radio groundwork
-  - supported local-first ISRC enrichment with optional user-provided AcoustID key and MusicBrainz lookup
-  - kept lifestyle radio/stations as a future expansion rather than a basic player-only vision
-- Public docs and onboarding posture.
-  - updated public docs around the platform model, app SDK, performance modes, and Firefox/Chromium install paths
-  - kept screenshot/readme/onboarding work scoped to what is accurate for the platform release
-
-## Coming Platform Direction: Composable App/Mod System
-
-Theme: turn bundled first-party features into efficient composable apps and open a path for community-built milXdy apps.
-
-The long-term platform goal is a complete mod system where default apps and future community apps can live as packages in an apps folder. Each app should declare its manifest, surfaces, permissions, assets, dock behavior, Performance-mode cost, privacy notes, background services, and lifecycle hooks, then compose with the shared milXdy runtime instead of patching the extension root directly.
-
-This will take more refactoring than a simple folder move. Many apps need the same expensive substrate: X/Twitter timeline scanning, profile/user detection, route handling, media detection, shared visual effects, overlay panels, storage, background fetches, and diagnostics. Those systems need to remain shared so apps can be powerful without multiplying observers, network queues, DOM writes, and visual-effect layers.
-
-Near-term platform work after `0.2.0` should therefore focus on:
-
-- extracting default apps behind cleaner package boundaries while keeping shared scanners and effects centralized
-- defining the apps folder layout and package manifest shape
-- stabilizing lifecycle hooks for app boot, enable, disable, route changes, surface delivery, overlay open/close, and dispose
-- expanding the app runtime beyond X/Twitter so site-aware apps can run on RemiliaNET, Miladychan, Remilia Wiki, and other related hosts with explicit permissions and privacy disclosure
-- adding review rules for host permissions, background services, storage keys, privacy labels, and performance cost
-- keeping Apps Hub disclosure tied to manifest metadata so users understand what each app loads, stores, and fetches
-- deciding how community apps are installed, updated, verified, disabled, and removed
-
-Developers can begin designing against the `0.2.0` concepts now, but external install support and stable third-party compatibility are still future work.
-
-## Shipped: 0.2.2 - Prepared App SDK Update
+## Released: 0.2.2 - Prepared App SDK Update
 
 Theme: make first-party apps easier to understand, configure, package, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, local package groundwork, filesystem layout, and first-party lifecycle compliance.
 
@@ -122,20 +34,34 @@ Theme: make first-party apps easier to understand, configure, package, and maint
   - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
   - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
 
-## Planned: 0.2.3 - App Runtime And Distribution Prep
+## Release Candidate: 0.2.3 - Reliability And Recovery
 
-Theme: continue the app-platform split after Apps and Features cleanup by hardening runtime behavior, local package follow-through, and distribution groundwork.
+Theme: make the prepared app platform resilient across lifecycle failures, slow or stale network work, authenticated RemiliaNET features, X interaction hot paths, and accessibility-sensitive UI.
 
-- Harden app runtime behavior beyond the first Apps and Features pass.
-  - expand app runtime expectations across RemiliaNET, Miladychan, Remilia Wiki, and related hosts where permissions and privacy disclosure are explicit
-  - keep site-aware app behavior tied to manifest metadata, lifecycle hooks, background services, and shared diagnostics
-- Continue local app-package and distribution follow-through.
-  - evaluate package signatures, marketplace discovery, normal-user install/update UI, and starter-kit polish after the 0.2.2 reviewed custom-build groundwork
-  - keep marketplace, submission, and browser-distribution prep separate from the shipped 0.2.2 scope
-  - evaluate Safari desktop WebExtension support if it remains aligned with the release scope
-- Keep the former RemiNet Sharing work in Composer Kit.
-  - the X Messages RemiNet pseudo chat entry shipped in 0.2.0
-  - direct Tweet PNG upload to RemiNet and granular Tweet PNG metadata controls now belong with 0.2.4 reviewed sharing/composer media work
+- Complete the 43-finding reliability and accessibility remediation pass.
+  - isolate app lifecycle, surface-delivery, and idle-task failures so one app cannot strand shared cleanup or queued work
+  - make startup, network, storage, worker, speech, and local-file workflows cancelable and recoverable
+  - restore reversible teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan
+- Harden RemiliaNET recovery and actions.
+  - return Beetol Hunt results before background state reconciliation and preserve the final reward before cooldown
+  - bound Chat authentication and WebSocket opening, reuse recent valid authentication, and make logout authoritative over cached or in-flight work
+  - show RemiStats poke controls only after confirming the visible account is a RemiliaNET identity
+- Remove interaction and browsing hot paths.
+  - preserve X's native Like feedback and use compositor-friendly Maxxer feedback
+  - replace mutation-driven button rescans with a capped visible-page check
+  - replace the root relational dock selector with a static left-rail safe area
+- Improve app surfaces and accessibility.
+  - add rail overflow direction indicators and compact one-row rail ordering controls
+  - group Root Visual controls without changing stored theme/profile-pack shape
+  - open supported Wiki tabs and collapsed sections before read-aloud highlights them
+  - improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior
+  - retain the Firefox/Waterfox, browser-specific update, fullscreen DM media, and Tweet PNG fixes prepared after `0.2.2`
+
+Publication remains gated on the final automated release gate plus authenticated Chromium and Firefox/Waterfox QA documented in [the 0.2.3 checklist](QA_0.2.3.md).
+
+## Coming Platform Direction: Composable App/Mod System
+
+The long-term goal remains a reviewed composable app system where packages declare surfaces, permissions, assets, settings, privacy notes, performance cost, background services, and lifecycle hooks while sharing milXdy's scanners, schedulers, overlays, and network infrastructure. External installation and stable third-party compatibility remain future work.
 
 ## Planned: 0.2.4 - Composer Kit
 
@@ -205,6 +131,10 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - use X/Twitter's existing follow graph to bootstrap friend discovery and recommendations
   - keep graph-derived behavior opt-in, explainable, and privacy-conscious
   - distinguish local-only possibilities from anything requiring an external service
+- RemiNet friend affordances on X profiles.
+  - show whether the viewed profile is already a RemiNet friend when the identity can be resolved
+  - offer an explicit add-friend action only after RemiNet endpoint and browser-session behavior are confirmed
+  - keep RemiNet friendship visually distinct from native X following and avoid automatic relationship changes
 
 ## Planned: 0.2.7 - Activity Arcade
 
@@ -239,6 +169,7 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - connect board-inspired stations to a music-oriented Miladychan board if upstream data supports it, including followed/selected-user filtering where privacy and identity boundaries are clear
 - Music discovery and fallback research.
   - add legitimate, user-authorized discovery and fallback paths for missing local music
+  - provide a lightweight public-domain/ad-free source path with preselected links or collections users can review before importing locally
   - keep local library playback as the baseline
   - avoid automatic file sharing, scraping, downloading, or transmitting audio files
 - Books and reading.

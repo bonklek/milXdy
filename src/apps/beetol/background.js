@@ -6,8 +6,6 @@ import {
   clearRemiliaAuth,
   clearStoredRemiliaAuth,
   isRemiliaDisconnected,
-  allowRemiliaSessionAuth,
-  setRemiliaAuthCookie,
   adoptRemiliaBrowserSession,
   migrateRemiliaAuth,
   refreshRemiliaBrowserSessionTab,
@@ -89,7 +87,6 @@ async function remiliaFetch(method, path, body, retry = true) {
   const prepared = await prepareRemiliaAuth(AUTH_SESSION_PROBE_PATH);
   const accessToken = prepared.token;
   if (!accessToken) return { ok: false, authRequired: true };
-  await setRemiliaAuthCookie(accessToken);
 
   const result = await remiliaRequest(method, path, body, {
     credentials: 'include',
@@ -155,10 +152,9 @@ async function remiliaSessionFetch(method, path, body) {
 async function remiliaAuthedFetch(method, path, body, retry = true) {
   const tokenResult = await remiliaFetch(method, path, body, retry);
   if (tokenResult.ok) return tokenResult;
-  if (!tokenResult.authRequired) {
-    const sessionResult = await remiliaSessionFetch(method, path, body);
-    return sessionResult.ok ? sessionResult : tokenResult;
-  }
+  // A failed mutation may already have reached the server. Only retry using
+  // browser-session auth when the token path definitively rejected auth.
+  if (!tokenResult.authRequired) return tokenResult;
   return remiliaSessionFetch(method, path, body);
 }
 
@@ -175,25 +171,30 @@ async function getState() {
 
 async function runAction(action) {
   if (!ACTIONS.has(action)) return { ok: false, error: 'UNKNOWN_ACTION' };
-  const before = await remiliaAuthedFetch('GET', '/api/beetle/user');
-  const inventoryBefore = before.ok ? before.data?.inventory || {} : {};
+  // Do not surround the mutation with two state reads. The shared runtime
+  // deadline applies to the whole message handler, and a successful action
+  // used to time out while waiting for the trailing GET. Use the last known
+  // snapshot for best-effort reward labels and let the content panel reconcile
+  // state in a separate, non-blocking request after it receives this result.
+  const stored = await getStored({ lastUser: null });
+  const inventoryBefore = stored.lastUser?.inventory || {};
   const result = await remiliaAuthedFetch('POST', `/api/beetle/action/${action}`, {});
 
   if (!result.ok) return result;
   const cooldownMs = extractActionCooldownMs(result.data, action);
+  const responseUser = result.data?.user || null;
   if (result.data?.success === false) {
-    const after = await getState();
     return {
       ok: true,
       actionResult: result.data,
       cooldownMs,
-      user: after.ok ? after.user : null,
-      fetchedAt: after.ok ? after.fetchedAt : Date.now(),
+      user: responseUser,
+      fetchedAt: Date.now(),
+      needsRefresh: true,
     };
   }
 
-  const after = await getState();
-  const inventoryAfter = after.ok ? after.user?.inventory || {} : {};
+  const inventoryAfter = responseUser?.inventory || result.data?.inventory || {};
   const gained = Object.entries(inventoryAfter)
     .map(([key, qty]) => [key, qty - (inventoryBefore[key] || 0)])
     .filter(([, diff]) => diff > 0)
@@ -203,9 +204,10 @@ async function runAction(action) {
     ok: true,
     actionResult: result.data,
     cooldownMs,
-    user: after.ok ? after.user : null,
-    fetchedAt: after.ok ? after.fetchedAt : Date.now(),
+    user: responseUser,
+    fetchedAt: Date.now(),
     gained,
+    needsRefresh: true,
   };
 }
 
@@ -443,7 +445,6 @@ async function remiliaPokeFetchWithPrepared(username, prepared) {
   const accessToken = prepared?.token || '';
   if (!accessToken && !prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
 
-  if (accessToken) await setRemiliaAuthCookie(accessToken);
   const attempts = [
     { authMethod: 'cookie', credentials: 'include' },
     ...(accessToken ? [
@@ -686,7 +687,6 @@ async function handleBeetolMessage(message, sender) {
     return getAuthStatus();
   }
   if (message?.type === 'beetol:sessionStatus') {
-    await allowRemiliaSessionAuth();
     const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
     return {
       ok: true,

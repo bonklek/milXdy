@@ -23,6 +23,7 @@ const userDownloadAssetDirs = ["wiki-helper"];
 const nonWebAccessibleAssetDirs = new Set(userDownloadAssetDirs);
 const outDir = localAppPlan?.outputDir ?? (buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`);
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const registryApps = localAppPlan?.apps ?? JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const firstPartyApps = registryApps;
 const sourceBuiltApps = firstPartyApps.filter((app) => app.entryName && app.entryPoint);
@@ -97,7 +98,7 @@ const common = {
   define: {
     MILXDY_BUILD_PROFILE: JSON.stringify(buildProfile),
     MILXDY_BUILD_TARGET: JSON.stringify(target),
-    MILXDY_VERSION: JSON.stringify(packageJson.version),
+    MILXDY_VERSION: JSON.stringify(extensionVersion),
   },
   plugins: [profileRegistryPlugin()],
 };
@@ -456,6 +457,9 @@ async function writeManifest() {
             "websiteContent",
           ],
         },
+        strict_min_version: "140.0",
+      },
+      gecko_android: {
         strict_min_version: "142.0",
       },
     };

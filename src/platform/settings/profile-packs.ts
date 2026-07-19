@@ -1,5 +1,6 @@
 import { normalizePerformanceMode, type PerformanceMode } from "./performance-mode";
 import {
+  VISUAL_THEME_CONTROL_GROUPS,
   normalizeReskinProfile,
   normalizeVisualTheme,
   type ReskinProfile,
@@ -154,6 +155,7 @@ export function profilePackPreviewLines(pack: MilxdyProfilePack): string[] {
   const lines = [`Import "${pack.name}"?`];
   if (pack.appearance?.visualTheme) {
     lines.push(`Appearance: ${pack.appearance.visualTheme.name}`);
+    lines.push(`Fine controls: ${VISUAL_THEME_CONTROL_GROUPS.map((group) => group.label).join(", ")}.`);
   } else if (pack.appearance?.reskinProfile) {
     lines.push(`Appearance profile: ${pack.appearance.reskinProfile}`);
   }

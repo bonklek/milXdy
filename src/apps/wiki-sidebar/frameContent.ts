@@ -66,6 +66,14 @@ const READ_BUTTON_ID = "milxdy-wiki-read-aloud";
 const READ_BUTTON_SLOT_ID = "milxdy-wiki-read-aloud-slot";
 const STYLE_ID = "milxdy-wiki-post-reading-style";
 const THEME_STYLE_ID = "milxdy-wiki-sidebar-theme-style";
+const EXPANDABLE_WIKI_CONTAINER_SELECTOR = [
+  "details",
+  '[role="tabpanel"]',
+  ".tabber__section",
+  ".tabbertab",
+  ".mw-collapsible-content",
+  ".collapse",
+].join(", ");
 let activeArticle: ActiveArticle | null = null;
 let smoothVisualIndex = 0;
 let smoothAnimationFrame: number | null = null;
@@ -242,7 +250,6 @@ function extractReadableArticle(): ActiveArticle | null {
 
 function isReadableBlock(element: HTMLElement): boolean {
   if (!element.isConnected) return false;
-  if (element.hidden || element.getAttribute("aria-hidden") === "true") return false;
   if (element.closest([
     "script",
     "style",
@@ -266,7 +273,9 @@ function isReadableBlock(element: HTMLElement): boolean {
   const text = normalizeBlockText(element.innerText || element.textContent || "");
   if (text.length < 2) return false;
   const rect = element.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  if (!element.hidden && element.getAttribute("aria-hidden") !== "true" && rect.width > 0 && rect.height > 0) return true;
+  const container = element.closest<HTMLElement>(EXPANDABLE_WIKI_CONTAINER_SELECTOR);
+  return Boolean(container && wikiContainerIsHidden(container) && wikiContainerController(container));
 }
 
 function normalizeBlockText(value: string): string {
@@ -300,6 +309,7 @@ function applyHighlightBoundary(message: WikiHighlightMessage): void {
   const charIndex = message.charIndex;
   const range = activeArticle.ranges.find((item) => charIndex >= item.start && charIndex <= item.end);
   if (!range) return;
+  revealWikiReadingRange(range.element);
   for (const item of activeArticle.ranges) {
     if (item !== range) clearBlockHighlight(item.element);
   }
@@ -330,6 +340,94 @@ function applyHighlightBoundary(message: WikiHighlightMessage): void {
   paintSmoothTokens(tokens, relativeIndex, range.text.length, rangeChanged, message.charLength ?? null, message.boundaryElapsedTime ?? null);
   lastRelativeIndex = relativeIndex;
   followReadingLine(findNearestToken(tokens, relativeIndex), message.autoScroll !== false);
+}
+
+function revealWikiReadingRange(element: HTMLElement): void {
+  const containers = ancestorExpandableWikiContainers(element);
+  for (const container of containers.reverse()) {
+    if (container instanceof HTMLDetailsElement) {
+      container.open = true;
+      continue;
+    }
+    if (!wikiContainerIsHidden(container)) continue;
+    wikiContainerController(container)?.click();
+  }
+}
+
+function ancestorExpandableWikiContainers(element: HTMLElement): HTMLElement[] {
+  const containers: HTMLElement[] = [];
+  let current: HTMLElement | null = element;
+  while (current && current !== document.body) {
+    if (current.matches(EXPANDABLE_WIKI_CONTAINER_SELECTOR)) containers.push(current);
+    current = current.parentElement;
+  }
+  return containers;
+}
+
+function wikiContainerIsHidden(container: HTMLElement): boolean {
+  if (container instanceof HTMLDetailsElement) return !container.open;
+  if (container.hidden || container.getAttribute("aria-hidden") === "true") return true;
+  if (container.classList.contains("mw-collapsed")) return true;
+  if (container.classList.contains("collapse") && !container.classList.contains("show")) return true;
+  const style = getComputedStyle(container);
+  return style.display === "none" || style.visibility === "hidden" || container.getClientRects().length === 0;
+}
+
+function wikiContainerController(container: HTMLElement): HTMLElement | null {
+  if (container instanceof HTMLDetailsElement) return container.querySelector<HTMLElement>(":scope > summary") || container;
+  const collapsible = container.closest<HTMLElement>(".mw-collapsible");
+  if (collapsible) {
+    const toggle = collapsible.querySelector<HTMLElement>(":scope > .mw-collapsible-toggle, .mw-collapsible-toggle");
+    if (toggle && safeWikiControllerElement(toggle)) return toggle;
+  }
+  if (container.id) {
+    const id = container.id;
+    const hash = `#${id}`;
+    const controller = Array.from(document.querySelectorAll<HTMLElement>(
+      '[aria-controls], [data-target], [data-bs-target], a[href^="#"]',
+    )).find((candidate) => (
+      safeWikiControllerCandidate(candidate, id, hash) && (
+        (candidate.getAttribute("aria-controls") || "").split(/\s+/).includes(id)
+        || candidate.getAttribute("data-target") === hash
+        || candidate.getAttribute("data-bs-target") === hash
+        || candidate.getAttribute("href") === hash
+      )
+    ));
+    if (controller) return controller;
+  }
+  const labelledBy = container.getAttribute("aria-labelledby");
+  if (labelledBy) {
+    const label = document.getElementById(labelledBy);
+    if (label instanceof HTMLElement && safeWikiControllerElement(label)) return label;
+  }
+  if (container.classList.contains("tabbertab")) {
+    const tabber = container.closest<HTMLElement>(".tabberlive, .tabber");
+    const panels = tabber ? Array.from(tabber.querySelectorAll<HTMLElement>(":scope > .tabbertab, :scope > .tabber__section")) : [];
+    const index = panels.indexOf(container);
+    const candidate = index >= 0 ? tabber?.querySelectorAll<HTMLElement>(".tabbernav a, .tabber__tabs [role=tab]")[index] : null;
+    if (candidate && safeWikiControllerElement(candidate)) return candidate;
+  }
+  return null;
+}
+
+function safeWikiControllerCandidate(candidate: HTMLElement, id: string, hash: string): boolean {
+  if (!safeWikiControllerElement(candidate)) return false;
+  if (candidate instanceof HTMLAnchorElement) {
+    if (candidate.getAttribute("href") !== hash) return false;
+    return (candidate.getAttribute("aria-controls") || "").split(/\s+/).includes(id)
+      || candidate.matches('[role="tab"], .tabber__tab, .tabbernav a')
+      || candidate.getAttribute("data-target") === hash
+      || candidate.getAttribute("data-bs-target") === hash;
+  }
+  return true;
+}
+
+function safeWikiControllerElement(candidate: HTMLElement): boolean {
+  if (candidate instanceof HTMLAnchorElement) {
+    const href = candidate.getAttribute("href");
+    return Boolean(href?.startsWith("#") && href.length > 1);
+  }
+  return candidate.matches('button, [role="tab"], [role="button"], .tabber__tab, .mw-collapsible-toggle');
 }
 
 function clearReadHighlight(): void {
@@ -790,15 +888,16 @@ function injectPostReadingStyles(): void {
   style.textContent = `
     .milxdy-wiki-read-aloud,
     .milxdy-wiki-read-aloud-heading-slot .milxdy-wiki-read-aloud {
-      width: 34px;
-      height: 34px;
-      border: 0;
-      border-radius: 999px;
+      width: 30px;
+      height: 30px;
+      min-width: 30px;
+      border: 1px solid rgba(32, 35, 54, 0.22);
+      border-radius: 7px;
       display: inline-flex;
       align-items: center;
       justify-content: center;
       color: #54595d;
-      background: transparent;
+      background: rgba(255, 255, 255, 0.72);
       cursor: pointer;
       padding: 0;
       vertical-align: middle;
@@ -813,6 +912,24 @@ function injectPostReadingStyles(): void {
     .milxdy-wiki-read-aloud:focus-visible {
       color: rgb(199, 102, 147);
       background: rgba(199, 102, 147, 0.12);
+    }
+    .milxdy-wiki-read-aloud:active {
+      transform: translate(1px, 1px);
+      box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
+    }
+    .milxdy-wiki-read-aloud:focus-visible {
+      outline: 2px solid rgb(199, 102, 147);
+      outline-offset: 2px;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud {
+      border-color: #484e69 !important;
+      background: #222533 !important;
+      color: #eef0ff !important;
+    }
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:hover,
+    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:focus-visible {
+      border-color: #9d78df !important;
+      background: #342a4a !important;
     }
     .milxdy-wiki-read-aloud svg {
       width: 18px;
@@ -865,6 +982,7 @@ function handleWikiFrameClick(event: MouseEvent): void {
   const target = event.target instanceof Element ? event.target : null;
   const link = target?.closest<HTMLAnchorElement>("a[href]");
   if (!link) return;
+  if (isWikiDisclosureControl(link)) return;
 
   const url = parseUrl(link.href);
   if (!url) return;
@@ -878,6 +996,23 @@ function handleWikiFrameClick(event: MouseEvent): void {
   event.preventDefault();
   event.stopPropagation();
   void openOutsideFrame(url.href);
+}
+
+function isWikiDisclosureControl(link: HTMLAnchorElement): boolean {
+  const hashTarget = link.getAttribute("href");
+  if (!hashTarget?.startsWith("#") || hashTarget.length < 2) return false;
+  if (link.closest(".mw-collapsible-toggle")) return true;
+  let targetId = hashTarget.slice(1);
+  try {
+    targetId = decodeURIComponent(targetId);
+  } catch {
+    return false;
+  }
+  const controlledIds = (link.getAttribute("aria-controls") || "").split(/\s+/).filter(Boolean);
+  if (controlledIds.some((id) => document.getElementById(id)?.matches(EXPANDABLE_WIKI_CONTAINER_SELECTOR))) return true;
+  const target = document.getElementById(targetId);
+  if (target?.matches(EXPANDABLE_WIKI_CONTAINER_SELECTOR)) return true;
+  return Boolean(link.matches('[role="tab"], .tabber__tab') || link.closest(".tabbernav, .tabber__tabs"));
 }
 
 function reportCurrentFrameUrl(): void {

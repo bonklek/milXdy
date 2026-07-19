@@ -641,8 +641,17 @@
   color: #7d2222;
 }
 
+#beetol-message.beetol-done {
+  color: #b00020;
+  font-weight: 700;
+}
+
 #beetol-hunter-root[data-mode="dark"] #beetol-message.beetol-warn {
   color: #ffb4c1;
+}
+
+#beetol-hunter-root[data-mode="dark"] #beetol-message.beetol-done {
+  color: #ff6b7d;
 }
 
 .beetol-footer button {

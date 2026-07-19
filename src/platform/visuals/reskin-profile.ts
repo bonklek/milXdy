@@ -47,6 +47,100 @@ export type VisualThemeSettings = {
   tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
 };
 
+export type VisualThemeControlOwner = "root-visuals" | "app-chrome" | "tweet-png" | "reminet" | "maxxer";
+
+export type VisualThemeControlGroup = {
+  id: string;
+  label: string;
+  owner: VisualThemeControlOwner;
+  scope: "global-x" | "global-app-chrome" | "feature-mirror" | "app-mirror";
+  profilePackSafe: true;
+  settings: readonly (keyof VisualThemeSettings)[];
+};
+
+export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
+  {
+    id: "root-page-type",
+    label: "X page and typography",
+    owner: "root-visuals",
+    scope: "global-x",
+    profilePackSafe: true,
+    settings: ["profile", "tweetFont", "uiFont", "backgroundFade"],
+  },
+  {
+    id: "root-avatars-media",
+    label: "PFPs, media, and cards",
+    owner: "root-visuals",
+    scope: "global-x",
+    profilePackSafe: true,
+    settings: ["pfpShape", "pfpFeed", "pfpNotifications", "pfpChat", "squareMedia", "quoteMediaGap", "maxMediaHeight"],
+  },
+  {
+    id: "root-notifications",
+    label: "X notifications",
+    owner: "root-visuals",
+    scope: "global-x",
+    profilePackSafe: true,
+    settings: ["notificationUnreadTint"],
+  },
+  {
+    id: "root-navigation-actions",
+    label: "X navigation and actions",
+    owner: "root-visuals",
+    scope: "global-x",
+    profilePackSafe: true,
+    settings: [
+      "postButtonClickly",
+      "postSound",
+      "sidebarBevel",
+      "sidebarSound",
+      "newPostsPill",
+      "newPostsSound",
+    ],
+  },
+  {
+    id: "app-chrome",
+    label: "App chrome",
+    owner: "app-chrome",
+    scope: "global-app-chrome",
+    profilePackSafe: true,
+    settings: ["appWindowStyle", "appShadows"],
+  },
+  {
+    id: "tweet-png",
+    label: "Tweet PNG mirror",
+    owner: "tweet-png",
+    scope: "feature-mirror",
+    profilePackSafe: true,
+    settings: [
+      "tweetPngIncludeImages",
+      "tweetPngIncludeQuoteText",
+      "tweetPngIncludeQuoteImages",
+      "tweetPngShrinkTallImages",
+      "tweetPngIncludeDate",
+      "tweetPngIncludeStats",
+      "tweetPngBorder",
+      "tweetPngBorderPalette",
+    ],
+  },
+  {
+    id: "reminet-appearance",
+    label: "RemiStats and poke mirrors",
+    owner: "reminet",
+    scope: "feature-mirror",
+    profilePackSafe: true,
+    settings: ["remistatsBox", "incomingPokeGold", "pokePlacement", "reminetChatOverlay"],
+  },
+  {
+    id: "maxxer-visuals",
+    label: "Maxxer visual mirror",
+    owner: "maxxer",
+    scope: "app-mirror",
+    profilePackSafe: true,
+    settings: ["miladyOnly", "disableMaxxer", "disableSelfTracking", "maxxerIntensity", "maxxerSeparators", "maxxerShimmer"],
+  },
+] as const;
+
 export type SavedVisualTheme = {
   id: string;
   name: string;

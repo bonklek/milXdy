@@ -20,3 +20,5 @@ RemiStats adds RemiStats profile and user metrics to X/Twitter, including badges
 ## Notes
 
 RemiStats fetches profile and user data for visible handles from RemiStats and related Remilia services. Poke cooldowns are stored locally so state can survive a refresh, including fallback cooldowns when RemiliaNET does not return an explicit value.
+
+Poke controls appear only after the visible X/Twitter handle resolves to a confirmed RemiliaNET identity. Unknown, failed, and non-member lookups stay hidden while independent score or beetle information remains available when returned by the service.

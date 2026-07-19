@@ -16,6 +16,7 @@ export class SpeechController {
   private chunks: SpeechChunk[] = [];
   private index = 0;
   private generation = 0;
+  private pendingAbort: AbortController | null = null;
   private activeHasSyncedBoundaries = true;
   private state: SpeechState = {
     status: "idle",
@@ -176,9 +177,12 @@ export class SpeechController {
     const chunk = this.chunks[this.index];
     if (!chunk) return;
     const generation = ++this.generation;
+    const pendingAbort = new AbortController();
+    this.pendingAbort = pendingAbort;
     this.engine.speak({
       text: chunk.text,
       settings: this.settings,
+      signal: pendingAbort.signal,
       onBoundary: (event) => {
         if (generation !== this.generation) return;
         const charIndex = chunk.offset + event.charIndex;
@@ -200,6 +204,7 @@ export class SpeechController {
         this.setState("error", title, fullText, message);
       },
     }).then((session) => {
+      if (this.pendingAbort === pendingAbort) this.pendingAbort = null;
       if (generation !== this.generation) {
         session.stop();
         return;
@@ -211,6 +216,7 @@ export class SpeechController {
         session.pause();
       }
     }).catch((error) => {
+      if (this.pendingAbort === pendingAbort) this.pendingAbort = null;
       if (generation !== this.generation) return;
       const message = error instanceof Error ? error.message : "Speech playback failed.";
       this.setState("error", title, fullText, message);
@@ -219,6 +225,8 @@ export class SpeechController {
 
   private stopActiveSession(): void {
     this.generation += 1;
+    this.pendingAbort?.abort();
+    this.pendingAbort = null;
     this.session?.stop();
     this.session = null;
     this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
