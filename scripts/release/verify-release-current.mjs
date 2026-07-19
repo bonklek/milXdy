@@ -56,7 +56,10 @@ assert(!releases.includes("`verify:release:gates:020` is the canonical release r
 assert(changelog.includes("verify:release:gates") && changelog.includes("current release gate") && changelog.includes("Post-reading distribution"), "changelog must summarize the current release gate and Post-reading distribution coverage");
 assert(contributing.includes("npm run verify:release:gates"), "contributing docs must point release prep at the current release gate");
 assert(planning.includes(`next planned release is \`${packageJson.version}\``), "planning must identify the package version as the next planned release");
-assert(roadmap.includes(`Planned: ${packageJson.version}`), "roadmap must include the package version as a planned release");
+assert(
+  ["Planned", "Release Candidate", "Released"].some((status) => roadmap.includes(`${status}: ${packageJson.version}`)),
+  "roadmap must include the package version as planned, release candidate, or released",
+);
 assert(releaseNotes.includes(`# milXdy ${packageJson.version}`), "current release notes heading must match package version");
 assert(changelog.includes(`## ${packageJson.version}`), "changelog must include the package version heading");
 

@@ -18,7 +18,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
 - Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
 
-Status: in development.
+Status: release candidate. Automated release gates pass; authenticated Chromium and Firefox/Waterfox runtime QA remain before publication.
 
 ## 0.2.2
 
