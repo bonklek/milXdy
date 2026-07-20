@@ -96,7 +96,7 @@ export class SpeechController {
   speak(text: string, title: string): void {
     this.stopActiveSession();
     this.index = 0;
-    this.chunks = splitText(text);
+    this.chunks = splitSpeechText(text);
     this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
     if (this.chunks.length === 0) {
       this.setState("idle", title, text, null);
@@ -117,7 +117,7 @@ export class SpeechController {
     const trimOffset = text.slice(startAt).length - remaining.length;
     this.stopActiveSession();
     this.index = 0;
-    this.chunks = splitText(remaining, startAt + trimOffset);
+    this.chunks = splitSpeechText(remaining, startAt + trimOffset);
     this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
     this.setState(pauseAfterStart ? "paused" : "speaking", title, text, null, startAt + trimOffset, null);
     this.startCurrentChunk(title, text, pauseAfterStart);
@@ -262,13 +262,13 @@ export class SpeechController {
   }
 }
 
-function splitText(text: string, absoluteOffset = 0): SpeechChunk[] {
+export function splitSpeechText(text: string, absoluteOffset = 0): SpeechChunk[] {
   const normalized = text.trim();
   if (!normalized) return [];
   const leadingTrim = text.search(/\S/);
   const baseOffset = absoluteOffset + (leadingTrim >= 0 ? leadingTrim : 0);
-  const maxChunkLength = 1200;
-  const minBoundaryLength = 650;
+  const maxChunkLength = 220;
+  const minBoundaryLength = 80;
   if (normalized.length <= maxChunkLength) return [{ text: normalized, offset: baseOffset }];
 
   const chunks: SpeechChunk[] = [];

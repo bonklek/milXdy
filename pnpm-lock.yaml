@@ -11,9 +11,6 @@ importers:
       '@tesseract.js-data/eng':
         specifier: ^1.0.0
         version: 1.0.0
-      '@unimusic/chromaprint':
-        specifier: ^0.1.4
-        version: 0.1.4
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0
@@ -509,9 +506,6 @@ packages:
 
   '@types/qrcode@1.5.6':
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
-
-  '@unimusic/chromaprint@0.1.4':
-    resolution: {integrity: sha512-li+/NUjgvvPNEcWK1+72pxXT/vtfNpwWW2QNrh9+uccJ7tGT0Lnn0XCx9P+Sjnl9vJ2qa03dQYKV9w/i8o6Yww==}
 
   '@vitest/expect@4.1.9':
     resolution: {integrity: sha512-vl/rYsUKcBr3SnQn166+XR5ZQcgMx3DQhFWdfli/cWpLnLUmbxZvyrJZotLFUryib+LtArYMSTJ5RbQ57ZqrlA==}
@@ -2365,8 +2359,6 @@ snapshots:
   '@types/qrcode@1.5.6':
     dependencies:
       '@types/node': 24.13.2
-
-  '@unimusic/chromaprint@0.1.4': {}
 
   '@vitest/expect@4.1.9':
     dependencies:

@@ -11,13 +11,13 @@ import {
   ENS_REGISTRY_ADDRESS,
   GWEI_NAME_SERVICE_ADDRESS,
   REMINET_IDENTITY_CACHE_KEY,
-  REMINET_IDENTITY_CACHE_MAX_ENTRIES,
   REMINET_IDENTITY_CACHE_TTL_MS,
   addressFromEthCallResult,
   concatHex,
   contractForPfpProject,
   decodeAbiStringResult,
   emptyIdentityProfile,
+  emptyReminetIdentityCache,
   ensNameCallData,
   ensResolverCallData,
   extractGweiNameCandidates,
@@ -27,12 +27,16 @@ import {
   hexFromUtf8,
   identityCacheKeyForRemiliaUsername,
   identityCacheKeyForXHandle,
+  identityCacheEntry,
   isEthereumAddress,
   mergeIdentityProfile,
   normalizeRemiliaUsername,
   normalizeGweiName,
+  normalizeReminetIdentityCache,
   normalizeXHandle,
   ownerOfCallData,
+  pruneSharedIdentityCache,
+  rememberSharedIdentity,
   reverseEnsNameForAddress,
   type ReminetIdentityCache,
   type ReminetIdentityCacheEntry,
@@ -58,6 +62,7 @@ type ReminetIdentityMessage = {
   xHandle?: string;
   remiliaUsername?: string;
   force?: boolean;
+  maxAgeMs?: number;
 };
 
 type UpdateMessage = {
@@ -69,6 +74,9 @@ type FetchImageDataUrlMessage = {
   url: string;
 };
 
+const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
+let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
+
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
   url: string;
@@ -77,12 +85,6 @@ type MiladychanFetchJsonMessage = {
 type MusicFetchJsonMessage = {
   type: "music:fetchJson";
   url: string;
-};
-
-type MusicPostFormMessage = {
-  type: "music:postForm";
-  url: string;
-  form: Record<string, string>;
 };
 
 type MusicFetchImageDataUrlMessage = {
@@ -124,9 +126,6 @@ type WikiSidebarReadAloudRequestMessage = {
 
 const MUSICBRAINZ_JSON_RULES: readonly UrlAllowRule[] = [
   { origin: "https://musicbrainz.org", pathPrefix: "/ws/2/" },
-];
-const ACOUSTID_FORM_RULES: readonly UrlAllowRule[] = [
-  { origin: "https://api.acoustid.org", pathPattern: /^\/v2\/lookup$/ },
 ];
 const MILADYCHAN_JSON_RULES: readonly UrlAllowRule[] = [
   { origin: "https://boards.miladychan.org", pathPrefix: "/json/" },
@@ -174,11 +173,6 @@ setupBackgroundMessageRouter([
     type: "music:fetchJson",
     matches: isMusicFetchJsonMessage,
     handle: (message, sender) => fetchMusicJsonForSender(message.url, sender),
-  },
-  {
-    type: "music:postForm",
-    matches: isMusicPostFormMessage,
-    handle: (message, sender) => postMusicFormForSender(message.url, message.form, sender),
   },
   {
     type: "music:fetchImageDataUrl",
@@ -263,14 +257,6 @@ function isMusicFetchJsonMessage(message: unknown): message is MusicFetchJsonMes
   return record.type === "music:fetchJson" && typeof record.url === "string";
 }
 
-function isMusicPostFormMessage(message: unknown): message is MusicPostFormMessage {
-  if (!message || typeof message !== "object") return false;
-  const record = message as Record<string, unknown>;
-  if (record.type !== "music:postForm" || typeof record.url !== "string") return false;
-  if (!record.form || typeof record.form !== "object" || Array.isArray(record.form)) return false;
-  return Object.values(record.form).every((value) => typeof value === "string");
-}
-
 function isMusicFetchImageDataUrlMessage(message: unknown): message is MusicFetchImageDataUrlMessage {
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
@@ -336,7 +322,7 @@ async function fetchRemiStatsUser(handleValue: string, force = false): Promise<R
       profileFromRemiStatsResponse(data, handle),
       "remistats",
     );
-    await rememberIdentityProfile(cache, profile, { xHandles: [handle] });
+    await rememberIdentityProfile(profile, { xHandles: [handle] });
     return { ok: true, cached: false, data };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
@@ -367,7 +353,7 @@ function remiStatsCacheTtlForMode(mode: PerformanceMode): number {
 
 function cachedRemiStatsResponse(cache: ReminetIdentityCache, handle: string, ttlMs: number): Record<string, unknown> | null {
   if (ttlMs <= 0) return null;
-  const entry = cache[identityCacheKeyForXHandle(handle)];
+  const entry = identityCacheEntry(cache, identityCacheKeyForXHandle(handle));
   if (!entry?.profile || typeof entry.cachedAt !== "number" || Date.now() - entry.cachedAt >= ttlMs) return null;
   if (entry.profile.remiStatsScore === null && entry.profile.beetleCount === null) return null;
   return {
@@ -389,12 +375,16 @@ async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<
     xHandle ? identityCacheKeyForXHandle(xHandle) : "",
     remiliaUsername ? identityCacheKeyForRemiliaUsername(remiliaUsername) : "",
   ].filter(Boolean);
-  const cached = lookupKeys.map((key) => cache[key]).find((entry) => freshIdentityEntry(entry));
+  const maxAgeMs = normalizeIdentityMaxAge(message.maxAgeMs);
+  const cached = lookupKeys
+    .map((key) => identityCacheEntry(cache, key))
+    .find((entry) => freshIdentityEntry(entry, maxAgeMs, Boolean(remiliaUsername)));
   if (cached && message.force !== true && hasCurrentIdentitySchema(cached.profile)) {
     return { ok: true, cached: true, profile: cached.profile };
   }
 
   let profile = cached?.profile || emptyIdentityProfile();
+  const warnings: string[] = [];
   if (xHandle) profile = mergeIdentityProfile(profile, { xHandle }, "input");
   if (remiliaUsername) profile = mergeIdentityProfile(profile, { remiliaUsername }, "input");
 
@@ -408,16 +398,36 @@ async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<
   }
 
   const resolvedUsername = normalizeRemiliaUsername(profile.remiliaUsername || remiliaUsername);
+  let publicProfileCachedAt: number | undefined;
   if (resolvedUsername) {
     const remiliaProfile = await fetchRemiliaPublicProfile(resolvedUsername);
-    if (remiliaProfile) profile = mergeIdentityProfile(profile, profileFromRemiliaResponse(remiliaProfile, resolvedUsername), "remilia.net");
+    if (remiliaProfile) {
+      profile = mergeIdentityProfile(profile, profileFromRemiliaResponse(remiliaProfile, resolvedUsername), "remilia.net");
+      publicProfileCachedAt = Date.now();
+    } else {
+      warnings.push("REMILIA_PROFILE_UNAVAILABLE");
+    }
+  }
+
+  const resolvedXHandle = normalizeXHandle(profile.xHandle);
+  if (!xHandle && resolvedXHandle) {
+    const remiStatsResponse = await fetchRemiStatsUser(resolvedXHandle, message.force === true);
+    if (remiStatsResponse.ok) {
+      profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, resolvedXHandle), "remistats");
+    }
   }
 
   profile = await attachNftOwner(profile);
   profile = await attachEnsName(profile);
   profile = await attachGweiName(profile);
-  await rememberIdentityProfile(cache, profile);
-  return { ok: true, cached: false, profile };
+  await rememberIdentityProfile(profile, { publicProfileCachedAt });
+  return { ok: true, cached: false, partial: warnings.length > 0, warnings, profile };
+}
+
+function normalizeIdentityMaxAge(value: unknown): number {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return REMINET_IDENTITY_CACHE_TTL_MS;
+  return Math.max(0, Math.min(7 * 24 * 60 * 60 * 1000, numeric));
 }
 
 async function fetchRemiliaPublicProfile(username: string): Promise<unknown | null> {
@@ -666,34 +676,80 @@ function handleFromUrl(value: string): string {
 }
 
 async function loadIdentityCache(): Promise<ReminetIdentityCache> {
-  const stored = await chrome.storage.local.get({ [REMINET_IDENTITY_CACHE_KEY]: {} }).catch(() => ({})) as Record<string, unknown>;
-  const raw = stored[REMINET_IDENTITY_CACHE_KEY];
-  return raw && typeof raw === "object" && !Array.isArray(raw) ? raw as ReminetIdentityCache : {};
+  const stored = await chrome.storage.local.get({
+    [REMINET_IDENTITY_CACHE_KEY]: emptyReminetIdentityCache(),
+    [LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY]: null,
+  }).catch(() => ({})) as Record<string, unknown>;
+  const cache = normalizeReminetIdentityCache(stored[REMINET_IDENTITY_CACHE_KEY]);
+  const legacyChatCache = objectValue(stored[LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY]);
+  if (!Object.keys(legacyChatCache).length) return cache;
+
+  const migrated = await mutateSharedIdentityCache((latest) => {
+    for (const [handle, candidate] of Object.entries(legacyChatCache)) {
+      const entry = objectValue(candidate);
+      const user = objectValue(entry.user);
+      const cachedAt = numberValue(entry.cachedAt);
+      if (!Object.keys(user).length || cachedAt === null) continue;
+      const profile = mergeIdentityProfile(
+        emptyIdentityProfile(),
+        profileFromRemiliaResponse({ user }, handle),
+        "reminet-chat:migrated",
+      );
+      rememberSharedIdentity(latest, profile, {
+        cachedAt,
+        publicProfileCachedAt: cachedAt,
+        aliases: [
+          identityCacheKeyForRemiliaUsername(handle),
+          profile.xHandle ? identityCacheKeyForXHandle(profile.xHandle) : "",
+        ],
+      });
+    }
+  });
+  await chrome.storage.local.remove(LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY);
+  return migrated;
 }
 
 async function rememberIdentityProfile(
-  cache: ReminetIdentityCache,
   profile: ReminetIdentityProfile,
-  aliases: { xHandles?: string[]; remiliaUsernames?: string[] } = {},
+  aliases: { xHandles?: string[]; remiliaUsernames?: string[]; publicProfileCachedAt?: number } = {},
 ): Promise<void> {
-  const entry = { profile, cachedAt: Date.now() };
   const xHandles = new Set([normalizeXHandle(profile.xHandle), ...(aliases.xHandles || []).map(normalizeXHandle)].filter(Boolean));
   const remiliaUsernames = new Set([normalizeRemiliaUsername(profile.remiliaUsername), ...(aliases.remiliaUsernames || []).map(normalizeRemiliaUsername)].filter(Boolean));
-  for (const xHandle of xHandles) cache[identityCacheKeyForXHandle(xHandle)] = entry;
-  for (const remiliaUsername of remiliaUsernames) cache[identityCacheKeyForRemiliaUsername(remiliaUsername)] = entry;
-  await chrome.storage.local.set({ [REMINET_IDENTITY_CACHE_KEY]: pruneIdentityCache(cache) }).catch(() => undefined);
+  await mutateSharedIdentityCache((latest) => {
+    rememberSharedIdentity(latest, profile, {
+      publicProfileCachedAt: aliases.publicProfileCachedAt,
+      aliases: [
+        ...Array.from(xHandles, identityCacheKeyForXHandle),
+        ...Array.from(remiliaUsernames, identityCacheKeyForRemiliaUsername),
+      ],
+    });
+  });
 }
 
-function pruneIdentityCache(cache: ReminetIdentityCache): ReminetIdentityCache {
-  const entries = Object.entries(cache)
-    .filter(([, entry]) => entry && typeof entry.cachedAt === "number" && Boolean(entry.profile))
-    .sort((left, right) => right[1].cachedAt - left[1].cachedAt)
-    .slice(0, REMINET_IDENTITY_CACHE_MAX_ENTRIES);
-  return Object.fromEntries(entries);
+async function mutateSharedIdentityCache(mutator: (cache: ReminetIdentityCache) => void): Promise<ReminetIdentityCache> {
+  let result = emptyReminetIdentityCache();
+  const write = sharedIdentityCacheWriteQueue.then(async () => {
+    const stored = await chrome.storage.local.get({ [REMINET_IDENTITY_CACHE_KEY]: emptyReminetIdentityCache() });
+    const latest = normalizeReminetIdentityCache(stored[REMINET_IDENTITY_CACHE_KEY]);
+    mutator(latest);
+    result = pruneSharedIdentityCache(latest);
+    await chrome.storage.local.set({ [REMINET_IDENTITY_CACHE_KEY]: result });
+  });
+  sharedIdentityCacheWriteQueue = write.catch((error) => {
+    console.warn("Shared RemiNET identity cache write failed:", error);
+  });
+  await write;
+  return result;
 }
 
-function freshIdentityEntry(entry: ReminetIdentityCacheEntry | undefined): entry is ReminetIdentityCacheEntry {
-  return Boolean(entry?.profile && typeof entry.cachedAt === "number" && Date.now() - entry.cachedAt < REMINET_IDENTITY_CACHE_TTL_MS);
+function freshIdentityEntry(
+  entry: ReminetIdentityCacheEntry | undefined,
+  maxAgeMs = REMINET_IDENTITY_CACHE_TTL_MS,
+  requirePublicProfile = false,
+): entry is ReminetIdentityCacheEntry {
+  if (!entry?.profile) return false;
+  const timestamp = requirePublicProfile ? entry.publicProfileCachedAt : entry.cachedAt;
+  return typeof timestamp === "number" && Date.now() - timestamp < maxAgeMs;
 }
 
 function hasCurrentIdentitySchema(profile: ReminetIdentityProfile): boolean {
@@ -758,35 +814,6 @@ async function fetchMusicImageDataUrl(url: string): Promise<Record<string, unkno
 async function fetchMusicImageDataUrlForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
   return fetchMusicImageDataUrl(url);
-}
-
-async function postMusicForm(url: string, form: Record<string, string>): Promise<Record<string, unknown>> {
-  const parsed = parseAllowedUrl(url, ACOUSTID_FORM_RULES);
-  if (!parsed) {
-    return { ok: false, status: 0, error: "Unsupported music lookup URL." };
-  }
-
-  try {
-    const response = await budgetedFetch(parsed.href, {
-      method: "POST",
-      credentials: "omit",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-        "User-Agent": "milXdy/0.1.5 (https://github.com/bonklek/milXdy)",
-      },
-      body: new URLSearchParams(form),
-    }, "music:postForm");
-    if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
-    return { ok: true, status: response.status, data: await response.json() };
-  } catch (error) {
-    return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-async function postMusicFormForSender(url: string, form: Record<string, string>, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
-  return postMusicForm(url, form);
 }
 
 async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>> {

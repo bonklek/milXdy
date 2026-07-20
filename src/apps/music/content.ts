@@ -1,5 +1,6 @@
 import QRCode from "qrcode";
 import jsQR from "jsqr";
+import { ARTWORK_METADATA_VERSION, shouldReadEmbeddedArtwork } from "./artwork-cache";
 import {
   createOverlayAppFrame,
   type OverlayAppFrame,
@@ -25,7 +26,6 @@ const WIDTH_KEY = "milxdy.music.width";
 const HEIGHT_KEY = "milxdy.music.height";
 const TOP_KEY = "milxdy.music.top";
 const LIBRARY_MINIMIZED_KEY = "milxdy.music.libraryMinimized";
-const ACOUSTID_CLIENT_KEY = "milxdy.music.acoustIdClientKey";
 const AUTO_ACCEPT_ISRC_KEY = "milxdy.music.autoAcceptHighConfidenceIsrc";
 const VOLUME_KEY = "milxdy.music.volume";
 const DB_NAME = "milxdy-music";
@@ -48,7 +48,7 @@ let lastSyncedRowPlaybackTrackId: string | null = null;
 type MusicTab = "library" | "queue" | "playlists" | "radio" | "settings";
 type MusicSortKey = "artist" | "title" | "album" | "added";
 type RepeatMode = "off" | "one" | "all";
-type EnrichmentStatus = "pending" | "fingerprinting" | "lookup" | "review" | "matched" | "unresolved" | "error";
+type EnrichmentStatus = "pending" | "review" | "matched" | "unresolved" | "error";
 const DEFAULT_REPEAT_MODE: RepeatMode = "all";
 
 type MusicFolder = {
@@ -64,9 +64,8 @@ type MusicFolder = {
 type IsrcCandidate = {
   isrc: string;
   confidence: number;
-  sources: Array<"embedded" | "acoustid" | "musicbrainz" | "manual">;
+  sources: Array<"embedded" | "musicbrainz" | "manual">;
   musicBrainzRecordingId?: string;
-  acoustId?: string;
   title?: string;
   artist?: string;
   album?: string;
@@ -78,8 +77,6 @@ type IsrcEnrichmentState = {
   attempts: number;
   lastAttemptAt: number | null;
   nextRetryAt: number | null;
-  fingerprintHash?: string;
-  acoustId?: string;
   candidates: IsrcCandidate[];
   error?: string;
 };
@@ -93,6 +90,10 @@ type MusicTrack = {
   album: string;
   durationMs: number | null;
   artworkDataUrl?: string;
+  artworkCheckedAt?: number;
+  artworkMetadataVersion?: number;
+  artworkFileLastModified?: number;
+  artworkFileSize?: number;
   isrc: string | null;
   isrcConfidence: number;
   fileHandleKey: string;
@@ -206,7 +207,6 @@ type MusicState = LibraryState & {
   selectedPlaylistId: string | null;
   activeRadioSessionId: string | null;
   lastQrDataUrl: string;
-  acoustIdClientKey: string;
   autoAcceptHighConfidenceIsrc: boolean;
   libraryMinimized: boolean;
   layoutReady: boolean;
@@ -250,7 +250,6 @@ const state: MusicState = {
   playlists: [],
   radioSessions: [],
   lastQrDataUrl: "",
-  acoustIdClientKey: "",
   autoAcceptHighConfidenceIsrc: true,
   libraryMinimized: false,
   layoutReady: false,
@@ -262,8 +261,9 @@ let audioUrl: string | null = null;
 let renderQueued = false;
 let lastMusicBrainzLookupAt = 0;
 let lastAudibleVolume = state.playback.volume;
-let chromaprintModulePromise: Promise<typeof import("@unimusic/chromaprint")> | null = null;
 let playbackGeneration = 0;
+let artworkHydrationActive = false;
+let libraryLoadPromise: Promise<void> | null = null;
 let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
@@ -382,12 +382,10 @@ async function loadTheme(): Promise<void> {
 
 async function loadMusicSettings(): Promise<void> {
   const stored: Record<string, unknown> = await chrome.storage.local.get({
-    [ACOUSTID_CLIENT_KEY]: "",
     [AUTO_ACCEPT_ISRC_KEY]: true,
     [VOLUME_KEY]: state.playback.volume,
   }).catch(() => ({}));
   if (!lifecycleActive()) return;
-  state.acoustIdClientKey = typeof stored[ACOUSTID_CLIENT_KEY] === "string" ? stored[ACOUSTID_CLIENT_KEY].trim() : "";
   state.autoAcceptHighConfidenceIsrc = stored[AUTO_ACCEPT_ISRC_KEY] !== false;
   const volume = Number(stored[VOLUME_KEY]);
   if (Number.isFinite(volume)) state.playback.volume = Math.max(0, Math.min(1, volume));
@@ -399,12 +397,6 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
     if (changes[STYLE_THEME_KEY]) {
       state.theme = normalizeTheme(changes[STYLE_THEME_KEY].newValue);
       applyTheme();
-    }
-    if (changes[ACOUSTID_CLIENT_KEY]) {
-      state.acoustIdClientKey = typeof changes[ACOUSTID_CLIENT_KEY].newValue === "string"
-        ? changes[ACOUSTID_CLIENT_KEY].newValue.trim()
-        : "";
-      render();
     }
     if (changes[AUTO_ACCEPT_ISRC_KEY]) {
       state.autoAcceptHighConfidenceIsrc = changes[AUTO_ACCEPT_ISRC_KEY].newValue !== false;
@@ -632,7 +624,15 @@ function closePanel(): void {
   animateOverlayAppClose(root, () => root?.remove());
 }
 
-async function loadLibrary(): Promise<void> {
+function loadLibrary(): Promise<void> {
+  if (libraryLoadPromise) return libraryLoadPromise;
+  libraryLoadPromise = loadLibraryOnce().finally(() => {
+    libraryLoadPromise = null;
+  });
+  return libraryLoadPromise;
+}
+
+async function loadLibraryOnce(): Promise<void> {
   let folders: MusicFolder[];
   let tracks: MusicTrack[];
   let playlists: MusicPlaylist[];
@@ -658,7 +658,8 @@ async function loadLibrary(): Promise<void> {
   state.tracks = withDefaultAchievementTrack(tracks.sort(compareTracks));
   state.playlists = playlists.sort((a, b) => b.updatedAt - a.updatedAt);
   state.radioSessions = radioSessions.sort((a, b) => new Date(b.start).getTime() - new Date(a.start).getTime());
-  render();
+  await hydrateMissingArtwork();
+  if (lifecycleActive()) render();
 }
 
 async function addFolder(): Promise<void> {
@@ -792,6 +793,10 @@ async function buildTrack(folder: MusicFolder, entry: { file: File; handle: File
     album,
     durationMs: metadata.durationMs,
     artworkDataUrl: metadata.artworkDataUrl || existing?.artworkDataUrl,
+    artworkCheckedAt: now,
+    artworkMetadataVersion: ARTWORK_METADATA_VERSION,
+    artworkFileLastModified: entry.file.lastModified,
+    artworkFileSize: entry.file.size,
     isrc,
     isrcConfidence: isrc ? 1 : 0,
     fileHandleKey: `${folder.id}:${entry.path}`,
@@ -821,14 +826,7 @@ async function buildTrack(folder: MusicFolder, entry: { file: File; handle: File
 }
 
 async function readMetadata(file: File): Promise<{ title: string; artist: string; album: string; isrc: string | null; durationMs: number | null; artworkDataUrl?: string }> {
-  const lower = file.name.toLowerCase();
-  const tags = lower.endsWith(".mp3")
-    ? await readId3v2(file)
-    : lower.endsWith(".flac")
-      ? await readFlacMetadata(file)
-      : lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".alac")
-        ? await readMp4Metadata(file)
-        : {};
+  const tags = await readEmbeddedTags(file);
   const durationMs = await readDuration(file).catch(() => null);
   return {
     title: tags.title || "",
@@ -838,6 +836,17 @@ async function readMetadata(file: File): Promise<{ title: string; artist: string
     durationMs,
     artworkDataUrl: tags.artworkDataUrl,
   };
+}
+
+async function readEmbeddedTags(file: File): Promise<ParsedAudioMetadata> {
+  const lower = file.name.toLowerCase();
+  return lower.endsWith(".mp3")
+    ? await readId3v2(file)
+    : lower.endsWith(".flac")
+      ? await readFlacMetadata(file)
+      : lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".alac")
+        ? await readMp4Metadata(file)
+        : {};
 }
 
 async function readId3v2(file: File): Promise<ParsedAudioMetadata> {
@@ -854,15 +863,56 @@ async function readId3v2(file: File): Promise<ParsedAudioMetadata> {
     const size = major === 4 ? syncSafe(bytes.subarray(offset + 4, offset + 8)) : uint32(bytes.subarray(offset + 4, offset + 8));
     if (size <= 0 || offset + 10 + size > bytes.length) break;
     const frame = bytes.subarray(offset + 10, offset + 10 + size);
-    const value = id === "APIC" ? "" : decodeTextFrame(frame);
-    if (id === "TIT2") out.title = value;
-    if (id === "TPE1") out.artist = value;
-    if (id === "TALB") out.album = value;
-    if (id === "TSRC") out.isrc = value;
+    if (id === "TIT2") out.title = decodeTextFrame(frame);
+    if (id === "TPE1") out.artist = decodeTextFrame(frame);
+    if (id === "TALB") out.album = decodeTextFrame(frame);
+    if (id === "TSRC") out.isrc = decodeTextFrame(frame);
     if (id === "APIC" && !out.artworkDataUrl) out.artworkDataUrl = parseApicFrame(frame);
     offset += 10 + size;
   }
+  if (!out.artworkDataUrl) out.artworkDataUrl = findId3Artwork(bytes, major);
+  if (!out.artworkDataUrl) out.artworkDataUrl = findArtworkBySignature(bytes);
   return out;
+}
+
+function findId3Artwork(bytes: Uint8Array, major: number): string | undefined {
+  for (let offset = 0; offset + 10 <= bytes.length; offset += 1) {
+    if (bytes[offset] !== 0x41 || bytes[offset + 1] !== 0x50 || bytes[offset + 2] !== 0x49 || bytes[offset + 3] !== 0x43) continue;
+    const size = major === 4
+      ? syncSafe(bytes.subarray(offset + 4, offset + 8))
+      : uint32(bytes.subarray(offset + 4, offset + 8));
+    if (size <= 0 || offset + 10 + size > bytes.length) continue;
+    const artwork = parseApicFrame(bytes.subarray(offset + 10, offset + 10 + size));
+    if (artwork) return artwork;
+  }
+  return undefined;
+}
+
+function findArtworkBySignature(bytes: Uint8Array): string | undefined {
+  const jpegStart = findByteSequence(bytes, [0xff, 0xd8, 0xff]);
+  if (jpegStart >= 0) {
+    const jpegEnd = findByteSequence(bytes, [0xff, 0xd9], jpegStart + 3);
+    if (jpegEnd >= jpegStart && jpegEnd + 2 - jpegStart <= 1_500_000) {
+      return `data:image/jpeg;base64,${base64Bytes(bytes.subarray(jpegStart, jpegEnd + 2))}`;
+    }
+  }
+
+  const pngStart = findByteSequence(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+  if (pngStart >= 0) {
+    const iend = findByteSequence(bytes, [0x49, 0x45, 0x4e, 0x44], pngStart + 8);
+    const pngEnd = iend >= 4 ? iend + 8 : -1;
+    if (pngEnd > pngStart && pngEnd - pngStart <= 1_500_000) {
+      return `data:image/png;base64,${base64Bytes(bytes.subarray(pngStart, pngEnd))}`;
+    }
+  }
+  return undefined;
+}
+
+function findByteSequence(bytes: Uint8Array, sequence: number[], from = 0): number {
+  for (let offset = Math.max(0, from); offset + sequence.length <= bytes.length; offset += 1) {
+    if (sequence.every((byte, index) => bytes[offset + index] === byte)) return offset;
+  }
+  return -1;
 }
 
 async function readFlacMetadata(file: File): Promise<ParsedAudioMetadata> {
@@ -1073,10 +1123,8 @@ function shouldEnrich(track: MusicTrack): boolean {
 async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
   const now = Date.now();
   try {
-    const fingerprint = await fingerprintTrack(track);
     const candidates = [
       ...inferIsrcCandidates(track),
-      ...await lookupAcoustIdCandidates(track, fingerprint.fingerprint),
       ...await lookupMusicBrainzCandidates(track),
     ].sort((left, right) => right.confidence - left.confidence);
     if (candidates.length > 0 && candidates[0].confidence >= 0.92 && state.autoAcceptHighConfidenceIsrc) {
@@ -1085,8 +1133,6 @@ async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
         attempts: track.enrichment.attempts + 1,
         lastAttemptAt: now,
         nextRetryAt: null,
-        fingerprintHash: fingerprint.fingerprintHash,
-        acoustId: candidates[0].acoustId,
         candidates,
       };
     }
@@ -1096,8 +1142,6 @@ async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
         attempts: track.enrichment.attempts + 1,
         lastAttemptAt: now,
         nextRetryAt: null,
-        fingerprintHash: fingerprint.fingerprintHash,
-        acoustId: candidates.find((candidate) => candidate.acoustId)?.acoustId,
         candidates,
       };
     }
@@ -1106,7 +1150,6 @@ async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
       attempts: track.enrichment.attempts + 1,
       lastAttemptAt: now,
       nextRetryAt: now + 7 * 24 * 60 * 60 * 1000,
-      fingerprintHash: fingerprint.fingerprintHash,
       candidates: [],
     };
   } catch (error) {
@@ -1115,107 +1158,10 @@ async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
       attempts: track.enrichment.attempts + 1,
       lastAttemptAt: now,
       nextRetryAt: now + 24 * 60 * 60 * 1000,
-      fingerprintHash: track.enrichment.fingerprintHash,
       candidates: track.enrichment.candidates,
       error: errorMessage(error),
     };
   }
-}
-
-async function fingerprintTrack(track: MusicTrack): Promise<{ fingerprint: string | null; fingerprintHash: string }> {
-  const file = await getTrackFile(track);
-  if (!file) {
-    const fingerprintHash = await metadataFingerprint(track);
-    return { fingerprint: null, fingerprintHash };
-  }
-  try {
-    const { ChromaprintAlgorithm, processAudioFile } = await loadChromaprintModule();
-    const buffer = await file.arrayBuffer();
-    for await (const fingerprint of processAudioFile(buffer, {
-      maxDuration: 120,
-      chunkDuration: 0,
-      algorithm: ChromaprintAlgorithm.Default,
-      rawOutput: false,
-      overlap: false,
-    })) {
-      return {
-        fingerprint,
-        fingerprintHash: await hashText(fingerprint),
-      };
-    }
-  } catch {
-    // Browser audio decoding varies by codec. Metadata lookup still gives a useful fallback path.
-  }
-  const fingerprintHash = await metadataFingerprint(track);
-  return { fingerprint: null, fingerprintHash };
-}
-
-function loadChromaprintModule(): Promise<typeof import("@unimusic/chromaprint")> {
-  chromaprintModulePromise ??= import("@unimusic/chromaprint");
-  return chromaprintModulePromise;
-}
-
-async function metadataFingerprint(track: MusicTrack): Promise<string> {
-  const source = `${track.title}|${track.artist}|${track.album}|${track.durationMs ?? 0}|${track.fileName}`;
-  return hashText(source.toLowerCase());
-}
-
-async function hashText(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(digest)).slice(0, 16).map((byte) => byte.toString(16).padStart(2, "0")).join("");
-}
-
-async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string | null): Promise<IsrcCandidate[]> {
-  const client = state.acoustIdClientKey.trim();
-  if (!client || !fingerprint || !track.durationMs) return [];
-  const response = await runtimeMessage<{ ok?: boolean; data?: unknown; error?: string }>({
-    type: "music:postForm",
-    url: "https://api.acoustid.org/v2/lookup",
-    form: {
-      client,
-      duration: String(Math.max(1, Math.round(track.durationMs / 1000))),
-      fingerprint,
-      meta: "recordings+recordingids+compress",
-      format: "json",
-    },
-  });
-  if (!response?.ok) return [];
-  const data = response.data as Record<string, unknown> | null;
-  if (data?.status !== "ok") return [];
-  const out: IsrcCandidate[] = [];
-  const results = objectArray(data.results).slice(0, 4);
-  for (const result of results) {
-    const acoustId = typeof result.id === "string" ? result.id : undefined;
-    const score = typeof result.score === "number" ? result.score : Number(result.score ?? 0);
-    for (const recording of objectArray(result.recordings).slice(0, 4)) {
-      const musicBrainzRecordingId = typeof recording.id === "string" ? recording.id : undefined;
-      if (!musicBrainzRecordingId) continue;
-      const record = await lookupMusicBrainzRecordingById(musicBrainzRecordingId);
-      const sourceRecord = record || recording;
-      out.push(...candidatesFromMusicBrainzRecord(sourceRecord, track, {
-        source: "acoustid",
-        acoustId,
-        musicBrainzRecordingId,
-        acoustIdScore: score,
-      }));
-    }
-  }
-  return out;
-}
-
-async function lookupMusicBrainzRecordingById(id: string): Promise<Record<string, unknown> | null> {
-  const elapsed = Date.now() - lastMusicBrainzLookupAt;
-  if (elapsed < 1100) await sleep(1100 - elapsed);
-  lastMusicBrainzLookupAt = Date.now();
-  const url = new URL(`https://musicbrainz.org/ws/2/recording/${encodeURIComponent(id)}`);
-  url.searchParams.set("inc", "isrcs+artists+releases");
-  url.searchParams.set("fmt", "json");
-  const response = await runtimeMessage<{ ok?: boolean; data?: unknown; error?: string }>({
-    type: "music:fetchJson",
-    url: url.href,
-  });
-  if (!response?.ok || !response.data || typeof response.data !== "object" || Array.isArray(response.data)) return null;
-  return response.data as Record<string, unknown>;
 }
 
 function inferIsrcCandidates(track: MusicTrack): IsrcCandidate[] {
@@ -1257,12 +1203,6 @@ async function lookupMusicBrainzCandidates(track: MusicTrack): Promise<IsrcCandi
 function candidatesFromMusicBrainzRecord(
   record: Record<string, unknown>,
   track: MusicTrack,
-  evidence?: {
-    source?: "acoustid" | "musicbrainz";
-    acoustId?: string;
-    musicBrainzRecordingId?: string;
-    acoustIdScore?: number;
-  },
 ): IsrcCandidate[] {
   const isrcs = stringArray(record.isrcs ?? record["isrc-list"]);
   if (!isrcs.length) return [];
@@ -1273,14 +1213,8 @@ function candidatesFromMusicBrainzRecord(
   const titleMatch = looseEqual(title, track.title);
   const durationScore = durationDeltaMs === undefined ? 0.04 : durationDeltaMs < 2500 ? 0.12 : durationDeltaMs < 8000 ? 0.06 : 0;
   const metadataBase = Math.min(0.88, Math.max(0.58, score / 100));
-  const acoustIdBase = evidence?.source === "acoustid"
-    ? Math.min(0.95, Math.max(0.82, evidence.acoustIdScore ?? 0))
-    : metadataBase;
-  const confidence = Math.min(
-    evidence?.source === "acoustid" ? 0.98 : 0.94,
-    acoustIdBase + (titleMatch ? 0.04 : 0) + durationScore,
-  );
-  const sources: IsrcCandidate["sources"] = evidence?.source === "acoustid" ? ["acoustid", "musicbrainz"] : ["musicbrainz"];
+  const confidence = Math.min(0.94, metadataBase + (titleMatch ? 0.04 : 0) + durationScore);
+  const sources: IsrcCandidate["sources"] = ["musicbrainz"];
   return isrcs
     .map(normalizeIsrc)
     .filter((isrc): isrc is string => Boolean(isrc))
@@ -1288,8 +1222,7 @@ function candidatesFromMusicBrainzRecord(
       isrc,
       confidence,
       sources,
-      musicBrainzRecordingId: evidence?.musicBrainzRecordingId || (typeof record.id === "string" ? record.id : undefined),
-      acoustId: evidence?.acoustId,
+      musicBrainzRecordingId: typeof record.id === "string" ? record.id : undefined,
       title: title || track.title,
       artist: track.artist,
       album: track.album,
@@ -1388,6 +1321,9 @@ async function resolveTrackAudioSource(track: MusicTrack): Promise<{ url: string
     render();
     return null;
   }
+  if (!track.artworkDataUrl) {
+    await hydrateTrackArtworkFromFile(track, file);
+  }
   return { url: URL.createObjectURL(file), revoke: true };
 }
 
@@ -1430,7 +1366,7 @@ function setupAudio(): void {
   });
 }
 
-async function getTrackFile(track: MusicTrack, folder?: MusicFolder): Promise<File | null> {
+async function getTrackFile(track: MusicTrack, folder?: MusicFolder, reportError = true): Promise<File | null> {
   folder ??= state.folders.find((candidate) => candidate.id === track.folderId);
   if (!folder) return null;
   try {
@@ -1444,8 +1380,86 @@ async function getTrackFile(track: MusicTrack, folder?: MusicFolder): Promise<Fi
     const handle = await current.getFileHandle(parts[parts.length - 1]);
     return handle.getFile();
   } catch (error) {
-    state.error = `Could not open ${track.path}: ${errorMessage(error)}`;
+    if (reportError) state.error = `Could not open ${track.path}: ${errorMessage(error)}`;
     return null;
+  }
+}
+
+async function hydrateMissingArtwork(): Promise<void> {
+  if (artworkHydrationActive || !lifecycleActive()) return;
+  const candidates = state.tracks.filter((track) => (
+    track.source === "local"
+    && !track.artworkDataUrl
+  ));
+  if (!candidates.length) return;
+
+  artworkHydrationActive = true;
+  try {
+    const db = await openDb();
+    const readableFolders = new Map<string, boolean>();
+    let hydrated = 0;
+    let checked = 0;
+    for (const candidate of candidates) {
+      if (!lifecycleActive()) break;
+      const track = state.tracks.find((entry) => entry.id === candidate.id);
+      if (!track || track.artworkDataUrl) continue;
+      const folder = state.folders.find((entry) => entry.id === track.folderId);
+      if (!folder) continue;
+
+      let readable = readableFolders.get(folder.id);
+      if (readable === undefined) {
+        readable = await hasReadPermission(folder.handle);
+        readableFolders.set(folder.id, readable);
+      }
+      if (!readable) continue;
+
+      const file = await getTrackFile(track, folder, false);
+      if (!file) continue;
+      if (!shouldReadEmbeddedArtwork(track, file)) continue;
+      const artworkRestored = await hydrateTrackArtworkFromFile(track, file, db);
+      checked += 1;
+      if (artworkRestored) hydrated += 1;
+      if (artworkRestored) renderSoon();
+      if (checked % 8 === 0) await yieldArtworkHydration();
+    }
+    if (hydrated > 0 && lifecycleActive()) {
+      state.status = `Restored artwork for ${hydrated} track${hydrated === 1 ? "" : "s"}`;
+      render();
+    }
+  } finally {
+    artworkHydrationActive = false;
+  }
+}
+
+async function hydrateTrackArtworkFromFile(track: MusicTrack, file: File, db?: IDBDatabase): Promise<boolean> {
+  let tags: ParsedAudioMetadata;
+  try {
+    tags = await readEmbeddedTags(file);
+  } catch {
+    return false;
+  }
+  track.artworkCheckedAt = Date.now();
+  track.artworkMetadataVersion = ARTWORK_METADATA_VERSION;
+  track.artworkFileLastModified = file.lastModified;
+  track.artworkFileSize = file.size;
+  if (tags.artworkDataUrl) track.artworkDataUrl = tags.artworkDataUrl;
+  await putItem(db || await openDb(), "tracks", track);
+  return Boolean(tags.artworkDataUrl);
+}
+
+function yieldArtworkHydration(): Promise<void> {
+  return new Promise((resolve) => window.requestAnimationFrame(() => resolve()));
+}
+
+async function hasReadPermission(handle: FileSystemDirectoryHandle): Promise<boolean> {
+  const permissionHandle = handle as FileSystemDirectoryHandle & {
+    queryPermission?: (descriptor?: { mode: "read" }) => Promise<PermissionState>;
+  };
+  if (!permissionHandle.queryPermission) return true;
+  try {
+    return await permissionHandle.queryPermission({ mode: "read" }) === "granted";
+  } catch {
+    return false;
   }
 }
 
@@ -2065,8 +2079,6 @@ async function editTrackIsrc(track: MusicTrack): Promise<void> {
       attempts: track.enrichment.attempts,
       lastAttemptAt: Date.now(),
       nextRetryAt: null,
-      fingerprintHash: track.enrichment.fingerprintHash,
-      acoustId: track.enrichment.acoustId,
       candidates: [{
         isrc,
         confidence: 1,
@@ -2458,7 +2470,6 @@ function renderSettings(body: HTMLElement): void {
     settingLine("Missing files", `${state.tracks.filter((track) => track.unavailable).length}`, actionButton("Repair", () => void repairMissingTracks())),
     settingLine("ISRC matched", `${state.tracks.filter((track) => track.isrc).length}`, actionButton("Enrich", () => void runEnrichmentQueue())),
     autoAcceptSettingLine(),
-    acoustIdSettingLine(),
     settingLine("Library index", "Local IndexedDB", actionButton("Clear", () => void clearLibrary())),
   );
   body.append(settings);
@@ -2863,7 +2874,7 @@ function autoAcceptSettingLine(): HTMLElement {
   const strong = document.createElement("strong");
   strong.textContent = "Auto-match ISRC";
   const small = document.createElement("small");
-  small.textContent = "Accept high-confidence acoustic matches";
+  small.textContent = "Accept high-confidence metadata matches";
   copy.append(strong, small);
   const input = document.createElement("input");
   input.type = "checkbox";
@@ -2873,34 +2884,6 @@ function autoAcceptSettingLine(): HTMLElement {
     void chrome.storage.local.set({ [AUTO_ACCEPT_ISRC_KEY]: state.autoAcceptHighConfidenceIsrc });
   });
   row.append(copy, input);
-  return row;
-}
-
-function acoustIdSettingLine(): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "milxdy-music-setting milxdy-music-setting-wide";
-  const copy = document.createElement("span");
-  const strong = document.createElement("strong");
-  strong.textContent = "AcoustID key";
-  const small = document.createElement("small");
-  small.textContent = state.acoustIdClientKey ? "Fingerprint lookup enabled" : "Optional, enables acoustic ISRC lookup";
-  copy.append(strong, small);
-  const controls = document.createElement("div");
-  controls.className = "milxdy-music-setting-controls";
-  const input = document.createElement("input");
-  input.type = "password";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.placeholder = "client key";
-  input.value = state.acoustIdClientKey;
-  const save = actionButton("Save", () => {
-    state.acoustIdClientKey = input.value.trim();
-    void chrome.storage.local.set({ [ACOUSTID_CLIENT_KEY]: state.acoustIdClientKey });
-    state.status = state.acoustIdClientKey ? "AcoustID lookup enabled" : "AcoustID lookup disabled";
-    render();
-  });
-  controls.append(input, save);
-  row.append(copy, controls);
   return row;
 }
 

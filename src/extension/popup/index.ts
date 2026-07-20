@@ -193,7 +193,6 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
-  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
 };
 
 void boot();
@@ -553,7 +552,6 @@ async function applyFullStartSetup(): Promise<void> {
   setControlValue("milady.showLevelBadge", true);
   setControlValue("milady.includeRemiStatsBeetles", true);
   setControlValue("remistats.beetol.enabled", true);
-  setControlValue("reminetChat.enabled", true);
   writeVisualEditor(fullTheme);
   renderVisualPresetButtons();
   showOnboardingMessage(blockedApps.length
@@ -919,11 +917,13 @@ async function applyProfileAudioPreset(settings: ProfileAudioSettings): Promise<
     soundEnabled: settings.miladySoundEnabled,
     soundsEnabled: settings.remistatsSoundsEnabled,
     soundVolume: settings.remistatsSoundVolume,
+    "milxdy.remistats.likeAutoPoke": settings.remistatsLikeAutoPoke,
     endOfTweetDing: settings.postReadingEndOfTweetDing,
   });
   setControlValue("milady.soundEnabled", settings.miladySoundEnabled);
   setControlValue("remistats.soundsEnabled", settings.remistatsSoundsEnabled);
   setControlValue("remistats.soundVolume", settings.remistatsSoundVolume);
+  setControlValue("remistats.likeAutoPoke", settings.remistatsLikeAutoPoke);
   setControlValue("post-reading.endOfTweetDing", settings.postReadingEndOfTweetDing);
 }
 

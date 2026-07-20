@@ -2,11 +2,14 @@ import { registerBackgroundMessageHandlers } from "../../platform/background/rou
 import { isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import {
   REMILIA_BASE_URL,
+  type RemiliaAuthResult,
   prepareRemiliaAuth,
   renewRemiliaAuth,
   adoptRemiliaBrowserSession,
+  refreshRemiliaBrowserSessionTab,
   isRemiliaDisconnected,
 } from "../../platform/auth/remilia-auth";
+import { hasUsableSocketAccessToken, resolveSocketAuthCredential } from "./socket-auth-policy";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
@@ -15,6 +18,7 @@ const SOCKET_PORT_NAME = "reminetChat:socket";
 const SESSION_PROBE_PATH = "/api/profile/whoami";
 const SOCKET_HEARTBEAT_MS = 25_000;
 const SOCKET_AUTH_TIMEOUT_MS = 12_000;
+const SOCKET_BROWSER_SESSION_REFRESH_TIMEOUT_MS = 7_000;
 const SOCKET_OPEN_TIMEOUT_MS = 12_000;
 const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
@@ -26,6 +30,7 @@ const ALLOWED_ATTACHMENT_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "vide
 let socketAuthReadyUntil = 0;
 let socketAuthPromise: Promise<{ ok: boolean; signedIn: boolean; error?: string }> | null = null;
 let socketAuthGeneration = 0;
+let socketAuthRefreshRequired = false;
 
 type DecodedAttachment = {
   contentType: string;
@@ -38,8 +43,7 @@ type ChatMessage =
   | { type: "reminetChat:getHistory"; limit?: number; before?: number; after?: number }
   | { type: "reminetChat:prepareSocket" }
   | { type: "reminetChat:uploadAttachment"; name?: string; mimeType?: string; dataUrl?: string }
-  | { type: "reminetChat:fetchMedia"; url?: string }
-  | { type: "reminetChat:getProfile"; username?: string };
+  | { type: "reminetChat:fetchMedia"; url?: string };
 
 registerBackgroundMessageHandlers([{
   type: "reminetChat:*",
@@ -57,6 +61,7 @@ chrome.runtime.onConnect.addListener((port) => {
   let closed = false;
   let connectGeneration = 0;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  const locallyClosedSockets = new WeakSet<WebSocket>();
 
   const post = (message: Record<string, unknown>) => {
     try {
@@ -72,6 +77,7 @@ chrome.runtime.onConnect.addListener((port) => {
     const current = socket;
     socket = null;
     if (current && current.readyState !== WebSocket.CLOSED && current.readyState !== WebSocket.CLOSING) {
+      locallyClosedSockets.add(current);
       current.close();
     }
   };
@@ -115,15 +121,18 @@ chrome.runtime.onConnect.addListener((port) => {
     }
     const nextSocket = new WebSocket(SOCKET_URL);
     socket = nextSocket;
+    let opened = false;
     post({ type: "socket:connecting" });
     const openTimer = setTimeout(() => {
       if (socket !== nextSocket || closed || nextSocket.readyState === WebSocket.OPEN) return;
+      invalidateSocketAuthAfterHandshakeFailure();
       post({ type: "socket:error", error: "Live chat connection timed out.", reason: "socket-open-timeout" });
       nextSocket.close();
     }, SOCKET_OPEN_TIMEOUT_MS);
     nextSocket.addEventListener("open", () => {
       clearTimeout(openTimer);
       if (socket !== nextSocket || closed) return;
+      opened = true;
       nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
       startHeartbeat(nextSocket);
       post({ type: "socket:open", at: Date.now() });
@@ -136,10 +145,12 @@ chrome.runtime.onConnect.addListener((port) => {
       clearTimeout(openTimer);
       stopHeartbeat();
       if (socket === nextSocket) socket = null;
+      if (opened && !closed && !locallyClosedSockets.has(nextSocket)) invalidateSocketAuthAfterHandshakeFailure();
       post({ type: "socket:close", code: event.code, reason: event.reason, wasClean: event.wasClean });
     });
     nextSocket.addEventListener("error", () => {
       clearTimeout(openTimer);
+      if (!opened) invalidateSocketAuthAfterHandshakeFailure();
       post({ type: "socket:error", error: "Connection interrupted.", reason: "socket-error" });
     });
   };
@@ -197,8 +208,7 @@ function isChatMessage(message: unknown): message is ChatMessage {
     || type === "reminetChat:getHistory"
     || type === "reminetChat:prepareSocket"
     || type === "reminetChat:uploadAttachment"
-    || type === "reminetChat:fetchMedia"
-    || type === "reminetChat:getProfile";
+    || type === "reminetChat:fetchMedia";
 }
 
 async function handleChatMessage(message: ChatMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -225,7 +235,7 @@ async function handleChatMessage(message: ChatMessage, sender: chrome.runtime.Me
     if (message.type === "reminetChat:fetchMedia") {
       return await fetchMediaDataUrl(message.url);
     }
-    return await getProfile(message.username);
+    return { ok: false, error: "UNSUPPORTED_MESSAGE" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -253,16 +263,25 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
     socketAuthPromise = null;
     return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
   }
-  if (Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
+  if (!socketAuthRefreshRequired && Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
   if (socketAuthPromise) return socketAuthPromise;
   const generation = ++socketAuthGeneration;
+  const forceBrowserSessionRefresh = socketAuthRefreshRequired;
   const abort = new AbortController();
   const pending = withDeadline(
-    prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }).then(async (auth) => {
+    resolveSocketAuthCredential(
+      () => prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
+      () => refreshSocketAccessToken(abort.signal),
+      {
+        forceBrowserSessionRefresh,
+        requireAccessTokenAfterRefresh: forceBrowserSessionRefresh,
+      },
+    ).then(async (auth) => {
       if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
         return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
       }
       if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
+      socketAuthRefreshRequired = false;
       socketAuthReadyUntil = Date.now() + SOCKET_AUTH_CACHE_MS;
       return { ok: true, signedIn: true };
     }),
@@ -279,6 +298,20 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
   } finally {
     if (socketAuthPromise === pending) socketAuthPromise = null;
   }
+}
+
+function invalidateSocketAuthAfterHandshakeFailure(): void {
+  socketAuthReadyUntil = 0;
+  socketAuthRefreshRequired = true;
+}
+
+async function refreshSocketAccessToken(signal: AbortSignal): Promise<RemiliaAuthResult> {
+  const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH, {
+    timeoutMs: SOCKET_BROWSER_SESSION_REFRESH_TIMEOUT_MS,
+  });
+  if (hasUsableSocketAccessToken(refreshed)) return refreshed;
+  const renewed = await renewRemiliaAuth(SESSION_PROBE_PATH, { signal });
+  return hasUsableSocketAccessToken(renewed) ? renewed : refreshed;
 }
 
 async function authStatus(): Promise<Record<string, unknown>> {
@@ -463,12 +496,6 @@ async function readCappedResponseBlob(response: Response, maxBytes: number, cont
     reader.releaseLock();
   }
   return new Blob(chunks, { type: contentType });
-}
-
-async function getProfile(username: unknown): Promise<Record<string, unknown>> {
-  if (typeof username !== "string" || !username) return { ok: false, error: "INVALID_USERNAME" };
-  const clean = username.replace(/^~/, "").replace(/^@/, "");
-  return remiliaAuthedFetch("GET", `/api/profile/~${encodeURIComponent(clean)}`);
 }
 
 function isAllowedMediaUrl(value: string): boolean {

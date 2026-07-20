@@ -5,6 +5,7 @@ RemiNet Chat provides a docked RemiliaNET chat client and an X Messages integrat
 ## Where To Find It
 
 - Enable **RemiNet Chat** from Apps & Features.
+- Use Apps & Features as the single enable/disable control; the extension popup no longer contains a duplicate Chat visibility toggle.
 - Open **RemiNet Chat** from the side rail.
 - On supported X Messages routes, use the **RemiliaNET Chat** entry for the larger chat surface.
 

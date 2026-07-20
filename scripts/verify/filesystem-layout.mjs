@@ -33,7 +33,7 @@ const forbiddenRoots = [
 ];
 
 for (const dir of requiredDirs) assert(existsSync(dir), `required filesystem root is missing: ${dir}`);
-for (const dir of forbiddenRoots) assert(!existsSync(dir), `historical filesystem root must not return: ${dir}`);
+for (const dir of forbiddenRoots) assert(!directoryHasFiles(dir), `historical filesystem root must not contain files: ${dir}`);
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
@@ -93,6 +93,15 @@ function sourceFiles(root) {
     else if (/\.[cm]?[jt]sx?$/.test(entry.name)) files.push(normalizePosix(file));
   }
   return files;
+}
+
+function directoryHasFiles(root) {
+  if (!existsSync(root)) return false;
+  for (const entry of readdirSync(root, { withFileTypes: true })) {
+    if (entry.isFile()) return true;
+    if (entry.isDirectory() && directoryHasFiles(path.join(root, entry.name))) return true;
+  }
+  return false;
 }
 
 function assert(condition, message) {

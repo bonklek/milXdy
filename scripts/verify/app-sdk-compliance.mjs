@@ -552,7 +552,6 @@ function verifyInternalBridgeValidation() {
     "fetchImageDataUrlForSender",
     "fetchMiladychanJsonForSender",
     "fetchMusicJsonForSender",
-    "postMusicFormForSender",
     "fetchMusicImageDataUrlForSender",
     "fetchRemiStatsUserForSender",
     "resolveReminetIdentityForSender",

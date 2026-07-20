@@ -14,7 +14,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
-- Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
+- Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
 - Post-reading custom HTTP TTS is optional and local-only. When selected, milXdy sends the text being read plus speed, volume, and voice metadata only to a loopback endpoint such as `http://localhost`, `http://127.0.0.1`, or `http://[::1]`; remote custom TTS endpoints and returned remote audio URLs are rejected.
@@ -81,7 +81,7 @@ Miladychan Portal is a docked reader for public Miladychan board, thread, post, 
 
 Music indexes only local folders the user chooses through the browser folder picker. Indexed metadata, playlists, radio sessions, ISRC candidates, folder handles, and enrichment settings are stored locally in extension storage or IndexedDB. Playlist and radio QR exports contain metadata such as title, artist, ISRC, playlist name, and start time; they do not include audio files.
 
-MusicBrainz lookup sends track metadata needed for candidate search. AcoustID lookup is disabled unless the user provides a client key; when enabled, milXdy may send audio fingerprints or metadata to AcoustID for matching.
+MusicBrainz lookup sends track metadata needed for candidate search. Audio files and acoustic fingerprints are not sent to MusicBrainz.
 
 ## Local Persistence
 

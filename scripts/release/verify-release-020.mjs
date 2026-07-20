@@ -103,7 +103,6 @@ function verifyDocsCoverage() {
     "Miladychan Portal",
     "Music",
     "MusicBrainz",
-    "AcoustID",
     "boards.miladychan.org",
   ]) {
     assert(files.privacy.includes(phrase), `privacy docs missing ${phrase}`);
@@ -299,7 +298,7 @@ function verifyDocsCoverage() {
     assert(files.background.includes(freshInstallDefault), `central background missing enabled first-run default: ${freshInstallDefault}`);
   }
   assert(!files.remistatsBackground.includes("chrome.runtime.onInstalled.addListener"), "RemiStats must not duplicate central install default seeding");
-  assert(files.appSmokeVerifier.includes("Miladychan Portal") && files.appSmokeVerifier.includes("createRadioSession") && files.appSmokeVerifier.includes("features/chromaprint.wasm"), "app smoke verifier must cover Miladychan Portal and Music MVP contracts");
+  assert(files.appSmokeVerifier.includes("Miladychan Portal") && files.appSmokeVerifier.includes("createRadioSession"), "app smoke verifier must cover Miladychan Portal and Music MVP contracts");
   for (const phrase of [
     "chrome://extensions",
     "dist/chromium",
@@ -386,7 +385,7 @@ function verifyRegistryCoverage() {
   const music = byId.get("music");
   assert(music.version === "0.2.0", "Music registry version must be 0.2.0");
   assert(music.permissions?.hosts?.includes("https://musicbrainz.org/*"), "music missing MusicBrainz host permission");
-  assert(music.permissions?.hosts?.includes("https://api.acoustid.org/*"), "music missing AcoustID host permission");
+  assert(!music.permissions?.hosts?.includes("https://api.acoustid.org/*"), "music retained removed AcoustID host permission");
   assert(music.hub?.privacyLabels?.includes("local-files"), "music must disclose local file access");
 
   const miladychan = byId.get("miladychanSpotlight");
@@ -410,7 +409,6 @@ function verifyBackgroundSecurityContract() {
   assert(files.background.includes("parseAllowedUrl"), "central background must use shared allowlist parser");
   for (const rule of [
     "MUSICBRAINZ_JSON_RULES",
-    "ACOUSTID_FORM_RULES",
     "MILADYCHAN_JSON_RULES",
     "MUSIC_IMAGE_RULES",
     "MILADY_MAKER_BANNER_RULES",

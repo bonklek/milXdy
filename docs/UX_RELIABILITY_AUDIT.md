@@ -659,7 +659,7 @@ Coverage states: **not started**, **static traced**, **automated evidence**, **l
 - Full Music folder behavior requires user-granted Chromium File System Access and representative local media. No folder permission was requested; Firefox degradation requires a Firefox runtime run.
 - Voice boundary behavior depends on browser/OS voices. No audible speech was initiated. OCR and local ONNX inference need representative assets and timing/failure injection.
 - OS-level screen reader, reduced-motion, high zoom, and narrow X viewport interaction were not available. Popup accessibility-tree and narrow-viewport structure were checked in Chromium only.
-- External Remilia, RemiStats, Miladychan, MusicBrainz, AcoustID, Wiki, Grok, and media endpoints were not fault-injected; source-level failure paths are recorded without asserting current upstream behavior.
+- External Remilia, RemiStats, Miladychan, MusicBrainz, Wiki, Grok, and media endpoints were not fault-injected; source-level failure paths are recorded without asserting current upstream behavior.
 
 ## Prioritized Contributor Backlog
 

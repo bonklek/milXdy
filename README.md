@@ -104,4 +104,4 @@ Other integrated or local feature areas include Remilia Wiki linking, Post-readi
 
 ## License
 
-VPL for this repository unless otherwise noted. Upstream and bundled dependencies may carry their own license terms. See [LICENSE](LICENSE).
+VPL for this repository unless otherwise noted. Upstream and bundled dependencies retain their own license terms. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

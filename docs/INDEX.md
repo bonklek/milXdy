@@ -23,6 +23,7 @@
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Settings migration audit](SETTINGS_MIGRATION_AUDIT.md)
 - [Roadmap](ROADMAP.md)
+- [0.3.x onchain roadmap](ONCHAIN_ROADMAP.md)
 - [Documentation maintenance](DOCS_MAINTENANCE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Firefox QA](FIREFOX_QA.md)
