@@ -73,7 +73,7 @@ Theme: app platform refactor, side-rail apps, performance modes, and new first-p
   - left deeper board/deck/radio expansion as future follow-up
 - Music MVP and local radio foundation.
   - added a docked local music app with library/playlists/radio groundwork
-  - supported local-first ISRC enrichment with optional user-provided AcoustID key and MusicBrainz lookup
+  - supported local-first ISRC enrichment with MusicBrainz lookup and manual review
   - kept lifestyle radio/stations as a future expansion rather than a basic player-only vision
 - Public docs and onboarding posture.
   - updated public docs around the platform model, app SDK, performance modes, and Firefox/Chromium install paths
@@ -122,22 +122,26 @@ Theme: make first-party apps easier to understand, configure, package, and maint
   - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
   - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
 
-## Planned: 0.2.3 - App Runtime And Distribution Prep
+## Planned: 0.2.3 - App Runtime And Distribution Prep (Target: 2026-07-26)
 
 Theme: continue the app-platform split after Apps and Features cleanup by hardening runtime behavior, local package follow-through, and distribution groundwork.
 
 - Harden app runtime behavior beyond the first Apps and Features pass.
   - expand app runtime expectations across RemiliaNET, Miladychan, Remilia Wiki, and related hosts where permissions and privacy disclosure are explicit
   - keep site-aware app behavior tied to manifest metadata, lifecycle hooks, background services, and shared diagnostics
+  - keep RemiNet Chat enablement owned by Apps & Features instead of duplicating app switches in the extension popup
+  - stabilize lazy RemiStats poke placement, tweet-header space allocation, and Music embedded-artwork recovery
 - Continue local app-package and distribution follow-through.
   - evaluate package signatures, marketplace discovery, normal-user install/update UI, and starter-kit polish after the 0.2.2 reviewed custom-build groundwork
   - keep marketplace, submission, and browser-distribution prep separate from the shipped 0.2.2 scope
-  - evaluate Safari desktop WebExtension support if it remains aligned with the release scope
+- RemiNet and remilia.net correctness/accessibility follow-through.
+  - show Poke actions only for profiles confirmed to have a usable RemiNet identity, with bounded lookup and clear pending/failure behavior
+  - add a dedicated reduced-motion option for remilia.net Beetle Hunt without changing the separate X/Twitter Beetol Hunt feature
 - Keep the former RemiNet Sharing work in Composer Kit.
   - the X Messages RemiNet pseudo chat entry shipped in 0.2.0
   - direct Tweet PNG upload to RemiNet and granular Tweet PNG metadata controls now belong with 0.2.4 reviewed sharing/composer media work
 
-## Planned: 0.2.4 - Composer Kit
+## Planned: 0.2.4 - Composer Kit (Target: 2026-08-02)
 
 Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme-designer integrations, and AI-assisted metadata normalization.
 
@@ -168,8 +172,12 @@ Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme
   - design an optional editing flow that standardizes formatting, metadata, identifiers, links, and readability
   - preserve the user's voice and require final review before publishing
   - avoid automatic posting or invisible metadata changes
+- Reviewed context and prompt-pack export.
+  - let users inspect and export versioned post/thread, Tweet PNG, reply-composer, and source-pack context
+  - let reviewed app packages declare bounded prompt templates or skills for manual use in the user's chosen assistant
+  - exclude private/session data and never send, insert, upload, save, or post returned content automatically
 
-## Planned: 0.2.5 - Reader Voice
+## Planned: 0.2.5 - Reader Voice (Target: 2026-08-09)
 
 Theme: Post-reading companion voice experiments and long-form audio export.
 
@@ -184,8 +192,12 @@ Theme: Post-reading companion voice experiments and long-form audio export.
   - open extracted text in a review editor before generation
   - export through the selected TTS path, preferring MP3 or M4A when the backend can return those formats
   - keep source metadata with the generated audio result
+- X direct-message Read Aloud.
+  - read an explicitly opened conversation in chronological order while distinguishing incoming and outgoing messages
+  - exclude conversation-list previews, composer text, controls, timestamps, and unrelated page chrome
+  - keep private DM text within the user-selected TTS path and reset safely when conversations change
 
-## Planned: 0.2.6 - Social Tuning
+## Planned: 0.2.6 - Social Tuning (Target: 2026-08-16)
 
 Theme: Maxxer collection behavior, classifier research, like-button presets, follow suggestions, and X graph discovery.
 
@@ -209,8 +221,12 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - show whether the viewed profile is already a RemiNet friend when the identity can be resolved
   - offer an explicit add-friend action only after RemiNet endpoint and browser-session behavior are confirmed
   - keep RemiNet friendship visually distinct from native X following and avoid automatic relationship changes
+- Local usage awareness and engagement-reduction presets.
+  - add opt-in local session/activity statistics and configurable gentle nudges
+  - support reversible grayscale, media-reduction, and lower-intensity presentation choices without collecting private content
+  - respect reduced-motion, Performance mode, dismissal, snooze, reset, and disable behavior
 
-## Planned: 0.2.7 - Activity Arcade
+## Planned: 0.2.7 - Activity Arcade (Target: 2026-08-23)
 
 Theme: daily rituals, poke feed, stats, leaderboards, and Beetle sharing.
 
@@ -226,8 +242,11 @@ Theme: daily rituals, poke feed, stats, leaderboards, and Beetle sharing.
   - add explicit user-initiated sharing for Beetle Hunt results or milestones
 - Optional poke feed.
   - implement a lightweight history/feed for poke activity using available RemiNet data
+- Optional relationship activity history.
+  - show outgoing/incoming poke timing and exact or first-observed follow timing only where evidence exists
+  - keep stable-account records local, bounded, resettable, and clearly labeled when a date is first observed rather than historically exact
 
-## Planned: 0.2.8 - Identifier Media Layer
+## Planned: 0.2.8 - Identifier Media Layer (Target: 2026-08-30)
 
 Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifier-first sharing research.
 
@@ -237,6 +256,9 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - use Music/ISRC behavior as the first implemented example and generalize the model carefully
   - evaluate Miladychan domain boards as the shared posting/discovery substrate for media apps, so Music, Books, Movies/TV, Podcasts, and Recipes can fetch and cache relevant public board posts instead of each app requiring a separate social backend
   - add source archive and permanent-link research collections so users can preserve links through archive services or IPFS-style paths and turn source packs into zettelkasten, knowledge-book, or Remilia Wiki drafting inputs
+- Bookmark tags and reusable collections.
+  - supplement the native X bookmark action with local post tags, a tag manager, and stable storage/migration behavior
+  - make selected tagged collections available to source packs and reviewed context export without hidden assistant calls
 - Music and board-inspired radio stations.
   - move beyond playlist start-time radio toward station, timed block, and album/record concepts
   - support local-first station schedules and QR/import sharing by metadata, ISRCs, and local matching hints rather than audio
@@ -260,17 +282,22 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - add recipe sharing with source attribution, external links, structured references, and user commentary
   - distinguish original user recipes from externally sourced recipes
 
-## Planned: 0.2.9 - RemiCast Integration
+## Planned: 0.2.9 - Live Media Integrations (Target: 2026-09-06)
 
-Theme: concrete RemiCast entry point, embed/open behavior, privacy, and fallback handling.
+Theme: explicit, privacy-preserving entry points for RemiCast and Twitch, with stable fallback handling and no implicit external media loading.
 
 - RemiCast integration.
   - add a RemiCast entry point in an appropriate milXdy surface
   - support opening or embedding RemiCast content where browser-extension constraints allow it
   - require explicit user action before loading external media or external service content
   - document any required permissions, remote-service behavior, and fallback handling
+- Twitch live-media cards.
+  - recognize explicit Twitch channel, stream, video, and clip links where milXdy already presents supported media
+  - show a compact card using information already present on the page or safely derivable from the URL
+  - provide an explicit `Open on Twitch` handoff without prefetching, autoplay, embeds, authentication, or API credentials
+  - preserve the original link as the fallback for unsupported or malformed URLs
 
-## Planned: 0.2.10 - Miladychan Live
+## Planned: 0.2.10 - Miladychan Live (Target: 2026-09-13)
 
 Theme: deck, live-board, and board pulse expansion.
 
@@ -279,19 +306,19 @@ Theme: deck, live-board, and board pulse expansion.
   - preserve pseudonymous board expectations and avoid merging Miladychan identity with X/Twitter identity by default
   - define polling, caching, rate-limit, moderation/safety, and performance constraints before shipping live behavior
 
-## Planned: 0.2.11 - User Registry
+## Planned: 0.2.11 - User Registry (Target: 2026-09-20)
 
 Theme: opt-in milXdy user badges, profile ownership proof, removal, privacy, and abuse controls.
 
 - Optional milXdy user registry.
   - add opt-in profile badges for users who run milXdy
   - implement profile ownership proof before a profile can be listed
-  - evaluate optional wallet identity linking with ENS and Gwei resolution as a separate opt-in layer, not a default registry requirement
+  - keep wallet identity out of the registry baseline; optional wallet, ENS, and Gwei linking begins in the 0.3.x onchain foundation
   - support removal/unpublish behavior, privacy disclosure, and abuse controls
 
-## Planned: 0.3.0 - The Front Door Update
+## Planned: 0.2.12 - Front Door & Platform Reach (Target: 2026-09-27)
 
-Theme: redesigned onboarding, visual guides, videos, pictures, walkthroughs, and non-technical user setup.
+Theme: redesigned onboarding, visual guides, Safari desktop support, distribution research, mobile feasibility, and non-technical user setup.
 
 - Public screenshots and README visual guide.
   - add public-safe screenshots for the major user-facing surfaces
@@ -304,30 +331,51 @@ Theme: redesigned onboarding, visual guides, videos, pictures, walkthroughs, and
   - include pictures/screenshots throughout the guide flow
   - include video walkthroughs or video-ready scripts/checklists
   - clearly separate required setup steps from optional advanced features
+- Safari desktop support.
+  - add a Safari Web Extension build, packaging path, compatibility layer, and desktop QA target
+  - preserve the Chromium and Firefox variants while documenting Safari-specific limitations
 - Chrome Web Store readiness, if distribution goals change.
   - document store policy blockers and package requirements before committing to store distribution
 - Mobile extension mode research.
-  - document what can realistically work in a mobile browser or app-like surface before advertising support
+  - use #93 as the staged planning epic, with Firefox Android first and iOS/iPadOS Safari second
+  - define a reduced mobile-safe profile, mobile UI primitives, platform evidence, follow-up implementation issues, docs, and QA gates before advertising support
+- Small-format brand assets.
+  - refresh the square milXdy mark and themed X favicon variants for 16px, 32px, 48px, extension, tab, README, and documentation surfaces
+
+## Planned: 0.3.x - Onchain Integration
+
+Theme: progress from shared wallet and chain safety into read-only Ethereum media, account-abstraction networking, reviewed social value, private blob mail, collection context, advanced publishing, and collective metadata.
+
+- `0.3.0 - The Onchain Foundation` (target 2026-10-04): wallet identity, app capabilities, bounded RPC, transaction review, receipts, and recovery.
+- `0.3.1 - Ethereum Media` (target 2026-10-11): verified read-only RFE playback, content-addressed sources, and optional NFT collection context.
+- `0.3.2 - The Paraclete Network` (target 2026-10-18): optional browser AA gossip and scoped ERC-4337 adapters.
+- `0.3.3 - Social Value` (target 2026-10-25): receiving-address proofs, reviewed `$CULT` cheers and tips, and address lifecycle research.
+- `0.3.4 - BlobMail` (target 2026-11-01): testnet encrypted mail, key transparency, reviewed composition, delivery evidence, and bounded local storage.
+- `0.3.5 - Onchain Collections` (target 2026-11-08): optional ownership context for Remilia Gotcha and Banners plus read-only Bonklet integration.
+- `0.3.6 - Onchain Publishing` (target 2026-11-15): advanced RFE publishing, portable station apps, program-rights research, and reviewed IPFS publication.
+- `0.3.7 - Collective Metadata` (target 2026-11-22): signed public observations, bounded post-Paraclete propagation, passive metadata adapters, and X `Account based in` region filtering.
+
+See the [0.3.x onchain roadmap](ONCHAIN_ROADMAP.md) for the dependency map, release gates, project boundaries, and issue index.
+
+## Exploratory: 0.4.x - Personal Computing Directions
+
+`0.4.x` is conjectural and does not yet represent a committed release order, version split, or final architecture. Current research directions are:
+
+- Personal Workspace concept; issues #97 and #162-#164.
+  - explore a private sticky-note canvas, durable local state, accessible navigation, recovery, and reviewed portability
+  - use the concept to test whether milXdy should host substantial personal state, not to promise a complete productivity suite
+- Companion Bridge concept; issues #77 and #165-#168.
+  - explore a separately installed local bridge for explicitly selected context and bounded returned artifacts
+  - treat native messaging, MCP ownership, capability pairing, and browser coverage as current design hypotheses requiring prototypes and threat-model review
+- Open sequencing questions.
+  - either concept may be reduced, deferred, combined, reordered, or replaced after the `0.3.x` integration work and app-platform evidence
+  - public/shared workspaces, autonomous assistants, ambient context access, and broad browser/filesystem/wallet authority are not implied
 
 ## Backlog Requiring Product Research
 
-- Bookmark-based post tagging and collections.
-  - build on X/Twitter's native bookmarks with a milXdy tag action near or around the bookmark button
-  - let users create tags, apply existing tags, inspect saved labels, and browse tagged post collections later
-  - make tagged collections exportable as structured context for source packs, reply drafting, media prompts, and user-controlled LLM/MCP workflows
-  - preserve native bookmark behavior while keeping local tag storage, stale-post handling, and X DOM/API risks explicit
-- User LLM and MCP integration.
-  - design a user-configured bridge to local models, MCP servers, Claude/Codex-style tools, Grok/manual prompt flows, or other user-controlled assistants
-  - export structured milXdy context for posts, generated images, reply composers, wiki/source packs, and app-package artifacts
-  - package reusable prompt templates or skills with apps so workflows such as animating a Tweet PNG or preparing meme replies can run in the user's chosen assistant
-  - keep returned drafts, media, and composer insertions user-reviewed before posting, saving, or uploading
 - Post-reading audio library, RSS queues, and shareable verbal-media exports.
   - save reviewed long-form conversions into a local audio library with draft and completed states
   - ingest RSS feeds so long-form items can be queued, reviewed, and converted later
   - add Miladychan file-posting for generated audio/video with source title, context, and subtitles
   - convert readings into MP4 posts with a default contextual image, audio track, and matched subtitles
   - explore feed/podcast-like export and source-extractor plugins for additional long-form sites
-- Twitch streaming embeds.
-  - define a concrete user value, embed model, permissions, and privacy behavior before assigning to a release
-- `$CULT` token cheer, on-chain tipping, and rotating receiving wallets.
-  - keep as one consolidated wallet/social-value backlog concept until custody, wallet hygiene, opt-in, recovery, and abuse-control behavior are resolved

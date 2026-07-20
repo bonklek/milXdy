@@ -1,11 +1,11 @@
 import { readFile } from "node:fs/promises";
+import { ignoredProfilePackSections } from "../../src/platform/settings/profile-pack-sections.ts";
 
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const popupSource = await readFile("src/extension/popup/index.ts", "utf8");
 const popupHtml = await readFile("assets/extension/popup/popup.html", "utf8");
 const postReadingDefaults = await readFile("src/apps/post-reading/shared/defaults.ts", "utf8");
 const firstPartyAppsSource = await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8");
-const profilePacksSource = await readFile("src/platform/settings/profile-packs.ts", "utf8");
 
 const failures = [];
 const notes = [];
@@ -31,15 +31,24 @@ const generatedFeatureSettings = registry.flatMap((app) => {
     .map((setting) => ({ app, setting }));
 });
 
-const appEnablementCases = [
-  { appId: "wikiSidebar", settingId: "wikiSidebar.enabled", propertyWrite: "sidebarEnabled", legacyFallbackProperty: "enabled" },
-  { appId: "post-reading", settingId: "post-reading.enabled", popupControl: "post-reading.enabled" },
-  { appId: "miladymaxxer", settingId: "miladymaxxer.mode", popupControl: "milady.mode", modeValues: ["milady", "off"] },
-  { appId: "beetol", settingId: "beetol.enabled", popupControl: "remistats.beetol.enabled" },
-  { appId: "reminetChat", settingId: "reminetChat.enabled", popupControl: "reminetChat.enabled" },
-  { appId: "miladychanSpotlight", settingId: "miladychan.enabled" },
-  { appId: "music", settingId: "music.enabled" },
-];
+const popupEnablementControls = new Map([
+  ["composerTools.enabled", "composerTools.enabled"],
+  ["post-reading.enabled", "post-reading.enabled"],
+  ["miladymaxxer.mode", "milady.mode"],
+  ["beetol.enabled", "remistats.beetol.enabled"],
+]);
+const appEnablementOverrides = new Map([
+  ["wikiSidebar.enabled", { propertyWrite: "sidebarEnabled", legacyFallbackProperty: "enabled" }],
+  ["miladymaxxer.mode", { modeValues: ["milady", "off"] }],
+]);
+const appEnablementCases = registry.filter((app) => app.packageKind === "app").flatMap((app) => (app.settings || [])
+  .filter((setting) => setting.role === "enablement")
+  .map((setting) => ({
+    appId: app.id,
+    settingId: setting.id,
+    popupControl: popupEnablementControls.get(setting.id),
+    ...(appEnablementOverrides.get(setting.id) || {}),
+  })));
 
 const appSurfacePopupMirrorCases = [
   { settingId: "post-reading.voiceURI", popupControl: "post-reading.voiceURI" },
@@ -107,6 +116,8 @@ function verifyAppEnablement(entry) {
     else compareStorage(setting, binding, `${entry.settingId} popup mirror`);
     requirePopupControl(entry.popupControl, entry.settingId);
   } else {
+    if (popupBindings.has(entry.settingId)) fail(`${entry.settingId}: Apps & Features-only enablement must not have a popup binding`);
+    if (popupControls.has(entry.settingId)) fail(`${entry.settingId}: Apps & Features-only enablement must not have a popup control`);
     notes.push(`${entry.settingId}: no popup mirror is expected; Apps & Features adapter/storage path was checked.`);
   }
   requireSetEnabledStorage(entry, setting);
@@ -162,17 +173,9 @@ function requireDistinctEnablementStorage(entry, setting) {
 }
 
 function verifyProfilePackUnsupportedSections() {
-  for (const section of ["apps", "rail", "layout"]) {
-    if (!profilePacksSource.includes(`Ignored ${section}:`) && !profilePacksSource.includes(`Ignored ${section}`)) {
-      fail(`profile packs must preview unsupported ${section} imports as ignored`);
-    }
-  }
-  if (!profilePacksSource.includes("Only appearance and performance are imported today")) {
-    fail("profile pack preview must state the currently imported sections");
-  }
-  if (!popupSource.includes("ignoredProfilePackSections") || !popupSource.includes("Ignored unsupported sections")) {
-    fail("profile pack import status must report ignored unsupported sections");
-  }
+  const ignored = ignoredProfilePackSections({ sections: ["appearance", "performance", "apps", "rail", "layout"] });
+  if (ignored.join(",") !== "apps,rail,layout") fail(`profile packs must classify unsupported import sections; got ${ignored.join(",")}`);
+  if (!popupSource.includes("ignoredProfilePackSections(pack)")) fail("profile pack import status must use the shared unsupported-section classifier");
 }
 
 function verifyPostReadingFullQuoteOptInDefaults() {

@@ -38,9 +38,9 @@ function verifyRegistryContracts() {
   assert(music.loadTriggers?.includes("dockOpen"), "Music must load on dock open");
   assert(!music.loadTriggers?.includes("startup"), "Music must not load at startup");
   assert(music.permissions?.hosts?.includes("https://musicbrainz.org/*"), "Music must declare MusicBrainz host permission");
-  assert(music.permissions?.hosts?.includes("https://api.acoustid.org/*"), "Music must declare AcoustID host permission");
   assert(music.hub?.privacyLabels?.includes("local-files"), "Music must disclose local file access");
-  assert(music.requiredOutputs?.includes("features/chromaprint.wasm"), "Music must require Chromaprint WASM output");
+  assert(!music.permissions?.hosts?.includes("https://api.acoustid.org/*"), "Music must not retain the removed AcoustID host permission");
+  assert(!music.requiredOutputs?.includes("features/chromaprint.wasm"), "Music must not retain the removed Chromaprint WASM output");
 }
 
 function verifyMiladychanPortalContract() {
@@ -81,7 +81,6 @@ function verifyMusicMvpContract() {
     "currentRadioPosition",
     "joinRadio",
     "lookupMusicBrainzCandidates",
-    "lookupAcoustIdCandidates",
     "reviewTrackCandidates",
     "manual",
     "Local folder access is not available in this browser",
@@ -89,8 +88,8 @@ function verifyMusicMvpContract() {
     assert(files.musicSource.includes(needle), `Music source missing ${needle}`);
   }
   assert(files.background.includes("MUSICBRAINZ_JSON_RULES"), "background must define MusicBrainz allowlist");
-  assert(files.background.includes("ACOUSTID_FORM_RULES"), "background must define AcoustID allowlist");
-  assert(files.background.includes("Unsupported music lookup URL"), "background must reject unsupported music JSON URLs");
+  assert(!files.musicSource.includes("lookupAcoustIdCandidates"), "Music must not retain removed AcoustID lookup code");
+  assert(!files.background.includes("ACOUSTID_FORM_RULES"), "background must not retain removed AcoustID allowlist");
   assert(files.docsQa.includes("Start a radio session") && files.docsQa.includes("MusicBrainz ISRC enrichment"), "QA checklist must cover Music radio and enrichment smoke");
   assert(files.docsReleaseNotes.includes("Music MVP") || files.docsReleaseNotes.includes("Music"), "release notes must document Music MVP");
 }
@@ -106,10 +105,9 @@ async function verifyFullBuildOutputs(target, root) {
   assert(existsSync(path.join(root, "music", "content.css")), `${target}: missing Music CSS`);
   assert(resources.includes("miladychanSpotlight/*"), `${target}: Miladychan Portal CSS assets must be web-accessible`);
   assert(resources.includes("music/*"), `${target}: Music CSS assets must be web-accessible`);
-  assert(resources.includes("features/*.wasm"), `${target}: Music WASM assets must be web-accessible`);
   assert(manifest.host_permissions?.includes("https://boards.miladychan.org/*"), `${target}: missing Miladychan host permission`);
   assert(manifest.host_permissions?.includes("https://musicbrainz.org/*"), `${target}: missing MusicBrainz host permission`);
-  assert(manifest.host_permissions?.includes("https://api.acoustid.org/*"), `${target}: missing AcoustID host permission`);
+  assert(!manifest.host_permissions?.includes("https://api.acoustid.org/*"), `${target}: removed AcoustID host permission returned`);
 }
 
 function assert(condition, message) {

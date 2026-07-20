@@ -857,6 +857,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       const module = state.loaded.get(app.id);
       const shouldDeliverSurface = appDeliversSurface(app, surface.kind);
+      // RemiStats' action-row poke slot participates in the host flex layout.
+      // Reserve it on every scanned tweet even while the lazy module import is
+      // in flight so native actions and the poke control do not jump columns.
+      if (app.id === "remistats" && surfaceIsWithinBudget && shouldDeliverSurface) {
+        prepareTweetFeatureScaffold(app, surface);
+      }
       if (!module?.onSurface) {
         const importDecision = app.loadTriggers.includes("surface")
           ? surfaceImportDecision(app, surface, surfaceIsWithinBudget)

@@ -7,16 +7,28 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
 - Completes the code-level reliability and accessibility remediation pass for all 43 findings documented in the UX and feature reliability audit.
 - Returns Beetol hunt results immediately after the action request and reconciles inventory/cooldowns separately, preventing successful hunts from appearing stuck behind sequential state refreshes.
-- Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.
+- Reuses an authenticated RemiliaNET browser session for RemiNet Chat, but renews its write credential after an opened socket is rejected instead of reusing the cached credential in a Connecting loop; authentication and WebSocket opening remain bounded.
 - Passes the complete non-live 0.2.3 release gate, including both browser builds, package/security contracts, smoke tests, archive checksums, and reproducibility; authenticated live QA remains the publication gate.
 - Invalidates cached Chat authentication across connector logout/timeouts and propagates shared background deadlines into fetch abort signals so expired work cannot continue consuming privileged network resources.
 - Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction and dark pop-out states, darkens Post/Reply controls in the dark preset, and matches the Wiki read-aloud button to the square Wiki control family.
 - Restores a compact Apps & Features rail-settings view with single-line ordering controls, removes the redundant self-link, and keeps app presets collapsed until requested.
 - Keeps X's native Like feedback responsive by removing broad button-transition overrides and replacing Maxxer's full-card shadow animation with short compositor-friendly feedback.
+- Clears Chrome's stranded Web Speech pause state before starting a new read-aloud utterance, preventing a silent first-word hang.
+- Restores continuous paragraph-level smooth highlighting by carrying each boundary toward the next one and continuously recalibrating fill speed against speech instead of limiting animation to the current token.
+- Keeps that paragraph scan moving when Chrome continues speaking after emitting only its first synchronized boundary, while yielding immediately if native boundary events resume.
+- Restores navigation-sized speech chunks so the small previous/next paragraph controls move within long readings while the large controls remain previous/next post actions.
+- Reconstructs the Beetle Hunt cooldown from the API's `beetleHuntsUsed` and `lastBeetleHuntDate` fields and reads nested action cooldowns, preserving the actual remainder of the 90-minute timer across reloads and server cooldown responses.
 - Removes two suspected reliability-audit lag contributors: main-column mutation-driven button rescans are replaced by a disabled-aware, capped visible-page check every five seconds, and the root-level relational dock selector is replaced by a static left-rail safe area.
 - Keeps the final Beetle Hunt reward visible before transitioning to a red Done status and the persisted 90-minute cooldown.
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
 - Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
+- Keeps the RemiStats action-row poke position stable while its lazy app bundle loads, and lets tweet names and handles use available header space before truncating.
+- Corrects the tweet-header flex allocation so longer display names do not ellipsize against an oversized metadata basis while usable row space remains.
+- Restores embedded local cover art in Music from the selected audio file, retries stale metadata results when the parser or file changes, and persists recovered artwork for later popout renders.
+- Makes Apps & Features the single place to enable or disable RemiNet Chat by removing the duplicate popup toggle, and relabels the updater handoff action as **Open in LLM**.
+- Enables RemiStats poke-on-Like when applying the Medium or Max appearance preset while keeping it disabled in Minimal.
+- Replaces several implementation-coupled regression checks with registry-driven and production-policy tests for app enablement, profile-pack sections, Music artwork caching, and Post-reading hyperlink offsets.
+- Removes Chromaprint WASM and AcoustID acoustic lookup from Music, reducing release size and host permissions while preserving metadata inference, MusicBrainz enrichment, candidate review, and manual ISRC editing.
 
 Status: in development.
 

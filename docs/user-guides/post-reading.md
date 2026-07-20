@@ -27,7 +27,7 @@ Post-reading reads X/Twitter posts aloud, can hand Remilia Wiki articles into th
 
 Tweet reading and Wiki reading share the reader runtime but pause each other so only one read-aloud session speaks at a time.
 
-Word and paragraph highlighting is most accurate with browser voices that report stable speech boundaries. milXdy probes voices and prefers known boundary-capable voices; other voices use an estimated smooth-highlight fallback for both feed posts and Wiki playback.
+Word and paragraph highlighting is most accurate with browser voices that report stable speech boundaries. milXdy probes voices and prefers known boundary-capable voices; other voices use an estimated smooth-highlight fallback for both feed posts and Wiki playback. If a boundary-capable voice stops reporting progress after playback begins, feed-post highlighting temporarily follows the same estimated clock and returns to exact timing when boundary events resume.
 
 Custom HTTP TTS can return audio plus optional timing boundaries. Remote endpoints and returned remote audio URLs are rejected; use a loopback local service. When boundaries are provided, Post-reading can keep highlighting and seeking closer to the spoken audio.
 

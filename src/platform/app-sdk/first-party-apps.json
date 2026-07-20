@@ -2918,6 +2918,7 @@
     "background": {
       "messageTypes": [
         "reminetChat:*",
+        "reminetIdentity:getProfile",
         "beetol:poke",
         "remistats:getUser"
       ],
@@ -3103,8 +3104,7 @@
         "milxdy.music.top",
         "milxdy.music.libraryMinimized",
         "milxdy.music.volume",
-        "milxdy.music.autoAcceptHighConfidenceIsrc",
-        "milxdy.music.acoustIdClientKey"
+        "milxdy.music.autoAcceptHighConfidenceIsrc"
       ]
     },
     "settings": [
@@ -3215,11 +3215,10 @@
         "Requires user-selected local folder access for music indexing."
       ],
       "dataNotes": [
-        "Reads selected local audio files and may send fingerprints or metadata to enrichment services when configured."
+        "Reads selected local audio files and may send track metadata to MusicBrainz during enrichment."
       ],
       "remoteServices": [
-        "musicbrainz.org",
-        "api.acoustid.org"
+        "musicbrainz.org"
       ],
       "localStorageNotes": [
         "Stores music library metadata, playlists, layout, volume, and enrichment settings."
@@ -3240,14 +3239,12 @@
       ],
       "services": [
         "musicBrainz",
-        "acoustId",
         "imageProxy"
       ]
     },
     "permissions": {
       "hosts": [
-        "https://musicbrainz.org/*",
-        "https://api.acoustid.org/*"
+        "https://musicbrainz.org/*"
       ]
     },
     "css": [
@@ -3261,9 +3258,6 @@
     ],
     "assets": [
       "music"
-    ],
-    "requiredOutputs": [
-      "features/chromaprint.wasm"
     ]
   }
 ]

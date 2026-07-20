@@ -1883,15 +1883,12 @@ function remiliaUrl(path) {
 async function fetchTrophyProfile(remiliaUsername) {
   const clean = cleanUsername(remiliaUsername);
   if (!clean) return null;
-
-  const response = await fetch(`${REMILIA_BASE_URL}/api/profile/~${encodeURIComponent(clean)}`, {
-    credentials: 'omit',
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) return null;
-
-  const data = await response.json().catch(() => null);
-  return data?.user || null;
+  const response = await runtimeSendMessage({
+    type: 'reminetIdentity:getProfile',
+    remiliaUsername: clean,
+    maxAgeMs: 24 * 60 * 60 * 1000,
+  }, 'reminetIdentity:getProfile');
+  return response?.ok ? response.profile || null : null;
 }
 
 function firstShelfRow(user) {

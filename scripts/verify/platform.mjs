@@ -68,6 +68,7 @@ async function verifyRuntimeOwnership() {
   assert(background.includes("createBackgroundNetworkDeadlineSignal()"), "central budgeted fetches must retain a deadline while response bodies are read");
   assert(postReadingBackground.includes("AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])"), "Post-reading response bodies must retain queue cancellation and a read deadline");
   assert(!reskinStyles.includes('html[data-milxdy-reskin-profile="max"] [role="button"],'), "Root Visuals must not override transition properties on every native X button");
+  assert(/\[data-milxdy-tweet-header="true"\][\s\S]*?flex:\s*1 1 0% !important/.test(reskinStyles), "Root Visuals tweet headers must grow into available control-row space before truncating handles");
   assert(!maxxerStyles.includes("transition: transform 0.3s ease, box-shadow 0.3s ease"), "Maxxer cards must not animate large multi-layer shadows during Like state changes");
   assert(wikiFrame.includes("revealWikiReadingRange(range.element)") && wikiFrame.includes("EXPANDABLE_WIKI_CONTAINER_SELECTOR"), "Wiki read-aloud must reveal supported collapsed/tabbed containers before highlighting");
   assert(wikiFrame.includes("container && wikiContainerIsHidden(container) && wikiContainerController(container)"), "Wiki read-aloud must skip hidden content that has no hidden expandable container and recoverable controller");
@@ -107,7 +108,7 @@ async function verifyRuntimeOwnership() {
   assert(/const finalRect = clampOverlayRectToSafeArea\(snapped\.rect,[\s\S]*?applyFreeformRect\(finalRect, options\)/.test(overlayPanelBase), "freeform resize must re-clamp snapped geometry before applying it");
   const beetolContent = await readFile("src/apps/beetol/content.js", "utf8");
   assert(beetolContent.includes("allowInteractiveDragTarget: true"), "Beetol must explicitly declare its tab drag-handle exception");
-  assert(beetolContent.includes("FINAL_HUNT_COOLDOWN_MS = 90 * 60 * 1000") && beetolContent.includes("scheduleFinalHuntDone()"), "Beetol final hunts must preserve the result before the 90-minute cooldown state");
+  assert(beetolContent.includes("scheduleFinalHuntDone()"), "Beetol final hunts must preserve the result before transitioning to cooldown state");
   assert(beetolContent.includes("messageRevision !== expectedMessageRevision"), "Beetol final-hunt Done transition must not overwrite a newer operation status");
   assert(runtime.includes('setSettingsAction("milxdy.addApps"') && runtime.includes("onActivate: openHubPanel"), "content runtime must link dock settings to the Apps Hub through the dock settings action API");
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");

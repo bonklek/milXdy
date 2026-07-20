@@ -547,25 +547,32 @@ export const RESKIN_CSS = `
     letter-spacing: 0 !important;
   }
 
+  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"] {
+    flex: 1 1 0% !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"] {
     align-items: center !important;
     column-gap: 4px !important;
     display: flex !important;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
     min-width: 0 !important;
     row-gap: 1px !important;
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 100% !important;
-    max-width: 100% !important;
+    flex: 0 1 auto !important;
+    max-width: none !important;
     min-width: 0 !important;
     overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] span {
-    max-width: 100% !important;
+    max-width: none !important;
     min-width: 0 !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
@@ -576,7 +583,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 100% !important;
+    flex: 1 1 0% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
@@ -611,15 +618,15 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 100% !important;
-    max-width: 100% !important;
+    flex: 0 1 auto !important;
+    max-width: none !important;
     overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] span {
     min-width: 0 !important;
-    max-width: 100% !important;
+    max-width: none !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
     text-overflow: ellipsis !important;
@@ -629,7 +636,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 auto !important;
+    flex: 1 1 0% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
@@ -1226,6 +1233,11 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] [data-testid="cellInnerDiv"] > div,
   html[data-milxdy-reskin-profile="max"] article {
     border-color: color-mix(in srgb, var(--milxdy-border) 76%, transparent) !important;
+  }
+
+  html[data-milxdy-reskin-profile] [data-testid^="message-"]:not([data-testid^="message-text-"])
+  div:has(> a[href*="/status/"]) {
+    background-color: var(--milxdy-surface) !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article:not([data-miladymaxxer-effect]) {

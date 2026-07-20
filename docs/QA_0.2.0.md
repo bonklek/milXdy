@@ -94,12 +94,11 @@ If `node` is unavailable on `PATH` in the test environment, run the same scripts
 - Export playlist JSON and QR. Re-import both into a fresh/cleared music library and confirm tracks resolve by ISRC or title/artist/album/duration metadata when available.
 - Start a radio session from a playlist, export its QR, import it, and confirm Join computes the current track and offset from the shared start time and marks the active session.
 - Run MusicBrainz ISRC enrichment on test tracks and review at least one candidate.
-- Add an AcoustID key only in a test profile, run optional acoustic lookup, then remove the key and confirm lookup is disabled.
 - In Firefox, confirm Music explains local folder limitations rather than failing silently.
 
 ## Background Security
 
-- Confirm background URL fetches reject unsupported origins for Miladychan, MusicBrainz, AcoustID, Milady Maker image proxy, Music image proxy, and RemiNet media.
+- Confirm background URL fetches reject unsupported origins for Miladychan, MusicBrainz, Milady Maker image proxy, Music image proxy, and RemiNet media.
 - Confirm `npm run verify:url-allowlist` passes after any background fetch or media proxy rule change.
 - Confirm supported allowlisted URLs still work for the app flows above.
 - Confirm feature background modules do not add separate `chrome.runtime.onMessage` listeners.

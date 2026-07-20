@@ -6,124 +6,71 @@ Use this file for unscheduled or release-assigned ideas that are not yet impleme
 
 Add newly captured unscheduled ideas here before assigning them to a release.
 
-- Create a distinct milXdy logo.
-  - Current builds are still borrowing the Remilia Wiki logo.
-
 ## Assigned Entries
 
-### 0.2.0 - The Platform Update
+### 0.2.3 - App Runtime And Distribution Prep
 
-- App platform refactor and first-party app registry.
-  - Details: `ideas/app-platform-refactor-handoff.md`.
-  - Public docs: `docs/APP_SDK.md`.
-- Shared overlay dock and app frame.
-- Performance mode split from appearance intensity.
-  - Details: `ideas/performance-mode-refactor-note.md`.
-- Miladychan Portal.
-  - Details: `ideas/miladychan-master-plan-notes.md`.
-- Music MVP and local radio foundation.
-  - Details: `ideas/music-lifestyle-radio.md`.
-- App-platform docs, install/update docs, and public product framing.
+- Gate the Poke action on confirmed RemiNet eligibility; issue #88.
+- Add a remilia.net Beetle Hunt reduced-motion option; issue #134.
 
-### 0.2.1 - RemiNet Placement And Maxxer Controls
+### 0.2.4 - Composer Kit
 
-- Add a pseudo chat to the X Chats tab with RemiNet chat pinned at the top.
-- Expand Miladymaxxer image detection to all reliably recognized collections.
-- Add an advanced menu for choosing which recognized collections are maxxed, minimized, or neutral.
-- Complete minimization of non-Milady profile pictures.
-  - Preserve users with RemiStats beetle stats.
-  - Keep whitelist/manual-list overrides.
-  - Make the effect reversible from settings.
-- Add direct Tweet PNG upload to RemiNet.
-  - Requires endpoint/API confirmation.
-  - Requires preview/review behavior and privacy review.
-  - Never upload automatically.
+- Export reviewed milXdy context and app prompt packs; issue #158.
 
-### 0.2.2 - Reply And Composer Media Tools
+### 0.2.5 - Reader Voice
 
-- Add a Miladybooru or Meme Depot reply picker.
-  - Use an approved Milady image corpus.
-  - If `https://memedepot.com/d/milady` remains the backing corpus, keep source reliability and attribution explicit.
-- Add a local meme saver folder.
-  - Add a local collection of reaction gifs and images near attachment/gif controls.
-  - Gallery popup should support scrolling and search.
-  - Add a `save to collection` button to uploaded reply images.
-- Add a small outline Milady-head reply button next to reply.
-  - Sends `milady` without interrupting flow.
-  - Settings can change it to `remilio`.
-  - Optional custom SVG upload for a custom reply action.
-- Add a `Milady Maker` button to the tweet composer bottom bar.
-  - Opens `https://maker.remilia.org/milady`.
-  - Investigate whether drafted tweet text can be passed into the `TOP TEXT` field safely.
+- Support Read Aloud on X direct-message conversations; issue #135.
 
-### 0.2.3 - Postreader Companion Voice
+### 0.2.6 - Social Tuning
 
-- TTS engine side package.
-  - User can install it locally.
-  - Instructions link to the other repo.
-  - Maybe lives in a standalone postreader package.
+- Add an opt-in local usage monitor, gentle nudges, and reversible engagement-reduction presets; issue #87.
 
-### 0.2.4 - Identity And Registry Experiments
+### 0.2.7 - Activity Arcade
 
-- Facelord Fixer classifier.
-  - Detect whether an account has the real face and full name of a person.
-  - Options: minimize/erase, Kagamify, or scramble.
-  - Kagamify replaces the pfp with a Kagami and the name with Milady.
-  - Scramble gives the default Twitter pfp plus a generated name.
-- Optional registry of milXdy users.
-  - Show as a badge on opted-in X profiles.
-  - Requires a new API or static registry service for lookup/sync.
-  - Requires ownership proof, privacy rules, removal flow, and abuse controls.
+- Add optional local relationship activity history for pokes and exact/first-observed follow timing; issue #131.
 
-### 0.2.5 - Daily Milady Spin
+### 0.2.8 - Identifier Media Layer
 
-- Add a slot-machine icon near the Milady/X icon that opens a Milady wheel.
-  - One spin per day.
-  - Gives or displays a random Milady-style result.
-  - Include a view-on-Blur button.
-  - Let users choose which collection their daily spins use.
-  - Could model the mini game after `https://isabisabel.com/gacha/`.
+- Add bookmark-based post tags, local collections, source-pack handoff, and reviewed context export; issue #78.
 
-### 0.2.6 - Lifestyle Radio
+### 0.2.9 - Live Media Integrations
 
-- Optional music player follow-through.
-  - Details: `ideas/music-lifestyle-radio.md`.
-  - Let users select one or more local folders as a library.
-  - Support shuffle and playlists.
-  - Treat playlist start-time radio as the MVP compatibility layer, not the final radio concept.
-  - Long-term radio model should be station -> timed block -> full record/album, inspired by the Miladychan master plan.
-  - Add personal stations generated from the user's own library, plus board-inspired stations for Miladychan surfaces.
-  - Treat ISRC enrichment as first-class.
-  - First lookup path: embedded tags, filename/manual hints, browser Chromaprint fingerprint, AcoustID lookup, MusicBrainz recording ISRC lookup.
-  - AcoustID requires a client key; store it locally as an optional user setting rather than introducing a developer media backend.
-  - Respect MusicBrainz rate limits with one-at-a-time queued lookup work.
-  - Export/import playlists by ISRC metadata where possible, leaving unmatched local-only tracks as unresolved placeholders.
-  - Add QR playlist sharing and start-time radio mode before any streaming fallback.
+- Add a reviewed RemiCast open/embed integration; issue #34.
+- Add lightweight Twitch live-media cards with an explicit `Open on Twitch` handoff and no implicit external loading; issue #35.
 
-### 0.2.7 - Stats And Shareable Activity
+### 0.2.10 - Miladychan Live
 
-- Stats and Leaderboards panel.
-  - Unify Maxxer XP, pokes, Beetol actions, Postreader usage, RemiStats, and local diagnostics.
-- Beetle Hunt share-to-X.
-- Optional poke feed.
+- Add Miladychan deck, live-board, watchlist, and board-pulse expansion; issue #38.
+- Detailed context: `ideas/miladychan-master-plan-notes.md`.
+
+### 0.2.12 - Front Door & Platform Reach
+
+- Public screenshots and README visual guide; issue #28.
+- Fullscreen onboarding guide and tutorial; issue #29.
+- Chrome Web Store readiness research; issue #30.
+- Safari desktop WebExtension support; issue #91.
+- Firefox Android and iOS/iPadOS Safari mobile feasibility plan; issue #93.
+- Small square logo and themed X favicon refresh; issue #104.
+
+### 0.3.x - Onchain Integration
+
+- Public planning and dependency map: `docs/ONCHAIN_ROADMAP.md`.
+- `0.3.0`: wallet identity, onchain app capabilities, RPC safety, and transaction review/recovery.
+- `0.3.1`: read-only Radio Free Ethereum, content-addressed sources, and collection context.
+- `0.3.2`: Paraclete compatibility, optional AA gossip, and scoped ERC-4337 adapters.
+- `0.3.3`: `$CULT` cheers, tipping, receiving-address proofs, and rotation research.
+- `0.3.4`: BlobMail key transparency, testnet inbox/composer, delivery evidence, and local recovery.
+- `0.3.5`: optional Remilia Gotcha/Banners ownership context and read-only Bonklet integration.
+- `0.3.6`: advanced RFE publishing, portable station apps, rights research, and reviewed IPFS publication.
+- `0.3.7`: signed observation records, bounded metadata gossip, passive public-metadata adapters, a shared local index, and X `Account based in` region filtering.
+
+### Exploratory 0.4.x - Personal Computing
+
+- Personal Workspace research: sticky-note canvas, durable local state, recovery, accessibility, and reviewed portability; issues #97 and #162-#164.
+- Companion Bridge research: explicit context handoff, bounded artifacts, native messaging, capability pairing, and companion-owned MCP adaptation; issues #77 and #165-#168.
+- These are design/prototype containers, not a committed `0.4.0`/`0.4.1` sequence. Either direction may be reduced, deferred, combined, reordered, or replaced.
+- Keep manual reviewed prompt-pack export in 0.2.4 as the reliable fallback; issue #158.
 
 ## Backlog
 
-- Public screenshots and README visual guide.
-- Fullscreen onboarding guide and tutorial for fresh installs.
-- Customize the like button with a few presets that keep the normal faded-to-colorful click transition.
-  - Defaults: joycat, thumbs up, heart eyes, star eyes, hamburger, tearing-up smile, salute.
-- Unfollow suggestions.
-  - In the following list, highlight light-red accounts without Milady pfps using Maxxer.
-- Mobile extension mode that can be saved to the home screen and mimics the desktop browsing experience.
-- RemiCast integration.
-- Support Twitch streaming embeds.
-- `$CULT` token cheer.
-  - Investigate public ENS/ETH discovery only if there is a clear privacy-safe user value.
-  - Require explicit opt-in before any wallet/address-linked behavior.
-- On-chain tipping and rotating receiving wallets.
-  - Details: `ideas/onchain-tipping-and-receiving-wallets.md`.
-  - Requires strong privacy, opt-in, and withdrawal hygiene before any implementation.
-- Miladychan deck and advanced live-board expansion.
-  - Details: `ideas/miladychan-master-plan-notes.md`.
-  - Future follow-up after the implemented Portal has real usage feedback.
+No currently triaged entries. Add new unscheduled ideas under `New Entries` before assigning them.

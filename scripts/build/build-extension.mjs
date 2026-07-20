@@ -33,6 +33,9 @@ const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
 await rm(outDir, { recursive: true, force: true });
 await mkdir(outDir, { recursive: true });
 await mkdir(`${outDir}/features`, { recursive: true });
+await copyFile("LICENSE", `${outDir}/LICENSE`);
+await copyFile("THIRD_PARTY_NOTICES.md", `${outDir}/THIRD_PARTY_NOTICES.md`);
+await cp("third_party", `${outDir}/third_party`, { recursive: true });
 
 await writeManifest();
 await copyFile("assets/extension/popup/popup.html", `${outDir}/popup.html`);
@@ -58,10 +61,6 @@ for (const sheet of firstPartyApps.flatMap((app) => app.css || [])) {
   }
 }
 await copyLocalPackageAssets();
-if (appEnabled("music") && existsSync("node_modules/@unimusic/chromaprint/dist/chromaprint.wasm")) {
-  await copyFile("node_modules/@unimusic/chromaprint/dist/chromaprint.wasm", `${outDir}/features/chromaprint.wasm`);
-}
-
 if (appEnabled("post-reading")) {
   await mkdir(`${outDir}/ocr/core`, { recursive: true });
   await mkdir(`${outDir}/ocr/lang`, { recursive: true });
@@ -492,8 +491,7 @@ function buildWebAccessibleResources(existing) {
     if (tesseractCoreDir) resources.push("ocr/core/*");
     if (existsSync("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz")) resources.push("ocr/lang/*");
   }
-  if (appEnabled("music")) resources.push("features/*.wasm");
-  if (appEnabled("miladymaxxer")) resources.push("features/*.wasm", "worker.js", "ort/*", "generated/*", "models/*", "milady-logo.png");
+  if (appEnabled("miladymaxxer")) resources.push("worker.js", "ort/*", "generated/*", "models/*", "milady-logo.png");
   const localResources = localAppPlan?.webAccessibleAssets?.flatMap((entry) => entry.resources || []) || [];
   return [{
     resources: unique(resources),
@@ -542,9 +540,12 @@ async function mirrorChromiumRootOutput() {
     "popup.css",
     "popup.html",
     "popup.js",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
     "wikiFrame.js",
     "worker.js",
     "features",
+    "third_party",
     ...unique([
       ...commonAssetDirs,
       ...firstPartyApps.flatMap((app) => app.assets || []),

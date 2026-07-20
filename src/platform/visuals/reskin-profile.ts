@@ -153,6 +153,7 @@ export type ProfileAudioSettings = {
   miladySoundEnabled: boolean;
   remistatsSoundsEnabled: boolean;
   remistatsSoundVolume: number;
+  remistatsLikeAutoPoke: boolean;
   postReadingEndOfTweetDing: boolean;
 };
 
@@ -328,18 +329,21 @@ export const PROFILE_AUDIO_PRESETS: Record<ReskinProfile, ProfileAudioSettings> 
     miladySoundEnabled: true,
     remistatsSoundsEnabled: true,
     remistatsSoundVolume: 0.75,
+    remistatsLikeAutoPoke: true,
     postReadingEndOfTweetDing: true,
   },
   moderate: {
     miladySoundEnabled: true,
     remistatsSoundsEnabled: true,
     remistatsSoundVolume: 0.55,
+    remistatsLikeAutoPoke: true,
     postReadingEndOfTweetDing: false,
   },
   min: {
     miladySoundEnabled: false,
     remistatsSoundsEnabled: false,
     remistatsSoundVolume: 0.4,
+    remistatsLikeAutoPoke: false,
     postReadingEndOfTweetDing: false,
   },
 };

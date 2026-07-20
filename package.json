@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "description": "An integrated X/Twitter experience enhancer by consolidating multiple browser extensions.",
-  "license": "VPL",
+  "license": "SEE LICENSE IN LICENSE",
   "scripts": {
     "build": "node scripts/build/build-extension.mjs --target=chromium",
     "build:chromium": "node scripts/build/build-extension.mjs --target=chromium",
@@ -22,6 +22,7 @@
     "build:all": "node scripts/build/build-extension.mjs --target=chromium && node scripts/build/build-extension.mjs --target=firefox",
     "build:profiles": "node scripts/build/build-profiles.mjs",
     "dev": "node scripts/build/build-extension.mjs --target=chromium --watch",
+    "test": "vitest run src",
     "typecheck": "tsc --noEmit",
     "lint:firefox": "node scripts/verify/firefox-lint.mjs",
     "verify:music": "node scripts/verify/music-build.mjs",
@@ -59,7 +60,6 @@
   },
   "dependencies": {
     "@tesseract.js-data/eng": "^1.0.0",
-    "@unimusic/chromaprint": "^0.1.4",
     "jsqr": "^1.4.0",
     "onnxruntime-web": "^1.24.3",
     "qrcode": "^1.5.4",

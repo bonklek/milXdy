@@ -18,7 +18,7 @@ The Suite tab provides a guided version of this flow:
 
 - **Download** opens the matching GitHub release zip for the current browser target when the update checker finds one. If the exact archive is missing, use the release page and choose the zip that matches the installed browser.
 - **Steps** copies the safe in-place update checklist.
-- **LLM** opens your configured assistant target after copying the update checklist so you can ask for guided help without losing the safe update steps.
+- **Open in LLM** opens your configured assistant target after copying the update checklist so you can ask for guided help without losing the safe update steps.
 - **Reload** calls Chrome's extension reload after you have replaced the files in the same folder.
 
 ## Main, Apps, And Appearance
@@ -183,16 +183,16 @@ When RemiNet connector auth is available, milXdy can show a small incoming poke 
 
 ### RemiNet Chat
 
-Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/Twitter routes and add a RemiNet entry to X Messages.
+Enable **RemiNet Chat** from Apps & Features to mount it on supported X/Twitter routes and add a RemiNet entry to X Messages. Apps & Features is the single enable/disable control for the app; the extension popup contains only Chat preferences such as sounds.
 
 - The chat uses the same RemiNet connector login as pokes and Beetol Game.
 - It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
 - When you scroll to the oldest loaded messages, use **Show more** to load another batch of older chat history.
 - It supports reactions, pokes, attachments, allowlisted media and pfp.remilia.net avatar previews, profile lookups, and minimized mode.
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
-- The setting is off by default while beta performance and auth behavior are validated.
+- The app is off by default while beta performance and auth behavior are validated.
 
-If the chat does not connect, confirm RemiNet login status first, then refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
+Chat reuses a signed-in RemiliaNET browser session directly. If an authenticated send causes the WebSocket to reject its cached write credential, milXdy refreshes the browser session and renews that credential once before reconnecting. If renewal fails, Chat stops at **Retry session** instead of repeatedly reconnecting. Confirm RemiNet login status first, then use **Retry session** or refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
 
 ## Beetol Game Login
 
@@ -238,12 +238,13 @@ The portal is a reader/browser surface. Deeper board deck, board-inspired radio,
 Enable and pin **Music** from Apps & Features to open the docked local music app.
 
 - **Library** indexes user-selected local folders in Chromium browsers that support persistent folder handles. Rescans ask for permission again when needed, mark removed files as missing, normalize basic filename metadata, and flag likely duplicates without touching local audio files.
+- Embedded cover art is read from the selected local audio file and cached with the indexed track. Missing art is retried when the metadata parser changes or the underlying file size or modification time changes.
 - **Queue** controls local playback order, including reorder, shuffle, repeat, progress seek, and volume.
 - **Playlists** lets you create, add visible library tracks, reorder, remove, retry matching, play, export, import, and QR-share metadata playlists.
 - **Radio** creates metadata-based sessions from playlists. Joining or importing a session computes the current track and offset locally from the shared start time and marks the active joined session.
-- **Settings** controls local folders, ISRC enrichment, auto-match behavior, and the optional AcoustID client key.
+- **Settings** controls local folders, MusicBrainz ISRC enrichment, and auto-match behavior.
 
-ISRC enrichment is local-first. milXdy can infer candidates from file metadata, query MusicBrainz, and optionally use AcoustID when the user provides a key. Playlist and radio QR payloads share title, artist, album, ISRC, duration, playlist name, and start time metadata, not audio files. Imports match local files by ISRC first and then by title, artist, album, and duration.
+ISRC enrichment is local-first. milXdy can infer candidates from file metadata and query MusicBrainz. Playlist and radio QR payloads share title, artist, album, ISRC, duration, playlist name, and start time metadata, not audio files. Imports match local files by ISRC first and then by title, artist, album, and duration.
 
 Firefox support for local music folders is limited by browser folder-handle support; use Chromium for the full local library workflow.
 
@@ -284,7 +285,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`.
-- Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
+- Music enrichment may call `https://musicbrainz.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.
 - RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.

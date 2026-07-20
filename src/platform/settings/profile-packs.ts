@@ -1,4 +1,5 @@
 import { normalizePerformanceMode, type PerformanceMode } from "./performance-mode";
+import { ignoredProfilePackSections, type ProfilePackSection } from "./profile-pack-sections";
 import {
   VISUAL_THEME_CONTROL_GROUPS,
   normalizeReskinProfile,
@@ -9,9 +10,7 @@ import {
 
 export const PROFILE_PACK_KIND = "milxdy.profilePack";
 export const PROFILE_PACK_VERSION = 1;
-
-export type ProfilePackSection = "appearance" | "performance" | "apps" | "rail" | "layout";
-const SUPPORTED_IMPORT_SECTIONS = new Set<ProfilePackSection>(["appearance", "performance"]);
+export { ignoredProfilePackSections, type ProfilePackSection } from "./profile-pack-sections";
 
 export type VisualThemePackPayload = {
   kind: "milxdy.visualTheme";
@@ -171,16 +170,12 @@ export function profilePackPreviewLines(pack: MilxdyProfilePack): string[] {
   if (pack.layout?.appChromeOverrides) {
     lines.push(`Ignored layout: ${Object.keys(pack.layout.appChromeOverrides).length} chrome override(s)`);
   }
-  const ignoredSections = pack.sections.filter((section) => !SUPPORTED_IMPORT_SECTIONS.has(section));
+  const ignoredSections = ignoredProfilePackSections(pack);
   if (ignoredSections.length > 0) {
     lines.push(`Only appearance and performance are imported today; ignored section(s): ${ignoredSections.join(", ")}.`);
   }
   lines.push("Auth, sessions, API keys, private data, file paths, caches, and diagnostics are never imported from profile packs.");
   return lines;
-}
-
-export function ignoredProfilePackSections(pack: MilxdyProfilePack): ProfilePackSection[] {
-  return pack.sections.filter((section) => !SUPPORTED_IMPORT_SECTIONS.has(section));
 }
 
 function inferredSections(pack: MilxdyProfilePack): ProfilePackSection[] {
