@@ -33,6 +33,7 @@
     "verify:app-smoke": "node scripts/smoke/app-smoke.mjs",
     "verify:app-smoke:020": "node scripts/smoke/app-smoke-020.mjs",
     "verify:filesystem-layout": "node scripts/verify/filesystem-layout.mjs",
+    "verify:locales": "node scripts/verify/locales.mjs",
     "verify:app-sdk-compliance": "node scripts/verify/app-sdk-compliance.mjs",
     "verify:internal-messaging-bridges": "node scripts/verify/internal-messaging-bridges.mjs",
     "verify:remistats-tooltip-escaping": "node scripts/verify/remistats-tooltip-escaping.mjs",

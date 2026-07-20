@@ -6,6 +6,7 @@ const gates = [
   ["Current release docs/contracts", ["scripts/release/verify-release-current.mjs"]],
   ["Build Chromium/Firefox profiles", ["scripts/build/build-profiles.mjs"]],
   ["Filesystem layout", ["scripts/verify/filesystem-layout.mjs"]],
+  ["Localization metadata", ["scripts/verify/locales.mjs"]],
   ["Platform contracts", ["scripts/verify/platform.mjs"]],
   ["URL allowlist contracts", ["scripts/verify/url-allowlist.mjs"]],
   ["App SDK compliance", ["scripts/verify/app-sdk-compliance.mjs"]],
