@@ -11,7 +11,6 @@ const packageRelease = await readFile("scripts/release/package-release.mjs", "ut
 const releaseChecksums = await readFile("scripts/release/verify-release-checksums.mjs", "utf8");
 const releaseReproducible = await readFile("scripts/release/verify-reproducible-release.mjs", "utf8");
 const releaseLock = await readFile("scripts/release/release-artifact-lock.mjs", "utf8");
-const planning = await readFile("PLANNING.md", "utf8");
 const roadmap = await readFile("docs/ROADMAP.md", "utf8");
 const releaseNotes = await readFile(`docs/RELEASE_NOTES_${packageJson.version}.md`, "utf8");
 
@@ -53,12 +52,10 @@ assert(releaseLock.includes("tmp") && releaseLock.includes("release-artifacts.lo
 assert(releases.includes("npm run verify:release:gates"), "release docs must use the current version-neutral release gate");
 assert(releases.includes("npm.cmd run verify:release:gates"), "release docs must include the Windows current release gate command");
 assert(!releases.includes("`verify:release:gates:020` is the canonical release readiness gate"), "release docs must not call the historical 0.2.0 gate canonical");
-assert(changelog.includes("verify:release:gates") && changelog.includes("current release gate") && changelog.includes("Post-reading distribution"), "changelog must summarize the current release gate and Post-reading distribution coverage");
 assert(contributing.includes("npm run verify:release:gates"), "contributing docs must point release prep at the current release gate");
-assert(planning.includes(`next planned release is \`${packageJson.version}\``), "planning must identify the package version as the next planned release");
 assert(
-  ["Planned", "Release Candidate", "Released"].some((status) => roadmap.includes(`${status}: ${packageJson.version}`)),
-  "roadmap must include the package version as planned, release candidate, or released",
+  ["Planned", "Upcoming", "Released"].some((status) => roadmap.includes(`${status}: ${packageJson.version}`)),
+  "roadmap must include the package version as planned, upcoming, or released",
 );
 assert(releaseNotes.includes(`# milXdy ${packageJson.version}`), "current release notes heading must match package version");
 assert(changelog.includes(`## ${packageJson.version}`), "changelog must include the package version heading");

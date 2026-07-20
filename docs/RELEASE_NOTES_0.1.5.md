@@ -10,7 +10,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 - Added X-native outline poke controls, persisted poke cooldowns, gold incoming-poke styling, and Miladymaxxer XP credit for successful pokes.
 - Added Beetle trophy shelf profile banners and profile banner cycling with original, trophy shelf, and random Banners NFT modes.
 - Added Tweet PNG export from X/Twitter share actions with local rendering, clipboard/download/share behavior, media, quotes, date, and RemiStats options.
-- Added repeatable Chromium and Firefox build targets, Firefox manifest generation, and Firefox lint/QA docs.
+- Added repeatable Chromium and Firefox build targets, Firefox manifest generation, and browser-specific installation notes.
 
 ## Added
 
@@ -20,7 +20,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 - `npm run build:firefox` emits Firefox output under `dist/firefox`.
 - `npm run build:all` builds both targets.
 - `npm run lint:firefox` runs `web-ext lint --source-dir dist/firefox`.
-- Added [Firefox QA](FIREFOX_QA.md) with the manual load and smoke-test checklist.
+- Added [Firefox and Waterfox](FIREFOX_QA.md) installation and compatibility notes.
 
 ### RemiNet and RemiChat
 
@@ -64,9 +64,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 
 ## Known Limits
 
-- Firefox automated build/lint checks pass, but Firefox support should not be advertised broadly until manual Firefox smoke testing passes using [Firefox QA](FIREFOX_QA.md).
-- `web-ext` reports no Firefox lint errors. The current package still has reviewed warnings from bundled OCR/ONNX/Tesseract code and existing dynamic-rendering patterns. Later release work added explicit Firefox data-collection metadata under `browser_specific_settings.gecko.data_collection_permissions`.
-- `npm audit --omit=dev` reports no production dependency vulnerabilities. `npm ci` still reports dev-tree audit findings, which should be reviewed separately from the frozen feature package.
+- Firefox features that depend on Chromium's File System Access API have reduced behavior; see [Firefox and Waterfox](FIREFOX_QA.md).
 - Direct RemiNet upload/share for Tweet PNG exports is still blocked until a suitable endpoint and privacy behavior are confirmed.
 - X/Twitter DOM changes can affect share-menu injection, RemiNet surfaces, and profile banner rendering.
 

@@ -77,28 +77,8 @@ Developers should treat `0.2.0` as the app-platform preview and planning target:
 ## Documentation
 
 - Added [App SDK](APP_SDK.md) covering manifests, runtime lifecycle, Apps Hub, Performance modes, overlay panels, background services, and the future GitHub app package path.
-- Added [0.2.0 QA checklist](QA_0.2.0.md), [0.2.0 QA evidence log](QA_LOG_0.2.0.md), [0.2.0 Chrome live QA handoff](CHROME_LIVE_QA_0.2.0.md), [0.2.0 release screenshot asks](RELEASE_SCREENSHOTS_0.2.0.md), `npm run build:profiles`, `npm run verify:release:020`, `npm run verify:release:gates:020`, `npm run verify:app-smoke:020`, `npm run verify:smoke:020`, `npm run verify:url-allowlist`, `npm run print:live-probe:020`, `npm run verify:live-probe:020`, `npm run package:release`, `npm run verify:release:checksums`, and `npm run verify:release:reproducible` to keep release-gate coverage tied to the platform roadmap, generated extension outputs, background URL security rules, app-specific smoke contracts, non-live release gate orchestration, optional live browser probe status, release media, release archive checksums, and deterministic archive reproduction.
 - Updated [User guide](USER_GUIDE.md) with Apps Hub, side rail, Performance modes, Miladychan Portal, and Music workflows.
 - Updated [Post-reading user guide](user-guides/post-reading.md) and [Post-reading standalone notes](POST_READING_STANDALONE.md) with Wiki read-aloud handoff, voice timing behavior, custom TTS timing support, and the extracted Chromium build scope.
 - Updated [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md) for Miladychan and Music data flows.
 - Updated [Troubleshooting](TROUBLESHOOTING.md) for Apps Hub, Miladychan, Music folders, enrichment, and QR import.
 - Updated the GitHub README presentation with the high-resolution full milXdy logo from `assets/brand/milxdy-home-logo-wide.png`.
-
-## Code Freeze Notes
-
-- Treat this release as the initial platform/mod-system pass, not the completed external app loader. The Apps Hub, registry, lifecycle, side rail, Performance modes, and SDK vocabulary are the contract preview; external package loading and stable third-party compatibility remain future work.
-- Include all untracked 0.2.0 files when transferring to the public repo: release docs, user guides, release scripts, reproducible-release verifier, profile-build helpers, `post-reading` renamed source/assets, Wiki sidebar read-aloud entries/assets, Music/Miladychan assets, shared runtime helpers, and standalone Post-reading files.
-- Do not transfer generated browser-profile artifacts under `tmp/pw-wiki-urlbar-profile-*` or other local smoke-test cache output.
-- When copying to `bonklek/milXdy`, restore the public repo's secret-file ignore rules for `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`, `*.p12`, and `*.pfx`.
-- Preserve the public maintenance fixes during transfer: Post-reading URL allowlists, removed X GraphQL bearer fallback, RemiStats tooltip escaping, encoded RemiStats PFP URL segments, and dependency security overrides.
-
-## Remaining Before Release
-
-- Keep `npm run verify:release:gates:020` passing before cutting the release. It runs the non-live 0.2.0 gate stack, rebuilds profile outputs, packages release archives, verifies checksums, and verifies deterministic archive reproduction.
-- Keep `npm run verify:release:020` passing as release notes, docs, registry metadata, and app surfaces change.
-- Run `git status --short --untracked-files=all` before the public handoff and explicitly separate release files from local `tmp/` browser-profile output.
-- Smoke test the Apps Hub and pinned app rail on X/Twitter.
-- Smoke test Miladychan board/thread loading against live board JSON.
-- Smoke test Music local folder indexing, permission recovery, missing-file repair, duplicate display, playlist export/import, QR import/export, radio join, and ISRC enrichment.
-- Capture the four optional release-media screenshots in [RELEASE_SCREENSHOTS_0.2.0.md](RELEASE_SCREENSHOTS_0.2.0.md) when preparing the release post.
-- Confirm generated Chromium and Firefox Lite/Balanced/Full release archives contain manifest version `0.2.0` and are listed in `release/milXdy-0.2.0-checksums.sha256`.

@@ -7,7 +7,6 @@ const files = {
   miladychanSource: await readFile("src/apps/miladychan-portal/content.ts", "utf8"),
   musicSource: await readFile("src/apps/music/content.ts", "utf8"),
   background: await readFile("src/extension/background/index.ts", "utf8"),
-  docsQa: await readFile("docs/QA_0.2.0.md", "utf8"),
   docsReleaseNotes: await readFile("docs/RELEASE_NOTES_0.2.0.md", "utf8"),
 };
 
@@ -63,7 +62,6 @@ function verifyMiladychanPortalContract() {
   }
   assert(files.background.includes("MILADYCHAN_JSON_RULES"), "background must define Miladychan JSON allowlist");
   assert(files.background.includes("Unsupported Miladychan URL"), "background must reject unsupported Miladychan URLs");
-  assert(files.docsQa.includes("board summaries load") && files.docsQa.includes("thread ordering"), "QA checklist must cover Miladychan board/thread smoke");
   assert(files.docsReleaseNotes.includes("Miladychan Portal"), "release notes must document Miladychan Portal");
 }
 
@@ -91,7 +89,6 @@ function verifyMusicMvpContract() {
   assert(files.background.includes("MUSICBRAINZ_JSON_RULES"), "background must define MusicBrainz allowlist");
   assert(files.background.includes("ACOUSTID_FORM_RULES"), "background must define AcoustID allowlist");
   assert(files.background.includes("Unsupported music lookup URL"), "background must reject unsupported music JSON URLs");
-  assert(files.docsQa.includes("Start a radio session") && files.docsQa.includes("MusicBrainz ISRC enrichment"), "QA checklist must cover Music radio and enrichment smoke");
   assert(files.docsReleaseNotes.includes("Music MVP") || files.docsReleaseNotes.includes("Music"), "release notes must document Music MVP");
 }
 

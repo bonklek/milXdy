@@ -5,15 +5,14 @@
 See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 
 - Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
-- Adds native English and contributor-provided Russian extension metadata, with deterministic locale coverage checks and documented fallback/contribution rules. In-app controls remain English until each catalog has fluent review and focused UI coverage.
+- Adds native English and contributor-provided Russian extension metadata. In-app controls remain English in this release.
 - Adds an opt-in Appearance setting that hides X's empty Messages request dot while preserving numbered unread badges.
 - Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.
 - Protects user-authored settings during reset, restores controls after failed saves, and keeps onboarding presets consistent with the selected performance mode.
 - Repairs stuck or stale states across Chat, Wiki, Music, Miladychan, Beetol, Maxxer, RemiStats, and Post-reading, including socket cleanup, history retention, cancelable work, bounded caches, retryable workers, and reversible disable/re-enable behavior.
-- Adds the audit's keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete 43-item inventory is in the [0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md#the-43-audit-findings).
+- Adds keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete user-facing inventory is in the [0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md#reliability-and-accessibility-fixes-in-plain-english).
 - Returns Beetol hunt results immediately after the action request and reconciles inventory/cooldowns separately, preventing successful hunts from appearing stuck behind sequential state refreshes.
 - Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.
-- Passes the complete non-live 0.2.3 release gate, including both browser builds, package/security contracts, smoke tests, archive checksums, and reproducibility; authenticated live QA remains the publication gate.
 - Invalidates cached Chat authentication across connector logout/timeouts and propagates shared background deadlines into fetch abort signals so expired work cannot continue consuming privileged network resources.
 - Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction and dark pop-out states, darkens Post/Reply controls in the dark preset, and matches the Wiki read-aloud button to the square Wiki control family.
 - Restores a compact Apps & Features rail-settings view with single-line ordering controls, removes the redundant self-link, and keeps app presets collapsed until requested.
@@ -23,20 +22,12 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
 - Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
 
-Status: release candidate. Automated release gates pass; authenticated Chromium and Firefox/Waterfox runtime QA remain before publication.
-
 ## 0.2.2
 
 See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
 
-- Aligned the package and public manifest versions with the `0.2.2` App SDK
-  release metadata, and made the current release verifier fail on future
-  package/App SDK version drift.
-- Added a release archive Markdown payload allowlist so helper and OCR Markdown
-  files are explicit public archive contents instead of accidental payloads.
-- Finalized Firefox data-collection manifest metadata for the documented
-  browser-session, remote-service, and site-content flows, and made Firefox lint
-  fail if the missing-data-collection or unsupported-min-version warnings return.
+- Aligned the package, extension, and App SDK version metadata.
+- Finalized Firefox data-collection manifest metadata for the documented browser-session, remote-service, and site-content flows.
 - Hardened local package composition so custom builds expose runtime-imported
   package entries, reject untranspiled content entries and direct runtime API
   bypass patterns without reviewed exceptions, preserve disabled-by-default
@@ -57,7 +48,6 @@ Post-`0.2.1` hotfix highlights:
 - Improved Beetol/RemiStats RemiliaNET auth recovery by refreshing the existing browser session before retrying stale or failed poke requests.
 - Expanded Post-reading support for X Articles, improved long-text highlighting with segmented smooth rendering, made stop/quit distinct from minimize, improved OCR skip/status behavior, and tightened OCR quality filtering.
 - Hardened Post-reading OCR image loading so the OCR host accepts only `https://pbs.twimg.com/media/...` image URLs and continues to use credentialless fetches/background fallback.
-- Replaced the stale active release gate with the current release gate, version-neutral `npm run verify:release:gates`, including current app smoke and Post-reading distribution contract coverage; `verify:release:gates:020` remains a historical 0.2.0 evidence gate.
 - Added light/dark Post-reading dock icon support and refreshed app icon validation for themed assets.
 - Added a **Wiki browser follows dark mode** setting for the docked Remilia Wiki sidebar.
 - Polished visual behavior around post sounds, media height limits in modals, shaped PFP coverage, and unread notification tinting.
@@ -71,12 +61,6 @@ Post-`0.2.1` hotfix highlights:
 Status: released.
 
 See [milXdy 0.2.1 release notes](docs/RELEASE_NOTES_0.2.1.md).
-
-Current release-gate state:
-
-- `typecheck`, browser release builds, update-check verification, Post-reading hyperlink-offset verification, extension smoke, app smoke, and platform checks passed in this workspace.
-- Live QA is complete for the 0.2.1 release scope, including the Post-reading smooth-highlight freeze follow-up, RemiNet/RemiStats poke state, Beetol cooldown memory, notification tinting, and thread/reply visual behavior.
-- Release packaging, checksum verification, and reproducibility verification passed for the published 0.2.1 artifacts.
 
 Implemented highlights:
 
@@ -99,19 +83,13 @@ Status: released.
 
 See [milXdy 0.2.0 release notes](docs/RELEASE_NOTES_0.2.0.md).
 
-Current release-gate state:
-
-- Non-live release gates are consolidated under `npm run verify:release:gates:020` and are passing in this workspace.
-- Live Chrome/X runtime proof is optional manual QA for 0.2.0 and is not part of the release readiness gate.
-
 Highlights:
 
-- Added the shared app registry, runtime lifecycle, Apps Hub, side rail, Performance modes, profile build matrix, and release packaging/checksum gates.
+- Added the shared app registry, runtime lifecycle, Apps Hub, side rail, Performance modes, and browser build profiles.
 - Added the docked Remilia Wiki sidebar, Miladychan Portal, and Music MVP surfaces.
 - Moved background fetches toward shared routing and explicit URL allowlists.
 - Documented `0.2.0` as the first app-platform preview before the complete composable app/mod system, where default and community apps can eventually live as packages while sharing scanners, effects, runtime services, and performance budgets.
 - Expanded Post-reading/read-aloud with Wiki sidebar article routing, dock-attached Wiki playback, boundary-aware highlighting, voice support probing, estimated highlight fallbacks, custom TTS timing support, and a standalone Chromium build path.
-- Added reproducible release archive verification so the 0.2.0 release gate checks deterministic ZIP output in addition to package checksums.
 - Added final release documentation for shared Wiki sidebar routing, shared Remilia auth, centralized install defaults, RemiStats tooltip hardening, dependency overrides, and release hygiene.
 - Updated `esbuild` to `0.28.1` in both checked-in lockfiles after the final audit pass so the Windows dev-server file-read advisory is not present in the release dependency tree.
 
@@ -140,7 +118,7 @@ Highlights:
 - Improved Max visual profile layout with tweet-header/metadata overflow handling, configurable media height limits, and more precise unread notification tinting.
 - Improved shared X/Twitter surface scanning with extracted handles, visibility-aware safety scans, and scanner diagnostics.
 - Added feature timing diagnostics for RemiStats, Miladymaxxer, Post-reading, and Wiki processing when performance diagnostics are enabled.
-- Added repeatable Chromium and Firefox build targets, with Firefox manifest generation and QA linting inspired by the contributor work in bonklek/milXdy#4.
+- Added repeatable Chromium and Firefox build targets, with Firefox manifest generation and lint validation inspired by the contributor work in bonklek/milXdy#4.
 - Moved Health/reporting into the Main popup tab and compressed popup navigation to Main, Wiki Links, Audio, RemiNet, and Milady Maxxer.
 - Changed Post-reading button placement to prefer the action row instead of tweet header controls.
 - Suppressed Miladymaxxer self profile badges when self-tracking is disabled.

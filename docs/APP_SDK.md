@@ -68,13 +68,11 @@ Supported site IDs are currently `x`, `remiliaNet`, `remiliaWiki`, and `miladych
 - `embeddedFrame` for behavior inside a validated embedded frame, such as the Wiki sidebar frame
 - `overlayApp` for a local overlay surface whose host relationship is user-initiated or service-backed rather than injected
 
-The current release still injects the main app runtime only on X/Twitter. RemiliaNET, Remilia Wiki, and Miladychan declarations describe background-service, embedded-frame, or overlay integrations unless a future manifest explicitly broadens content-script matches, permissions, privacy disclosure, and QA. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
+The current release still injects the main app runtime only on X/Twitter. RemiliaNET, Remilia Wiki, and Miladychan declarations describe background-service, embedded-frame, or overlay integrations unless a future manifest explicitly broadens content-script matches, permissions, privacy disclosure, and supported behavior. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
 
 ## Settings Schema
 
 Apps, non-app features, and future theme packages declare user-configurable settings in the manifest `settings` array. The schema is intentionally descriptive first: current first-party UI can still use local bindings, while Apps & Features and future package hosts can discover where a setting lives, how it resets, and whether presets may change it without hard-coding every control.
-
-For the current popup-to-Apps & Features migration map, including existing storage keys, owners, destinations, preset participation, and mirroring notes, see the [Settings Migration Audit](SETTINGS_MIGRATION_AUDIT.md).
 
 Each setting entry should include:
 

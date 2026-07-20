@@ -5,7 +5,7 @@ Post-reading is a normal first-party milXdy app. Its canonical source lives in:
 - `src/apps/post-reading`
 - `assets/apps/post-reading`
 
-The optional Chromium-only Post-reading package is a distribution wrapper around that app source, not a separate app implementation. The wrapper exists so Post-reading can still be QA'd as a focused unpacked extension while the main repo keeps one owner for content behavior, settings, OCR policy, popup controls, and assets.
+The optional Chromium-only Post-reading package is a distribution wrapper around that app source, not a separate app implementation. The wrapper supports a focused unpacked extension while the main repo keeps one owner for content behavior, settings, OCR policy, popup controls, and assets.
 
 Build the wrapper with:
 
@@ -72,4 +72,4 @@ If Post-reading is ever split into its own repository, move or package these pat
 - `scripts/build/build-post-reading-distribution.mjs`
 - `scripts/verify/post-reading-distribution.mjs`
 
-The current extraction intentionally keeps source shared inside this repo first, so focused distribution QA can happen before any repository split.
+The current extraction intentionally keeps source shared inside this repo, avoiding a separate implementation for the focused distribution.

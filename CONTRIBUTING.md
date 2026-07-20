@@ -24,9 +24,9 @@ Release candidates are intentional prereleases, such as `v0.2.2-rc.1`, used when
 
 Normal releases are tagged GitHub Releases, such as `v0.2.2`, and are the only builds the normal updater should follow.
 
-## Agent Workflow
+## Change Workflow
 
-When using Codex or another agent for repository changes:
+For repository changes:
 
 - start from a clean, updated `main`
 - create a task branch before editing
@@ -34,8 +34,6 @@ When using Codex or another agent for repository changes:
 - inspect local changes before committing
 - commit coherent checkpoints with direct messages
 - push the branch and open a pull request when the work is ready for review
-
-Do not rewrite, reset, or delete user work unless the user explicitly approves the exact operation.
 
 ## Local Setup
 
@@ -73,6 +71,5 @@ npm run verify:release:gates
 ```
 
 Do not run the release gate as a routine post-commit check. It rebuilds and
-repackages release artifacts, so reserve it for release preparation, changes to
-release/build/package mechanics, or cases where the maintainer explicitly asks
-for full release readiness evidence.
+repackages release artifacts, so reserve it for release preparation or changes
+to release, build, or package mechanics.

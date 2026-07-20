@@ -2,8 +2,6 @@
 
 milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It incorporates the unpublished browser fixes that were briefly prepared as `0.2.2.1` and expands the release into a full cross-feature remediation pass.
 
-Status: release candidate. Automated release gates pass; authenticated Chromium and Firefox/Waterfox runtime QA remain before publication.
-
 ## Included Fixes
 
 - Isolate shared runtime failures so one app cannot strand cleanup, surface delivery, or idle work for other apps.
@@ -24,12 +22,12 @@ Status: release candidate. Automated release gates pass; authenticated Chromium 
 - Make active Chat reaction counts visibly pressed, keep dark Chat pop-outs free of bright outer edges, and use darker Post/Reply buttons in the dark default preset.
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
-- Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. In-app controls remain English pending fluent review and focused localization tests.
+- Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. The in-app interface remains English in this release.
 - Add an Appearance toggle for hiding X's dot-style hidden-message-request indicator without suppressing numbered unread badges.
 
-## The 43 Audit Findings
+## Reliability And Accessibility Fixes In Plain English
 
-The reliability and accessibility audit identified the following concrete failure modes. Version `0.2.3` includes code-level remediation for each one; authenticated browser QA remains the final confirmation of their behavior in live X and RemiliaNET sessions.
+The broader reliability and accessibility work in this release addresses these user-visible failure modes:
 
 ### Shared runtime, startup, settings, and networking
 
@@ -87,20 +85,9 @@ The reliability and accessibility audit identified the following concrete failur
 37. One silent OCR-host startup failure could prevent every later OCR retry in the tab.
 38. Disposing and re-enabling Post-reading could leave old hidden player trees mounted.
 
-### Keyboard, motion, dialogs, and release consistency
+### Keyboard, motion, and dialogs
 
 39. The popup Runtime mode selector had no accessible name.
 40. Rail and app reordering was pointer-only.
 41. Rail reorder animation ignored the user's reduced-motion preference.
 42. Popup dialogs did not contain keyboard focus or restore it after closing.
-43. Active release-planning documents contradicted the package and manifest version.
-
-The evidence, severity, reproduction conditions, root-cause analysis, and regression recommendation for every item are recorded in the [full UX and feature reliability audit](UX_RELIABILITY_AUDIT.md).
-
-## Release Gate
-
-The canonical non-live release gate passed on 2026-07-10 after the reliability and RemiliaNET recovery fixes were integrated. This includes strict TypeScript, Chromium and Firefox builds, platform and messaging contracts, local-package trust tests, Firefox lint classification, extension/app smoke, release packaging, checksums, and reproducibility.
-
-This release is not ready for publication until the final closeout commit passes the canonical release gate and manual authenticated X/RemiliaNET QA covers the changed runtime, Beetol Hunt, RemiNet Chat live connection and sending, Post-reading, Wiki, rail/settings, and representative feed/notification surfaces. Track that evidence in the [0.2.3 QA checklist](QA_0.2.3.md).
-
-Expected release assets are `milXdy-0.2.3-chromium.zip` and `milXdy-0.2.3-firefox.zip`.
