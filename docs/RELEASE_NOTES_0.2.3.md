@@ -24,6 +24,7 @@ Status: release candidate. Automated release gates pass; authenticated Chromium 
 - Make active Chat reaction counts visibly pressed, keep dark Chat pop-outs free of bright outer edges, and use darker Post/Reply buttons in the dark default preset.
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
+- Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. In-app controls remain English pending fluent review and focused localization tests.
 
 ## The 43 Audit Findings
 

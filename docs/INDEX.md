@@ -21,6 +21,7 @@
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](APP_SDK.md)
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
+- [Localization scope and contributions](LOCALIZATION.md)
 - [Settings migration audit](SETTINGS_MIGRATION_AUDIT.md)
 - [Roadmap](ROADMAP.md)
 - [Documentation maintenance](DOCS_MAINTENANCE.md)
