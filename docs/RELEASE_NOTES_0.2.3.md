@@ -25,6 +25,7 @@ Status: release candidate. Automated release gates pass; authenticated Chromium 
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 - Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. In-app controls remain English pending fluent review and focused localization tests.
+- Add an Appearance toggle for hiding X's dot-style hidden-message-request indicator without suppressing numbered unread badges.
 
 ## The 43 Audit Findings
 

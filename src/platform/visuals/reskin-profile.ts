@@ -27,6 +27,7 @@ export type VisualThemeSettings = {
   newPostsPill: boolean;
   newPostsSound: boolean;
   notificationUnreadTint: boolean;
+  hideMessageRequestDot: boolean;
   remistatsBox: boolean;
   incomingPokeGold: boolean;
   pokePlacement: "top" | "actions";
@@ -81,7 +82,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     owner: "root-visuals",
     scope: "global-x",
     profilePackSafe: true,
-    settings: ["notificationUnreadTint"],
+    settings: ["notificationUnreadTint", "hideMessageRequestDot"],
   },
   {
     id: "root-navigation-actions",
@@ -177,6 +178,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   newPostsPill: true,
   newPostsSound: true,
   notificationUnreadTint: true,
+  hideMessageRequestDot: false,
   remistatsBox: false,
   incomingPokeGold: true,
   pokePlacement: "actions",
@@ -375,6 +377,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     newPostsPill: booleanValue(record.newPostsPill, fallback.newPostsPill),
     newPostsSound: booleanValue(record.newPostsSound, fallback.newPostsSound),
     notificationUnreadTint: booleanValue(record.notificationUnreadTint, fallback.notificationUnreadTint),
+    hideMessageRequestDot: booleanValue(record.hideMessageRequestDot, fallback.hideMessageRequestDot),
     remistatsBox: booleanValue(record.remistatsBox, fallback.remistatsBox),
     incomingPokeGold: booleanValue(record.incomingPokeGold, fallback.incomingPokeGold),
     pokePlacement: oneOf(record.pokePlacement, ["top", "actions"], fallback.pokePlacement),

@@ -915,6 +915,13 @@ export const RESKIN_CSS = `
     text-align: center !important;
   }
 
+  html[data-milxdy-visual-hide-message-request-dot="true"] [data-testid="AppTabBar_Messages_Link"] span[aria-hidden="true"]:empty,
+  html[data-milxdy-visual-hide-message-request-dot="true"] a[href="/messages"] span[aria-hidden="true"]:empty,
+  html[data-milxdy-visual-hide-message-request-dot="true"] [data-testid="AppTabBar_Messages_Link"] div[aria-live] span:empty,
+  html[data-milxdy-visual-hide-message-request-dot="true"] a[href="/messages"] div[aria-live] span:empty {
+    display: none !important;
+  }
+
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-sidebar-bevel="true"] header[role="banner"] nav a,
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-sidebar-bevel="true"] [data-testid^="AppTabBar_"] {
     border: 1px solid transparent !important;

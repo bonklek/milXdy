@@ -260,6 +260,32 @@
         "presetBehavior": {
           "saveAsCustom": true
         }
+      },
+      {
+        "id": "rootVisuals.hideMessageRequestDot",
+        "label": "Hide Messages request dot",
+        "description": "Hide the dot-style hidden-request indicator on X Messages while preserving numbered unread badges.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "hideMessageRequestDot"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
       }
     ],
     "surfaces": [

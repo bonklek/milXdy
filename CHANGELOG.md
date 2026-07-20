@@ -6,6 +6,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 
 - Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
 - Adds native English and contributor-provided Russian extension metadata, with deterministic locale coverage checks and documented fallback/contribution rules. In-app controls remain English until each catalog has fluent review and focused UI coverage.
+- Adds an opt-in Appearance setting that hides X's empty Messages request dot while preserving numbered unread badges.
 - Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.
 - Protects user-authored settings during reset, restores controls after failed saves, and keeps onboarding presets consistent with the selected performance mode.
 - Repairs stuck or stale states across Chat, Wiki, Music, Miladychan, Beetol, Maxxer, RemiStats, and Post-reading, including socket cleanup, history retention, cancelable work, bounded caches, retryable workers, and reversible disable/re-enable behavior.
