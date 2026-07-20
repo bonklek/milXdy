@@ -2,7 +2,7 @@
 
 milXdy `0.2.1`, **The Polish Patch**, is a public beta update focused on the fixes found during 0.2.0 platform testing: update flow correctness, cooldown memory, layout polish, and immediate usability repairs.
 
-Status: released. Automated release gates passed, release artifacts were verified, and live QA for the 0.2.1 release scope is complete.
+Status: released.
 
 ## Highlights
 
@@ -79,26 +79,6 @@ The public `0.2.1` milestone tracks the release as **The Polish Patch - bug fixe
 - `#69` Fix release update checker for normal GitHub releases: covered by update checker and normal-release documentation.
 
 Close or update these GitHub issues after the public release is published and the release branch is transferred back cleanly.
-
-## QA Status
-
-Passed in the current release workspace:
-
-- `pnpm run typecheck`
-- `npm run verify:update-check`
-- `npm run verify:post-reading:hyperlink-offsets`
-- `npm run build:profiles`
-- `npm run verify:platform`
-- `npm run verify:app-smoke:020`
-- `npm run verify:smoke:020`
-
-Manual QA completed for this release scope:
-
-- Chrome live testing on X/Twitter for notification tinting, reply connector hints, poke cooldown synchronization, Beetol cooldown memory, RemiNet Chat older-message loading, and Post-reading feed highlighting.
-- Follow-up testing for the reported Post-reading smooth-highlight freeze after the runtime lag handling and voice-highlight stop-control changes.
-- Firefox smoke testing for RemiStats tooltip PFPs, X CSP warning classification, core popup controls, and profile-build loading.
-
-Release packaging, checksum verification, and reproducibility verification passed for the published 0.2.1 artifacts.
 
 ## Upgrade Notes
 

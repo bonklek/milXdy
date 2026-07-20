@@ -17,7 +17,7 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 
 ## Firefox Beta Install
 
-Firefox or Waterfox 140 or newer support is packaged for beta testing, but it still needs manual smoke testing before being advertised as fully supported.
+Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterfox](FIREFOX_QA.md) for installation notes and browser-specific limitations.
 
 1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.
@@ -25,8 +25,6 @@ Firefox or Waterfox 140 or newer support is packaged for beta testing, but it st
 4. Click **Load Temporary Add-on**.
 5. Select the unzipped `manifest.json`.
 6. Refresh X/Twitter tabs.
-
-See [Firefox QA](FIREFOX_QA.md) for the smoke-test checklist.
 
 ## Install From Source
 

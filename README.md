@@ -35,7 +35,7 @@ For release builds:
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
+Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox and Waterfox](docs/FIREFOX_QA.md).
 
 For source builds:
 

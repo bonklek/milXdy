@@ -1,6 +1,6 @@
 # Release Process
 
-This document covers public release mechanics. Private release-planning notes live in the gitignored `ideas/` folder.
+This document covers the reproducible public build and release mechanics available to contributors.
 
 ## Maintainer Setup
 
@@ -57,15 +57,13 @@ Disabled feature bundles should not be downloaded or parsed on initial page load
 
 ## Checks
 
-Before publishing:
+To build and validate release archives:
 
 ```powershell
 npm.cmd run verify:release:gates
-npm.cmd run print:live-probe:020
-npm.cmd run verify:live-probe:020
 ```
 
-`verify:release:gates` is the canonical current release readiness gate. It rebuilds the profile matrix, runs TypeScript, current release contracts, platform checks, URL allowlist checks, App SDK and messaging bridge checks, local app package checks, Music verification, Post-reading distribution-wrapper contract checks, Firefox lint, extension/current app smoke checks, release packaging, checksum verification, and reproducible archive verification. Version-specific gates such as `verify:release:gates:020` are historical evidence gates for their release line. Keep live Chrome proof separate and optional because it must validate a real X/Twitter tab after reloading the unpacked `dist/chromium` build.
+`verify:release:gates` rebuilds the profile matrix, runs the project checks, packages both browser archives, verifies checksums, and confirms reproducible output. Version-specific commands such as `verify:release:gates:020` are retained only for compatibility with their historical release line.
 
 Also verify:
 
@@ -77,8 +75,6 @@ Also verify:
 - reproducibility verification with `npm run verify:release:reproducible`
 - changelog entry
 - version-specific release notes, such as `docs/RELEASE_NOTES_0.2.1.md`
-- 0.2.x QA checklist or Chrome live QA guide, when cutting a platform beta
-- `window.__milxdy020LiveProbe` evidence from the live X/Twitter tab for 0.2.x platform betas
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
 - no local browser caches or machine-specific test output in source or release archives

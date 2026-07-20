@@ -1,32 +1,21 @@
-# Firefox Build QA
+# Firefox And Waterfox
 
-Run this checklist in Firefox or Waterfox 140 or newer before advertising Firefox support.
+milXdy supports Firefox and Waterfox 140 or newer through the Firefox release archive.
 
-## Automated
+## Install A Temporary Build
 
-```powershell
-npm.cmd run typecheck
-npm.cmd run build:firefox
-npm.cmd run lint:firefox
-```
+1. Extract the Firefox archive.
+2. Open `about:debugging#/runtime/this-firefox`.
+3. Select **Load Temporary Add-on**.
+4. Choose `manifest.json` from the extracted folder.
+5. Refresh any open X/Twitter tabs.
 
-`web-ext` warnings from bundled OCR, ONNX, dynamic imports, or existing UI code need review, but lint errors should block release. Keep the current warning review in [Firefox lint warning classification](FIREFOX_LINT_WARNINGS.md).
+Temporary add-ons are removed when the browser closes. Reload the same extracted folder after restarting the browser.
 
-## Load
+## Browser-Specific Notes
 
-1. Open `about:debugging#/runtime/this-firefox`.
-2. Click **Load Temporary Add-on**.
-3. Select `dist/firefox/manifest.json`.
-4. Open the extension console and confirm there are no startup errors.
+- Features that depend on Chromium's File System Access API may offer a reduced workflow or report that local folder access is unavailable.
+- X/Twitter can emit its own Content Security Policy messages in the browser console. A message is relevant to milXdy only when it names a milXdy extension URL or blocks a milXdy asset.
+- Update downloads select the Firefox archive rather than the Chromium archive.
 
-## Smoke Tests
-
-- Popup opens and all tabs render.
-- `https://x.com` loads with no content bootstrap errors.
-- Console CSP warnings from the X page that mention `abs.twimg.com` are expected page-level noise unless they name a milXdy extension URL or block a milXdy-injected asset.
-- Remilia Wiki link previews still render.
-- Post-reading can read a post, and OCR progresses past the hidden-host loading stage.
-- RemiStats badges and RemiNet poke state render. When badge detail tooltips include a Remilia PFP, the image should load from `https://pfp.remilia.net/pfp/...` without a Firefox host-permission or CSP block.
-- RemiNet Chat connects when enabled.
-- Beetol auth/session status works.
-- Maxxer avatar detection runs and updates diagnostics in Debug mode.
+For general problems, see [Troubleshooting](TROUBLESHOOTING.md).

@@ -5,11 +5,9 @@ milXdy has several docs that intentionally overlap at the edges. Keep each doc f
 ## Source Of Truth
 
 - `docs/ROADMAP.md`: current release baseline plus future product direction. It should not archive old releases, list GitHub labels, or list suggested milestones.
-- `PLANNING.md`: short current planning handoff and near-term release identity. It should not duplicate the roadmap or become an issue registry.
 - `CHANGELOG.md`: historical release summary in descending version order.
 - `docs/RELEASE_NOTES_*.md`: detailed shipped scope for one release.
-- `docs/RELEASES.md`: maintainer release mechanics, build gates, archive expectations, and GitHub release policy.
-- `docs/QA_*.md` and QA logs: release validation checklists and evidence.
+- `docs/RELEASES.md`: reproducible build mechanics, archive expectations, and GitHub release policy.
 - `docs/USER_GUIDE.md` and `docs/user-guides/*`: user-facing behavior for shipped features.
 - `docs/APP_SDK.md`: app/platform developer contract and future app-package shape.
 - GitHub Issues: concrete bugs, enhancements, and contributor tasks.
@@ -79,7 +77,7 @@ The roadmap should not contain:
 - Full release notes.
 - GitHub label lists.
 - Suggested GitHub milestones.
-- QA checklists.
+- Internal release checklists or validation records.
 - Detailed implementation instructions better suited to issues.
 
 ## Pre-Commit Doc Check

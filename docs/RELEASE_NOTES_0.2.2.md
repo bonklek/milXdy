@@ -1,8 +1,8 @@
 # milXdy 0.2.2 Release Notes
 
-milXdy `0.2.2`, **The Prepared App SDK Update**, is a platform beta update focused on making apps, settings, package metadata, and release gates easier to reason about before broader community app loading work continues.
+milXdy `0.2.2`, **The Prepared App SDK Update**, is a platform beta update focused on making apps, settings, and package metadata easier to understand before broader community app loading work continues.
 
-Status: released. Automated non-live release gates passed, release artifacts were verified, and live QA for the 0.2.2 release scope is complete.
+Status: released.
 
 ## Highlights
 
@@ -11,7 +11,7 @@ Status: released. Automated non-live release gates passed, release artifacts wer
 - Apps & Features now has clearer information architecture for full apps, feature modules, enablement, rail pinning, app-card details, reset actions, privacy notes, and diagnostics.
 - First-run Lite, Balanced, and Full setup choices apply exact app enablement, rail defaults, and the matching Performance mode while keeping first-party apps available and toggleable.
 - First-party app and feature settings declare manifest metadata for location, storage, reset behavior, preset participation, and generated control expectations.
-- The settings migration audit records current storage ownership, popup mirrors, Apps & Features destinations, and profile-pack safety decisions.
+- Existing storage keys and profile-pack behavior remain compatible as controls move into Apps & Features.
 - App settings mirror verification keeps popup compatibility and generated Apps & Features metadata from drifting.
 - Composer Tools joins Apps & Features as a local-only feature module that converts typed double dashes into em dashes inside supported X/Twitter post composers.
 
@@ -37,13 +37,12 @@ Status: released. Automated non-live release gates passed, release artifacts wer
 - Trust gates fail closed for blocked or unreviewed packages, unacknowledged privileged surfaces, unsafe paths, malformed zips, duplicate package IDs, storage conflicts, invalid host declarations, direct runtime messaging, and sensitive extension API use.
 - Novel local packages can be controllable through generated Apps & Features enablement metadata, but package-owned background handlers, marketplace discovery, signatures, and polished install/update UI remain follow-up work.
 
-### Filesystem and release infrastructure
+### Filesystem and build infrastructure
 
 - Source layout is organized around `src/apps`, `src/platform`, `src/extension`, and `src/distributions`.
 - Public extension assets live under `assets/extension`; app assets live under `assets/apps`; user-download helper material is kept out of web-accessible resources.
 - Build, package, smoke, verify, and release scripts are grouped under `scripts/build`, `scripts/packages`, `scripts/smoke`, `scripts/verify`, and `scripts/release`.
 - `verify:filesystem-layout` prevents historical roots such as `public`, `src/features`, flat `scripts/*.mjs`, and old example package paths from returning.
-- The canonical current release gate, `verify:release:gates`, rebuilds Chromium/Firefox outputs, validates platform contracts, verifies package/composer trust gates, checks app smoke, packages release archives, verifies checksums, and checks archive reproducibility.
 
 ### Security, privacy, and compatibility hardening
 
@@ -65,7 +64,7 @@ The `release/0.2.2` branch carried the accepted scope for this release. Update o
 - `#54` Future local apps-folder package shape: covered by package manifests, examples, schema, package verifier, composer, and custom Chromium build flow.
 - `#55` Top-level settings and presets: covered by first-run setup, Performance mode/profile-pack metadata, and popup/App surface split.
 - `#57` Settings schema: covered by manifest settings metadata, reset behavior, storage ownership, control metadata, and preset participation rules.
-- `#58` Settings audit: covered by the settings migration audit and generated mirror verification.
+- `#58` Settings audit: covered by compatible storage ownership, generated controls, and popup mirror verification.
 - `#59` Apps & Features IA: covered by app/feature grouping, enable/open/reset roles, rail pinning, and privacy/cost metadata.
 - `#60` Registry metadata: covered by first-party app registry metadata and release verifiers.
 - `#61` Settings compatibility: covered by popup mirrors, storage migration notes, reset compatibility, and app settings verification.
@@ -77,32 +76,6 @@ The `release/0.2.2` branch carried the accepted scope for this release. Update o
 - `#94` and `#96` Wiki sidebar dark-mode polish: covered by the dark-mode setting and footer styling fix.
 - `#101` Local app composer/custom build: substantially advanced by the composer, build integration, and trust gates; marketplace discovery, signatures, and install/update UI remain follow-up work.
 - `#102` Custom app authoring developer experience: advanced by the schema, novel verifier command, example package, and empty-folder-to-build docs.
-
-## QA Status
-
-Passed locally on the prepared branch:
-
-- `pnpm.cmd run verify:release:gates`
-- `git diff --check`
-- `pnpm.cmd audit --json`
-
-The release gate includes TypeScript, Chromium and Firefox profile builds, current release contract checks, filesystem layout verification, platform contracts, URL allowlists, App SDK compliance, internal messaging bridge verification, local app package and trust-gate verification, app settings mirrors, Music build checks, Post-reading distribution checks, Firefox lint classification, current extension/app smoke, release archive packaging, checksum verification, and reproducible archive verification.
-
-Known non-live warnings:
-
-- App SDK compliance reports the RemiNet Chat socket bridge and Wiki sidebar frame bridge as intentional internal bridges with sender restrictions.
-- Firefox lint continues to report classified warnings for generated/bundled code patterns such as OCR/worker eval and innerHTML use. The release gate treats the current warning class as expected while failing on unclassified release blockers.
-
-Manual QA still required before publishing:
-
-- Reload the unpacked `dist/chromium` build and refresh X/Twitter.
-- Open Apps & Features from the side rail.
-- Confirm representative enabled and pinned apps open from the rail: Post-reading, RemiNet Chat, Beetol, Remilia Wiki Sidebar, Miladychan Portal, Music, and Milady Maxxer.
-- Confirm disabled or unpinned apps are absent or reachable exactly as expected.
-- Enable Composer Tools and confirm typing `--` in a post composer becomes an em dash, while DMs and search fields are ignored.
-- Check Post-reading feed controls, full-quote behavior, OCR skip/status, and highlight cleanup.
-- Check RemiNet/RemiStats poke state, Beetol cooldown memory, RemiNet Chat X Messages placement, and Wiki sidebar dark mode.
-- Exercise a local package dry run or custom local build when validating package/composer scope.
 
 ## Upgrade Notes
 

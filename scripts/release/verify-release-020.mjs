@@ -1,5 +1,11 @@
 import { readFile } from "node:fs/promises";
 
+const currentPackage = JSON.parse(await readFile("package.json", "utf8"));
+if (currentPackage.version !== "0.2.0") {
+  console.log(`Skipping historical 0.2.0 release verification on package version ${currentPackage.version}. Use npm run verify:release for the current release contract.`);
+  process.exit(0);
+}
+
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const files = {
   roadmap: await readFile("docs/ROADMAP.md", "utf8"),
@@ -43,12 +49,6 @@ const files = {
   releaseChecksumVerifier: await readFile("scripts/release/verify-release-checksums.mjs", "utf8"),
   urlAllowlistVerifier: await readFile("scripts/verify/url-allowlist.mjs", "utf8"),
 };
-
-const packageVersion = JSON.parse(files.packageJson).version;
-if (packageVersion !== "0.2.0") {
-  console.log(`Skipping historical 0.2.0 release verification on package version ${packageVersion}. Use npm run verify:release for the current release contract.`);
-  process.exit(0);
-}
 
 verifyRoadmapAndReleaseNotes();
 verifyDocsCoverage();

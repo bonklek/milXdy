@@ -34,11 +34,11 @@ Theme: make first-party apps easier to understand, configure, package, and maint
   - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
   - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
 
-## Release Candidate: 0.2.3 - Reliability And Recovery
+## Upcoming: 0.2.3 - Reliability And Recovery
 
 Theme: make the prepared app platform resilient across lifecycle failures, slow or stale network work, authenticated RemiliaNET features, X interaction hot paths, and accessibility-sensitive UI.
 
-- Complete the 43-finding reliability and accessibility remediation pass.
+- Improve reliability and accessibility across the shared runtime and first-party apps.
   - isolate app lifecycle, surface-delivery, and idle-task failures so one app cannot strand shared cleanup or queued work
   - make startup, network, storage, worker, speech, and local-file workflows cancelable and recoverable
   - restore reversible teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan
@@ -56,8 +56,6 @@ Theme: make the prepared app platform resilient across lifecycle failures, slow 
   - open supported Wiki tabs and collapsed sections before read-aloud highlights them
   - improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior
   - retain the Firefox/Waterfox, browser-specific update, fullscreen DM media, and Tweet PNG fixes prepared after `0.2.2`
-
-Publication remains gated on the final automated release gate plus authenticated Chromium and Firefox/Waterfox QA documented in [the 0.2.3 checklist](QA_0.2.3.md).
 
 ## Coming Platform Direction: Composable App/Mod System
 
