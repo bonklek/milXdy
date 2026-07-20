@@ -96,6 +96,7 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   setDatasetValue(root, "milxdyVisualNewPostsPill", String(theme.newPostsPill));
   setDatasetValue(root, "milxdyVisualNewPostsSound", String(theme.newPostsSound));
   setDatasetValue(root, "milxdyVisualNotificationUnreadTint", String(theme.notificationUnreadTint));
+  setDatasetValue(root, "milxdyVisualHideMessageRequestDot", String(theme.hideMessageRequestDot));
   setDatasetValue(root, "milxdyVisualRemistatsBox", String(theme.remistatsBox));
   setDatasetValue(root, "milxdyVisualIncomingPokeGold", String(theme.incomingPokeGold));
   setDatasetValue(root, "milxdyVisualPokePlacement", theme.pokePlacement);

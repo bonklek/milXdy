@@ -68,6 +68,7 @@ async function verifyRuntimeOwnership() {
   assert(background.includes("createBackgroundNetworkDeadlineSignal()"), "central budgeted fetches must retain a deadline while response bodies are read");
   assert(postReadingBackground.includes("AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])"), "Post-reading response bodies must retain queue cancellation and a read deadline");
   assert(!reskinStyles.includes('html[data-milxdy-reskin-profile="max"] [role="button"],'), "Root Visuals must not override transition properties on every native X button");
+  assert(reskinStyles.includes('data-milxdy-visual-hide-message-request-dot="true"') && reskinStyles.includes('a[href="/messages"] span[aria-hidden="true"]:empty'), "Messages request-dot suppression must stay opt-in and limited to empty dot-style badges");
   assert(!maxxerStyles.includes("transition: transform 0.3s ease, box-shadow 0.3s ease"), "Maxxer cards must not animate large multi-layer shadows during Like state changes");
   assert(wikiFrame.includes("revealWikiReadingRange(range.element)") && wikiFrame.includes("EXPANDABLE_WIKI_CONTAINER_SELECTOR"), "Wiki read-aloud must reveal supported collapsed/tabbed containers before highlighting");
   assert(wikiFrame.includes("container && wikiContainerIsHidden(container) && wikiContainerController(container)"), "Wiki read-aloud must skip hidden content that has no hidden expandable container and recoverable controller");

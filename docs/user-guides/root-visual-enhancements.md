@@ -12,6 +12,7 @@ Root Visual Enhancements provides the baseline milXdy X/Twitter polish: visual p
 
 - Pick **Max**, **Medium**, or **Minimal** in Appearance to change the X/Twitter visual treatment.
 - Use **Custom** to fine-tune the same theme after choosing a preset. Root X controls are grouped into page/typography, PFPs/media/cards, notifications, and navigation/actions.
+- Under **X Notifications**, **Hide Messages request dot** suppresses the empty dot-style request indicator on X Messages. Numbered unread badges remain visible, and turning the setting off restores X's native indicator.
 - Reload open X/Twitter tabs after changing major visual settings.
 - Use **Performance mode** separately from Appearance when you want to reduce background work.
 - Leave **Performance diagnostics** off unless you are preparing a bug report.

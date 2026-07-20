@@ -1120,6 +1120,7 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setChecked("visualNewPostsPill", theme.newPostsPill);
   setChecked("visualNewPostsSound", theme.newPostsSound);
   setChecked("visualNotificationUnreadTint", theme.notificationUnreadTint);
+  setChecked("visualHideMessageRequestDot", theme.hideMessageRequestDot);
   setChecked("visualRemistatsBox", theme.remistatsBox);
   setChecked("visualIncomingPokeGold", theme.incomingPokeGold);
   setChecked("visualReminetChatOverlay", theme.reminetChatOverlay);
@@ -1162,6 +1163,7 @@ function readVisualEditor(): VisualThemeSettings {
     newPostsPill: checkedValue("visualNewPostsPill"),
     newPostsSound: checkedValue("visualNewPostsSound"),
     notificationUnreadTint: checkedValue("visualNotificationUnreadTint"),
+    hideMessageRequestDot: checkedValue("visualHideMessageRequestDot"),
     remistatsBox: checkedValue("visualRemistatsBox"),
     incomingPokeGold: checkedValue("visualIncomingPokeGold"),
     reminetChatOverlay: checkedValue("visualReminetChatOverlay"),
@@ -1205,6 +1207,7 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualNewPostsPill",
     "visualNewPostsSound",
     "visualNotificationUnreadTint",
+    "visualHideMessageRequestDot",
     "visualRemistatsBox",
     "visualIncomingPokeGold",
     "visualReminetChatOverlay",
