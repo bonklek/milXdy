@@ -2,6 +2,10 @@
 
 `dev-note/` is a novel third-party package sample. It does not shadow a built-in app ID, starts disabled, and becomes controllable through its manifest-declared Apps & Features enablement setting after composition.
 
+For the author-facing declarations and copyable starter template, see
+`sdk/README.md`. This example remains the smallest deterministic integration
+fixture used by repository verification.
+
 Verify it directly:
 
 ```powershell

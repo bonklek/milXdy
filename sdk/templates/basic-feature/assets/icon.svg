@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">milXdy starter feature</title>
+  <rect width="64" height="64" rx="12" fill="#151515"/>
+  <path d="M18 32h28M32 18v28" stroke="#f3d9ff" stroke-width="6" stroke-linecap="round"/>
+</svg>

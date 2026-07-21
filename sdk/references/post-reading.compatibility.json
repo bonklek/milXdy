@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "packageId": "post-reading",
+  "packageVersion": "0.2.0-sdk.1",
+  "sourceRepository": "https://github.com/bonklek/post-reading",
+  "sourceBranch": "codex/milxdy-sdk-integration",
+  "milxdyRepository": "https://github.com/bonklek/milXdy",
+  "appSdk": {
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3"
+  },
+  "manifestVersion": 1,
+  "status": "reference-preview",
+  "supported": [
+    "runtime lifecycle",
+    "shared X surface delivery",
+    "bounded rescan requests",
+    "shared scheduler and cancellation",
+    "routed post-reading background messages",
+    "diagnostics",
+    "existing settings compatibility"
+  ],
+  "reviewedExceptions": [
+    "host-provided OCR frame and worker assets",
+    "host-provided post-reading background handlers"
+  ],
+  "unsupported": [
+    "package-owned background module registration",
+    "public shared overlay/dock primitives",
+    "runtime installation into an already-installed extension"
+  ]
+}

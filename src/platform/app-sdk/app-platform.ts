@@ -1,5 +1,8 @@
 import type { TwitterSurface, TwitterSurfaceKind } from "../scanner/twitter-scanner";
 import type { Disposable } from "../runtime/disposables";
+import type { AppStorageFacade } from "./app-storage";
+
+export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageChanges, AppStorageFacade } from "./app-storage";
 
 export type MilxdyAppId = string;
 
@@ -180,6 +183,11 @@ export type MilxdyAppManifest = {
     assets?: string[];
     webAccessibleAssets?: string[];
   };
+  /** Internal build metadata used to grant reviewed host-asset access. */
+  assets?: string[];
+  requiredOutputs?: string[];
+  hostAssetAccess?: string[];
+  localPackage?: Record<string, unknown>;
   isEnabled: () => Promise<boolean>;
   setEnabled?: (enabled: boolean) => Promise<void>;
 };
@@ -217,7 +225,7 @@ export type MilxdyLocalPackageReview = {
 
 export type MilxdyLocalAppPackageManifestV1 = Omit<
   MilxdyAppManifest,
-  "available" | "unavailableReason" | "hub" | "isEnabled" | "setEnabled" | "package"
+  "available" | "unavailableReason" | "hub" | "isEnabled" | "setEnabled" | "package" | "assets" | "requiredOutputs" | "hostAssetAccess" | "localPackage"
 > & {
   manifestVersion: MilxdyLocalPackageManifestVersion;
   sdk: MilxdyLocalPackageSdkCompatibility;
@@ -239,9 +247,13 @@ export type AppRuntimeScheduler = {
 export type MilxdyContentAppContext = {
   manifest: MilxdyAppManifest;
   signal: AbortSignal;
+  requestSurfaceRescan: () => void;
+  /** @deprecated Internal compatibility alias. External packages use requestSurfaceRescan. */
   scheduleScan: () => void;
   loadAppById: (id: MilxdyAppId, reason?: string) => Promise<MilxdyContentAppModule | null>;
   scheduler: AppRuntimeScheduler;
+  storage: AppStorageFacade;
+  resolveAssetUrl: (path: string) => string;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
   recordDiagnostic: (key: string, value: unknown) => void;
   addDisposable: (disposable: Disposable) => void;

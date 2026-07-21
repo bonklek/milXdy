@@ -1,0 +1,99 @@
+{
+  "$schema": "../../../docs/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "docked-app",
+  "name": "Docked App Starter",
+  "version": "0.1.0",
+  "description": "Minimal rail-capable overlay app using only public App SDK capabilities.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
+    "notes": ["Uses only the public content-app context documented in sdk/types."]
+  },
+  "contentEntry": "content.js",
+  "css": [
+    { "id": "docked-app.theme", "path": "styles/theme.css" },
+    { "id": "docked-app.overlay", "path": "styles/overlay.css" }
+  ],
+  "dock": {
+    "label": "Docked App",
+    "icon": "assets/icon.svg",
+    "defaultSide": "right"
+  },
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": [
+      "milxdy.local.docked-app.enabled",
+      "milxdy.local.docked-app.openCount"
+    ]
+  },
+  "settings": [
+    {
+      "id": "docked-app.enabled",
+      "label": "Docked App Starter",
+      "description": "Enable the starter app in this custom build.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": { "area": "local", "key": "milxdy.local.docked-app.enabled" },
+      "defaultValue": false,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["firstRun"]
+    }
+  ],
+  "surfaces": ["overlayApp"],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": ["Exports boot, open, close, disable, and dispose with cancellation-aware setup."]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": ["https://x.com/*", "https://twitter.com/*"],
+      "integration": "overlayApp",
+      "surfaces": ["overlayApp"],
+      "presentation": "sideRailOverlay",
+      "notes": ["Opens from milXdy rail and dock controls without additional host permissions."]
+    }
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": ["dockOpen"],
+  "hub": {
+    "category": "developer",
+    "shortDescription": "Public-capability starter for rail and overlay apps.",
+    "rail": { "supported": true, "defaultPinned": false },
+    "presets": ["full"],
+    "permissionNotes": [],
+    "dataNotes": ["Renders a local overlay only when opened."],
+    "remoteServices": [],
+    "localStorageNotes": ["Stores enablement and an open counter."],
+    "privacyLabels": ["local-only", "diagnostics"]
+  },
+  "privacy": {
+    "permissionNotes": [],
+    "dataNotes": ["Renders a local overlay only when opened."],
+    "localStorageNotes": ["Stores enablement and an open counter."],
+    "remoteServices": [],
+    "privacyLabels": ["local-only", "diagnostics"],
+    "consentRequired": false
+  },
+  "package": {
+    "assets": [
+      { "id": "docked-app.icon", "path": "assets/icon.svg", "kind": "icon", "webAccessible": true }
+    ],
+    "webAccessibleAssets": ["assets/icon.svg"]
+  },
+  "review": {
+    "status": "local",
+    "notes": ["Starter-kit template; local composition requires explicit review acknowledgement."]
+  }
+}

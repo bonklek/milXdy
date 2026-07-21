@@ -1,4 +1,5 @@
 import { icon } from "./icons";
+import { postReadingAssetUrl } from "./assetUrl";
 import type { BoundarySupport } from "./speech";
 import type { OcrProgress } from "./ocr";
 import type { PostReadingSettings, SpeechState, VoiceGenderFilter } from "./shared/types";
@@ -91,7 +92,7 @@ export class MiniPlayer {
     heading.className = "post-reading-panel-heading";
     const logo = document.createElement("img");
     logo.className = "post-reading-panel-logo";
-    logo.src = chrome.runtime.getURL("post-reading/post-reading-logo.png");
+    logo.src = postReadingAssetUrl("post-reading/post-reading-logo.png");
     logo.alt = "";
     const headingText = document.createElement("div");
     headingText.className = "post-reading-panel-heading-text";

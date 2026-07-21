@@ -1,0 +1,140 @@
+{
+  "$schema": "../../../docs/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "basic-feature",
+  "name": "Starter Feature",
+  "version": "0.1.0",
+  "description": "Minimal third-party feature template for the reviewed custom-build App SDK.",
+  "packageKind": "feature",
+  "sdk": {
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
+    "notes": [
+      "Uses only the public content-app context documented in sdk/types."
+    ]
+  },
+  "contentEntry": "content.js",
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": [
+      "milxdy.local.basic-feature.enabled"
+    ]
+  },
+  "settings": [
+    {
+      "id": "basic-feature.enabled",
+      "label": "Starter Feature",
+      "description": "Enable the starter feature in this custom build.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.basic-feature.enabled"
+      },
+      "defaultValue": false,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      },
+      "presets": [
+        "firstRun"
+      ]
+    }
+  ],
+  "surfaces": [
+    "route"
+  ],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": [
+      "Exports boot, onRouteChange, and dispose and relies on runtime cancellation."
+    ]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "integration": "contentScript",
+      "surfaces": [
+        "route"
+      ],
+      "notes": [
+        "Uses the existing X content runtime and requests no additional host permission."
+      ]
+    }
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": [
+    "startup"
+  ],
+  "hub": {
+    "category": "developer",
+    "shortDescription": "Typed starter feature with generated enablement and diagnostics.",
+    "rail": {
+      "supported": false,
+      "defaultPinned": false
+    },
+    "presets": [
+      "full"
+    ],
+    "permissionNotes": [],
+    "dataNotes": [
+      "Records local lifecycle and route diagnostics only when enabled."
+    ],
+    "remoteServices": [],
+    "localStorageNotes": [
+      "Stores its generated enablement toggle."
+    ],
+    "privacyLabels": [
+      "local-only",
+      "diagnostics"
+    ]
+  },
+  "privacy": {
+    "permissionNotes": [],
+    "dataNotes": [
+      "Records local lifecycle and route diagnostics only when enabled."
+    ],
+    "localStorageNotes": [
+      "Stores its generated enablement toggle."
+    ],
+    "remoteServices": [],
+    "privacyLabels": [
+      "local-only",
+      "diagnostics"
+    ],
+    "consentRequired": false
+  },
+  "package": {
+    "assets": [
+      {
+        "id": "basic-feature.icon",
+        "path": "assets/icon.svg",
+        "kind": "icon",
+        "webAccessible": true
+      }
+    ],
+    "webAccessibleAssets": [
+      "assets/icon.svg"
+    ]
+  },
+  "review": {
+    "status": "local",
+    "notes": [
+      "Starter-kit template; local composition requires explicit review acknowledgement."
+    ]
+  }
+}
