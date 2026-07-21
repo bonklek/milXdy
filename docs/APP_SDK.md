@@ -283,7 +283,7 @@ Current first-party status:
 
 | Package | Status | Notes and follow-up prompts |
 | --- | --- | --- |
-| RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream runs in an already-open RemiliaNET page and crosses two stateful `runtime.connect` ports; the background validates same-extension top-frame X/Twitter and RemiliaNET senders before relaying commands or frames. |
+| RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream remains a stateful `runtime.connect` bridge, but the background port validates same-extension top-frame X/Twitter senders before opening a socket. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
 | Miladychan Portal | Aligned | Uses shared overlay chrome, route through background router, and declares remote-service/privacy metadata. Keep public board fetches on allowlisted routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
