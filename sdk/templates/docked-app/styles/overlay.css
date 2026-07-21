@@ -1,0 +1,86 @@
+/* Accessible overlay primitives for milXdy App SDK packages. */
+.milxdy-sdk-overlay {
+  position: fixed;
+  z-index: 2147483000;
+  inset-block-start: 72px;
+  inset-inline-end: 16px;
+  box-sizing: border-box;
+  inline-size: min(360px, calc(100vw - 32px));
+  max-block-size: calc(100vh - 88px);
+  overflow: auto;
+  border: 1px solid var(--milxdy-sdk-color-border);
+  border-radius: var(--milxdy-sdk-radius-panel);
+  background: var(--milxdy-sdk-color-surface);
+  color: var(--milxdy-sdk-color-text);
+  box-shadow: var(--milxdy-sdk-shadow-panel);
+  font: 14px/1.45 var(--milxdy-sdk-font-ui);
+  isolation: isolate;
+}
+
+.milxdy-sdk-overlay__header {
+  display: flex;
+  align-items: center;
+  gap: var(--milxdy-sdk-space-3);
+  padding: var(--milxdy-sdk-space-4);
+  border-block-end: 1px solid var(--milxdy-sdk-color-border);
+  background: var(--milxdy-sdk-color-surface-raised);
+}
+
+.milxdy-sdk-overlay__icon {
+  flex: none;
+  inline-size: 32px;
+  block-size: 32px;
+}
+
+.milxdy-sdk-overlay__title {
+  flex: 1;
+  min-inline-size: 0;
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.milxdy-sdk-overlay__body {
+  padding: var(--milxdy-sdk-space-4);
+  font-family: var(--milxdy-sdk-font-content);
+}
+
+.milxdy-sdk-overlay__body > :first-child { margin-block-start: 0; }
+.milxdy-sdk-overlay__body > :last-child { margin-block-end: 0; }
+
+.milxdy-sdk-overlay__button {
+  min-inline-size: 44px;
+  min-block-size: 44px;
+  border: 1px solid var(--milxdy-sdk-color-border);
+  border-radius: var(--milxdy-sdk-radius-control);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background var(--milxdy-sdk-motion-fast) ease;
+}
+
+.milxdy-sdk-overlay__button:hover {
+  background: color-mix(in srgb, var(--milxdy-sdk-color-accent) 14%, transparent);
+}
+
+.milxdy-sdk-overlay :focus-visible {
+  outline: 3px solid var(--milxdy-sdk-color-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .milxdy-sdk-overlay {
+    inset: 8px;
+    inline-size: auto;
+    max-block-size: calc(100vh - 16px);
+  }
+}
+
+@media (forced-colors: active) {
+  .milxdy-sdk-overlay,
+  .milxdy-sdk-overlay__header,
+  .milxdy-sdk-overlay__button {
+    border-color: CanvasText;
+  }
+}

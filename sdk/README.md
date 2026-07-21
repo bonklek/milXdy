@@ -21,6 +21,10 @@ scanner is not a sandbox guarantee.
 - `testing/app-harness.mjs`: an in-memory public-context harness for lifecycle,
   cancellation, scheduling, storage, assets, messaging, diagnostics, and
   disposables.
+- `ui/theme.css` and `ui/overlay.css`: copyable semantic tokens and accessible,
+  responsive overlay primitives used by the docked starter.
+- `UI.md`, `ACCESSIBILITY.md`, and `ASSETS_AND_LICENSING.md`: the author-facing
+  UI, interaction, review, and redistribution baseline.
 - `../docs/local-app-package.schema.json`: JSON Schema for
   `milxdy.app.json` authoring.
 - `../docs/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.
@@ -59,6 +63,8 @@ the generated composition report and package hashes.
 - Exercise lifecycle and capability assumptions with `createAppHarness()` before
   composing a browser build; the harness fails closed on undeclared storage and
   asset access just like the public runtime facade.
+- Copy the public UI CSS into the package instead of importing private overlay
+  modules, then satisfy the accessibility and asset-license checklists.
 
 The starter declaration intentionally omits internal runtime helpers such as
 cross-app loading. If a template cannot implement a real app without a private

@@ -394,6 +394,14 @@ The harness validates public-contract behavior; it does not emulate the browser
 DOM or prove runtime isolation. Browser composition and the deferred pre-merge
 QA checklist remain separate gates.
 
+For app UI, copy `sdk/ui/theme.css` and `sdk/ui/overlay.css` into the package and
+declare both files in manifest `css`. The docked starter demonstrates the
+supported classes, semantic tokens, keyboard-close behavior, focus entry and
+restoration, responsive geometry, reduced motion, and forced colors. See
+`sdk/UI.md`, `sdk/ACCESSIBILITY.md`, and `sdk/ASSETS_AND_LICENSING.md` for the
+review baseline. These public CSS files are package-owned copies at runtime;
+apps must not import private helpers from `src/platform/overlay`.
+
 ### Package Fixtures
 
 The first-party package-shape pilots live under `examples/packages/first-party-replacements/`. They are fixtures for built-in replacement and registry compatibility:
