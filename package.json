@@ -35,6 +35,7 @@
     "verify:app-smoke:020": "node scripts/smoke/app-smoke-020.mjs",
     "verify:filesystem-layout": "node scripts/verify/filesystem-layout.mjs",
     "verify:app-sdk-compliance": "node scripts/verify/app-sdk-compliance.mjs",
+    "verify:app-sdk-production": "node scripts/verify/app-sdk-production.mjs",
     "verify:internal-messaging-bridges": "node scripts/verify/internal-messaging-bridges.mjs",
     "verify:remistats-tooltip-escaping": "node scripts/verify/remistats-tooltip-escaping.mjs",
     "verify:app-settings-mirrors": "node scripts/verify/app-settings-mirrors.mjs",
@@ -78,6 +79,7 @@
   },
   "overrides": {
     "ajv": "8.20.0",
+    "protobufjs": "7.6.5",
     "shell-quote": "1.8.4",
     "tmp": "0.2.7"
   }

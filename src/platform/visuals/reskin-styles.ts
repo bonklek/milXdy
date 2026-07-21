@@ -1021,6 +1021,12 @@ export const RESKIN_CSS = `
     transition: transform 80ms ease, box-shadow 80ms ease, filter 80ms ease !important;
   }
 
+  html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] *,
+  html[data-milxdy-reskin-profile="max"] [data-testid="tweetButtonInline"] *,
+  html[data-milxdy-reskin-profile="max"] [data-testid="tweetButton"] * {
+    color: #ffffff !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] svg,
   html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] svg *,
   html[data-milxdy-reskin-profile="max"] [data-testid="tweetButtonInline"] svg,
@@ -1114,6 +1120,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="SideNav_NewTweet_Button"] *,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="tweetButtonInline"] *,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="tweetButton"] * {
+    color: #ffffff !important;
     text-transform: uppercase !important;
   }
 

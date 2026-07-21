@@ -134,6 +134,8 @@ Theme: continue the app-platform split after Apps and Features cleanup by harden
 - Continue local app-package and distribution follow-through.
   - evaluate package signatures, marketplace discovery, normal-user install/update UI, and starter-kit polish after the 0.2.2 reviewed custom-build groundwork
   - keep marketplace, submission, and browser-distribution prep separate from the shipped 0.2.2 scope
+- Finalize the App SDK as the stable foundation for first-party and reviewed app packages.
+  - complete the starter-kit, lifecycle, diagnostics, and app-launcher follow-through needed for packages to feel like a coherent platform
 - RemiNet and remilia.net correctness/accessibility follow-through.
   - show Poke actions only for profiles confirmed to have a usable RemiNet identity, with bounded lookup and clear pending/failure behavior
   - add a dedicated reduced-motion option for remilia.net Beetle Hunt without changing the separate X/Twitter Beetol Hunt feature
@@ -143,12 +145,13 @@ Theme: continue the app-platform split after Apps and Features cleanup by harden
 
 ## Planned: 0.2.4 - Composer Kit (Target: 2026-08-02)
 
-Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme-designer integrations, and AI-assisted metadata normalization.
+Theme: post upgrades, reviewed media sharing, Miladychan posting, reply media, phrase helpers, and maker/meme-designer integrations.
 
 - Tweet PNG and RemiNet sharing.
   - add granular Tweet PNG metadata and styling settings so users can choose which identity, date, source, RemiStats, and border details appear before copy, download, browser share, or upload
   - support direct Tweet PNG upload to RemiNet only after endpoint/API and browser-session auth behavior are confirmed
   - require preview/review behavior before upload and never send or upload PNGs automatically
+  - research direct, user-initiated exports to supported global-chat surfaces once exact destinations and session boundaries are defined
 - Miladychan posting from the portal.
   - let users create posts on Miladychan from inside milXdy instead of only browsing and opening the native site
   - preserve pseudonymous board expectations and make posting destination/board/thread state explicit
@@ -168,14 +171,6 @@ Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme
 - Quick composer helpers.
   - add a small Milady-head reply action that can send `milady`, `remilio`, or a user-selected phrase
   - route Maker-style buttons through the broader composer meme designer where technically possible
-- Grok-assisted posting and metadata normalization.
-  - design an optional editing flow that standardizes formatting, metadata, identifiers, links, and readability
-  - preserve the user's voice and require final review before publishing
-  - avoid automatic posting or invisible metadata changes
-- Reviewed context and prompt-pack export.
-  - let users inspect and export versioned post/thread, Tweet PNG, reply-composer, and source-pack context
-  - let reviewed app packages declare bounded prompt templates or skills for manual use in the user's chosen assistant
-  - exclude private/session data and never send, insert, upload, save, or post returned content automatically
 
 ## Planned: 0.2.5 - Reader Voice (Target: 2026-08-09)
 
@@ -187,22 +182,25 @@ Theme: Post-reading companion voice experiments and long-form audio export.
   - keep milXdy functional without the side package
   - decide whether this remains a Post-reading companion or becomes its own package
 - Long-form Post-reading audio export.
-  - let users invoke Post-reading on wiki articles, X articles/long posts, Substack, Medium, blogs, RSS item pages, and other long-form pages
+  - let users invoke Post-reading on Wikipedia, X articles/long posts, Substack, Medium, blogs, RSS item pages, and other long-form pages
   - use hard-coded extractors for known sources first, with a generic readable-text fallback for unrecognized pages
   - open extracted text in a review editor before generation
+  - provide a Post-reading popout for editing the readable text before playback or export
   - export through the selected TTS path, preferring MP3 or M4A when the backend can return those formats
   - keep source metadata with the generated audio result
 - X direct-message Read Aloud.
   - read an explicitly opened conversation in chronological order while distinguishing incoming and outgoing messages
   - exclude conversation-list previews, composer text, controls, timestamps, and unrelated page chrome
   - keep private DM text within the user-selected TTS path and reset safely when conversations change
+- Native X article follow-through.
+  - restore Read Aloud on X native articles
 
 ## Planned: 0.2.6 - Social Tuning (Target: 2026-08-16)
 
 Theme: Maxxer collection behavior, classifier research, like-button presets, follow suggestions, and X graph discovery.
 
 - Expanded Maxxer collection behavior.
-  - include recognized collections that the local classifier/model pipeline can support reliably
+  - include recognized and derivative collections that the local classifier/model pipeline can support reliably
   - add an advanced behavior menu for maxxed, lower-tier, neutral, or minimized treatment
   - complete reversible non-Milady minimization without minimizing RemiStats beetle users
 - Facelord Fixer classifier.
@@ -225,10 +223,15 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - add opt-in local session/activity statistics and configurable gentle nudges
   - support reversible grayscale, media-reduction, and lower-intensity presentation choices without collecting private content
   - respect reduced-motion, Performance mode, dismissal, snooze, reset, and disable behavior
+- Miladychan Live.
+  - add deck, watchlist, live-board, multitrack, and board-pulse views
+  - make board purpose, thread context, unread state, navigation, and unavailable states clear for newer readers without flattening pseudonymous board culture
+  - provide readable, accessible local defaults and optional local-only reading-density, refresh, and watchlist preferences
+  - keep Miladychan's pseudonymous culture separate from X identity by default
 
 ## Planned: 0.2.7 - Activity Arcade (Target: 2026-08-23)
 
-Theme: daily rituals, poke feed, stats, leaderboards, and Beetle sharing.
+Theme: daily rituals, Poke activity, Maxxer/Poke/SCS stats and leaderboards, and Beetle sharing.
 
 - Milady wheel daily spin.
   - add a slot-machine icon near the Milady/X icon that opens a Milady wheel
@@ -236,8 +239,11 @@ Theme: daily rituals, poke feed, stats, leaderboards, and Beetle sharing.
   - award or display a random Milady-style result with a view-on-Blur action
   - let users choose which collection their daily spins use
 - Stats and leaderboards panel.
-  - unify Maxxer XP, pokes, Beetol actions, Post-reading usage, RemiStats, and local diagnostics where useful
+  - unify Maxxer XP, Poke stats, Beetol actions, Post-reading usage, RemiStats, and local diagnostics where useful
   - avoid turning metrics into simple farm loops
+- Daily collection and Poke feedback.
+  - add a Banners daily deck tracker to Milady Maxxer
+  - add optional animated, audible RemiNet Poke notifications on X
 - Beetle Hunt share-to-X.
   - add explicit user-initiated sharing for Beetle Hunt results or milestones
 - Optional poke feed.
@@ -248,7 +254,7 @@ Theme: daily rituals, poke feed, stats, leaderboards, and Beetle sharing.
 
 ## Planned: 0.2.8 - Identifier Media Layer (Target: 2026-08-30)
 
-Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifier-first sharing research.
+Theme: local-first radio, Miladychan board-based identifier sharing, books, podcasts, movies, TV, recipes, and evaluated live-media integrations.
 
 - Identifier-first social layer design.
   - define milXdy as a social layer for references, recommendations, collections, and discussion around works that already exist elsewhere
@@ -268,6 +274,12 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - provide a lightweight public-domain/ad-free source path with preselected links or collections users can review before importing locally
   - keep local library playback as the baseline
   - avoid automatic file sharing, scraping, downloading, or transmitting audio files
+- Live media entry points.
+  - add a reviewed RemiCast entry point in an appropriate milXdy surface, with an explicit user action before any external media loads
+  - recognize Twitch channel, stream, video, and clip links where supported media is presented, using only page-visible or URL-derived information for a compact card
+  - begin with an explicit `Open on Twitch` handoff without prefetching, autoplay, authentication, API credentials, or hidden external loading
+  - evaluate a Twitch embed only behind explicit opt-in, privacy, autoplay, performance, and service-constraint gates
+  - preserve the original URL as the fallback for unsupported or malformed links
 - Books and reading.
   - add an EPUB reader as a future app surface
   - use Gutenberg.org as an initial public-domain source
@@ -282,43 +294,9 @@ Theme: local-first radio plus books, podcasts, movies, TV, recipes, and identifi
   - add recipe sharing with source attribution, external links, structured references, and user commentary
   - distinguish original user recipes from externally sourced recipes
 
-## Planned: 0.2.9 - Live Media Integrations (Target: 2026-09-06)
+## Planned: 0.2.9 - Front Door & Platform Reach (Target: 2026-09-06)
 
-Theme: explicit, privacy-preserving entry points for RemiCast and Twitch, with stable fallback handling and no implicit external media loading.
-
-- RemiCast integration.
-  - add a RemiCast entry point in an appropriate milXdy surface
-  - support opening or embedding RemiCast content where browser-extension constraints allow it
-  - require explicit user action before loading external media or external service content
-  - document any required permissions, remote-service behavior, and fallback handling
-- Twitch live-media cards.
-  - recognize explicit Twitch channel, stream, video, and clip links where milXdy already presents supported media
-  - show a compact card using information already present on the page or safely derivable from the URL
-  - provide an explicit `Open on Twitch` handoff without prefetching, autoplay, embeds, authentication, or API credentials
-  - preserve the original link as the fallback for unsupported or malformed URLs
-
-## Planned: 0.2.10 - Miladychan Live (Target: 2026-09-13)
-
-Theme: deck, live-board, and board pulse expansion.
-
-- Miladychan deck and advanced live-board expansion.
-  - explore live board pulse, deck view, watchlists, multitrack navigation, and board/thread activity surfaces
-  - preserve pseudonymous board expectations and avoid merging Miladychan identity with X/Twitter identity by default
-  - define polling, caching, rate-limit, moderation/safety, and performance constraints before shipping live behavior
-
-## Planned: 0.2.11 - User Registry (Target: 2026-09-20)
-
-Theme: opt-in milXdy user badges, profile ownership proof, removal, privacy, and abuse controls.
-
-- Optional milXdy user registry.
-  - add opt-in profile badges for users who run milXdy
-  - implement profile ownership proof before a profile can be listed
-  - keep wallet identity out of the registry baseline; optional wallet, ENS, and Gwei linking begins in the 0.3.x onchain foundation
-  - support removal/unpublish behavior, privacy disclosure, and abuse controls
-
-## Planned: 0.2.12 - Front Door & Platform Reach (Target: 2026-09-27)
-
-Theme: redesigned onboarding, visual guides, Safari desktop support, distribution research, mobile feasibility, and non-technical user setup.
+Theme: redesigned onboarding, visual guides, a Safari desktop app path, distribution research, mobile feasibility, and non-technical user setup.
 
 - Public screenshots and README visual guide.
   - add public-safe screenshots for the major user-facing surfaces
@@ -331,7 +309,7 @@ Theme: redesigned onboarding, visual guides, Safari desktop support, distributio
   - include pictures/screenshots throughout the guide flow
   - include video walkthroughs or video-ready scripts/checklists
   - clearly separate required setup steps from optional advanced features
-- Safari desktop support.
+- Safari desktop app path.
   - add a Safari Web Extension build, packaging path, compatibility layer, and desktop QA target
   - preserve the Chromium and Firefox variants while documenting Safari-specific limitations
 - Chrome Web Store readiness, if distribution goals change.
@@ -344,34 +322,40 @@ Theme: redesigned onboarding, visual guides, Safari desktop support, distributio
 
 ## Planned: 0.3.x - Onchain Integration
 
-Theme: progress from shared wallet and chain safety into read-only Ethereum media, account-abstraction networking, reviewed social value, private blob mail, collection context, advanced publishing, and collective metadata.
+Theme: progress from browser-extension wallet connection and chain safety into read-only Ethereum media, account-abstraction networking, reviewed CULT cheer, private blob mail, collection context, advanced publishing, and collective metadata.
 
-- `0.3.0 - The Onchain Foundation` (target 2026-10-04): wallet identity, app capabilities, bounded RPC, transaction review, receipts, and recovery.
-- `0.3.1 - Ethereum Media` (target 2026-10-11): verified read-only RFE playback, content-addressed sources, and optional NFT collection context.
-- `0.3.2 - The Paraclete Network` (target 2026-10-18): optional browser AA gossip and scoped ERC-4337 adapters.
-- `0.3.3 - Social Value` (target 2026-10-25): receiving-address proofs, reviewed `$CULT` cheers and tips, and address lifecycle research.
-- `0.3.4 - BlobMail` (target 2026-11-01): testnet encrypted mail, key transparency, reviewed composition, delivery evidence, and bounded local storage.
-- `0.3.5 - Onchain Collections` (target 2026-11-08): optional ownership context for Remilia Gotcha and Banners plus read-only Bonklet integration.
-- `0.3.6 - Onchain Publishing` (target 2026-11-15): advanced RFE publishing, portable station apps, program-rights research, and reviewed IPFS publication.
-- `0.3.7 - Collective Metadata` (target 2026-11-22): signed public observations, bounded post-Paraclete propagation, passive metadata adapters, and X `Account based in` region filtering.
+- `0.3.0 - The Onchain Foundation` (target 2026-09-13): connect browser-extension wallets through a clear safety, permission, bounded-RPC, transaction-review, receipt, and recovery architecture.
+- `0.3.1 - Blobcast` (target 2026-09-20): verified read-only RFE/Blobcast playback and content-addressed source resolution.
+- `0.3.2 - The Paraclete Network` (target 2026-09-27): optional browser AA gossip, scoped ERC-4337 adapters, registered friend-activity research, and a jointly scoped IP-privacy/optional-features evaluation.
+- `0.3.3 - CULT Cheer` (target 2026-10-04): receiving-address proofs, reviewed `$CULT` cheers and tips, address lifecycle research, and separately gated private/shielded-transfer research.
+- `0.3.4 - BlobMail` (target 2026-10-11): testnet encrypted mail, key transparency, reviewed composition, delivery evidence, and bounded local storage.
+- `0.3.5 - Onchain Collections` (target 2026-10-18): optional NFT context for Banners and daily collections plus read-only Bonklet integration; later shared records may complement—not replace—the Miladychan board substrate.
+- `0.3.6 - Onchain Publishing` (target 2026-10-25): advanced RFE publishing, portable station apps, program-rights research, and reviewed IPFS publication.
+- `0.3.7 - Collective Metadata` (target 2026-11-01): signed public observations, bounded post-Paraclete propagation, passive metadata adapters, X `Account based in` region filtering, relationship-status research, and opt-in milXdy registry records.
 
 See the [0.3.x onchain roadmap](ONCHAIN_ROADMAP.md) for the dependency map, release gates, project boundaries, and issue index.
 
-## Exploratory: 0.4.x - Personal Computing Directions
+## Exploratory: 0.4.x - Research Directions
 
 `0.4.x` is conjectural and does not yet represent a committed release order, version split, or final architecture. Current research directions are:
 
-- Personal Workspace concept; issues #97 and #162-#164.
+- Personal Workspace concept; issues #97, #162-#164, and #171.
   - explore a private sticky-note canvas, durable local state, accessible navigation, recovery, and reviewed portability
+  - research passive, local personal X-account dossiers and a desktop-LLM-client connection for user-directed knowledge-base synthesis, content creation, and sharing; Exocore is a possible integration context, not an architectural commitment
   - use the concept to test whether milXdy should host substantial personal state, not to promise a complete productivity suite
-- Companion Bridge concept; issues #77 and #165-#168.
-  - explore a separately installed local bridge for explicitly selected context and bounded returned artifacts
-  - treat native messaging, MCP ownership, capability pairing, and browser coverage as current design hypotheses requiring prototypes and threat-model review
+- Remilia Gotcha concept.
+  - explore a local-first collector game in which bounded X avatar encounters feed a local event ledger, progression currency, reveal queue, packs, cards, duplicate leveling, and collection completion; it is separate from `0.3.5`'s read-only onchain collection context
+  - begin from the standalone `milady-gacha` prototype; only consider a milXdy app integration after the core loop, metadata/licensing posture, classifier quality, storage/export, and X performance constraints are proven
+  - do not imply wallet ownership, NFT/token identification, trading, market value, or real-money packs; public leaderboards remain undecided research, not a commitment
 - Open sequencing questions.
-  - either concept may be reduced, deferred, combined, reordered, or replaced after the `0.3.x` integration work and app-platform evidence
+  - any concept may be reduced, deferred, combined, reordered, or replaced after the `0.3.x` integration work and app-platform evidence
   - public/shared workspaces, autonomous assistants, ambient context access, and broad browser/filesystem/wallet authority are not implied
 
 ## Backlog Requiring Product Research
+
+- Reviewed context and app prompt-pack export; [issue #158](https://github.com/bonklek/milXdy/issues/158).
+  - keep as research until the source-specific entry points, declared pack recipes, review surface, and manual handoff behavior are fully specified and tested
+  - preserve the provisional interaction notes in the issue: field-level inspection/removal, no unrelated browser context, explicit copy/download only, and no provider launch or automatic return path
 
 - Post-reading audio library, RSS queues, and shareable verbal-media exports.
   - save reviewed long-form conversions into a local audio library with draft and completed states

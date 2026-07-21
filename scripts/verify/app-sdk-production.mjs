@@ -1,0 +1,68 @@
+import { readFile } from "node:fs/promises";
+import { spawnSync } from "node:child_process";
+
+const packageJson = JSON.parse(await readFile("package.json", "utf8"));
+const publicTypes = await readFile("sdk/types/index.d.ts", "utf8");
+const starterManifest = JSON.parse(await readFile("sdk/templates/basic-feature/milxdy.app.json", "utf8"));
+const readiness = await readFile("docs/APP_PLATFORM_PRODUCTION_READINESS.md", "utf8");
+const compatibility = await readFile("docs/APP_SDK_COMPATIBILITY.md", "utf8");
+const docsIndex = await readFile("docs/INDEX.md", "utf8");
+
+assert(publicTypes.includes(`App SDK ${packageJson.appSdkVersion}`), "public declarations must name the current App SDK version");
+for (const name of [
+  "MilxdyContentAppContext",
+  "MilxdyContentAppModule",
+  "TwitterSurface",
+  "MilxdyRouteChange",
+  "AppRuntimeScheduler",
+]) {
+  assert(publicTypes.includes(name), `public declarations are missing ${name}`);
+}
+assert(!publicTypes.includes("loadAppById"), "public declarations must not expose internal cross-app loading");
+assert(!publicTypes.includes("scheduleScan"), "public declarations must not expose internal scanner scheduling");
+assert(starterManifest.sdk?.minVersion === packageJson.appSdkVersion, "starter template sdk.minVersion must match package.json appSdkVersion");
+assert(starterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "starter template sdk.targetVersion must match package.json appSdkVersion");
+assert(starterManifest.defaultEnabled === false, "starter template must start disabled");
+assert(readiness.includes("reviewed custom-build platform"), "production-readiness docs must define the supported near-term boundary");
+assert(readiness.includes("External proof"), "production-readiness docs must require an external integration proof");
+assert(compatibility.includes("Package-owned background module | Unsupported"), "compatibility policy must disclose unsupported package background modules");
+assert(docsIndex.includes("APP_SDK_COMPATIBILITY.md") && docsIndex.includes("APP_PLATFORM_PRODUCTION_READINESS.md"), "docs index must link SDK production policies");
+
+const checks = [
+  ["Public SDK declarations and starter JavaScript", ["node_modules/typescript/bin/tsc", "-p", "sdk/tsconfig.json"]],
+  ["App SDK compliance", ["scripts/verify/app-sdk-compliance.mjs"]],
+  ["App settings mirrors", ["scripts/verify/app-settings-mirrors.mjs"]],
+  ["Internal messaging bridges", ["scripts/verify/internal-messaging-bridges.mjs"]],
+  ["First-party package fixtures", ["scripts/packages/verify-local-app-packages.mjs"]],
+  ["Novel package integration", [
+    "scripts/packages/verify-local-app-package.mjs",
+    "--package=examples/packages/local-dev/dev-note",
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ]],
+  ["Starter template integration", [
+    "scripts/packages/verify-local-app-package.mjs",
+    "--package=sdk/templates/basic-feature",
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ]],
+  ["Local package trust gates", ["scripts/packages/verify-local-app-trust-gates.mjs"]],
+];
+
+console.log(`App SDK production verification for ${packageJson.appSdkVersion}`);
+for (const [label, args] of checks) {
+  console.log(`\n== ${label} ==`);
+  const result = spawnSync(process.execPath, args, {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: "inherit",
+  });
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(result.status ?? 1);
+}
+
+console.log("\nApp SDK production verification passed.");
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}

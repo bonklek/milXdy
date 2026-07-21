@@ -43,6 +43,11 @@
       "js": ["wikiFrame.js"],
       "run_at": "document_start",
       "all_frames": true
+    },
+    {
+      "matches": ["https://www.remilia.net/*"],
+      "js": ["reminetChatBridge.js"],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

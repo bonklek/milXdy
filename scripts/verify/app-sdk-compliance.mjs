@@ -92,9 +92,9 @@ function verifyLocalPackageShapeContract() {
   requireIncludes(appSdkDocs, "entryName", "package docs must distinguish first-party build-only fields");
   requireIncludes(appSdkDocs, "requiredOutputs", "package docs must distinguish requiredOutputs as build-only metadata");
   requireIncludes(appSdkDocs, "Package paths are package-root-relative", "package docs must forbid absolute/traversal paths");
-  requireIncludes(appSdkDocs, "Blockers before local app loading can ship", "package docs must list loader blockers");
-  requireIncludes(appSdkDocs, "manifest validator", "package docs must require future validation before loading");
-  requireIncludes(appSdkDocs, "install/enable consent UI", "package docs must require permission and data-use consent");
+  requireIncludes(appSdkDocs, "Remaining blockers before normal-user package loading or marketplace installation can ship", "package docs must distinguish completed composer safeguards from normal-user loader blockers");
+  requireIncludes(appSdkDocs, "deterministic manifest, archive, path, asset, lifecycle, settings, background-message, permission, privacy, and URL metadata validation", "package docs must record implemented validation safeguards");
+  requireIncludes(appSdkDocs, "complete install/update/rollback/remove UI", "package docs must require permission, data-use, and cleanup lifecycle UX");
 
   requireIncludes(privacyDocs, "## Future Local App Packages", "privacy docs must describe future local package permissions");
   requireIncludes(privacyDocs, "stay disabled until validation", "privacy docs must keep copied packages disabled before validation/consent");

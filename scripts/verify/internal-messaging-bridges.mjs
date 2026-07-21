@@ -7,6 +7,8 @@ const files = {
   postReadingOcr: await readFile("src/apps/post-reading/ocr.ts", "utf8"),
   postReadingOcrHost: await readFile("src/extension/frames/ocr-host.ts", "utf8"),
   reminetChatBackground: await readFile("src/apps/reminet-chat/background.ts", "utf8"),
+  reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
+  extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
   beetolContent: await readFile("src/apps/beetol/content.js", "utf8"),
   miladyMaxxerBackground: await readFile("src/apps/milady-maxxer/background.ts", "utf8"),
@@ -37,14 +39,29 @@ console.log("Internal messaging bridge verification passed.");
 function verifyReminetChatSocketBridge() {
   const onConnect = functionBody(files.reminetChatBackground, "chrome.runtime.onConnect.addListener");
   const senderPolicy = functionBody(files.reminetChatBackground, "isReminetChatSocketSender");
+  const registerSiteBridge = functionBody(files.reminetChatBackground, "registerSiteSocketBridge");
+  const bridge = files.reminetChatBridge;
   assertIncludes(onConnect, "if (port.name !== SOCKET_PORT_NAME) return;", "RemiNet socket bridge must ignore unrelated port names");
   assertIncludes(onConnect, "if (!isReminetChatSocketSender(port.sender))", "RemiNet socket bridge must validate sender before socket setup");
   assertIncludes(onConnect, "port.disconnect();", "RemiNet socket bridge must disconnect invalid senders");
-  assertOrder(onConnect, "if (!isReminetChatSocketSender(port.sender))", "let socket: WebSocket | null = null;", "RemiNet socket bridge must validate before allocating socket state");
-  assertIncludes(onConnect, "SOCKET_OPEN_TIMEOUT_MS", "RemiNet socket bridge must bound the WebSocket opening phase");
-  assertIncludes(onConnect, 'reason: "socket-open-timeout"', "RemiNet socket bridge must expose a recoverable open-timeout reason");
-  assertIncludes(onConnect, 'reason: authRequired ? "auth-required" : "socket-auth-timeout"', "RemiNet socket auth timeouts must remain recoverable instead of falsely signing the user out");
-  assertIncludes(onConnect, "generation !== connectGeneration", "RemiNet socket bridge must ignore authentication that completes after close");
+  assertIncludes(onConnect, "postToSiteSocketBridge", "RemiNet socket clients must relay through the authenticated site bridge");
+  assertNotIncludes(files.reminetChatBackground, "new WebSocket", "RemiNet background must not own the cross-site WebSocket");
+  assertNotIncludes(files.reminetChatBackground, "chrome.tabs.create", "RemiNet socket recovery must not open hidden tabs");
+  assertNotIncludes(files.reminetChatBackground, "chrome.tabs.remove", "RemiNet socket recovery must not close tabs");
+
+  assertIncludes(registerSiteBridge, 'isAllowedReminetChatSender(port.sender, ["www.remilia.net"])', "RemiNet site bridge must accept only RemiliaNET top-frame senders");
+  assertIncludes(registerSiteBridge, 'startsWith("socket:")', "RemiNet site bridge must relay only socket events");
+  assertIncludes(registerSiteBridge, "client.postMessage(record)", "RemiNet site bridge must broadcast live frames to connected chat clients");
+
+  assertIncludes(bridge, 'chrome.runtime.connect({ name: SOCKET_PORT_NAME })', "RemiNet site bridge must use its dedicated runtime port");
+  assertIncludes(bridge, 'new WebSocket(SOCKET_URL)', "RemiNet live socket must be created in the RemiliaNET page context");
+  assertIncludes(bridge, 'type: "subscribe"', "RemiNet live socket must subscribe after opening");
+  assertIncludes(bridge, 'socket.send(JSON.stringify(record.payload))', "RemiNet site bridge must forward submitted chat payloads unchanged");
+  assertIncludes(bridge, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
+  assertIncludes(bridge, "reconnectTimer = setTimeout(connectPort", "RemiNet site bridge must reconnect after a background-worker restart");
+  assertIncludes(bridge, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
+  assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*"]', "RemiNet site bridge must be injected only on RemiliaNET pages");
+  assertIncludes(files.extensionManifest, '"js": ["reminetChatBridge.js"]', "RemiNet site bridge must be declared in the extension manifest");
 
   const auth = files.reminetChatBackground;
   assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
@@ -275,7 +292,7 @@ function verifyWikiSidebarFrameBridge() {
 
 function verifyDocsContract() {
   assertIncludes(files.appSdkDocs, "not local package APIs and not sandbox boundaries", "App SDK docs must state internal bridges are not package APIs or sandbox boundaries");
-  assertIncludes(files.appSdkDocs, "same-extension top-frame X/Twitter senders", "App SDK docs must document RemiNet socket sender validation");
+  assertIncludes(files.appSdkDocs, "same-extension top-frame X/Twitter and RemiliaNET senders", "App SDK docs must document both sides of RemiNet socket sender validation");
   assertIncludes(files.appSdkDocs, "packaged `ocr.html` sender", "App SDK docs must document OCR frame sender validation");
   assertIncludes(files.appSdkDocs, "content-issued frame authentication token", "App SDK docs must document OCR frame parent authentication");
   assertIncludes(files.appSdkDocs, "same-extension non-top wiki frame senders", "App SDK docs must document Wiki iframe sender validation");
