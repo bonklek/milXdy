@@ -32,6 +32,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build Chromium
         run: npm run build:chromium
 
@@ -46,6 +49,9 @@ jobs:
 
       - name: Verify platform
         run: npm run verify:platform
+
+      - name: Verify App SDK production contract
+        run: npm run verify:app-sdk-production
 
       - name: Verify extension smoke
         run: npm run verify:smoke:020

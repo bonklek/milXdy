@@ -35,7 +35,7 @@ For release builds:
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox and Waterfox](docs/FIREFOX_QA.md).
+Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/FIREFOX_QA.md).
 
 For source builds:
 
@@ -62,6 +62,8 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Privacy and permissions](docs/PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](docs/APP_SDK.md)
+- [App SDK starter kit](sdk/README.md)
+- [App platform production readiness](docs/APP_PLATFORM_PRODUCTION_READINESS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
@@ -104,4 +106,4 @@ Other integrated or local feature areas include Remilia Wiki linking, Post-readi
 
 ## License
 
-VPL for this repository unless otherwise noted. Upstream and bundled dependencies may carry their own license terms. See [LICENSE](LICENSE).
+VPL for this repository unless otherwise noted. Upstream and bundled dependencies retain their own license terms. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
