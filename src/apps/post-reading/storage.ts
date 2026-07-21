@@ -1,44 +1,47 @@
 import { DEFAULT_SETTINGS } from "./shared/defaults";
 import type { AutoplayMode, BodyHighlightMode, ButtonPlacement, CustomTtsTimingMode, FullQuoteDisplay, PlayerPosition, PostReadingSettings, TtsEngineChoice, VoiceGenderFilter } from "./shared/types";
 import type { BoundarySupport } from "./speech";
+import type { AppStorageFacade } from "../../platform/app-sdk/app-platform";
 
 const SETTINGS_KEYS = Object.keys(DEFAULT_SETTINGS) as Array<keyof PostReadingSettings>;
 const VOICE_BOUNDARY_SUPPORT_KEY = "voiceBoundarySupportV2";
+let runtimeStorage: AppStorageFacade | null = null;
+
+export function configurePostReadingStorage(storage: AppStorageFacade | null): void {
+  runtimeStorage = storage;
+}
 
 export async function loadSettings(): Promise<PostReadingSettings> {
   const fallback = { ...DEFAULT_SETTINGS };
-  if (!globalThis.chrome?.storage?.sync) {
+  if (!runtimeStorage) {
     return fallback;
   }
-  const stored = await chrome.storage.sync.get(fallback);
+  const stored = await runtimeStorage.sync.get(fallback);
   return normalizeSettings(stored);
 }
 
 export async function saveSettings(settings: PostReadingSettings): Promise<void> {
-  if (!globalThis.chrome?.storage?.sync) return;
-  await chrome.storage.sync.set(normalizeSettings(settings));
+  if (!runtimeStorage) return;
+  await runtimeStorage.sync.set(normalizeSettings(settings));
 }
 
 export function observeSettings(callback: (settings: PostReadingSettings) => void): () => void {
-  if (!globalThis.chrome?.storage?.onChanged) return () => undefined;
-  const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-    if (area !== "sync") return;
+  if (!runtimeStorage) return () => undefined;
+  return runtimeStorage.sync.onChanged((changes) => {
     if (!SETTINGS_KEYS.some((key) => changes[key])) return;
     void loadSettings().then(callback);
-  };
-  chrome.storage.onChanged.addListener(listener);
-  return () => chrome.storage.onChanged.removeListener(listener);
+  });
 }
 
 export async function loadVoiceBoundarySupport(): Promise<Record<string, BoundarySupport>> {
-  if (!globalThis.chrome?.storage?.local) return {};
-  const stored = await chrome.storage.local.get({ [VOICE_BOUNDARY_SUPPORT_KEY]: {} });
+  if (!runtimeStorage) return {};
+  const stored = await runtimeStorage.local.get({ [VOICE_BOUNDARY_SUPPORT_KEY]: {} });
   return normalizeVoiceBoundarySupport(stored[VOICE_BOUNDARY_SUPPORT_KEY]);
 }
 
 export async function saveVoiceBoundarySupport(results: Record<string, BoundarySupport>): Promise<void> {
-  if (!globalThis.chrome?.storage?.local) return;
-  await chrome.storage.local.set({ [VOICE_BOUNDARY_SUPPORT_KEY]: normalizeVoiceBoundarySupport(results) });
+  if (!runtimeStorage) return;
+  await runtimeStorage.local.set({ [VOICE_BOUNDARY_SUPPORT_KEY]: normalizeVoiceBoundarySupport(results) });
 }
 
 export function normalizeSettings(value: unknown): PostReadingSettings {

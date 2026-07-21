@@ -14,6 +14,15 @@
       "root": "examples/packages/first-party-replacements/wikiSidebar",
       "packageSha256": "c3f39b33dff32efd6331df400f9c8e5b3ecebf7b02068d1f1b8c424123ddcf7a",
       "reason": "Checked-in first-party App SDK pilot fixture for Remilia Wiki sidebar."
+    },
+    {
+      "id": "post-reading",
+      "sourceType": "folder",
+      "root": "tmp/post-reading-sdk-reference/post-reading",
+      "sourceUrl": "https://github.com/bonklek/post-reading",
+      "sourceCommit": "372861b955624a65a5ec6e23fab837f2a21d5924",
+      "packageSha256": "76eb4e1bf37d7d3c8cc67bbab150389ecdccff95b404eb3e8172b223c2b3059f",
+      "reason": "Pinned external Post-reading App SDK reference package, staged by the cross-repository verifier."
     }
   ]
 }

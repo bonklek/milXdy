@@ -4,7 +4,7 @@ milXdy first-party features now run through a shared app platform instead of eac
 
 ## Prepared SDK Status
 
-`0.2.0` shipped the first app-platform preview. `0.2.1` polished that platform for public beta distribution. `0.2.2` is the **Prepared App SDK** pass: it makes the local-first app contract clearer, makes first-party apps conform to the contract more consistently, and documents enough package shape that future app work has a stable target.
+`0.2.0` shipped the first app-platform preview. `0.2.1` polished that platform for public beta distribution. `0.2.2` established the prepared local-first contract, and `0.2.3` hardens reviewed package composition, tamper detection, trust acknowledgements, and generated custom builds. The supported near-term product boundary and production exit criteria live in [App Platform Production Readiness](APP_PLATFORM_PRODUCTION_READINESS.md); version compatibility and deprecation rules live in [App SDK Compatibility](APP_SDK_COMPATIBILITY.md).
 
 This is still not the final remote community app system. Treat the APIs here as the current internal contract and public design direction, not a finalized third-party compatibility promise.
 
@@ -145,6 +145,19 @@ The root content entry should stay a tiny bootstrap. Shared page-wide visual sta
 
 Use `onSurface(surface)` for Twitter/X surfaces. The runtime performs visibility gating, import decisions, diagnostics, and idle scheduling before invoking the hook, so apps should not subscribe directly to the scanner or install broad page observers for routine surface work.
 
+Use `context.requestSurfaceRescan()` after a user-visible setting change invalidates already-rendered surface decorations. The runtime coalesces the request through its shared scanner. External packages must not import scanner internals; `scheduleScan` remains only as a deprecated first-party compatibility alias while bundled apps migrate.
+
+Use `context.storage.local` and `context.storage.sync` for app persistence. Each
+area exposes `get`, `set`, `remove`, and `onChanged`, but only for keys declared
+by the app manifest. Undeclared access fails before the browser storage API is
+called, and change listeners receive only declared keys from their area.
+
+Use `context.resolveAssetUrl(path)` for extension-packaged resources. Local
+package assets are mapped into the package namespace. Built-in host assets are
+available only when repo policy explicitly grants them to a reviewed
+first-party replacement. Absolute URLs, traversal, and undeclared paths fail
+closed.
+
 Use `deliverySurfaces` when an app needs a surface kind to trigger import but does not need ongoing `onSurface()` calls for that kind. For example, Root Visuals can wake from tweet activity so user-action listeners are available, while receiving only notification surfaces for unread marking.
 
 Use `context.scheduler` for routine delayed or idle work. The runtime backs it with one shared queue, applies the active Performance mode's per-frame idle budget, supports cancellation, and records `idleQueueDepth`, `idleQueueMaxDepth`, and `idleScheduler` diagnostics. App-owned `requestIdleCallback`, broad polling intervals, or unbounded scan queues should be reserved for feature-specific behavior that cannot be expressed through runtime surfaces.
@@ -270,7 +283,7 @@ Current first-party status:
 
 | Package | Status | Notes and follow-up prompts |
 | --- | --- | --- |
-| RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream remains a stateful `runtime.connect` bridge, but the background port now validates same-extension top-frame X/Twitter senders before opening a socket. |
+| RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream remains a stateful `runtime.connect` bridge, but the background port validates same-extension top-frame X/Twitter senders before opening a socket. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
 | Miladychan Portal | Aligned | Uses shared overlay chrome, route through background router, and declares remote-service/privacy metadata. Keep public board fetches on allowlisted routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
@@ -355,6 +368,37 @@ Expected generated artifacts:
 - `dist/chromium-local-apps/local-app-composition.json` preserving package source, review, diagnostics, privacy, and settings metadata for inspection
 
 `docs/local-app-package.schema.json` is the authoring schema for `milxdy.app.json`. It includes the supported enum values for package kind, lifecycle mode, surfaces, site scopes, settings locations, controls, reset behavior, presets, privacy labels, cost classes, asset kinds, review status, and current background metadata.
+
+### Starter Templates And Author Harness
+
+Use `sdk/templates/basic-feature/` for a route-driven feature and
+`sdk/templates/docked-app/` for a rail-capable overlay app. Both start disabled,
+declare their package-owned state and assets, and use only the public context.
+The docked template also demonstrates `boot`/`open`/`close`/`disable`/`dispose`,
+guarded asset URLs, and declared-key storage.
+
+Before composing a browser build, import `createAppHarness` from
+`sdk/testing/app-harness.mjs` in app-owned tests. It provides an in-memory public
+context and records lifecycle calls, diagnostics, messages, and rescan requests.
+It can flush or cancel scheduled work, abort the runtime signal, run registered
+disposables, seed declared storage, and reject undeclared storage or assets.
+The repository self-test is:
+
+```powershell
+pnpm.cmd run verify:app-sdk-harness
+```
+
+The harness validates public-contract behavior; it does not emulate the browser
+DOM or prove runtime isolation. Browser composition and compatibility testing
+remain separate responsibilities.
+
+For app UI, copy `sdk/ui/theme.css` and `sdk/ui/overlay.css` into the package and
+declare both files in manifest `css`. The docked starter demonstrates the
+supported classes, semantic tokens, keyboard-close behavior, focus entry and
+restoration, responsive geometry, reduced motion, and forced colors. See
+`sdk/UI.md`, `sdk/ACCESSIBILITY.md`, and `sdk/ASSETS_AND_LICENSING.md` for the
+review baseline. These public CSS files are package-owned copies at runtime;
+apps must not import private helpers from `src/platform/overlay`.
 
 ### Package Fixtures
 
@@ -465,14 +509,22 @@ Shared-service expectations:
 - Settings use the manifest settings schema and storage metadata so Apps & Features, profile packs, reset, and future import/export previews can reason about them without importing the app bundle.
 - Packages that declare non-X sites must distinguish `contentScript`, `backgroundService`, `embeddedFrame`, and `overlayApp` integrations; a host permission alone does not mean the full content runtime should inject there.
 
-Blockers before local app loading can ship:
+Completed safeguards for the reviewed custom-build path:
 
-- a manifest validator that checks the shape above, path traversal, assets, lifecycle exports, settings storage, background message declarations, and URL allowlists
-- install/enable consent UI for host permissions, browser-session access, local files, remote APIs, workers, WASM, and data retention
-- package conflict handling for duplicate IDs, incompatible SDK versions, blocked packages, malformed zips, and safe remove/reset/reload flows
-- sandbox and CSP rules for package assets, frames, workers, and web-accessible resources
-- diagnostics and smoke coverage proving package load cost, scanner usage, background routing, and overlay behavior remain bounded
-- review metadata for canonical listings, while still allowing clearly marked local/unreviewed packages in a future advanced flow
+- deterministic manifest, archive, path, asset, lifecycle, settings, background-message, permission, privacy, and URL metadata validation
+- fail-closed trust and consent acknowledgements for local review, privileged package surfaces, sensitive API exceptions, and first-party replacements
+- package-set conflict handling for duplicate IDs, incompatible SDK versions, blocked packages, malformed zips, storage ownership, routes, background namespaces, assets, hosts, and theme/chrome precedence
+- package and build-plan hashes plus builder-side tamper checks before copied code reaches a generated build
+- static payload review gates that block direct runtime messaging and require reviewed acknowledgement for permitted non-runtime sensitive API exceptions
+
+Remaining blockers before normal-user package loading or marketplace installation can ship:
+
+- a complete install/update/rollback/remove UI with permission and data-retention consent, package-owned storage cleanup, incompatibility recovery, and revocation behavior
+- a runtime membrane or sandbox with explicit CSP and capability rules; the static scanner is not isolation
+- a supported package-owned background capability model or a sufficient set of typed shared services
+- external reference-app validation covering lifecycle, messaging, settings migration, failure recovery, compatibility, and cleanup without private imports
+- required CI coverage for SDK compliance, internal bridges, package integration, and trust gates
+- canonical review, signing/provenance, checksum, update, and blocking policy for marketplace listings
 
 ## Future GitHub App Store Path
 

@@ -1,4 +1,5 @@
 import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
+import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
 import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
 import { icon } from "./icons";
@@ -9,7 +10,7 @@ import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./sha
 import { playEndDing } from "./sounds";
 import { SpeechController } from "./speech";
 import { injectStyles } from "./styles";
-import { loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
+import { configurePostReadingStorage, loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
 import type { TwitterSurface } from "../../platform/scanner/twitter-scanner";
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
@@ -155,10 +156,12 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
   lifecycleSignal = context?.signal || null;
-  runtimeScheduleScan = context?.scheduleScan || runtimeScheduleScan;
+  runtimeScheduleScan = context?.requestSurfaceRescan || context?.scheduleScan || runtimeScheduleScan;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
   configureFullQuoteRuntimeMessage(context?.sendMessage || null);
+  configurePostReadingStorage(context?.storage || null);
+  configurePostReadingAssetResolver(context?.resolveAssetUrl || null);
   const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
   settings = await loadSettings();
@@ -370,6 +373,8 @@ export function dispose(): void {
   appFrame = null;
   recordRuntimeDiagnostic = () => undefined;
   configureFullQuoteRuntimeMessage(null);
+  configurePostReadingStorage(null);
+  configurePostReadingAssetResolver(null);
   lifecycleSignal = null;
   booted = false;
 }
@@ -386,7 +391,7 @@ function postReadingDockIcon(): string {
     || (root.dataset.milxdyXTheme !== "light"
       && root.dataset.milxdySettingsTheme !== "light"
       && (root.style.colorScheme === "dark" || window.matchMedia?.("(prefers-color-scheme: dark)").matches === true));
-  return chrome.runtime.getURL(dark ? "post-reading/post-reading-logo-outline.png" : "post-reading/post-reading-logo.png");
+  return postReadingAssetUrl(dark ? "post-reading/post-reading-logo-outline.png" : "post-reading/post-reading-logo.png");
 }
 
 function updateDockState(): void {

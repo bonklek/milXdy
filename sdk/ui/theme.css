@@ -1,0 +1,37 @@
+/* milXdy App SDK 0.2.3 semantic UI tokens. Copy this file into app packages. */
+:root {
+  --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #ffffff);
+  --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #f7f9f9);
+  --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #cfd9de);
+  --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #0f1419);
+  --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #536471);
+  --milxdy-sdk-color-accent: var(--milxdy-overlay-app-accent, #1d9bf0);
+  --milxdy-sdk-color-focus: #1d9bf0;
+  --milxdy-sdk-font-ui: var(--milxdy-font-ui, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --milxdy-sdk-font-content: var(--milxdy-font-tweet, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --milxdy-sdk-font-mono: var(--milxdy-font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+  --milxdy-sdk-radius-panel: 16px;
+  --milxdy-sdk-radius-control: 999px;
+  --milxdy-sdk-space-1: 4px;
+  --milxdy-sdk-space-2: 8px;
+  --milxdy-sdk-space-3: 12px;
+  --milxdy-sdk-space-4: 16px;
+  --milxdy-sdk-shadow-panel: 0 8px 32px rgb(0 0 0 / 24%);
+  --milxdy-sdk-motion-fast: 120ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #000000);
+    --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #16181c);
+    --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #2f3336);
+    --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #e7e9ea);
+    --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #8b98a5);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --milxdy-sdk-motion-fast: 0ms;
+  }
+}

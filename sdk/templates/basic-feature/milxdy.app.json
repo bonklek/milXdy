@@ -1,36 +1,36 @@
 {
   "$schema": "../../../docs/local-app-package.schema.json",
   "manifestVersion": 1,
-  "id": "dev-note",
-  "name": "Developer Note",
+  "id": "basic-feature",
+  "name": "Starter Feature",
   "version": "0.1.0",
-  "description": "A minimal third-party local package that records an SDK diagnostic when enabled.",
+  "description": "Minimal third-party feature template for the reviewed custom-build App SDK.",
   "packageKind": "feature",
   "sdk": {
     "minVersion": "0.2.3",
     "targetVersion": "0.2.3",
     "notes": [
-      "Novel package sample for local custom builds."
+      "Uses only the public content-app context documented in sdk/types."
     ]
   },
-  "contentEntry": "dist/content.js",
+  "contentEntry": "content.js",
   "defaultEnabled": false,
   "storageKeys": {
     "local": [
-      "milxdy.local.dev-note.enabled"
+      "milxdy.local.basic-feature.enabled"
     ]
   },
   "settings": [
     {
-      "id": "dev-note.enabled",
-      "label": "Developer Note",
-      "description": "Enable the sample diagnostic package in this custom build.",
+      "id": "basic-feature.enabled",
+      "label": "Starter Feature",
+      "description": "Enable the starter feature in this custom build.",
       "scope": "feature",
       "location": "appsAndFeatures",
       "role": "enablement",
       "storage": {
         "area": "local",
-        "key": "milxdy.local.dev-note.enabled"
+        "key": "milxdy.local.basic-feature.enabled"
       },
       "defaultValue": false,
       "control": {
@@ -51,7 +51,7 @@
     "mode": "runtime",
     "localOnly": true,
     "notes": [
-      "Exports boot() and relies on the shared content runtime for loading, enablement, and diagnostics."
+      "Exports boot, onRouteChange, and dispose and relies on runtime cancellation."
     ]
   },
   "siteScopes": [
@@ -65,9 +65,8 @@
       "surfaces": [
         "route"
       ],
-      "presentation": "userAction",
       "notes": [
-        "Uses only the existing X/Twitter content runtime; no additional host permission is requested."
+        "Uses the existing X content runtime and requests no additional host permission."
       ]
     }
   ],
@@ -81,15 +80,9 @@
   "loadTriggers": [
     "startup"
   ],
-  "chrome": {
-    "nativeStyle": "native",
-    "supportedStyles": [
-      "native"
-    ]
-  },
   "hub": {
     "category": "developer",
-    "shortDescription": "Minimal local package sample with generated enablement.",
+    "shortDescription": "Typed starter feature with generated enablement and diagnostics.",
     "rail": {
       "supported": false,
       "defaultPinned": false
@@ -97,34 +90,38 @@
     "presets": [
       "full"
     ],
+    "permissionNotes": [],
     "dataNotes": [
-      "Records a local SDK diagnostic only when enabled."
+      "Records local lifecycle and route diagnostics only when enabled."
     ],
+    "remoteServices": [],
     "localStorageNotes": [
       "Stores its generated enablement toggle."
     ],
     "privacyLabels": [
-      "local-only"
+      "local-only",
+      "diagnostics"
     ]
   },
   "privacy": {
     "permissionNotes": [],
     "dataNotes": [
-      "Records a local SDK diagnostic only when enabled."
+      "Records local lifecycle and route diagnostics only when enabled."
     ],
     "localStorageNotes": [
       "Stores its generated enablement toggle."
     ],
     "remoteServices": [],
     "privacyLabels": [
-      "local-only"
+      "local-only",
+      "diagnostics"
     ],
     "consentRequired": false
   },
   "package": {
     "assets": [
       {
-        "id": "dev-note.icon",
+        "id": "basic-feature.icon",
         "path": "assets/icon.svg",
         "kind": "icon",
         "webAccessible": true
@@ -137,7 +134,7 @@
   "review": {
     "status": "local",
     "notes": [
-      "Checked-in novel-package sample; pass --allow-local-review for local custom builds."
+      "Starter-kit template; local composition requires explicit review acknowledgement."
     ]
   }
 }
