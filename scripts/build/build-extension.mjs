@@ -221,7 +221,7 @@ function validateLocalAppPlan(plan) {
       throw new Error(`Local app plan package ${packageId} first-party replacement hash does not match policy.`);
     }
     const trustPolicy = diagnostic.trust.firstPartyReplacementPolicy;
-    if (trustPolicy?.allowed !== true || trustPolicy.root !== policy.root || trustPolicy.packageSha256 !== policy.packageSha256) {
+    if (trustPolicy?.allowed !== true || trustPolicy.root !== policy.root || trustPolicy.packageSha256 !== policy.packageSha256 || (policy.sourceUrl && trustPolicy.sourceUrl !== policy.sourceUrl)) {
       throw new Error(`Local app plan package ${packageId} is missing a verified first-party replacement trust decision.`);
     }
   }

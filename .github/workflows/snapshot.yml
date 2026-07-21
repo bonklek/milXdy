@@ -32,6 +32,13 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Check out pinned Post-reading SDK reference
+        uses: actions/checkout@v4
+        with:
+          repository: bonklek/post-reading
+          ref: 89b875d56c16e7240cff2eb5d81d059c8a5eec69
+          path: post-reading-sdk
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
@@ -40,6 +47,11 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Install Post-reading reference dependencies
+        run: |
+          corepack enable
+          corepack pnpm --dir post-reading-sdk install --frozen-lockfile
 
       - name: Validate snapshot inputs
         env:
@@ -75,6 +87,11 @@ jobs:
 
       - name: Verify App SDK production contract
         run: npm run verify:app-sdk-production
+
+      - name: Verify external Post-reading App SDK reference
+        env:
+          POST_READING_REPO: ${{ github.workspace }}/post-reading-sdk
+        run: npm run verify:post-reading-sdk-reference
 
       - name: Verify extension smoke
         run: npm run verify:smoke:020

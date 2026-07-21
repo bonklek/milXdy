@@ -147,6 +147,8 @@ The root content entry should stay a tiny bootstrap. Shared page-wide visual sta
 
 Use `onSurface(surface)` for Twitter/X surfaces. The runtime performs visibility gating, import decisions, diagnostics, and idle scheduling before invoking the hook, so apps should not subscribe directly to the scanner or install broad page observers for routine surface work.
 
+Use `context.requestSurfaceRescan()` after a user-visible setting change invalidates already-rendered surface decorations. The runtime coalesces the request through its shared scanner. External packages must not import scanner internals; `scheduleScan` remains only as a deprecated first-party compatibility alias while bundled apps migrate.
+
 Use `deliverySurfaces` when an app needs a surface kind to trigger import but does not need ongoing `onSurface()` calls for that kind. For example, Root Visuals can wake from tweet activity so user-action listeners are available, while receiving only notification surfaces for unread marking.
 
 Use `context.scheduler` for routine delayed or idle work. The runtime backs it with one shared queue, applies the active Performance mode's per-frame idle budget, supports cancellation, and records `idleQueueDepth`, `idleQueueMaxDepth`, and `idleScheduler` diagnostics. App-owned `requestIdleCallback`, broad polling intervals, or unbounded scan queues should be reserved for feature-specific behavior that cannot be expressed through runtime surfaces.
