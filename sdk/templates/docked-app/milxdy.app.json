@@ -12,6 +12,10 @@
     "notes": ["Uses only the public content-app context documented in sdk/types."]
   },
   "contentEntry": "content.js",
+  "css": [
+    { "id": "docked-app.theme", "path": "styles/theme.css" },
+    { "id": "docked-app.overlay", "path": "styles/overlay.css" }
+  ],
   "dock": {
     "label": "Docked App",
     "icon": "assets/icon.svg",

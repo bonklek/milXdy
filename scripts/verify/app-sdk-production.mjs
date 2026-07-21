@@ -5,6 +5,13 @@ const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const publicTypes = await readFile("sdk/types/index.d.ts", "utf8");
 const starterManifest = JSON.parse(await readFile("sdk/templates/basic-feature/milxdy.app.json", "utf8"));
 const dockedStarterManifest = JSON.parse(await readFile("sdk/templates/docked-app/milxdy.app.json", "utf8"));
+const dockedStarterJavaScript = await readFile("sdk/templates/docked-app/content.js", "utf8");
+const themePrimitives = await readFile("sdk/ui/theme.css", "utf8");
+const overlayPrimitives = await readFile("sdk/ui/overlay.css", "utf8");
+const starterThemePrimitives = await readFile("sdk/templates/docked-app/styles/theme.css", "utf8");
+const starterOverlayPrimitives = await readFile("sdk/templates/docked-app/styles/overlay.css", "utf8");
+const accessibilityGuide = await readFile("sdk/ACCESSIBILITY.md", "utf8");
+const assetGuide = await readFile("sdk/ASSETS_AND_LICENSING.md", "utf8");
 const readiness = await readFile("docs/APP_PLATFORM_PRODUCTION_READINESS.md", "utf8");
 const compatibility = await readFile("docs/APP_SDK_COMPATIBILITY.md", "utf8");
 const docsIndex = await readFile("docs/INDEX.md", "utf8");
@@ -36,6 +43,15 @@ assert(dockedStarterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "
 assert(dockedStarterManifest.defaultEnabled === false, "docked starter must start disabled");
 assert(dockedStarterManifest.packageKind === "app" && dockedStarterManifest.surfaces?.includes("overlayApp"), "docked starter must exercise the overlay app contract");
 assert(dockedStarterManifest.loadTriggers?.includes("dockOpen") && dockedStarterManifest.dock?.label, "docked starter must exercise dock metadata and loading");
+assert(themePrimitives === starterThemePrimitives, "docked starter theme tokens must match the public UI kit");
+assert(overlayPrimitives === starterOverlayPrimitives, "docked starter overlay primitives must match the public UI kit");
+assert(themePrimitives.includes("--milxdy-sdk-color-surface") && themePrimitives.includes("prefers-reduced-motion"), "public UI tokens must include semantic color and motion contracts");
+assert(overlayPrimitives.includes(":focus-visible") && overlayPrimitives.includes("forced-colors") && overlayPrimitives.includes("min-inline-size: 44px"), "public overlay primitives must preserve focus, forced colors, and target sizing");
+for (const requirement of ["aria-labelledby", "Escape", "previousFocus", "panel.focus()", "milxdy-sdk-overlay__button"]) {
+  assert(dockedStarterJavaScript.includes(requirement), `docked starter must demonstrate accessible overlay behavior: ${requirement}`);
+}
+assert(accessibilityGuide.includes("screen-reader") && accessibilityGuide.includes("200% zoom") && accessibilityGuide.includes("reduced motion"), "accessibility guide must define assistive technology, zoom, and motion expectations");
+assert(assetGuide.includes("package.webAccessibleAssets") && assetGuide.includes("license") && assetGuide.includes("not legal approval"), "asset guide must define declaration, licensing, and review boundaries");
 assert(readiness.includes("reviewed custom-build platform"), "production-readiness docs must define the supported near-term boundary");
 assert(readiness.includes("External proof"), "production-readiness docs must require an external integration proof");
 assert(compatibility.includes("Package-owned background module | Unsupported"), "compatibility policy must disclose unsupported package background modules");
