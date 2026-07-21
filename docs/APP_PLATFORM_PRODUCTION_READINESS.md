@@ -75,7 +75,7 @@ reference app.
 | Background capability model | Metadata only for third parties | Expose named shared services or design reviewed build-time handler registration. |
 | Runtime isolation | Not provided | Do not promise runtime installation until a membrane/sandbox exists. |
 | Install/update/remove UX | Custom rebuild only | Document the rebuild lifecycle now; design in-product lifecycle separately. |
-| Starter kit | Initial fixture only | Add representative templates, test harness, theme tokens, and packaging guidance. |
+| Starter kit | Feature and docked-app templates plus lifecycle/capability harness | Add theme tokens, overlay primitives, and packaging guidance. |
 | Reviewed marketplace | Design issue open | Publish a canonical, machine-readable reviewed catalog only after review policy is complete. |
 | Multi-site runtime | X-first | Add per-site runtime/scanner implementation and QA before claiming general site support. |
 | CI and repository governance | Partial | Require the SDK production suite and protect the public integration branch. |
@@ -125,11 +125,12 @@ Required CI must run:
 
 ### P1: Complete The Author Experience
 
-- Add scaffoldable feature and docked-app templates.
+- Keep the scaffoldable feature and docked-app templates in the production gate.
 - Publish theme tokens, overlay primitives, accessibility expectations, and asset
   licensing guidance.
-- Add a package test harness that exercises lifecycle order, cancellation,
-  settings storage, message namespace enforcement, and diagnostics.
+- Keep the package test harness aligned with lifecycle order, cancellation,
+  declared storage/assets, scheduling, messaging, diagnostics, and cleanup;
+  add message namespace enforcement when typed shared services land.
 - Document the exact custom-build update/removal process and preservation or
   cleanup of package-owned storage.
 - Clarify whether the repository license applies to independently authored app
