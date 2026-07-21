@@ -9,7 +9,7 @@ import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./sha
 import { playEndDing } from "./sounds";
 import { SpeechController } from "./speech";
 import { injectStyles } from "./styles";
-import { loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
+import { configurePostReadingStorage, loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
 import type { TwitterSurface } from "../../platform/scanner/twitter-scanner";
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
@@ -159,6 +159,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
   configureFullQuoteRuntimeMessage(context?.sendMessage || null);
+  configurePostReadingStorage(context?.storage || null);
   const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
   settings = await loadSettings();
@@ -370,6 +371,7 @@ export function dispose(): void {
   appFrame = null;
   recordRuntimeDiagnostic = () => undefined;
   configureFullQuoteRuntimeMessage(null);
+  configurePostReadingStorage(null);
   lifecycleSignal = null;
   booted = false;
 }

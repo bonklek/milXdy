@@ -19,12 +19,14 @@ for (const name of [
   "TwitterSurface",
   "MilxdyRouteChange",
   "AppRuntimeScheduler",
+  "AppStorageFacade",
 ]) {
   assert(publicTypes.includes(name), `public declarations are missing ${name}`);
 }
 assert(!publicTypes.includes("loadAppById"), "public declarations must not expose internal cross-app loading");
 assert(!publicTypes.includes("scheduleScan"), "public declarations must not expose internal scanner scheduling");
 assert(publicTypes.includes("requestSurfaceRescan(): void"), "public declarations must expose the bounded surface-rescan request used by external packages");
+assert(publicTypes.includes("readonly storage: AppStorageFacade"), "public declarations must expose declared-key app storage");
 assert(starterManifest.sdk?.minVersion === packageJson.appSdkVersion, "starter template sdk.minVersion must match package.json appSdkVersion");
 assert(starterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "starter template sdk.targetVersion must match package.json appSdkVersion");
 assert(starterManifest.defaultEnabled === false, "starter template must start disabled");

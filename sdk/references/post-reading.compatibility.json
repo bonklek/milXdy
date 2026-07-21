@@ -21,7 +21,6 @@
     "existing settings compatibility"
   ],
   "reviewedExceptions": [
-    "browser storage access until an SDK storage facade exists",
     "extension asset URL access until an SDK asset facade exists",
     "host-provided OCR frame and worker assets",
     "host-provided post-reading background handlers"
