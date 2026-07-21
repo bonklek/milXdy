@@ -1167,6 +1167,9 @@
         "keyPreviousChunk",
         "keySkipOcr",
         "keyPlayPause"
+      ],
+      "local": [
+        "voiceBoundarySupportV2"
       ]
     },
     "settings": [

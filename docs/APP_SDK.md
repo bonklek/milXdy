@@ -147,6 +147,11 @@ Use `onSurface(surface)` for Twitter/X surfaces. The runtime performs visibility
 
 Use `context.requestSurfaceRescan()` after a user-visible setting change invalidates already-rendered surface decorations. The runtime coalesces the request through its shared scanner. External packages must not import scanner internals; `scheduleScan` remains only as a deprecated first-party compatibility alias while bundled apps migrate.
 
+Use `context.storage.local` and `context.storage.sync` for app persistence. Each
+area exposes `get`, `set`, `remove`, and `onChanged`, but only for keys declared
+by the app manifest. Undeclared access fails before the browser storage API is
+called, and change listeners receive only declared keys from their area.
+
 Use `deliverySurfaces` when an app needs a surface kind to trigger import but does not need ongoing `onSurface()` calls for that kind. For example, Root Visuals can wake from tweet activity so user-action listeners are available, while receiving only notification surfaces for unread marking.
 
 Use `context.scheduler` for routine delayed or idle work. The runtime backs it with one shared queue, applies the active Performance mode's per-frame idle budget, supports cancellation, and records `idleQueueDepth`, `idleQueueMaxDepth`, and `idleScheduler` diagnostics. App-owned `requestIdleCallback`, broad polling intervals, or unbounded scan queues should be reserved for feature-specific behavior that cannot be expressed through runtime surfaces.

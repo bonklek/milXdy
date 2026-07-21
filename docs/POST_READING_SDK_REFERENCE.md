@@ -29,7 +29,7 @@ verification.
 | Background requests | Supported through host routes | Uses `context.sendMessage()` and the declared `post-reading:*` namespace. |
 | Diagnostics | Supported | Uses the public diagnostics callback. |
 | Settings compatibility | Supported | The replacement is hash-pinned and explicitly trusted to retain built-in keys. |
-| Storage facade | Gap | Direct `chrome.storage` is a recorded reviewed exception. |
+| Storage facade | Supported | Uses declared-key `context.storage` areas; undeclared access fails before reaching browser storage. |
 | Asset URL facade | Gap | Direct `chrome.runtime.getURL` is a recorded reviewed exception. |
 | OCR and background handlers | Host-provided gap | The initial reference uses milXdy's existing OCR assets and handlers. Package-owned background registration remains unsupported. |
 | Shared overlay/dock UI | Gap | Post-reading retains its own floating player until public primitives exist. |

@@ -50,6 +50,11 @@ ask the shared X surface scanner to revisit already-rendered surfaces after a
 settings change. The internal `scheduleScan` name is not part of the public
 declaration and must not be imported or reconstructed by external packages.
 
+App SDK `0.2.3` also exposes declared-key `context.storage.local` and
+`context.storage.sync` areas. Packages must declare every accessed key in
+`storageKeys`; undeclared reads, writes, removals, and change delivery fail
+closed.
+
 Third-party package background handlers are not supported in the current
 reviewed custom-build contract. `background.messageTypes` declares messages a
 content bundle may send through `context.sendMessage`; it does not cause package
