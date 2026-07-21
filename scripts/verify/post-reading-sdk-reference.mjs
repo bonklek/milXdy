@@ -58,6 +58,12 @@ try {
 
   run(process.execPath, composerArgs(false), workspace);
 
+  const composition = JSON.parse(await readFile(path.join(compositionRoot, "composition-report.json"), "utf8"));
+  const referenceTrust = composition.trustDecisions?.find((candidate) => candidate.packageId === "post-reading");
+  if (!referenceTrust || referenceTrust.sensitiveApiFindings?.length !== 0) {
+    throw new Error("Post-reading reference must compose without sensitive package API exceptions");
+  }
+
   const plan = JSON.parse(await readFile(planPath, "utf8"));
   plan.outputDir = "tmp/post-reading-sdk-reference/chromium";
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
@@ -88,7 +94,6 @@ function composerArgs(checkOnly) {
     ...(checkOnly ? ["--check"] : []),
     "--acknowledge-first-party-replacement",
     "--acknowledge-package-consent",
-    "--allow-sensitive-package-apis",
   ];
 }
 

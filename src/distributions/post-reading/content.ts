@@ -81,6 +81,7 @@ async function bootStandalonePostReading(): Promise<void> {
       local: chromeStorageArea("local"),
       sync: chromeStorageArea("sync"),
     },
+    resolveAssetUrl: (path) => chrome.runtime.getURL(path),
     sendMessage: (message) => safeRuntimeMessage(message),
     recordDiagnostic: () => undefined,
     addDisposable(disposable) {

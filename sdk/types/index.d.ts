@@ -68,6 +68,7 @@ export interface MilxdyContentAppContext {
   readonly signal: AbortSignal;
   readonly scheduler: AppRuntimeScheduler;
   readonly storage: AppStorageFacade;
+  resolveAssetUrl(path: string): string;
   requestSurfaceRescan(): void;
   sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
   recordDiagnostic(key: string, value: unknown): void;

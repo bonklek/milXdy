@@ -152,6 +152,12 @@ area exposes `get`, `set`, `remove`, and `onChanged`, but only for keys declared
 by the app manifest. Undeclared access fails before the browser storage API is
 called, and change listeners receive only declared keys from their area.
 
+Use `context.resolveAssetUrl(path)` for extension-packaged resources. Local
+package assets are mapped into the package namespace. Built-in host assets are
+available only when repo policy explicitly grants them to a reviewed
+first-party replacement. Absolute URLs, traversal, and undeclared paths fail
+closed.
+
 Use `deliverySurfaces` when an app needs a surface kind to trigger import but does not need ongoing `onSurface()` calls for that kind. For example, Root Visuals can wake from tweet activity so user-action listeners are available, while receiving only notification surfaces for unread marking.
 
 Use `context.scheduler` for routine delayed or idle work. The runtime backs it with one shared queue, applies the active Performance mode's per-frame idle budget, supports cancellation, and records `idleQueueDepth`, `idleQueueMaxDepth`, and `idleScheduler` diagnostics. App-owned `requestIdleCallback`, broad polling intervals, or unbounded scan queues should be reserved for feature-specific behavior that cannot be expressed through runtime surfaces.
