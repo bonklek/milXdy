@@ -30,7 +30,7 @@ verification.
 | Diagnostics | Supported | Uses the public diagnostics callback. |
 | Settings compatibility | Supported | The replacement is hash-pinned and explicitly trusted to retain built-in keys. |
 | Storage facade | Supported | Uses declared-key `context.storage` areas; undeclared access fails before reaching browser storage. |
-| Asset URL facade | Gap | Direct `chrome.runtime.getURL` is a recorded reviewed exception. |
+| Asset URL facade | Supported | `context.resolveAssetUrl()` authorizes package-owned paths and policy-granted host assets while rejecting unsafe or undeclared paths. |
 | OCR and background handlers | Host-provided gap | The initial reference uses milXdy's existing OCR assets and handlers. Package-owned background registration remains unsupported. |
 | Shared overlay/dock UI | Gap | Post-reading retains its own floating player until public primitives exist. |
 | Runtime install/update/remove | Unsupported | Packages are incorporated into reviewed custom builds, not injected into an installed extension. |
@@ -44,3 +44,8 @@ the compatibility JSON exactly, update the pinned package hash after review,
 and pass both repositories' verification. A source URL mismatch, compatibility
 drift, content hash change, direct runtime messaging, undeclared privilege, or
 composer/build failure blocks the integration.
+
+The reference package currently composes with zero sensitive package API
+findings. Its remaining reviewed dependencies are host-provided OCR resources
+and Post-reading background handlers, both declared in the compatibility
+matrix rather than accessed through private imports.

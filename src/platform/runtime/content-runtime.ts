@@ -10,6 +10,7 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
+import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../overlay/app-chrome";
@@ -442,6 +443,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             return () => chrome.storage.onChanged.removeListener(chromeListener);
           },
         }),
+        resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
         addDisposable: (disposable) => disposables.add(disposable),

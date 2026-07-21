@@ -27,6 +27,7 @@ assert(!publicTypes.includes("loadAppById"), "public declarations must not expos
 assert(!publicTypes.includes("scheduleScan"), "public declarations must not expose internal scanner scheduling");
 assert(publicTypes.includes("requestSurfaceRescan(): void"), "public declarations must expose the bounded surface-rescan request used by external packages");
 assert(publicTypes.includes("readonly storage: AppStorageFacade"), "public declarations must expose declared-key app storage");
+assert(publicTypes.includes("resolveAssetUrl(path: string): string"), "public declarations must expose guarded asset URL resolution");
 assert(starterManifest.sdk?.minVersion === packageJson.appSdkVersion, "starter template sdk.minVersion must match package.json appSdkVersion");
 assert(starterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "starter template sdk.targetVersion must match package.json appSdkVersion");
 assert(starterManifest.defaultEnabled === false, "starter template must start disabled");
@@ -37,6 +38,7 @@ assert(docsIndex.includes("APP_SDK_COMPATIBILITY.md") && docsIndex.includes("APP
 assert(docsIndex.includes("POST_READING_SDK_REFERENCE.md"), "docs index must link the external SDK reference");
 assert(referenceCompatibility.packageId === "post-reading", "external compatibility mirror must identify Post-reading");
 assert(referenceCompatibility.appSdk?.targetVersion === packageJson.appSdkVersion, "external reference must target the current App SDK");
+assert(!referenceCompatibility.reviewedExceptions.some((entry) => /storage|asset URL/i.test(entry)), "external reference must use public storage and asset URL capabilities");
 assert(referenceDocs.includes("verify:post-reading-sdk-reference"), "external reference docs must publish the cross-repository gate");
 assert(/^[0-9a-f]{40}$/.test(postReadingPolicy?.sourceCommit || ""), "external reference trust policy must pin a full Git commit");
 

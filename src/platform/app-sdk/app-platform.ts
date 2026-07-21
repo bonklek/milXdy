@@ -183,6 +183,11 @@ export type MilxdyAppManifest = {
     assets?: string[];
     webAccessibleAssets?: string[];
   };
+  /** Internal build metadata used to grant reviewed host-asset access. */
+  assets?: string[];
+  requiredOutputs?: string[];
+  hostAssetAccess?: string[];
+  localPackage?: Record<string, unknown>;
   isEnabled: () => Promise<boolean>;
   setEnabled?: (enabled: boolean) => Promise<void>;
 };
@@ -220,7 +225,7 @@ export type MilxdyLocalPackageReview = {
 
 export type MilxdyLocalAppPackageManifestV1 = Omit<
   MilxdyAppManifest,
-  "available" | "unavailableReason" | "hub" | "isEnabled" | "setEnabled" | "package"
+  "available" | "unavailableReason" | "hub" | "isEnabled" | "setEnabled" | "package" | "assets" | "requiredOutputs" | "hostAssetAccess" | "localPackage"
 > & {
   manifestVersion: MilxdyLocalPackageManifestVersion;
   sdk: MilxdyLocalPackageSdkCompatibility;
@@ -248,6 +253,7 @@ export type MilxdyContentAppContext = {
   loadAppById: (id: MilxdyAppId, reason?: string) => Promise<MilxdyContentAppModule | null>;
   scheduler: AppRuntimeScheduler;
   storage: AppStorageFacade;
+  resolveAssetUrl: (path: string) => string;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
   recordDiagnostic: (key: string, value: unknown) => void;
   addDisposable: (disposable: Disposable) => void;
