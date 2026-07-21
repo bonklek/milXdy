@@ -239,6 +239,8 @@ export type AppRuntimeScheduler = {
 export type MilxdyContentAppContext = {
   manifest: MilxdyAppManifest;
   signal: AbortSignal;
+  requestSurfaceRescan: () => void;
+  /** @deprecated Internal compatibility alias. External packages use requestSurfaceRescan. */
   scheduleScan: () => void;
   loadAppById: (id: MilxdyAppId, reason?: string) => Promise<MilxdyContentAppModule | null>;
   scheduler: AppRuntimeScheduler;

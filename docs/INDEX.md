@@ -20,6 +20,7 @@
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](APP_SDK.md)
 - [App SDK compatibility policy](APP_SDK_COMPATIBILITY.md)
+- [Post-reading App SDK reference](POST_READING_SDK_REFERENCE.md)
 - [App platform production readiness](APP_PLATFORM_PRODUCTION_READINESS.md)
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Localization scope and contributions](LOCALIZATION.md)

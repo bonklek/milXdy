@@ -13,7 +13,7 @@
       "Uses only the public content-app context documented in sdk/types."
     ]
   },
-  "contentEntry": "dist/content.js",
+  "contentEntry": "content.js",
   "defaultEnabled": false,
   "storageKeys": {
     "local": [

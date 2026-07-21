@@ -50,6 +50,7 @@ export interface MilxdyContentAppContext {
   readonly manifest: PublicAppManifest;
   readonly signal: AbortSignal;
   readonly scheduler: AppRuntimeScheduler;
+  requestSurfaceRescan(): void;
   sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
   recordDiagnostic(key: string, value: unknown): void;
   addDisposable(disposable: Disposable): void;

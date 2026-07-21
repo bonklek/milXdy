@@ -45,6 +45,11 @@ Until capability negotiation is added to the manifest/runtime facade, authors
 must treat optional behavior as unavailable unless the documented target SDK
 guarantees it.
 
+App SDK `0.2.3` exposes `context.requestSurfaceRescan()` as the supported way to
+ask the shared X surface scanner to revisit already-rendered surfaces after a
+settings change. The internal `scheduleScan` name is not part of the public
+declaration and must not be imported or reconstructed by external packages.
+
 Third-party package background handlers are not supported in the current
 reviewed custom-build contract. `background.messageTypes` declares messages a
 content bundle may send through `context.sendMessage`; it does not cause package

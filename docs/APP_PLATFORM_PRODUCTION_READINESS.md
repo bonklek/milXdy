@@ -71,7 +71,7 @@ reference app.
 | First-party runtime | Strong | Keep all registry compliance and bounded-runtime checks green. |
 | Manifest and composition | Strong advanced-user path | Keep schema, composer, builder, and tamper tests synchronized. |
 | Public developer API | Preview | Publish supported declarations and validate them against runtime types. |
-| External integration proof | Missing | Complete the standalone Post-reading SDK matrix from GitHub issue #18. |
+| External integration proof | Implemented locally | Publish the paired branches and require the Post-reading cross-repository gate before release. |
 | Background capability model | Metadata only for third parties | Expose named shared services or design reviewed build-time handler registration. |
 | Runtime isolation | Not provided | Do not promise runtime installation until a membrane/sandbox exists. |
 | Install/update/remove UX | Custom rebuild only | Document the rebuild lifecycle now; design in-product lifecycle separately. |

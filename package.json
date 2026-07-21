@@ -37,6 +37,7 @@
     "verify:locales": "node scripts/verify/locales.mjs",
     "verify:app-sdk-compliance": "node scripts/verify/app-sdk-compliance.mjs",
     "verify:app-sdk-production": "node scripts/verify/app-sdk-production.mjs",
+    "verify:post-reading-sdk-reference": "node scripts/verify/post-reading-sdk-reference.mjs",
     "verify:internal-messaging-bridges": "node scripts/verify/internal-messaging-bridges.mjs",
     "verify:remistats-tooltip-escaping": "node scripts/verify/remistats-tooltip-escaping.mjs",
     "verify:app-settings-mirrors": "node scripts/verify/app-settings-mirrors.mjs",
