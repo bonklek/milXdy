@@ -389,8 +389,8 @@ pnpm.cmd run verify:app-sdk-harness
 ```
 
 The harness validates public-contract behavior; it does not emulate the browser
-DOM or prove runtime isolation. Browser composition and the deferred pre-merge
-QA checklist remain separate gates.
+DOM or prove runtime isolation. Browser composition and compatibility testing
+remain separate responsibilities.
 
 For app UI, copy `sdk/ui/theme.css` and `sdk/ui/overlay.css` into the package and
 declare both files in manifest `css`. The docked starter demonstrates the
@@ -522,7 +522,7 @@ Remaining blockers before normal-user package loading or marketplace installatio
 - a complete install/update/rollback/remove UI with permission and data-retention consent, package-owned storage cleanup, incompatibility recovery, and revocation behavior
 - a runtime membrane or sandbox with explicit CSP and capability rules; the static scanner is not isolation
 - a supported package-owned background capability model or a sufficient set of typed shared services
-- external reference-app evidence covering lifecycle, messaging, settings migration, failure recovery, compatibility, and cleanup without private imports
+- external reference-app validation covering lifecycle, messaging, settings migration, failure recovery, compatibility, and cleanup without private imports
 - required CI coverage for SDK compliance, internal bridges, package integration, and trust gates
 - canonical review, signing/provenance, checksum, update, and blocking policy for marketplace listings
 

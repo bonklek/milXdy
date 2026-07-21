@@ -53,7 +53,7 @@ of these are true:
 - **Lifecycle ownership:** the generated extension can enable, disable, reset,
   and diagnose every novel package without importing it merely to change
   settings.
-- **Release evidence:** unit tests, SDK compliance, internal bridge checks,
+- **Automated coverage:** unit tests, SDK compliance, internal bridge checks,
   package fixtures, the novel-package integration test, and trust-gate cases
   pass in required CI.
 - **Operational policy:** compatibility, support, review status, package
