@@ -904,7 +904,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
   const reviewStatus = manifest.review?.status || "local";
   const privilegedSurfaces = privilegedSurfacesFor(manifest, files, webAccessibleAssets);
   const sensitiveFindings = payloadScan.findings.filter((finding) => finding.severity === "error" || finding.severity === "warning");
-  const replacementPolicy = firstPartyReplacementTrust(id, source, packageSha256);
+  const replacementPolicy = firstPartyReplacementTrust(id, source, manifest, packageSha256);
 
   if (reviewStatus !== "reviewed" && reviewStatus !== "blocked") {
     requiredAcknowledgements.push({
@@ -1118,7 +1118,7 @@ function sensitivePackageApiScanRules(source) {
   return rules;
 }
 
-function firstPartyReplacementTrust(id, source, packageSha256) {
+function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
   const policy = firstPartyReplacementPolicyById.get(id);
   if (!firstPartyById.has(id)) {
     return { allowed: false, reason: "not-a-first-party-replacement" };
@@ -1144,6 +1144,15 @@ function firstPartyReplacementTrust(id, source, packageSha256) {
       reason: `source root ${actualRoot} does not match policy root ${expectedRoot}`,
     };
   }
+  if (policy.sourceUrl && manifest.review?.sourceUrl !== policy.sourceUrl) {
+    return {
+      allowed: false,
+      root: expectedRoot,
+      sourceUrl: policy.sourceUrl,
+      packageSha256: policy.packageSha256,
+      reason: `review source URL ${manifest.review?.sourceUrl || "<missing>"} does not match policy sourceUrl ${policy.sourceUrl}`,
+    };
+  }
   if (policy.packageSha256 !== packageSha256) {
     return {
       allowed: false,
@@ -1155,6 +1164,7 @@ function firstPartyReplacementTrust(id, source, packageSha256) {
   return {
     allowed: true,
     root: expectedRoot,
+    ...(policy.sourceUrl ? { sourceUrl: policy.sourceUrl } : {}),
     packageSha256: policy.packageSha256,
     reason: policy.reason || "repo-owned replacement policy matched",
   };
@@ -2009,6 +2019,16 @@ function lifecycleExports(source) {
   const names = new Set();
   const regex = /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g;
   for (const match of source.matchAll(regex)) names.add(match[1]);
+  const namedExportRegex = /export\s*\{([^}]+)\}/g;
+  for (const match of source.matchAll(namedExportRegex)) {
+    for (const item of match[1].split(",")) {
+      const candidate = item.trim().replace(/\/\*[\s\S]*?\*\//g, "");
+      const alias = candidate.match(/(?:^|\s)as\s+([A-Za-z_$][\w$]*)$/);
+      const direct = candidate.match(/^([A-Za-z_$][\w$]*)$/);
+      if (alias) names.add(alias[1]);
+      else if (direct) names.add(direct[1]);
+    }
+  }
   return names;
 }
 

@@ -155,7 +155,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
   lifecycleSignal = context?.signal || null;
-  runtimeScheduleScan = context?.scheduleScan || runtimeScheduleScan;
+  runtimeScheduleScan = context?.requestSurfaceRescan || context?.scheduleScan || runtimeScheduleScan;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
   configureFullQuoteRuntimeMessage(context?.sendMessage || null);

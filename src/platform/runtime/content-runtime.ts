@@ -416,6 +416,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       await module.boot?.({
         manifest: app,
         signal: abortController.signal,
+        requestSurfaceRescan: scheduleTwitterScan,
         scheduleScan: scheduleTwitterScan,
         loadAppById,
         scheduler,
