@@ -2,6 +2,8 @@
 let appContext = null;
 /** @type {HTMLElement | null} */
 let panel = null;
+/** @type {HTMLElement | null} */
+let previousFocus = null;
 
 const openCountKey = "milxdy.local.docked-app.openCount";
 
@@ -20,25 +22,46 @@ export async function open() {
 
   panel = document.createElement("aside");
   panel.setAttribute("role", "dialog");
-  panel.setAttribute("aria-label", "Docked App starter");
-  panel.style.cssText = "position:fixed;z-index:2147483000;right:16px;top:72px;width:280px;padding:18px;border:1px solid #536471;border-radius:16px;background:#000;color:#e7e9ea;font:14px/1.4 system-ui;box-shadow:0 8px 32px #0008";
+  panel.setAttribute("aria-modal", "false");
+  panel.setAttribute("aria-labelledby", "milxdy-docked-app-title");
+  panel.tabIndex = -1;
+  panel.className = "milxdy-sdk-overlay";
+  panel.addEventListener("keydown", onPanelKeydown);
+
+  const header = document.createElement("header");
+  header.className = "milxdy-sdk-overlay__header";
 
   const icon = document.createElement("img");
   icon.src = appContext.resolveAssetUrl("assets/icon.svg");
   icon.alt = "";
   icon.width = 32;
   icon.height = 32;
+  icon.className = "milxdy-sdk-overlay__icon";
 
   const heading = document.createElement("h2");
+  heading.id = "milxdy-docked-app-title";
   heading.textContent = "Docked App";
-  heading.style.cssText = "margin:8px 0;font-size:20px";
+  heading.className = "milxdy-sdk-overlay__title";
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = "milxdy-sdk-overlay__button";
+  closeButton.setAttribute("aria-label", "Close Docked App");
+  closeButton.textContent = "×";
+  closeButton.addEventListener("click", close);
+
+  const content = document.createElement("div");
+  content.className = "milxdy-sdk-overlay__body";
 
   const body = document.createElement("p");
   body.textContent = `Opened ${Number(stored[openCountKey]) + 1} time(s). State stays in declared local storage.`;
-  body.style.margin = "0";
 
-  panel.append(icon, heading, body);
+  header.append(icon, heading, closeButton);
+  content.append(body);
+  panel.append(header, content);
+  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.append(panel);
+  panel.focus();
   appContext.recordDiagnostic("docked-app.open", true);
 }
 
@@ -59,4 +82,13 @@ export function dispose() {
 function removePanel() {
   panel?.remove();
   panel = null;
+  if (previousFocus?.isConnected) previousFocus.focus();
+  previousFocus = null;
+}
+
+/** @param {KeyboardEvent} event */
+function onPanelKeydown(event) {
+  if (event.key !== "Escape") return;
+  event.preventDefault();
+  close();
 }
