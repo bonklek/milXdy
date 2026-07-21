@@ -1,4 +1,5 @@
 import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
+import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
 import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
 import { icon } from "./icons";
@@ -160,6 +161,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
   configureFullQuoteRuntimeMessage(context?.sendMessage || null);
   configurePostReadingStorage(context?.storage || null);
+  configurePostReadingAssetResolver(context?.resolveAssetUrl || null);
   const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
   settings = await loadSettings();
@@ -372,6 +374,7 @@ export function dispose(): void {
   recordRuntimeDiagnostic = () => undefined;
   configureFullQuoteRuntimeMessage(null);
   configurePostReadingStorage(null);
+  configurePostReadingAssetResolver(null);
   lifecycleSignal = null;
   booted = false;
 }
@@ -388,7 +391,7 @@ function postReadingDockIcon(): string {
     || (root.dataset.milxdyXTheme !== "light"
       && root.dataset.milxdySettingsTheme !== "light"
       && (root.style.colorScheme === "dark" || window.matchMedia?.("(prefers-color-scheme: dark)").matches === true));
-  return chrome.runtime.getURL(dark ? "post-reading/post-reading-logo-outline.png" : "post-reading/post-reading-logo.png");
+  return postReadingAssetUrl(dark ? "post-reading/post-reading-logo-outline.png" : "post-reading/post-reading-logo.png");
 }
 
 function updateDockState(): void {

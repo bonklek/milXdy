@@ -650,6 +650,9 @@ function toGeneratedRegistryApp(record) {
   return {
     ...firstParty,
     ...manifest,
+    hostAssetAccess: firstParty
+      ? [...(firstParty.assets || []), ...(firstParty.requiredOutputs || [])]
+      : undefined,
     entryName: undefined,
     entryPoint: undefined,
     assets: undefined,

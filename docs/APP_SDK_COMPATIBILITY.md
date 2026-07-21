@@ -55,6 +55,10 @@ App SDK `0.2.3` also exposes declared-key `context.storage.local` and
 `storageKeys`; undeclared reads, writes, removals, and change delivery fail
 closed.
 
+`context.resolveAssetUrl(path)` is the public extension-asset capability.
+Package-owned assets resolve inside the package namespace; host-owned assets
+require repository policy. Unsafe and undeclared paths fail closed.
+
 Third-party package background handlers are not supported in the current
 reviewed custom-build contract. `background.messageTypes` declares messages a
 content bundle may send through `context.sendMessage`; it does not cause package
