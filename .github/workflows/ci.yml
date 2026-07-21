@@ -37,9 +37,7 @@ jobs:
         run: npm ci
 
       - name: Install Post-reading reference dependencies
-        run: |
-          corepack enable
-          corepack pnpm --dir post-reading-sdk install --frozen-lockfile
+        run: corepack pnpm@11.7.0 --dir post-reading-sdk install --frozen-lockfile
 
       - name: Typecheck
         run: npm run typecheck
