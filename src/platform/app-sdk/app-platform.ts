@@ -1,5 +1,8 @@
 import type { TwitterSurface, TwitterSurfaceKind } from "../scanner/twitter-scanner";
 import type { Disposable } from "../runtime/disposables";
+import type { AppStorageFacade } from "./app-storage";
+
+export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageChanges, AppStorageFacade } from "./app-storage";
 
 export type MilxdyAppId = string;
 
@@ -244,6 +247,7 @@ export type MilxdyContentAppContext = {
   scheduleScan: () => void;
   loadAppById: (id: MilxdyAppId, reason?: string) => Promise<MilxdyContentAppModule | null>;
   scheduler: AppRuntimeScheduler;
+  storage: AppStorageFacade;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
   recordDiagnostic: (key: string, value: unknown) => void;
   addDisposable: (disposable: Disposable) => void;

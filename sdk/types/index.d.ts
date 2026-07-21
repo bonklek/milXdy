@@ -37,6 +37,23 @@ export interface AppRuntimeScheduler {
 
 export type Disposable = (() => void) | { dispose(): void };
 
+export interface AppStorageChange {
+  oldValue?: unknown;
+  newValue?: unknown;
+}
+
+export interface AppStorageArea {
+  get<T extends Record<string, unknown>>(defaults: T): Promise<T>;
+  set(values: Record<string, unknown>): Promise<void>;
+  remove(keys: string | readonly string[]): Promise<void>;
+  onChanged(listener: (changes: Record<string, AppStorageChange>) => void): () => void;
+}
+
+export interface AppStorageFacade {
+  readonly local: AppStorageArea;
+  readonly sync: AppStorageArea;
+}
+
 export interface PublicAppManifest {
   id: string;
   name: string;
@@ -50,6 +67,7 @@ export interface MilxdyContentAppContext {
   readonly manifest: PublicAppManifest;
   readonly signal: AbortSignal;
   readonly scheduler: AppRuntimeScheduler;
+  readonly storage: AppStorageFacade;
   requestSurfaceRescan(): void;
   sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
   recordDiagnostic(key: string, value: unknown): void;

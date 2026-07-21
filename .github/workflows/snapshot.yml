@@ -36,7 +36,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: bonklek/post-reading
-          ref: 89b875d56c16e7240cff2eb5d81d059c8a5eec69
+          ref: f4f5ea3b7acc88da2d19c469647de1d11f5f3e01
           path: post-reading-sdk
 
       - name: Set up Node

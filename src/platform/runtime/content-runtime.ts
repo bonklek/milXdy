@@ -9,6 +9,7 @@ import {
 } from "../scanner/twitter-scanner";
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
+import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../overlay/app-chrome";
@@ -420,6 +421,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         scheduleScan: scheduleTwitterScan,
         loadAppById,
         scheduler,
+        storage: createAppStorageFacade(app.id, app.storageKeys, {
+          async get(area, defaults) {
+            return await safeStorageGet(area, defaults) || { ...defaults };
+          },
+          async set(area, values) {
+            if (area === "local") await safeLocalSet(values);
+            else await safeSyncSet(values);
+          },
+          async remove(area, keys) {
+            if (area === "local") await safeLocalRemove(keys);
+            else await safeSyncRemove(keys);
+          },
+          onChanged(listener) {
+            const chromeListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+              if (area !== "local" && area !== "sync") return;
+              listener(area as AppStorageAreaName, changes as AppStorageChanges);
+            };
+            chrome.storage.onChanged.addListener(chromeListener);
+            return () => chrome.storage.onChanged.removeListener(chromeListener);
+          },
+        }),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
         addDisposable: (disposable) => disposables.add(disposable),

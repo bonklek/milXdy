@@ -20,8 +20,8 @@
       "sourceType": "folder",
       "root": "tmp/post-reading-sdk-reference/post-reading",
       "sourceUrl": "https://github.com/bonklek/post-reading",
-      "sourceCommit": "89b875d56c16e7240cff2eb5d81d059c8a5eec69",
-      "packageSha256": "0d3cfab2635e260e429c705683c257c48136347ffb42278c466dced78f83c9ff",
+      "sourceCommit": "f4f5ea3b7acc88da2d19c469647de1d11f5f3e01",
+      "packageSha256": "5f782b2bee4e364098e219041c7027699ded5006083d5c5dee90e07c20037605",
       "reason": "Pinned external Post-reading App SDK reference package, staged by the cross-repository verifier."
     }
   ]
