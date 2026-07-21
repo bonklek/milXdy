@@ -1,6 +1,7 @@
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import { ARTWORK_METADATA_VERSION, shouldReadEmbeddedArtwork } from "./artwork-cache";
+import { PlaybackHistoryTracker } from "./playback-history";
 import {
   createOverlayAppFrame,
   type OverlayAppFrame,
@@ -42,11 +43,9 @@ const COMPACT_DEFAULT_HEIGHT = 198;
 const COMPACT_MAX_HEIGHT = COMPACT_DEFAULT_HEIGHT;
 const COMPACT_HIDE_NOW_HEIGHT = 142;
 const COMPACT_TIGHT_HEIGHT = 172;
-const rowPlayButtonsByTrackId = new Map<string, Set<HTMLButtonElement>>();
-let lastSyncedRowPlaybackTrackId: string | null = null;
 
 type MusicTab = "library" | "queue" | "playlists" | "radio" | "settings";
-type MusicSortKey = "artist" | "title" | "album" | "added";
+type MusicSortKey = "default" | "artist" | "title" | "album" | "added";
 type RepeatMode = "off" | "one" | "all";
 type EnrichmentStatus = "pending" | "review" | "matched" | "unresolved" | "error";
 const DEFAULT_REPEAT_MODE: RepeatMode = "all";
@@ -224,7 +223,7 @@ const state: MusicState = {
   topOffset: 16,
   theme: "system",
   search: "",
-  sortKey: "artist",
+  sortKey: "default",
   status: "Ready",
   error: "",
   scanActive: false,
@@ -259,9 +258,11 @@ let dbPromise: Promise<IDBDatabase> | null = null;
 let audio: HTMLAudioElement | null = null;
 let audioUrl: string | null = null;
 let renderQueued = false;
+let librarySortRenderDeferred = false;
 let lastMusicBrainzLookupAt = 0;
 let lastAudibleVolume = state.playback.volume;
 let playbackGeneration = 0;
+const playbackHistory = new PlaybackHistoryTracker();
 let artworkHydrationActive = false;
 let libraryLoadPromise: Promise<void> | null = null;
 let booted = false;
@@ -310,6 +311,7 @@ export function disable(): void {
 
 export function dispose(): void {
   disable();
+  playbackHistory.clear();
   state.appFrame?.remove();
   state.appFrame = null;
   state.root?.remove();
@@ -1265,22 +1267,22 @@ function runtimeMessageLabel(message: unknown): string {
   return "music:message";
 }
 
-async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
+async function playTrack(trackId: string, queueIds?: string[], historyMode: "record" | "preserve" = "record"): Promise<boolean> {
   const generation = ++playbackGeneration;
   const track = state.tracks.find((candidate) => candidate.id === trackId);
-  if (!track) return;
+  if (!track) return false;
   state.selectedTrackId = trackId;
   state.error = "";
   state.status = `Loading ${track.title}`;
   render();
   const source = await resolveTrackAudioSource(track);
-  if (!source) return;
+  if (!source) return false;
   if (!lifecycleActive() || generation !== playbackGeneration) {
     if (source.revoke) URL.revokeObjectURL(source.url);
-    return;
+    return false;
   }
   if (!audio) setupAudio();
-  if (!audio) return;
+  if (!audio) return false;
   if (audioUrl) URL.revokeObjectURL(audioUrl);
   audioUrl = source.revoke ? source.url : null;
   audio.src = source.url;
@@ -1294,10 +1296,12 @@ async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
   await audio.play().catch((error) => {
     if (generation === playbackGeneration) state.error = errorMessage(error);
   });
-  if (!lifecycleActive() || generation !== playbackGeneration) return;
+  if (!lifecycleActive() || generation !== playbackGeneration) return false;
   state.playback.playing = !audio.paused;
+  if (state.playback.playing && historyMode === "record") playbackHistory.record(trackId);
   state.status = state.playback.playing ? `Playing ${track.title}` : "Playback blocked";
   render();
+  return state.playback.playing;
 }
 
 async function resolveTrackAudioSource(track: MusicTrack): Promise<{ url: string; revoke: boolean } | null> {
@@ -1480,8 +1484,15 @@ async function requestReadPermission(handle: FileSystemDirectoryHandle): Promise
 async function playNext(): Promise<void> {
   if (!state.playback.queueTrackIds.length) return;
   if (state.playback.repeatMode === "one" && state.currentTrackId) {
-    await playTrack(state.currentTrackId);
+    await playTrack(state.currentTrackId, undefined, "preserve");
     return;
+  }
+  if (state.playback.shuffle) {
+    const forward = playbackHistory.peek(1);
+    if (forward) {
+      if (await playTrack(forward.trackId, undefined, "preserve")) playbackHistory.commit(forward.cursor);
+      return;
+    }
   }
   let next = state.playback.shuffle && state.playback.queueTrackIds.length > 1
     ? randomQueueIndexExcept(state.playback.currentIndex, state.playback.queueTrackIds.length)
@@ -1499,6 +1510,11 @@ async function playNext(): Promise<void> {
 
 async function playPrevious(): Promise<void> {
   if (!state.playback.queueTrackIds.length) return;
+  if (state.playback.shuffle) {
+    const previous = playbackHistory.peek(-1);
+    if (previous && await playTrack(previous.trackId, undefined, "preserve")) playbackHistory.commit(previous.cursor);
+    return;
+  }
   const prev = Math.max(0, state.playback.currentIndex - 1);
   await playTrack(state.playback.queueTrackIds[prev]);
 }
@@ -1873,6 +1889,13 @@ function render(): void {
   const root = state.root;
   updateDockState();
   if (!root) return;
+  const activeSort = root.querySelector<HTMLSelectElement>('[data-role="library-sort"]');
+  if (activeSort && document.activeElement === activeSort) {
+    librarySortRenderDeferred = true;
+    renderPlayer();
+    return;
+  }
+  librarySortRenderDeferred = false;
   root.dataset.side = state.side;
   root.dataset.minimized = String(state.libraryMinimized);
   root.dataset.playerSize = compactPlayerSize();
@@ -1907,7 +1930,6 @@ function render(): void {
     button.dataset.active = String(button.dataset.tab === state.tab);
   }
   body.textContent = "";
-  rowPlayButtonsByTrackId.clear();
   if (!state.libraryMinimized) {
     if (state.tab === "library") renderLibrary(body);
     if (state.tab === "queue") renderQueue(body);
@@ -1940,7 +1962,9 @@ function renderLibrary(body: HTMLElement): void {
   });
   const sort = document.createElement("select");
   sort.title = "Sort library";
+  sort.dataset.role = "library-sort";
   for (const [value, label] of [
+    ["default", "Default"],
     ["artist", "Artist"],
     ["title", "Title"],
     ["album", "Album"],
@@ -1954,7 +1978,12 @@ function renderLibrary(body: HTMLElement): void {
   }
   sort.addEventListener("change", () => {
     state.sortKey = normalizeSortKey(sort.value);
+    sort.blur();
     render();
+  });
+  sort.addEventListener("blur", () => {
+    if (!librarySortRenderDeferred) return;
+    window.requestAnimationFrame(render);
   });
   const filterGroup = document.createElement("div");
   filterGroup.className = "milxdy-music-toolbar-group milxdy-music-toolbar-filter";
@@ -2000,6 +2029,7 @@ function trackRow(track: MusicTrack): HTMLElement {
   row.dataset.unavailable = String(track.unavailable === true);
   row.dataset.demo = String(isDefaultAchievementTrack(track));
   row.dataset.duplicate = String((track.duplicateGroupSize ?? 0) > 1);
+  if ((track.duplicateGroupSize ?? 0) > 1) row.title = `Possible duplicate group: ${track.duplicateGroupSize} tracks`;
   row.dataset.trackId = track.id;
   const visibleQueue = () => filteredTracks().map((entry) => entry.id);
   const main = document.createElement("button");
@@ -2015,34 +2045,54 @@ function trackRow(track: MusicTrack): HTMLElement {
   const meta = document.createElement("span");
   meta.textContent = `${track.artist} · ${track.album}`;
   main.append(title, meta);
-  const right = document.createElement("span");
+  const right = document.createElement("div");
   right.className = "milxdy-music-track-side";
-  right.textContent = [
-    isDefaultAchievementTrack(track) ? "Default" : track.isrc ? "ISRC" : track.enrichment.status,
-    (track.duplicateGroupSize ?? 0) > 1 ? `dup x${track.duplicateGroupSize}` : "",
-    formatDuration(track.durationMs),
-  ].filter(Boolean).join(" - ");
-  const actions = document.createElement("div");
-  actions.className = "milxdy-music-track-actions";
+  const isrcIndicator = trackIsrcIndicator(track);
+  if (isrcIndicator) right.append(isrcIndicator);
+  const duration = document.createElement("span");
+  duration.className = "milxdy-music-track-duration";
+  duration.textContent = formatDuration(track.durationMs);
+  right.append(duration);
+  const overflow = document.createElement("details");
+  overflow.className = "milxdy-music-track-overflow";
+  const overflowToggle = document.createElement("summary");
+  overflowToggle.textContent = "⋯";
+  overflowToggle.title = "Track actions";
+  overflowToggle.setAttribute("aria-label", `Actions for ${track.title}`);
+  const overflowMenu = document.createElement("div");
+  overflowMenu.className = "milxdy-music-track-overflow-menu";
+  const menuAction = (label: string, onClick: () => void): HTMLButtonElement => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = label;
+    button.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      overflow.removeAttribute("open");
+      onClick();
+    });
+    return button;
+  };
   const isCurrentTrack = state.currentTrackId === track.id;
   const isPlayingTrack = isCurrentTrack && state.playback.playing;
-  const playControl = transportButton(isPlayingTrack ? "pause" : "play", isPlayingTrack ? "Pause track" : "Play track", () => {
+  overflowMenu.append(menuAction(isPlayingTrack ? "Pause" : "Play", () => {
     state.selectedTrackId = track.id;
     notePanelInteraction();
     if (isCurrentTrack) togglePlayback();
     else void playTrack(track.id, visibleQueue());
-  });
-  playControl.dataset.rowPlayTrackId = track.id;
-  registerRowPlayButton(playControl, track.id);
-  actions.append(playControl);
-  actions.append(transportButton("queue-add", "Add to queue", () => queueTrack(track.id)));
+  }));
+  overflowMenu.append(menuAction("Add to queue", () => queueTrack(track.id)));
   if (!isDefaultAchievementTrack(track) && track.enrichment.status === "review" && track.enrichment.candidates.length) {
-    actions.append(iconButton("?", "Review ISRC candidates", () => void reviewTrackCandidates(track)));
+    overflowMenu.append(menuAction("Review ISRC candidates", () => void reviewTrackCandidates(track)));
   }
   if (!isDefaultAchievementTrack(track)) {
-    actions.append(iconButton("I", "Edit ISRC", () => void editTrackIsrc(track)));
+    overflowMenu.append(menuAction("Edit ISRC", () => void editTrackIsrc(track)));
   }
-  row.append(trackThumbnail(track), main, right, actions);
+  overflow.append(overflowToggle, overflowMenu);
+  overflow.addEventListener("focusout", (event) => {
+    if (!(event.relatedTarget instanceof Node) || !overflow.contains(event.relatedTarget)) overflow.removeAttribute("open");
+  });
+  row.append(trackThumbnail(track), main, right, overflow);
   return row;
 }
 
@@ -2059,6 +2109,40 @@ function trackThumbnail(track: MusicTrack): HTMLElement {
   }
   thumb.textContent = "♪";
   return thumb;
+}
+
+function trackIsrcIndicator(track: MusicTrack): HTMLElement | null {
+  if (isDefaultAchievementTrack(track)) return null;
+  let tone: "green" | "yellow" | "red";
+  let label: string;
+  if (track.isrc || track.enrichment.status === "matched") {
+    tone = "green";
+    label = track.isrc ? `ISRC resolved: ${track.isrc}` : "ISRC resolved";
+  } else if (track.enrichment.status === "review") {
+    tone = "yellow";
+    label = "ISRC candidates need review";
+  } else if (track.enrichment.status === "pending") {
+    tone = "yellow";
+    label = "ISRC lookup pending";
+  } else if (track.enrichment.status === "error") {
+    tone = "red";
+    label = "ISRC lookup failed; retry is available";
+  } else {
+    tone = "red";
+    label = "No ISRC match found";
+  }
+  const indicator = document.createElement("span");
+  indicator.className = "milxdy-music-isrc-indicator";
+  indicator.dataset.tone = tone;
+  indicator.title = label;
+  indicator.setAttribute("role", "img");
+  indicator.setAttribute("aria-label", label);
+  indicator.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M9 18h6M10 21h4M8.4 14.5A6 6 0 1 1 15.6 14.5C14.7 15.2 14.2 16 14 17h-4c-.2-1-.7-1.8-1.6-2.5Z"></path>
+    </svg>
+  `;
+  return indicator;
 }
 
 async function editTrackIsrc(track: MusicTrack): Promise<void> {
@@ -2640,7 +2724,6 @@ function renderPlayer(): void {
   volumeRow.append(speaker, volume);
 
   player.append(info, progress, controls, volumeRow);
-  syncTrackRowPlaybackButtons();
 }
 
 function updatePlayerOnly(): void {
@@ -2668,43 +2751,6 @@ function updatePlayerOnly(): void {
       : "";
     meta.textContent = `${track.artist} · ${track.album}${queueLabel}`;
   }
-  syncTrackRowPlaybackButtons();
-}
-
-function syncTrackRowPlaybackButtons(): void {
-  const trackIds = new Set<string>();
-  if (lastSyncedRowPlaybackTrackId) trackIds.add(lastSyncedRowPlaybackTrackId);
-  if (state.currentTrackId) trackIds.add(state.currentTrackId);
-  for (const trackId of trackIds) syncTrackRowPlaybackButtonsForTrack(trackId);
-  lastSyncedRowPlaybackTrackId = state.currentTrackId;
-}
-
-function registerRowPlayButton(button: HTMLButtonElement, trackId: string): void {
-  let buttons = rowPlayButtonsByTrackId.get(trackId);
-  if (!buttons) {
-    buttons = new Set();
-    rowPlayButtonsByTrackId.set(trackId, buttons);
-  }
-  buttons.add(button);
-}
-
-function syncTrackRowPlaybackButtonsForTrack(trackId: string): void {
-  const buttons = rowPlayButtonsByTrackId.get(trackId);
-  if (!buttons) return;
-  for (const button of Array.from(buttons)) {
-    if (!button.isConnected || button.dataset.rowPlayTrackId !== trackId) {
-      buttons.delete(button);
-      continue;
-    }
-    const isPlayingTrack = trackId === state.currentTrackId && state.playback.playing;
-    const icon = isPlayingTrack ? "pause" : "play";
-    const title = isPlayingTrack ? "Pause track" : "Play track";
-    button.className = `milxdy-music-transport milxdy-music-transport-${icon}`;
-    button.title = title;
-    button.setAttribute("aria-label", title);
-    button.replaceChildren(transportShape(icon));
-  }
-  if (buttons.size === 0) rowPlayButtonsByTrackId.delete(trackId);
 }
 
 function emptyState(text: string): HTMLElement {
@@ -2897,6 +2943,7 @@ async function removeFolder(folder: MusicFolder): Promise<void> {
   state.folders = state.folders.filter((candidate) => candidate.id !== folder.id);
   state.tracks = state.tracks.filter((track) => track.folderId !== folder.id);
   state.playback.queueTrackIds = state.playback.queueTrackIds.filter((id) => !trackIds.includes(id));
+  playbackHistory.remove(trackIds);
   if (state.currentTrackId && trackIds.includes(state.currentTrackId)) {
     audio?.pause();
     state.currentTrackId = null;
@@ -3108,6 +3155,11 @@ function compareTracks(a: MusicTrack, b: MusicTrack): number {
 }
 
 function compareTracksByActiveSort(a: MusicTrack, b: MusicTrack): number {
+  if (state.sortKey === "default") {
+    const bundledOrder = Number(isDefaultAchievementTrack(b)) - Number(isDefaultAchievementTrack(a));
+    if (bundledOrder) return bundledOrder;
+    return compareTracks(a, b);
+  }
   if (state.sortKey === "title") return a.title.localeCompare(b.title) || a.artist.localeCompare(b.artist);
   if (state.sortKey === "album") return a.album.localeCompare(b.album) || compareTracks(a, b);
   if (state.sortKey === "added") return b.addedAt - a.addedAt || compareTracks(a, b);
@@ -3246,7 +3298,7 @@ function normalizeTab(value: string | undefined): MusicTab {
 }
 
 function normalizeSortKey(value: string | undefined): MusicSortKey {
-  return value === "title" || value === "album" || value === "added" ? value : "artist";
+  return value === "artist" || value === "title" || value === "album" || value === "added" ? value : "default";
 }
 
 function normalizeTheme(value: unknown): MusicState["theme"] {

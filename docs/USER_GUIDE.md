@@ -192,7 +192,7 @@ Enable **RemiNet Chat** from Apps & Features to mount it on supported X/Twitter 
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The app is off by default while beta performance and auth behavior are validated.
 
-Chat reuses a signed-in RemiliaNET browser session directly. If an authenticated send causes the WebSocket to reject its cached write credential, milXdy refreshes the browser session and renews that credential once before reconnecting. If renewal fails, Chat stops at **Retry session** instead of repeatedly reconnecting. Confirm RemiNet login status first, then use **Retry session** or refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
+Chat reuses a signed-in RemiliaNET browser session directly. History and media requests use the extension background, while the live WebSocket runs in an already-open RemiliaNET tab so it has the same site session as native chat. After installing or reloading milXdy, refresh that RemiliaNET tab once so the bridge can attach, then refresh X/Twitter. If no bridge is available, Chat stops with an **Open or refresh a signed-in RemiliaNET tab** prompt instead of opening and closing tabs or looping on **Connecting**. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
 
 ## Beetol Game Login
 

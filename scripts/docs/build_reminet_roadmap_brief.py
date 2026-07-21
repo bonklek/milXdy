@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
+import os
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -15,7 +16,12 @@ from docx.shared import Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "ideas" / "meeting-drafts" / "milxdy-roadmap-brief-reminet-2026-07-20.md"
-OUTPUT = ROOT / "ideas" / "meeting-drafts" / "milxdy-roadmap-brief-reminet-working-draft.docx"
+OUTPUT = Path(
+    os.environ.get(
+        "MILXDY_ROADMAP_DOCX_OUTPUT",
+        ROOT / "ideas" / "meeting-drafts" / "milxdy-roadmap-brief-reminet-working-draft.docx",
+    )
+)
 
 NAVY = "0B2545"
 BLUE = "2E74B5"
@@ -266,9 +272,6 @@ def configure_styles(doc: Document):
 
 
 def configure_page(doc: Document):
-    # Word can preserve distinct even-page parts from a template/default even
-    # when the document setting is toggled later. Populate both explicitly so
-    # the working draft has a consistent running frame on every page.
     doc.settings.odd_and_even_pages_header_footer = True
     section = doc.sections[0]
     section.page_width = Inches(8.5)
@@ -281,22 +284,39 @@ def configure_page(doc: Document):
     section.footer_distance = Inches(0.492)
     section.different_first_page_header_footer = False
 
-    for header in (section.header, section.even_page_header):
-        p = header.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-        p.paragraph_format.space_after = Pt(0)
-        run = p.add_run("milXdy Roadmap Brief  |  Working Draft")
-        set_run_font(run, size=9, color=MUTED, bold=True)
+    header = section.header
+    p = header.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_after = Pt(0)
+    run = p.add_run("milXdy Roadmap Brief  |  Working Draft")
+    set_run_font(run, size=9, color=MUTED, bold=True)
 
-    for footer in (section.footer, section.even_page_footer):
-        p = footer.paragraphs[0]
-        p.paragraph_format.space_before = Pt(0)
-        p.paragraph_format.space_after = Pt(0)
-        p.paragraph_format.tab_stops.add_tab_stop(Inches(6.1))
-        run = p.add_run("milXdy roadmap working draft - July 20, 2026")
-        set_run_font(run, size=9, color=MUTED)
-        p.add_run("\t")
-        add_page_field(p)
+    even_header = section.even_page_header
+    p = even_header.paragraphs[0]
+    p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    p.paragraph_format.space_after = Pt(0)
+    run = p.add_run("milXdy Roadmap Brief  |  Working Draft")
+    set_run_font(run, size=9, color=MUTED, bold=True)
+
+    footer = section.footer
+    p = footer.paragraphs[0]
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.tab_stops.add_tab_stop(Inches(6.1))
+    run = p.add_run("milXdy roadmap working draft - July 20, 2026")
+    set_run_font(run, size=9, color=MUTED)
+    p.add_run("\t")
+    add_page_field(p)
+
+    even_footer = section.even_page_footer
+    p = even_footer.paragraphs[0]
+    p.paragraph_format.space_before = Pt(0)
+    p.paragraph_format.space_after = Pt(0)
+    p.paragraph_format.tab_stops.add_tab_stop(Inches(6.1))
+    run = p.add_run("milXdy roadmap working draft - July 20, 2026")
+    set_run_font(run, size=9, color=MUTED)
+    p.add_run("\t")
+    add_page_field(p)
 
 
 def add_callout(doc, label: str, text: str, fill=PALE_GOLD):
@@ -321,7 +341,7 @@ def add_title_page(doc):
 
     p = doc.add_paragraph()
     p.paragraph_format.space_after = Pt(18)
-    run = p.add_run("Discussion draft for the RemiNet developer team")
+    run = p.add_run("Working roadmap for the RemiNet developer team")
     set_run_font(run, size=14, color=MUTED)
 
     metadata = [
@@ -354,7 +374,7 @@ def add_title_page(doc):
         "Executive direction and release map",
         "0.2.x product and RemiNet integration work",
         "0.3.x Onchain Integration sequence",
-        "Conjectural personal-computing directions",
+        "Conjectural research directions",
         "Editable diagrams and low-fidelity mockups",
         "Current planning positions and delivery risks",
     ]
@@ -420,7 +440,7 @@ def add_mermaid_diagram(doc, code: str):
             [
                 ["0.2.x\nProduct and app-platform expansion", "0.2.x\nProduct and app-platform expansion", "0.2.x\nProduct and app-platform expansion"],
                 ["0.3.0\nOnchain Foundation", "0.3.0\nOnchain Foundation", "Possible 0.4.x\nExploratory directions"],
-                ["0.3.1\nEthereum Media", "0.3.2\nParaclete Network", "Workspace / companion\nconcept research"],
+                ["0.3.1\nEthereum Media", "0.3.2\nParaclete Network", "Workspace / companion / Gotcha\nconcept research"],
                 ["Collections + publishing", "Social value + BlobMail + collective metadata", "No committed order,\nversions, or scope"],
             ],
             [3120, 3120, 3120],
@@ -517,7 +537,9 @@ def add_heading(doc, text, level, first_heading_state):
     p = doc.add_paragraph(style=f"Heading {level}")
     continuation_sections = {
         "Product and dependency sequence",
+        "Possible 0.4.x directions: research concepts",
         "Working diagrams and low-fidelity mockups",
+        "Current planning positions",
         "Major risks and gates",
         "Reference planning documents",
     }

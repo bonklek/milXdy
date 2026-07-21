@@ -11,8 +11,14 @@ Status: in development.
 - Restore reversible feature teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan.
 - Improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior across the popup and in-page app surfaces.
 - Keep Beetol hunts responsive by returning the mutation result before a separate background state reconciliation.
-- Recover RemiNet Chat when an authenticated message send closes the socket: invalidate the cached write credential, renew it once, and stop at a retry state if renewal fails instead of looping on Connecting.
+- Restore RemiNet Chat message sending by owning the live WebSocket in an already-open, signed-in RemiliaNET tab and relaying frames to X, while removing the hidden-tab refresh loop that previously followed each rejected send.
 - Keep connector logout authoritative over cached/in-flight Chat authentication and abort background fetches when their shared deadline expires.
+- Keep dark-theme Post button labels white in both the top and sidebar composers, including X's nested label elements.
+- Apply RemiNet Chat's dark palette to its injected Messages conversation row under current X dark and dim theme signals.
+- Preserve temporary Music shuffle history so the transport's Previous and Next controls navigate the actual play sequence instead of unrelated queue positions.
+- Keep the bundled song first in Music's Default order and keep the sort dropdown open while background artwork or indexing updates arrive.
+- Replace always-visible Music track action buttons with an accessible hover/focus overflow menu that temporarily covers the duration instead of reserving a permanent column.
+- Replace Music's row-level ISRC words with accessible green/yellow/red lightbulb indicators and explanatory tooltips.
 - Clear Chrome's stranded Web Speech pause state before queueing playback so read-aloud cannot remain silent while displaying the first-word highlight.
 - Restore continuous paragraph-level smooth highlighting and keep its fill rate calibrated throughout speech rather than filling isolated token ranges with a fixed early cadence.
 - Continue the paragraph scan when Chrome speaks without delivering another native boundary, and return to native timing as soon as boundary delivery resumes.

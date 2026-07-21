@@ -8,25 +8,25 @@ The weekly dates below are planning targets and move when a safety, dependency, 
 
 | Release | Target | Name | Product outcome |
 | --- | --- | --- | --- |
-| `0.3.0` | 2026-10-04 | The Onchain Foundation | Shared identity, permission, RPC, wallet-action, review, and recovery boundaries. |
-| `0.3.1` | 2026-10-11 | Ethereum Media | Read-only RFE playback, content-addressed sources, and collection context. |
-| `0.3.2` | 2026-10-18 | The Paraclete Network | Optional browser AA gossip and narrowly scoped ERC-4337 adapters. |
-| `0.3.3` | 2026-10-25 | Social Value | Reviewed `$CULT` cheers, direct tips, and receiving-address lifecycle. |
-| `0.3.4` | 2026-11-01 | BlobMail | Testnet encrypted mail with key transparency and explicit delivery evidence. |
-| `0.3.5` | 2026-11-08 | Onchain Collections | Optional ownership context for Remilia Gotcha, Banners, and Bonklet. |
-| `0.3.6` | 2026-11-15 | Onchain Publishing | Advanced RFE publishing, portable station apps, rights research, and reviewed IPFS publication. |
-| `0.3.7` | 2026-11-22 | Collective Metadata | Signed, content-addressed public observations with bounded post-Paraclete propagation and reusable consumer indexes. |
+| `0.3.0` | 2026-09-13 | The Onchain Foundation | Browser-extension wallet connection with shared identity, permission, RPC, review, and recovery boundaries. |
+| `0.3.1` | 2026-09-20 | Blobcast | Read-only RFE/Blobcast playback and content-addressed source resolution. |
+| `0.3.2` | 2026-09-27 | The Paraclete Network | Optional browser AA gossip, narrowly scoped ERC-4337 adapters, and a jointly scoped IP-privacy/optional-features evaluation. |
+| `0.3.3` | 2026-10-04 | CULT Cheer | Reviewed `$CULT` cheers, direct tips, receiving-address lifecycle, and separately gated private/shielded-transfer research. |
+| `0.3.4` | 2026-10-11 | BlobMail | Testnet encrypted mail with key transparency and explicit delivery evidence. |
+| `0.3.5` | 2026-10-18 | Onchain Collections | Optional NFT context for Banners/daily collections and read-only Bonklet context. |
+| `0.3.6` | 2026-10-25 | Onchain Publishing | Advanced RFE publishing, portable station apps, rights research, and reviewed IPFS publication. |
+| `0.3.7` | 2026-11-01 | Collective Metadata | Signed, content-addressed public observations with bounded post-Paraclete propagation, reusable consumer indexes, and opt-in milXdy registry records. |
 
-The current onboarding, screenshots, Safari, store-readiness, and mobile-research milestone moves to `0.2.12 - Front Door & Platform Reach`, so `0.3.0` can begin the onchain sequence with a clean foundation.
+`0.2.9 - Front Door & Platform Reach` owns onboarding, screenshots, Safari, store-readiness, and mobile research, leaving `0.3.0` to begin the onchain sequence with a clean foundation.
 
 ## Dependency map
 
 ```mermaid
 flowchart LR
-    A["0.2.12<br/>Front Door & Platform Reach"] --> B["0.3.0<br/>Onchain Foundation"]
-    B --> C["0.3.1<br/>Ethereum Media"]
+    A["0.2.9<br/>Front Door & Platform Reach"] --> B["0.3.0<br/>Onchain Foundation"]
+    B --> C["0.3.1<br/>Blobcast"]
     B --> D["0.3.2<br/>Paraclete Network"]
-    D --> E["0.3.3<br/>Social Value"]
+    D --> E["0.3.3<br/>CULT Cheer"]
     D --> F["0.3.4<br/>BlobMail"]
     C --> G["0.3.5<br/>Onchain Collections"]
     C --> H["0.3.6<br/>Onchain Publishing"]
@@ -39,7 +39,7 @@ The product rhythm is:
 1. Explain and secure.
 2. Read and verify.
 3. Connect to decentralized transport.
-4. Move small amounts of value deliberately.
+4. Send a reviewed CULT cheer or direct tip deliberately.
 5. Send encrypted messages.
 6. Add collection ownership and collective-action context.
 7. Publish media and operate advanced onchain applications.
@@ -59,7 +59,7 @@ The product rhythm is:
 
 ## 0.3.0 - The Onchain Foundation
 
-Goal: establish shared boundaries before any milXdy app moves value or joins a P2P network.
+Goal: let a user connect a browser-extension wallet through shared boundaries before any milXdy app moves value or joins a P2P network.
 
 - [#73 - Wallet, ENS, and Gwei identity linking](https://github.com/bonklek/milXdy/issues/73)
 - [#136 - Onchain app capabilities and permission disclosures](https://github.com/bonklek/milXdy/issues/136)
@@ -68,36 +68,36 @@ Goal: establish shared boundaries before any milXdy app moves value or joins a P
 
 Release boundary: no value transfer, P2P node, blob publication, or extension-managed wallet custody.
 
-## 0.3.1 - Ethereum Media
+## 0.3.1 - Blobcast
 
 Goal: ship useful read-only chain integrations before transaction features.
 
 - [#139 - RFE station discovery and verified read-only playback](https://github.com/bonklek/milXdy/issues/139)
 - [#140 - Content-addressed source resolution and IPFS verification](https://github.com/bonklek/milXdy/issues/140)
-- [#141 - Opt-in read-only NFT collection context](https://github.com/bonklek/milXdy/issues/141)
 
 Release boundary: listening, resolving, verifying, caching, and deep-linking only. No publishing, bidding, purchasing, approving, listing, or transferring.
 
 ## 0.3.2 - The Paraclete Network
 
-Goal: integrate [Paraclete](https://github.com/unattended-backpack/paraclete) as optional, inspectable browser account-abstraction infrastructure.
+Goal: integrate [Paraclete](https://github.com/unattended-backpack/paraclete) as optional, inspectable browser peer infrastructure for scoped account-abstraction actions, with separately versioned and registered data protocols layered above the same peer-network plumbing. Scope an IP-privacy and optional-features evaluation jointly with Tim Clancy; do not claim privacy properties before the protocol and threat model support them.
 
 - [#142 - Paraclete integration boundary and package provenance](https://github.com/bonklek/milXdy/issues/142)
 - [#143 - Optional Paraclete AA gossip service and diagnostics](https://github.com/bonklek/milXdy/issues/143)
 - [#144 - Scoped ERC-4337 UserOperation and bundler adapters](https://github.com/bonklek/milXdy/issues/144)
+- [#172 - Registered Paraclete friend-activity protocol prototype](https://github.com/bonklek/milXdy/issues/172)
 
-Release boundary: supported and reviewed UserOperations only. Gossip acceptance, bundler acceptance, inclusion, execution, and finality remain distinct states. Arbitrary app payloads are not accepted through a generic transport escape hatch.
+Release boundary: the AA mempool accepts supported and reviewed UserOperations only. Gossip acceptance, bundler acceptance, inclusion, execution, and finality remain distinct states. The peer network may later carry registered, versioned data records through a separate bounded protocol; arbitrary app payloads are not accepted through the UserOperation channel or a generic transport escape hatch.
 
-## 0.3.3 - Social Value
+## 0.3.3 - CULT Cheer
 
-Goal: make `$CULT` cheering and direct tipping the first reviewed value-transfer experience.
+Goal: make `$CULT` cheering and direct tipping the first reviewed value-transfer experience. Private or shielded-transfer work is a separate, explicitly gated research path that depends on the Paraclete protocol, threat model, wallet support, and a clear user-facing privacy explanation.
 
-- [#37 - Social Value milestone epic](https://github.com/bonklek/milXdy/issues/37)
+- [#37 - CULT Cheer milestone epic](https://github.com/bonklek/milXdy/issues/37)
 - [#145 - Receiving-address proofs and profile display](https://github.com/bonklek/milXdy/issues/145)
 - [#146 - Reviewed `$CULT` cheer and direct tipping](https://github.com/bonklek/milXdy/issues/146)
 - [#147 - Rotating receiving-address lifecycle](https://github.com/bonklek/milXdy/issues/147)
 
-Release boundary: no private-key custody, automatic tip, inferred recipient, hidden approval, or claim that address rotation provides full anonymity.
+Release boundary: no private-key custody, automatic tip, inferred recipient, hidden approval, or claim that address rotation or a prospective shielded path provides anonymity. Any private/shielded path ships only after its own reviewed capability and safety gates are met.
 
 ## 0.3.4 - BlobMail
 
@@ -115,7 +115,7 @@ Release boundary: testnet or local devnet only; no automatic send, attachment ex
 
 Goal: add optional ownership context to existing Remilia experiences without converting them into trading products.
 
-- [#151 - Wallet ownership bridge for Remilia Gotcha](https://github.com/bonklek/milXdy/issues/151)
+- [#141 - Opt-in read-only NFT collection context](https://github.com/bonklek/milXdy/issues/141)
 - [#152 - Owned, seen, and tracked NFT states for Banners and daily collections](https://github.com/bonklek/milXdy/issues/152)
 - [#153 - Read-only Bonklet treasury and fractional-bidding context](https://github.com/bonklek/milXdy/issues/153)
 
@@ -134,24 +134,26 @@ Release boundary: advanced and disabled by default. No automatic publication, un
 
 ## 0.3.7 - Collective Metadata
 
-Goal: let one client passively observe approved public metadata and let other participating clients reuse that observation through a bounded, provenance-aware protocol built after Paraclete AA gossip.
+Goal: let one client passively observe approved public metadata and let other participating clients reuse that observation through a bounded, provenance-aware data protocol over Paraclete peer-network plumbing, built after the AA gossip boundary is stable.
 
 - [#159 - Signed social-metadata observation records and commitments](https://github.com/bonklek/milXdy/issues/159)
 - [#160 - Bounded social-metadata propagation over Paraclete gossip](https://github.com/bonklek/milXdy/issues/160)
 - [#161 - Passive public-metadata adapters and shared local index](https://github.com/bonklek/milXdy/issues/161)
 - [#132 - Shared X Account based in observations and region filtering](https://github.com/bonklek/milXdy/issues/132)
+- [#173 - Signed relationship-status research over metadata gossip](https://github.com/bonklek/milXdy/issues/173)
+- [#20 - Opt-in milXdy registry records](https://github.com/bonklek/milXdy/issues/20)
 
 Release boundary: registered public observation types only. No arbitrary payload transport, hidden bulk crawling, private-field collection, claim that signatures prove truth, or automatic per-record L1 publication.
 
 ## Project boundaries
 
 - [Radio Free Ethereum](https://github.com/bonklek/eth-radio) supplies the authoritative Station, viewer, publisher, verification, and playback semantics. milXdy is an optional client surface, not a competing protocol.
-- [Paraclete](https://github.com/unattended-backpack/paraclete) is account-abstraction gossip infrastructure. It is not a generic message protocol, wallet, or automatic transaction executor.
+- [Paraclete](https://github.com/unattended-backpack/paraclete) supplies peer-network plumbing and scoped account-abstraction gossip. The AA mempool accepts valid UserOperations only; separately versioned, registered, bounded data protocols may reuse peer connectivity without becoming generic messaging, a wallet, or an automatic transaction executor.
 - [BlobMail](https://github.com/bonklek/blobmail) is asynchronous encrypted mail over shared blob batches. It may reuse Paraclete-style collection and milXdy identity/UI infrastructure without becoming RemiNet Chat.
 - [Bonklet](https://github.com/TimTinkers/Bonklet) is a separate contract system. Initial milXdy support is read-only and exact-address based.
 - Remilia Gotcha remains local-first. Wallet context is optional evidence for bounded local gameplay, not proof that local cards are owned or tradable NFTs.
 - Ordinary archive services remain part of the identifier-media roadmap. The `0.3.x` work owns content-addressed verification and reviewed publication.
-- Collective Metadata is a bounded application protocol layered after Paraclete, not an expansion of the AA mempool into generic messaging. Signed records prove provenance and integrity, while consumer trust and conflict policies remain explicit.
+- Collective Metadata is a bounded application protocol that reuses Paraclete peer-network plumbing after the AA boundary is stable, not an expansion of the AA mempool into generic messaging. It may later complement Miladychan board-based sharing where the public-record model is appropriate; it is not a promised replacement. Signed records prove provenance and integrity, while consumer trust and conflict policies remain explicit.
 
 ## Planning ownership
 

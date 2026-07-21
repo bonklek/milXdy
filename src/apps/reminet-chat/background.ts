@@ -2,24 +2,19 @@ import { registerBackgroundMessageHandlers } from "../../platform/background/rou
 import { isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import {
   REMILIA_BASE_URL,
-  type RemiliaAuthResult,
   prepareRemiliaAuth,
   renewRemiliaAuth,
   adoptRemiliaBrowserSession,
-  refreshRemiliaBrowserSessionTab,
   isRemiliaDisconnected,
 } from "../../platform/auth/remilia-auth";
-import { hasUsableSocketAccessToken, resolveSocketAuthCredential } from "./socket-auth-policy";
+import { resolveSocketAuthCredential } from "./socket-auth-policy";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
-const SOCKET_URL = "wss://www.remilia.net/api/ws";
 const SOCKET_PORT_NAME = "reminetChat:socket";
+const SITE_SOCKET_PORT_NAME = "reminetChat:site-socket";
 const SESSION_PROBE_PATH = "/api/profile/whoami";
-const SOCKET_HEARTBEAT_MS = 25_000;
 const SOCKET_AUTH_TIMEOUT_MS = 12_000;
-const SOCKET_BROWSER_SESSION_REFRESH_TIMEOUT_MS = 7_000;
-const SOCKET_OPEN_TIMEOUT_MS = 12_000;
 const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 const MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -30,7 +25,6 @@ const ALLOWED_ATTACHMENT_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "vide
 let socketAuthReadyUntil = 0;
 let socketAuthPromise: Promise<{ ok: boolean; signedIn: boolean; error?: string }> | null = null;
 let socketAuthGeneration = 0;
-let socketAuthRefreshRequired = false;
 
 type DecodedAttachment = {
   contentType: string;
@@ -51,17 +45,21 @@ registerBackgroundMessageHandlers([{
   handle: handleChatMessage,
 }]);
 
+let siteSocketBridge: chrome.runtime.Port | null = null;
+const siteSocketBridges = new Set<chrome.runtime.Port>();
+const socketClients = new Set<chrome.runtime.Port>();
+
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === SITE_SOCKET_PORT_NAME) {
+    registerSiteSocketBridge(port);
+    return;
+  }
   if (port.name !== SOCKET_PORT_NAME) return;
   if (!isReminetChatSocketSender(port.sender)) {
     port.disconnect();
     return;
   }
-  let socket: WebSocket | null = null;
-  let closed = false;
-  let connectGeneration = 0;
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  const locallyClosedSockets = new WeakSet<WebSocket>();
+  socketClients.add(port);
 
   const post = (message: Record<string, unknown>) => {
     try {
@@ -71,115 +69,89 @@ chrome.runtime.onConnect.addListener((port) => {
     }
   };
 
-  const closeSocket = () => {
-    connectGeneration += 1;
-    stopHeartbeat();
-    const current = socket;
-    socket = null;
-    if (current && current.readyState !== WebSocket.CLOSED && current.readyState !== WebSocket.CLOSING) {
-      locallyClosedSockets.add(current);
-      current.close();
-    }
-  };
-
-  const stopHeartbeat = () => {
-    if (heartbeatTimer !== null) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-  };
-
-  const startHeartbeat = (target: WebSocket) => {
-    stopHeartbeat();
-    heartbeatTimer = setInterval(() => {
-      if (socket !== target || closed) {
-        stopHeartbeat();
-        return;
-      }
-      if (target.readyState !== WebSocket.OPEN) {
-        post({ type: "socket:heartbeat", ok: false, readyState: target.readyState, reason: "not-open" });
-        return;
-      }
-      post({ type: "socket:heartbeat", ok: true, readyState: target.readyState, at: Date.now() });
-    }, SOCKET_HEARTBEAT_MS);
-  };
-
-  const connectSocket = async () => {
-    if (closed || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
-    const generation = ++connectGeneration;
-    const ready = await prepareSocketAuth();
-    if (closed || generation !== connectGeneration) return;
-    if (!ready.ok) {
-      const authRequired = ready.error === "AUTH_REQUIRED";
-      post({
-        type: "socket:error",
-        error: authRequired ? "AUTH_REQUIRED" : "Live chat authentication timed out.",
-        reason: authRequired ? "auth-required" : "socket-auth-timeout",
-        authRequired,
-      });
-      return;
-    }
-    const nextSocket = new WebSocket(SOCKET_URL);
-    socket = nextSocket;
-    let opened = false;
-    post({ type: "socket:connecting" });
-    const openTimer = setTimeout(() => {
-      if (socket !== nextSocket || closed || nextSocket.readyState === WebSocket.OPEN) return;
-      invalidateSocketAuthAfterHandshakeFailure();
-      post({ type: "socket:error", error: "Live chat connection timed out.", reason: "socket-open-timeout" });
-      nextSocket.close();
-    }, SOCKET_OPEN_TIMEOUT_MS);
-    nextSocket.addEventListener("open", () => {
-      clearTimeout(openTimer);
-      if (socket !== nextSocket || closed) return;
-      opened = true;
-      nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
-      startHeartbeat(nextSocket);
-      post({ type: "socket:open", at: Date.now() });
-    });
-    nextSocket.addEventListener("message", (event) => {
-      if (socket !== nextSocket || closed) return;
-      post({ type: "socket:frame", data: event.data });
-    });
-    nextSocket.addEventListener("close", (event) => {
-      clearTimeout(openTimer);
-      stopHeartbeat();
-      if (socket === nextSocket) socket = null;
-      if (opened && !closed && !locallyClosedSockets.has(nextSocket)) invalidateSocketAuthAfterHandshakeFailure();
-      post({ type: "socket:close", code: event.code, reason: event.reason, wasClean: event.wasClean });
-    });
-    nextSocket.addEventListener("error", () => {
-      clearTimeout(openTimer);
-      if (!opened) invalidateSocketAuthAfterHandshakeFailure();
-      post({ type: "socket:error", error: "Connection interrupted.", reason: "socket-error" });
-    });
-  };
-
   port.onMessage.addListener((message: unknown) => {
     const record = objectValue(message);
     if (record.type === "connect") {
-      void connectSocket();
+      if (!siteSocketBridge) {
+        post({
+          type: "socket:error",
+          error: "Open or refresh a signed-in RemiliaNET tab.",
+          reason: "site-bridge-required",
+        });
+        return;
+      }
+      postToSiteSocketBridge({ type: "connect" });
       return;
     }
     if (record.type === "close") {
-      closeSocket();
+      socketClients.delete(port);
+      if (socketClients.size === 0) postToSiteSocketBridge({ type: "close" });
       return;
     }
     if (record.type === "send") {
-      if (!socket || socket.readyState !== WebSocket.OPEN || typeof record.payload !== "object" || record.payload === null) {
+      if (!siteSocketBridge || typeof record.payload !== "object" || record.payload === null) {
         post({ type: "socket:error", error: "Socket is not open." });
         return;
       }
-      socket.send(JSON.stringify(record.payload));
+      postToSiteSocketBridge({ type: "send", payload: record.payload });
     }
   });
   port.onDisconnect.addListener(() => {
-    connectGeneration += 1;
-    closed = true;
-    stopHeartbeat();
-    closeSocket();
+    socketClients.delete(port);
+    if (socketClients.size === 0) postToSiteSocketBridge({ type: "close" });
   });
 });
+
+function registerSiteSocketBridge(port: chrome.runtime.Port): void {
+  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"])) {
+    port.disconnect();
+    return;
+  }
+  siteSocketBridges.add(port);
+  if (!siteSocketBridge) siteSocketBridge = port;
+  port.onMessage.addListener((message: unknown) => {
+    if (siteSocketBridge !== port) return;
+    const record = objectValue(message);
+    if (!String(record.type || "").startsWith("socket:")) return;
+    for (const client of socketClients) {
+      try {
+        client.postMessage(record);
+      } catch {
+        socketClients.delete(client);
+      }
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    siteSocketBridges.delete(port);
+    if (siteSocketBridge !== port) return;
+    siteSocketBridge = siteSocketBridges.values().next().value ?? null;
+    if (siteSocketBridge && socketClients.size > 0) {
+      postToSiteSocketBridge({ type: "connect" });
+      return;
+    }
+    for (const client of socketClients) {
+      try {
+        client.postMessage({
+          type: "socket:error",
+          error: "Open or refresh a signed-in RemiliaNET tab.",
+          reason: "site-bridge-required",
+        });
+      } catch {
+        socketClients.delete(client);
+      }
+    }
+  });
+  if (socketClients.size > 0) postToSiteSocketBridge({ type: "connect" });
+}
+
+function postToSiteSocketBridge(message: Record<string, unknown>): void {
+  try {
+    siteSocketBridge?.postMessage(message);
+  } catch {
+    if (siteSocketBridge) siteSocketBridges.delete(siteSocketBridge);
+    siteSocketBridge = null;
+  }
+}
 
 function isReminetChatSocketSender(sender: chrome.runtime.MessageSender | undefined): boolean {
   return isAllowedReminetChatSender(sender, ["x.com", "twitter.com"]);
@@ -263,25 +235,19 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
     socketAuthPromise = null;
     return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
   }
-  if (!socketAuthRefreshRequired && Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
+  if (Date.now() < socketAuthReadyUntil) return { ok: true, signedIn: true };
   if (socketAuthPromise) return socketAuthPromise;
   const generation = ++socketAuthGeneration;
-  const forceBrowserSessionRefresh = socketAuthRefreshRequired;
   const abort = new AbortController();
   const pending = withDeadline(
     resolveSocketAuthCredential(
       () => prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
-      () => refreshSocketAccessToken(abort.signal),
-      {
-        forceBrowserSessionRefresh,
-        requireAccessTokenAfterRefresh: forceBrowserSessionRefresh,
-      },
+      () => renewRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
     ).then(async (auth) => {
       if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
         return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
       }
       if (!auth.ok) return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
-      socketAuthRefreshRequired = false;
       socketAuthReadyUntil = Date.now() + SOCKET_AUTH_CACHE_MS;
       return { ok: true, signedIn: true };
     }),
@@ -298,20 +264,6 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
   } finally {
     if (socketAuthPromise === pending) socketAuthPromise = null;
   }
-}
-
-function invalidateSocketAuthAfterHandshakeFailure(): void {
-  socketAuthReadyUntil = 0;
-  socketAuthRefreshRequired = true;
-}
-
-async function refreshSocketAccessToken(signal: AbortSignal): Promise<RemiliaAuthResult> {
-  const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH, {
-    timeoutMs: SOCKET_BROWSER_SESSION_REFRESH_TIMEOUT_MS,
-  });
-  if (hasUsableSocketAccessToken(refreshed)) return refreshed;
-  const renewed = await renewRemiliaAuth(SESSION_PROBE_PATH, { signal });
-  return hasUsableSocketAccessToken(renewed) ? renewed : refreshed;
 }
 
 async function authStatus(): Promise<Record<string, unknown>> {
