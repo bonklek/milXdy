@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const publicTypes = await readFile("sdk/types/index.d.ts", "utf8");
 const starterManifest = JSON.parse(await readFile("sdk/templates/basic-feature/milxdy.app.json", "utf8"));
+const dockedStarterManifest = JSON.parse(await readFile("sdk/templates/docked-app/milxdy.app.json", "utf8"));
 const readiness = await readFile("docs/APP_PLATFORM_PRODUCTION_READINESS.md", "utf8");
 const compatibility = await readFile("docs/APP_SDK_COMPATIBILITY.md", "utf8");
 const docsIndex = await readFile("docs/INDEX.md", "utf8");
@@ -31,6 +32,10 @@ assert(publicTypes.includes("resolveAssetUrl(path: string): string"), "public de
 assert(starterManifest.sdk?.minVersion === packageJson.appSdkVersion, "starter template sdk.minVersion must match package.json appSdkVersion");
 assert(starterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "starter template sdk.targetVersion must match package.json appSdkVersion");
 assert(starterManifest.defaultEnabled === false, "starter template must start disabled");
+assert(dockedStarterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "docked starter target version must match the current App SDK");
+assert(dockedStarterManifest.defaultEnabled === false, "docked starter must start disabled");
+assert(dockedStarterManifest.packageKind === "app" && dockedStarterManifest.surfaces?.includes("overlayApp"), "docked starter must exercise the overlay app contract");
+assert(dockedStarterManifest.loadTriggers?.includes("dockOpen") && dockedStarterManifest.dock?.label, "docked starter must exercise dock metadata and loading");
 assert(readiness.includes("reviewed custom-build platform"), "production-readiness docs must define the supported near-term boundary");
 assert(readiness.includes("External proof"), "production-readiness docs must require an external integration proof");
 assert(compatibility.includes("Package-owned background module | Unsupported"), "compatibility policy must disclose unsupported package background modules");
@@ -44,6 +49,7 @@ assert(/^[0-9a-f]{40}$/.test(postReadingPolicy?.sourceCommit || ""), "external r
 
 const checks = [
   ["Public SDK declarations and starter JavaScript", ["node_modules/typescript/bin/tsc", "-p", "sdk/tsconfig.json"]],
+  ["App SDK author harness", ["scripts/verify/app-sdk-harness.mjs"]],
   ["App SDK compliance", ["scripts/verify/app-sdk-compliance.mjs"]],
   ["App settings mirrors", ["scripts/verify/app-settings-mirrors.mjs"]],
   ["Internal messaging bridges", ["scripts/verify/internal-messaging-bridges.mjs"]],
@@ -57,6 +63,12 @@ const checks = [
   ["Starter template integration", [
     "scripts/packages/verify-local-app-package.mjs",
     "--package=sdk/templates/basic-feature",
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ]],
+  ["Docked starter integration", [
+    "scripts/packages/verify-local-app-package.mjs",
+    "--package=sdk/templates/docked-app",
     "--allow-local-review",
     "--acknowledge-package-consent",
   ]],

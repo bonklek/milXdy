@@ -16,6 +16,11 @@ scanner is not a sandbox guarantee.
 - `templates/basic-feature/`: a minimal novel feature package with generated
   Apps & Features enablement, cancellation-safe lifecycle hooks, and local-only
   diagnostics.
+- `templates/docked-app/`: a rail-capable overlay app using guarded assets,
+  declared local storage, deterministic open/close hooks, and cleanup.
+- `testing/app-harness.mjs`: an in-memory public-context harness for lifecycle,
+  cancellation, scheduling, storage, assets, messaging, diagnostics, and
+  disposables.
 - `../docs/local-app-package.schema.json`: JSON Schema for
   `milxdy.app.json` authoring.
 - `../docs/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.
@@ -29,6 +34,8 @@ From the repository root:
 
 ```powershell
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
+pnpm.cmd run verify:local-app-package -- --package=sdk/templates/docked-app --allow-local-review --acknowledge-package-consent
+pnpm.cmd run verify:app-sdk-harness
 pnpm.cmd run build:local-apps:chromium -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 ```
 
@@ -49,6 +56,9 @@ the generated composition report and package hashes.
 - Treat DOM nodes delivered in `onSurface` as short-lived SPA state.
 - Register cleanup through `context.addDisposable` and check
   `context.signal.aborted` after asynchronous work.
+- Exercise lifecycle and capability assumptions with `createAppHarness()` before
+  composing a browser build; the harness fails closed on undeclared storage and
+  asset access just like the public runtime facade.
 
 The starter declaration intentionally omits internal runtime helpers such as
 cross-app loading. If a template cannot implement a real app without a private
