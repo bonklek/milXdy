@@ -19,6 +19,6 @@ Every interactive app must meet these requirements before review:
 - Remove app-owned DOM, listeners, timers, and live regions on close, disable,
   abort, and dispose.
 
-Static conformance and the starter are baselines, not a substitute for the
-pre-merge keyboard, zoom, screen-reader, reduced-motion, and forced-colors QA
-checklist.
+Static conformance and the starter are baselines. Authors should also test
+keyboard use, zoom, screen readers, reduced motion, and forced colors in the
+supported browsers.
