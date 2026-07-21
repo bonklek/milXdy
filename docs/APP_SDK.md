@@ -371,6 +371,29 @@ Expected generated artifacts:
 
 `docs/local-app-package.schema.json` is the authoring schema for `milxdy.app.json`. It includes the supported enum values for package kind, lifecycle mode, surfaces, site scopes, settings locations, controls, reset behavior, presets, privacy labels, cost classes, asset kinds, review status, and current background metadata.
 
+### Starter Templates And Author Harness
+
+Use `sdk/templates/basic-feature/` for a route-driven feature and
+`sdk/templates/docked-app/` for a rail-capable overlay app. Both start disabled,
+declare their package-owned state and assets, and use only the public context.
+The docked template also demonstrates `boot`/`open`/`close`/`disable`/`dispose`,
+guarded asset URLs, and declared-key storage.
+
+Before composing a browser build, import `createAppHarness` from
+`sdk/testing/app-harness.mjs` in app-owned tests. It provides an in-memory public
+context and records lifecycle calls, diagnostics, messages, and rescan requests.
+It can flush or cancel scheduled work, abort the runtime signal, run registered
+disposables, seed declared storage, and reject undeclared storage or assets.
+The repository self-test is:
+
+```powershell
+pnpm.cmd run verify:app-sdk-harness
+```
+
+The harness validates public-contract behavior; it does not emulate the browser
+DOM or prove runtime isolation. Browser composition and the deferred pre-merge
+QA checklist remain separate gates.
+
 ### Package Fixtures
 
 The first-party package-shape pilots live under `examples/packages/first-party-replacements/`. They are fixtures for built-in replacement and registry compatibility:

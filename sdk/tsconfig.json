@@ -13,6 +13,7 @@
   },
   "include": [
     "types/**/*.d.ts",
-    "templates/**/*.js"
+    "templates/**/*.js",
+    "testing/**/*.mjs"
   ]
 }
