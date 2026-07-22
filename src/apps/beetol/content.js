@@ -7,6 +7,7 @@ import {
 } from "../../platform/overlay/panel-base";
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
+import { BEETLE_HUNT_COOLDOWN_MS, beetleHuntChargesFromUser, beetleHuntCooldownFromUser } from "./hunt-cooldown";
 
 function mountBeetolGame(context = {}) {
   const ROOT_VERSION = '2026-06-28-settings-dark-signin';
@@ -35,7 +36,7 @@ function mountBeetolGame(context = {}) {
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
-  const FINAL_HUNT_COOLDOWN_MS = 90 * 60 * 1000;
+  const FINAL_HUNT_COOLDOWN_MS = BEETLE_HUNT_COOLDOWN_MS;
   const FINAL_HUNT_RESULT_HOLD_MS = 2400;
   const ENABLED_KEY = 'milxdy.remistats.beetol.enabled';
   const SETTINGS_THEME_KEY = 'milxdy.settings.theme';
@@ -521,7 +522,10 @@ function mountBeetolGame(context = {}) {
   function huntStateFromUser(user) {
     const actionData = user?.beetleHunt || user?.actions?.beetleHunt || {};
     const cooldown = cooldownFromUser(user, 'beetleHunt');
-    const cooldownMs = normalizeCooldownMs(cooldown);
+    const cooldownMs = Math.max(
+      normalizeCooldownMs(cooldown),
+      beetleHuntCooldownFromUser(user),
+    );
     const message = [
       actionData?.message,
       actionData?.error,
@@ -538,6 +542,7 @@ function mountBeetolGame(context = {}) {
       actionData?.remainingCharges,
       actionData?.huntsRemaining,
       actionData?.remaining,
+      beetleHuntChargesFromUser(user),
     ]);
     const available = firstBoolean([
       user?.canBeetleHunt,
