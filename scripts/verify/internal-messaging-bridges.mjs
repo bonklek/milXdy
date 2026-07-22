@@ -8,6 +8,7 @@ const files = {
   postReadingOcrHost: await readFile("src/extension/frames/ocr-host.ts", "utf8"),
   reminetChatBackground: await readFile("src/apps/reminet-chat/background.ts", "utf8"),
   reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
+  reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
   extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
   beetolContent: await readFile("src/apps/beetol/content.js", "utf8"),
@@ -62,6 +63,10 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(bridge, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
   assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*"]', "RemiNet site bridge must be injected only on RemiliaNET pages");
   assertIncludes(files.extensionManifest, '"js": ["reminetChatBridge.js"]', "RemiNet site bridge must be declared in the extension manifest");
+  assertIncludes(files.extensionManifest, '"js": ["reminetCraftFastPath.js"]', "RemiNet crafting fast path must be declared in the extension manifest");
+  assertIncludes(files.extensionManifest, '"world": "MAIN"', "RemiNet crafting fast path must run in the page world");
+  assertIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must limit acceleration to known staged timers");
+  assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
 
   const auth = files.reminetChatBackground;
   assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
