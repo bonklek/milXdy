@@ -1759,8 +1759,16 @@ async function insertBadge(element, usernameOverride = null) {
   if (ownBadge) {
     const existingSlot = Array.from(element.querySelectorAll('[data-reminet-badge-slot], [data-milxdy-tweet-slot="remistats-badge"]'))
       .find((slot) => surfaceOwnsNode(element, slot));
-    stabilizeTweetBadgeSlot(element, existingSlot);
-    backfillActionPokeForExistingBadge(element, ownBadge);
+    // Repeated surface delivery is normal as X virtualizes the timeline. Avoid
+    // another measured layout pass unless X actually moved the existing slot.
+    positionBadgeSlotNearTweetTime(element, existingSlot);
+    if (
+      visualTheme.pokePlacement === 'actions'
+      && !Array.from(element.querySelectorAll('[data-reminet-action-poke-group]'))
+        .some((group) => surfaceOwnsNode(element, group))
+    ) {
+      backfillActionPokeForExistingBadge(element, ownBadge);
+    }
     return markSurfaceResult(element, 'already-has-badge');
   }
   
@@ -1883,15 +1891,12 @@ function remiliaUrl(path) {
 async function fetchTrophyProfile(remiliaUsername) {
   const clean = cleanUsername(remiliaUsername);
   if (!clean) return null;
-
-  const response = await fetch(`${REMILIA_BASE_URL}/api/profile/~${encodeURIComponent(clean)}`, {
-    credentials: 'omit',
-    headers: { Accept: 'application/json' },
-  });
-  if (!response.ok) return null;
-
-  const data = await response.json().catch(() => null);
-  return data?.user || null;
+  const response = await runtimeSendMessage({
+    type: 'reminetIdentity:getProfile',
+    remiliaUsername: clean,
+    maxAgeMs: 24 * 60 * 60 * 1000,
+  }, 'reminetIdentity:getProfile');
+  return response?.ok ? response.profile || null : null;
 }
 
 function firstShelfRow(user) {
