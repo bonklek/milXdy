@@ -654,6 +654,7 @@ await buildOrWatch({
     popup: source("src/extension/popup/index.ts"),
     wikiFrame: source("src/extension/frames/wiki-frame.ts"),
     reminetChatBridge: source("src/extension/frames/reminet-chat-bridge.ts"),
+    reminetCraftFastPath: source("src/extension/frames/reminet-craft-fast-path.ts"),
   },
   outdir: outDir,
   format: "iife",

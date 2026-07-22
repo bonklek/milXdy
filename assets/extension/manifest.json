@@ -48,6 +48,12 @@
       "matches": ["https://www.remilia.net/*"],
       "js": ["reminetChatBridge.js"],
       "run_at": "document_start"
+    },
+    {
+      "matches": ["https://www.remilia.net/*"],
+      "js": ["reminetCraftFastPath.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
     }
   ],
   "web_accessible_resources": [

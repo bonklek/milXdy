@@ -19,6 +19,7 @@ Status: in development.
 - Keep the bundled song first in Music's Default order and keep the sort dropdown open while background artwork or indexing updates arrive.
 - Replace always-visible Music track action buttons with an accessible hover/focus overflow menu that temporarily covers the duration instead of reserving a permanent column.
 - Replace Music's row-level ISRC words with accessible green/yellow/red lightbulb indicators and explanatory tooltips.
+- Default interface labels to X's native font and expose a consistent global Interface font choice for controls and profile/navigation tabs, separately from post text.
 - Clear Chrome's stranded Web Speech pause state before queueing playback so read-aloud cannot remain silent while displaying the first-word highlight.
 - Restore continuous paragraph-level smooth highlighting and keep its fill rate calibrated throughout speech rather than filling isolated token ranges with a fixed early cadence.
 - Continue the paragraph scan when Chrome speaks without delivering another native boundary, and return to native timing as soon as boundary delivery resumes.

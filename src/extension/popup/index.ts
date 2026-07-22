@@ -10,6 +10,7 @@ declare const MILXDY_BUILD_TARGET: string;
 import type { AppPreset, MilxdyAppManifest } from "../../platform/app-sdk/app-platform";
 import { FIRST_PARTY_APPS } from "../../platform/app-sdk/first-party-registry";
 import {
+  BENCHMARK_COMPARISON_START_MESSAGE,
   BENCHMARK_RESULT_PREFIX,
   BENCHMARK_START_MESSAGE,
   DEFAULT_BENCHMARK_DURATION_MS,
@@ -193,6 +194,8 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
+  "reminet.beetleReducedMotion": { area: "sync", key: "milxdy.reminet.beetleReducedMotion", kind: "boolean", fallback: false },
+  "reminet.beetleInstantResults": { area: "sync", key: "milxdy.reminet.beetleInstantResults", kind: "boolean", fallback: false },
 };
 
 void boot();
@@ -1122,7 +1125,6 @@ function writeVisualEditor(settings: VisualThemeSettings, includeName = true): v
   setChecked("visualNotificationUnreadTint", theme.notificationUnreadTint);
   setChecked("visualRemistatsBox", theme.remistatsBox);
   setChecked("visualIncomingPokeGold", theme.incomingPokeGold);
-  setChecked("visualReminetChatOverlay", theme.reminetChatOverlay);
   setChecked("visualDisableMaxxer", theme.disableMaxxer);
   setChecked("visualDisableSelfTracking", theme.disableSelfTracking);
   setChecked("visualMaxxerShimmer", theme.maxxerShimmer);
@@ -1164,7 +1166,6 @@ function readVisualEditor(): VisualThemeSettings {
     notificationUnreadTint: checkedValue("visualNotificationUnreadTint"),
     remistatsBox: checkedValue("visualRemistatsBox"),
     incomingPokeGold: checkedValue("visualIncomingPokeGold"),
-    reminetChatOverlay: checkedValue("visualReminetChatOverlay"),
     disableMaxxer: checkedValue("visualDisableMaxxer"),
     disableSelfTracking: checkedValue("visualDisableSelfTracking"),
     maxxerShimmer: checkedValue("visualMaxxerShimmer"),
@@ -1207,7 +1208,6 @@ function visualEditorElements(): Array<HTMLInputElement | HTMLSelectElement> {
     "visualNotificationUnreadTint",
     "visualRemistatsBox",
     "visualIncomingPokeGold",
-    "visualReminetChatOverlay",
     "visualDisableMaxxer",
     "visualDisableSelfTracking",
     "visualMaxxerShimmer",
@@ -2169,6 +2169,7 @@ const BENCHMARK_PROFILE_LABEL: Record<ReskinProfile, string> = {
 
 function setupBenchmarkControls(): void {
   const startButton = document.getElementById("benchmarkStart") as HTMLButtonElement | null;
+  const compareButton = document.getElementById("benchmarkCompare") as HTMLButtonElement | null;
   const copyButton = document.getElementById("benchmarkCopy") as HTMLButtonElement | null;
   const message = document.getElementById("benchmarkMessage");
   const report = document.getElementById("benchmarkReport");
@@ -2211,7 +2212,7 @@ function setupBenchmarkControls(): void {
 
     startButton.disabled = true;
     const seconds = Math.round(DEFAULT_BENCHMARK_DURATION_MS / 1000);
-    setMessage(`Sampling for ${seconds}s — keep that X tab visible and scroll the feed until this finishes…`);
+    setMessage(`Sampling for ${seconds}s — keep that X tab visible; milXdy will drive the same timeline scroll cadence for this run.`);
     try {
       const response = (await chrome.tabs.sendMessage(tabId, { type: BENCHMARK_START_MESSAGE })) as
         | { ok?: boolean; busy?: boolean; result?: BenchmarkResult | null }
@@ -2230,6 +2231,39 @@ function setupBenchmarkControls(): void {
       setMessage("Could not reach the X tab — reload it so the latest extension is loaded, then retry.");
     } finally {
       startButton.disabled = false;
+    }
+  });
+
+  compareButton?.addEventListener("click", async () => {
+    const [activeTab] = await chrome.tabs
+      .query({ active: true, currentWindow: true })
+      .catch(() => [] as chrome.tabs.Tab[]);
+    const tabId = activeTab?.id;
+    const url = activeTab?.url ?? "";
+    if (typeof tabId !== "number" || !/^https:\/\/(x\.com|twitter\.com)\//.test(url)) {
+      setMessage("Switch to the X/Twitter tab you want to measure, then start the comparison.");
+      return;
+    }
+    const enabled = await chrome.storage.local.get({ "milxdy.diagnostics.enabled": false });
+    if (enabled["milxdy.diagnostics.enabled"] !== true) {
+      setMessage("Enable performance counters before starting a comparison.");
+      return;
+    }
+    compareButton.disabled = true;
+    setMessage("Running Max then Moderate automatically. Keep the X tab visible; your prior appearance will be restored.");
+    try {
+      const response = await chrome.tabs.sendMessage(tabId, { type: BENCHMARK_COMPARISON_START_MESSAGE }) as { ok?: boolean; busy?: boolean } | undefined;
+      if (!response?.ok) setMessage(response?.busy ? "A benchmark is already running." : "Comparison did not complete; reload the X tab and retry.");
+      else {
+        const rendered = await renderBenchmarkReport(report);
+        copyText = rendered.copyText;
+        if (copyButton) copyButton.hidden = copyText.length === 0;
+        setMessage(rendered.verdict ? `Comparison complete: Max is ${rendered.verdict.text} vs Moderate.` : "Comparison complete.", rendered.verdict?.over2x ? "over" : undefined);
+      }
+    } catch {
+      setMessage("Could not reach the X tab; reload it and retry.");
+    } finally {
+      compareButton.disabled = false;
     }
   });
 
@@ -2321,9 +2355,11 @@ function benchmarkVerdict(results: Map<ReskinProfile, BenchmarkResult>): Benchma
     return a > 0 ? Infinity : null;
   };
   const gap = ratio(max.worstFrameGapMs, moderate.worstFrameGapMs);
+  const fps = ratio(moderate.averageFps, max.averageFps);
   const over50 = ratio(max.framesOver50ms, moderate.framesOver50ms);
   const tasks = ratio(max.longTasks, moderate.longTasks);
   if (gap !== null) ratios.push(["worst frame gap", gap]);
+  if (fps !== null) ratios.push(["average FPS", fps]);
   if (over50 !== null) ratios.push(["frames >50ms", over50]);
   if (tasks !== null) ratios.push(["long tasks", tasks]);
   if (ratios.length === 0) return null;
@@ -2337,7 +2373,7 @@ function benchmarkVerdict(results: Map<ReskinProfile, BenchmarkResult>): Benchma
   } else if (over2x) {
     text = `${worst[1].toFixed(1)}× worse (${worst[0]}) — over 2×`;
   } else {
-    text = `${worst[1].toFixed(1)}× worse (${worst[0]})`;
+    text = `within the 2× threshold (${worst[0]} is ${worst[1].toFixed(1)}× higher)`;
   }
   return { text, over2x };
 }

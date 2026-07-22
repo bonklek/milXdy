@@ -143,9 +143,10 @@
           <div class="setting-group-header">
             <h3>Max profile benchmark</h3>
           </div>
-          <p class="setting-note">Compare Max against Moderate/Min on the same feed. Set Appearance, open X, start a run, then scroll for 30 seconds. Run again on each profile to compare.</p>
+          <p class="setting-note">Compare Max against Moderate/Min on the same feed. Set Appearance, open X, and start a run. milXdy waits briefly, then uses the same fixed timeline scroll cadence for each profile.</p>
           <div class="benchmark-actions">
             <button type="button" id="benchmarkStart" class="secondary-button">Start 30s benchmark</button>
+            <button type="button" id="benchmarkCompare" class="secondary-button">Run Max vs Moderate</button>
             <button type="button" id="benchmarkCopy" class="secondary-button" hidden>Copy report</button>
           </div>
           <p class="benchmark-message" id="benchmarkMessage" role="status"></p>
@@ -311,6 +312,8 @@
             <h3>Beetol Mirror</h3>
           </div>
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
+          <label class="setting"><span><strong>Reduce remilia.net Beetle Hunt motion</strong><small>Reduce decorative and idle motion on remilia.net while preserving action-result feedback. Does not change the X/Twitter Beetol panel.</small></span><input type="checkbox" data-control="reminet.beetleReducedMotion"></label>
+          <label class="setting"><span><strong>Use instant Beetle results</strong><small>Use the existing Remilia Beetle display pane for direct Claim/Hunt results instead of the site's video sequence. Reload the page after a result to sync native inventory and cooldown text.</small></span><input type="checkbox" data-control="reminet.beetleInstantResults"></label>
           <div class="auth-session" id="beetolSession">
             <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in on remilia.net, then retry the browser session to use Beetol hunts and RemiStats pokes.</small></div>
             <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
@@ -369,8 +372,8 @@
             <label class="field"><span>Theme name</span><input id="visualThemeName" type="text" placeholder="My theme"></label>
             <div class="field-grid">
               <label class="field"><span>Base profile</span><select id="visualProfile"><option value="max">Max</option><option value="moderate">Medium</option><option value="min">Minimal</option></select></label>
-              <label class="field"><span>Tweet font</span><select id="visualTweetFont"><option value="twitter">X readable</option><option value="hei">Remilia Hei</option><option value="mincho">Remilia Mincho</option><option value="menlo">Remilia Menlo</option></select></label>
-              <label class="field"><span>Chrome font</span><select id="visualUiFont"><option value="hei">Remilia Hei</option><option value="menlo">Remilia Menlo</option><option value="system">System</option></select></label>
+              <label class="field"><span>Post text font</span><select id="visualTweetFont"><option value="twitter">X default</option><option value="hei">Remilia Hei</option><option value="mincho">Remilia Mincho</option><option value="menlo">Remilia Menlo</option></select></label>
+              <label class="field"><span>Interface font</span><select id="visualUiFont"><option value="twitter">X default</option><option value="hei">Remilia Hei</option><option value="menlo">Remilia Menlo</option><option value="system">System</option></select></label>
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="page-type">
@@ -436,7 +439,6 @@
             <div class="visual-toggle-grid">
               <label class="setting"><span><strong>RemiStats backing box</strong><small>Put a grey frame behind stats and poke controls.</small></span><input id="visualRemistatsBox" type="checkbox"></label>
               <label class="setting"><span><strong>Gold poke alerts</strong><small>Show incoming "poked you!" flags with a shiny gold finish.</small></span><input id="visualIncomingPokeGold" type="checkbox"></label>
-              <label class="setting"><span><strong>RemiNet chat overlay</strong><small>Mount global chat in X's right sidebar.</small></span><input id="visualReminetChatOverlay" type="checkbox"></label>
             </div>
           </div>
           <div class="appearance-subgroup" data-appearance-group="maxxer">

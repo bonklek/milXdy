@@ -25,13 +25,15 @@ Each run is tagged with the active Appearance profile (Max / Moderate / Min) and
 
 1. Open the milXdy popup → **Diagnostics**, and enable **Collect performance counters**.
    (Results are only saved while this is on.)
-2. Set **Appearance** to **Moderate**.
-3. Open an X/Twitter tab.
-4. In the popup, click **Start 30s benchmark**, then switch to the X tab and **scroll the feed
-   steadily** until the run finishes (~30s). The same scrolling pattern each run keeps results comparable.
-5. Switch **Appearance** to **Max** and repeat steps 3–4 on the same kind of surface (e.g. the home timeline).
-6. The Diagnostics panel now shows a compact **Max vs Moderate** comparison. Click **Copy report**
+2. Open an X/Twitter timeline tab.
+3. In the popup, click **Run Max vs Moderate**, then keep the X tab visible for about 65 seconds.
+   The suite applies canonical Max and Moderate presets in sequence, waits briefly, and uses the same
+   fixed timeline scroll cadence for each sample. Do not manually scroll during the run.
+4. When it finishes, your prior Appearance profile and theme are restored. The Diagnostics panel now
+   shows a compact **Max vs Moderate** comparison. Click **Copy report**
    to copy a plaintext summary for an issue or PR.
+
+Use **Start 30s benchmark** only when you need to sample the current appearance profile by itself.
 
 Re-running a profile overwrites that profile's stored result, so you always compare the latest runs.
 
@@ -39,7 +41,7 @@ Re-running a profile overwrites that profile's stored result, so you always comp
 
 The comparison grid shows each metric per profile (`Max` / `Mod` / `Min`) and a
 **verdict** line. The verdict reports the worst ratio of Max vs Moderate across worst frame gap,
-frames >50ms, and long tasks, and flags when **Max is more than 2× worse** — the threshold the
+inverse average FPS, frames >50ms, and long tasks, and flags when **Max is more than 2× worse** — the threshold the
 benchmark exists to confirm.
 
 From there, a follow-up optimization issue can use the feature-timing rows to narrow the bottleneck

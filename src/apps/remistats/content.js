@@ -1759,8 +1759,20 @@ async function insertBadge(element, usernameOverride = null) {
   if (ownBadge) {
     const existingSlot = Array.from(element.querySelectorAll('[data-reminet-badge-slot], [data-milxdy-tweet-slot="remistats-badge"]'))
       .find((slot) => surfaceOwnsNode(element, slot));
-    stabilizeTweetBadgeSlot(element, existingSlot);
-    backfillActionPokeForExistingBadge(element, ownBadge);
+    // Surface delivery is intentionally repeatable as X virtualizes and mutates a
+    // timeline. A previously rendered badge does not need another layout pass on
+    // every delivery: in Max this queued a getBoundingClientRect-based rAF for
+    // each visible tweet, even when the header had not changed. Reposition only
+    // when X actually moved the slot; the initial render still performs the
+    // overlap check in stabilizeTweetBadgeSlot().
+    positionBadgeSlotNearTweetTime(element, existingSlot);
+    if (
+      visualTheme.pokePlacement === 'actions'
+      && !Array.from(element.querySelectorAll('[data-reminet-action-poke-group]'))
+        .some((group) => surfaceOwnsNode(element, group))
+    ) {
+      backfillActionPokeForExistingBadge(element, ownBadge);
+    }
     return markSurfaceResult(element, 'already-has-badge');
   }
   

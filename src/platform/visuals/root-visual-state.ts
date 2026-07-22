@@ -99,7 +99,6 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   setDatasetValue(root, "milxdyVisualRemistatsBox", String(theme.remistatsBox));
   setDatasetValue(root, "milxdyVisualIncomingPokeGold", String(theme.incomingPokeGold));
   setDatasetValue(root, "milxdyVisualPokePlacement", theme.pokePlacement);
-  setDatasetValue(root, "milxdyVisualReminetChatOverlay", String(theme.reminetChatOverlay));
   setDatasetValue(root, "milxdyVisualMiladyOnly", String(theme.miladyOnly));
   setDatasetValue(root, "milxdyVisualDisableMaxxer", String(theme.disableMaxxer));
   setDatasetValue(root, "milxdyVisualDisableSelfTracking", String(theme.disableSelfTracking));
@@ -394,6 +393,8 @@ function tweetFontStack(value: VisualThemeSettings["tweetFont"]): string {
 
 function uiFontStack(value: VisualThemeSettings["uiFont"]): string {
   switch (value) {
+    case "twitter":
+      return 'TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
     case "menlo":
       return '"Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace';
     case "system":
