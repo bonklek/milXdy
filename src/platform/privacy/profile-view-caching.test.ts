@@ -49,6 +49,12 @@ describe("profile-view caching", () => {
     expect(migrated.aliases["x:same"]).toBe(migrated.aliases["rn:same-rn"]);
   });
 
+  it("deduplicates trophy banner profile work through the shared identity service", () => {
+    const remiStats = source("src/apps/remistats/content.js");
+    expect(remiStats).toContain("type: 'reminetIdentity:getProfile'");
+    expect(remiStats).not.toContain("fetch(`${REMILIA_BASE_URL}/api/profile/~");
+  });
+
   it("keeps shared identity enrichment behind the persistent identity cache", () => {
     const background = source("src/extension/background/index.ts");
     expect(background).toContain("freshIdentityEntry(entry, maxAgeMs");
