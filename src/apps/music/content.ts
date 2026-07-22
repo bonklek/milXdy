@@ -210,6 +210,7 @@ type MusicState = LibraryState & {
   autoAcceptHighConfidenceIsrc: boolean;
   libraryMinimized: boolean;
   layoutReady: boolean;
+  isrcEditor: { trackId: string; draft: string; validation: string; returnFocus: HTMLElement | null } | null;
 };
 
 const state: MusicState = {
@@ -254,6 +255,7 @@ const state: MusicState = {
   autoAcceptHighConfidenceIsrc: true,
   libraryMinimized: false,
   layoutReady: false,
+  isrcEditor: null,
 };
 
 let dbPromise: Promise<IDBDatabase> | null = null;
@@ -1893,6 +1895,8 @@ function render(): void {
     button.dataset.active = String(button.dataset.tab === state.tab);
   }
   body.textContent = "";
+  if (state.isrcEditor && !state.tracks.some((track) => track.id === state.isrcEditor?.trackId)) state.isrcEditor = null;
+  if (state.isrcEditor) body.append(renderIsrcEditor());
   rowPlayButtonsByTrackId.clear();
   if (!state.libraryMinimized) {
     if (state.tab === "library") renderLibrary(body);
@@ -2048,12 +2052,27 @@ function trackThumbnail(track: MusicTrack): HTMLElement {
 }
 
 async function editTrackIsrc(track: MusicTrack): Promise<void> {
-  const current = track.isrc || "";
-  const input = window.prompt("ISRC (blank clears)", current);
-  if (input === null) return;
-  const isrc = normalizeIsrc(input);
-  if (input.trim() && !isrc) {
-    state.error = "That ISRC was not recognized.";
+  openIsrcEditor(track);
+}
+
+function openIsrcEditor(track: MusicTrack): void {
+  state.isrcEditor = { trackId: track.id, draft: track.isrc || "", validation: "", returnFocus: document.activeElement instanceof HTMLElement ? document.activeElement : null };
+  render();
+}
+
+function closeIsrcEditor(): void {
+  const returnFocus = state.isrcEditor?.returnFocus;
+  state.isrcEditor = null;
+  render();
+  queueMicrotask(() => returnFocus?.isConnected && returnFocus.focus());
+}
+
+async function saveIsrcEditor(track: MusicTrack): Promise<void> {
+  const editor = state.isrcEditor;
+  if (!editor) return;
+  const isrc = normalizeIsrc(editor.draft);
+  if (editor.draft.trim() && !isrc) {
+    editor.validation = "Enter a valid ISRC or clear the field.";
     render();
     return;
   }
@@ -2084,46 +2103,15 @@ async function editTrackIsrc(track: MusicTrack): Promise<void> {
     };
   await saveTrack(track);
   state.status = isrc ? "ISRC saved" : "ISRC cleared";
-  render();
+  closeIsrcEditor();
 }
 
 async function reviewTrackCandidates(track: MusicTrack): Promise<void> {
+  openIsrcEditor(track);
+}
+
+async function acceptIsrcCandidate(track: MusicTrack, selected: MusicTrack["enrichment"]["candidates"][number]): Promise<void> {
   const candidates = track.enrichment.candidates.slice(0, 6);
-  const lines = candidates.map((candidate, index) => {
-    const sources = candidate.sources.join("+");
-    return `${index + 1}. ${candidate.isrc} ${Math.round(candidate.confidence * 100)}% ${sources}`;
-  });
-  const input = window.prompt([
-    "Choose ISRC candidate number.",
-    "Use m to edit manually, r to retry lookup, x to reject all.",
-    ...lines,
-  ].join("\n"));
-  if (!input) return;
-  const value = input.trim().toLowerCase();
-  if (value === "m") {
-    await editTrackIsrc(track);
-    return;
-  }
-  if (value === "r") {
-    track.enrichment.status = "pending";
-    track.enrichment.nextRetryAt = null;
-    await saveTrack(track);
-    await runEnrichmentQueue();
-    return;
-  }
-  if (value === "x") {
-    track.enrichment = {
-      ...track.enrichment,
-      status: "unresolved",
-      nextRetryAt: Date.now() + 7 * 24 * 60 * 60 * 1000,
-      candidates: [],
-    };
-    await saveTrack(track);
-    render();
-    return;
-  }
-  const selected = candidates[Number(value) - 1];
-  if (!selected) return;
   track.isrc = selected.isrc;
   track.isrcConfidence = selected.confidence;
   track.enrichment = {
@@ -2135,7 +2123,48 @@ async function reviewTrackCandidates(track: MusicTrack): Promise<void> {
   };
   await saveTrack(track);
   state.status = "ISRC candidate accepted";
-  render();
+  closeIsrcEditor();
+}
+
+async function retryIsrcLookup(track: MusicTrack): Promise<void> {
+  track.enrichment.status = "pending";
+  track.enrichment.nextRetryAt = null;
+  await saveTrack(track);
+  closeIsrcEditor();
+  await runEnrichmentQueue();
+}
+
+async function rejectIsrcCandidates(track: MusicTrack): Promise<void> {
+  track.enrichment = { ...track.enrichment, status: "unresolved", nextRetryAt: Date.now() + 7 * 24 * 60 * 60 * 1000, candidates: [] };
+  await saveTrack(track);
+  state.status = "ISRC candidates rejected";
+  closeIsrcEditor();
+}
+
+function renderIsrcEditor(): HTMLElement {
+  const editor = state.isrcEditor!;
+  const track = state.tracks.find((candidate) => candidate.id === editor.trackId)!;
+  const wrap = document.createElement("section");
+  wrap.className = "milxdy-music-editor milxdy-music-isrc-editor";
+  wrap.setAttribute("aria-label", "ISRC review and editor");
+  const heading = document.createElement("strong");
+  heading.textContent = `ISRC review · ${track.title}`;
+  const details = document.createElement("span");
+  details.textContent = `Current: ${track.isrc || "not set"}`;
+  const form = document.createElement("form");
+  const input = document.createElement("input");
+  input.name = "isrc"; input.value = editor.draft; input.placeholder = "ISRC"; input.setAttribute("aria-label", "ISRC");
+  input.addEventListener("input", () => { editor.draft = input.value; editor.validation = ""; });
+  form.addEventListener("submit", (event) => { event.preventDefault(); void saveIsrcEditor(track); });
+  form.append(input, actionButton("Save", () => void saveIsrcEditor(track)), actionButton("Clear", () => { editor.draft = ""; void saveIsrcEditor(track); }));
+  if (editor.validation) { const message = document.createElement("p"); message.className = "milxdy-music-isrc-validation"; message.textContent = editor.validation; wrap.append(message); }
+  const candidates = document.createElement("div");
+  candidates.className = "milxdy-music-isrc-candidates";
+  for (const candidate of track.enrichment.candidates.slice(0, 6)) candidates.append(actionButton(`Accept ${candidate.isrc} · ${Math.round(candidate.confidence * 100)}% · ${candidate.sources.join("+")}`, () => void acceptIsrcCandidate(track, candidate)));
+  wrap.append(heading, details, form, candidates, actionButton("Retry lookup", () => void retryIsrcLookup(track)), actionButton("Reject all candidates", () => void rejectIsrcCandidates(track)), actionButton("Cancel", closeIsrcEditor));
+  wrap.addEventListener("keydown", (event) => { if (event.key === "Escape") { event.preventDefault(); closeIsrcEditor(); } });
+  queueMicrotask(() => input.focus());
+  return wrap;
 }
 
 function renderQueue(body: HTMLElement): void {

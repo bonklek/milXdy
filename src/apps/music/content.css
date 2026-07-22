@@ -768,6 +768,31 @@
   white-space: nowrap;
 }
 
+.milxdy-music-isrc-editor {
+  border-color: color-mix(in srgb, var(--music-link) 55%, var(--music-border) 45%);
+  background: color-mix(in srgb, var(--music-surface) 82%, var(--music-panel) 18%);
+}
+
+.milxdy-music-isrc-editor > span,
+.milxdy-music-isrc-validation {
+  margin: 0;
+  color: var(--music-muted);
+  font: 12px/1.35 var(--music-font-ui);
+}
+
+.milxdy-music-isrc-validation { color: var(--music-danger, #d45c5c); }
+
+.milxdy-music-isrc-editor form,
+.milxdy-music-isrc-candidates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.milxdy-music-isrc-editor input { flex: 1 1 150px; min-width: 0; }
+
+.milxdy-music-isrc-candidates button { text-align: left; }
+
 .milxdy-music-empty,
 .milxdy-music-hint,
 .milxdy-music-setting,
