@@ -67,6 +67,7 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(files.extensionManifest, '"world": "MAIN"', "RemiNet crafting fast path must run in the page world");
   assertIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must limit acceleration to known staged timers");
   assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
+  assertIncludes(bridge, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
 
   const auth = files.reminetChatBackground;
   assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
