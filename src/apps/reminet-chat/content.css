@@ -160,6 +160,8 @@ html[data-milxdy-visual-pfp-chat="false"] .milxdy-chat-avatar {
   border-radius: 999px;
 }
 
+html[data-milxdy-x-theme="dark"] #milxdy-reminet-chat-pseudo-row,
+html[data-milxdy-x-theme="dim"] #milxdy-reminet-chat-pseudo-row,
 html[data-color-mode="dark"] #milxdy-reminet-chat-pseudo-row,
 html[style*="color-scheme: dark"] #milxdy-reminet-chat-pseudo-row {
   background:
@@ -168,6 +170,10 @@ html[style*="color-scheme: dark"] #milxdy-reminet-chat-pseudo-row {
   color: #f0f1f8;
 }
 
+html[data-milxdy-x-theme="dark"] #milxdy-reminet-chat-pseudo-row:hover,
+html[data-milxdy-x-theme="dark"] #milxdy-reminet-chat-pseudo-row[data-selected="true"],
+html[data-milxdy-x-theme="dim"] #milxdy-reminet-chat-pseudo-row:hover,
+html[data-milxdy-x-theme="dim"] #milxdy-reminet-chat-pseudo-row[data-selected="true"],
 html[data-color-mode="dark"] #milxdy-reminet-chat-pseudo-row:hover,
 html[data-color-mode="dark"] #milxdy-reminet-chat-pseudo-row[data-selected="true"],
 html[style*="color-scheme: dark"] #milxdy-reminet-chat-pseudo-row:hover,
@@ -177,17 +183,23 @@ html[style*="color-scheme: dark"] #milxdy-reminet-chat-pseudo-row[data-selected=
     #20222d;
 }
 
+html[data-milxdy-x-theme="dark"] .milxdy-chat-pseudo-avatar,
+html[data-milxdy-x-theme="dim"] .milxdy-chat-pseudo-avatar,
 html[data-color-mode="dark"] .milxdy-chat-pseudo-avatar,
 html[style*="color-scheme: dark"] .milxdy-chat-pseudo-avatar {
   background: #20222d;
   color: #c6ccff;
 }
 
+html[data-milxdy-x-theme="dark"] .milxdy-chat-pseudo-copy strong,
+html[data-milxdy-x-theme="dim"] .milxdy-chat-pseudo-copy strong,
 html[data-color-mode="dark"] .milxdy-chat-pseudo-copy strong,
 html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy strong {
   color: #c6ccff;
 }
 
+html[data-milxdy-x-theme="dark"] .milxdy-chat-pseudo-copy span,
+html[data-milxdy-x-theme="dim"] .milxdy-chat-pseudo-copy span,
 html[data-color-mode="dark"] .milxdy-chat-pseudo-copy span,
 html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   color: rgba(240, 241, 248, 0.68);
