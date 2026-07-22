@@ -1095,6 +1095,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     "milxdy.music.enabled": true,
     "milxdy.reminetChat.enabled": false,
     "milxdy.remistats.beetol.enabled": true,
+    "milxdy.reminet.beetleWelcomePending": true,
   });
   void chrome.storage.sync.set({
     mode: "milady",
