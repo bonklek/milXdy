@@ -193,6 +193,8 @@ const bindings: Record<string, ControlBinding> = {
   "milady.whitelistHandles": { area: "sync", key: "whitelistHandles", kind: "handleList", fallback: [] },
   "milady.miladyListHandles": { area: "sync", key: "miladyListHandles", kind: "handleList", fallback: [] },
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
+  "reminet.beetleReducedMotion": { area: "sync", key: "milxdy.reminet.beetleReducedMotion", kind: "boolean", fallback: false },
+  "reminet.beetleInstantResults": { area: "sync", key: "milxdy.reminet.beetleInstantResults", kind: "boolean", fallback: false },
   "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
 };
 
