@@ -11,6 +11,8 @@ const BEETLE_INSTANT_RESULTS_ATTRIBUTE = "data-milxdy-reminet-beetle-instant-res
 const BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE = "data-milxdy-reminet-beetle-instant-results-active";
 const BEETLE_INSTANT_RESULTS_STYLE_ID = "milxdy-reminet-beetle-instant-results";
 const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-result";
+const BEETLE_WELCOME_PENDING_KEY = "milxdy.reminet.beetleWelcomePending";
+const BEETLE_WELCOME_ID = "milxdy-reminet-beetle-welcome";
 
 let socket: WebSocket | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -24,6 +26,76 @@ const instantResultCompletedActions = new Set<"catchBeetle" | "beetleHunt">();
 let beetleRouteObserverTimer: ReturnType<typeof setInterval> | null = null;
 let lastObservedBeetleRoute: boolean | null = null;
 let craftingVideoAcceleratorInstalled = false;
+
+async function syncBeetleWelcome(): Promise<void> {
+  const existing = document.getElementById(BEETLE_WELCOME_ID);
+  if (!isBeetleRoute()) {
+    existing?.remove();
+    return;
+  }
+  const stored = await chrome.storage.local.get({ [BEETLE_WELCOME_PENDING_KEY]: false });
+  if (stored[BEETLE_WELCOME_PENDING_KEY] !== true || document.getElementById(BEETLE_WELCOME_ID)) return;
+
+  const notice = document.createElement("aside");
+  notice.id = BEETLE_WELCOME_ID;
+  notice.setAttribute("role", "status");
+  notice.innerHTML = `
+    <button type="button" aria-label="Dismiss milXdy tip">×</button>
+    <p>Did you know you can enable faster animations on RemiliaNET in the milXdy settings?</p>
+  `;
+  notice.querySelector("button")?.addEventListener("click", () => {
+    notice.remove();
+    void chrome.storage.local.set({ [BEETLE_WELCOME_PENDING_KEY]: false });
+  });
+  document.documentElement.append(notice);
+
+  const style = document.createElement("style");
+  style.id = `${BEETLE_WELCOME_ID}-style`;
+  style.textContent = `
+    #${BEETLE_WELCOME_ID} {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      z-index: 2147483647;
+      width: min(282px, calc(100vw - 36px));
+      margin: 0;
+      padding: 12px 34px 12px 14px;
+      box-sizing: border-box;
+      overflow: hidden;
+      border: 1px solid rgba(212, 251, 137, 0.8);
+      background: linear-gradient(125deg, rgba(8, 14, 10, 0.96), rgba(35, 50, 27, 0.96), rgba(8, 14, 10, 0.96));
+      background-size: 220% 100%;
+      box-shadow: 0 0 0 1px rgba(5, 8, 5, 0.8), 0 7px 22px rgba(0, 0, 0, 0.48), inset 0 0 18px rgba(212, 251, 137, 0.08);
+      color: #f7f1d0;
+      font: 800 11px/1.45 ui-monospace, "Cascadia Mono", Menlo, monospace;
+      letter-spacing: 0.035em;
+      text-transform: uppercase;
+      animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite;
+    }
+    #${BEETLE_WELCOME_ID} p { margin: 0; }
+    #${BEETLE_WELCOME_ID} button {
+      position: absolute;
+      top: 5px;
+      right: 7px;
+      width: 23px;
+      height: 23px;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: #d4fb89;
+      cursor: pointer;
+      font: 400 23px/20px ui-monospace, monospace;
+    }
+    #${BEETLE_WELCOME_ID} button:hover,
+    #${BEETLE_WELCOME_ID} button:focus-visible { color: #fffbd8; text-shadow: 0 0 8px #d4fb89; outline: none; }
+    @keyframes milxdy-beetle-welcome-shimmer {
+      0%, 100% { background-position: 100% 50%; border-color: rgba(212, 251, 137, 0.58); }
+      50% { background-position: 0% 50%; border-color: rgba(247, 241, 208, 0.92); }
+    }
+    @media (prefers-reduced-motion: reduce) { #${BEETLE_WELCOME_ID} { animation: none; } }
+  `;
+  if (!document.getElementById(style.id)) document.documentElement.append(style);
+}
 
 function isBeetleRoute(): boolean {
   const cartridge = new URLSearchParams(location.search).get("cartridge")?.toLowerCase();
@@ -123,6 +195,7 @@ async function syncBeetleReducedMotion(): Promise<void> {
   });
   applyBeetleReducedMotion(stored[BEETLE_REDUCED_MOTION_KEY] === true);
   applyInstantBeetleResults(stored[BEETLE_INSTANT_RESULTS_KEY] === true);
+  await syncBeetleWelcome();
 }
 
 function ensureInstantResultStyle(): void {
