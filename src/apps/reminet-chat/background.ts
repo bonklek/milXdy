@@ -11,12 +11,10 @@ import { resolveSocketAuthCredential } from "./socket-auth-policy";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
-const SOCKET_URL = "wss://www.remilia.net/api/ws";
 const SOCKET_PORT_NAME = "reminetChat:socket";
+const SITE_SOCKET_PORT_NAME = "reminetChat:site-socket";
 const SESSION_PROBE_PATH = "/api/profile/whoami";
-const SOCKET_HEARTBEAT_MS = 25_000;
 const SOCKET_AUTH_TIMEOUT_MS = 12_000;
-const SOCKET_OPEN_TIMEOUT_MS = 12_000;
 const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
 const MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -39,8 +37,7 @@ type ChatMessage =
   | { type: "reminetChat:getHistory"; limit?: number; before?: number; after?: number }
   | { type: "reminetChat:prepareSocket" }
   | { type: "reminetChat:uploadAttachment"; name?: string; mimeType?: string; dataUrl?: string }
-  | { type: "reminetChat:fetchMedia"; url?: string }
-  | { type: "reminetChat:getProfile"; username?: string };
+  | { type: "reminetChat:fetchMedia"; url?: string };
 
 registerBackgroundMessageHandlers([{
   type: "reminetChat:*",
@@ -48,16 +45,21 @@ registerBackgroundMessageHandlers([{
   handle: handleChatMessage,
 }]);
 
+let siteSocketBridge: chrome.runtime.Port | null = null;
+const siteSocketBridges = new Set<chrome.runtime.Port>();
+const socketClients = new Set<chrome.runtime.Port>();
+
 chrome.runtime.onConnect.addListener((port) => {
+  if (port.name === SITE_SOCKET_PORT_NAME) {
+    registerSiteSocketBridge(port);
+    return;
+  }
   if (port.name !== SOCKET_PORT_NAME) return;
   if (!isReminetChatSocketSender(port.sender)) {
     port.disconnect();
     return;
   }
-  let socket: WebSocket | null = null;
-  let closed = false;
-  let connectGeneration = 0;
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  socketClients.add(port);
 
   const post = (message: Record<string, unknown>) => {
     try {
@@ -67,109 +69,89 @@ chrome.runtime.onConnect.addListener((port) => {
     }
   };
 
-  const closeSocket = () => {
-    connectGeneration += 1;
-    stopHeartbeat();
-    const current = socket;
-    socket = null;
-    if (current && current.readyState !== WebSocket.CLOSED && current.readyState !== WebSocket.CLOSING) {
-      current.close();
-    }
-  };
-
-  const stopHeartbeat = () => {
-    if (heartbeatTimer !== null) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-  };
-
-  const startHeartbeat = (target: WebSocket) => {
-    stopHeartbeat();
-    heartbeatTimer = setInterval(() => {
-      if (socket !== target || closed) {
-        stopHeartbeat();
-        return;
-      }
-      if (target.readyState !== WebSocket.OPEN) {
-        post({ type: "socket:heartbeat", ok: false, readyState: target.readyState, reason: "not-open" });
-        return;
-      }
-      post({ type: "socket:heartbeat", ok: true, readyState: target.readyState, at: Date.now() });
-    }, SOCKET_HEARTBEAT_MS);
-  };
-
-  const connectSocket = async () => {
-    if (closed || socket?.readyState === WebSocket.OPEN || socket?.readyState === WebSocket.CONNECTING) return;
-    const generation = ++connectGeneration;
-    const ready = await prepareSocketAuth();
-    if (closed || generation !== connectGeneration) return;
-    if (!ready.ok) {
-      const authRequired = ready.error === "AUTH_REQUIRED";
-      post({
-        type: "socket:error",
-        error: authRequired ? "AUTH_REQUIRED" : "Live chat authentication timed out.",
-        reason: authRequired ? "auth-required" : "socket-auth-timeout",
-        authRequired,
-      });
-      return;
-    }
-    const nextSocket = new WebSocket(SOCKET_URL);
-    socket = nextSocket;
-    post({ type: "socket:connecting" });
-    const openTimer = setTimeout(() => {
-      if (socket !== nextSocket || closed || nextSocket.readyState === WebSocket.OPEN) return;
-      post({ type: "socket:error", error: "Live chat connection timed out.", reason: "socket-open-timeout" });
-      nextSocket.close();
-    }, SOCKET_OPEN_TIMEOUT_MS);
-    nextSocket.addEventListener("open", () => {
-      clearTimeout(openTimer);
-      if (socket !== nextSocket || closed) return;
-      nextSocket.send(JSON.stringify({ type: "subscribe", payload: { chat_id: CHAT_ID } }));
-      startHeartbeat(nextSocket);
-      post({ type: "socket:open", at: Date.now() });
-    });
-    nextSocket.addEventListener("message", (event) => {
-      if (socket !== nextSocket || closed) return;
-      post({ type: "socket:frame", data: event.data });
-    });
-    nextSocket.addEventListener("close", (event) => {
-      clearTimeout(openTimer);
-      stopHeartbeat();
-      if (socket === nextSocket) socket = null;
-      post({ type: "socket:close", code: event.code, reason: event.reason, wasClean: event.wasClean });
-    });
-    nextSocket.addEventListener("error", () => {
-      clearTimeout(openTimer);
-      post({ type: "socket:error", error: "Connection interrupted.", reason: "socket-error" });
-    });
-  };
-
   port.onMessage.addListener((message: unknown) => {
     const record = objectValue(message);
     if (record.type === "connect") {
-      void connectSocket();
+      if (!siteSocketBridge) {
+        post({
+          type: "socket:error",
+          error: "Open or refresh a signed-in RemiliaNET tab.",
+          reason: "site-bridge-required",
+        });
+        return;
+      }
+      postToSiteSocketBridge({ type: "connect" });
       return;
     }
     if (record.type === "close") {
-      closeSocket();
+      socketClients.delete(port);
+      if (socketClients.size === 0) postToSiteSocketBridge({ type: "close" });
       return;
     }
     if (record.type === "send") {
-      if (!socket || socket.readyState !== WebSocket.OPEN || typeof record.payload !== "object" || record.payload === null) {
+      if (!siteSocketBridge || typeof record.payload !== "object" || record.payload === null) {
         post({ type: "socket:error", error: "Socket is not open." });
         return;
       }
-      socket.send(JSON.stringify(record.payload));
+      postToSiteSocketBridge({ type: "send", payload: record.payload });
     }
   });
   port.onDisconnect.addListener(() => {
-    connectGeneration += 1;
-    closed = true;
-    stopHeartbeat();
-    closeSocket();
+    socketClients.delete(port);
+    if (socketClients.size === 0) postToSiteSocketBridge({ type: "close" });
   });
 });
+
+function registerSiteSocketBridge(port: chrome.runtime.Port): void {
+  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"])) {
+    port.disconnect();
+    return;
+  }
+  siteSocketBridges.add(port);
+  if (!siteSocketBridge) siteSocketBridge = port;
+  port.onMessage.addListener((message: unknown) => {
+    if (siteSocketBridge !== port) return;
+    const record = objectValue(message);
+    if (!String(record.type || "").startsWith("socket:")) return;
+    for (const client of socketClients) {
+      try {
+        client.postMessage(record);
+      } catch {
+        socketClients.delete(client);
+      }
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    siteSocketBridges.delete(port);
+    if (siteSocketBridge !== port) return;
+    siteSocketBridge = siteSocketBridges.values().next().value ?? null;
+    if (siteSocketBridge && socketClients.size > 0) {
+      postToSiteSocketBridge({ type: "connect" });
+      return;
+    }
+    for (const client of socketClients) {
+      try {
+        client.postMessage({
+          type: "socket:error",
+          error: "Open or refresh a signed-in RemiliaNET tab.",
+          reason: "site-bridge-required",
+        });
+      } catch {
+        socketClients.delete(client);
+      }
+    }
+  });
+  if (socketClients.size > 0) postToSiteSocketBridge({ type: "connect" });
+}
+
+function postToSiteSocketBridge(message: Record<string, unknown>): void {
+  try {
+    siteSocketBridge?.postMessage(message);
+  } catch {
+    if (siteSocketBridge) siteSocketBridges.delete(siteSocketBridge);
+    siteSocketBridge = null;
+  }
+}
 
 function isReminetChatSocketSender(sender: chrome.runtime.MessageSender | undefined): boolean {
   return isAllowedReminetChatSender(sender, ["x.com", "twitter.com"]);
@@ -198,8 +180,7 @@ function isChatMessage(message: unknown): message is ChatMessage {
     || type === "reminetChat:getHistory"
     || type === "reminetChat:prepareSocket"
     || type === "reminetChat:uploadAttachment"
-    || type === "reminetChat:fetchMedia"
-    || type === "reminetChat:getProfile";
+    || type === "reminetChat:fetchMedia";
 }
 
 async function handleChatMessage(message: ChatMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -226,7 +207,7 @@ async function handleChatMessage(message: ChatMessage, sender: chrome.runtime.Me
     if (message.type === "reminetChat:fetchMedia") {
       return await fetchMediaDataUrl(message.url);
     }
-    return await getProfile(message.username);
+    return { ok: false, error: "UNSUPPORTED_MESSAGE" };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -467,12 +448,6 @@ async function readCappedResponseBlob(response: Response, maxBytes: number, cont
     reader.releaseLock();
   }
   return new Blob(chunks, { type: contentType });
-}
-
-async function getProfile(username: unknown): Promise<Record<string, unknown>> {
-  if (typeof username !== "string" || !username) return { ok: false, error: "INVALID_USERNAME" };
-  const clean = username.replace(/^~/, "").replace(/^@/, "");
-  return remiliaAuthedFetch("GET", `/api/profile/~${encodeURIComponent(clean)}`);
 }
 
 function isAllowedMediaUrl(value: string): boolean {

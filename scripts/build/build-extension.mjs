@@ -655,6 +655,7 @@ await buildOrWatch({
     background: source("src/extension/background/index.ts"),
     popup: source("src/extension/popup/index.ts"),
     wikiFrame: source("src/extension/frames/wiki-frame.ts"),
+    reminetChatBridge: source("src/extension/frames/reminet-chat-bridge.ts"),
   },
   outdir: outDir,
   format: "iife",
@@ -685,6 +686,7 @@ if (!watch) {
   const required = [
     `${outDir}/content.js`,
     `${outDir}/wikiFrame.js`,
+    `${outDir}/reminetChatBridge.js`,
     ...sourceBuiltApps.map((app) => `${outDir}/${app.entryName}.js`),
     ...firstPartyApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
     ...(localAppPlan?.packageCopyMap || []).map((item) => `${outDir}/${item.to}`),
