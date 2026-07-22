@@ -24,13 +24,107 @@ export type ReminetIdentityProfile = {
 export type ReminetIdentityCacheEntry = {
   profile: ReminetIdentityProfile;
   cachedAt: number;
+  publicProfileCachedAt?: number;
 };
 
-export type ReminetIdentityCache = Record<string, ReminetIdentityCacheEntry>;
+export type ReminetIdentityCache = {
+  version: 2;
+  records: Record<string, ReminetIdentityCacheEntry>;
+  aliases: Record<string, string>;
+};
 
 export const REMINET_IDENTITY_CACHE_KEY = "milxdy.reminetIdentity.profileCache";
 export const REMINET_IDENTITY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 export const REMINET_IDENTITY_CACHE_MAX_ENTRIES = 600;
+
+export function emptyReminetIdentityCache(): ReminetIdentityCache {
+  return { version: 2, records: {}, aliases: {} };
+}
+
+export function normalizeReminetIdentityCache(value: unknown): ReminetIdentityCache {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return emptyReminetIdentityCache();
+  const raw = value as Record<string, unknown>;
+  if (raw.version === 2 && raw.records && typeof raw.records === "object" && raw.aliases && typeof raw.aliases === "object") {
+    return {
+      version: 2,
+      records: raw.records as Record<string, ReminetIdentityCacheEntry>,
+      aliases: raw.aliases as Record<string, string>,
+    };
+  }
+
+  const cache = emptyReminetIdentityCache();
+  for (const [legacyKey, candidate] of Object.entries(raw)) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const entry = candidate as ReminetIdentityCacheEntry;
+    if (!entry.profile || typeof entry.cachedAt !== "number") continue;
+    const canonical = canonicalIdentityKey(entry.profile, [legacyKey]);
+    const existing = cache.records[canonical];
+    if (!existing || entry.cachedAt > existing.cachedAt) {
+      cache.records[canonical] = {
+        ...entry,
+        publicProfileCachedAt: entry.publicProfileCachedAt
+          ?? (entry.profile.sources?.includes("remilia.net") ? entry.cachedAt : undefined),
+      };
+    }
+    cache.aliases[legacyKey] = canonical;
+    addProfileAliases(cache, canonical, entry.profile);
+  }
+  return cache;
+}
+
+export function identityCacheEntry(cache: ReminetIdentityCache, alias: string): ReminetIdentityCacheEntry | undefined {
+  const canonical = cache.aliases[alias] || alias;
+  return cache.records[canonical];
+}
+
+export function rememberSharedIdentity(
+  cache: ReminetIdentityCache,
+  profile: ReminetIdentityProfile,
+  options: {
+    cachedAt?: number;
+    publicProfileCachedAt?: number;
+    aliases?: string[];
+  } = {},
+): string {
+  const aliasKeys = (options.aliases || []).filter(Boolean);
+  const existingCanonical = aliasKeys.map((alias) => cache.aliases[alias]).find(Boolean);
+  const canonical = existingCanonical || canonicalIdentityKey(profile, aliasKeys);
+  const previous = cache.records[canonical];
+  cache.records[canonical] = {
+    profile: previous ? mergeIdentityProfile(previous.profile, profile) : profile,
+    cachedAt: options.cachedAt ?? Date.now(),
+    publicProfileCachedAt: options.publicProfileCachedAt ?? previous?.publicProfileCachedAt,
+  };
+  for (const alias of aliasKeys) cache.aliases[alias] = canonical;
+  addProfileAliases(cache, canonical, cache.records[canonical].profile);
+  return canonical;
+}
+
+export function pruneSharedIdentityCache(cache: ReminetIdentityCache, maxEntries = REMINET_IDENTITY_CACHE_MAX_ENTRIES): ReminetIdentityCache {
+  const records = Object.fromEntries(
+    Object.entries(cache.records)
+      .filter(([, entry]) => entry && typeof entry.cachedAt === "number" && Boolean(entry.profile))
+      .sort((left, right) => right[1].cachedAt - left[1].cachedAt)
+      .slice(0, maxEntries),
+  );
+  const aliases = Object.fromEntries(Object.entries(cache.aliases).filter(([, canonical]) => Boolean(records[canonical])));
+  return { version: 2, records, aliases };
+}
+
+function canonicalIdentityKey(profile: ReminetIdentityProfile, aliases: string[]): string {
+  const remilia = normalizeRemiliaUsername(profile.remiliaUsername);
+  if (remilia) return identityCacheKeyForRemiliaUsername(remilia);
+  const xHandle = normalizeXHandle(profile.xHandle);
+  if (xHandle) return identityCacheKeyForXHandle(xHandle);
+  return aliases[0] || `profile:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+}
+
+function addProfileAliases(cache: ReminetIdentityCache, canonical: string, profile: ReminetIdentityProfile): void {
+  const xHandle = normalizeXHandle(profile.xHandle);
+  const remilia = normalizeRemiliaUsername(profile.remiliaUsername);
+  if (xHandle) cache.aliases[identityCacheKeyForXHandle(xHandle)] = canonical;
+  if (remilia) cache.aliases[identityCacheKeyForRemiliaUsername(remilia)] = canonical;
+}
 
 export const ETHEREUM_RPC_URL = "https://ethereum.publicnode.com";
 export const ENS_REGISTRY_ADDRESS = "0x00000000000C2E074eC69A0dFb2997BA6C7d2e1e";
