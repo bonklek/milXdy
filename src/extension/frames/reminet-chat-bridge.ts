@@ -43,6 +43,18 @@ function applyBeetleReducedMotion(enabled: boolean): void {
   const style = document.createElement("style");
   style.id = BEETLE_REDUCED_MOTION_STYLE_ID;
   style.textContent = `
+    /* Remilia changes class names often and nests most movement inside the
+       cartridge tree. The explicit setting is intentionally route-wide. */
+    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}],
+    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *,
+    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *::before,
+    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *::after {
+      animation-duration: 0.001ms !important;
+      animation-delay: 0ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      transition-delay: 0ms !important;
+    }
     html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] :is(
       .beetle-console, .beetleModule, .beetle-catch-module,
       .beetle-catch-module__buttons-container, .beetle-catch-module__beetle-item,
@@ -429,4 +441,3 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (changes[BEETLE_REDUCED_MOTION_KEY]) applyBeetleReducedMotion(changes[BEETLE_REDUCED_MOTION_KEY].newValue === true);
   if (changes[BEETLE_INSTANT_RESULTS_KEY]) applyInstantBeetleResults(changes[BEETLE_INSTANT_RESULTS_KEY].newValue === true);
 });
-
