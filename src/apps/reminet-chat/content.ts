@@ -1492,6 +1492,13 @@ function handleSocketPortMessage(message: unknown): void {
       render();
       return;
     }
+    if (record.reason === "site-bridge-required") {
+      state.socketState = "closed";
+      state.composerError = "Open or refresh a signed-in RemiliaNET tab to enable live chat.";
+      setRecoveryVisibleState("failed", "Retry connection");
+      render();
+      return;
+    }
     void recoverChatConnection(String(record.reason || "socket-error"), { visible: true });
   }
 }
@@ -1612,7 +1619,7 @@ function renderReconnectState(): string {
   const copy = state.recoveryVisibleState === "recovering"
     ? "Checking your existing RemiliaNET browser session..."
     : state.recoveryVisibleState === "failed"
-      ? "Chat connection stalled. Retry your current browser session."
+      ? state.composerError || "Chat connection stalled. Retry your current browser session."
       : "RemiliaNET needs your browser session again. Sign in if prompted, then retry.";
   const disabled = state.recoveryVisibleState === "recovering" ? " disabled" : "";
   return `
