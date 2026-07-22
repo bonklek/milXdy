@@ -7,6 +7,7 @@ import {
   adoptRemiliaBrowserSession,
   isRemiliaDisconnected,
 } from "../../platform/auth/remilia-auth";
+import { resolveSocketAuthCredential } from "./socket-auth-policy";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
@@ -258,7 +259,10 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
   const generation = ++socketAuthGeneration;
   const abort = new AbortController();
   const pending = withDeadline(
-    prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }).then(async (auth) => {
+    resolveSocketAuthCredential(
+      () => prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
+      () => renewRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
+    ).then(async (auth) => {
       if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
         return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
       }
