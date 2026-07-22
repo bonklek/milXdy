@@ -12,6 +12,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Pins the bundled Music track above local tracks in the new Default library order, while explicit Artist, Title, Album, and Added sorts remain exact; background library updates no longer destroy an open sort menu.
 - Collapses Music library row actions into a hover/focus three-dot menu that overlays the far-right duration only while active, leaving no permanent action column and substantially more width for titles and artist/album metadata.
 - Replaces textual Music ISRC states with compact, tooltipped square lightbulbs: green for resolved, yellow for pending/review, and red for unresolved/error; the bundled track omits the indicator.
+- Makes X's native font the default interface face across appearance presets, adds **X default** to the renamed **Interface font** control, and applies that choice consistently to profile/navigation tabs instead of styling only the active label.
 - Passes the complete non-live 0.2.3 release gate, including both browser builds, package/security contracts, smoke tests, archive checksums, and reproducibility; authenticated live QA remains the publication gate.
 - Invalidates cached Chat authentication across connector logout/timeouts and propagates shared background deadlines into fetch abort signals so expired work cannot continue consuming privileged network resources.
 - Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction, pop-out, and Messages-row dark states, darkens Post/Reply controls in the dark preset, keeps Post labels white in both top and sidebar composers, and matches the Wiki read-aloud button to the square Wiki control family.
@@ -26,6 +27,20 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Keeps the final Beetle Hunt reward visible before transitioning to a red Done status and the persisted 90-minute cooldown.
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
 - Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
+- Prevents Grok-generated posts from being clipped when the Read Aloud control is added to X's specialized Grok post layout.
+- Lets X's expanded image and video viewers bypass the Moderate profile's inline-media height cap.
+- Avoids repeated forced-layout stabilization for already-rendered RemiStats badges, improving Max-profile timeline responsiveness.
+- Narrows Max typography selectors to their owning elements, reducing style recalculation while X virtualizes a scrolling timeline.
+- Removes Max's root-level relational theme fallbacks and uses the runtime's explicit X theme marker instead, avoiding document-wide selector invalidation during feed updates.
+- Makes the Max-profile benchmark use a fixed built-in timeline scroll cadence after a short settle period, removing manual-scroll variance from profile comparisons.
+- Includes inverse average FPS in the Max-versus-Moderate benchmark verdict so low sustained frame rate cannot be masked by a shorter worst-frame gap.
+- Labels sub-threshold mixed benchmark results as within the 2× tolerance instead of calling Max simply worse.
+- Adds a dedicated RemiNet setting to remove nonessential motion on remilia.net Beetle Hunt routes without changing the separate X/Twitter Beetol panel.
+- Keeps Beetle Hunt's action-result video intact under reduced motion so its site-managed reward transition remains coherent rather than appearing partially suppressed.
+- Adds an opt-in instant-result path that uses Remilia's existing Beetle display pane for direct Claim/Hunt results instead of the native video sequence.
+- Makes reduced motion apply to Beetle Craft's result flow as well: valid Assemble and Smash actions now skip Remilia's staged result timers, so the sidebar result and next usable action state appear immediately.
+- Adds a one-click Max-versus-Moderate benchmark suite that restores the prior visual theme after both controlled samples finish.
+- Keeps X's native tweet font in the Moderate preset; custom tweet typography remains the Max preset default.
 - Keeps the RemiStats action-row poke position stable while its lazy app bundle loads, and lets tweet names and handles use available header space before truncating.
 - Corrects the tweet-header flex allocation so longer display names do not ellipsize against an oversized metadata basis while usable row space remains.
 - Restores embedded local cover art in Music from the selected audio file, retries stale metadata results when the parser or file changes, and persists recovered artwork for later popout renders.
@@ -33,6 +48,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Enables RemiStats poke-on-Like when applying the Medium or Max appearance preset while keeping it disabled in Minimal.
 - Replaces several implementation-coupled regression checks with registry-driven and production-policy tests for app enablement, profile-pack sections, Music artwork caching, and Post-reading hyperlink offsets.
 - Removes Chromaprint WASM and AcoustID acoustic lookup from Music, reducing release size and host permissions while preserving metadata inference, MusicBrainz enrichment, candidate review, and manual ISRC editing.
+- Removes the redundant RemiNet Chat overlay control from Appearance; RemiNet Chat enablement now lives exclusively in Apps & Features.
 
 Status: in development.
 

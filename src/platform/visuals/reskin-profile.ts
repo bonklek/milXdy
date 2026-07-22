@@ -9,7 +9,7 @@ export const DEFAULT_RESKIN_PROFILE: ReskinProfile = "moderate";
 export type VisualThemeSettings = {
   profile: ReskinProfile;
   tweetFont: "twitter" | "hei" | "mincho" | "menlo";
-  uiFont: "hei" | "menlo" | "system";
+  uiFont: "twitter" | "hei" | "menlo" | "system";
   backgroundFade: boolean;
   squareMedia: boolean;
   pfpShape: "circle" | "rounded-square" | "square";
@@ -30,7 +30,6 @@ export type VisualThemeSettings = {
   remistatsBox: boolean;
   incomingPokeGold: boolean;
   pokePlacement: "top" | "actions";
-  reminetChatOverlay: boolean;
   miladyOnly: boolean;
   disableMaxxer: boolean;
   disableSelfTracking: boolean;
@@ -129,7 +128,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     owner: "reminet",
     scope: "feature-mirror",
     profilePackSafe: true,
-    settings: ["remistatsBox", "incomingPokeGold", "pokePlacement", "reminetChatOverlay"],
+    settings: ["remistatsBox", "incomingPokeGold", "pokePlacement"],
   },
   {
     id: "maxxer-visuals",
@@ -160,7 +159,7 @@ export type ProfileAudioSettings = {
 export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   profile: DEFAULT_RESKIN_PROFILE,
   tweetFont: "twitter",
-  uiFont: "hei",
+  uiFont: "twitter",
   backgroundFade: true,
   squareMedia: true,
   pfpShape: "rounded-square",
@@ -181,7 +180,6 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   remistatsBox: false,
   incomingPokeGold: true,
   pokePlacement: "actions",
-  reminetChatOverlay: false,
   miladyOnly: false,
   disableMaxxer: false,
   disableSelfTracking: false,
@@ -203,7 +201,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     ...DEFAULT_VISUAL_THEME,
     profile: "max",
     tweetFont: "hei",
-    uiFont: "hei",
+    uiFont: "twitter",
     backgroundFade: true,
     squareMedia: true,
     pfpShape: "rounded-square",
@@ -224,7 +222,6 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     remistatsBox: false,
     incomingPokeGold: true,
     pokePlacement: "actions",
-    reminetChatOverlay: true,
     miladyOnly: false,
     disableMaxxer: false,
     disableSelfTracking: false,
@@ -243,8 +240,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
   moderate: {
     ...DEFAULT_VISUAL_THEME,
     profile: "moderate",
-    tweetFont: "mincho",
-    uiFont: "hei",
+    tweetFont: "twitter",
+    uiFont: "twitter",
     backgroundFade: true,
     squareMedia: true,
     pfpShape: "rounded-square",
@@ -265,7 +262,6 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     remistatsBox: false,
     incomingPokeGold: true,
     pokePlacement: "actions",
-    reminetChatOverlay: false,
     miladyOnly: false,
     disableMaxxer: false,
     disableSelfTracking: false,
@@ -285,7 +281,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     ...DEFAULT_VISUAL_THEME,
     profile: "min",
     tweetFont: "twitter",
-    uiFont: "system",
+    uiFont: "twitter",
     backgroundFade: false,
     squareMedia: false,
     pfpShape: "circle",
@@ -306,7 +302,6 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     remistatsBox: false,
     incomingPokeGold: false,
     pokePlacement: "actions",
-    reminetChatOverlay: false,
     miladyOnly: false,
     disableMaxxer: false,
     disableSelfTracking: false,
@@ -361,7 +356,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
   return {
     profile,
     tweetFont: oneOf(record.tweetFont, ["twitter", "hei", "mincho", "menlo"], fallback.tweetFont),
-    uiFont: oneOf(record.uiFont, ["hei", "menlo", "system"], fallback.uiFont),
+    uiFont: oneOf(record.uiFont, ["twitter", "hei", "menlo", "system"], fallback.uiFont),
     backgroundFade: booleanValue(record.backgroundFade, fallback.backgroundFade),
     squareMedia: booleanValue(record.squareMedia, fallback.squareMedia),
     pfpShape: oneOf(record.pfpShape, ["circle", "rounded-square", "square"], fallback.pfpShape),
@@ -382,7 +377,6 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     remistatsBox: booleanValue(record.remistatsBox, fallback.remistatsBox),
     incomingPokeGold: booleanValue(record.incomingPokeGold, fallback.incomingPokeGold),
     pokePlacement: oneOf(record.pokePlacement, ["top", "actions"], fallback.pokePlacement),
-    reminetChatOverlay: booleanValue(record.reminetChatOverlay, fallback.reminetChatOverlay),
     miladyOnly: booleanValue(record.miladyOnly, fallback.miladyOnly),
     disableMaxxer: booleanValue(record.disableMaxxer, fallback.disableMaxxer),
     disableSelfTracking: booleanValue(record.disableSelfTracking, fallback.disableSelfTracking),

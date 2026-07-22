@@ -17,7 +17,7 @@ The weekly dates below are planning targets and move when a safety, dependency, 
 | `0.3.6` | 2026-10-25 | Onchain Publishing | Advanced RFE publishing, portable station apps, rights research, and reviewed IPFS publication. |
 | `0.3.7` | 2026-11-01 | Collective Metadata | Signed, content-addressed public observations with bounded post-Paraclete propagation, reusable consumer indexes, and opt-in milXdy registry records. |
 
-`0.2.9 - Front Door & Platform Reach` owns onboarding, screenshots, Safari, store-readiness, and mobile research, leaving `0.3.0` to begin the onchain sequence with a clean foundation.
+`0.2.9 - Front Door & Platform Reach` owns onboarding, screenshots, Safari, Chrome Web Store preparation, and mobile research. It establishes the Store-edition scope, permissions/privacy work, listing/reviewer materials, and release gate that the `0.3.0` Chromium candidate must pass while beginning the onchain sequence.
 
 ## Dependency map
 
@@ -67,6 +67,8 @@ Goal: let a user connect a browser-extension wallet through shared boundaries be
 - [#138 - Transaction review, receipts, and recovery UI](https://github.com/bonklek/milXdy/issues/138)
 
 Release boundary: no value transfer, P2P node, blob publication, or extension-managed wallet custody.
+
+Distribution gate: the Chromium candidate must pass the Chrome Web Store readiness checks established in `0.2.9`, including single-purpose scope, minimum permissions, store-specific update behavior, privacy/disclosure consistency, reviewer access, listing assets, and an upload-valid package. Submission or publication still requires an explicit maintainer action.
 
 ## 0.3.1 - Blobcast
 
@@ -160,4 +162,4 @@ Release boundary: registered public observation types only. No arbitrary payload
 - `docs/ROADMAP.md` remains the concise public release sequence.
 - This document owns the cross-release onchain architecture, dependency map, release gates, and issue index.
 - GitHub milestones own current scheduling and issue-level completion state.
-- Detailed release implementation notes belong in `ideas/releases/` when an individual `0.3.x` cycle becomes active.
+- Detailed release implementation notes belong in the maintainer-local release-operations store when an individual `0.3.x` cycle becomes active.

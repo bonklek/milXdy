@@ -1,6 +1,6 @@
 # Release Process
 
-This document covers public release mechanics. Private release-planning notes live in the gitignored `ideas/` folder.
+This document covers public release mechanics. Private release-planning notes are maintained outside the repository in the maintainer's local release-operations store.
 
 ## Maintainer Setup
 

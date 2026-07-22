@@ -1122,6 +1122,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const anchor = Array.from(surface.element.querySelectorAll<HTMLElement>('button, [role="button"], a, [aria-label], [data-testid]'))
       .find((button) => {
         if (button.closest('[data-testid="quoteTweet"]')) return false;
+        if (button.closest('[data-testid="Tweet-User-Avatar"]')) return false;
         if (actionRow?.contains(button)) return false;
         const text = [
           button.getAttribute("aria-label") || "",
@@ -1134,12 +1135,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       || Array.from(surface.element.querySelectorAll<HTMLElement>('[data-testid="caret"], [aria-label*="More"], [aria-label*="more"], button, [role="button"], a'))
         .find((button) => {
           if (button.closest('[data-testid="quoteTweet"]')) return false;
+          if (button.closest('[data-testid="Tweet-User-Avatar"]')) return false;
           if (actionRow?.contains(button)) return false;
           if (isShowMoreExpansionControl(button)) return false;
           const label = `${button.getAttribute("aria-label") || ""} ${button.getAttribute("data-testid") || ""}`.toLowerCase();
           return label.includes("caret") || label.includes("more");
         });
-    if (!anchor?.parentElement) return "missing";
+    if (!anchor?.parentElement || anchor.parentElement.closest('[data-testid="Tweet-User-Avatar"]')) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "post-reading-header-action";
     slot.dataset.postReadingButtonSlot = "true";

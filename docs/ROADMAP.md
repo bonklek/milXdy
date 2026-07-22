@@ -296,7 +296,7 @@ Theme: local-first radio, Miladychan board-based identifier sharing, books, podc
 
 ## Planned: 0.2.9 - Front Door & Platform Reach (Target: 2026-09-06)
 
-Theme: redesigned onboarding, visual guides, a Safari desktop app path, distribution research, mobile feasibility, and non-technical user setup.
+Theme: redesigned onboarding, visual guides, Chrome Web Store preparation, a Safari desktop app path, mobile feasibility, and non-technical user setup.
 
 - Public screenshots and README visual guide.
   - add public-safe screenshots for the major user-facing surfaces
@@ -312,8 +312,12 @@ Theme: redesigned onboarding, visual guides, a Safari desktop app path, distribu
 - Safari desktop app path.
   - add a Safari Web Extension build, packaging path, compatibility layer, and desktop QA target
   - preserve the Chromium and Firefox variants while documenting Safari-specific limitations
-- Chrome Web Store readiness, if distribution goals change.
-  - document store policy blockers and package requirements before committing to store distribution
+- Chrome Web Store preparation.
+  - define a narrow single-purpose Store edition and decide which bundled features belong in it
+  - add store-specific packaging and update behavior so Store installs use Store updates instead of the GitHub/manual-update path
+  - minimize required permissions and hosts, using optional grants for optional features where practical
+  - complete the public privacy policy, prominent data-use disclosure and consent, dashboard disclosure map, listing assets, and reviewer instructions
+  - add an automated and manual readiness gate that the `0.3.0` Chromium release candidate must pass before submission
 - Mobile extension mode research.
   - use #93 as the staged planning epic, with Firefox Android first and iOS/iPadOS Safari second
   - define a reduced mobile-safe profile, mobile UI primitives, platform evidence, follow-up implementation issues, docs, and QA gates before advertising support
@@ -324,7 +328,7 @@ Theme: redesigned onboarding, visual guides, a Safari desktop app path, distribu
 
 Theme: progress from browser-extension wallet connection and chain safety into read-only Ethereum media, account-abstraction networking, reviewed CULT cheer, private blob mail, collection context, advanced publishing, and collective metadata.
 
-- `0.3.0 - The Onchain Foundation` (target 2026-09-13): connect browser-extension wallets through a clear safety, permission, bounded-RPC, transaction-review, receipt, and recovery architecture.
+- `0.3.0 - The Onchain Foundation` (target 2026-09-13): connect browser-extension wallets through a clear safety, permission, bounded-RPC, transaction-review, receipt, and recovery architecture, and ship a Chromium candidate that passes the Chrome Web Store readiness gate established in `0.2.9`.
 - `0.3.1 - Blobcast` (target 2026-09-20): verified read-only RFE/Blobcast playback and content-addressed source resolution.
 - `0.3.2 - The Paraclete Network` (target 2026-09-27): optional browser AA gossip, scoped ERC-4337 adapters, registered friend-activity research, and a jointly scoped IP-privacy/optional-features evaluation.
 - `0.3.3 - CULT Cheer` (target 2026-10-04): receiving-address proofs, reviewed `$CULT` cheers and tips, address lifecycle research, and separately gated private/shielded-transfer research.
