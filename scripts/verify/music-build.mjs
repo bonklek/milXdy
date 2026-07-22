@@ -15,6 +15,10 @@ const forbiddenMusicNeedles = [
   "external_ids",
   "oauth",
 ];
+const musicSource = await readFile("src/apps/music/content.ts", "utf8");
+const isrcEditorSource = musicSource.slice(musicSource.indexOf("async function editTrackIsrc"), musicSource.indexOf("function renderIsrcEditor"));
+assert(isrcEditorSource.includes("openIsrcEditor"), "Music source must open the authored ISRC editor");
+assert(!isrcEditorSource.includes("window.prompt"), "Music ISRC edit/review flow must not invoke native prompts");
 
 for (const target of targets) {
   const root = `dist/${target}`;
@@ -51,6 +55,8 @@ for (const target of targets) {
   assert(bundle.includes("matchingTrackCandidates"), `${target}: music missing playlist metadata matching`);
   assert(bundle.includes("supportsDirectoryPicker"), `${target}: music missing Firefox/local-folder limitation path`);
   assert(bundle.includes("activeRadioSessionId"), `${target}: music missing active radio-session state`);
+  assert(bundle.includes("milxdy-music-isrc-editor"), `${target}: music missing in-popout ISRC editor`);
+  assert(bundle.includes("Accept ") && bundle.includes("Reject all candidates") && bundle.includes("Retry lookup"), `${target}: music missing ISRC review controls`);
   for (const needle of forbiddenMusicNeedles) {
     assert(!bundle.toLowerCase().includes(needle), `${target}: phase-9 needle present in music bundle: ${needle}`);
   }
