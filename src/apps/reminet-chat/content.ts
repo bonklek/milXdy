@@ -29,11 +29,9 @@ const SOUND_POKE_KEY = "milxdy.reminetChat.sounds.poke";
 const WIDTH_KEY = "milxdy.reminetChat.width";
 const HEIGHT_KEY = "milxdy.reminetChat.height";
 const TOP_KEY = "milxdy.reminetChat.top";
-const PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 const MAX_MESSAGES = 1200;
 const HISTORY_PAGE_SIZE = 30;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-const PROFILE_CACHE_MAX_ENTRIES = 250;
 const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
 const LEFT_RAIL_MIN_HEIGHT_PX = 260;
 const SOCKET_STALE_TIMEOUT_MS = 70_000;
@@ -108,13 +106,6 @@ type ApiUser = {
   theme?: string;
   connections?: unknown[];
 };
-
-type CachedProfile = {
-  cachedAt?: number;
-  user?: ApiUser;
-};
-
-type ProfileCache = Record<string, CachedProfile>;
 
 type MediaAttachment = {
   mediaId?: number | null;
@@ -2739,131 +2730,54 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
   profileLookupPending.add(cacheKey);
   void (async () => {
     try {
-      const cached = await getCachedProfile(cacheKey);
-      if (!lifecycleActive()) return;
-      if (cached) {
-        const cachedXHandle = connectedXHandle(cached);
-        if (cachedXHandle) xHandleByRemiliaHandle.set(cacheKey, cachedXHandle);
-        profileLookupDone.add(cacheKey);
-        state.users.set(authorId, { ...state.users.get(authorId), ...cached });
-        render();
-        return;
-      }
-
-      const profileResponse = await runtimeSendMessage({ type: "reminetChat:getProfile", username: handleValue }, "reminetChat:getProfile").then(asRecord);
+      const profileResponse = await runtimeSendMessage(
+        { type: "reminetIdentity:getProfile", remiliaUsername: handleValue, maxAgeMs: PROFILE_CACHE_TTL_MS },
+        "reminetIdentity:getProfile",
+      ).then(asRecord).catch(() => asRecord({}));
       if (!lifecycleActive()) return;
       const enriched = profileUserFromResponse(profileResponse);
-      const enrichedXHandle = enriched ? connectedXHandle(enriched) : "";
-      if (profileResponse.ok && enriched && enrichedXHandle) {
-        xHandleByRemiliaHandle.set(cacheKey, enrichedXHandle);
+      if (profileResponse.ok && enriched) {
+        if (profileResponse.partial === true) {
+          recordChatDiagnostic("profileLookupPartial", {
+            handle: cacheKey,
+            warnings: Array.isArray(profileResponse.warnings) ? profileResponse.warnings : [],
+          });
+        }
+        const enrichedXHandle = connectedXHandle(enriched);
+        if (enrichedXHandle) xHandleByRemiliaHandle.set(cacheKey, enrichedXHandle);
         profileLookupDone.add(cacheKey);
-        void storeCachedProfile(cacheKey, enriched);
         state.users.set(authorId, { ...state.users.get(authorId), ...enriched });
         render();
         return;
       }
-      if (profileResponse.ok && enriched) {
-        state.users.set(authorId, { ...state.users.get(authorId), ...enriched });
-        render();
-      }
-
-      const remiStatsUser = await getRemiStatsCachedUser(cacheKey);
-      if (!lifecycleActive()) return;
-      const remiStatsXHandle = remiStatsUser ? connectedXHandle(remiStatsUser) : "";
-      if (remiStatsUser && remiStatsXHandle) {
-        xHandleByRemiliaHandle.set(cacheKey, remiStatsXHandle);
-        profileLookupDone.add(cacheKey);
-        void storeCachedProfile(cacheKey, remiStatsUser);
-        state.users.set(authorId, { ...state.users.get(authorId), ...remiStatsUser });
-        render();
-      }
+      recordChatDiagnostic("profileLookupFailed", {
+        handle: cacheKey,
+        error: String(profileResponse.error || "PROFILE_LOOKUP_FAILED"),
+      });
+      profileLookupDone.add(cacheKey);
     } finally {
       profileLookupPending.delete(cacheKey);
     }
   })();
 }
 
-async function getRemiStatsCachedUser(handleKey: string): Promise<ApiUser | null> {
-  const response = await runtimeSendMessage({ type: "remistats:getUser", handle: handleKey }, "remistats:getUser").then(asRecord).catch(() => asRecord({}));
-  if (!response.ok) return null;
-  const data = objectValue(response.data);
-  const user = objectValue(data.user);
-  const twitterHandle = stringOrUndefined(user.twitterHandle ?? user.twitter_handle);
-  if (!twitterHandle) return null;
-  return {
-    handle: stringOrUndefined(user.username ?? user.userHandle ?? user.user_handle ?? user.handle ?? handleKey),
-    userHandle: stringOrUndefined(user.userHandle ?? user.user_handle ?? user.username ?? user.handle ?? handleKey),
-    username: stringOrUndefined(user.username ?? user.userHandle ?? user.user_handle ?? user.handle ?? handleKey),
-    displayName: stringOrUndefined(user.displayName ?? user.display_name),
-    twitterHandle,
-    xHandle: twitterHandle,
-  };
-}
-
-async function getCachedProfile(handleKey: string): Promise<ApiUser | null> {
-  const stored: RuntimeRecord = await chrome.storage.local.get(PROFILE_CACHE_KEY).catch(() => ({}));
-  const cache = normalizeProfileCache(stored[PROFILE_CACHE_KEY]);
-  const entry = cache[handleKey];
-  if (!entry?.cachedAt) return null;
-  const age = Date.now() - entry.cachedAt;
-  return entry.user && age < PROFILE_CACHE_TTL_MS ? entry.user : null;
-}
-
-async function storeCachedProfile(handleKey: string, user: ApiUser): Promise<void> {
-  const stored: RuntimeRecord = await chrome.storage.local.get(PROFILE_CACHE_KEY).catch(() => ({}));
-  const cache = pruneProfileCache(normalizeProfileCache(stored[PROFILE_CACHE_KEY]));
-  cache[handleKey] = { cachedAt: Date.now(), user: compactCachedProfile(user) };
-  await chrome.storage.local.set({ [PROFILE_CACHE_KEY]: cache }).catch(() => undefined);
-}
-
-function normalizeProfileCache(value: unknown): ProfileCache {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
-  return value as ProfileCache;
-}
-
-function pruneProfileCache(cache: ProfileCache): ProfileCache {
-  const entries = Object.entries(cache)
-    .filter(([, entry]) => entry && typeof entry === "object" && typeof entry.cachedAt === "number")
-    .sort((a, b) => (b[1].cachedAt || 0) - (a[1].cachedAt || 0))
-    .slice(0, PROFILE_CACHE_MAX_ENTRIES - 1);
-  return Object.fromEntries(entries);
-}
-
-function compactCachedProfile(user: ApiUser): ApiUser {
-  return {
-    id: user.id,
-    userId: user.userId,
-    user_id: user.user_id,
-    handle: user.handle,
-    userHandle: user.userHandle,
-    user_handle: user.user_handle,
-    username: user.username,
-    twitterHandle: user.twitterHandle,
-    twitter_handle: user.twitter_handle,
-    twitterUsername: user.twitterUsername,
-    twitter_username: user.twitter_username,
-    twitterUrl: user.twitterUrl,
-    twitter_url: user.twitter_url,
-    xHandle: user.xHandle,
-    x_handle: user.x_handle,
-    xUsername: user.xUsername,
-    x_username: user.x_username,
-    xUrl: user.xUrl,
-    x_url: user.x_url,
-    displayName: user.displayName,
-    display_name: user.display_name,
-    name: user.name,
-    profilePicUrl: user.profilePicUrl,
-    profile_pic_url: user.profile_pic_url,
-    pfpUrl: user.pfpUrl,
-    pfp_url: user.pfp_url,
-    color: user.color,
-    theme: user.theme,
-    connections: user.connections,
-  };
-}
-
 function profileUserFromResponse(response: RuntimeRecord): ApiUser | null {
+  const sharedProfile = objectValue(response.profile);
+  if (Object.keys(sharedProfile).length) {
+    const remiliaUsername = stringOrUndefined(sharedProfile.remiliaUsername);
+    const xHandle = stringOrUndefined(sharedProfile.xHandle);
+    const pfpUrl = stringOrUndefined(sharedProfile.pfpUrl);
+    return {
+      ...(sharedProfile as ApiUser),
+      handle: remiliaUsername,
+      userHandle: remiliaUsername,
+      username: remiliaUsername,
+      twitterHandle: xHandle,
+      xHandle,
+      profilePicUrl: pfpUrl,
+      pfpUrl,
+    };
+  }
   const data = objectValue(response.data);
   const candidates = [
     data.user,
