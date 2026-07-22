@@ -1087,6 +1087,9 @@ function combineAbortSignals(existing: AbortSignal | null | undefined, deadline:
 chrome.runtime.onInstalled.addListener((details) => {
   scheduleUpdateChecks();
   void runUpdateCheck();
+  // Chrome reports an unpacked-extension reload as an update. Re-arm the
+  // lightweight Beetle tip so it is straightforward to verify during QA.
+  void chrome.storage.local.set({ "milxdy.reminet.beetleWelcomePending": true });
   if (details.reason !== "install") return;
   void chrome.storage.local.set({
     "milxdy.diagnostics.enabled": false,
@@ -1095,7 +1098,6 @@ chrome.runtime.onInstalled.addListener((details) => {
     "milxdy.music.enabled": true,
     "milxdy.reminetChat.enabled": false,
     "milxdy.remistats.beetol.enabled": true,
-    "milxdy.reminet.beetleWelcomePending": true,
   });
   void chrome.storage.sync.set({
     mode: "milady",
