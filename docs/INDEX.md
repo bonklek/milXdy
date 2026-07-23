@@ -3,6 +3,7 @@
 - [Install and update](INSTALL_AND_UPDATE.md)
 - [User guide](USER_GUIDE.md)
 - [Apps & Features and side rail guide](user-guides/apps-hub-and-side-rail.md)
+- [Link Browser guide](user-guides/link-browser.md)
 - [Root Visual Enhancements guide](user-guides/root-visual-enhancements.md)
 - [Tweet PNG guide](user-guides/tweet-png.md)
 - [Composer Tools guide](user-guides/composer-tools.md)
