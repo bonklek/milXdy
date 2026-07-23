@@ -1,5 +1,19 @@
 export type HighlightTokenMode = "word" | "smooth";
 
+export type HighlightTextSegment = {
+  text: string;
+  included: boolean;
+};
+
+export type HighlightTextSegmentLayout = HighlightTextSegment & {
+  uncountedPrefix: string;
+  parts: Array<{
+    text: string;
+    start: number;
+    token: boolean;
+  }>;
+};
+
 type PrepareTokenOptions = {
   includeTextNode?: (node: Text) => boolean;
   textOverride?: string;
@@ -35,7 +49,6 @@ type PendingSmoothAnimation = {
   toIndex: number;
 };
 
-const CALIBRATION_SAMPLE_LIMIT = 5;
 const originalHtmlByElement = new WeakMap<HTMLElement, string>();
 
 export class TextHighlightEngine {
@@ -50,8 +63,6 @@ export class TextHighlightEngine {
   private lastRelativeIndex: number | null = null;
   private calibratedCharsPerSecond = 13;
   private baselineCharsPerSecond = 13;
-  private calibrationSamples = 0;
-  private calibrationLocked = false;
   private catchUpUntil = 0;
   private readonly onSmoothAnimation?: (diagnostic: SmoothAnimationDiagnostic) => void;
 
@@ -80,41 +91,25 @@ export class TextHighlightEngine {
     const tokens: HTMLElement[] = [];
     const textNodes = collectTextNodes(element);
     let tokenIndex = 0;
-    let textCursor = 0;
-    let skippedText = false;
-    let countedTextEndsWithWhitespace = false;
+    const layouts = layoutHighlightTextSegments(textNodes.map((node) => ({
+      text: node.textContent || "",
+      included: options.includeTextNode?.(node) !== false,
+    })), mode);
 
-    for (const node of textNodes) {
-      if (options.includeTextNode && !options.includeTextNode(node)) {
-        skippedText = true;
-        continue;
-      }
-      const originalText = node.textContent || "";
-      const uncountedPrefix = skippedText && countedTextEndsWithWhitespace
-        ? originalText.match(/^\s+/)?.[0] || ""
-        : "";
-      const text = uncountedPrefix ? originalText.slice(uncountedPrefix.length) : originalText;
-      skippedText = false;
-      if (!text.trim()) {
-        textCursor += text.length;
-        if (text) countedTextEndsWithWhitespace = /\s$/.test(text);
-        continue;
-      }
+    for (const [nodeIndex, node] of textNodes.entries()) {
+      const layout = layouts[nodeIndex];
+      if (!layout.included || layout.parts.length === 0) continue;
 
       const fragment = document.createDocumentFragment();
-      if (uncountedPrefix) fragment.appendChild(document.createTextNode(uncountedPrefix));
-      for (const part of splitHighlightParts(text, mode)) {
-        if (/^\s+$/.test(part) && mode === "word") {
-          fragment.appendChild(document.createTextNode(part));
-          textCursor += part.length;
-          countedTextEndsWithWhitespace = true;
+      if (layout.uncountedPrefix) fragment.appendChild(document.createTextNode(layout.uncountedPrefix));
+      for (const part of layout.parts) {
+        if (!part.token) {
+          fragment.appendChild(document.createTextNode(part.text));
           continue;
         }
-        const span = createHighlightToken(part, mode, tokenIndex++, textCursor, options.smoothReadableLength === true);
+        const span = createHighlightToken(part.text, mode, tokenIndex++, part.start, options.smoothReadableLength === true);
         tokens.push(span);
         fragment.appendChild(span);
-        textCursor += part.length;
-        countedTextEndsWithWhitespace = /\s$/.test(part);
       }
       node.parentNode?.replaceChild(fragment, node);
     }
@@ -274,8 +269,6 @@ export class TextHighlightEngine {
     this.lastBoundaryElapsedTime = null;
     this.lastRelativeIndex = null;
     this.calibratedCharsPerSecond = this.baselineCharsPerSecond;
-    this.calibrationSamples = 0;
-    this.calibrationLocked = false;
     this.catchUpUntil = 0;
     void rangeElement;
   }
@@ -336,17 +329,13 @@ export class TextHighlightEngine {
 
   private updateBoundaryCalibration(relativeIndex: number, boundaryElapsedTime: unknown): void {
     const now = performance.now();
-    if (!this.calibrationLocked && this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
+    if (this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
       const elapsedMs = this.boundaryElapsedMs(boundaryElapsedTime, now);
       const charDelta = relativeIndex - this.lastRelativeIndex;
       const observed = elapsedMs !== null && elapsedMs > 0 ? charDelta / (elapsedMs / 1000) : null;
       if (elapsedMs !== null && elapsedMs > 0) this.lastBoundaryIntervalMs = elapsedMs;
-      if (elapsedMs !== null && observed !== null && this.isUsefulSpeedSample(observed, charDelta, elapsedMs)) {
-        this.calibratedCharsPerSecond = this.calibrationSamples === 0
-          ? observed
-          : this.calibratedCharsPerSecond * 0.68 + observed * 0.32;
-        this.calibrationSamples += 1;
-        if (this.calibrationSamples >= CALIBRATION_SAMPLE_LIMIT) this.calibrationLocked = true;
+      if (observed !== null && Number.isFinite(observed) && observed > 1 && observed < 80) {
+        this.calibratedCharsPerSecond = this.calibratedCharsPerSecond * 0.72 + observed * 0.28;
       }
     }
     this.lastBoundaryAt = now;
@@ -362,14 +351,6 @@ export class TextHighlightEngine {
     if (relativeIndex < pending.toIndex) return null;
     this.catchUpUntil = performance.now() + 1600;
     return { pendingToIndex: pending.toIndex, boundaryIndex: relativeIndex };
-  }
-
-  private isUsefulSpeedSample(observed: number, charDelta: number, elapsedMs: number): boolean {
-    if (!Number.isFinite(observed) || observed <= 0) return false;
-    if (charDelta < 3 || elapsedMs <= 0) return false;
-    const lower = this.baselineCharsPerSecond * 0.45;
-    const upper = this.baselineCharsPerSecond * 2.4;
-    return observed >= lower && observed <= upper;
   }
 
   private boundaryElapsedMs(boundaryElapsedTime: unknown, now: number): number | null {
@@ -457,16 +438,12 @@ export class TextHighlightEngine {
   }
 
   private estimateTokenDurationMs(length: number): number {
-    const cps = Math.max(0.001, this.calibratedCharsPerSecond);
+    const cps = Math.max(4, this.calibratedCharsPerSecond);
     return Math.round((Math.max(0, length) / cps) * 1000);
   }
 
   private estimateSmoothFillDurationMs(length: number): number {
-    const tokenDuration = Math.max(35, Math.min(1200, this.estimateTokenDurationMs(length)));
-    if (this.lastBoundaryIntervalMs === null) return tokenDuration;
-    const cadenceRatio = this.catchUpActive() ? 0.52 : 0.72;
-    const cadenceDuration = Math.round(Math.max(24, Math.min(650, this.lastBoundaryIntervalMs * cadenceRatio)));
-    return Math.max(35, Math.min(tokenDuration, cadenceDuration));
+    return Math.max(80, Math.min(1200, this.estimateTokenDurationMs(length)));
   }
 
   private catchUpActive(): boolean {
@@ -476,6 +453,47 @@ export class TextHighlightEngine {
 
 export function estimateHighlightTokenCount(text: string): number {
   return splitSmoothParts(text).length;
+}
+
+export function layoutHighlightTextSegments(
+  segments: HighlightTextSegment[],
+  mode: HighlightTokenMode,
+): HighlightTextSegmentLayout[] {
+  const layouts: HighlightTextSegmentLayout[] = [];
+  let cursor = 0;
+  let skippedText = false;
+  let countedTextEndsWithWhitespace = false;
+
+  for (const segment of segments) {
+    if (!segment.included) {
+      skippedText = true;
+      layouts.push({ ...segment, uncountedPrefix: "", parts: [] });
+      continue;
+    }
+
+    const uncountedPrefix = skippedText && countedTextEndsWithWhitespace
+      ? segment.text.match(/^\s+/)?.[0] || ""
+      : "";
+    const text = uncountedPrefix ? segment.text.slice(uncountedPrefix.length) : segment.text;
+    skippedText = false;
+    const parts: HighlightTextSegmentLayout["parts"] = [];
+    if (!text.trim()) {
+      cursor += text.length;
+      if (text) countedTextEndsWithWhitespace = /\s$/.test(text);
+      layouts.push({ ...segment, uncountedPrefix, parts });
+      continue;
+    }
+
+    for (const part of splitHighlightParts(text, mode)) {
+      const token = !(mode === "word" && /^\s+$/.test(part));
+      parts.push({ text: part, start: cursor, token });
+      cursor += part.length;
+      countedTextEndsWithWhitespace = /\s$/.test(part);
+    }
+    layouts.push({ ...segment, uncountedPrefix, parts });
+  }
+
+  return layouts;
 }
 
 export function tokenStart(token: HTMLElement | null): number {

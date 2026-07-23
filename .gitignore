@@ -18,3 +18,5 @@ local-app-packages/
 *.tmp
 .codex-review-notes-*.tmp.md
 *.map
+__pycache__/
+*.pyc

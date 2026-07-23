@@ -44,9 +44,9 @@ function verifySharedRuleSemantics() {
   assert(!isAllowedUrl("http://musicbrainz.org/ws/2/recording", originRule), "origin rule should reject protocol downgrade");
   assert(!isAllowedUrl("https://evil.example/ws/2/recording", originRule), "origin rule should reject other hosts");
 
-  const exactPathRule = [{ origin: "https://api.acoustid.org", pathPattern: /^\/v2\/lookup$/ }];
-  assert(isAllowedUrl("https://api.acoustid.org/v2/lookup", exactPathRule), "path pattern should allow exact AcoustID lookup path");
-  assert(!isAllowedUrl("https://api.acoustid.org/v2/lookup/extra", exactPathRule), "path pattern should reject nested lookup paths");
+  const exactPathRule = [{ origin: "https://miladymaker.net", pathPattern: /^\/banners\/nft\/\d+\.png$/ }];
+  assert(isAllowedUrl("https://miladymaker.net/banners/nft/123.png", exactPathRule), "path pattern should allow an exact Milady Maker banner path");
+  assert(!isAllowedUrl("https://miladymaker.net/banners/nft/123.png/extra", exactPathRule), "path pattern should reject a nested banner path");
 
   const subdomainRule = [{ protocol: "https:", hostname: "www.remilia.net", includeSubdomains: true }];
   assert(isAllowedUrl("https://www.remilia.net/api/media/1", subdomainRule), "subdomain rule should allow exact host");
@@ -166,11 +166,9 @@ async function verifyBackgroundRuleContracts() {
   ]);
   for (const expected of [
     'origin: "https://musicbrainz.org", pathPrefix: "/ws/2/"',
-    'origin: "https://api.acoustid.org", pathPattern: /^\\/v2\\/lookup$/',
     'origin: "https://boards.miladychan.org", pathPrefix: "/json/"',
     'origin: "https://miladymaker.net", pathPattern: /^\\/banners\\/nft\\/\\d+\\.png$/',
     'parseAllowedUrl(url, MUSICBRAINZ_JSON_RULES)',
-    'parseAllowedUrl(url, ACOUSTID_FORM_RULES)',
     'parseAllowedUrl(url, MILADYCHAN_JSON_RULES)',
     'parseAllowedUrl(url, MUSIC_IMAGE_RULES)',
     'parseAllowedUrl(url, MILADY_MAKER_BANNER_RULES)',

@@ -42,6 +42,7 @@ export const generatedAssetRoots = [
 ];
 
 export const allowedMarkdownArchiveFiles = [
+  "THIRD_PARTY_NOTICES.md",
   "ocr/core/README.md",
   "wiki-helper/remilia-wiki-article-writer/SKILL.md",
   "wiki-helper/remilia-wiki-article-writer/references/article-patterns.md",

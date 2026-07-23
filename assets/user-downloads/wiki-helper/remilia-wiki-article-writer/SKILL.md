@@ -9,7 +9,9 @@ Your job is to interview the user, research comparable Remilia Wiki pages when w
 
 ## Prefer Wikitool When Available
 
-If the user provides the official `remiliacorporation/remilia-wikitool` release or AI pack, use that first. Its `AGENTS.md`, `codex_skills/`, and `writing_context/` files are the canonical Remilia Wiki authoring workflow.
+This lightweight fallback was independently authored for milXdy interoperability. It references Wikitool's public commands and workflow concepts, but does not bundle or reproduce the Wikitool AI pack.
+
+If the user provides the official [`remiliacorporation/remilia-wikitool`](https://github.com/remiliacorporation/remilia-wikitool) release or AI pack, use that first. Its `AGENTS.md`, `codex_skills/`, and `writing_context/` files are the canonical Remilia Wiki authoring workflow.
 
 When the local `wikitool` binary is available, start with:
 
