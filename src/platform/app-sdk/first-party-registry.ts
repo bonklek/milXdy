@@ -45,6 +45,10 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
     const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
     return enabledFromStoredValue(settings.sidebarEnabled ?? settings.enabled, defaultAppEnabled("wikiSidebar"));
   },
+  linkBrowser: async () => {
+    const stored = await chrome.storage.local.get("milxdy.linkBrowser.enabled");
+    return enabledFromStoredValue(stored["milxdy.linkBrowser.enabled"], defaultAppEnabled("linkBrowser"));
+  },
   "post-reading": async () => {
     const stored = await chrome.storage.sync.get("enabled");
     return enabledFromStoredValue(stored.enabled, defaultAppEnabled("post-reading"));
@@ -113,6 +117,9 @@ const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | und
         sidebarEnabled: enabled,
       },
     });
+  },
+  linkBrowser: async (enabled) => {
+    await chrome.storage.local.set({ "milxdy.linkBrowser.enabled": enabled });
   },
   "post-reading": async (enabled) => {
     await chrome.storage.sync.set({ enabled });

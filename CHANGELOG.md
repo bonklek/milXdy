@@ -5,6 +5,7 @@
 See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 
 - Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
+- Adds the opt-in Link Browser app: Alt-click a link on X/Twitter to open it in a docked, sandboxed reader panel while ordinary link behavior remains native.
 - Adds native English and contributor-provided Russian extension metadata. In-app controls remain English in this release.
 - Adds an opt-in Appearance setting that hides X's empty Messages request dot while preserving numbered unread badges.
 - Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.

@@ -1122,6 +1122,119 @@
     ]
   },
   {
+    "id": "linkBrowser",
+    "name": "Link Browser",
+    "version": "0.2.3",
+    "description": "Opens an Alt-clicked X/Twitter link in a docked, sandboxed reader panel.",
+    "packageKind": "app",
+    "entryName": "features/linkBrowser",
+    "entryPoint": "src/apps/link-browser/entry.ts",
+    "contentEntry": "features/linkBrowser.js",
+    "defaultEnabled": false,
+    "storageKeys": {
+      "local": [
+        "milxdy.linkBrowser.width",
+        "milxdy.linkBrowser.height",
+        "milxdy.linkBrowser.top",
+        "milxdy.linkBrowser.lastUrl",
+        "milxdy.linkBrowser.enabled"
+      ]
+    },
+    "settings": [
+      {
+        "id": "linkBrowser.enabled",
+        "label": "Link Browser",
+        "description": "Open Alt-clicked X/Twitter links in a docked reader panel.",
+        "scope": "app",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.linkBrowser.enabled"
+        },
+        "defaultValue": false,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        }
+      }
+    ],
+    "surfaces": [
+      "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens user-selected links in a sandboxed iframe and keeps ordinary link clicks native."
+        ]
+      }
+    ],
+    "cost": {
+      "startup": "cheap",
+      "perSurface": "cheap",
+      "network": "none",
+      "worker": "none",
+      "domWrite": "small"
+    },
+    "loadTriggers": [
+      "startup",
+      "dockOpen"
+    ],
+    "chrome": {
+      "nativeStyle": "reader",
+      "supportedStyles": [
+        "native",
+        "reminet",
+        "classic",
+        "reader"
+      ]
+    },
+    "hub": {
+      "category": "reading",
+      "shortDescription": "Open Alt-clicked X/Twitter links in a docked reader panel.",
+      "rail": {
+        "supported": true,
+        "defaultPinned": false
+      },
+      "presets": [
+        "balanced",
+        "full"
+      ],
+      "permissionNotes": [
+        "Loads only the URL selected by the user in a sandboxed iframe; sites may block embedded display."
+      ],
+      "dataNotes": [
+        "Stores the panel layout and the most recently opened link locally."
+      ],
+      "localStorageNotes": [
+        "Stores panel width, height, position, and the most recent link."
+      ],
+      "privacyLabels": [
+        "remote-api",
+        "local-only"
+      ]
+    },
+    "dock": {
+      "label": "Links",
+      "defaultSide": "right"
+    },
+    "package": {
+      "assets": []
+    }
+  },
+  {
     "id": "post-reading",
     "name": "Post-reading",
     "version": "0.1.5",

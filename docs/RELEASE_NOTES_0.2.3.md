@@ -24,6 +24,7 @@ milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It bri
 - Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
 - Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. The in-app interface remains English in this release.
 - Add an Appearance toggle for hiding X's dot-style hidden-message-request indicator without suppressing numbered unread badges.
+- Add the opt-in Link Browser app: Alt-click a link on X/Twitter to inspect it in a docked, sandboxed reader panel while normal links keep their native behavior.
 
 ## What This Means
 
