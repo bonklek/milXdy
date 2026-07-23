@@ -66,12 +66,21 @@ async function syncBeetleWelcome(): Promise<void> {
   const resizeObserver = new ResizeObserver(positionNotice);
   const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTOR);
   if (anchor) resizeObserver.observe(anchor);
+  const tabObserver = new MutationObserver(positionNotice);
+  tabObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class"],
+    childList: true,
+    subtree: true,
+  });
   addEventListener("resize", positionNotice, { passive: true });
   const stopPositioning = () => {
     resizeObserver.disconnect();
+    tabObserver.disconnect();
     removeEventListener("resize", positionNotice);
   };
   notice.querySelector("button")?.addEventListener("click", stopPositioning, { once: true });
+  addEventListener("pagehide", stopPositioning, { once: true });
 
   const style = document.createElement("style");
   style.id = `${BEETLE_WELCOME_ID}-style`;
