@@ -2948,7 +2948,8 @@
       "messageTypes": [
         "reminetChat:*",
         "beetol:poke",
-        "remistats:getUser"
+        "remistats:getUser",
+        "reminetIdentity:getProfile"
       ],
       "services": [
         "remiliaAuth"

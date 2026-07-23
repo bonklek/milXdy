@@ -108,7 +108,7 @@ async function verifyRuntimeOwnership() {
   assert(/const finalRect = clampOverlayRectToSafeArea\(snapped\.rect,[\s\S]*?applyFreeformRect\(finalRect, options\)/.test(overlayPanelBase), "freeform resize must re-clamp snapped geometry before applying it");
   const beetolContent = await readFile("src/apps/beetol/content.js", "utf8");
   assert(beetolContent.includes("allowInteractiveDragTarget: true"), "Beetol must explicitly declare its tab drag-handle exception");
-  assert(beetolContent.includes("FINAL_HUNT_COOLDOWN_MS = 90 * 60 * 1000") && beetolContent.includes("scheduleFinalHuntDone()"), "Beetol final hunts must preserve the result before the 90-minute cooldown state");
+  assert(beetolContent.includes("FINAL_HUNT_COOLDOWN_MS = BEETLE_HUNT_COOLDOWN_MS") && beetolContent.includes("scheduleFinalHuntDone()"), "Beetol final hunts must preserve the result before the authoritative 90-minute cooldown state");
   assert(beetolContent.includes("messageRevision !== expectedMessageRevision"), "Beetol final-hunt Done transition must not overwrite a newer operation status");
   assert(runtime.includes('setSettingsAction("milxdy.addApps"') && runtime.includes("onActivate: openHubPanel"), "content runtime must link dock settings to the Apps Hub through the dock settings action API");
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");

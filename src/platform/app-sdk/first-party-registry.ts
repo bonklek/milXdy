@@ -151,6 +151,10 @@ export const FIRST_PARTY_APPS: readonly MilxdyAppManifest[] = registry.map((app)
       assets,
       webAccessibleAssets: requiredOutputs,
     },
+    // Registry build metadata authorizes a first-party app to use the host
+    // assets it ships with. Keep it separate from package.assets: local and
+    // third-party packages remain limited to their declared package files.
+    hostAssetAccess: [...(assets ?? []), ...(requiredOutputs ?? [])],
     isEnabled,
     setEnabled,
   };
