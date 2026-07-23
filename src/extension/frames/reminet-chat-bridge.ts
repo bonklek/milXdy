@@ -105,7 +105,7 @@ async function syncBeetleWelcome(): Promise<void> {
       letter-spacing: 0.035em;
       text-transform: uppercase;
       transform-origin: top left;
-      animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite, milxdy-beetle-welcome-breathe 5.5s ease-in-out infinite;
+      animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite, milxdy-beetle-welcome-breathe 5.5s ease-in-out infinite !important;
     }
     #${BEETLE_WELCOME_ID} p { margin: 0; }
     #${BEETLE_WELCOME_ID} button {
