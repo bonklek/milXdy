@@ -13,7 +13,7 @@ const BEETLE_INSTANT_RESULTS_STYLE_ID = "milxdy-reminet-beetle-instant-results";
 const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-result";
 const BEETLE_WELCOME_PENDING_KEY = "milxdy.reminet.beetleWelcomePending";
 const BEETLE_WELCOME_ID = "milxdy-reminet-beetle-welcome";
-const BEETLE_WELCOME_ANCHOR_SELECTORS = ".beetle-tab, .beetle-game-nav, .beetleModule, .beetle-console, .beetle-catch-module";
+const BEETLE_WELCOME_ANCHOR_SELECTOR = ".beetle-tab.beetleboy.active";
 
 let socket: WebSocket | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -50,7 +50,7 @@ async function syncBeetleWelcome(): Promise<void> {
   });
   document.documentElement.append(notice);
   const positionNotice = () => {
-    const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTORS);
+    const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTOR);
     if (!notice.isConnected) return;
     if (!anchor) {
       notice.hidden = true;
@@ -64,7 +64,7 @@ async function syncBeetleWelcome(): Promise<void> {
   };
   positionNotice();
   const resizeObserver = new ResizeObserver(positionNotice);
-  const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTORS);
+  const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTOR);
   if (anchor) resizeObserver.observe(anchor);
   addEventListener("resize", positionNotice, { passive: true });
   const stopPositioning = () => {
