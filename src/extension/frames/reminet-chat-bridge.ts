@@ -95,16 +95,17 @@ async function syncBeetleWelcome(): Promise<void> {
       padding: 12px 34px 12px 14px;
       box-sizing: border-box;
       overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.88);
+      border: 1px solid rgba(91, 26, 55, 0.9);
       background: linear-gradient(125deg, rgba(255, 183, 211, 0.97), rgba(255, 213, 229, 0.98), rgba(248, 159, 198, 0.97));
       background-size: 220% 100%;
-      box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.45), 0 7px 22px rgba(103, 30, 62, 0.34), inset 0 0 18px rgba(255, 255, 255, 0.34);
+      box-shadow: 0 0 0 2px rgba(74, 18, 43, 0.82), 0 7px 22px rgba(103, 30, 62, 0.42), inset 0 0 18px rgba(255, 255, 255, 0.34);
       color: #fff;
       text-shadow: 0 0 7px rgba(255, 255, 255, 0.95), 0 1px 2px rgba(126, 27, 72, 0.48);
       font: 800 11px/1.45 ui-monospace, "Cascadia Mono", Menlo, monospace;
       letter-spacing: 0.035em;
       text-transform: uppercase;
-      animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite;
+      transform-origin: top left;
+      animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite, milxdy-beetle-welcome-breathe 5.5s ease-in-out infinite;
     }
     #${BEETLE_WELCOME_ID} p { margin: 0; }
     #${BEETLE_WELCOME_ID} button {
@@ -116,15 +117,20 @@ async function syncBeetleWelcome(): Promise<void> {
       border: 0;
       padding: 0;
       background: transparent;
+      border-radius: 6px;
       color: #fff;
       cursor: pointer;
       font: 400 23px/20px ui-monospace, monospace;
     }
     #${BEETLE_WELCOME_ID} button:hover,
-    #${BEETLE_WELCOME_ID} button:focus-visible { color: #fff; text-shadow: 0 0 10px #fff, 0 0 15px #e45a91; outline: none; }
+    #${BEETLE_WELCOME_ID} button:focus-visible { background: rgba(91, 26, 55, 0.42); color: #fff; text-shadow: 0 0 10px #fff, 0 0 15px #e45a91; outline: none; }
     @keyframes milxdy-beetle-welcome-shimmer {
       0%, 100% { background-position: 100% 50%; border-color: rgba(255, 255, 255, 0.65); }
       50% { background-position: 0% 50%; border-color: rgba(255, 255, 255, 1); }
+    }
+    @keyframes milxdy-beetle-welcome-breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.018); }
     }
     @media (prefers-reduced-motion: reduce) { #${BEETLE_WELCOME_ID} { animation: none; } }
   `;
