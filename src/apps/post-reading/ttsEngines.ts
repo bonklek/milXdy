@@ -103,6 +103,10 @@ export class WebSpeechEngine implements TtsEngine {
       if (!stopped) request.onError("Speech playback failed.");
     };
 
+    // Chrome can preserve the global paused flag after canceling an utterance.
+    // A newly queued utterance then remains pending forever while the controller
+    // optimistically reports "speaking". Clear that stale state before enqueueing.
+    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
 
     return {
@@ -308,6 +312,7 @@ export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice, sig
     utterance.onend = () => finish(hasEnoughBoundaries());
     utterance.onerror = () => finish(false);
     window.speechSynthesis.cancel();
+    window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
   });
 }

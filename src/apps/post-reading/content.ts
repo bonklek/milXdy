@@ -2,6 +2,7 @@ import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetT
 import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
 import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
+import { HighlightProgressClock } from "./highlightProgress";
 import { icon } from "./icons";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
@@ -47,6 +48,7 @@ let estimatedHighlightTimer: number | null = null;
 let estimatedHighlightKey = "";
 let estimatedHighlightStartedAt = 0;
 let estimatedHighlightPausedAt: number | null = null;
+const highlightProgressClock = new HighlightProgressClock();
 let pendingTweetHighlightState: HighlightSpeechState | null = null;
 let tweetHighlightFrame: number | null = null;
 let highlightWorkGeneration = 0;
@@ -1667,6 +1669,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     recordHighlightPaintDiagnostic("no-targets", state, null, null, null, null, null, settings.bodyHighlightMode);
     return;
   }
+  highlightProgressClock.observe(state, performance.now());
   updateEstimatedHighlightLoop(state);
   const chunkChanged = lastChunkIndex !== null && state.chunkIndex !== lastChunkIndex;
   lastChunkIndex = state.chunkIndex;
@@ -1733,6 +1736,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     textLength: paintTarget.text.length,
     snapToCurrent: highlightJumped || state.status !== "speaking",
     boundaryElapsedTime: state.boundaryElapsedTime ?? null,
+    leadToNextToken: state.status === "speaking",
   });
   const paintMs = performance.now() - paintStartedAt;
   recordHighlightTimingDiagnostic(target, paintTarget, words, tokenizeMs, paintMs);
@@ -1741,20 +1745,16 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
 }
 
 function updateEstimatedHighlightLoop(state: HighlightSpeechState): void {
-  if (state.hasSyncedBoundaries || state.charIndex !== null) {
-    clearEstimatedHighlightLoop();
-    return;
-  }
   if (state.status !== "speaking") return;
-  if (estimatedHighlightTimer !== null) return;
+  const delay = highlightProgressClock.nextUpdateDelay(state, performance.now());
+  if (delay === null) return;
+  if (estimatedHighlightTimer !== null) window.clearTimeout(estimatedHighlightTimer);
   estimatedHighlightTimer = window.setTimeout(() => {
     estimatedHighlightTimer = null;
     if (!speech || !lifecycleActive()) return;
     const nextState = speech.getState();
-    if (nextState.status === "speaking" && !nextState.hasSyncedBoundaries && nextState.charIndex === null) {
-      updateTweetHighlight(nextState);
-    }
-  }, 140);
+    if (nextState.status === "speaking") updateTweetHighlight(nextState);
+  }, delay);
 }
 
 function clearEstimatedHighlightLoop(): void {
@@ -1765,6 +1765,7 @@ function clearEstimatedHighlightLoop(): void {
   estimatedHighlightKey = "";
   estimatedHighlightStartedAt = 0;
   estimatedHighlightPausedAt = null;
+  highlightProgressClock.reset();
 }
 
 function estimateUnsyncedHighlightIndex(state: HighlightSpeechState): number | null {
@@ -1829,7 +1830,13 @@ function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlight
 }
 
 function currentSpeechAbsoluteIndex(state: HighlightSpeechState): number | null {
-  return state.charIndex ?? estimateUnsyncedHighlightIndex(state) ?? state.chunkStart;
+  if (state.chunkStart === null) return null;
+  return highlightProgressClock.resolveIndex(
+    state,
+    performance.now(),
+    calibratedCharsPerSecond,
+    findEstimatedChunkEnd(state.text || "", state.chunkStart),
+  ) ?? estimateUnsyncedHighlightIndex(state) ?? state.chunkStart;
 }
 
 function cachedHighlightTokenEstimate(target: HighlightTarget): number {
@@ -2706,21 +2713,6 @@ function resetBoundaryCalibration(): void {
   calibratedCharsPerSecond = 13 * Math.max(0.5, settings.speed);
   highlightEngine.updateBaselineReadingSpeed(settings.speed);
   highlightEngine.resetSmoothTracking();
-}
-
-function buildSmoothParts(text: string): string[] {
-  const raw = text.match(/\s*[\p{L}\p{N}_'-]+[^\s\p{L}\p{N}_'-]*|\s+|[^\s\p{L}\p{N}_'-]+/gu) || [];
-  const parts: string[] = [];
-  for (const part of raw) {
-    if (!part) continue;
-    const last = parts[parts.length - 1];
-    if (/^\s+$/.test(part) && last && !/\s$/.test(last)) {
-      parts[parts.length - 1] += part;
-    } else {
-      parts.push(part);
-    }
-  }
-  return parts;
 }
 
 function estimateHighlightTokenCount(text: string): number {

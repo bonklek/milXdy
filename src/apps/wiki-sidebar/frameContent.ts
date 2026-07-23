@@ -494,6 +494,7 @@ function paintSmoothTokens(
     textLength,
     snapToCurrent,
     boundaryElapsedTime,
+    leadToNextToken: true,
   });
 }
 

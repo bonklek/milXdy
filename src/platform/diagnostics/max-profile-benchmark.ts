@@ -2,6 +2,8 @@ import { hasExtensionRuntime, safeLocalGet, safeLocalSet } from "../background/e
 import {
   DEFAULT_RESKIN_PROFILE,
   RESKIN_PROFILE_KEY,
+  VISUAL_PRESETS,
+  VISUAL_THEME_KEY,
   normalizeReskinProfile,
   type ReskinProfile,
 } from "../visuals/reskin-profile";
@@ -10,8 +12,11 @@ const DIAGNOSTICS_ENABLED_KEY = "milxdy.diagnostics.enabled";
 const FEATURE_TIMINGS_KEY = "milxdy.diagnostics.featureTimings";
 export const BENCHMARK_RESULT_PREFIX = "milxdy.diagnostics.benchmark.";
 export const BENCHMARK_START_MESSAGE = "milxdy:benchmark:start";
+export const BENCHMARK_COMPARISON_START_MESSAGE = "milxdy:benchmark:compare-max-moderate";
 
 export const DEFAULT_BENCHMARK_DURATION_MS = 30000;
+const BENCHMARK_SETTLE_MS = 750;
+const SCROLL_INTERVAL_MS = 700;
 // recordFeatureTiming flushes its snapshot to storage 1.5s after the last record, so wait a
 // little longer than that before reading the end-of-window snapshot to capture the tail.
 const FEATURE_TIMING_FLUSH_WAIT_MS = 1700;
@@ -58,7 +63,13 @@ type BenchmarkStartMessage = {
   durationMs?: number;
 };
 
+type BenchmarkComparisonStartMessage = {
+  type: typeof BENCHMARK_COMPARISON_START_MESSAGE;
+  durationMs?: number;
+};
+
 let running = false;
+let comparisonRunning = false;
 let benchmarkListenerInstalled = false;
 
 function isBenchmarkStartMessage(value: unknown): value is BenchmarkStartMessage {
@@ -69,10 +80,53 @@ function isBenchmarkStartMessage(value: unknown): value is BenchmarkStartMessage
   );
 }
 
+function isBenchmarkComparisonStartMessage(value: unknown): value is BenchmarkComparisonStartMessage {
+  return (
+    typeof value === "object"
+    && value !== null
+    && (value as { type?: unknown }).type === BENCHMARK_COMPARISON_START_MESSAGE
+  );
+}
+
 async function readProfile(): Promise<ReskinProfile> {
   const stored = await safeLocalGet({ [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE });
   // Normalize so the result is always stored under a known max/moderate/min key the report reads.
   return normalizeReskinProfile(stored?.[RESKIN_PROFILE_KEY]);
+}
+
+async function waitForProfile(profile: ReskinProfile): Promise<void> {
+  const deadline = Date.now() + 2500;
+  while (Date.now() < deadline) {
+    if (document.documentElement.dataset.milxdyReskinProfile === profile) return;
+    await delay(50);
+  }
+}
+
+async function runComparisonBenchmark(durationMs: number): Promise<Record<"max" | "moderate", BenchmarkResult | null>> {
+  if (comparisonRunning || running) return { max: null, moderate: null };
+  comparisonRunning = true;
+  const original = await safeLocalGet({
+    [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
+    [VISUAL_THEME_KEY]: VISUAL_PRESETS[DEFAULT_RESKIN_PROFILE],
+  });
+  const results: Record<"max" | "moderate", BenchmarkResult | null> = { max: null, moderate: null };
+  try {
+    for (const profile of ["max", "moderate"] as const) {
+      await safeLocalSet({
+        [RESKIN_PROFILE_KEY]: profile,
+        [VISUAL_THEME_KEY]: VISUAL_PRESETS[profile],
+      });
+      await waitForProfile(profile);
+      results[profile] = await runBenchmark(durationMs);
+    }
+    return results;
+  } finally {
+    await safeLocalSet({
+      [RESKIN_PROFILE_KEY]: original?.[RESKIN_PROFILE_KEY] ?? DEFAULT_RESKIN_PROFILE,
+      [VISUAL_THEME_KEY]: original?.[VISUAL_THEME_KEY] ?? VISUAL_PRESETS[DEFAULT_RESKIN_PROFILE],
+    });
+    comparisonRunning = false;
+  }
 }
 
 /** Read the cumulative (page-lifetime) feature-timing counters from storage. */
@@ -127,9 +181,18 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function benchmarkScrollStep(): void {
+  // X owns the scrolling document on the supported timeline surfaces. A fixed
+  // viewport-relative increment drives comparable virtualization work without
+  // relying on an inconsistent wheel/trackpad gesture from the test operator.
+  const distance = Math.max(160, Math.round(window.innerHeight * 0.3));
+  window.scrollBy(0, distance);
+}
+
 /**
  * Sample frame timing + long tasks for `durationMs`, then persist a result tagged with the
- * active reskin profile. The caller is expected to scroll/interact during the window.
+ * active reskin profile. After a short settle period it drives a fixed scroll cadence,
+ * so Max and Moderate runs exercise comparable timeline virtualization work.
  * Returns null if it can't sample (already running, no rAF support, or no frames were
  * rendered — e.g. the tab was hidden the whole time).
  */
@@ -138,6 +201,9 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
   if (typeof requestAnimationFrame !== "function" || typeof performance === "undefined") return null;
   running = true;
   try {
+    // Do not charge the popup-to-tab handoff or an initial wheel gesture to the
+    // profile being measured.
+    await delay(BENCHMARK_SETTLE_MS);
     const baselineTimings = await readCumulativeTimings();
 
     let longTasks = 0;
@@ -167,6 +233,7 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
     let framesOver100ms = 0;
     let firstFrameAt = 0;
     let lastFrameAt = 0;
+    let lastScrollAt = startedAt;
     let haveFirstFrame = false;
 
     await new Promise<void>((resolve) => {
@@ -191,6 +258,10 @@ export async function runBenchmark(durationMs = DEFAULT_BENCHMARK_DURATION_MS): 
           if (gap > worstFrameGapMs) worstFrameGapMs = gap;
           if (gap > 50) framesOver50ms += 1;
           if (gap > 100) framesOver100ms += 1;
+        }
+        if (now - lastScrollAt >= SCROLL_INTERVAL_MS) {
+          benchmarkScrollStep();
+          lastScrollAt = now;
         }
         if (now - startedAt >= durationMs) {
           finish();
@@ -253,8 +324,8 @@ export function setupMaxProfileBenchmark(): void {
   if (benchmarkListenerInstalled) return;
   benchmarkListenerInstalled = true;
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-    if (!isBenchmarkStartMessage(message)) return undefined;
-    if (running) {
+    if (!isBenchmarkStartMessage(message) && !isBenchmarkComparisonStartMessage(message)) return undefined;
+    if (running || comparisonRunning) {
       sendResponse({ ok: false, busy: true });
       return false;
     }
@@ -262,9 +333,15 @@ export function setupMaxProfileBenchmark(): void {
       typeof message.durationMs === "number" && message.durationMs > 0
         ? message.durationMs
         : DEFAULT_BENCHMARK_DURATION_MS;
-    void runBenchmark(duration).then((result) => {
-      sendResponse({ ok: result !== null, busy: false, result });
-    });
+    if (isBenchmarkComparisonStartMessage(message)) {
+      void runComparisonBenchmark(duration).then((results) => {
+        sendResponse({ ok: Boolean(results.max && results.moderate), busy: false, results });
+      });
+    } else {
+      void runBenchmark(duration).then((result) => {
+        sendResponse({ ok: result !== null, busy: false, result });
+      });
+    }
     return true; // keep the message channel open for the async response
   });
 }

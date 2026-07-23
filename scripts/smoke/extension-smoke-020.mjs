@@ -47,7 +47,6 @@ function verifyManifest(build, manifest) {
     for (const host of [
       "https://boards.miladychan.org/*",
       "https://musicbrainz.org/*",
-      "https://api.acoustid.org/*",
       "https://www.remilia.net/*",
     ]) {
       assert(hosts.has(host), `${build.dir}: missing full-profile host ${host}`);
@@ -105,7 +104,6 @@ function verifyAppAssets(build) {
     "miladychanSpotlight/content.css",
     "beetol/content.css",
     "reminetChat/content.css",
-    "features/chromaprint.wasm",
     "worker.js",
     "ocrHost.js",
   ]) {

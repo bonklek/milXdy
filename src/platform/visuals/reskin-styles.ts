@@ -96,9 +96,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile]:not([data-milxdy-settings-theme="light"])[style*="background-color: rgb(0, 0, 0)"],
   html[data-milxdy-reskin-profile]:not([data-milxdy-settings-theme="light"])[style*="background-color: rgb(22, 24, 28)"],
   html[data-milxdy-reskin-profile][data-milxdy-x-theme="dark"],
-  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"],
-  html[data-milxdy-reskin-profile]:not([data-milxdy-settings-theme="light"]):has(body[style*="background-color: rgb(0, 0, 0)"]),
-  html[data-milxdy-reskin-profile]:not([data-milxdy-settings-theme="light"]):has(body[style*="background-color: rgb(22, 24, 28)"]) {
+  html[data-milxdy-reskin-profile][data-milxdy-x-theme="dim"] {
     --milxdy-rn-blue: #9ea7ff;
     --milxdy-rn-blue-dark: #cbd0ff;
     --milxdy-green: #c9f0a8;
@@ -434,9 +432,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"],
   html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]),
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] {
     background:
       linear-gradient(180deg, rgba(43, 70, 48, 0.4), rgba(16, 27, 19, 0.24) 180px, transparent 360px),
       var(--milxdy-surface) !important;
@@ -466,10 +462,16 @@ export const RESKIN_CSS = `
     letter-spacing: 0 !important;
   }
 
+  html[data-milxdy-reskin-profile] [role="tablist"] [role="tab"],
+  html[data-milxdy-reskin-profile] [role="tablist"] [role="tab"] *,
+  html[data-milxdy-reskin-profile] [data-testid^="ScrollSnap-List"] a,
+  html[data-milxdy-reskin-profile] [data-testid^="ScrollSnap-List"] a * {
+    font-family: var(--milxdy-font-ui) !important;
+    letter-spacing: 0 !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] article [data-testid="tweetText"],
-  html[data-milxdy-reskin-profile="max"] article [data-testid="tweetText"] *,
-  html[data-milxdy-reskin-profile="max"] [data-testid="quoteTweet"] [data-testid="tweetText"],
-  html[data-milxdy-reskin-profile="max"] [data-testid="quoteTweet"] [data-testid="tweetText"] * {
+  html[data-milxdy-reskin-profile="max"] [data-testid="quoteTweet"] [data-testid="tweetText"] {
     font-family: var(--milxdy-font-tweet) !important;
     letter-spacing: 0 !important;
   }
@@ -483,11 +485,8 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] header[role="banner"],
-  html[data-milxdy-reskin-profile="max"] header[role="banner"] *,
   html[data-milxdy-reskin-profile="max"] [data-testid="sidebarColumn"],
-  html[data-milxdy-reskin-profile="max"] [data-testid="sidebarColumn"] *,
   html[data-milxdy-reskin-profile="max"] [data-testid="User-Name"],
-  html[data-milxdy-reskin-profile="max"] [data-testid="User-Name"] *,
   html[data-milxdy-reskin-profile="max"] time,
   html[data-milxdy-reskin-profile="max"] [data-testid="app-bar-close"] {
     font-family: var(--milxdy-font-ui) !important;
@@ -547,25 +546,32 @@ export const RESKIN_CSS = `
     letter-spacing: 0 !important;
   }
 
+  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"] {
+    flex: 1 1 0% !important;
+    max-width: none !important;
+    width: auto !important;
+  }
+
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"] {
     align-items: center !important;
     column-gap: 4px !important;
     display: flex !important;
-    flex-wrap: wrap !important;
+    flex-wrap: nowrap !important;
     min-width: 0 !important;
     row-gap: 1px !important;
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 100% !important;
-    max-width: 100% !important;
+    flex: 0 1 auto !important;
+    max-width: none !important;
     min-width: 0 !important;
     overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] span {
-    max-width: 100% !important;
+    max-width: none !important;
     min-width: 0 !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
@@ -576,7 +582,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 100% !important;
+    flex: 1 1 0% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
@@ -611,15 +617,15 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 100% !important;
-    max-width: 100% !important;
+    flex: 0 1 auto !important;
+    max-width: none !important;
     overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] span {
     min-width: 0 !important;
-    max-width: 100% !important;
+    max-width: none !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
     text-overflow: ellipsis !important;
@@ -629,7 +635,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 auto !important;
+    flex: 1 1 0% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
@@ -733,10 +739,10 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] [data-testid="primaryColumn"] > div > div:first-child,
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] main[role="main"] > div > div:first-child,
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid="primaryColumn"] > div > div:first-child,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) main[role="main"] > div > div:first-child,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid="primaryColumn"] > div > div:first-child,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) main[role="main"] > div > div:first-child,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid="primaryColumn"] > div > div:first-child {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [data-testid="primaryColumn"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] main[role="main"] > div > div:first-child,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid="primaryColumn"] > div > div:first-child {
     background:
       linear-gradient(180deg, color-mix(in srgb, var(--milxdy-green-soft) 78%, var(--milxdy-surface-2)), color-mix(in srgb, var(--milxdy-green-soft) 34%, var(--milxdy-surface))) !important;
     box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.08) !important;
@@ -828,14 +834,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] header[role="banner"] nav a *,
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid^="AppTabBar_"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [data-testid^="AppTabBar_"] *,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) header[role="banner"] nav a,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) header[role="banner"] nav a *,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid^="AppTabBar_"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [data-testid^="AppTabBar_"] *,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) header[role="banner"] nav a,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) header[role="banner"] nav a *,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [data-testid^="AppTabBar_"] * {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [data-testid^="AppTabBar_"] * {
     color: var(--milxdy-sidebar-icon) !important;
     fill: currentColor !important;
   }
@@ -1021,6 +1020,12 @@ export const RESKIN_CSS = `
     transition: transform 80ms ease, box-shadow 80ms ease, filter 80ms ease !important;
   }
 
+  html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] *,
+  html[data-milxdy-reskin-profile="max"] [data-testid="tweetButtonInline"] *,
+  html[data-milxdy-reskin-profile="max"] [data-testid="tweetButton"] * {
+    color: #ffffff !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] svg,
   html[data-milxdy-reskin-profile="max"] [data-testid="SideNav_NewTweet_Button"] svg *,
   html[data-milxdy-reskin-profile="max"] [data-testid="tweetButtonInline"] svg,
@@ -1114,6 +1119,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="SideNav_NewTweet_Button"] *,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="tweetButtonInline"] *,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-post-button="clickly"] [data-testid="tweetButton"] * {
+    color: #ffffff !important;
     text-transform: uppercase !important;
   }
 
@@ -1235,6 +1241,11 @@ export const RESKIN_CSS = `
     border-color: color-mix(in srgb, var(--milxdy-border) 76%, transparent) !important;
   }
 
+  html[data-milxdy-reskin-profile] [data-testid^="message-"]:not([data-testid^="message-text-"])
+  div:has(> a[href*="/status/"]) {
+    background-color: var(--milxdy-surface) !important;
+  }
+
   html[data-milxdy-reskin-profile="max"] article:not([data-miladymaxxer-effect]) {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 34px),
@@ -1244,9 +1255,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] article:not([data-miladymaxxer-effect]),
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] article:not([data-miladymaxxer-effect]),
   html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] article:not([data-miladymaxxer-effect]),
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] article:not([data-miladymaxxer-effect]),
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) article:not([data-miladymaxxer-effect]),
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) article:not([data-miladymaxxer-effect]) {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] article:not([data-miladymaxxer-effect]) {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0) 24px),
       color-mix(in srgb, var(--milxdy-surface) 86%, var(--milxdy-mint-bg)) !important;
@@ -1349,7 +1358,7 @@ export const RESKIN_CSS = `
     div[aria-label="Image"],
     a[href*="/photo/"]
   ),
-  html[data-milxdy-reskin-profile="moderate"] :is([aria-modal="true"], [role="dialog"]) :is(
+  html[data-milxdy-reskin-profile="moderate"]:not([data-milxdy-visual-max-media-height="0"]) :is([aria-modal="true"], [role="dialog"]) :is(
     [data-testid="tweetPhoto"],
     [data-testid="videoPlayer"],
     div[aria-label="Image"],
@@ -1360,7 +1369,7 @@ export const RESKIN_CSS = `
     [data-testid="videoPlayer"] video,
     div[aria-label="Image"] img
   ),
-  html[data-milxdy-reskin-profile="moderate"] :is([aria-modal="true"], [role="dialog"]) :is(
+  html[data-milxdy-reskin-profile="moderate"]:not([data-milxdy-visual-max-media-height="0"]) :is([aria-modal="true"], [role="dialog"]) :is(
     [data-testid="tweetPhoto"] img,
     [data-testid="videoPlayer"] video,
     div[aria-label="Image"] img
@@ -1684,12 +1693,12 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [aria-label="Timeline: Trending now"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] [aria-label="Who to follow"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] aside [role="complementary"] > div > div,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [aria-label="Timeline: Trending now"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) [aria-label="Who to follow"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) aside [role="complementary"] > div > div,
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [aria-label="Timeline: Trending now"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) [aria-label="Who to follow"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) aside [role="complementary"] > div > div {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] aside [role="complementary"] > div > div,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [aria-label="Timeline: Trending now"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] [aria-label="Who to follow"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] aside [role="complementary"] > div > div {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 38px),
       var(--milxdy-surface) !important;
@@ -1718,10 +1727,10 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(0, 0, 0)"] div[aria-modal="true"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] div[role="dialog"],
   html[data-milxdy-reskin-profile="max"][style*="background-color: rgb(22, 24, 28)"] div[aria-modal="true"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) div[role="dialog"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(0, 0, 0)"]) div[aria-modal="true"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) div[role="dialog"],
-  html[data-milxdy-reskin-profile="max"]:has(body[style*="background-color: rgb(22, 24, 28)"]) div[aria-modal="true"] {
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"] div[aria-modal="true"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] div[role="dialog"],
+  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"] div[aria-modal="true"] {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 38px),
       var(--milxdy-surface) !important;

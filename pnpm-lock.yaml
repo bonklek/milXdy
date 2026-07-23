@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+overrides:
+  protobufjs: 7.6.5
+
 importers:
 
   .:
@@ -11,9 +14,6 @@ importers:
       '@tesseract.js-data/eng':
         specifier: ^1.0.0
         version: 1.0.0
-      '@unimusic/chromaprint':
-        specifier: ^0.1.4
-        version: 0.1.4
       jsqr:
         specifier: ^1.4.0
         version: 1.4.0
@@ -509,9 +509,6 @@ packages:
 
   '@types/qrcode@1.5.6':
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
-
-  '@unimusic/chromaprint@0.1.4':
-    resolution: {integrity: sha512-li+/NUjgvvPNEcWK1+72pxXT/vtfNpwWW2QNrh9+uccJ7tGT0Lnn0XCx9P+Sjnl9vJ2qa03dQYKV9w/i8o6Yww==}
 
   '@vitest/expect@4.1.9':
     resolution: {integrity: sha512-vl/rYsUKcBr3SnQn166+XR5ZQcgMx3DQhFWdfli/cWpLnLUmbxZvyrJZotLFUryib+LtArYMSTJ5RbQ57ZqrlA==}
@@ -1539,8 +1536,8 @@ packages:
   proto-list@1.2.4:
     resolution: {integrity: sha512-vtK/94akxsTMhe0/cbfpR+syPuszcuwhqVjJq26CuNDgFGj682oRBXOP5MJpv2r7JtE8MsiepGIqvvOTBwn2vA==}
 
-  protobufjs@7.6.4:
-    resolution: {integrity: sha512-RJJPTTpvFfHcWLkIa2JFWK4XvtSzS0yEWDmunqHXli1h3JlkbcQZXDZdcWxv+JK3Xsl5/UFDPZ0iGm7DAengYw==}
+  protobufjs@7.6.5:
+    resolution: {integrity: sha512-/FPD0nUc9jH6rfFjji9IBqOz4pcSE3CsT1m7Ep6Mdb0LxSUMj8hgl6GomOvZzpNpAqqGaXA0P3VSrZLFzIhQrw==}
     engines: {node: '>=12.0.0'}
 
   punycode@2.3.1:
@@ -2365,8 +2362,6 @@ snapshots:
   '@types/qrcode@1.5.6':
     dependencies:
       '@types/node': 24.13.2
-
-  '@unimusic/chromaprint@0.1.4': {}
 
   '@vitest/expect@4.1.9':
     dependencies:
@@ -3247,7 +3242,7 @@ snapshots:
       long: 5.3.2
       onnxruntime-common: 1.27.0
       platform: 1.3.6
-      protobufjs: 7.6.4
+      protobufjs: 7.6.5
 
   open@11.0.0:
     dependencies:
@@ -3375,7 +3370,7 @@ snapshots:
 
   proto-list@1.2.4: {}
 
-  protobufjs@7.6.4:
+  protobufjs@7.6.5:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
