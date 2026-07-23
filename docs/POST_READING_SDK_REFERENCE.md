@@ -1,6 +1,6 @@
 # Post-reading App SDK Reference
 
-Post-reading is the release-blocking external reference app for App SDK 0.2.3.
+Post-reading is the production external reference app for App SDK 0.2.3.
 Its feature source, settings, standalone adapter, package manifest, and
 compatibility declaration live in `bonklek/post-reading`. milXdy owns the public
 SDK runtime, shared services, trust policy, pinned source commit and package hash, and the mirror
@@ -21,7 +21,7 @@ verification.
 
 ## Capability Matrix
 
-| Capability | Status | Current boundary |
+| Capability | Status | Integration |
 | --- | --- | --- |
 | Lifecycle and surface delivery | Supported | Public `boot`, `onSurface`, `disable`, `dispose`, `open`, and `close` hooks. |
 | Scheduler and cancellation | Supported | Uses the public scheduler, abort signal, and disposable registration. |
@@ -31,10 +31,10 @@ verification.
 | Settings compatibility | Supported | The replacement is hash-pinned and explicitly trusted to retain built-in keys. |
 | Storage facade | Supported | Uses declared-key `context.storage` areas; undeclared access fails before reaching browser storage. |
 | Asset URL facade | Supported | `context.resolveAssetUrl()` authorizes package-owned paths and policy-granted host assets while rejecting unsafe or undeclared paths. |
-| OCR and background handlers | Host-provided gap | The initial reference uses milXdy's existing OCR assets and handlers. Package-owned background registration remains unsupported. |
-| Shared overlay/dock UI | Gap | Post-reading retains its own floating player until public primitives exist. |
-| Runtime install/update/remove | Unsupported | Packages are incorporated into reviewed custom builds, not injected into an installed extension. |
-| General non-X runtime | Unsupported | The current delivery runtime is X-first. |
+| OCR and background handlers | Host service | Uses milXdy's declared OCR assets and typed Post-reading handlers. |
+| Reader UI | App-owned surface | Uses its own floating player through the public lifecycle and asset facade. |
+| Distribution | Reviewed custom build | The verified package is incorporated into the generated extension. |
+| Host runtime | X surfaces | Receives X route and surface delivery from the shared runtime. |
 
 ## Synchronization Policy
 
@@ -45,7 +45,6 @@ and pass both repositories' verification. A source URL mismatch, compatibility
 drift, content hash change, direct runtime messaging, undeclared privilege, or
 composer/build failure blocks the integration.
 
-The reference package currently composes with zero sensitive package API
-findings. Its remaining reviewed dependencies are host-provided OCR resources
-and Post-reading background handlers, both declared in the compatibility
-matrix rather than accessed through private imports.
+The reference package composes with zero sensitive package API findings. Its
+host-provided OCR resources and Post-reading background handlers are declared
+in the compatibility matrix and accessed through public SDK capabilities.

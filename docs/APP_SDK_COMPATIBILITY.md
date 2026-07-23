@@ -21,9 +21,9 @@ under the previous schema. It does not change for every App SDK release.
 
 ## SemVer Policy
 
-Before App SDK `1.0.0`, minor releases may change preview APIs. Such a change
-must include updated declarations, fixtures, verification, and migration notes;
-silently changing the runtime context is not acceptable.
+Before App SDK `1.0.0`, minor releases may introduce contract changes. Every
+such change ships with updated declarations, fixtures, verification, and
+migration notes.
 
 Starting with App SDK `1.0.0`:
 
@@ -39,11 +39,9 @@ warns when its target differs.
 
 ## Capability Compatibility
 
-An accepted manifest is not proof that every requested runtime capability is
-implemented. Packages must degrade safely when a declared capability is absent.
-Until capability negotiation is added to the manifest/runtime facade, authors
-must treat optional behavior as unavailable unless the documented target SDK
-guarantees it.
+Manifest compatibility and runtime capability availability are separate checks.
+Packages use capabilities guaranteed by their target SDK and degrade safely
+when optional behavior is unavailable.
 
 App SDK `0.2.3` exposes `context.requestSurfaceRescan()` as the supported way to
 ask the shared X surface scanner to revisit already-rendered surfaces after a
@@ -59,14 +57,12 @@ closed.
 Package-owned assets resolve inside the package namespace; host-owned assets
 require repository policy. Unsafe and undeclared paths fail closed.
 
-Third-party package background handlers are not supported in the current
-reviewed custom-build contract. `background.messageTypes` declares messages a
-content bundle may send through `context.sendMessage`; it does not cause package
-background code to be installed.
+App packages use host-provided background services. `background.messageTypes`
+declares messages a content bundle may send through `context.sendMessage`; it
+does not install package-authored background code.
 
-The shared content runtime is X-first. A non-X `siteScopes` declaration records
-intent and permission review but does not imply that a general non-X content
-runtime exists.
+The shared content runtime delivers X routes and surfaces. Non-X `siteScopes`
+declare background-service, embedded-frame, or overlay integrations.
 
 ## Deprecation And Migration
 
@@ -82,16 +78,15 @@ runtime exists.
 
 ## Support Matrix
 
-| Surface | Current support |
+| Surface | Support |
 | --- | --- |
 | First-party bundled apps | Supported by the extension release contract. |
-| Reviewed local folder/ZIP composed into Chromium | App SDK preview; supported advanced-developer path. |
+| Reviewed local folder/ZIP composed into Chromium | Supported App SDK distribution path. |
 | Novel app enable/disable through generated Apps & Features metadata | Supported in composed builds. |
-| Package-owned background module | Unsupported. |
-| Runtime install into an already-installed extension | Unsupported. |
-| Remote marketplace install/update/remove | Unsupported. |
-| Capability-isolated third-party execution | Unsupported. |
-| General non-X content runtime | Not yet supported. |
+| Package-owned background module | Use host-provided declared services. |
+| Runtime install into an already-installed extension | Outside the custom-build distribution model. |
+| Remote marketplace install/update/remove | Outside the custom-build distribution model. |
+| Capability-isolated third-party execution | Packages are reviewed extension build inputs. |
+| General non-X content runtime | X content runtime; non-X host integrations are declared separately. |
 
-This matrix must be updated before public copy broadens the supported platform
-claim.
+This matrix defines the App SDK 0.2.3 compatibility boundary.

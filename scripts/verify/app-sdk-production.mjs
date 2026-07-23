@@ -52,9 +52,9 @@ for (const requirement of ["aria-labelledby", "Escape", "previousFocus", "panel.
 }
 assert(accessibilityGuide.includes("screen-reader") && accessibilityGuide.includes("200% zoom") && accessibilityGuide.includes("reduced motion"), "accessibility guide must define assistive technology, zoom, and motion expectations");
 assert(assetGuide.includes("package.webAccessibleAssets") && assetGuide.includes("license") && assetGuide.includes("not legal approval"), "asset guide must define declaration, licensing, and review boundaries");
-assert(readiness.includes("reviewed custom-build platform"), "production-readiness docs must define the supported near-term boundary");
-assert(readiness.includes("External proof"), "production-readiness docs must require an external integration proof");
-assert(compatibility.includes("Package-owned background module | Unsupported"), "compatibility policy must disclose unsupported package background modules");
+assert(readiness.includes("Supported Distribution Model"), "platform contract must define the supported distribution model");
+assert(readiness.includes("Post-reading is the production reference app"), "platform contract must identify the external integration proof");
+assert(compatibility.includes("Package-owned background module | Use host-provided declared services"), "compatibility policy must define the package background-service model");
 assert(docsIndex.includes("APP_SDK_COMPATIBILITY.md") && docsIndex.includes("APP_PLATFORM_PRODUCTION_READINESS.md"), "docs index must link SDK production policies");
 assert(docsIndex.includes("POST_READING_SDK_REFERENCE.md"), "docs index must link the external SDK reference");
 assert(referenceCompatibility.packageId === "post-reading", "external compatibility mirror must identify Post-reading");

@@ -1,28 +1,35 @@
 # milXdy App SDK
 
-milXdy first-party features now run through a shared app platform instead of each feature owning its own bootstrap path. The current SDK is intentionally local-first: built-in apps use the same manifest concepts future external packages should use, while external package loading, remote install/update UX, and a stable third-party API remain future work. Local app packages are privileged, reviewed custom-build inputs; they are not sandboxed runtime plugins.
+milXdy App SDK 0.2.3 is a production platform for building reviewed apps into
+custom Chromium distributions of milXdy. Apps declare their lifecycle,
+surfaces, settings, storage, assets, permissions, privacy effects, performance
+cost, background messages, and dock behavior through a versioned manifest.
 
-## Prepared SDK Status
+The shared runtime supplies X/Twitter route and surface delivery, scheduling,
+cancellation, diagnostics, guarded storage and assets, app-scoped messaging,
+Apps & Features integration, side-rail registration, and overlay UI patterns.
+The deterministic composer accepts app folders and ZIP archives, enforces the
+package trust contract, and produces a reviewable unpacked extension build.
 
-`0.2.0` shipped the first app-platform preview. `0.2.1` polished that platform for public beta distribution. `0.2.2` established the prepared local-first contract, and `0.2.3` hardens reviewed package composition, tamper detection, trust acknowledgements, and generated custom builds. The supported near-term product boundary and production exit criteria live in [App Platform Production Readiness](APP_PLATFORM_PRODUCTION_READINESS.md); version compatibility and deprecation rules live in [App SDK Compatibility](APP_SDK_COMPATIBILITY.md).
+Start with the [SDK starter kit](../sdk/README.md), then use this guide as the
+authoritative manifest, runtime, composition, and security reference. The
+[App Platform Support Contract](APP_PLATFORM_PRODUCTION_READINESS.md) defines
+the supported distribution model and guarantees. [App SDK Compatibility](APP_SDK_COMPATIBILITY.md)
+defines versioning and migration rules.
 
-This is still not the final remote community app system. Treat the APIs here as the current internal contract and public design direction, not a finalized third-party compatibility promise.
+## Platform Model
 
-The long-term goal is a complete composable app/mod system where default apps and community apps can live as packages in an apps folder. In that model, an app should declare its surfaces, permissions, assets, dock behavior, performance cost, privacy notes, and lifecycle hooks through a manifest instead of wiring itself directly into the extension root.
+First-party and external packages share the same app concepts: versioned
+metadata, runtime-owned lifecycle hooks, declared capabilities, generated
+settings ownership, and shared platform services. First-party apps ship with
+milXdy; external packages are reviewed and composed into deterministic custom
+builds.
 
-That final shape needs more refactoring before it can be safe and efficient. Most milXdy apps touch the same expensive X/Twitter substrate: timeline scanning, user/profile detection, route changes, media surfaces, visual effects, background fetches, and overlay panels. The platform needs those systems to stay shared so every app does not bring its own observer, poller, scanner, animation layer, or network queue. Until that extraction is complete, first-party apps remain bundled in the extension while the registry, lifecycle, Apps & Features, and rail establish the contract future packages should target.
-
-Developers can use this document to plan app ideas now, especially around manifests, declared surfaces, load triggers, performance cost, Apps & Features disclosure, settings schema, diagnostics, and docked UI behavior.
-
-For `0.2.2`, SDK preparation should focus on:
-
-- first-party app package boundaries and folder conventions
-- lifecycle hook stability
-- manifest metadata completeness
-- shared runtime/scanner usage instead of app-owned duplicate observers
-- settings/preset participation
-- dock/window behavior expected from app surfaces
-- diagnostics that can prove app runtime cost and scanner decisions
+An App SDK package owns its feature code and UI. milXdy owns shared page
+scanning, route detection, scheduling, network policy, app chrome, lifecycle,
+diagnostics, and package trust enforcement. This division prevents every app
+from installing a competing observer, poller, scanner, animation system, or
+network queue.
 
 ## App Manifest
 
@@ -44,8 +51,8 @@ Optional fields:
 - `css` files injected before the content bundle loads
 - `deliverySurfaces` to narrow which Twitter/X surface kinds call `onSurface()` when an app declares broader `surfaces` only for import timing
 - `lifecycle` metadata with `mode: "runtime"` for normal runtime-owned apps or `mode: "invoked"` for user-action-only tools that should not export `boot()`
-- `siteScopes` metadata for site-specific host, route, surface, and integration-mode declarations across X/Twitter, RemiliaNET, Remilia Wiki, Miladychan, and future reviewed sites
-- `packageKind` as `app`, `feature`, or `theme` so future package hosts can group install, settings, and review flows without inferring intent from the ID
+- `siteScopes` metadata for site-specific host, route, surface, and integration-mode declarations across X/Twitter, RemiliaNET, Remilia Wiki, Miladychan, and other reviewed hosts
+- `packageKind` as `app`, `feature`, or `theme` so Apps & Features and the composer can group install, settings, and review flows without inferring intent from the ID
 - `dock` metadata for apps that appear in the shared overlay dock
 - `chrome` metadata for app-window style compatibility: native style, supported shared presets, and notes about app-specific chrome constraints
 - `settings` metadata for user-configurable storage-backed controls
@@ -54,7 +61,7 @@ Optional fields:
 
 `src/platform/app-sdk/first-party-apps.json` is the source of truth for first-party package metadata. `src/platform/app-sdk/first-party-registry.ts` adapts that static registry into runtime manifests by adding storage-backed `isEnabled()` functions, and `scripts/build/build-extension.mjs` consumes the same JSON for bundle entries, copied assets, CSS, web-accessible files, and required outputs.
 
-Lifecycle metadata is intentionally small while the SDK remains local-first. Runtime-owned packages may omit `lifecycle` today, but packages that rely on unusual loading behavior should be explicit:
+Lifecycle metadata distinguishes runtime-owned packages from user-invoked tools:
 
 - `mode: "runtime"` means the shared content runtime owns imports, `boot()`, route/surface delivery, dock open/close, disable, dispose, abort signals, and diagnostics.
 - `mode: "invoked"` means the package is loaded only from a declared user action. It should use `loadTriggers: ["userAction"]`, avoid runtime delivery `surfaces`, declare `invokedBy: "userAction"` plus the platform load `reason`, and should not add a fake `boot()` export.
@@ -68,16 +75,16 @@ Supported site IDs are currently `x`, `remiliaNet`, `remiliaWiki`, and `miladych
 - `embeddedFrame` for behavior inside a validated embedded frame, such as the Wiki sidebar frame
 - `overlayApp` for a local overlay surface whose host relationship is user-initiated or service-backed rather than injected
 
-The current release still injects the main app runtime only on X/Twitter. RemiliaNET, Remilia Wiki, and Miladychan declarations describe background-service, embedded-frame, or overlay integrations unless a future manifest explicitly broadens content-script matches, permissions, privacy disclosure, and supported behavior. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
+The shared content runtime operates on X/Twitter. RemiliaNET, Remilia Wiki, and Miladychan declarations describe background-service, embedded-frame, or overlay integrations. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
 
 ## Settings Schema
 
-Apps, non-app features, and future theme packages declare user-configurable settings in the manifest `settings` array. The schema is intentionally descriptive first: current first-party UI can still use local bindings, while Apps & Features and future package hosts can discover where a setting lives, how it resets, and whether presets may change it without hard-coding every control.
+Apps, features, and theme packages declare user-configurable settings in the manifest `settings` array. Apps & Features uses this schema to discover where a setting lives, how it resets, and whether presets may change it without hard-coding every control.
 
 Each setting entry should include:
 
 - `id`: stable dotted identifier, usually `<appId>.<settingName>` or a global namespace such as `appearance.appWindowStyle`
-- `label` and optional `description`: public copy that can appear in settings search, Apps & Features details, import previews, and future generated controls
+- `label` and optional `description`: public copy for settings search, Apps & Features details, import previews, and generated controls
 - `scope`: `global`, `app`, or `feature`
 - `location`: `appearance`, `appsAndFeatures`, `appSurface`, or `advanced`
 - optional `role`: `preference`, `enablement`, `open`, or `reset`; omitted means a normal detailed preference
@@ -89,9 +96,9 @@ Each setting entry should include:
 - optional `presetBehavior.overwriteWarning` and `presetBehavior.saveAsCustom` for settings whose current value can be replaced by an imported preset or profile pack
 - optional `advanced` and `requires` fields for controls that should stay out of default flows or depend on a capability such as an authenticated session
 
-Use `scope: global` only for settings that intentionally affect more than one app or surface, such as Appearance profile, app chrome style, app shadows, Performance mode, or future side-rail layout. App-owned settings belong to `scope: app` even when the app is docked in the rail. Page-wide non-window features such as inline wiki linking or RemiStats badges use `scope: feature`.
+Use `scope: global` only for settings that intentionally affect more than one app or surface, such as Appearance profile, app chrome style, app shadows, Performance mode, or side-rail layout. App-owned settings belong to `scope: app` even when the app is docked in the rail. Page-wide non-window features such as inline wiki linking or RemiStats badges use `scope: feature`.
 
-Use `role` to distinguish app-card affordances from detailed preferences. App-owned settings in Apps & Features may declare `role: "enablement"`, `role: "open"`, or `role: "reset"` when the control belongs beside the card's enable/open/reset actions. Detailed app preferences remain `role: "preference"` or omit the field and should live in an app surface, an explicit app settings surface, or a temporary popup mirror until migration is complete. Legacy keys can still be enablement controls when real behavior uses them that way; Milady Maxxer `mode`, for example, is stored as a mode value but still carries app on/off behavior through `off` versus enabled modes.
+Use `role` to distinguish app-card affordances from detailed preferences. App-owned settings in Apps & Features may declare `role: "enablement"`, `role: "open"`, or `role: "reset"` when the control belongs beside the card's enable/open/reset actions. Detailed app preferences remain `role: "preference"` or omit the field and live in an app surface, an explicit app settings surface, or a supported popup mirror. Legacy keys can still be enablement controls when real behavior uses them that way; Milady Maxxer `mode`, for example, is stored as a mode value but still carries app on/off behavior through `off` versus enabled modes.
 
 Storage metadata must match the actual browser storage location. If the value is stored inside an object, declare the object key and the `property`; if the setting owns a whole key, omit `property`. Keep `storageKeys` at the app level as the reset and change-detection list, and use `settings` to describe the user-facing controls inside those keys.
 
@@ -99,21 +106,21 @@ Preset participation is opt-in per setting. Visual presets should only touch vis
 
 Never mark authentication tokens, sessions, cookies, API keys, local absolute file paths, private cache payloads, or remote account data as preset/profile-pack participants. Local package manifests must not expose those values through generated settings controls at all, and novel packages must not claim built-in registry storage keys unless they are trusted first-party replacements. Sensitive values may appear in internal storage keys, but the settings schema should expose only safe controls and public reset behavior.
 
-Apps & Features cards use manifest settings metadata for details and search. A future generated settings renderer should build from the same schema instead of adding per-app switch statements.
+Apps & Features cards and generated settings surfaces use the same manifest schema instead of per-app switch statements.
 
 Use `control.options` for select or segmented controls with stable, enumerable values. Use `control.dynamicOptions` when values come from a runtime provider such as browser/OS Web Speech voices; the manifest should name the provider, value field, label field, refresh event when relevant, and portability limits. Do not add placeholder static options for provider-owned values, and make profile-pack flows preview or fall back when a dynamic value is unavailable on another browser profile.
 
 ## Profile Packs
 
-Profile packs are versioned shareable bundles for settings that are broader than one custom visual theme. The current public schema is `kind: "milxdy.profilePack"` with `version: 1`, implemented in `src/platform/settings/profile-packs.ts`.
+Profile packs are versioned shareable bundles for settings that are broader than one custom visual theme. The public schema is `kind: "milxdy.profilePack"` with `version: 1`, implemented in `src/platform/settings/profile-packs.ts`.
 
 A pack may contain these top-level sections:
 
 - `appearance`: the current reskin profile and a nested `milxdy.visualTheme` payload, preserving compatibility with the existing visual theme export/import/share format
 - `performance`: Performance mode, currently stored at `milxdy.performance.mode`
-- `apps`: declared app enablement values, once export/import UI opts those settings in
-- `rail`: declared side-rail pins and side preference, once export/import UI opts those settings in
-- `layout`: declared layout and app chrome override values, once export/import UI opts those settings in
+- `apps`: declared app enablement values
+- `rail`: declared side-rail pins and side preference
+- `layout`: declared layout and app chrome override values
 
 The first import/export UI supports `appearance` plus the non-visual `performance` section. Existing appearance theme JSON export/import and appearance share strings remain separate and continue to work; profile packs nest the visual theme rather than replacing that format.
 
@@ -123,7 +130,7 @@ The current UI writes only these keys during profile-pack import:
 - `milxdy.settings.visualTheme`
 - `milxdy.performance.mode`
 
-Future profile-pack sections may include declared app enablement, rail pins, rail side, layout, and app chrome override keys after those settings opt into `profilePack`. They must exclude auth tokens, session cookies, API keys, private account data, local absolute file paths, large caches, and diagnostic payloads. Settings should participate in profile packs only when their manifest entry includes `profilePack` in `presets`.
+Profile-pack sections may include declared app enablement, rail pins, rail side, layout, and app chrome override keys only when those settings opt into `profilePack`. They must exclude auth tokens, session cookies, API keys, private account data, local absolute file paths, large caches, and diagnostic payloads.
 
 Import flows must preview the sections and changes before writing storage, allow cancel, and ignore unsupported or excluded classes. If a pack would replace customized settings, the UI should warn and preserve a save-as-custom path where the source flow supports custom profiles.
 
@@ -178,11 +185,11 @@ The menu is organized by manifest `packageKind`:
 
 - `app`: full app surfaces with a rail entry, pop-out, or major app window, such as Music, Post-reading, RemiNet Chat, Beetol, Miladychan, Wiki, and Maxxer
 - `feature`: non-app modules that extend X/Twitter surfaces without their own app window, such as RemiStats, Tweet PNG, Composer Tools, injected controls, and page-level visual effects
-- `theme`: future texture, visual, or profile packages that should appear as installable packages without pretending to be launchable apps
+- `theme`: texture, visual, or profile packages that appear as installable packages without pretending to be launchable apps
 
 Full apps and features can share categories such as `reading`, `social`, `appearance`, `media`, or `game`, but category should not decide the IA section. Use `packageKind` for section placement and `hub.category` for filtering, chips, and search.
 
-Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.defaultPinned` is app-store metadata for first-run presets and future package install flows; it should not be confused with current-user pin state. The shared dock enforces hidden item IDs globally, so feature bundles cannot bypass Hub pinning by registering their own app frame after lazy import.
+Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.defaultPinned` supplies the initial rail choice for first-run presets and package install flows; it is separate from current-user pin state. The shared dock enforces hidden item IDs globally, so feature bundles cannot bypass Hub pinning by registering their own app frame after lazy import.
 
 Current first-party Apps & Features-managed enablement keys include Post-reading `enabled`, Composer Tools `milxdy.composerTools.enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links `remiliaWikiHyperlink.settings.enabled`, Wiki sidebar `remiliaWikiHyperlink.settings.sidebarEnabled` with fallback migration from the legacy Wiki links bit when unset, and Milady Maxxer `mode` as a legacy enablement/mode key.
 
@@ -194,11 +201,7 @@ Apps & Features cards derive their compact metadata chips from the same registry
 
 The card Details toggle is also registry-driven. It expands to show the app description, performance cost profile, load triggers, settings home, data notes, permission notes or hosts, storage notes or keys, diagnostics/runtime state, and build availability. Cards with declared storage keys also get a reset-settings action that restores declared setting defaults, resets object-backed settings by property, skips shared broad keys unless a setting explicitly owns the whole key, re-reads manifest enablement, updates dock/scanner state, and records `hub.reset.<appId>` diagnostics without importing the app bundle. Do not hard-code per-app disclosure copy or reset key lists when a registry field can describe it.
 
-Global controls and presets stay in the top-right extension popup. Apps & Features owns app/feature enablement, launch/open actions, rail pinning, storage reset, permissions/privacy/data disclosure, diagnostics/status rows, and shortcuts into app-owned settings. App-owned settings in Apps & Features must declare an enablement/open/reset role; detailed app preferences should live in the app window or app settings surface. Feature settings should surface directly in Apps & Features once generated setting controls are implemented.
-
-Reserve a future package area inside Apps & Features for reviewed marketplace links and local package loading. Reviewed marketplace entries should be visually distinct from unreviewed local packages. Local loading should expose Load/Reload apps, validation status, incompatible-package messages, declared kind grouping, safe disable/remove/reset actions, and permission/data-use disclosure before enabling sensitive or remote-service packages.
-
-Right-click settings shortcuts on rail app icons are a useful future affordance, but they should open the same app-owned settings surface described by the manifest rather than creating a second settings location.
+Global controls and presets stay in the top-right extension popup. Apps & Features owns app/feature enablement, launch/open actions, rail pinning, storage reset, permissions/privacy/data disclosure, diagnostics/status rows, and shortcuts into app-owned settings. App-owned settings in Apps & Features declare an enablement/open/reset role; detailed app preferences live in the app window or app settings surface. Feature settings use manifest-driven controls in Apps & Features.
 
 ## Performance Modes
 
@@ -229,7 +232,7 @@ Apps should own only their feature UI and state. Shared panel mechanics should s
 
 Panel apps should use `observeOverlayPanelTheme()` and `resolveOverlayPanelTheme()` instead of each app wiring its own X theme or color-scheme observer. This keeps Music, Miladychan, RemiNet Chat, and Beetol aligned with the same root theme signal.
 
-Use the shared overlay drag and resize helpers for movable app windows. Header buttons, links, form controls, and editable fields must stay clickable and should not accidentally start a drag; the shared drag helper ignores those interactive descendants by default. If an app intentionally uses an interactive-looking control as its drag handle, document that exception in code with `allowInteractiveDragTarget` so future audits can tell it apart from accidental bubbling.
+Use the shared overlay drag and resize helpers for movable app windows. Header buttons, links, form controls, and editable fields must stay clickable and should not accidentally start a drag; the shared drag helper ignores those interactive descendants by default. If an app intentionally uses an interactive-looking control as its drag handle, document that exception in code with `allowInteractiveDragTarget` so compliance audits can tell it apart from accidental bubbling.
 
 Overlay layout records live in `local:milxdy.overlayApps.layouts.v1`. They may store app IDs, pixel bounds, rail side, viewport size, snap metadata, and timestamps; they must not store page URLs, account identifiers, iframe contents, board/thread payloads, music library paths, auth state, or remote-service data. Keep legacy per-app width, height, and top keys readable during migration.
 
@@ -247,7 +250,7 @@ The global Appearance control stores `appWindowStyle` in `milxdy.settings.visual
 
 Apps declare chrome compatibility in `src/platform/app-sdk/first-party-apps.json` with `chrome.nativeStyle`, `chrome.supportedStyles`, and optional `chrome.notes`. Native style names can identify app-authored examples such as `maxxer`, `reader`, `miladychan`, `music`, or `wiki`, while `supportedStyles` should include the shared styles the app can safely receive without losing its core affordances.
 
-Future per-app overrides should build on that manifest metadata instead of creating app-local theme storage. The intended model is: one global default, optional per-app override to a supported style, and `native` as the escape hatch that preserves the app's authored look.
+Per-app overrides build on that manifest metadata instead of creating app-local theme storage: one global default, an optional per-app override to a supported style, and `native` as the escape hatch that preserves the app's authored look.
 
 ## Background Services
 
@@ -257,15 +260,15 @@ App SDK `context.sendMessage()` calls are app-scoped. The content runtime extrac
 
 Use `src/platform/browser/url-allowlist.ts` for background fetch URL policy checks. Service handlers should declare small rule sets near the service they protect, then call `parseAllowedUrl()` or `isAllowedUrl()` before any fetch that uses a URL supplied by content scripts, app UI, remote payloads, QR imports, or user-controlled metadata.
 
-Feature-specific background modules can continue to register handlers during migration, but new shared services should be added through the router. Direct `safeRuntimeMessage`, `chrome.runtime.sendMessage`, and `chrome.runtime.connect` bridges are allowed only for documented internal surfaces that cannot receive App SDK context, such as packaged frames or stateful streaming ports. They are internal privileged bridges, not local package APIs and not sandbox boundaries; those bridges must add sender validation in background handlers and remain visible in compliance verification.
+Shared services register through the router. Direct `safeRuntimeMessage`, `chrome.runtime.sendMessage`, and `chrome.runtime.connect` bridges are reserved for documented internal surfaces that cannot receive App SDK context, such as packaged frames or stateful streaming ports. They are internal privileged bridges rather than local package APIs; each bridge validates senders in its background handler and remains covered by compliance verification.
 
-## First-Party Compliance Checklist
+## Package Compliance Contract
 
-Run `pnpm.cmd run verify:app-sdk-compliance` after changing first-party app metadata, lifecycle exports, app entries, background routes, generated Apps & Features settings, or shared scanner/scheduler/overlay behavior. The verifier is deterministic and no-network; it freezes the objective parts of the current local-first contract while reporting current migration gaps as warnings. Run `pnpm.cmd run verify:internal-messaging-bridges` after touching the remaining internal frame or port bridges so their sender restrictions stay explicit.
+Run `pnpm.cmd run verify:app-sdk-compliance` after changing app metadata, lifecycle exports, app entries, background routes, generated Apps & Features settings, or shared scanner/scheduler/overlay behavior. The verifier is deterministic and no-network. Run `pnpm.cmd run verify:internal-messaging-bridges` after changing an internal frame or port bridge so sender restrictions stay explicit.
 
 First-party apps and feature packages should satisfy this checklist:
 
-| Area | Current compliance target |
+| Area | Requirement |
 | --- | --- |
 | Manifest metadata | `src/platform/app-sdk/first-party-apps.json` declares IDs, package kind, content entry, enablement storage, surfaces, cost, load triggers, Hub category, rail support, presets, storage/data/privacy notes, chrome compatibility, settings metadata, and background metadata where applicable. |
 | Lifecycle exports | Content bundles export `boot()` when runtime-loaded, plus `onSurface()`, `onRouteChange()`, `open()`, `close()`, `disable()`, and `dispose()` when their declared surfaces require those hooks. Invoked-only tools declare `lifecycle.mode: "invoked"`, stay `userAction`-only, and do not add fake `boot()` hooks. |
@@ -276,38 +279,38 @@ First-party apps and feature packages should satisfy this checklist:
 | Background/router metadata | Background fetches and privileged work go through `backgroundRouter` and URL allowlists. Manifest `background.messageTypes`, `background.services`, `permissions.hosts`, permission notes, data notes, remote services, and privacy labels must describe the routed work. |
 | Generated settings ownership | Apps & Features generated controls read manifest settings and shared storage helpers from the platform layer; the renderer must not import app bundles. App-owned detailed settings should stay in app surfaces unless they are enable/open/reset/disclosure controls. |
 | Reset and storage safety | App-level `storageKeys` and setting-level `storage` metadata must match real storage. Reset must restore declared defaults, preserve unrelated properties inside shared object keys, and avoid exporting secrets, sessions, local file handles, caches, diagnostics payloads, or user queues through presets/profile packs. |
-| Cost, privacy, and permissions | Cost metadata, remote-service notes, host permissions, local-storage notes, and privacy labels must stay accurate enough for Apps & Features details, Health diagnostics, and future package review. |
+| Cost, privacy, and permissions | Cost metadata, remote-service notes, host permissions, local-storage notes, and privacy labels must stay accurate for Apps & Features details, Health diagnostics, and package review. |
 | Diagnostics | The runtime records app load state, import avoidance, heavy/worker/network app lists, surface delivery, scheduler, network queue, storage reset, long-task, and layout-shift diagnostics from shared metadata rather than per-app hard-coded lists. |
 
-Current first-party status:
+First-party platform examples:
 
-| Package | Status | Notes and follow-up prompts |
+| Package | Integration | Notes |
 | --- | --- | --- |
 | RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream remains a stateful `runtime.connect` bridge between validated same-extension top-frame X/Twitter and RemiliaNET senders. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
 | Miladychan Portal | Aligned | Uses shared overlay chrome, route through background router, and declares remote-service/privacy metadata. Keep public board fetches on allowlisted routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
-| Remilia Wiki hyperlinks | Mostly aligned | Inline feature uses shared surface delivery. Feature preferences, including previews and draft workflow mode, are generated in Apps & Features while popup controls remain storage-compatible mirrors. |
+| Remilia Wiki hyperlinks | Shared surface feature | Inline delivery and manifest-generated Apps & Features preferences with storage-compatible popup mirrors. |
 | Remilia Wiki sidebar | Aligned with internal iframe bridge | Uses shared overlay chrome and declares its wiki sidebar background routes. Frame-local observers and frame-to-background messages are sidebar-frame implementation details; background handlers validate same-extension non-top wiki frame senders before forwarding navigation, history, open-tab, or read-aloud messages. |
-| Post-reading | Mostly aligned with internal OCR frame bridge | Uses shared scanner delivery, overlay player chrome, App SDK routed full-quote fetches, and background fetch router. The packaged OCR frame may request image blobs through a direct helper message, but the background handler restricts that route to the packaged `ocr.html` sender, and the web-accessible OCR frame only accepts parent requests from allowed X/Twitter/wiki origins after a content-issued frame authentication token is initialized. Voice selection declares dynamic Web Speech options, so generated settings and profile-pack flows should treat saved voice URIs as browser-profile dependent. |
-| RemiStats and Pokes | Transitional | Runtime uses shared surface delivery and background router. Some generated settings write local keys that are not yet listed in `storageKeys.local`; align reset/storage metadata before hiding old popup mirrors. |
-| Milady Maxxer | Mostly aligned, heavy app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work. Keep heavy model, remote identity, and cache disclosures explicit; app-owned settings should stay in app surfaces except enablement. |
+| Post-reading | Shared reader and OCR services | Uses shared scanner delivery, overlay player chrome, App SDK routed full-quote fetches, and the background fetch router. The packaged OCR frame accepts authenticated parent requests from allowed X/Twitter/wiki origins, and its background helper validates the packaged `ocr.html` sender. Voice selection declares dynamic Web Speech options, so saved voice URIs remain browser-profile dependent. |
+| RemiStats and Pokes | Shared surface and background services | Uses shared surface delivery, routed background work, generated settings metadata, and declared storage ownership. |
+| Milady Maxxer | Worker-heavy overlay app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work with explicit model, remote identity, and cache disclosures. |
 | Tweet PNG | Invoked-only | Declares `lifecycle.mode: "invoked"` and remains a local `userAction` package loaded by Root Visuals from the X share-menu action. If it becomes a runtime app, change the lifecycle mode, add real lifecycle exports, and keep PNG rendering local and user initiated. |
 | Composer Tools | Aligned lightweight feature | Runtime-loaded local-only feature with a metadata-backed Apps & Features enablement toggle. Its document input listeners are scoped to supported X/Twitter post composers and cleaned up through runtime disposables. |
-| Root Visuals | Core feature with bounded page-chrome observers | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, the home-logo observer attaches only to discovered header/h1 page-chrome roots with route/boot retries for late X SPA rendering, and the click-triggered Tweet PNG share-menu observer is scheduler-capped and cleaned up. A fuller shared page-chrome scanner/service remains deferred to #39/#90/#64. |
+| Root Visuals | Core visual runtime feature | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, the home-logo observer attaches only to discovered header/h1 page-chrome roots, and the click-triggered Tweet PNG share-menu observer is scheduler-capped and cleaned up. |
 
-Known schema and runtime limitations:
+Platform boundaries:
 
-- Lifecycle and site support now has manifest metadata for invoked-only tools, X direct-message routes, and current RemiliaNET, Wiki, and Miladychan service/frame integrations. The shared runtime remains X-content-script-first; do not silently assume every non-X site scope is backed by the Twitter/X scanner or a content-script app runtime.
+- Lifecycle and site metadata covers invoked-only tools, X direct-message routes, and RemiliaNET, Wiki, and Miladychan service/frame integrations. The shared content runtime is X-specific; non-X scopes use their declared background, frame, or overlay integration.
 - Background route metadata is checked against shared router registrations, with first-party app message patterns declared in the registry.
-- App-owned scheduler/timer fallbacks should become app-specific follow-up work, not hidden verifier exceptions.
-- App-owned settings in Apps & Features are acceptable for enable/open/reset controls, but detailed app settings should move to app surfaces or explicit app settings surfaces.
+- Package work uses the shared scheduler unless a bounded, disposable app-specific mechanism is required.
+- Apps & Features owns enable/open/reset controls and disclosure; detailed preferences belong to app surfaces.
 
 ## Local Apps-Folder Package Shape
 
-External package loading is not implemented yet inside an already-loaded store extension. The current local path is reviewed custom-build composition: a package is composed into a new unpacked Chromium build, reviewed by the developer, and then loaded as that custom build. The package contract below must stay compatible with the first-party registry and the runtime contract described above.
+The App SDK distribution path is reviewed custom-build composition: milXdy composes selected packages into a deterministic unpacked Chromium build and records the resulting trust, permission, asset, and package metadata for review.
 
-Expected install shape:
+Package shape:
 
 ```text
 apps/
@@ -321,7 +324,7 @@ apps/
       preview.png
 ```
 
-A copied folder or zip should have one package root and one required `milxdy.app.json` at that root. Normal users should not need to edit source files, build config, extension manifests, or registry JSON to try a future local package; the package should ship prebuilt bundles and declared assets. A future Load/Reload apps action should discover packages, validate them, show compatible/incompatible status, and keep malformed packages disabled with visible errors.
+A folder or ZIP has one package root and one required `milxdy.app.json` at that root. Packages ship prebuilt bundles and declared assets; authors and users do not edit milXdy source files, build configuration, extension manifests, or registry JSON.
 
 `milxdy.app.json` should use manifest version `1` and map onto `MilxdyLocalAppPackageManifestV1` in `src/platform/app-sdk/app-platform.ts`. Required fields:
 
@@ -402,14 +405,12 @@ apps must not import private helpers from `src/platform/overlay`.
 
 ### Package Fixtures
 
-The first-party package-shape pilots live under `examples/packages/first-party-replacements/`. They are fixtures for built-in replacement and registry compatibility:
+First-party replacement fixtures live under `examples/packages/first-party-replacements/`. They demonstrate built-in replacement and registry compatibility:
 
 - `examples/packages/first-party-replacements/tweetPng/` converts the first-party Tweet PNG metadata into a package root with `milxdy.app.json`, a placeholder prebuilt `dist/content.js`, and a declared icon asset. It proves the invoked/user-action `feature` shape: `lifecycle.mode: "invoked"`, `loadTriggers: ["userAction"]`, X site scope metadata, Apps & Features settings metadata, local-only privacy notes, and no dock or runtime delivery surfaces.
 - `examples/packages/first-party-replacements/wikiSidebar/` converts the first-party Wiki Sidebar metadata into a docked `app` package root with `milxdy.app.json`, placeholder prebuilt content/frame files, CSS, and a declared icon asset. It proves the overlay app shape: runtime lifecycle, `dock` and chrome metadata, embedded Wiki site scope, permission/privacy disclosure, background message metadata, and web-accessible assets.
 
-Run `pnpm.cmd run verify:local-app-packages` to validate those pilot packages. The verifier checks manifest version, ID/folder alignment, SDK compatibility, package kind rules, safe package-relative paths, declared file existence, lifecycle exports, site scopes, settings storage metadata, permissions/privacy disclosure, package assets, and absence of first-party-only runtime/build fields such as `entryName`, `entryPoint`, `requiredOutputs`, `isEnabled`, and `setEnabled`.
-
-These pilots advance #54 by proving the package root shape against real first-party metadata. They also give #101 concrete input examples for the local package composer.
+Run `pnpm.cmd run verify:local-app-packages` to validate the fixtures. The verifier checks manifest version, ID/folder alignment, SDK compatibility, package kind rules, safe package-relative paths, declared file existence, lifecycle exports, site scopes, settings storage metadata, permissions/privacy disclosure, package assets, and absence of first-party-only runtime/build fields such as `entryName`, `entryPoint`, `requiredOutputs`, `isEnabled`, and `setEnabled`.
 
 Novel package verification is separate so third-party developers do not accidentally validate the checked-in first-party fixtures:
 
@@ -463,9 +464,9 @@ The bundled Remilia Wiki assistant helper ZIP is packaged for the extension popu
 
 Zip archives must contain exactly one package root with `milxdy.app.json` at the archive root. The composer rejects missing manifests, nested or multiple manifests, malformed JSON, encrypted entries, unsupported compression, absolute paths, `..` traversal, unsafe filenames, files outside the package root, oversized entries, and oversized archives before producing a plan. Zip entries are extracted only into ignored `tmp/local-app-composition/extracted/` working folders so the normal build can copy declared package files by path; no package code is executed during composition.
 
-The package-set conflict model rejects duplicate local package IDs, incompatible SDK versions, unsafe or missing declared files, invalid background message patterns, duplicate or overlapping background message types/services, background capabilities without review disclosure and consent, storage-key ownership conflicts, host permissions without privacy notes, site/route conflicts, web-accessible asset and asset-ID collisions, invalid package-kind capabilities, sensitive profile-pack participation, blocked review status, unacknowledged local review, unacknowledged privileged/consent surfaces, and app chrome/theme override conflicts without deterministic precedence. Local packages whose ID matches a built-in app intentionally shadow that built-in app only inside the generated custom build plan; this keeps the pilot fixtures usable while still rejecting duplicate IDs within the selected local package set.
+The package-set conflict model rejects duplicate local package IDs, incompatible SDK versions, unsafe or missing declared files, invalid background message patterns, duplicate or overlapping background message types/services, background capabilities without review disclosure and consent, storage-key ownership conflicts, host permissions without privacy notes, site/route conflicts, web-accessible asset and asset-ID collisions, invalid package-kind capabilities, sensitive profile-pack participation, blocked review status, unacknowledged local review, unacknowledged privileged/consent surfaces, and app chrome/theme override conflicts without deterministic precedence. Local packages whose ID matches a built-in app intentionally shadow that built-in app only inside the generated custom build plan; this keeps the replacement fixtures usable while still rejecting duplicate IDs within the selected local package set.
 
-Review metadata is preserved in reports, generated app metadata, and `local-app-composition.json`. `review.status: "blocked"` is rejected, `review.status: "reviewed"` is treated as accepted metadata for ordinary local packages, and missing or `local` review status is rejected unless the developer passes `--allow-local-review`. Built-in app ID replacement is stricter: package-authored review metadata is not a trust root, so replacements must match the repo-owned root and package SHA-256 policy in `scripts/packages/local-app-first-party-replacements.json` in addition to `--acknowledge-first-party-replacement`. The checked-in first-party pilot fixtures under `examples/packages/first-party-replacements/<id>` are the only current allowed replacements. Reports separate accepted packages, rejected packages, required acknowledgements, trust/consent decisions, scanner findings, warnings, and errors. Reports and build plans include SHA-256 hashes for package archives, package file sets, and copied files so future signature and review tooling has a stable attachment point. If a selected package set is rejected, the composer may write `composition-report.json` but does not emit a build plan.
+Review metadata is preserved in reports, generated app metadata, and `local-app-composition.json`. `review.status: "blocked"` is rejected, `review.status: "reviewed"` is treated as accepted metadata for ordinary local packages, and missing or `local` review status is rejected unless the developer passes `--allow-local-review`. Built-in app ID replacement is stricter: package-authored review metadata is not a trust root, so replacements must match the repo-owned root and package SHA-256 policy in `scripts/packages/local-app-first-party-replacements.json` in addition to `--acknowledge-first-party-replacement`. The checked-in first-party replacement fixtures under `examples/packages/first-party-replacements/<id>` are the allowed replacements. Reports separate accepted packages, rejected packages, required acknowledgements, trust/consent decisions, scanner findings, warnings, and errors. Reports and build plans include SHA-256 hashes for package archives, package file sets, and copied files as a stable attachment point for provenance and review tooling. If a selected package set is rejected, the composer may write `composition-report.json` but does not emit a build plan.
 
 The composer statically scans declared text payloads while skipping binary
 assets. It flags direct `chrome.runtime.sendMessage`/`connect`,
@@ -497,7 +498,7 @@ That one action reruns the composer through `scripts/build/build-local-apps.mjs`
 
 On a clean checkout using the checked-in examples fallback, the first-party replacement acknowledgement is required because the examples intentionally shadow built-in app IDs.
 
-This builder supports folder packages and zip archives. Marketplace discovery, full cryptographic signature enforcement, remote trust policy, and polished GUI install/update UX remain follow-up work before local app loading can ship to normal users.
+The builder supports folder packages and ZIP archives. It produces an unpacked Chromium distribution for developer review and local installation.
 
 Background declarations are metadata-only for third-party local packages in this release. `background.messageTypes` may declare the message types a content bundle is allowed to send through `context.sendMessage`, and those message types must live under the package's own namespace such as `dev-note:*`. The composer does not copy, import, or register package-owned background handlers. `background.services` and extra fields such as `background.entry` are rejected until a reviewed package-owned background-loader design exists.
 
@@ -506,10 +507,10 @@ Shared-service expectations:
 - Content bundles export SDK lifecycle hooks and use `context.scheduler`, `context.signal`, `context.sendMessage`, `context.recordDiagnostic`, and shared scanner delivery instead of app-owned duplicate observers, direct runtime messaging, or unbounded polling.
 - Overlay packages use `overlayDock`, `overlayAppFrame`, and `overlayPanelBase` behavior instead of custom drag/resize/layout primitives.
 - Background work declares `background.messageTypes`, `background.services`, `permissions.hosts`, privacy notes, and URL allowlists before the router enables it.
-- Settings use the manifest settings schema and storage metadata so Apps & Features, profile packs, reset, and future import/export previews can reason about them without importing the app bundle.
+- Settings use the manifest settings schema and storage metadata so Apps & Features, profile packs, reset, and import/export flows can reason about them without importing the app bundle.
 - Packages that declare non-X sites must distinguish `contentScript`, `backgroundService`, `embeddedFrame`, and `overlayApp` integrations; a host permission alone does not mean the full content runtime should inject there.
 
-Completed safeguards for the reviewed custom-build path:
+Security and trust safeguards:
 
 - deterministic manifest, archive, path, asset, lifecycle, settings, background-message, permission, privacy, and URL metadata validation
 - fail-closed trust and consent acknowledgements for local review, privileged package surfaces, sensitive API exceptions, and first-party replacements
@@ -517,24 +518,12 @@ Completed safeguards for the reviewed custom-build path:
 - package and build-plan hashes plus builder-side tamper checks before copied code reaches a generated build
 - static payload review gates that block direct runtime messaging and require reviewed acknowledgement for permitted non-runtime sensitive API exceptions
 
-Remaining blockers before normal-user package loading or marketplace installation can ship:
+## Distribution Boundary
 
-- a complete install/update/rollback/remove UI with permission and data-retention consent, package-owned storage cleanup, incompatibility recovery, and revocation behavior
-- a runtime membrane or sandbox with explicit CSP and capability rules; the static scanner is not isolation
-- a supported package-owned background capability model or a sufficient set of typed shared services
-- external reference-app validation covering lifecycle, messaging, settings migration, failure recovery, compatibility, and cleanup without private imports
-- required CI coverage for SDK compliance, internal bridges, package integration, and trust gates
-- canonical review, signing/provenance, checksum, update, and blocking policy for marketplace listings
-
-## Future GitHub App Store Path
-
-A GitHub-hosted app package should map cleanly onto the same `milxdy.app.json` shape:
-
-- manifest version, SDK compatibility, ID, display metadata, version, declared surfaces, permissions, background services, CSS, and assets
-- Hub metadata with user-facing descriptions, preset membership, rail defaults, data/permission notes, and privacy labels
-- a prebuilt content entry bundle using the lifecycle hooks
-- optional background handlers that declare message types and host allowlists
-- no broad DOM observers or interval scans unless justified by the package review notes
-- no host access beyond declared allowlists
-
-Before remote packages are supported, the platform needs manifest signature/verification, install consent UI, update policy that reuses or adapts the existing GitHub release updater where appropriate, package sandboxing rules, and review tooling for permissions and performance diagnostics.
+App SDK 0.2.3 packages are incorporated into reviewed custom builds. The SDK
+does not inject new JavaScript into an already-installed extension, and its
+static review scanner is not described as a JavaScript sandbox. Package-owned
+background modules use host-provided typed services and declared message
+routes. These boundaries keep the supported platform precise without limiting
+what authors can build through the public lifecycle, storage, asset, messaging,
+surface, overlay, settings, and diagnostic APIs.

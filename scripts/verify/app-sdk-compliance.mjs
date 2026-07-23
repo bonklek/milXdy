@@ -84,17 +84,17 @@ function verifyLocalPackageShapeContract() {
   requireIncludes(appPlatform, "\"isEnabled\" | \"setEnabled\"", "local package manifest must not include runtime enablement adapter functions");
 
   requireIncludes(appSdkDocs, "## Local Apps-Folder Package Shape", "App SDK docs must define the local apps-folder package shape");
-  requireIncludes(appSdkDocs, "External package loading is not implemented yet", "package docs must not imply the local loader exists today");
-  requireIncludes(appSdkDocs, "apps/", "package docs must show the future apps folder root");
+  requireIncludes(appSdkDocs, "reviewed custom-build composition", "package docs must define the supported custom-build distribution path");
+  requireIncludes(appSdkDocs, "apps/", "package docs must show the package folder root");
   requireIncludes(appSdkDocs, "milxdy.app.json", "package docs must require the package manifest file");
   requireIncludes(appSdkDocs, "manifestVersion: 1", "package docs must document the manifest version");
   requireIncludes(appSdkDocs, "sdk.minVersion", "package docs must document SDK compatibility");
   requireIncludes(appSdkDocs, "entryName", "package docs must distinguish first-party build-only fields");
   requireIncludes(appSdkDocs, "requiredOutputs", "package docs must distinguish requiredOutputs as build-only metadata");
   requireIncludes(appSdkDocs, "Package paths are package-root-relative", "package docs must forbid absolute/traversal paths");
-  requireIncludes(appSdkDocs, "Remaining blockers before normal-user package loading or marketplace installation can ship", "package docs must distinguish completed composer safeguards from normal-user loader blockers");
+  requireIncludes(appSdkDocs, "## Distribution Boundary", "package docs must define the custom-build distribution boundary");
   requireIncludes(appSdkDocs, "deterministic manifest, archive, path, asset, lifecycle, settings, background-message, permission, privacy, and URL metadata validation", "package docs must record implemented validation safeguards");
-  requireIncludes(appSdkDocs, "complete install/update/rollback/remove UI", "package docs must require permission, data-use, and cleanup lifecycle UX");
+  requireIncludes(appSdkDocs, "does not inject new JavaScript into an already-installed extension", "package docs must distinguish composition from runtime injection");
 
   requireIncludes(privacyDocs, "## Future Local App Packages", "privacy docs must describe future local package permissions");
   requireIncludes(privacyDocs, "stay disabled until validation", "privacy docs must keep copied packages disabled before validation/consent");

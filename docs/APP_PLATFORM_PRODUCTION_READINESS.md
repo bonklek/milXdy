@@ -1,179 +1,120 @@
-# App Platform Production Readiness
+# App Platform Support Contract
 
-This document is the release contract for making milXdy dependable enough for
-independent apps to build upon. It separates the platform that can be supported
-now from the runtime-installed marketplace that still requires a different
-security and browser-distribution design.
+milXdy App SDK 0.2.3 is the supported platform for building reviewed apps into
+custom Chromium distributions of milXdy. It gives app authors a versioned
+manifest, typed lifecycle, declared capabilities, shared runtime services,
+starter templates, deterministic packaging, and fail-closed trust checks.
 
-## Supported Product Boundary
+## Supported Distribution Model
 
-The first production App SDK target is the **reviewed custom-build platform**:
+An app ships as a folder or ZIP containing:
 
-1. an app author ships a folder or ZIP containing a versioned
-   `milxdy.app.json`, prebuilt JavaScript, and declared assets;
-2. the local composer validates the complete selected package set and fails
-   closed on unsafe, incompatible, conflicting, or unacknowledged inputs;
-3. a developer or advanced user reviews the composition report;
-4. the builder emits a deterministic unpacked Chromium extension containing
-   the accepted packages;
-5. Apps & Features owns package enablement, disclosure, reset, rail, and
-   diagnostics behavior in that generated build.
+- a versioned `milxdy.app.json` manifest;
+- prebuilt JavaScript and declared styles;
+- package-owned assets and web-accessible resources;
+- explicit storage, host, service, privacy, and performance metadata.
 
-This boundary is intentionally narrower than a conventional app store. The
-current platform does not download and execute new JavaScript inside an
-already-installed release extension. Local packages are privileged code in a
-custom extension build and are not capability-isolated merely because the
-static review scanner accepts them.
+The milXdy composer validates the complete selected package set, produces a
+reviewable composition report, and generates a deterministic unpacked Chromium
+build. Apps & Features provides package enablement, disclosure, reset, rail,
+and diagnostics behavior in the generated extension.
 
-Runtime-installed packages, marketplace installation, and package-owned
-background modules remain future products until a runtime membrane or sandbox,
-browser-distribution policy, and complete install/update/remove lifecycle are
-designed and tested.
+This is a custom-build SDK. Packages become part of the generated extension;
+they are not downloaded into an already-installed browser extension. Package
+JavaScript therefore receives extension content-script authority and must pass
+milXdy's review and trust gates.
 
-## Production Definition Of Done
+## Platform Guarantees
 
-The reviewed custom-build platform may be called production-ready only when all
-of these are true:
+The App SDK provides:
 
-- **Stable contract:** the manifest schema, content module lifecycle, context
-  facade, settings metadata, compatibility policy, and supported package kinds
-  are versioned and documented.
-- **External proof:** at least one non-trivial external app completes the
-  package, composition, enable/disable, settings, messaging, update, and cleanup
-  matrix without importing private milXdy source paths.
-- **Representative starter kit:** authors have typed lifecycle declarations and
-  working feature, docked-app, and capability-using examples.
-- **Fail-closed composition:** malformed archives, unsafe paths, incompatible
-  versions, storage/route/asset conflicts, undeclared privileges, package
-  tampering, and untrusted first-party replacements fail before a build plan is
-  emitted.
-- **Bounded authority:** package code uses the SDK context and declared message
-  namespaces. Direct runtime messaging stays blocked; any sensitive API
-  exception is reviewed, explicit, and recorded.
-- **Lifecycle ownership:** the generated extension can enable, disable, reset,
-  and diagnose every novel package without importing it merely to change
-  settings.
-- **Automated coverage:** unit tests, SDK compliance, internal bridge checks,
-  package fixtures, the novel-package integration test, and trust-gate cases
-  pass in required CI.
-- **Operational policy:** compatibility, support, review status, package
-  checksums, vulnerability response, deprecation, and removal/revocation
-  expectations are public.
+- **Versioned contracts:** App SDK SemVer, manifest schema versioning, package
+  versions, compatibility ranges, and documented migration rules.
+- **Typed lifecycle:** `boot`, `enable`, `disable`, `onRouteChange`,
+  `onSurface`, `open`, `close`, and `dispose` hooks owned by the shared runtime.
+- **Bounded context:** declared-key storage, guarded asset URLs, app-scoped
+  messaging, shared scheduling, cancellation, diagnostics, and surface rescans.
+- **Shared X runtime:** route tracking, surface delivery, visibility-aware
+  scheduling, performance budgets, app loading, and cleanup.
+- **App surfaces:** Apps & Features metadata, side-rail registration, shared
+  overlay patterns, settings ownership, reset behavior, and disclosure.
+- **Deterministic composition:** folder and ZIP inputs, normalized package
+  paths, generated registries, copied assets, merged permissions, package
+  hashes, and reproducible build metadata.
+- **Fail-closed trust:** incompatible versions, malformed archives, unsafe
+  paths, undeclared privileges, storage or route conflicts, asset collisions,
+  tampered plans, blocked review status, and unacknowledged sensitive surfaces
+  stop before package code reaches a generated build.
+- **Author tooling:** public TypeScript declarations, feature and docked-app
+  templates, an in-memory lifecycle harness, UI tokens, overlay primitives,
+  accessibility guidance, and asset-licensing guidance.
 
-Passing the composer does not satisfy the external proof requirement by itself.
-The checked-in `dev-note` package is a contract fixture, not the production
-reference app.
+## Security Model
 
-## Readiness Scorecard
+The composer treats every app package as privileged build input. Validation and
+static scanning enforce the declared package contract and expose review data;
+they do not claim to sandbox arbitrary JavaScript.
 
-| Area | Current state | Production exit |
-| --- | --- | --- |
-| First-party runtime | Strong | Keep all registry compliance and bounded-runtime checks green. |
-| Manifest and composition | Strong advanced-user path | Keep schema, composer, builder, and tamper tests synchronized. |
-| Public developer API | Preview | Publish supported declarations and validate them against runtime types. |
-| External integration proof | Implemented and CI-enforced | Complete live behavior QA, then merge the paired Post-reading and milXdy PRs. |
-| Background capability model | Metadata only for third parties | Expose named shared services or design reviewed build-time handler registration. |
-| Runtime isolation | Not provided | Do not promise runtime installation until a membrane/sandbox exists. |
-| Install/update/remove UX | Custom rebuild only | Document the rebuild lifecycle now; design in-product lifecycle separately. |
-| Starter kit | Feature/docked templates, harness, UI tokens, overlay primitives, and author checklists | Keep examples and public UI assets synchronized in the production gate. |
-| Reviewed marketplace | Design issue open | Publish a canonical, machine-readable reviewed catalog only after review policy is complete. |
-| Multi-site runtime | X-first | Add per-site runtime/scanner implementation and QA before claiming general site support. |
-| CI and repository governance | Partial | Require the SDK production suite and protect the public integration branch. |
+Direct package access to runtime messaging is blocked. Apps communicate through
+`context.sendMessage()` using manifest-declared message namespaces. Package
+storage and assets are limited to declared keys and paths. Host permissions,
+remote services, background routes, data use, and consent requirements remain
+visible in both package reports and Apps & Features.
 
-## Delivery Sequence
+Built-in app replacement requires repository-owned source and package hashes in
+addition to explicit reviewer acknowledgement. Novel packages start disabled
+when they request privileged capabilities or consent.
 
-### P0: Freeze The Reviewed Custom-Build Contract
+## Supported Capabilities
 
-- Keep `manifestVersion: 1` and App SDK SemVer independent from app package
-  versions.
-- Publish the supported content-module and runtime-context declarations in
-  `sdk/types/`.
-- Define compatibility, breaking-change, deprecation, and capability rules in
-  `APP_SDK_COMPATIBILITY.md`.
-- Keep the schema, TypeScript contract, composer validation, generated registry,
-  and author documentation synchronized through deterministic verification.
-- Correct documentation that still lists already-implemented validation or
-  conflict checks as future blockers.
+| Capability | Support |
+| --- | --- |
+| Reviewed folder or ZIP package | Supported |
+| Deterministic Chromium custom build | Supported |
+| Feature and docked overlay packages | Supported |
+| Manifest-generated enablement and reset | Supported |
+| X route and surface lifecycle | Supported |
+| Declared storage and asset access | Supported |
+| App-scoped host background services | Supported |
+| Shared scheduler, cancellation, and diagnostics | Supported |
+| Public UI and accessibility kit | Supported |
+| Runtime injection into an installed extension | Outside this distribution model |
+| Package-owned background modules | Use host-provided declared services |
+| General content runtime on arbitrary websites | X runtime only; other sites use declared host integrations |
 
-### P0: Prove A Real External App
+## External Reference
 
-Use standalone Post-reading as the release-blocking reference integration:
+Post-reading is the production reference app for App SDK 0.2.3. Its standalone
+repository builds the same feature source as a milXdy package, targets the
+public SDK declarations, uses declared storage and assets, and is pinned by
+source commit and package hash. The cross-repository verification gate builds,
+composes, and checks the complete integration.
 
-- no imports from `src/platform`, `src/apps`, or other private milXdy paths;
-- a machine-readable milXdy/App SDK compatibility pair;
-- repeatable package build and composition;
-- enable/disable, launch, settings defaults and migrations, reset, and cleanup;
-- declared content/background messaging with stable error envelopes;
-- cancellation, timeout, offline, unavailable-capability, and version-mismatch
-  coverage;
-- Chromium and Firefox behavior documented even if the current composer output
-  remains Chromium-only;
-- an SDK gap report for every workaround.
+See [Post-reading App SDK Reference](POST_READING_SDK_REFERENCE.md) for the
+capability matrix and verification command.
 
-### P0: Make Verification Non-Optional
+## Verification Contract
 
-Required CI must run:
+The production verification suite covers:
 
-- TypeScript and unit tests;
-- Chromium and Firefox builds;
-- platform and URL allowlist verification;
-- App SDK compliance and settings-mirror verification;
-- internal messaging-bridge verification;
-- local package fixtures and the novel-package integration check;
-- the full local package trust-gate suite;
-- existing extension and app smoke tests.
+- public declarations and starter TypeScript;
+- lifecycle harness behavior;
+- App SDK compliance and generated settings ownership;
+- internal bridge restrictions;
+- package fixtures and novel-package integration;
+- folder and ZIP trust gates;
+- Post-reading cross-repository integration;
+- Chromium and Firefox extension builds;
+- platform, privacy, URL allowlist, smoke, checksum, and reproducibility gates.
 
-### P1: Complete The Author Experience
+Changes to the SDK contract, schema, composer, runtime context, starter kit, or
+reference integration must keep this suite green.
 
-- Keep the scaffoldable feature and docked-app templates in the production gate.
-- Keep theme tokens, overlay primitives, accessibility expectations, and asset
-  licensing guidance synchronized with the docked starter.
-- Keep the package test harness aligned with lifecycle order, cancellation,
-  declared storage/assets, scheduling, messaging, diagnostics, and cleanup;
-  add message namespace enforcement when typed shared services land.
-- Document the exact custom-build update/removal process and preservation or
-  cleanup of package-owned storage.
-- Clarify whether the repository license applies to independently authored app
-  packages and provide a submission licensing checklist.
+## Versioning And Support
 
-### P1: Define Capabilities Instead Of Private Imports
+The compatibility policy defines App SDK SemVer, manifest versions,
+deprecations, package ranges, and migration requirements. Supported SDK
+contracts remain synchronized across public declarations, schemas, templates,
+runtime types, and deterministic verification.
 
-- Give supported services stable capability identifiers and typed request/result
-  envelopes.
-- Prefer shared services for fetch, storage, overlay, scanner, audio, and
-  diagnostics work.
-- Remove or permission internal cross-app loading from the eventual public
-  context facade.
-- Keep package-owned background code unsupported until registration, sender
-  validation, quotas, cancellation, upgrades, and teardown are specified.
-
-### P2: Reviewed Marketplace And Runtime Installation
-
-- Define a canonical reviewed catalog with source URL, artifact URL, checksum,
-  signing/provenance metadata, SDK range, permissions, review date, and status.
-- Define update, rollback, deprecation, blocking, and revocation behavior.
-- Add install consent and safe remove/reset flows.
-- Only add runtime package execution after the sandbox/membrane and browser
-  distribution model are proven. A store launcher alone is discovery UI, not
-  package installation or a trust boundary.
-
-## GitHub And Administrative Work
-
-These tasks require repository administration rather than source changes:
-
-- protect `main` and require the CI verification job;
-- enable Dependabot security updates, secret scanning, and push protection where
-  the repository plan supports them;
-- resolve or document open App Runtime And Distribution Prep milestone issues;
-- keep issue #18 as the external SDK release gate;
-- complete the reviewed marketplace policy in issue #56 and starter kit scope in
-  issue #70 before presenting the App Store as available;
-- treat issue #74 as the gate for claiming a general multi-site content runtime.
-
-## Release Decision
-
-Until every P0 exit is complete, use **App SDK preview** or **reviewed local
-package preview** in public copy. After every P0 exit is complete, the supported
-claim may become **production-ready reviewed custom-build App SDK**. Reserve
-**runtime app platform** or **App Store installation** for the later sandboxed
-product.
+See [App SDK Compatibility Policy](APP_SDK_COMPATIBILITY.md).
