@@ -13,6 +13,7 @@ const BEETLE_INSTANT_RESULTS_STYLE_ID = "milxdy-reminet-beetle-instant-results";
 const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-result";
 const BEETLE_WELCOME_PENDING_KEY = "milxdy.reminet.beetleWelcomePending";
 const BEETLE_WELCOME_ID = "milxdy-reminet-beetle-welcome";
+const BEETLE_WELCOME_ANCHOR_SELECTORS = ".beetleModule, .beetle-console, .beetle-catch-module";
 
 let socket: WebSocket | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -48,14 +49,33 @@ async function syncBeetleWelcome(): Promise<void> {
     void chrome.storage.local.set({ [BEETLE_WELCOME_PENDING_KEY]: false });
   });
   document.documentElement.append(notice);
+  const positionNotice = () => {
+    const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTORS);
+    if (!anchor || !notice.isConnected) return;
+    const bounds = anchor.getBoundingClientRect();
+    // The Beetle module is the actual game surface. Keep the tip inside its
+    // upper-left corner, below the BeetleBoy navigation instead of page chrome.
+    notice.style.left = `${Math.max(18, bounds.left + 18)}px`;
+    notice.style.top = `${Math.max(18, bounds.top + 18)}px`;
+  };
+  positionNotice();
+  const resizeObserver = new ResizeObserver(positionNotice);
+  const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTORS);
+  if (anchor) resizeObserver.observe(anchor);
+  addEventListener("resize", positionNotice, { passive: true });
+  const stopPositioning = () => {
+    resizeObserver.disconnect();
+    removeEventListener("resize", positionNotice);
+  };
+  notice.querySelector("button")?.addEventListener("click", stopPositioning, { once: true });
 
   const style = document.createElement("style");
   style.id = `${BEETLE_WELCOME_ID}-style`;
   style.textContent = `
     #${BEETLE_WELCOME_ID} {
       position: fixed;
-      top: 18px;
-      left: 18px;
+      top: 0;
+      left: 0;
       z-index: 2147483647;
       width: min(282px, calc(100vw - 36px));
       margin: 0;
