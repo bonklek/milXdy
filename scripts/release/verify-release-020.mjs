@@ -94,8 +94,8 @@ function verifyDocsCoverage() {
   for (const phrase of [
     "Background Services",
     "urlAllowlist.ts",
-    "Future GitHub App Store Path",
-    "Apps Hub And Rail Pinning",
+    "Distribution Boundary",
+    "Apps & Features IA",
   ]) {
     assert(files.appSdk.includes(phrase), `App SDK missing ${phrase}`);
   }
