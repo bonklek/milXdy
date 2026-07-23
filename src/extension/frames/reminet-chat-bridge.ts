@@ -13,7 +13,7 @@ const BEETLE_INSTANT_RESULTS_STYLE_ID = "milxdy-reminet-beetle-instant-results";
 const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-result";
 const BEETLE_WELCOME_PENDING_KEY = "milxdy.reminet.beetleWelcomePending";
 const BEETLE_WELCOME_ID = "milxdy-reminet-beetle-welcome";
-const BEETLE_WELCOME_ANCHOR_SELECTORS = ".beetleModule, .beetle-console, .beetle-catch-module";
+const BEETLE_WELCOME_ANCHOR_SELECTORS = ".beetle-tab, .beetle-game-nav, .beetleModule, .beetle-console, .beetle-catch-module";
 
 let socket: WebSocket | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -51,12 +51,16 @@ async function syncBeetleWelcome(): Promise<void> {
   document.documentElement.append(notice);
   const positionNotice = () => {
     const anchor = document.querySelector<HTMLElement>(BEETLE_WELCOME_ANCHOR_SELECTORS);
-    if (!anchor || !notice.isConnected) return;
+    if (!notice.isConnected) return;
+    if (!anchor) {
+      notice.hidden = true;
+      return;
+    }
     const bounds = anchor.getBoundingClientRect();
-    // The Beetle module is the actual game surface. Keep the tip inside its
-    // upper-left corner, below the BeetleBoy navigation instead of page chrome.
+    notice.hidden = false;
+    // Start beneath the BeetleBoy tab/header, inside the cartridge surface.
     notice.style.left = `${Math.max(18, bounds.left + 18)}px`;
-    notice.style.top = `${Math.max(18, bounds.top + 18)}px`;
+    notice.style.top = `${Math.max(18, bounds.bottom + 12)}px`;
   };
   positionNotice();
   const resizeObserver = new ResizeObserver(positionNotice);
