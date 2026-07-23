@@ -132,6 +132,9 @@ async function syncBeetleWelcome(): Promise<void> {
 }
 
 function isBeetleRoute(): boolean {
+  // BeetleBoy can render inside a Remilia profile URL that does not include a
+  // beetle cartridge/path segment. Its active tab is the authoritative signal.
+  if (document.querySelector(BEETLE_WELCOME_ANCHOR_SELECTOR)) return true;
   const cartridge = new URLSearchParams(location.search).get("cartridge")?.toLowerCase();
   if (cartridge === "beetle" || cartridge === "beetol" || cartridge === "craft") return true;
   const locationText = `${location.pathname}${location.hash}${location.search}`.toLowerCase();
