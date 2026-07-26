@@ -1760,40 +1760,39 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (!AudioCtor) return;
       const context = new AudioCtor();
       void context.resume();
-      const duration = 0.28;
-      const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
-      const samples = buffer.getChannelData(0);
-      let previous = 0;
-      for (let index = 0; index < samples.length; index += 1) {
-        // A tiny low-pass walk makes the noise read as air instead of static.
-        previous = previous * 0.76 + (Math.random() * 2 - 1) * 0.24;
-        samples[index] = previous;
-      }
-      const source = context.createBufferSource();
-      source.buffer = buffer;
-      const filter = context.createBiquadFilter();
-      filter.type = "bandpass";
-      filter.Q.value = 1.6;
-      const shaper = context.createWaveShaper();
-      const curve = new Float32Array(33);
-      for (let index = 0; index < curve.length; index += 1) curve[index] = Math.round(((index / 32) * 2 - 1) * 7) / 7;
-      shaper.curve = curve;
-      shaper.oversample = "none";
-      const gain = context.createGain();
       const now = context.currentTime;
-      // Deliberately stepped frequency changes keep the wind distinctly 8-bit.
-      filter.frequency.setValueAtTime(330, now);
-      filter.frequency.setValueAtTime(520, now + 0.07);
-      filter.frequency.setValueAtTime(810, now + 0.14);
-      filter.frequency.setValueAtTime(1_240, now + 0.2);
-      gain.gain.setValueAtTime(0.0001, context.currentTime);
-      // Band-pass wind loses a lot of perceived loudness on laptop speakers.
-      // Compensate here while retaining the user's 0–1 volume scale.
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.78, state.interfaceSoundsVolume * 1.15)), now + 0.035);
-      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-      source.connect(filter).connect(shaper).connect(gain).connect(context.destination);
-      source.start();
-      source.addEventListener("ended", () => void context.close());
+      const master = context.createGain();
+      // Ten percent below the previous cue's compensation, while preserving the
+      // user's global 0–1 Interface sounds preference.
+      master.gain.setValueAtTime(Math.max(0.0001, Math.min(0.702, state.interfaceSoundsVolume * 1.035)), now);
+      master.connect(context.destination);
+      const notes = [
+        { frequency: 783.99, offset: 0, level: 0.38, release: 0.65 },
+        { frequency: 987.77, offset: 0.13, level: 0.30, release: 0.55 },
+        { frequency: 1174.66, offset: 0.27, level: 0.23, release: 0.27 },
+      ];
+      const partials = [
+        { ratio: 1, level: 1 },
+        { ratio: 2.01, level: 0.32 },
+        { ratio: 3.44, level: 0.15 },
+      ];
+      for (const note of notes) {
+        for (const partial of partials) {
+          const oscillator = context.createOscillator();
+          const envelope = context.createGain();
+          const start = now + note.offset;
+          const peak = Math.max(0.0001, note.level * partial.level);
+          oscillator.type = "sine";
+          oscillator.frequency.setValueAtTime(note.frequency * partial.ratio, start);
+          envelope.gain.setValueAtTime(0.0001, start);
+          envelope.gain.exponentialRampToValueAtTime(peak, start + 0.009);
+          envelope.gain.exponentialRampToValueAtTime(0.0001, start + note.release);
+          oscillator.connect(envelope).connect(master);
+          oscillator.start(start);
+          oscillator.stop(start + note.release + 0.02);
+        }
+      }
+      window.setTimeout(() => void context.close(), 1_000);
     } catch {
       // Audio restrictions must never block the catalog tab.
     }
