@@ -7,7 +7,6 @@ export type OverlayDockItem = {
   label: string;
   icon: string;
   stackable?: boolean;
-  utility?: boolean;
   beforeId?: string;
   badgeText?: string;
   active?: boolean;
@@ -283,8 +282,6 @@ function createDockApi(): DockApi {
     }
 
     const items = orderedItems();
-    const railItems = items.filter((item) => item.utility !== true);
-    const utilityItems = items.filter((item) => item.utility === true);
     const renderedItemIds = new Set(items.map((item) => item.id));
 
     for (const button of Array.from(rail.querySelectorAll<HTMLButtonElement>(":scope > .milxdy-overlay-dock-item[data-item-id]"))) {
@@ -293,30 +290,13 @@ function createDockApi(): DockApi {
     }
 
     let nextNode: ChildNode | null = rail.firstChild;
-    for (const item of railItems) {
+    for (const item of items) {
       const button = findItemButton(rail, item.id) || createItemButton(item.id);
       updateItemButton(button, item);
       if (button !== nextNode) rail.insertBefore(button, nextNode);
       nextNode = button.nextSibling;
     }
 
-    let utility = root.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-utility");
-    if (!utility && utilityItems.length) {
-      utility = document.createElement("div");
-      utility.className = "milxdy-overlay-dock-utility";
-      root.append(utility);
-    }
-    if (utility) {
-      for (const item of utilityItems) {
-        const button = findItemButton(utility, item.id) || createItemButton(item.id);
-        updateItemButton(button, item);
-        utility.append(button);
-      }
-      for (const button of Array.from(utility.querySelectorAll<HTMLButtonElement>(":scope > .milxdy-overlay-dock-item[data-item-id]"))) {
-        if (!utilityItems.some((item) => item.id === button.dataset.itemId)) button.remove();
-      }
-      if (!utilityItems.length) utility.remove();
-    }
 
     for (const extra of Array.from(rail.querySelectorAll<HTMLElement>(":scope > :not(.milxdy-overlay-dock-item)"))) {
       extra.remove();
@@ -792,19 +772,6 @@ function injectStyles(): void {
       scrollbar-color: var(--milxdy-dock-scrollbar) transparent;
       scroll-snap-type: y proximity;
     }
-    .milxdy-overlay-dock-utility {
-      position: fixed;
-      bottom: 18px;
-      display: grid;
-      justify-items: center;
-      width: 56px;
-      padding: 4px;
-      border: 2px solid var(--milxdy-dock-border);
-      background: var(--milxdy-dock-bg);
-      box-shadow: inset 2px 2px 0 var(--milxdy-dock-highlight), inset -2px -2px 0 var(--milxdy-dock-shadow), 5px 5px 0 rgba(0, 0, 0, 0.26);
-    }
-    #${ROOT_ID}[data-side="left"] .milxdy-overlay-dock-utility { left: 8px; }
-    #${ROOT_ID}[data-side="right"] .milxdy-overlay-dock-utility { right: 8px; }
     .milxdy-overlay-dock-rail::-webkit-scrollbar {
       width: 5px;
     }
