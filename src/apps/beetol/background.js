@@ -19,6 +19,7 @@ const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
 const SESSION_PROBE_PATH = '/api/beetle/user';
 const AUTH_SESSION_PROBE_PATH = '/api/profile/whoami';
+const CRUNCH_STEP_MS = 717;
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
   'beetol:logout',
@@ -225,7 +226,7 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-async function crunchJunk() {
+async function crunchJunk({ runId, onProgress } = {}) {
   const before = await remiliaFetch('GET', '/api/beetle/user');
   if (!before.ok) return before;
 
@@ -237,18 +238,43 @@ async function crunchJunk() {
   const pairs = Math.floor(pool.length / 2);
   let made = 0;
   let skipped = 0;
+  const reportProgress = (outcome = null) => onProgress?.({
+    runId,
+    total: pairs,
+    processed: made + skipped,
+    made,
+    skipped,
+    outcome,
+  });
+
+  reportProgress();
 
   for (let i = 0; i < pairs * 2; i += 2) {
+    const startedAt = Date.now();
+    onProgress?.({
+      runId,
+      total: pairs,
+      processed: made + skipped,
+      made,
+      skipped,
+      phase: 'processing',
+    });
     const result = await remiliaFetch('POST', '/api/beetle/action/craft', {
       type: 1,
       slot1: pool[i],
       slot2: pool[i + 1],
     });
     if (!result.ok) return { ...result, made, skipped, pairs };
-    if (result.data?.success !== false) made += 1;
-    else if (result.data?.message === 'INVALID_RECIPE') skipped += 1;
+    if (result.data?.success !== false) {
+      made += 1;
+      await sleep(Math.max(0, CRUNCH_STEP_MS - (Date.now() - startedAt)));
+      reportProgress('made');
+    } else if (result.data?.message === 'INVALID_RECIPE') {
+      skipped += 1;
+      await sleep(Math.max(0, CRUNCH_STEP_MS - (Date.now() - startedAt)));
+      reportProgress('skipped');
+    }
     else return { ok: false, error: result.data?.message || 'Failed mid-crunch.', made, skipped, pairs };
-    await sleep(200);
   }
 
   const after = await getState();
@@ -705,7 +731,14 @@ async function handleBeetolMessage(message, sender) {
     return runAction(message.action);
   }
   if (message?.type === 'beetol:crunchJunk') {
-    return crunchJunk();
+    const tabId = sender.tab?.id;
+    return crunchJunk({
+      runId: message.runId,
+      onProgress: progress => {
+        if (typeof tabId !== 'number') return;
+        void chrome.tabs.sendMessage(tabId, { type: 'beetol:crunchProgress', ...progress }).catch(() => {});
+      },
+    });
   }
   if (message?.type === 'beetol:poke') {
     return pokeUser(message.username);
