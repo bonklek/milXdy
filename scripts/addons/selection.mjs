@@ -37,6 +37,13 @@ export function validateSelection(selection, policy) {
   const allowedTop = new Set(["schemaVersion", "catalog", "packages"]);
   for (const key of Object.keys(selection)) if (!allowedTop.has(key)) throw selectionError("selection-schema", `Unknown selection field: ${key}`);
   if (selection.schemaVersion !== 1) throw selectionError("selection-schema", "Unsupported selection schemaVersion.");
+  if (selection.catalog !== undefined) {
+    if (!selection.catalog || typeof selection.catalog !== "object" || Array.isArray(selection.catalog)) throw selectionError("selection-schema", "catalog must be an object.");
+    const allowedCatalog = new Set(["id", "generatedAt"]);
+    for (const key of Object.keys(selection.catalog)) if (!allowedCatalog.has(key)) throw selectionError("selection-schema", `Unknown catalog field: ${key}`);
+    if (typeof selection.catalog.id !== "string" || !selection.catalog.id.trim() || selection.catalog.id.length > 100) throw selectionError("selection-schema", "catalog.id is required.");
+    if (selection.catalog.generatedAt !== undefined && !Number.isFinite(Date.parse(selection.catalog.generatedAt))) throw selectionError("selection-schema", "catalog.generatedAt must be a date-time.");
+  }
   if (!Array.isArray(selection.packages) || selection.packages.length > 100) throw selectionError("selection-schema", "packages must be an array with at most 100 entries.");
   const ids = new Set();
   const filenames = new Set();
@@ -49,7 +56,8 @@ export function validateSelection(selection, policy) {
     if (!FILENAME.test(entry.filename || "") || path.basename(entry.filename) !== entry.filename) throw selectionError("selection-filename", `Invalid ZIP filename for ${entry.id}.`);
     if (!SHA256.test(entry.sha256 || "")) throw selectionError("selection-hash", `Invalid SHA-256 for ${entry.id}.`);
     validateUrl(entry.url, allowedHosts, entry.id);
-    if (!entry.review || typeof entry.review.identity !== "string" || !entry.review.identity.trim() || !/^\d{4}-\d{2}-\d{2}$/u.test(entry.review.date || "")) {
+    if (!entry.review || typeof entry.review !== "object" || Array.isArray(entry.review) || Object.keys(entry.review).some((key) => key !== "identity" && key !== "date")
+      || typeof entry.review.identity !== "string" || !entry.review.identity.trim() || entry.review.identity.length > 120 || !isCalendarDate(entry.review.date)) {
       throw selectionError("selection-review", `Invalid review identity/date for ${entry.id}.`);
     }
     if (ids.has(entry.id)) throw selectionError("selection-duplicate-id", `Duplicate package id: ${entry.id}`);
@@ -112,8 +120,7 @@ async function downloadPinned(urlValue, destination, expectedSha256, policy) {
     const declaredLength = Number(response.headers.get("content-length") || 0);
     const maxBytes = Number(policy.maxArchiveBytes || 104857600);
     if (declaredLength > maxBytes) throw selectionError("download-size", `Archive exceeds ${maxBytes} bytes.`);
-    const bytes = Buffer.from(await response.arrayBuffer());
-    if (bytes.length > maxBytes) throw selectionError("download-size", `Archive exceeds ${maxBytes} bytes.`);
+    const bytes = await readLimitedBody(response, maxBytes);
     const actual = sha256Buffer(bytes);
     if (actual !== expectedSha256) throw selectionError("download-hash", `Downloaded ZIP SHA-256 mismatch; expected ${expectedSha256}, got ${actual}.`);
     const temporary = `${destination}.partial`;
@@ -135,6 +142,30 @@ async function fileMatchesHash(filePath, expected) {
   if (!existsSync(filePath)) return false;
   const info = await stat(filePath);
   return info.isFile() && await sha256File(filePath) === expected;
+}
+
+async function readLimitedBody(response, maxBytes) {
+  if (!response.body) return Buffer.alloc(0);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > maxBytes) {
+      await reader.cancel();
+      throw selectionError("download-size", `Archive exceeds ${maxBytes} bytes.`);
+    }
+    chunks.push(Buffer.from(value));
+  }
+  return Buffer.concat(chunks, total);
+}
+
+function isCalendarDate(value) {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function reviewKey(entry) {
