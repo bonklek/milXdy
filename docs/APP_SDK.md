@@ -10,6 +10,10 @@ cancellation, diagnostics, guarded storage and assets, app-scoped messaging,
 Apps & Features integration, side-rail registration, and overlay UI patterns.
 The deterministic composer accepts app folders and ZIP archives, enforces the
 package trust contract, and produces a reviewable unpacked extension build.
+The local Add-on Manager adds the supported user workflow around that composer:
+catalog selection files or manually supplied ZIPs, pinned download verification,
+transactional package placement, a stable build folder, and durable status for
+Apps & Features.
 
 Start with the [SDK starter kit](../sdk/README.md), then use this guide as the
 authoritative manifest, runtime, composition, and security reference. The
@@ -24,6 +28,19 @@ metadata, runtime-owned lifecycle hooks, declared capabilities, generated
 settings ownership, and shared platform services. First-party apps ship with
 milXdy; external packages are reviewed and composed into deterministic custom
 builds.
+
+There are three distinct entry points:
+
+- **Catalog selection:** the catalog exports one `.milxdy-selection.json` that
+  pins package IDs, HTTPS ZIP URLs, filenames, SHA-256 hashes, and review
+  identities. `addons:prepare` downloads and validates that exact set;
+  `addons:apply` builds it after the required trust acknowledgements.
+- **Manual local packages:** users place trusted ZIPs in
+  `local-addons/manual/`, inspect them with `addons:status`, and build with
+  `addons:rebuild`.
+- **Author inspection:** `verify:local-app-package`, `compose:local-apps`, and
+  `build:local-apps:chromium` expose the lower-level validator and composer for
+  package development and repository verification.
 
 An App SDK package owns its feature code and UI. milXdy owns shared page
 scanning, route detection, scheduling, network policy, app chrome, lifecycle,
@@ -351,22 +368,29 @@ Package-kind rules:
 - `feature` packages may declare scanner-delivered surfaces, generated Apps & Features controls, background routes, and user-action tools. They must not declare dock metadata or pretend to be rail apps.
 - `theme` packages are for visual, texture, icon, chrome, or preset resources. They should not declare content-script surfaces, host permissions, background services, or remote services unless a later platform pass adds explicit theme runtime support and review rules.
 
-### Empty Folder To Custom Build
+### Package To Custom Build
 
 Use the checked-in novel sample as the smallest third-party package shape:
 
 ```powershell
-mkdir local-app-packages
-copy-item -Recurse examples/packages/local-dev/dev-note local-app-packages/dev-note
-pnpm.cmd run verify:local-app-package -- --package=local-app-packages/dev-note --allow-local-review --acknowledge-package-consent
-pnpm.cmd run build:local-apps:chromium -- --package=local-app-packages/dev-note --allow-local-review --acknowledge-package-consent
+New-Item -ItemType Directory -Force local-addons\manual
+Compress-Archive -Path examples\packages\local-dev\dev-note\* -DestinationPath local-addons\manual\dev-note.zip -Force
+npm run addons:status
+npm run addons:rebuild -- --allow-local-review --acknowledge-package-consent
 ```
 
-Expected generated artifacts:
+The ZIP must contain `milxdy.app.json` at its root. The manager validates the
+complete package set before changing the stable build. After the first build,
+load `dist/chromium-local-apps/` once from `chrome://extensions`. After later
+rebuilds, click **Reload** on that existing extension card and refresh X/Twitter.
+See [Local Add-ons](LOCAL_ADDONS.md) for the complete user workflow.
 
-- `tmp/local-app-composition/composition-report.json` with accepted/rejected packages, trust decisions, consent acknowledgements, payload scan findings, settings/storage metadata, and background handler status
-- `tmp/local-app-composition/build-plan.json` with generated app registry metadata, copied package file targets, host permissions, web-accessible resources, and diagnostics
-- `tmp/local-app-composition/apps.generated.json` containing the generated registry row with `localPackage` metadata and no first-party build-only fields
+Expected managed artifacts:
+
+- `tmp/local-addon-manager/status.json` with the workflow stage, build identity, package list, warnings, and classified failures
+- `tmp/local-addon-manager/composition/composition-report.json` with accepted/rejected packages, trust decisions, consent acknowledgements, payload scan findings, settings/storage metadata, and background handler status
+- `tmp/local-addon-manager/composition/build-plan.json` with generated app registry metadata, copied package file targets, host permissions, web-accessible resources, and diagnostics
+- `tmp/local-addon-manager/composition/apps.generated.json` containing the generated registry rows with `localPackage` metadata and no first-party build-only fields
 - `dist/chromium-local-apps/local-apps/<package-id>/...` containing copied declared package files
 - `dist/chromium-local-apps/local-app-composition.json` preserving package source, review, diagnostics, privacy, and settings metadata for inspection
 
@@ -421,7 +445,57 @@ pnpm.cmd run verify:local-app-package -- --packages-dir=path\to\packages --allow
 
 That command runs the composer against only the selected package source, then inspects the generated build plan. It rejects missing trust acknowledgements, invalid enum values, unsafe or missing paths, bad lifecycle exports, missing storage declarations, unsupported background fields, invalid review/consent status, leaked first-party build-only fields, and novel packages that cannot be controlled through generated Apps & Features enablement metadata.
 
-### Local Package Composer And Builder
+### Managed Catalog And Manual Workflows
+
+The catalog creates a small selection document instead of initiating multiple
+browser downloads. Its schema is
+[`milxdy-selection.schema.json`](milxdy-selection.schema.json). Prepare accepts
+only checked-in GitHub download hosts, validates redirects, streams downloads
+under the archive size limit, verifies pinned SHA-256 hashes, reuses the
+content-addressed cache in `local-addons/.cache/`, and transactionally replaces
+the exact package set in `local-addons/catalog/`:
+
+```powershell
+npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
+npm run addons:apply -- --acknowledge-package-consent
+```
+
+Prepare prints one consolidated summary of capabilities, hosts, permissions,
+storage, remote services, review evidence, and required acknowledgements. It
+does not build or execute package code. Apply re-verifies the materialized ZIP
+hashes and then invokes the same composer and trust gates used by manual builds.
+Catalog review metadata is authoritative only when the package ID, archive
+hash, reviewer, and review date match
+`scripts/addons/trusted-catalog-reviews.json`; otherwise Apply requires
+`--allow-local-review`.
+
+Manual ZIPs live in `local-addons/manual/` and use:
+
+```powershell
+npm run addons:status
+npm run addons:rebuild -- --allow-local-review --acknowledge-package-consent
+```
+
+Both paths promote successful builds transactionally to
+`dist/chromium-local-apps/` and preserve the last known-good output on download,
+validation, composition, compilation, or promotion failure. Recovery journals
+complete or roll back interrupted package-set and build promotions. Manager
+state and reports live in `tmp/local-addon-manager/`.
+
+Every successful build receives a new `buildInstanceId`, which lets Apps &
+Features detect that Chrome still has the previous build loaded. The
+`compositionFingerprint` is deterministic for the extension version, SDK
+version, target, and sorted package ID/version/hash tuples, so equivalent
+compositions can be compared independently of rebuild time. Apps & Features
+shows the loaded package IDs, fingerprint, and whether a prepared build is
+current or waiting for Chrome reload.
+
+### Low-Level Composer And Builder
+
+The commands in this section are author and repository inspection tools. The
+supported user drop folders are `local-addons/manual/` and
+`local-addons/catalog/`; `local-app-packages/` remains a backward-compatible
+low-level composer input.
 
 The deterministic composer is implemented as:
 
@@ -488,13 +562,13 @@ reach extension APIs. Do not market local packages as capability-isolated until
 package execution moves behind a runtime membrane or sandbox that exposes only
 the SDK facade.
 
-To build the current local composition as an unpacked Chromium extension:
+To build a selected package set directly as an unpacked Chromium extension:
 
 ```powershell
 pnpm.cmd run build:local-apps:chromium -- --allow-local-review --acknowledge-package-consent --acknowledge-first-party-replacement
 ```
 
-That one action reruns the composer through `scripts/build/build-local-apps.mjs` and then calls `scripts/build/build-extension.mjs --target=chromium --local-app-plan=tmp/local-app-composition/build-plan.json`. The same `--packages-dir`, `--package`, `--out-dir`, and `--plan-out` flags can be passed after `--` on the pnpm command. The output is `dist/chromium-local-apps/`. Selected package payloads are copied to deterministic `local-apps/<package-id>/...` paths, generated metadata is emitted as `local-app-composition.json`, host permissions and web-accessible resources are merged explicitly, and normal release builds continue to ignore local package source unless a local composition plan is passed.
+That low-level action reruns the composer through `scripts/build/build-local-apps.mjs` and then calls `scripts/build/build-extension.mjs --target=chromium --local-app-plan=tmp/local-app-composition/build-plan.json`. The same `--packages-dir`, `--package`, `--out-dir`, and `--plan-out` flags can be passed after `--` on the pnpm command. The output is `dist/chromium-local-apps/`. Selected package payloads are copied to deterministic `local-apps/<package-id>/...` paths, generated metadata is emitted as `local-app-composition.json`, host permissions and web-accessible resources are merged explicitly, and normal release builds continue to ignore local package source unless a local composition plan is passed. The Add-on Manager is the user-facing wrapper that adds canonical folders, transaction recovery, persistent status, and Prepare/Apply.
 
 On a clean checkout using the checked-in examples fallback, the first-party replacement acknowledgement is required because the examples intentionally shadow built-in app IDs.
 
