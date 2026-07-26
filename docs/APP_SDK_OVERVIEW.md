@@ -44,6 +44,9 @@ capability environment.
 The catalog is a selection surface. It produces a small
 `.milxdy-selection.json`; the checked-in local manager owns downloads, hash
 verification, filesystem placement, composition, and build promotion.
+The 0.2.3 repository includes the catalog implementation with no published
+package inventory. Catalog publication is a separate maintainer action and is
+not required for the manual trusted-ZIP workflow.
 
 ## Current Support
 

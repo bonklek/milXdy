@@ -15,6 +15,7 @@ milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It bri
 - Group Root Visual controls by their actual X/app ownership while preserving existing visual-theme storage and profile-pack compatibility.
 - Show when more pinned apps are available above or below the visible side rail.
 - Keep rail settings compact and separate from the Apps & Features catalog, with one-row ordering controls and advanced app presets collapsed by default.
+- Add a Local Add-ons panel in Apps & Features for loaded-build status, user-selected ZIP preflight, package handoff to a source checkout, and clear Chrome Load unpacked or Reload guidance. The running extension does not install package code or rebuild itself; the checked-in local manager performs authoritative validation and creates the custom Chromium build.
 - Preserve responsive native Like animation while keeping lightweight Maxxer catch and level-up feedback.
 - Reduce unnecessary work during browsing by using a bounded visible-page check for controls and a stable left-rail safe area for the dock.
 - Show the final Beetle Hunt reward before the red Done state and normal persisted 90-minute cooldown.
@@ -31,6 +32,7 @@ milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It bri
 
 - Apps recover more gracefully from failed, canceled, or stale work.
 - Settings, startup, scanning, speech, and local-file actions are more dependable.
+- Local custom builds now have an in-extension status and handoff surface while retaining the reviewed build-time package model.
 - Chat, reading, music, Wiki, visual, and game surfaces clean up predictably when you switch pages or turn them off.
 - Keyboard navigation, focus behavior, motion preferences, and screen-reader support are improved throughout the extension.
 - Everyday browsing work is kept lighter, especially around interactive X surfaces.

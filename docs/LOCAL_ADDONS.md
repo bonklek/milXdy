@@ -18,7 +18,10 @@ The output folder is stable. Do not load the temporary build under `tmp/`.
 **Settings → Apps & Features → Local Add-ons** is the local control panel for
 this workflow:
 
-1. **Get more add-ons** opens the public GitHub catalog in a new tab.
+1. **Get more add-ons** opens the configured GitHub catalog URL in a new tab.
+   The 0.2.3 repository contains a zero-package catalog preview; publishing it
+   is a separate maintainer action, so obtain trusted ZIPs directly until that
+   catalog is available.
 2. After Chrome downloads package ZIPs, **Load downloaded add-ons** opens a
    user-initiated multi-file picker. milXdy does not scan Downloads or request
    broad Downloads permission.
