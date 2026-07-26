@@ -454,7 +454,9 @@ durable status, `buildInstanceId`, and `compositionFingerprint`.
 The extension’s App Store launcher opens the canonical GitHub-hosted catalog
 defined in `src/platform/app-sdk/addons-catalog.ts`. That configuration accepts
 only the documented HTTPS catalog URL and its App SDK fallback; it is a
-discovery link only and never installs packages or grants permissions.
+discovery link only and never installs packages or grants permissions. It opens
+or focuses a normal browser tab, and its optional cue uses the shared Interface
+sounds control in the extension Audio settings.
 
 The catalog selection document is defined by
 [`milxdy-selection.schema.json`](milxdy-selection.schema.json). Catalog review

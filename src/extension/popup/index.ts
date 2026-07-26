@@ -10,6 +10,7 @@ declare const MILXDY_BUILD_TARGET: string;
 import type { AppPreset, MilxdyAppManifest } from "../../platform/app-sdk/app-platform";
 import { FIRST_PARTY_APPS } from "../../platform/app-sdk/first-party-registry";
 import { MILXDY_ADDONS_CATALOG_URL } from "../../platform/app-sdk/addons-catalog";
+import { DEFAULT_INTERFACE_SOUNDS_VOLUME, INTERFACE_SOUNDS_ENABLED_KEY, INTERFACE_SOUNDS_VOLUME_KEY } from "../../platform/settings/interface-sounds";
 import {
   BENCHMARK_RESULT_PREFIX,
   BENCHMARK_START_MESSAGE,
@@ -145,6 +146,8 @@ let fullAppearanceWarningAccepted = false;
 const bindings: Record<string, ControlBinding> = {
   "composerTools.enabled": { area: "local", key: "milxdy.composerTools.enabled", kind: "boolean", fallback: true },
   diagnosticsEnabled: { area: "local", key: "milxdy.diagnostics.enabled", kind: "boolean", fallback: false },
+  "interfaceSounds.enabled": { area: "local", key: INTERFACE_SOUNDS_ENABLED_KEY, kind: "boolean", fallback: true },
+  "interfaceSounds.volume": { area: "local", key: INTERFACE_SOUNDS_VOLUME_KEY, kind: "number", fallback: DEFAULT_INTERFACE_SOUNDS_VOLUME },
   performanceMode: { area: "local", key: PERFORMANCE_MODE_KEY, kind: "string", fallback: "balanced" },
   reskinProfile: { area: "local", key: RESKIN_PROFILE_KEY, kind: "string", fallback: DEFAULT_RESKIN_PROFILE },
   "wiki.enabled": { area: "local", key: WIKI_SETTINGS_KEY, property: "enabled", kind: "boolean", fallback: true },
