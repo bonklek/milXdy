@@ -101,6 +101,12 @@ type MusicFetchJsonMessage = {
   url: string;
 };
 
+type MusicPostFormMessage = {
+  type: "music:postForm";
+  url: string;
+  form: Record<string, string>;
+};
+
 type MusicFetchImageDataUrlMessage = {
   type: "music:fetchImageDataUrl";
   url: string;
@@ -140,6 +146,9 @@ type WikiSidebarReadAloudRequestMessage = {
 
 const MUSICBRAINZ_JSON_RULES: readonly UrlAllowRule[] = [
   { origin: "https://musicbrainz.org", pathPrefix: "/ws/2/" },
+];
+const ACOUSTID_FORM_RULES: readonly UrlAllowRule[] = [
+  { origin: "https://api.acoustid.org", pathPattern: /^\/v2\/lookup$/ },
 ];
 const MILADYCHAN_JSON_RULES: readonly UrlAllowRule[] = [
   { origin: "https://boards.miladychan.org", pathPrefix: "/json/" },
@@ -202,6 +211,11 @@ setupBackgroundMessageRouter([
     type: "music:fetchJson",
     matches: isMusicFetchJsonMessage,
     handle: (message, sender) => fetchMusicJsonForSender(message.url, sender),
+  },
+  {
+    type: "music:postForm",
+    matches: isMusicPostFormMessage,
+    handle: (message, sender) => postMusicFormForSender(message.url, message.form, sender),
   },
   {
     type: "music:fetchImageDataUrl",
@@ -359,6 +373,14 @@ function isMusicFetchJsonMessage(message: unknown): message is MusicFetchJsonMes
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
   return record.type === "music:fetchJson" && typeof record.url === "string";
+}
+
+function isMusicPostFormMessage(message: unknown): message is MusicPostFormMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  if (record.type !== "music:postForm" || typeof record.url !== "string") return false;
+  if (!record.form || typeof record.form !== "object" || Array.isArray(record.form)) return false;
+  return Object.values(record.form).every((value) => typeof value === "string");
 }
 
 function isMusicFetchImageDataUrlMessage(message: unknown): message is MusicFetchImageDataUrlMessage {
@@ -898,6 +920,35 @@ async function fetchMusicJson(url: string): Promise<Record<string, unknown>> {
 async function fetchMusicJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
   return fetchMusicJson(url);
+}
+
+async function postMusicForm(url: string, form: Record<string, string>): Promise<Record<string, unknown>> {
+  const parsed = parseAllowedUrl(url, ACOUSTID_FORM_RULES);
+  if (!parsed) {
+    return { ok: false, status: 0, error: "Unsupported music lookup URL." };
+  }
+
+  try {
+    const response = await budgetedFetch(parsed.href, {
+      method: "POST",
+      credentials: "omit",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+        "User-Agent": "milXdy/0.1.5 (https://github.com/bonklek/milXdy)",
+      },
+      body: new URLSearchParams(form),
+    }, "music:postForm");
+    if (!response.ok) return { ok: false, status: response.status, error: `HTTP ${response.status}` };
+    return { ok: true, status: response.status, data: await response.json() };
+  } catch (error) {
+    return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function postMusicFormForSender(url: string, form: Record<string, string>, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return postMusicForm(url, form);
 }
 
 async function fetchMusicImageDataUrl(url: string): Promise<Record<string, unknown>> {
