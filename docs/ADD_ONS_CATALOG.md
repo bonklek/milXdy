@@ -16,31 +16,39 @@ visual cues use square or near-square frames with slightly rounded corners.
 The header uses the existing square beveled mark from `assets/brand/`.
 
 The catalog is currently a preview with no published package inventory. It
-does not claim runtime ZIP installation, and it does not expose download links
-until a package record has a verified HTTPS ZIP URL and SHA-256 value.
+does not claim runtime ZIP installation, and it does not allow a package into a
+selection file until its record has a verified HTTPS ZIP URL, SHA-256 value,
+approved review, and matching checked-in trusted-review entry.
 
 ## User Workflow
 
 The catalog documents the current Chromium workflow:
 
-1. Download a package ZIP that is explicitly marked **Published**.
-2. Copy the unchanged ZIP into `local-app-packages/` at the root of a milXdy
-   source checkout. This folder is intentionally gitignored.
-3. Install repository dependencies, then run:
+1. Select one or more packages explicitly marked **Published** and download the
+   generated `.milxdy-selection.json` file. The file pins package IDs, exact
+   HTTPS ZIP URLs, filenames, SHA-256 values, and review identities/dates.
+2. In a milXdy source checkout, install repository dependencies and prepare the
+   selection:
 
    ```powershell
-   pnpm.cmd run build:local-apps:chromium -- --packages-dir=local-app-packages --allow-local-review --acknowledge-package-consent
+   npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
    ```
 
-4. Read the generated composition plan and any additional acknowledgement
-   required by the trust gates. The build output is
-   `dist/chromium-local-apps/`.
+3. Read the consolidated capability, host, permission, storage, remote-service,
+   review, and trust-acknowledgement summary. Prepare downloads the pinned ZIPs,
+   verifies their hashes, and transactionally places the exact catalog set in
+   `local-addons/catalog/`; it does not build or execute them.
+4. Run `npm run addons:apply` with the acknowledgement flags printed by
+   Prepare. The stable build output is `dist/chromium-local-apps/`.
 5. Load that output folder from `chrome://extensions` the first time. On later
    builds, keep the same folder, click **Reload** on the existing extension
    card, and refresh X/Twitter tabs.
 
-This is not a runtime package manager. The site cannot extract or move ZIPs,
-run the composer, modify the loaded extension, or reload Chrome. Local packages
+This is not a runtime package manager. The site cannot fetch or move ZIPs,
+run the composer, modify the loaded extension, or reload Chrome. It only emits
+the small selection file; the checked-in local manager owns downloads, pinned
+hash verification, filesystem placement, composition, and the stable build.
+Local packages
 run as privileged extension code after composition, so review, declarations,
 and explicit consent remain part of the security boundary.
 

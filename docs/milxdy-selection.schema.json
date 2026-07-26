@@ -24,7 +24,7 @@
         "additionalProperties": false,
         "required": ["id", "url", "filename", "sha256", "review"],
         "properties": {
-          "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,63}$" },
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
           "url": { "type": "string", "format": "uri", "pattern": "^https://" },
           "filename": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\.zip$" },
           "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
