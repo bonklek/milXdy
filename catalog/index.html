@@ -53,8 +53,8 @@
             <span class="journey-number">01</span><strong>Select</strong><small>Published packages</small>
           </li>
           <li>
-            <span class="journey-icon journey-folder" aria-hidden="true"></span>
-            <span class="journey-number">02</span><strong>Place ZIPs</strong><code>local-app-packages/</code>
+            <button id="choose-packages-folder" class="journey-icon journey-folder folder-picker-button" type="button" aria-label="Choose the local-app-packages folder" aria-describedby="packages-folder-status"></button>
+            <span class="journey-number">02</span><strong>Place ZIPs</strong><code id="packages-folder-status" aria-live="polite">Choose local-app-packages/</code>
           </li>
           <li>
             <span class="journey-icon journey-terminal" aria-hidden="true">&gt;_</span>

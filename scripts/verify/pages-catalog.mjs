@@ -183,7 +183,7 @@ const detail = contents.get("catalog/add-ons/index.html") || "";
 if (!detail.includes("addon-detail")) failures.push("detail page mount is missing");
 
 const script = contents.get("catalog/assets/catalog.js") || "";
-for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "selectionJson", ".milxdy-selection.json"]) {
+for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "selectionJson", ".milxdy-selection.json", "showDirectoryPicker", "milxdy-local-app-packages", "queryPermission", "indexedDB"]) {
   if (!script.includes(phrase)) failures.push(`catalog renderer is missing required behavior: ${phrase}`);
 }
 const { selectionFor } = await import(new URL("../../catalog/assets/selection.js", import.meta.url));
