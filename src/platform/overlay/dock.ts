@@ -847,6 +847,20 @@ function injectStyles(): void {
     .milxdy-overlay-dock-item[data-item-id="milxdyHideAll"]:active .milxdy-overlay-dock-icon {
       color: color-mix(in srgb, var(--milxdy-dock-active) 78%, var(--milxdy-dock-shadow));
     }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] {
+      border-color: var(--milxdy-dock-active);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--milxdy-dock-panel) 82%, var(--milxdy-dock-active)) 0 50%, var(--milxdy-dock-panel) 50% 100%);
+      color: var(--milxdy-dock-active);
+      font-size: 29px;
+      font-weight: 400;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"]:active {
+      transform: translate(1px, 1px);
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-shadow),
+        inset -1px -1px 0 var(--milxdy-dock-highlight);
+    }
     #${ROOT_ID}[data-reorder="true"] .milxdy-overlay-dock-item {
       cursor: grab;
       animation: milxdy-dock-wiggle 150ms infinite alternate ease-in-out;
