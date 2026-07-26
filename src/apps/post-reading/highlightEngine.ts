@@ -49,6 +49,7 @@ type PendingSmoothAnimation = {
   toIndex: number;
 };
 
+const CALIBRATION_SAMPLE_LIMIT = 5;
 const originalHtmlByElement = new WeakMap<HTMLElement, string>();
 
 export class TextHighlightEngine {
@@ -63,6 +64,8 @@ export class TextHighlightEngine {
   private lastRelativeIndex: number | null = null;
   private calibratedCharsPerSecond = 13;
   private baselineCharsPerSecond = 13;
+  private calibrationSamples = 0;
+  private calibrationLocked = false;
   private catchUpUntil = 0;
   private readonly onSmoothAnimation?: (diagnostic: SmoothAnimationDiagnostic) => void;
 
@@ -162,6 +165,11 @@ export class TextHighlightEngine {
     return current;
   }
 
+  paintSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
+    this.clearSmoothAnimation();
+    this.snapSmoothAt(tokens, cursorIndex);
+  }
+
   paintSmooth(tokens: HTMLElement[], relativeIndex: number, options: SmoothPaintOptions = {}): HTMLElement | null {
     if (tokens.length === 0) return null;
     this.updateBoundaryCalibration(relativeIndex, options.boundaryElapsedTime);
@@ -187,12 +195,6 @@ export class TextHighlightEngine {
           ),
         )
       : currentTokenEnd;
-    const interrupted = this.recordBoundaryInterruption(relativeIndex);
-    if (interrupted) {
-      this.clearSmoothAnimation({ completePending: true });
-      this.activeSmoothToken = null;
-    }
-
     if (
       this.pendingSmoothAnimation?.token === currentToken
       && this.activeSmoothToken === currentToken
@@ -232,7 +234,7 @@ export class TextHighlightEngine {
     const duration = this.estimateSmoothFillDurationMs(animationEnd - visualStart);
     this.snapSmoothAt(tokens, visualStart);
     this.activeSmoothToken = currentToken;
-    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, interrupted, relativeIndex);
+    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, null, relativeIndex);
     return currentToken;
   }
 
@@ -269,6 +271,8 @@ export class TextHighlightEngine {
     this.lastBoundaryElapsedTime = null;
     this.lastRelativeIndex = null;
     this.calibratedCharsPerSecond = this.baselineCharsPerSecond;
+    this.calibrationSamples = 0;
+    this.calibrationLocked = false;
     this.catchUpUntil = 0;
     void rangeElement;
   }
@@ -329,13 +333,17 @@ export class TextHighlightEngine {
 
   private updateBoundaryCalibration(relativeIndex: number, boundaryElapsedTime: unknown): void {
     const now = performance.now();
-    if (this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
+    if (!this.calibrationLocked && this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
       const elapsedMs = this.boundaryElapsedMs(boundaryElapsedTime, now);
       const charDelta = relativeIndex - this.lastRelativeIndex;
       const observed = elapsedMs !== null && elapsedMs > 0 ? charDelta / (elapsedMs / 1000) : null;
       if (elapsedMs !== null && elapsedMs > 0) this.lastBoundaryIntervalMs = elapsedMs;
-      if (observed !== null && Number.isFinite(observed) && observed > 1 && observed < 80) {
-        this.calibratedCharsPerSecond = this.calibratedCharsPerSecond * 0.72 + observed * 0.28;
+      if (elapsedMs !== null && observed !== null && this.isUsefulSpeedSample(observed, charDelta, elapsedMs)) {
+        this.calibratedCharsPerSecond = this.calibrationSamples === 0
+          ? observed
+          : this.calibratedCharsPerSecond * 0.68 + observed * 0.32;
+        this.calibrationSamples += 1;
+        if (this.calibrationSamples >= CALIBRATION_SAMPLE_LIMIT) this.calibrationLocked = true;
       }
     }
     this.lastBoundaryAt = now;
@@ -351,6 +359,14 @@ export class TextHighlightEngine {
     if (relativeIndex < pending.toIndex) return null;
     this.catchUpUntil = performance.now() + 1600;
     return { pendingToIndex: pending.toIndex, boundaryIndex: relativeIndex };
+  }
+
+  private isUsefulSpeedSample(observed: number, charDelta: number, elapsedMs: number): boolean {
+    if (!Number.isFinite(observed) || observed <= 0) return false;
+    if (charDelta < 3 || elapsedMs <= 0) return false;
+    const lower = this.baselineCharsPerSecond * 0.45;
+    const upper = this.baselineCharsPerSecond * 2.4;
+    return observed >= lower && observed <= upper;
   }
 
   private boundaryElapsedMs(boundaryElapsedTime: unknown, now: number): number | null {
@@ -438,12 +454,15 @@ export class TextHighlightEngine {
   }
 
   private estimateTokenDurationMs(length: number): number {
-    const cps = Math.max(4, this.calibratedCharsPerSecond);
+    const cps = Math.max(0.001, this.calibratedCharsPerSecond);
     return Math.round((Math.max(0, length) / cps) * 1000);
   }
 
   private estimateSmoothFillDurationMs(length: number): number {
-    return Math.max(80, Math.min(1200, this.estimateTokenDurationMs(length)));
+    const tokenDuration = Math.max(35, Math.min(1200, this.estimateTokenDurationMs(length)));
+    if (this.lastBoundaryIntervalMs === null) return tokenDuration;
+    const cadenceDuration = Math.round(Math.max(35, Math.min(900, this.lastBoundaryIntervalMs * 0.86)));
+    return Math.max(35, Math.min(tokenDuration, cadenceDuration));
   }
 
   private catchUpActive(): boolean {

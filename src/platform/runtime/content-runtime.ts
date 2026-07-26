@@ -41,6 +41,24 @@ import type {
 declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
 declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
 declare const MILXDY_VERSION: string | undefined;
+declare const MILXDY_LOCAL_ADDON_BUILD_ID: string | undefined;
+
+type LocalAddonStatus = {
+  schemaVersion: 1 | 2;
+  mode: "standard" | "custom-composition" | "managed-local-addons";
+  state: "prepared" | "built" | "validation-failed" | "build-failed";
+  buildId?: string;
+  buildInstanceId?: string;
+  compositionFingerprint?: string;
+  extensionVersion?: string;
+  generatedAt?: string;
+  addOnsDirectory?: string;
+  outputDirectory?: string;
+  reportPath?: string;
+  packages?: Array<{ id: string; name?: string; version?: string; reviewStatus?: string; packageSha256?: string }>;
+  errors?: string[];
+  warnings?: string[];
+};
 
 type RuntimeState = {
   apps: readonly MilxdyAppManifest[];
@@ -68,6 +86,8 @@ type RuntimeState = {
   hubSearchQuery: string;
   hubExpandedApps: Set<MilxdyAppId>;
   hubDockSettingsOpen: boolean;
+  localAddonStatus: LocalAddonStatus | null;
+  localAddonStatusLoading: boolean;
   hubAppDrag: {
     appId: MilxdyAppId;
     pointerId: number;
@@ -243,6 +263,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubSearchQuery: "",
     hubExpandedApps: new Set(),
     hubDockSettingsOpen: false,
+    localAddonStatus: null,
+    localAddonStatusLoading: false,
     hubAppDrag: null,
     iconTheme: currentAppIconTheme(),
     firstRunPending: false,
@@ -1697,6 +1719,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function openHubPanel(): void {
     ensureHubPanel();
     renderHubPanel();
+    void refreshLocalAddonStatus();
     state.hubDockRegistration?.update({ active: true, title: "Apps & Features" });
   }
 
@@ -1793,7 +1816,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return;
     }
 
-    root.append(appHubRuntimeSummary());
+    root.append(appHubRuntimeSummary(), localAddonManagerPanel());
 
     const search = document.createElement("label");
     search.className = "milxdy-app-hub-search";
@@ -1926,6 +1949,87 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     meta.textContent = `${enabledCount} enabled | ${pinnedCount} pinned | ${loadedCount} loaded | ${loadingCount} loading${failedCount ? ` | ${failedCount} failed` : ""}`;
     summary.append(title, meta);
     return summary;
+  }
+
+  async function refreshLocalAddonStatus(): Promise<void> {
+    if (state.localAddonStatusLoading) return;
+    state.localAddonStatusLoading = true;
+    renderHubPanel();
+    try {
+      const response = await safeRuntimeMessage({ type: "milxdy:getLocalAddonStatus" }) as Record<string, unknown> | undefined;
+      const candidate = response?.ok === true ? response.status : null;
+      state.localAddonStatus = isLocalAddonStatus(candidate) ? candidate : null;
+    } finally {
+      state.localAddonStatusLoading = false;
+      renderHubPanel();
+    }
+  }
+
+  function isLocalAddonStatus(value: unknown): value is LocalAddonStatus {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const record = value as Record<string, unknown>;
+    return (record.schemaVersion === 1 || record.schemaVersion === 2)
+      && ["standard", "custom-composition", "managed-local-addons"].includes(String(record.mode))
+      && ["prepared", "built", "validation-failed", "build-failed"].includes(String(record.state));
+  }
+
+  function localAddonManagerPanel(): HTMLElement {
+    const panel = document.createElement("section");
+    panel.className = "milxdy-app-hub-addons";
+    const heading = document.createElement("strong");
+    heading.textContent = "Local Add-ons";
+    const status = state.localAddonStatus;
+    const loadedBuildId = typeof MILXDY_LOCAL_ADDON_BUILD_ID === "string" ? MILXDY_LOCAL_ADDON_BUILD_ID : "";
+    const buildWaitingForReload = Boolean(status?.buildId && loadedBuildId && status.buildId !== loadedBuildId);
+    const summary = document.createElement("p");
+    if (state.localAddonStatusLoading && !status) {
+      summary.textContent = "Checking this build…";
+    } else if (!status || status.mode === "standard") {
+      summary.textContent = "This is a standard build. Put trusted ZIP packages in local-addons/manual, then run the local rebuild command.";
+    } else if (status.state === "prepared") {
+      summary.textContent = "The selected package set is prepared and validated. Run the apply command with the listed trust acknowledgements.";
+    } else if (status.state !== "built") {
+      summary.textContent = `Last rebuild ${status.state === "validation-failed" ? "failed validation" : "failed"}. The previous working build remains in place.`;
+    } else if (buildWaitingForReload) {
+      summary.textContent = "A validated rebuild is ready. Reload the existing milXdy unpacked extension in Chrome, then refresh X.";
+    } else {
+      const count = status.packages?.length ?? 0;
+      summary.textContent = `${count} validated local add-on${count === 1 ? " is" : "s are"} loaded from the stable custom build.`;
+    }
+    const paths = document.createElement("span");
+    paths.textContent = `Packages: ${status?.addOnsDirectory || "local-addons"} | Build: ${status?.outputDirectory || "dist/chromium-local-apps"}`;
+    const actions = document.createElement("div");
+    actions.className = "milxdy-app-hub-addon-actions";
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.textContent = "Copy rebuild command";
+    copy.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText("npm run addons:rebuild");
+        copy.textContent = "Copied";
+      } catch {
+        copy.textContent = "Run: npm run addons:rebuild";
+      }
+    });
+    const refresh = document.createElement("button");
+    refresh.type = "button";
+    refresh.textContent = "Refresh status";
+    refresh.disabled = state.localAddonStatusLoading;
+    refresh.addEventListener("click", () => void refreshLocalAddonStatus());
+    actions.append(copy, refresh);
+    if (status?.packages?.length) {
+      const packages = document.createElement("span");
+      packages.textContent = status.packages.map((entry) => `${entry.name || entry.id}${entry.version ? ` ${entry.version}` : ""}`).join("; ");
+      panel.append(heading, summary, paths, packages, actions);
+    } else {
+      panel.append(heading, summary, paths, actions);
+    }
+    if (status?.compositionFingerprint) {
+      const fingerprint = document.createElement("span");
+      fingerprint.textContent = `Composition ${status.compositionFingerprint.slice(0, 16)}…`;
+      panel.insertBefore(fingerprint, actions);
+    }
+    return panel;
   }
 
   function appHubCard(app: MilxdyAppManifest): HTMLElement {
@@ -3777,6 +3881,22 @@ function injectTweetScaffoldStyles(): void {
       font-size: 12px;
       line-height: 1.2;
     }
+    .milxdy-app-hub-addons {
+      display: grid;
+      gap: 5px;
+      padding: 8px 10px;
+      border: 2px solid var(--milxdy-hub-outline);
+      background: var(--milxdy-hub-panel);
+      box-shadow:
+        inset 1px 1px 0 var(--milxdy-hub-border-dark),
+        inset -1px -1px 0 var(--milxdy-hub-border-light);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+    .milxdy-app-hub-addons strong { color: var(--milxdy-hub-accent); font-size: 12px; }
+    .milxdy-app-hub-addons p { margin: 0; }
+    .milxdy-app-hub-addons > span { color: var(--milxdy-hub-muted); overflow-wrap: anywhere; }
+    .milxdy-app-hub-addon-actions { display: flex; flex-wrap: wrap; gap: 6px; }
     .milxdy-app-hub-runtime span,
     .milxdy-app-hub-runtime-state {
       color: var(--milxdy-hub-muted);
