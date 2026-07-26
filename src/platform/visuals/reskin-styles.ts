@@ -1499,59 +1499,12 @@ export const RESKIN_CSS = `
     text-decoration-color: color-mix(in srgb, var(--milxdy-rn-blue) 60%, transparent) !important;
   }
 
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(232, 245, 253"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(232, 245, 253"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] article[data-testid="notification"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] article[data-testid="notification"][style*="background-color: rgb(232, 245, 253"] {
-    background:
-      linear-gradient(90deg, color-mix(in srgb, var(--milxdy-green) 20%, transparent), transparent 72%),
-      color-mix(in srgb, var(--milxdy-green-soft) 38%, var(--milxdy-surface)) !important;
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--milxdy-green) 18%, transparent) !important;
-    position: relative !important;
-  }
-
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="max"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(22, 36, 46"] {
-    background:
-      linear-gradient(90deg, rgba(201, 240, 168, 0.24), rgba(201, 240, 168, 0.05) 58%, rgba(201, 240, 168, 0) 86%),
-      rgb(31, 42, 34) !important;
-    box-shadow:
-      inset 0 0 0 1px rgba(201, 240, 168, 0.2),
-      inset 3px 0 0 rgba(201, 240, 168, 0.95) !important;
-  }
-
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(232, 245, 253"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(232, 245, 253"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] article[data-testid="notification"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] article[data-testid="notification"][style*="background-color: rgb(232, 245, 253"] {
-    background:
-      linear-gradient(90deg, color-mix(in srgb, var(--milxdy-green) 16%, transparent), transparent 72%),
-      color-mix(in srgb, var(--milxdy-green-soft) 28%, var(--milxdy-surface)) !important;
-    box-shadow: inset 3px 0 0 color-mix(in srgb, var(--milxdy-green) 64%, transparent) !important;
-  }
-
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"][style*="background-color: rgb(22, 36, 46"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgba(29, 155, 240"],
-  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [aria-label="Timeline: Notifications"] [data-testid="cellInnerDiv"] > div[style*="background-color: rgb(22, 36, 46"] {
-    background:
-      linear-gradient(90deg, rgba(201, 240, 168, 0.18), rgba(201, 240, 168, 0.04) 58%, rgba(201, 240, 168, 0) 86%),
-      rgb(31, 42, 34) !important;
-    box-shadow: inset 3px 0 0 rgba(201, 240, 168, 0.78) !important;
+  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"][data-milxdy-notification-unread="pending"] > div,
+  html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="pending"],
+  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"][data-milxdy-notification-unread="pending"] > div,
+  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="pending"] {
+    background: var(--milxdy-surface) !important;
+    box-shadow: none !important;
   }
 
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div,
@@ -1580,6 +1533,7 @@ export const RESKIN_CSS = `
       inset 3px 0 0 rgba(201, 240, 168, 0.95) !important;
   }
 
+  html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"][data-milxdy-notification-unread="true"] > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="true"] {
     background:
@@ -1588,8 +1542,10 @@ export const RESKIN_CSS = `
     box-shadow: inset 3px 0 0 color-mix(in srgb, var(--milxdy-green) 64%, transparent) !important;
   }
 
+  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"][data-milxdy-notification-unread="true"] > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dark"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="true"],
+  html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"]:has(article[data-testid="notification"][data-milxdy-notification-unread="true"]) > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] [data-testid="cellInnerDiv"][data-milxdy-notification-unread="true"] > div,
   html[data-milxdy-reskin-profile="moderate"][data-milxdy-x-theme="dim"][data-milxdy-visual-notification-unread-tint="true"] article[data-testid="notification"][data-milxdy-notification-unread="true"] {
     background:

@@ -20,6 +20,7 @@
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](APP_SDK.md)
+- [Local Add-ons](LOCAL_ADDONS.md)
 - [App SDK compatibility policy](APP_SDK_COMPATIBILITY.md)
 - [Post-reading App SDK reference](POST_READING_SDK_REFERENCE.md)
 - [App platform support contract](APP_PLATFORM_PRODUCTION_READINESS.md)

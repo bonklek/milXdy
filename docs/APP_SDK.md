@@ -527,3 +527,6 @@ background modules use host-provided typed services and declared message
 routes. These boundaries keep the supported platform precise without limiting
 what authors can build through the public lifecycle, storage, asset, messaging,
 surface, overlay, settings, and diagnostic APIs.
+
+For the stable end-user ZIP folder, rebuild, and Chrome reload workflow, see
+[Local Add-ons](LOCAL_ADDONS.md).

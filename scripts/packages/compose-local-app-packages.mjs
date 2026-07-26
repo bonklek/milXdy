@@ -17,6 +17,11 @@ const defaultPackagesDir = "examples/packages/first-party-replacements";
 const defaultOutDir = "tmp/local-app-composition";
 const args = process.argv.slice(2);
 const outDir = assertSafeGeneratedOutputDir(readArg("--out-dir") ?? defaultOutDir, "Local app composer --out-dir");
+const buildOutputDir = assertSafeGeneratedOutputDir(readArg("--build-output-dir") ?? "dist/chromium-local-apps", "Local app composer --build-output-dir");
+const requestedBuildId = readArg("--build-id");
+if (requestedBuildId && !/^[a-f0-9]{24}$/u.test(requestedBuildId)) {
+  throw new Error("Local app composer --build-id must be 24 lowercase hexadecimal characters.");
+}
 const planOut = readArg("--plan-out") ?? path.join(outDir, "build-plan.json");
 const packagesDirs = readRepeatedArg("--packages-dir");
 const legacyPackagesRoot = readArg("--packages-root");
@@ -27,6 +32,7 @@ const allowLocalReview = args.includes("--allow-local-review");
 const acknowledgePackageConsent = args.includes("--acknowledge-package-consent");
 const acknowledgeFirstPartyReplacement = args.includes("--acknowledge-first-party-replacement");
 const allowSensitivePackageApis = args.includes("--allow-sensitive-package-apis");
+const previewTrustRequirements = args.includes("--preview-trust-requirements");
 const requestedPackages = [
   ...readRepeatedArg("--package"),
   ...args.filter((arg) => !arg.startsWith("--")),
@@ -564,12 +570,23 @@ function buildGeneratedPlan(records) {
     addedHostPermissions: unique(records.flatMap((record) => record.permissions.addedHosts)).sort(),
     optional_permissions: unique(records.flatMap((record) => record.permissions.optional)).sort(),
   };
+  const buildFingerprint = records.map((record) => ({
+    id: record.id,
+    version: record.manifest.version,
+    packageSha256: record.packageSha256,
+  })).sort((a, b) => a.id.localeCompare(b.id));
+  const compositionFingerprint = createHash("sha256")
+    .update(JSON.stringify({ sdkVersion: currentSdkVersion, packages: buildFingerprint }))
+    .digest("hex");
+  const buildId = requestedBuildId ?? compositionFingerprint.slice(0, 24);
   const buildPlan = {
     schemaVersion: 1,
     composer: "milxdy-local-app-composer",
     sdkVersion: currentSdkVersion,
     target: "chromium",
-    outputDir: "dist/chromium-local-apps",
+    outputDir: buildOutputDir,
+    buildId,
+    compositionFingerprint,
     selectedPackageIds: records.map((record) => record.id).sort(),
     apps,
     packageCopyMap,
@@ -917,7 +934,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
       acknowledged: allowLocalReview,
       details: `review.status is ${reviewStatus}; local packages fail closed unless the developer acknowledges local/unreviewed package review`,
     });
-    if (!allowLocalReview) errors.push(`${id}: review.status ${reviewStatus} requires --allow-local-review before composing local/unreviewed packages`);
+    if (!allowLocalReview && !previewTrustRequirements) errors.push(`${id}: review.status ${reviewStatus} requires --allow-local-review before composing local/unreviewed packages`);
   }
 
   if (firstPartyById.has(id)) {
@@ -936,7 +953,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
     if (!replacementPolicy.allowed) {
       errors.push(`${id}: replacing a built-in app id requires a repo-owned first-party replacement policy match; ${replacementPolicy.reason}`);
     }
-    if (!acknowledgeFirstPartyReplacement) {
+    if (!acknowledgeFirstPartyReplacement && !previewTrustRequirements) {
       errors.push(`${id}: replacing a built-in app id requires --acknowledge-first-party-replacement`);
     }
   }
@@ -951,7 +968,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
         ? `package declares privileged build inputs: ${privilegedSurfaces.join(", ")}`
         : "package privacy metadata requires user/developer consent before enablement",
     });
-    if (!acknowledgePackageConsent) {
+    if (!acknowledgePackageConsent && !previewTrustRequirements) {
       errors.push(`${id}: privileged local package surfaces require --acknowledge-package-consent before emitting a custom build plan`);
     }
   }
@@ -969,7 +986,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
     });
     if (reviewStatus !== "reviewed") {
       errors.push(`${id}: sensitive package API findings require review.status "reviewed" before an exception can be acknowledged`);
-    } else if (!allowSensitivePackageApis) {
+    } else if (!allowSensitivePackageApis && !previewTrustRequirements) {
       errors.push(`${id}: sensitive package API findings require --allow-sensitive-package-apis after review`);
     }
   }
@@ -980,7 +997,7 @@ function evaluatePackageTrust(id, source, manifest, files, webAccessibleAssets, 
   for (const finding of sensitiveFindings) {
     const label = `${id}:${finding.file}:${finding.line}:${finding.column}`;
     const diagnostic = `${label}: ${finding.ruleId}: ${finding.message}`;
-    if (isNonAcknowledgeableSensitiveFinding(finding) || !allowSensitivePackageApis || reviewStatus !== "reviewed") errors.push(diagnostic);
+    if (isNonAcknowledgeableSensitiveFinding(finding) || reviewStatus !== "reviewed" || (!allowSensitivePackageApis && !previewTrustRequirements)) errors.push(diagnostic);
     else warnings.push(diagnostic);
   }
 

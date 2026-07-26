@@ -1,9 +1,16 @@
 import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
 import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
-import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
+import {
+  TextHighlightEngine,
+  estimateHighlightTokenCount as estimateSharedHighlightTokenCount,
+  tokenLength,
+  tokenStart,
+} from "./highlightEngine";
+import { isSmoothHighlightDiscontinuity, resolveContinuousHighlightMode } from "./highlightPolicy";
 import { HighlightProgressClock } from "./highlightProgress";
 import { icon } from "./icons";
+import { findAdjacentLineStart } from "./navigation";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
 import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
@@ -31,7 +38,6 @@ const POST_READING_BUTTON_SLOT = '[data-post-reading-button-slot="true"]';
 const RUNTIME_POST_READING_SLOT = '[data-milxdy-tweet-slot="post-reading-action"]';
 const RUNTIME_POST_READING_HEADER_SLOT = '[data-milxdy-tweet-slot="post-reading-header-action"]';
 let scanScheduled = false;
-let userScrolledAt = 0;
 let highlightedBodies = new Set<HTMLElement>();
 const activeTweets = new Set<HTMLElement>();
 const activeReadButtons = new Set<HTMLButtonElement>();
@@ -177,10 +183,10 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onStop: () => {
       stopTweetReaderFromUi();
     },
-    onNext: () => nextTweetOrQuotingText(),
+    onNext: () => playAdjacent(1),
     onPrevious: () => playAdjacent(-1),
-    onNextChunk: () => nextChunkAndResyncHighlight(),
-    onPreviousChunk: () => previousChunkAndResyncHighlight(),
+    onNextChunk: () => jumpSpeechLine(1),
+    onPreviousChunk: () => jumpSpeechLine(-1),
     onSkipOcr: () => skipOcrLoadingOrActiveSpeech(),
     onSettingsChange: (next) => {
       settings = next;
@@ -213,8 +219,8 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onPrevious: () => {
       void jumpWikiParagraph(-1, wikiSpeech);
     },
-    onNextChunk: () => nextChunkAndResyncHighlight(wikiSpeech),
-    onPreviousChunk: () => previousChunkAndResyncHighlight(wikiSpeech),
+    onNextChunk: () => jumpSpeechLine(1, wikiSpeech),
+    onPreviousChunk: () => jumpSpeechLine(-1, wikiSpeech),
     onSkipOcr: () => undefined,
     onSettingsChange: (next) => {
       settings = next;
@@ -305,11 +311,6 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     runtimeScheduleScan();
   }));
 
-  const scrollListener = () => {
-    userScrolledAt = Date.now();
-  };
-  window.addEventListener("scroll", scrollListener, { passive: true });
-  addDisposable(() => window.removeEventListener("scroll", scrollListener));
   window.addEventListener("keydown", handleKeydown, true);
   addDisposable(() => window.removeEventListener("keydown", handleKeydown, true));
 
@@ -753,15 +754,14 @@ function pauseWikiReader(): void {
   if (wikiSpeech?.getState().status === "speaking") wikiSpeech.pauseOrResume();
 }
 
-function nextChunkAndResyncHighlight(controller = speech): void {
+function jumpSpeechLine(direction: 1 | -1, controller = speech): void {
   if (!lifecycleActive()) return;
-  controller.nextChunk();
-  resyncHighlightAfterSpeechJump(controller);
-}
-
-function previousChunkAndResyncHighlight(controller = speech): void {
-  if (!lifecycleActive()) return;
-  controller.previousChunk();
+  const state = controller.getState();
+  if ((state.status !== "speaking" && state.status !== "paused") || !state.text) return;
+  const currentIndex = state.charIndex ?? state.chunkStart ?? 0;
+  const target = findAdjacentLineStart(state.text, currentIndex, direction);
+  if (target === null || target === currentIndex) return;
+  controller.jumpToCharIndex(target);
   resyncHighlightAfterSpeechJump(controller);
 }
 
@@ -1363,49 +1363,35 @@ function showTransientOcrStatus(status: string): void {
   }, 1400);
 }
 
-function playAdjacent(direction: 1 | -1): void {
+function playAdjacent(direction: 1 | -1, allowScroll = true): void {
   if (!lifecycleActive()) return;
-  const tweets = visibleTweets();
+  const tweets = timelineTweets();
   if (tweets.length === 0) return;
   const currentIndex = currentTweet ? tweets.indexOf(currentTweet) : -1;
-  const candidates = direction === 1 ? tweets.slice(currentIndex + 1) : tweets.slice(0, Math.max(0, currentIndex)).reverse();
+  const candidates = currentIndex >= 0
+    ? direction === 1
+      ? tweets.slice(currentIndex + 1)
+      : tweets.slice(0, currentIndex).reverse()
+    : tweets
+        .filter((tweet) => tweet !== currentTweet)
+        .filter((tweet) => direction === 1
+          ? tweet.getBoundingClientRect().top >= 0
+          : tweet.getBoundingClientRect().bottom <= (window.innerHeight || document.documentElement.clientHeight))
+        .sort((left, right) => direction * (left.getBoundingClientRect().top - right.getBoundingClientRect().top));
   const next = candidates.find((tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet));
   if (next) {
     playTweet(next);
     next.scrollIntoView({ block: "center", behavior: "smooth" });
     return;
   }
-  if (direction === 1 && settings.autoplayMode === "autoscroll" && Date.now() - userScrolledAt > 750) {
-    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: "smooth" });
+  if (allowScroll) {
+    window.scrollBy({ top: Math.round(window.innerHeight * 0.85) * direction, behavior: "smooth" });
     runtimeScheduler.timeout(() => {
       if (!lifecycleActive()) return;
       scheduleScan();
-      const refreshed = visibleTweets();
-      const candidate = refreshed.find((tweet) => tweet !== currentTweet && tweet.getBoundingClientRect().top > 0 && (!settings.skipPromotedPosts || !isPromotedTweet(tweet)));
-      if (candidate) playTweet(candidate);
-    }, 900);
+      playAdjacent(direction, false);
+    }, 550);
   }
-}
-
-function nextTweetOrQuotingText(): void {
-  if (skipActiveOcrSpeechRange()) return;
-  if (jumpFromQuoteToMainText()) return;
-  playAdjacent(1);
-}
-
-function jumpFromQuoteToMainText(): boolean {
-  const state = speech.getState();
-  if (state.status !== "speaking" && state.status !== "paused") return false;
-  const currentIndex = currentSpeechAbsoluteIndex(state);
-  if (currentIndex === null) return false;
-  const active = currentHighlightTargets.find((target) => currentIndex >= target.start && currentIndex <= target.end);
-  if (active?.kind !== "quote") return false;
-  const main = currentHighlightTargets.find((target) => target.kind === "main");
-  if (!main) return false;
-  speech.jumpToCharIndex(main.start);
-  resyncHighlightAfterSpeechJump();
-  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  return true;
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -1422,10 +1408,10 @@ function handleKeydown(event: KeyboardEvent): void {
 
   const normalized = normalizeKeybind(keybind);
   const actions: Array<[string, () => void]> = [
-    [settings.keyNextTweet, () => nextTweetOrQuotingText()],
+    [settings.keyNextTweet, () => playAdjacent(1)],
     [settings.keyPreviousTweet, () => playAdjacent(-1)],
-    [settings.keyNextChunk, () => nextChunkAndResyncHighlight()],
-    [settings.keyPreviousChunk, () => previousChunkAndResyncHighlight()],
+    [settings.keyNextChunk, () => jumpSpeechLine(1)],
+    [settings.keyPreviousChunk, () => jumpSpeechLine(-1)],
     [settings.keySkipOcr, () => skipOcrLoadingOrActiveSpeech()],
     [settings.keyPlayPause, () => speech.pauseOrResume()],
   ];
@@ -1469,11 +1455,9 @@ function normalizeKeybindPart(value: string): string {
   return value.length === 1 ? value.toUpperCase() : value;
 }
 
-function visibleTweets(): HTMLElement[] {
-  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+function timelineTweets(): HTMLElement[] {
   return Array.from(document.querySelectorAll<HTMLElement>(TWEET)).filter((tweet) => {
-    const rect = tweet.getBoundingClientRect();
-    return rect.bottom > 0 && rect.top < viewportHeight;
+    return tweet.isConnected && !tweet.parentElement?.closest(TWEET);
   });
 }
 
@@ -1720,6 +1704,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   const tokenizeStartedAt = performance.now();
   const words = prepareSmoothBody(paintTarget.body, paintTarget.text);
   const tokenizeMs = performance.now() - tokenizeStartedAt;
+  const cursorIndex = smoothCursorIndex(words, paintTarget.relativeIndex, state.charLength);
   const highlightJumped = targetChanged || segmentChanged || didHighlightDiscontinuity(paintTarget.relativeIndex, chunkChanged);
   updateBoundaryCalibration(paintTarget.relativeIndex);
   highlightEngine.updateBaselineReadingSpeed(settings.speed);
@@ -1727,17 +1712,9 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     resetSmoothTokenFill(words);
     highlightEngine.resetSmoothTracking(paintTarget.body);
   }
-  if (state.status !== "speaking") {
-    highlightEngine.suspendSmoothTracking(paintTarget.relativeIndex);
-  }
   const paintStartedAt = performance.now();
-  const currentWord = highlightEngine.paintSmooth(words, paintTarget.relativeIndex, {
-    charLength: state.charLength,
-    textLength: paintTarget.text.length,
-    snapToCurrent: highlightJumped || state.status !== "speaking",
-    boundaryElapsedTime: state.boundaryElapsedTime ?? null,
-    leadToNextToken: state.status === "speaking",
-  });
+  highlightEngine.paintSmoothAt(words, Math.min(paintTarget.text.length, cursorIndex));
+  const currentWord = findCurrentWordToken(words, cursorIndex, null);
   const paintMs = performance.now() - paintStartedAt;
   recordHighlightTimingDiagnostic(target, paintTarget, words, tokenizeMs, paintMs);
   recordHighlightPaintDiagnostic(currentWord ? "smooth-painted" : "smooth-no-token", state, target, null, words, currentWord, highlightJumped ? "reset" : null, highlightMode, absoluteIndex);
@@ -1878,11 +1855,14 @@ function recordHighlightTokenizationSkip(
 }
 
 function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
-  if (settings.bodyHighlightMode !== "smooth") return settings.bodyHighlightMode;
   const performanceMode = document.documentElement.dataset.milxdyPerformanceMode || "balanced";
   const tokenEstimate = cachedHighlightTokenEstimate(target);
-  let mode: BodyHighlightMode = "smooth";
-  let reason = "configured";
+  const { mode, reason } = resolveContinuousHighlightMode(
+    settings.bodyHighlightMode,
+    performanceMode,
+    target.text.length,
+    tokenEstimate,
+  );
   if (mode !== "smooth") clearSmoothAnimation();
   const diagnosticSignature = `${settings.bodyHighlightMode}:${mode}:${performanceMode}:${target.kind}:${reason}:${Math.round(target.text.length / 100)}`;
   if (diagnosticSignature !== lastHighlightDiagnosticSignature) {
@@ -1957,10 +1937,7 @@ function recordHighlightPaintDiagnostic(
 }
 
 function didHighlightDiscontinuity(relativeIndex: number, chunkChanged: boolean): boolean {
-  if (chunkChanged || lastRelativeIndex === null) return true;
-  if (relativeIndex < lastRelativeIndex) return true;
-  const expectedLead = Math.max(18, calibratedCharsPerSecond * 1.25);
-  return relativeIndex - lastRelativeIndex > expectedLead;
+  return isSmoothHighlightDiscontinuity(lastRelativeIndex, relativeIndex, calibratedCharsPerSecond, chunkChanged);
 }
 
 function clearActiveTweets(): void {
@@ -2453,7 +2430,6 @@ function findHighlightTargets(tweet: HTMLElement, spokenText: string, post: Read
   const mainRange = post.text && mainBody ? findBodyRange(spokenText, post.text, "last") : null;
   if (mainBody && mainRange) {
     const target: HighlightTarget = { body: mainBody, bodies: mainBodies, kind: "main", ...mainRange };
-    target.segments = buildSmoothHighlightSegments(target);
     targets.push(target);
   }
 
@@ -2642,6 +2618,13 @@ function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElem
 
 function findCurrentWordToken(words: HTMLElement[], relativeIndex: number, charLength: number | null): HTMLElement | null {
   return highlightEngine.findCurrentToken(words, relativeIndex, charLength);
+}
+
+function smoothCursorIndex(tokens: HTMLElement[], relativeIndex: number, charLength: number | null): number {
+  if (charLength !== null && charLength > 0) return relativeIndex + charLength;
+  const token = findCurrentWordToken(tokens, relativeIndex, null);
+  if (!token) return relativeIndex;
+  return tokenStart(token) + tokenLength(token);
 }
 
 function resetSmoothTokenFill(tokens: HTMLElement[]): void {

@@ -69,6 +69,10 @@ type UpdateMessage = {
   type: "milxdy:checkUpdate";
 };
 
+type LocalAddonStatusMessage = {
+  type: "milxdy:getLocalAddonStatus";
+};
+
 type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
   url: string;
@@ -155,6 +159,11 @@ const WIKI_SIDEBAR_NAVIGATION_RULES: readonly UrlAllowRule[] = [
 
 setupBackgroundMessageRouter([
   {
+    type: "milxdy:getLocalAddonStatus",
+    matches: isLocalAddonStatusMessage,
+    handle: readLocalAddonStatus,
+  },
+  {
     type: "milxdy:checkUpdate",
     matches: isUpdateMessage,
     handle: runUpdateCheck,
@@ -237,6 +246,24 @@ function isReminetIdentityMessage(message: unknown): message is ReminetIdentityM
 
 function isUpdateMessage(message: unknown): message is UpdateMessage {
   return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:checkUpdate");
+}
+
+function isLocalAddonStatusMessage(message: unknown): message is LocalAddonStatusMessage {
+  return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:getLocalAddonStatus");
+}
+
+async function readLocalAddonStatus(): Promise<Record<string, unknown>> {
+  try {
+    const response = await fetch(`${chrome.runtime.getURL("local-addon-status.json")}?v=${Date.now()}`, { cache: "no-store" });
+    if (!response.ok) return { ok: false, error: `Status file returned HTTP ${response.status}.` };
+    const status = await response.json() as Record<string, unknown>;
+    if ((status.schemaVersion !== 1 && status.schemaVersion !== 2) || typeof status.mode !== "string" || typeof status.state !== "string") {
+      return { ok: false, error: "Status file is invalid." };
+    }
+    return { ok: true, status };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 function isFetchImageDataUrlMessage(message: unknown): message is FetchImageDataUrlMessage {

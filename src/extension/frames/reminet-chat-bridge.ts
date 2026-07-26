@@ -109,7 +109,11 @@ async function syncBeetleWelcome(): Promise<void> {
       transform-origin: top left;
       animation: milxdy-beetle-welcome-shimmer 4.5s ease-in-out infinite, milxdy-beetle-welcome-breathe 5.5s ease-in-out infinite !important;
     }
-    #${BEETLE_WELCOME_ID} p { margin: 0; }
+    #${BEETLE_WELCOME_ID} p {
+      margin: 0;
+      -webkit-text-stroke: 0.35px rgba(91, 26, 55, 0.72);
+      paint-order: stroke fill;
+    }
     #${BEETLE_WELCOME_ID} button {
       position: absolute;
       top: 5px;
