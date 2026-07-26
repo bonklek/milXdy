@@ -200,7 +200,7 @@ async function restoreHostPatch(patchPath, cwd) {
 
 async function runQaBuild({ cwd }) {
   const output = [];
-  await runProcess(process.execPath, ["scripts/qa/qa-reload.mjs", "--once"], {
+  await runProcess(process.execPath, ["scripts/qa/qa-reload.mjs", "--once", "--replace-foreign-output"], {
     cwd,
     onStdout(chunk) {
       output.push(chunk);

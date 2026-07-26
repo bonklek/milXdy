@@ -635,11 +635,9 @@ export function injectStyles(): void {
       display: inline;
       white-space: pre-wrap;
       background: linear-gradient(90deg, var(--post-reading-fill-color) var(--post-reading-fill), transparent var(--post-reading-fill));
-      border-radius: 0;
-      box-decoration-break: slice;
-      -webkit-box-decoration-break: slice;
-      margin: -0.1em 0 -0.16em;
-      padding: 0.1em 0 0.16em;
+      border-radius: 4px;
+      box-decoration-break: clone;
+      -webkit-box-decoration-break: clone;
       transition: --post-reading-fill var(--post-reading-fill-duration) linear;
     }
     [data-post-reading-smooth-word="true"][data-post-reading-smooth-filled="true"] {
@@ -647,8 +645,6 @@ export function injectStyles(): void {
     }
     [data-post-reading-smooth-word="true"][data-post-reading-token-kind="space"] {
       border-radius: 0;
-      margin-left: -0.02em;
-      margin-right: -0.02em;
     }
     @media (prefers-color-scheme: dark) {
       .post-reading-button {

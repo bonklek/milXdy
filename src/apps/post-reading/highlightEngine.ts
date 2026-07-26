@@ -49,7 +49,6 @@ type PendingSmoothAnimation = {
   toIndex: number;
 };
 
-const CALIBRATION_SAMPLE_LIMIT = 5;
 const originalHtmlByElement = new WeakMap<HTMLElement, string>();
 
 export class TextHighlightEngine {
@@ -64,8 +63,6 @@ export class TextHighlightEngine {
   private lastRelativeIndex: number | null = null;
   private calibratedCharsPerSecond = 13;
   private baselineCharsPerSecond = 13;
-  private calibrationSamples = 0;
-  private calibrationLocked = false;
   private catchUpUntil = 0;
   private readonly onSmoothAnimation?: (diagnostic: SmoothAnimationDiagnostic) => void;
 
@@ -195,6 +192,12 @@ export class TextHighlightEngine {
           ),
         )
       : currentTokenEnd;
+    const interrupted = this.recordBoundaryInterruption(relativeIndex);
+    if (interrupted) {
+      this.clearSmoothAnimation({ completePending: true });
+      this.activeSmoothToken = null;
+    }
+
     if (
       this.pendingSmoothAnimation?.token === currentToken
       && this.activeSmoothToken === currentToken
@@ -217,8 +220,7 @@ export class TextHighlightEngine {
     this.clearSmoothAnimation({ completePending: tokenChanged });
 
     if (options.snapToCurrent) {
-      this.smoothVisualIndex = Math.max(this.smoothVisualIndex, relativeIndex);
-      this.snapSmoothAt(tokens, this.smoothVisualIndex);
+      this.snapSmoothAt(tokens, relativeIndex);
     }
 
     const visualStart = Math.max(
@@ -234,7 +236,7 @@ export class TextHighlightEngine {
     const duration = this.estimateSmoothFillDurationMs(animationEnd - visualStart);
     this.snapSmoothAt(tokens, visualStart);
     this.activeSmoothToken = currentToken;
-    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, null, relativeIndex);
+    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, interrupted, relativeIndex);
     return currentToken;
   }
 
@@ -271,14 +273,14 @@ export class TextHighlightEngine {
     this.lastBoundaryElapsedTime = null;
     this.lastRelativeIndex = null;
     this.calibratedCharsPerSecond = this.baselineCharsPerSecond;
-    this.calibrationSamples = 0;
-    this.calibrationLocked = false;
     this.catchUpUntil = 0;
     void rangeElement;
   }
 
   suspendSmoothTracking(relativeIndex: number): void {
     this.clearSmoothAnimation();
+    this.smoothVisualIndex = 0;
+    this.activeSmoothToken = null;
     this.lastBoundaryAt = null;
     this.lastBoundaryIntervalMs = null;
     this.lastRelativeIndex = relativeIndex;
@@ -333,17 +335,13 @@ export class TextHighlightEngine {
 
   private updateBoundaryCalibration(relativeIndex: number, boundaryElapsedTime: unknown): void {
     const now = performance.now();
-    if (!this.calibrationLocked && this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
+    if (this.lastRelativeIndex !== null && relativeIndex > this.lastRelativeIndex) {
       const elapsedMs = this.boundaryElapsedMs(boundaryElapsedTime, now);
       const charDelta = relativeIndex - this.lastRelativeIndex;
       const observed = elapsedMs !== null && elapsedMs > 0 ? charDelta / (elapsedMs / 1000) : null;
       if (elapsedMs !== null && elapsedMs > 0) this.lastBoundaryIntervalMs = elapsedMs;
-      if (elapsedMs !== null && observed !== null && this.isUsefulSpeedSample(observed, charDelta, elapsedMs)) {
-        this.calibratedCharsPerSecond = this.calibrationSamples === 0
-          ? observed
-          : this.calibratedCharsPerSecond * 0.68 + observed * 0.32;
-        this.calibrationSamples += 1;
-        if (this.calibrationSamples >= CALIBRATION_SAMPLE_LIMIT) this.calibrationLocked = true;
+      if (observed !== null && Number.isFinite(observed) && observed > 1 && observed < 80) {
+        this.calibratedCharsPerSecond = this.calibratedCharsPerSecond * 0.72 + observed * 0.28;
       }
     }
     this.lastBoundaryAt = now;
@@ -361,14 +359,6 @@ export class TextHighlightEngine {
     return { pendingToIndex: pending.toIndex, boundaryIndex: relativeIndex };
   }
 
-  private isUsefulSpeedSample(observed: number, charDelta: number, elapsedMs: number): boolean {
-    if (!Number.isFinite(observed) || observed <= 0) return false;
-    if (charDelta < 3 || elapsedMs <= 0) return false;
-    const lower = this.baselineCharsPerSecond * 0.45;
-    const upper = this.baselineCharsPerSecond * 2.4;
-    return observed >= lower && observed <= upper;
-  }
-
   private boundaryElapsedMs(boundaryElapsedTime: unknown, now: number): number | null {
     if (typeof boundaryElapsedTime === "number" && Number.isFinite(boundaryElapsedTime) && this.lastBoundaryElapsedTime !== null) {
       const elapsed = (boundaryElapsedTime - this.lastBoundaryElapsedTime) * 1000;
@@ -379,24 +369,19 @@ export class TextHighlightEngine {
   }
 
   private snapSmoothAt(tokens: HTMLElement[], cursorIndex: number): void {
-    const previousCursor = this.smoothVisualIndex;
     const cursor = Math.max(this.smoothVisualIndex, cursorIndex);
     this.smoothVisualIndex = cursor;
     for (const token of tokens) {
       const start = tokenStart(token);
-      const length = Math.max(1, tokenLength(token));
       const readableLength = Math.max(1, tokenReadableLength(token));
       const readableEnd = start + readableLength;
-      const end = start + length;
-      if (end <= previousCursor && end <= cursor) continue;
-      if (start >= cursor && start >= previousCursor) continue;
-      if (end <= cursor) {
+      if (readableEnd <= cursor) {
         token.dataset.postReadingSmoothFilled = "true";
         setSmoothFillImmediate(token, 100);
       } else if (cursor >= start && cursor < readableEnd) {
         delete token.dataset.postReadingSmoothFilled;
         setSmoothFillImmediate(token, rangeFillPercentForToken(token, cursor));
-      } else if (tokenStart(token) >= cursor) {
+      } else {
         delete token.dataset.postReadingSmoothFilled;
         setSmoothFillImmediate(token, null);
       }
@@ -454,15 +439,12 @@ export class TextHighlightEngine {
   }
 
   private estimateTokenDurationMs(length: number): number {
-    const cps = Math.max(0.001, this.calibratedCharsPerSecond);
+    const cps = Math.max(4, this.calibratedCharsPerSecond);
     return Math.round((Math.max(0, length) / cps) * 1000);
   }
 
   private estimateSmoothFillDurationMs(length: number): number {
-    const tokenDuration = Math.max(35, Math.min(1200, this.estimateTokenDurationMs(length)));
-    if (this.lastBoundaryIntervalMs === null) return tokenDuration;
-    const cadenceDuration = Math.round(Math.max(35, Math.min(900, this.lastBoundaryIntervalMs * 0.86)));
-    return Math.max(35, Math.min(tokenDuration, cadenceDuration));
+    return Math.max(80, Math.min(1200, this.estimateTokenDurationMs(length)));
   }
 
   private catchUpActive(): boolean {

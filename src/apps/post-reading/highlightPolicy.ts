@@ -6,13 +6,10 @@ export function resolveContinuousHighlightMode(
   textLength: number,
   tokenEstimate: number,
 ): { mode: BodyHighlightMode; reason: string } {
-  if (configuredMode !== "smooth") return { mode: configuredMode, reason: "configured" };
-  if (performanceMode === "fast") return { mode: "word", reason: "fast-mode" };
-  if (performanceMode === "balanced" && (textLength > 1500 || tokenEstimate > 240)) {
-    return { mode: "word", reason: "balanced-cap" };
-  }
-  if (textLength > 2200 || tokenEstimate > 360) return { mode: "word", reason: "long-text-cap" };
-  return { mode: "smooth", reason: "configured" };
+  void performanceMode;
+  void textLength;
+  void tokenEstimate;
+  return { mode: configuredMode, reason: "configured" };
 }
 
 export function isSmoothHighlightDiscontinuity(

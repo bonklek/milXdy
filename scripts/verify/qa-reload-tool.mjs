@@ -82,6 +82,21 @@ try {
   await rm(qaOutput, { recursive: true, force: true });
 }
 
+const protectedOutputDir = "tmp/qa-reload-protected";
+const protectedOutput = resolve(protectedOutputDir);
+await rm(protectedOutput, { recursive: true, force: true });
+await mkdir(protectedOutput, { recursive: true });
+await writeFile(resolve(protectedOutput, "qa-build.json"), `${JSON.stringify({ source: { sha256: "foreign-source" } })}\n`);
+try {
+  await assert.rejects(
+    buildQaOnce({ outputDir: protectedOutputDir, quiet: true }),
+    /different source snapshot/u,
+    "ordinary QA builds must not overwrite a handoff build from another source snapshot",
+  );
+} finally {
+  await rm(protectedOutput, { recursive: true, force: true });
+}
+
 const productionManifest = await readFile("assets/extension/manifest.json", "utf8");
 const productionPopup = await readFile("assets/extension/popup/popup.html", "utf8");
 const productionBuilder = await readFile("scripts/build/build-extension.mjs", "utf8");

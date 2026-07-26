@@ -393,6 +393,11 @@ declare their package-owned state and assets, and use only the public context.
 The docked template also demonstrates `boot`/`open`/`close`/`disable`/`dispose`,
 guarded asset URLs, and declared-key storage.
 
+For AI-assisted package drafting, use the reusable
+[AI authoring prompt](../sdk/AI_AUTHORING.md). It constrains assistants to the
+public SDK and keeps validation, consent, trust, licensing, privacy, and
+maintainer review as required gates.
+
 Before composing a browser build, import `createAppHarness` from
 `sdk/testing/app-harness.mjs` in app-owned tests. It provides an in-memory public
 context and records lifecycle calls, diagnostics, messages, and rescan requests.

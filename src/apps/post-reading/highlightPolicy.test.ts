@@ -9,9 +9,14 @@ describe("continuous Post-reading highlighting", () => {
     });
   });
 
-  it("falls back to word highlighting before smooth tokenization becomes excessive", () => {
-    expect(resolveContinuousHighlightMode("smooth", "balanced", 1600, 220).mode).toBe("word");
-    expect(resolveContinuousHighlightMode("smooth", "quality", 2300, 300).mode).toBe("word");
+  it("keeps an explicit smooth selection for long text and fast mode", () => {
+    expect(resolveContinuousHighlightMode("smooth", "fast", 1600, 220).mode).toBe("smooth");
+    expect(resolveContinuousHighlightMode("smooth", "quality", 23_000, 3_000).mode).toBe("smooth");
+  });
+
+  it("preserves explicit word and off selections", () => {
+    expect(resolveContinuousHighlightMode("word", "quality", 200, 30).mode).toBe("word");
+    expect(resolveContinuousHighlightMode("off", "fast", 200, 30).mode).toBe("off");
   });
 
   it("does not reset completed fill for a contiguous transport chunk handoff", () => {

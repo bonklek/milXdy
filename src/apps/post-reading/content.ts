@@ -1,16 +1,16 @@
 import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
 import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
-import {
-  TextHighlightEngine,
-  estimateHighlightTokenCount as estimateSharedHighlightTokenCount,
-  tokenLength,
-  tokenStart,
-} from "./highlightEngine";
+import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
 import { isSmoothHighlightDiscontinuity, resolveContinuousHighlightMode } from "./highlightPolicy";
 import { HighlightProgressClock } from "./highlightProgress";
 import { icon } from "./icons";
-import { findAdjacentLineStart } from "./navigation";
+import {
+  findExplicitPostTarget,
+  findVisibleAutoplayTarget,
+  jumpToAdjacentSpeechBoundary,
+  shouldRestartCurrentPost,
+} from "./navigation";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
 import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
@@ -38,6 +38,7 @@ const POST_READING_BUTTON_SLOT = '[data-post-reading-button-slot="true"]';
 const RUNTIME_POST_READING_SLOT = '[data-milxdy-tweet-slot="post-reading-action"]';
 const RUNTIME_POST_READING_HEADER_SLOT = '[data-milxdy-tweet-slot="post-reading-header-action"]';
 let scanScheduled = false;
+let userScrolledAt = 0;
 let highlightedBodies = new Set<HTMLElement>();
 const activeTweets = new Set<HTMLElement>();
 const activeReadButtons = new Set<HTMLButtonElement>();
@@ -58,7 +59,6 @@ const highlightProgressClock = new HighlightProgressClock();
 let pendingTweetHighlightState: HighlightSpeechState | null = null;
 let tweetHighlightFrame: number | null = null;
 let highlightWorkGeneration = 0;
-let resyncHighlightTimer: number | null = null;
 let deferNextIdleHighlightCleanup = false;
 let lastHighlightDiagnosticSignature = "";
 let lastHighlightPaintDiagnosticSignature = "";
@@ -183,8 +183,8 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onStop: () => {
       stopTweetReaderFromUi();
     },
-    onNext: () => playAdjacent(1),
-    onPrevious: () => playAdjacent(-1),
+    onNext: () => nextTweetOrQuotingText(),
+    onPrevious: () => previousTweetOrStart(),
     onNextChunk: () => jumpSpeechLine(1),
     onPreviousChunk: () => jumpSpeechLine(-1),
     onSkipOcr: () => skipOcrLoadingOrActiveSpeech(),
@@ -274,7 +274,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     if (settings.endOfTweetDing) void playEndDing(settings.volume);
     if (settings.autoplayNext) {
       runtimeScheduler.timeout(() => {
-        if (lifecycleActive()) playAdjacent(1);
+        if (lifecycleActive()) playAdjacentAutoplay();
       }, 150);
     }
   });
@@ -311,6 +311,11 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     runtimeScheduleScan();
   }));
 
+  const scrollListener = () => {
+    userScrolledAt = Date.now();
+  };
+  window.addEventListener("scroll", scrollListener, { passive: true });
+  addDisposable(() => window.removeEventListener("scroll", scrollListener));
   window.addEventListener("keydown", handleKeydown, true);
   addDisposable(() => window.removeEventListener("keydown", handleKeydown, true));
 
@@ -756,13 +761,7 @@ function pauseWikiReader(): void {
 
 function jumpSpeechLine(direction: 1 | -1, controller = speech): void {
   if (!lifecycleActive()) return;
-  const state = controller.getState();
-  if ((state.status !== "speaking" && state.status !== "paused") || !state.text) return;
-  const currentIndex = state.charIndex ?? state.chunkStart ?? 0;
-  const target = findAdjacentLineStart(state.text, currentIndex, direction);
-  if (target === null || target === currentIndex) return;
-  controller.jumpToCharIndex(target);
-  resyncHighlightAfterSpeechJump(controller);
+  jumpToAdjacentSpeechBoundary(controller, direction, () => resyncHighlightAfterSpeechJump(controller));
 }
 
 function jumpWikiParagraph(direction: 1 | -1, controller = wikiSpeech): boolean {
@@ -802,16 +801,11 @@ function resyncHighlightAfterSpeechJump(controller = speech): void {
   lastChunkIndex = null;
   lastBoundaryAt = null;
   lastRelativeIndex = null;
-  const generation = highlightWorkGeneration;
-  resyncHighlightTimer = window.setTimeout(() => {
-    resyncHighlightTimer = null;
-    if (!lifecycleActive()) return;
-    if (generation !== highlightWorkGeneration) return;
-    const state = controller.getState();
-    if (state.status === "idle" || state.status === "error") return;
-    if (controller === wikiSpeech) updateWikiDocumentHighlight(state);
-    else updateTweetHighlight(state);
-  }, 32);
+  if (!lifecycleActive()) return;
+  const state = controller.getState();
+  if (state.status === "idle" || state.status === "error") return;
+  if (controller === wikiSpeech) updateWikiDocumentHighlight(state);
+  else updateTweetHighlight(state);
 }
 
 function skipActiveOcrSpeechRange(): boolean {
@@ -1363,35 +1357,83 @@ function showTransientOcrStatus(status: string): void {
   }, 1400);
 }
 
-function playAdjacent(direction: 1 | -1, allowScroll = true): void {
+function playAdjacentExplicit(direction: 1 | -1): void {
   if (!lifecycleActive()) return;
   const tweets = timelineTweets();
   if (tweets.length === 0) return;
-  const currentIndex = currentTweet ? tweets.indexOf(currentTweet) : -1;
-  const candidates = currentIndex >= 0
-    ? direction === 1
-      ? tweets.slice(currentIndex + 1)
-      : tweets.slice(0, currentIndex).reverse()
-    : tweets
-        .filter((tweet) => tweet !== currentTweet)
-        .filter((tweet) => direction === 1
-          ? tweet.getBoundingClientRect().top >= 0
-          : tweet.getBoundingClientRect().bottom <= (window.innerHeight || document.documentElement.clientHeight))
-        .sort((left, right) => direction * (left.getBoundingClientRect().top - right.getBoundingClientRect().top));
-  const next = candidates.find((tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet));
+  const next = findExplicitPostTarget(
+    tweets,
+    currentTweet,
+    direction,
+    (tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet),
+  );
   if (next) {
     playTweet(next);
     next.scrollIntoView({ block: "center", behavior: "smooth" });
+  }
+}
+
+function playAdjacentAutoplay(): void {
+  if (!lifecycleActive()) return;
+  const next = findVisibleAutoplayTarget(
+    visibleTweets(),
+    currentTweet,
+    (tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet),
+  );
+  if (next) {
+    playTweet(next);
     return;
   }
-  if (allowScroll) {
-    window.scrollBy({ top: Math.round(window.innerHeight * 0.85) * direction, behavior: "smooth" });
+  if (settings.autoplayMode === "autoscroll" && Date.now() - userScrolledAt > 750) {
+    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: "smooth" });
     runtimeScheduler.timeout(() => {
       if (!lifecycleActive()) return;
       scheduleScan();
-      playAdjacent(direction, false);
-    }, 550);
+      const candidate = findVisibleAutoplayTarget(
+        visibleTweets().filter((tweet) => tweet.getBoundingClientRect().top > 0),
+        currentTweet,
+        (tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet),
+      );
+      if (candidate) playTweet(candidate);
+    }, 900);
   }
+}
+
+function nextTweetOrQuotingText(): void {
+  if (skipActiveOcrSpeechRange()) return;
+  if (jumpFromQuoteToMainText()) return;
+  playAdjacentExplicit(1);
+}
+
+function previousTweetOrStart(): void {
+  const state = speech.getState();
+  const currentIndex = currentSpeechAbsoluteIndex(state);
+  if (
+    currentTweet
+    && (state.status === "speaking" || state.status === "paused")
+    && shouldRestartCurrentPost(currentIndex)
+  ) {
+    speech.jumpToCharIndex(0);
+    resyncHighlightAfterSpeechJump();
+    currentTweet.scrollIntoView({ block: "nearest", inline: "nearest" });
+    return;
+  }
+  playAdjacentExplicit(-1);
+}
+
+function jumpFromQuoteToMainText(): boolean {
+  const state = speech.getState();
+  if (state.status !== "speaking" && state.status !== "paused") return false;
+  const currentIndex = currentSpeechAbsoluteIndex(state);
+  if (currentIndex === null) return false;
+  const active = currentHighlightTargets.find((target) => currentIndex >= target.start && currentIndex <= target.end);
+  if (active?.kind !== "quote") return false;
+  const main = currentHighlightTargets.find((target) => target.kind === "main");
+  if (!main) return false;
+  speech.jumpToCharIndex(main.start);
+  resyncHighlightAfterSpeechJump();
+  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return true;
 }
 
 function handleKeydown(event: KeyboardEvent): void {
@@ -1408,8 +1450,8 @@ function handleKeydown(event: KeyboardEvent): void {
 
   const normalized = normalizeKeybind(keybind);
   const actions: Array<[string, () => void]> = [
-    [settings.keyNextTweet, () => playAdjacent(1)],
-    [settings.keyPreviousTweet, () => playAdjacent(-1)],
+    [settings.keyNextTweet, () => nextTweetOrQuotingText()],
+    [settings.keyPreviousTweet, () => previousTweetOrStart()],
     [settings.keyNextChunk, () => jumpSpeechLine(1)],
     [settings.keyPreviousChunk, () => jumpSpeechLine(-1)],
     [settings.keySkipOcr, () => skipOcrLoadingOrActiveSpeech()],
@@ -1453,6 +1495,15 @@ function normalizeKeybindPart(value: string): string {
   if (lower === "cmd" || lower === "command" || lower === "meta") return "Meta";
   if (lower === "space" || value === " ") return "Space";
   return value.length === 1 ? value.toUpperCase() : value;
+}
+
+function visibleTweets(): HTMLElement[] {
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  return Array.from(document.querySelectorAll<HTMLElement>(TWEET)).filter((tweet) => {
+    if (!tweet.isConnected || tweet.parentElement?.closest(TWEET)) return false;
+    const rect = tweet.getBoundingClientRect();
+    return rect.bottom > 0 && rect.top < viewportHeight;
+  });
 }
 
 function timelineTweets(): HTMLElement[] {
@@ -1671,10 +1722,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   const body = target.body;
   const relativeIndex = absoluteIndex - target.start;
   const configuredHighlightMode = effectiveHighlightMode(target);
-  const highlightMode = configuredHighlightMode === "smooth" && !state.hasSyncedBoundaries && state.charIndex === null
-    ? "word"
-    : configuredHighlightMode;
-  if (highlightMode !== configuredHighlightMode) clearSmoothAnimation();
+  const highlightMode = configuredHighlightMode;
 
   if (highlightMode !== "smooth") {
     if (!canTokenizeHighlightTarget(target, highlightMode)) {
@@ -1704,7 +1752,6 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   const tokenizeStartedAt = performance.now();
   const words = prepareSmoothBody(paintTarget.body, paintTarget.text);
   const tokenizeMs = performance.now() - tokenizeStartedAt;
-  const cursorIndex = smoothCursorIndex(words, paintTarget.relativeIndex, state.charLength);
   const highlightJumped = targetChanged || segmentChanged || didHighlightDiscontinuity(paintTarget.relativeIndex, chunkChanged);
   updateBoundaryCalibration(paintTarget.relativeIndex);
   highlightEngine.updateBaselineReadingSpeed(settings.speed);
@@ -1712,9 +1759,17 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     resetSmoothTokenFill(words);
     highlightEngine.resetSmoothTracking(paintTarget.body);
   }
+  if (state.status !== "speaking") {
+    highlightEngine.suspendSmoothTracking(paintTarget.relativeIndex);
+  }
   const paintStartedAt = performance.now();
-  highlightEngine.paintSmoothAt(words, Math.min(paintTarget.text.length, cursorIndex));
-  const currentWord = findCurrentWordToken(words, cursorIndex, null);
+  const currentWord = highlightEngine.paintSmooth(words, paintTarget.relativeIndex, {
+    charLength: state.charLength,
+    textLength: paintTarget.text.length,
+    snapToCurrent: highlightJumped || state.status !== "speaking",
+    boundaryElapsedTime: state.boundaryElapsedTime ?? null,
+    leadToNextToken: state.status === "speaking",
+  });
   const paintMs = performance.now() - paintStartedAt;
   recordHighlightTimingDiagnostic(target, paintTarget, words, tokenizeMs, paintMs);
   recordHighlightPaintDiagnostic(currentWord ? "smooth-painted" : "smooth-no-token", state, target, null, words, currentWord, highlightJumped ? "reset" : null, highlightMode, absoluteIndex);
@@ -2089,10 +2144,6 @@ function clearPendingTweetHighlight(): void {
 function cancelPendingHighlightWork(): void {
   highlightWorkGeneration += 1;
   clearPendingTweetHighlight();
-  if (resyncHighlightTimer !== null) {
-    window.clearTimeout(resyncHighlightTimer);
-    resyncHighlightTimer = null;
-  }
   clearSmoothAnimation();
 }
 
@@ -2430,6 +2481,7 @@ function findHighlightTargets(tweet: HTMLElement, spokenText: string, post: Read
   const mainRange = post.text && mainBody ? findBodyRange(spokenText, post.text, "last") : null;
   if (mainBody && mainRange) {
     const target: HighlightTarget = { body: mainBody, bodies: mainBodies, kind: "main", ...mainRange };
+    target.segments = buildSmoothHighlightSegments(target);
     targets.push(target);
   }
 
@@ -2618,13 +2670,6 @@ function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElem
 
 function findCurrentWordToken(words: HTMLElement[], relativeIndex: number, charLength: number | null): HTMLElement | null {
   return highlightEngine.findCurrentToken(words, relativeIndex, charLength);
-}
-
-function smoothCursorIndex(tokens: HTMLElement[], relativeIndex: number, charLength: number | null): number {
-  if (charLength !== null && charLength > 0) return relativeIndex + charLength;
-  const token = findCurrentWordToken(tokens, relativeIndex, null);
-  if (!token) return relativeIndex;
-  return tokenStart(token) + tokenLength(token);
 }
 
 function resetSmoothTokenFill(tokens: HTMLElement[]): void {

@@ -20,6 +20,7 @@ const QA_MANIFEST_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0K0sWrJ0FvF
 export async function main(argv = process.argv.slice(2)) {
   const once = argv.includes("--once");
   const watch = argv.includes("--watch") || !once;
+  const replaceForeignOutput = argv.includes("--replace-foreign-output");
   const outputDir = resolvePersistentQaOutput(readArg(argv, "--publish-dir") || process.env.MILXDY_QA_OUTPUT_DIR || DEFAULT_OUTPUT);
   const builder = readArg(argv, "--builder") || "scripts/build/build-extension.mjs";
   const port = readIntegerArg(argv, "--port", DEFAULT_PORT);
@@ -39,7 +40,7 @@ export async function main(argv = process.argv.slice(2)) {
     do {
       queued = false;
       try {
-        const build = await buildQaOnce({ outputDir, builder, port });
+        const build = await buildQaOnce({ outputDir, builder, port, replaceForeignOutput });
         state.build = build;
         process.exitCode = 0;
         releaseWaiters(state);
@@ -78,7 +79,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", port = DEFAULT_PORT, quiet = false } = {}) {
+export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", port = DEFAULT_PORT, quiet = false, replaceForeignOutput = false } = {}) {
   const outputRoot = resolveQaBuildOutput(outputDir);
   const stagingRelative = `${DEFAULT_STAGING_ROOT}/staging-${process.pid}-${Date.now()}`;
   const staging = resolve(assertSafeGeneratedOutputDir(stagingRelative, "QA staging directory"));
@@ -94,6 +95,7 @@ export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scrip
     const provenance = createProvenance(after, outputRoot, port);
     await injectQaRuntime(staging, provenance);
     await verifyStagedOutput(staging, provenance);
+    await assertOutputCanBeReplaced(outputRoot, provenance, replaceForeignOutput);
     await promoteLastKnownGood(staging, outputRoot);
     return provenance;
   } finally {
@@ -299,6 +301,18 @@ async function verifyStagedOutput(staging, provenance) {
   if (manifest.key !== QA_MANIFEST_KEY || provenance.extensionId !== extensionIdFromManifestKey(manifest.key)) {
     throw new Error("QA stable extension identity verification failed");
   }
+  const runtimeSource = await readFile(resolve("src/platform/runtime/content-runtime.ts"), "utf8");
+  const contentBundle = await readFile(resolve(staging, "content.js"), "utf8");
+  if (runtimeSource.includes("milxdyAddOnsCatalog") && !contentBundle.includes("milxdyAddOnsCatalog")) {
+    throw new Error("QA content bundle omitted the App Store dock control.");
+  }
+}
+
+async function assertOutputCanBeReplaced(output, provenance, replaceForeignOutput) {
+  const existingProvenance = await readJson(resolve(output, "qa-build.json")).catch(() => null);
+  if (!existingProvenance || replaceForeignOutput) return;
+  if (existingProvenance.source?.sha256 === provenance.source?.sha256) return;
+  throw new Error("QA output belongs to a different source snapshot. Use qa:apply-next for a submitted handoff, or rerun qa:build with --replace-foreign-output after intentionally switching sources.");
 }
 
 async function promoteLastKnownGood(staging, output) {

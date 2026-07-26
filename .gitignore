@@ -12,7 +12,6 @@ tmp/
 *.key
 *.p12
 *.pfx
-ideas/
 local-app-packages/
 local-addons/
 *.log

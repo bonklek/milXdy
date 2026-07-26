@@ -17,6 +17,7 @@ const gates = [
   ["Local app trust gates", ["scripts/packages/verify-local-app-trust-gates.mjs"]],
   ["App settings mirrors", ["scripts/verify/app-settings-mirrors.mjs"]],
   ["Music build contract", ["scripts/verify/music-build.mjs"]],
+  ["Post-reading regression tests", ["node_modules/vitest/vitest.mjs", "run", "src/apps/post-reading"]],
   ["Build Post-reading distribution", ["scripts/build/build-post-reading-distribution.mjs", "--target=chromium"]],
   ["Post-reading distribution contract", ["scripts/verify/post-reading-distribution.mjs"]],
   ["Firefox lint", ["scripts/verify/firefox-lint.mjs"]],
