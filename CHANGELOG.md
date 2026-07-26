@@ -4,7 +4,7 @@
 
 See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 
-- Carries forward the Firefox/Waterfox compatibility, browser-specific update download, fullscreen DM media, and Tweet PNG rendering fixes originally prepared as an unpublished `0.2.2.1` hotfix.
+- Includes Firefox/Waterfox compatibility, browser-specific update downloads, fullscreen DM media, and Tweet PNG rendering improvements introduced after `0.2.2`.
 - Adds the opt-in Link Browser app: Alt-click a link on X/Twitter to open it in a docked, sandboxed reader panel while ordinary link behavior remains native.
 - Adds native English and contributor-provided Russian extension metadata. In-app controls remain English in this release.
 - Adds an opt-in Appearance setting that hides X's empty Messages request dot while preserving numbered unread badges.
@@ -19,7 +19,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Reorganizes Root Visual fine controls without changing their stored profile-pack shape, adds rail overflow direction indicators, strengthens Chat reaction and dark pop-out states, darkens Post/Reply controls in the dark preset, and matches the Wiki read-aloud button to the square Wiki control family.
 - Restores a compact Apps & Features rail-settings view with single-line ordering controls, removes the redundant self-link, and keeps app presets collapsed until requested.
 - Keeps X's native Like feedback responsive by removing broad button-transition overrides and replacing Maxxer's full-card shadow animation with short compositor-friendly feedback.
-- Removes two suspected reliability-audit lag contributors: main-column mutation-driven button rescans are replaced by a disabled-aware, capped visible-page check every five seconds, and the root-level relational dock selector is replaced by a static left-rail safe area.
+- Reduces browsing lag by replacing main-column mutation-driven button rescans with a disabled-aware, capped visible-page check every five seconds and replacing the root-level relational dock selector with a static left-rail safe area.
 - Keeps the final Beetle Hunt reward visible before transitioning to a red Done status and the persisted 90-minute cooldown.
 - Opens supported collapsed Wiki sections and inactive tabs as read-aloud reaches them, keeping highlights and auto-scroll on visible text.
 - Hides RemiStats poke controls until the visible account resolves to a confirmed RemiliaNET identity, including the optional poke-on-Like path.
@@ -93,7 +93,7 @@ Highlights:
 - Documented `0.2.0` as the first app-platform preview before the complete composable app/mod system, where default and community apps can eventually live as packages while sharing scanners, effects, runtime services, and performance budgets.
 - Expanded Post-reading/read-aloud with Wiki sidebar article routing, dock-attached Wiki playback, boundary-aware highlighting, voice support probing, estimated highlight fallbacks, custom TTS timing support, and a standalone Chromium build path.
 - Added final release documentation for shared Wiki sidebar routing, shared Remilia auth, centralized install defaults, RemiStats tooltip hardening, dependency overrides, and release hygiene.
-- Updated `esbuild` to `0.28.1` in both checked-in lockfiles after the final audit pass so the Windows dev-server file-read advisory is not present in the release dependency tree.
+- Updated `esbuild` to `0.28.1` in both checked-in lockfiles so the Windows dev-server file-read advisory is not present in the release dependency tree.
 
 ## 0.1.5
 

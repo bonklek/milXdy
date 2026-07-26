@@ -9,7 +9,7 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 ## Most Recent Release
 
-For older shipped details, see the descending [changelog](../CHANGELOG.md).
+`0.2.3` is the current release. See its [release notes](RELEASE_NOTES_0.2.3.md) and the descending [changelog](../CHANGELOG.md) for shipped details.
 
 ## Released: 0.2.2 - Prepared App SDK Update
 
@@ -34,7 +34,7 @@ Theme: make first-party apps easier to understand, configure, package, and maint
   - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
   - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
 
-## Upcoming: 0.2.3 - Reliability And Recovery
+## Released: 0.2.3 - Reliability And Recovery
 
 Theme: make the prepared app platform resilient across lifecycle failures, slow or stale network work, authenticated RemiliaNET features, X interaction hot paths, and accessibility-sensitive UI.
 
@@ -55,7 +55,7 @@ Theme: make the prepared app platform resilient across lifecycle failures, slow 
   - group Root Visual controls without changing stored theme/profile-pack shape
   - open supported Wiki tabs and collapsed sections before read-aloud highlights them
   - improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior
-  - retain the Firefox/Waterfox, browser-specific update, fullscreen DM media, and Tweet PNG fixes prepared after `0.2.2`
+  - include Firefox/Waterfox compatibility, browser-specific update downloads, fullscreen DM media, and Tweet PNG improvements introduced after `0.2.2`
 
 ## Coming Platform Direction: Composable App/Mod System
 

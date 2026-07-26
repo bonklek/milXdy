@@ -22,7 +22,7 @@ milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It bri
 - Show poke controls only for accounts with a confirmed RemiliaNET identity while retaining independent score and beetle badges.
 - Make active Chat reaction counts visibly pressed, keep dark Chat pop-outs free of bright outer edges, and use darker Post/Reply buttons in the dark default preset.
 - Match the Remilia Wiki read-aloud control to the square Wiki button treatment.
-- Preserve the Firefox/Waterfox compatibility, target-specific update download, fullscreen DM media, and Tweet PNG rendering improvements prepared after `0.2.2`.
+- Include Firefox/Waterfox compatibility, target-specific update downloads, fullscreen DM media, and Tweet PNG rendering improvements introduced after `0.2.2`.
 - Localize the browser-provided extension name and description in Russian, falling back to English elsewhere. The in-app interface remains English in this release.
 - Add an Appearance toggle for hiding X's dot-style hidden-message-request indicator without suppressing numbered unread badges.
 - Add the opt-in Link Browser app: Alt-click a link on X/Twitter to inspect it in a docked, sandboxed reader panel while normal links keep their native behavior.
