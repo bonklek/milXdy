@@ -12,7 +12,6 @@ import { parseJsonObject } from "../../platform/browser/json";
 
 let postSoundContext: AudioContext | null = null;
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
-const xUnreadNotifications = new WeakSet<HTMLElement>();
 const clickedNotificationKeys = new WeakMap<HTMLElement, string>();
 const SHOW_NEW_POSTS_RE = /show\s+\d+\s+posts?/i;
 const SHOW_NEW_POST_SCAN_INTERVAL_MS = 5000;
@@ -738,26 +737,31 @@ function injectTweetPngStyles(): void {
 }
 
 function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void {
-  const pending = new Set<HTMLElement>();
-  let rafId = 0;
-  const flush = () => {
-    rafId = 0;
-    if (context.signal.aborted) return;
-    const notifications = Array.from(pending);
-    pending.clear();
-    for (const queued of notifications) markNotificationUnread(queued);
+  const settledCheckTimers = new Set<number>();
+  const reconcileNotification = (notification: HTMLElement) => {
+    if (!context.signal.aborted) {
+      const unknownState = notification.dataset.milxdyNotificationUnread === "pending" ? "pending" : "false";
+      markNotificationUnread(notification, unknownState);
+    }
   };
-  const queueNotification = (notification: HTMLElement) => {
-    pending.add(notification);
-    if (rafId) return;
-    rafId = window.requestAnimationFrame(flush);
+  const scheduleSettledChecks = (notification: HTMLElement) => {
+    for (const delay of [100, 350]) {
+      const timerId = window.setTimeout(() => {
+        settledCheckTimers.delete(timerId);
+        markNotificationUnread(notification, delay === 350 ? "false" : "pending");
+      }, delay);
+      settledCheckTimers.add(timerId);
+    }
+  };
+  const queueNotificationAndSettledChecks = (notification: HTMLElement) => {
+    markNotificationUnread(notification, "pending");
+    scheduleSettledChecks(notification);
   };
 
   const notificationClickListener = (event: MouseEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     const notification = target?.closest<HTMLElement>('article[data-testid="notification"]');
     if (!notification) return;
-    xUnreadNotifications.delete(notification);
     clickedNotificationKeys.set(notification, notificationReadKey(notification));
     notification.dataset.milxdyNotificationUnread = "false";
     notification.dataset.milxdyNotificationUnreadSource = "clicked";
@@ -768,29 +772,55 @@ function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void 
   addRootVisualClickHandler(context, notificationClickListener);
 
   for (const notification of document.querySelectorAll<HTMLElement>('article[data-testid="notification"]')) {
-    queueNotification(notification);
+    queueNotificationAndSettledChecks(notification);
   }
 
-  queueNotificationSurface = queueNotification;
+  const mutationObserver = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      const target = mutation.target instanceof Element ? mutation.target : null;
+      const notification = target?.closest<HTMLElement>('article[data-testid="notification"]');
+      if (notification) {
+        reconcileNotification(notification);
+        continue;
+      }
+      if (mutation.type !== "childList") continue;
+      for (const addedNode of mutation.addedNodes) {
+        if (!(addedNode instanceof HTMLElement)) continue;
+        const addedNotification = addedNode.matches('article[data-testid="notification"]')
+          ? addedNode
+          : addedNode.querySelector<HTMLElement>('article[data-testid="notification"]');
+        if (addedNotification) queueNotificationAndSettledChecks(addedNotification);
+      }
+    }
+  });
+  mutationObserver.observe(document.documentElement, {
+    subtree: true,
+    childList: true,
+    attributes: true,
+    attributeFilter: ["class", "style", "aria-label"],
+  });
+
+  queueNotificationSurface = queueNotificationAndSettledChecks;
   context.addDisposable(() => {
-    if (rafId) window.cancelAnimationFrame(rafId);
-    rafId = 0;
-    pending.clear();
-    if (queueNotificationSurface === queueNotification) queueNotificationSurface = null;
+    mutationObserver.disconnect();
+    for (const timerId of settledCheckTimers) window.clearTimeout(timerId);
+    settledCheckTimers.clear();
+    if (queueNotificationSurface === queueNotificationAndSettledChecks) queueNotificationSurface = null;
   });
 }
 
-function markNotificationUnread(notification: HTMLElement): void {
+function markNotificationUnread(notification: HTMLElement, unknownState: "false" | "pending" = "false"): void {
   if (!notification.isConnected) return;
   const cell = notification.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
   const unreadSource = getUnreadNotificationSource(notification, cell);
   const unread = Boolean(unreadSource);
-  if (unread && unreadSource !== "previous-x-unread") xUnreadNotifications.add(notification);
   if (unread) clickedNotificationKeys.delete(notification);
-  notification.dataset.milxdyNotificationUnread = String(unread);
-  notification.dataset.milxdyNotificationUnreadSource = unreadSource || "none";
-  if (cell) cell.dataset.milxdyNotificationUnread = String(unread);
-  if (cell) cell.dataset.milxdyNotificationUnreadSource = unreadSource || "none";
+  const state = unread ? "true" : unknownState;
+  const source = unreadSource || (state === "pending" ? "pending" : "none");
+  notification.dataset.milxdyNotificationUnread = state;
+  notification.dataset.milxdyNotificationUnreadSource = source;
+  if (cell) cell.dataset.milxdyNotificationUnread = state;
+  if (cell) cell.dataset.milxdyNotificationUnreadSource = source;
 }
 
 function getUnreadNotificationSource(notification: HTMLElement, cell: HTMLElement | null): string | null {
@@ -806,6 +836,10 @@ function getUnreadNotificationSource(notification: HTMLElement, cell: HTMLElemen
   const markerSource = getUnreadMarkerSource(notification, cell);
   if (markerSource) return markerSource;
 
+  return withNotificationTintMarkersDisabled(notification, cell, () => getNativeUnreadBackgroundSource(notification, cell));
+}
+
+function getNativeUnreadBackgroundSource(notification: HTMLElement, cell: HTMLElement | null): string | null {
   const candidates = [
     cell,
     cell?.firstElementChild,
@@ -819,8 +853,29 @@ function getUnreadNotificationSource(notification: HTMLElement, cell: HTMLElemen
     if (styleBackground && isTwitterUnreadBackground(styleBackground)) return "style-attribute";
     if (element instanceof HTMLElement && isTwitterUnreadBackground(window.getComputedStyle(element).backgroundColor)) return "computed-style";
   }
-  if (xUnreadNotifications.has(notification)) return "previous-x-unread";
   return null;
+}
+
+function withNotificationTintMarkersDisabled<T>(
+  notification: HTMLElement,
+  cell: HTMLElement | null,
+  callback: () => T,
+): T {
+  const notificationUnread = notification.getAttribute("data-milxdy-notification-unread");
+  const cellUnread = cell?.getAttribute("data-milxdy-notification-unread") ?? null;
+  notification.removeAttribute("data-milxdy-notification-unread");
+  if (cell) cell.removeAttribute("data-milxdy-notification-unread");
+  try {
+    return callback();
+  } finally {
+    restoreAttribute(notification, "data-milxdy-notification-unread", notificationUnread);
+    if (cell) restoreAttribute(cell, "data-milxdy-notification-unread", cellUnread);
+  }
+}
+
+function restoreAttribute(element: HTMLElement, name: string, value: string | null): void {
+  if (value === null) element.removeAttribute(name);
+  else element.setAttribute(name, value);
 }
 
 function setupOrphanReplyMarkers(context: MilxdyContentAppContext): void {
@@ -914,7 +969,7 @@ function getUnreadMarkerSource(notification: HTMLElement, cell: HTMLElement | nu
   return /\b(unread|new notification|new notifications)\b/i.test(statusText) ? "status-text" : null;
 }
 
-function isTwitterUnreadBackground(value: string): boolean {
+export function isTwitterUnreadBackground(value: string): boolean {
   const match = value.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/i);
   if (!match) return false;
   const [, redText, greenText, blueText, alphaText] = match;

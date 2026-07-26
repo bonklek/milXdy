@@ -63,6 +63,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [Privacy and permissions](docs/PRIVACY_AND_PERMISSIONS.md)
 - [App SDK](docs/APP_SDK.md)
 - [App SDK starter kit](sdk/README.md)
+- [Local Add-ons](docs/LOCAL_ADDONS.md)
 - [App platform support contract](docs/APP_PLATFORM_PRODUCTION_READINESS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](docs/CONTRIBUTING.md)
