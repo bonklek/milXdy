@@ -15,6 +15,8 @@ const status = JSON.parse(await readFile("tmp/local-addon-manager/status.json", 
 const plan = JSON.parse(await readFile("tmp/local-addon-manager/composition/build-plan.json", "utf8"));
 const runtime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
 const manager = await readFile("scripts/addons/manage-local-addons.mjs", "utf8");
+const popup = await readFile("assets/extension/popup/popup.html", "utf8");
+const popupRuntime = await readFile("src/extension/popup/index.ts", "utf8");
 
 assert.equal(status.schemaVersion, 2);
 assert.equal(status.mode, "managed-local-addons");
@@ -38,6 +40,8 @@ assert.match(runtime, /preflightLocalAddonZip/u);
 assert.match(runtime, /milxdy\.app\.json must be at the ZIP root/u);
 assert.match(runtime, /Rebuild custom extension/u);
 assert.match(runtime, /rebuild\.disabled = !state\.localAddonQueue\.some/u);
+assert.match(runtime, /localAddonPendingRemovals\.size === 0/u);
+assert.match(runtime, /milxdy\.localAddons\.pendingRemovals/u);
 assert.match(runtime, /showDirectoryPicker/u);
 assert.match(runtime, /this running extension did not rebuild itself/u);
 assert.match(runtime, /choose Load unpacked/u);
@@ -47,5 +51,13 @@ assert.match(manager, /The stable build was not replaced/u);
 assert.match(manager, /chrome:\/\/extensions/u);
 assert.match(manager, /build-promotion\.json/u);
 assert.match(manager, /Stage 1\/4/u);
+assert.doesNotMatch(popup, /class="tab"[^>]+data-panel="wiki"/u);
+assert.match(popup, /data-installed-addon="wiki"/u);
+assert.match(popup, /data-installed-addon="post-reading"/u);
+assert.match(popup, /data-addon-settings-source="post-reading"/u);
+assert.match(popup, /id="rebuildLocalAddons"[^>]+disabled/u);
+assert.match(popupRuntime, /moveInstalledAddonSettings/u);
+assert.match(popupRuntime, /PENDING_LOCAL_ADDON_REMOVALS_KEY/u);
+assert.match(popupRuntime, /Removal queued for the next rebuild/u);
 
 console.log("Local Add-on Manager verification passed.");
