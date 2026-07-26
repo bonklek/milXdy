@@ -145,6 +145,12 @@ for (const phrase of [
 ]) {
   if (!onboarding.includes(phrase)) failures.push(`Pages onboarding is missing required content: ${phrase}`);
 }
+for (const file of ["pages/index.html", "catalog/index.html", "catalog/add-ons/index.html"]) {
+  const html = contents.get(file) || "";
+  if (!html.includes('class="wip-banner"') || (html.match(/WORK IN PROGRESS!!!/g) || []).length < 8) {
+    failures.push(`${file} must include the repeated work-in-progress banner`);
+  }
+}
 if ((onboarding.match(/__PAGES_ASSET_VERSION__/g) || []).length < 2) {
   failures.push("Pages onboarding assets must use the generated deployment cache key");
 }
@@ -169,7 +175,7 @@ for (const phrase of ["milxdy-logo-square-bevel.png", "workflow-steps", "catalog
 }
 
 const styles = contents.get("catalog/assets/styles.css") || "";
-for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark"]) {
+for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark", "wip-banner-scroll", "prefers-reduced-motion: reduce"]) {
   if (!styles.includes(phrase)) failures.push(`catalog styles are missing established X-facing token or geometry: ${phrase}`);
 }
 
