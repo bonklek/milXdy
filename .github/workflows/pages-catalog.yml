@@ -1,4 +1,4 @@
-name: Deploy Add-ons Catalog to Pages
+name: Deploy milXdy Site to Pages
 
 on:
   workflow_dispatch:
@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Validate and deploy catalog
+    name: Validate and deploy onboarding site and catalog
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -29,16 +29,16 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify catalog metadata and disclosures
+      - name: Verify onboarding and catalog sources
         run: node scripts/verify/pages-catalog.mjs
 
-      - name: Build static catalog
+      - name: Build static site
         run: node scripts/build/build-pages-catalog.mjs
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
-      - name: Upload static catalog
+      - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
           path: tmp/pages-catalog-site

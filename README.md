@@ -61,7 +61,8 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [Full user guide](docs/USER_GUIDE.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Privacy and permissions](docs/PRIVACY_AND_PERMISSIONS.md)
-- [Add-ons Catalog](https://bonklek.github.io/milXdy/) — no add-ons are published yet
+- [milXdy setup and guides](https://bonklek.github.io/milXdy/)
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — no add-ons are published yet
 - [App SDK](docs/APP_SDK.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](docs/CONTRIBUTING.md)
