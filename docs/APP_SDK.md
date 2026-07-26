@@ -1,4 +1,4 @@
-# milXdy App SDK
+# milXdy App SDK Reference
 
 milXdy App SDK 0.2.3 is a production platform for building reviewed apps into
 custom Chromium distributions of milXdy. Apps declare their lifecycle,
@@ -18,8 +18,7 @@ Apps & Features.
 Start with the [SDK starter kit](../sdk/README.md), then use this guide as the
 authoritative manifest, runtime, composition, and security reference. The
 [App Platform Support Contract](APP_PLATFORM_PRODUCTION_READINESS.md) defines
-the supported distribution model and guarantees. [App SDK Compatibility](APP_SDK_COMPATIBILITY.md)
-defines versioning and migration rules.
+the supported distribution, security, compatibility, and versioning contract.
 
 ## Platform Model
 
@@ -370,20 +369,10 @@ Package-kind rules:
 
 ### Package To Custom Build
 
-Use the checked-in novel sample as the smallest third-party package shape:
-
-```powershell
-New-Item -ItemType Directory -Force local-addons\manual
-Compress-Archive -Path examples\packages\local-dev\dev-note\* -DestinationPath local-addons\manual\dev-note.zip -Force
-npm run addons:status
-npm run addons:rebuild -- --allow-local-review --acknowledge-package-consent
-```
-
-The ZIP must contain `milxdy.app.json` at its root. The manager validates the
-complete package set before changing the stable build. After the first build,
-load `dist/chromium-local-apps/` once from `chrome://extensions`. After later
-rebuilds, click **Reload** on that existing extension card and refresh X/Twitter.
-See [Local Add-ons](LOCAL_ADDONS.md) for the complete user workflow.
+`examples/packages/local-dev/dev-note/` is the smallest checked-in third-party
+package. Use the [starter kit](../sdk/README.md) to build and validate a package,
+then follow [Local Add-ons](LOCAL_ADDONS.md) to compose it into Chromium. A ZIP
+contains one package root with `milxdy.app.json` at that root.
 
 Expected managed artifacts:
 
@@ -447,48 +436,20 @@ That command runs the composer against only the selected package source, then in
 
 ### Managed Catalog And Manual Workflows
 
-The catalog creates a small selection document instead of initiating multiple
-browser downloads. Its schema is
-[`milxdy-selection.schema.json`](milxdy-selection.schema.json). Prepare accepts
-only checked-in GitHub download hosts, validates redirects, streams downloads
-under the archive size limit, verifies pinned SHA-256 hashes, reuses the
-content-addressed cache in `local-addons/.cache/`, and transactionally replaces
-the exact package set in `local-addons/catalog/`:
+The supported user procedure is documented once in
+[Local Add-ons](LOCAL_ADDONS.md). It covers manual ZIPs, catalog selection
+files, Prepare/Apply, trust acknowledgements, stable output, status, failure
+recovery, and Chrome reload.
 
-```powershell
-npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
-npm run addons:apply -- --acknowledge-package-consent
-```
+The manager uses the same package schema and composer described below. It adds
+canonical `local-addons/manual/` and `local-addons/catalog/` inputs, pinned
+catalog acquisition, transactional promotion to `dist/chromium-local-apps/`,
+durable status, `buildInstanceId`, and `compositionFingerprint`.
 
-Prepare prints one consolidated summary of capabilities, hosts, permissions,
-storage, remote services, review evidence, and required acknowledgements. It
-does not build or execute package code. Apply re-verifies the materialized ZIP
-hashes and then invokes the same composer and trust gates used by manual builds.
-Catalog review metadata is authoritative only when the package ID, archive
-hash, reviewer, and review date match
-`scripts/addons/trusted-catalog-reviews.json`; otherwise Apply requires
-`--allow-local-review`.
-
-Manual ZIPs live in `local-addons/manual/` and use:
-
-```powershell
-npm run addons:status
-npm run addons:rebuild -- --allow-local-review --acknowledge-package-consent
-```
-
-Both paths promote successful builds transactionally to
-`dist/chromium-local-apps/` and preserve the last known-good output on download,
-validation, composition, compilation, or promotion failure. Recovery journals
-complete or roll back interrupted package-set and build promotions. Manager
-state and reports live in `tmp/local-addon-manager/`.
-
-Every successful build receives a new `buildInstanceId`, which lets Apps &
-Features detect that Chrome still has the previous build loaded. The
-`compositionFingerprint` is deterministic for the extension version, SDK
-version, target, and sorted package ID/version/hash tuples, so equivalent
-compositions can be compared independently of rebuild time. Apps & Features
-shows the loaded package IDs, fingerprint, and whether a prepared build is
-current or waiting for Chrome reload.
+The catalog selection document is defined by
+[`milxdy-selection.schema.json`](milxdy-selection.schema.json). Catalog review
+claims become trusted only when their package ID, archive hash, reviewer, and
+review date match the checked-in trusted-review registry.
 
 ### Low-Level Composer And Builder
 

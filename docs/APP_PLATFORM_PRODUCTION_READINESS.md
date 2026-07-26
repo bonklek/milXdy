@@ -19,25 +19,12 @@ reviewable composition report, and generates a deterministic unpacked Chromium
 build. Apps & Features provides package enablement, disclosure, reset, rail,
 and diagnostics behavior in the generated extension.
 
-The supported local workflow has four explicit stages:
-
-1. **Select:** the catalog exports one `.milxdy-selection.json` containing the
-   exact package IDs, HTTPS ZIP URLs, filenames, SHA-256 hashes, and review
-   identities.
-2. **Place ZIPs:** `npm run addons:prepare` downloads from allowed GitHub hosts,
-   verifies every pinned hash, validates the complete set, and transactionally
-   places it in `local-addons/catalog/`. Users may instead put trusted ZIPs in
-   `local-addons/manual/` and inspect them with `npm run addons:status`.
-3. **Rebuild:** `npm run addons:apply` builds a prepared catalog selection;
-   `npm run addons:rebuild` builds the manual set. Both preserve the previous
-   working build if the operation fails.
-4. **Reload:** the stable output remains `dist/chromium-local-apps/`. Load it
-   once, then use Chrome's **Reload** action after each successful rebuild.
-
-The catalog owns selection, the checked-in local manager owns downloads,
-filesystem placement and composition, and the generated extension owns loaded
-build identity and reload confirmation. The low-level composer commands remain
-available for package authors and repository verification.
+The workflow is **Select → Place ZIPs → Rebuild → Reload**. The catalog owns
+selection, the checked-in local manager owns verified downloads, filesystem
+placement and composition, and the generated extension owns loaded-build
+identity and reload confirmation. [Local Add-ons](LOCAL_ADDONS.md) is the
+canonical procedure. Low-level composer commands remain available for package
+authors and repository verification.
 
 This is a custom-build SDK. Packages become part of the generated extension;
 they are not downloaded into an already-installed browser extension. Package
@@ -157,9 +144,38 @@ reference integration must keep this suite green.
 
 ## Versioning And Support
 
-The compatibility policy defines App SDK SemVer, manifest versions,
-deprecations, package ranges, and migration requirements. Supported SDK
-contracts remain synchronized across public declarations, schemas, templates,
-runtime types, and deterministic verification.
+The repository release version, browser extension version, App SDK version,
+package manifest version, app package version, and catalog selection schema
+version are independent compatibility signals:
 
-See [App SDK Compatibility Policy](APP_SDK_COMPATIBILITY.md).
+- `package.json.version` identifies the repository release.
+- `package.json.extensionVersion` identifies the browser extension build.
+- `package.json.appSdkVersion` identifies the public App SDK contract.
+- `milxdy.app.json.manifestVersion` identifies the package document schema and
+  is currently `1`.
+- `milxdy.app.json.version` identifies the individual app package.
+- `milxdy.app.json.sdk.minVersion` is the oldest supported App SDK.
+- `milxdy.app.json.sdk.targetVersion` is the SDK used for package testing.
+- `.milxdy-selection.json.schemaVersion` identifies the catalog-to-manager
+  document and is currently `1`.
+
+Before App SDK `1.0.0`, minor releases may introduce contract changes. Such a
+change includes synchronized public declarations, schemas, templates,
+verification, and migration notes. Starting with `1.0.0`, patch releases are
+compatible fixes, minor releases add backward-compatible contract surface, and
+major releases may require package migration.
+
+The composer rejects packages whose minimum SDK is newer than the current SDK
+and warns when the tested target differs. Additions use optional fields or
+backward-compatible defaults. Deprecations remain documented for at least one
+minor SDK release before removal after `1.0.0`. Breaking releases include a
+migration guide and updated starter templates.
+
+Storage changes declare migration and cleanup behavior. Message namespaces and
+error envelopes are compatibility contracts. Package updates must not silently
+orphan secrets, local paths, caches, or user data.
+
+`compositionFingerprint` identifies the extension version, SDK version, build
+target, and exact sorted package ID/version/hash tuples.
+`buildInstanceId` identifies one successful managed build and supports Chrome
+reload detection.

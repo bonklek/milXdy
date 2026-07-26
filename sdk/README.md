@@ -26,9 +26,8 @@ declared App SDK contract.
 - `../docs/local-app-package.schema.json`: JSON Schema for
   `milxdy.app.json` authoring.
 - `../docs/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.
-- `../docs/APP_SDK_COMPATIBILITY.md`: version and compatibility policy.
-- `../docs/APP_PLATFORM_PRODUCTION_READINESS.md`: platform guarantees, security
-  model, and supported distribution contract.
+- `../docs/APP_PLATFORM_PRODUCTION_READINESS.md`: platform guarantees,
+  security, compatibility, versioning, and the supported distribution contract.
 - `../docs/LOCAL_ADDONS.md`: the managed manual and catalog installation,
   rebuild, and Chrome reload workflow.
 - `../docs/ADD_ONS_CATALOG.md`: catalog selection format, publication gates,
