@@ -1756,18 +1756,38 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (!AudioCtor) return;
       const context = new AudioCtor();
       void context.resume();
-      const oscillator = context.createOscillator();
+      const duration = 0.28;
+      const buffer = context.createBuffer(1, Math.ceil(context.sampleRate * duration), context.sampleRate);
+      const samples = buffer.getChannelData(0);
+      let previous = 0;
+      for (let index = 0; index < samples.length; index += 1) {
+        // A tiny low-pass walk makes the noise read as air instead of static.
+        previous = previous * 0.76 + (Math.random() * 2 - 1) * 0.24;
+        samples[index] = previous;
+      }
+      const source = context.createBufferSource();
+      source.buffer = buffer;
+      const filter = context.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.Q.value = 1.6;
+      const shaper = context.createWaveShaper();
+      const curve = new Float32Array(33);
+      for (let index = 0; index < curve.length; index += 1) curve[index] = Math.round(((index / 32) * 2 - 1) * 7) / 7;
+      shaper.curve = curve;
+      shaper.oversample = "none";
       const gain = context.createGain();
-      oscillator.type = "triangle";
-      oscillator.frequency.setValueAtTime(260, context.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(1_180, context.currentTime + 0.17);
+      const now = context.currentTime;
+      // Deliberately stepped frequency changes keep the wind distinctly 8-bit.
+      filter.frequency.setValueAtTime(330, now);
+      filter.frequency.setValueAtTime(520, now + 0.07);
+      filter.frequency.setValueAtTime(810, now + 0.14);
+      filter.frequency.setValueAtTime(1_240, now + 0.2);
       gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.32), context.currentTime + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
-      oscillator.connect(gain).connect(context.destination);
-      oscillator.start();
-      oscillator.stop(context.currentTime + 0.25);
-      oscillator.addEventListener("ended", () => void context.close());
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.48), now + 0.035);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+      source.connect(filter).connect(shaper).connect(gain).connect(context.destination);
+      source.start();
+      source.addEventListener("ended", () => void context.close());
     } catch {
       // Audio restrictions must never block the catalog tab.
     }
