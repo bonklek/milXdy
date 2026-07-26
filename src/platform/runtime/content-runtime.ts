@@ -13,6 +13,7 @@ import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges
 import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
+import { MILXDY_ADDONS_CATALOG_URL } from "../app-sdk/addons-catalog";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../overlay/app-chrome";
 import { resetOverlayAppLayouts } from "../overlay/app-layout";
 import {
@@ -43,8 +44,6 @@ declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
 declare const MILXDY_VERSION: string | undefined;
 declare const MILXDY_LOCAL_ADDON_BUILD_ID: string | undefined;
 
-const MILXDY_ADDONS_CATALOG_URL = "https://bonklek.github.io/milXdy/";
-const MILXDY_ADDONS_CATALOG_PAGE_URL = "https://bonklek.github.io/milXdy/addons/";
 const LOCAL_ADDON_MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const LOCAL_ADDON_MAX_ENTRY_BYTES = 25 * 1024 * 1024;
 const LOCAL_ADDON_MAX_ENTRIES = 2000;
@@ -1711,10 +1710,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       label: "Get more add-ons",
       icon: "+",
       stackable: false,
+      utility: true,
       title: "Get more add-ons",
       active: false,
       onActivate: () => {
-        window.open(MILXDY_ADDONS_CATALOG_PAGE_URL, "_blank", "noopener,noreferrer");
+        void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
       },
     });
   }
