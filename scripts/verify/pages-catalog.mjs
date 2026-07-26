@@ -8,6 +8,7 @@ const notes = [];
 
 const requiredFiles = [
   "pages/index.html",
+  "pages/assets/catalog.js",
   "pages/assets/onboarding.css",
   "catalog/index.html",
   "catalog/add-ons/index.html",
@@ -143,6 +144,20 @@ for (const phrase of [
 ]) {
   if (!onboarding.includes(phrase)) failures.push(`Pages onboarding is missing required content: ${phrase}`);
 }
+if ((onboarding.match(/__PAGES_ASSET_VERSION__/g) || []).length < 2) {
+  failures.push("Pages onboarding assets must use the generated deployment cache key");
+}
+
+const legacyRootCatalog = contents.get("pages/assets/catalog.js") || "";
+if (!legacyRootCatalog.includes('searchParams.set("view", "onboarding")') || !legacyRootCatalog.includes("location.replace")) {
+  failures.push("Pages must redirect the catalog's former root script to a cache-busted onboarding URL");
+}
+
+for (const file of ["catalog/index.html", "catalog/add-ons/index.html"]) {
+  if ((contents.get(file)?.match(/__PAGES_ASSET_VERSION__/g) || []).length < 2) {
+    failures.push(`${file} assets must use the generated deployment cache key`);
+  }
+}
 
 const onboardingStyles = contents.get("pages/assets/onboarding.css") || "";
 for (const phrase of ["onboarding-tabs", "onboarding-hero", "setup-options", "feature-list", "addons-strip"]) {
@@ -183,6 +198,11 @@ for (const forbidden of ["push:", "pull_request:", "schedule:", "release:"]) {
 }
 if (!workflow.includes("build-pages-catalog.mjs") || !workflow.includes("tmp/pages-catalog-site")) {
   failures.push("Pages workflow must build and upload the staged onboarding site and catalog with checked-in brand assets");
+}
+
+const buildScript = contents.get("scripts/build/build-pages-catalog.mjs") || "";
+for (const phrase of ["PAGES_ASSET_VERSION", "GITHUB_SHA", 'path.join(outputDir, "data")', 'path.join(outputDir, "assets", "styles.css")']) {
+  if (!buildScript.includes(phrase)) failures.push(`Pages build is missing cache-safe migration handling: ${phrase}`);
 }
 
 const docs = contents.get("docs/ADD_ONS_CATALOG.md") || "";
