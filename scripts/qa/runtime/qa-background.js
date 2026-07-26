@@ -2,6 +2,7 @@
   const BUILD = __MILXDY_QA_BUILD_JSON__;
   const REQUEST_KEY = "milxdy.qa.reloadRequest";
   const RESULT_KEY = "milxdy.qa.lastReloadResult";
+  const RELOAD_GUARD_KEY = "milxdy.qa.reloadGuard";
   const POLL_BASE = `http://127.0.0.1:${BUILD.coordinatorPort}/milxdy-qa`;
   const RETRY_MS = 2_000;
 
@@ -23,7 +24,7 @@
     const request = stored[REQUEST_KEY];
     if (!request || request.desiredBuildId !== BUILD.buildId) return;
 
-    await chrome.storage.local.remove(REQUEST_KEY).catch(() => undefined);
+    await chrome.storage.local.remove([REQUEST_KEY, RELOAD_GUARD_KEY]).catch(() => undefined);
     const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] }).catch(() => []);
     const outcomes = await Promise.allSettled(tabs.flatMap((tab) => typeof tab.id === "number" ? [chrome.tabs.reload(tab.id)] : []));
     const refreshedTabs = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
@@ -47,12 +48,25 @@
         if (!response.ok) throw new Error(`coordinator returned HTTP ${response.status}`);
         const message = await response.json();
         if (message.action === "reload" && typeof message.buildId === "string" && message.buildId !== BUILD.buildId) {
+          if (message.output !== BUILD.output || message.extensionId !== BUILD.extensionId) {
+            console.warn("[milXdy QA] ignored a reload request from a different or legacy QA publisher", message);
+            await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+            continue;
+          }
+          const pair = `${BUILD.buildId}->${message.buildId}`;
+          const stored = await chrome.storage.local.get(RELOAD_GUARD_KEY).catch(() => ({}));
+          if (stored[RELOAD_GUARD_KEY]?.pair === pair) {
+            console.warn(`[milXdy QA] suppressed repeated automatic reload ${pair}; use the popup fallback if Chrome kept the old worker`);
+            await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
+            continue;
+          }
           await chrome.storage.local.set({
             [REQUEST_KEY]: {
               desiredBuildId: message.buildId,
               requestedAt: new Date().toISOString(),
               mode: "watch",
             },
+            [RELOAD_GUARD_KEY]: { pair, attemptedAt: new Date().toISOString() },
           });
           console.info(`[milXdy QA] reloading ${BUILD.buildId} -> ${message.buildId}`);
           chrome.runtime.reload();

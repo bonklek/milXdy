@@ -10,13 +10,15 @@ Build once:
 npm.cmd run qa:build
 ```
 
-In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the absolute folder printed by the command. Its repository-relative location is always:
+In Chrome, open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the absolute folder printed by the command. The persistent folder is:
 
 ```text
-dist/qa-chromium
+%USERPROFILE%\Documents\dev\milXdy-QA\chromium
 ```
 
-Load that folder once and keep using the same extension card. Chrome storage is tied to that unpacked extension identity, so do not load a staging directory.
+Load that folder once and keep using the same extension card. The QA-only manifest has a fixed public key, so its extension ID and Chrome storage remain stable even when a different source worktree publishes the next build. Do not load a staging directory or a worktree's `dist` folder.
+
+The first migration from an older worktree-local QA card requires removing that orphaned card and loading this persistent folder once. Later source-worktree changes do not require another migration.
 
 ## Watch loop
 
@@ -24,7 +26,9 @@ Load that folder once and keep using the same extension card. Chrome storage is 
 npm.cmd run qa:watch
 ```
 
-The watcher waits 450 ms after the last source event, builds Chromium/full into a private staging directory, verifies it, and atomically promotes it to `dist/qa-chromium`. A compilation, validation, or promotion failure leaves the previous QA output untouched. If files change during compilation, the mixed build is discarded and a clean build is queued.
+The watcher waits 450 ms after the last source event, builds Chromium/full inside the source checkout, verifies it, copies it to a staging sibling beside the persistent folder, and atomically promotes it. A compilation, validation, copy, or promotion failure leaves the previous QA output untouched. If files change during compilation, the mixed build is discarded and a clean build is queued.
+
+A publisher lock in `%USERPROFILE%\Documents\dev\milXdy-QA` allows only one build/watch process to own the persistent folder. If another source checkout is already publishing, the second command stops with the owning PID and source path. Stop the first watcher before switching source checkouts; abandoned locks are recovered automatically after their process exits.
 
 The QA-only background worker long-polls `127.0.0.1:7319`. After a successful promotion, it attempts to:
 
@@ -34,6 +38,8 @@ The QA-only background worker long-polls `127.0.0.1:7319`. After a successful pr
 This path uses extension APIs and the localhost permissions already present in milXdy. It does not use Codex's Browser sidebar, remote debugging, UI automation, or a separate Chrome profile.
 
 Windows and Chrome may suspend a Manifest V3 worker or delay local resource pickup. Until the automatic path has passed real external-Chrome QA on the maintainer's machine, treat it as best-effort rather than guaranteed. The terminal reports only successful builds; it does not claim Chrome loaded them.
+
+The worker accepts automatic reload requests only from a coordinator advertising the same persistent output and fixed QA extension ID. It attempts each running-build-to-target-build transition once; if Chrome keeps the old worker, repeated reloads are suppressed and the popup fallback remains available. This prevents an orphaned legacy watcher from triggering Chrome's “reloaded itself too frequently” protection.
 
 ## Worktree handoff MVP
 
@@ -75,7 +81,7 @@ Every successful QA output contains `qa-build.json`. It records:
 
 - the full Git commit and dirty state;
 - a SHA-256 fingerprint of every tracked or unignored source file (including uncommitted and untracked files);
-- build timestamp and unique build ID;
+- build timestamp, unique build ID, and fixed QA extension ID;
 - target/profile, Node version, worktree, and stable output path.
 
 The same object is compiled into the QA worker and popup helper. The popup's bright **DEVELOPER QA BUILD** panel asks the running background worker for its compiled identity, then compares that response with `qa-build.json` currently on disk. It does not assume that newly read popup files prove the worker reloaded. Chrome's extension card and toolbar title also say **milXdy QA**.
@@ -101,4 +107,4 @@ npm.cmd run typecheck
 
 `verify:qa-handoff` checks tracked-diff capture, shared pending status, clean application and source restoration, exact overlap rejection, build-failure restoration, and rejection of untracked files. It uses temporary Git worktrees and does not build or control external Chrome.
 
-To stop watch mode, press `Ctrl+C`. The promoted `dist/qa-chromium` output remains available and is ignored by Git. Delete it manually only when Chrome is no longer using it.
+To stop watch mode, press `Ctrl+C`. The persistent output remains available outside Git. Delete it manually only when Chrome is no longer using it.
