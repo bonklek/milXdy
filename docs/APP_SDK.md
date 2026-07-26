@@ -577,3 +577,4 @@ surface, overlay, settings, and diagnostic APIs.
 
 For the stable end-user ZIP folder, rebuild, and Chrome reload workflow, see
 [Local Add-ons](LOCAL_ADDONS.md).
+For the current GitHub-based maintainer submission and catalog-review process, see [Submit a milXdy Add-on for Catalog Consideration](ADD_ON_CATALOG_SUBMISSIONS.md). It describes the required review materials and outcomes without changing the local package contract or creating a package registry, signing guarantee, or automated publishing system.
