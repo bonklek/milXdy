@@ -1710,7 +1710,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       label: "Get more add-ons",
       icon: "+",
       stackable: false,
-      utility: true,
       title: "Get more add-ons",
       active: false,
       onActivate: () => {
