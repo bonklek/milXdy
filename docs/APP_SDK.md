@@ -451,6 +451,11 @@ canonical `local-addons/manual/` and `local-addons/catalog/` inputs, pinned
 catalog acquisition, transactional promotion to `dist/chromium-local-apps/`,
 durable status, `buildInstanceId`, and `compositionFingerprint`.
 
+The extension’s App Store launcher opens the canonical GitHub-hosted catalog
+defined in `src/platform/app-sdk/addons-catalog.ts`. That configuration accepts
+only the documented HTTPS catalog URL and its App SDK fallback; it is a
+discovery link only and never installs packages or grants permissions.
+
 The catalog selection document is defined by
 [`milxdy-selection.schema.json`](milxdy-selection.schema.json). Catalog review
 claims become trusted only when their package ID, archive hash, reviewer, and

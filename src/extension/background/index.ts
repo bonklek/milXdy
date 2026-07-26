@@ -50,6 +50,7 @@ import {
   type UpdateStatus,
 } from "../../platform/background/update-check";
 import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
+import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -78,6 +79,8 @@ type OpenAddonsSettingsMessage = {
   target: "folder" | "rebuild";
 };
 
+type OpenAddonsCatalogMessage = { type: "milxdy:openAddonsCatalog" };
+
 type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
   url: string;
@@ -85,6 +88,8 @@ type FetchImageDataUrlMessage = {
 
 const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
+let addOnsCatalogWindowId: number | null = null;
+let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
@@ -174,6 +179,11 @@ setupBackgroundMessageRouter([
     handle: (message, sender) => openAddonsSettings(message.target, sender),
   },
   {
+    type: "milxdy:openAddonsCatalog",
+    matches: isOpenAddonsCatalogMessage,
+    handle: openAddonsCatalogWindow,
+  },
+  {
     type: "milxdy:checkUpdate",
     matches: isUpdateMessage,
     handle: runUpdateCheck,
@@ -260,6 +270,39 @@ function isUpdateMessage(message: unknown): message is UpdateMessage {
 
 function isLocalAddonStatusMessage(message: unknown): message is LocalAddonStatusMessage {
   return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:getLocalAddonStatus");
+}
+
+function isOpenAddonsCatalogMessage(message: unknown): message is OpenAddonsCatalogMessage {
+  return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:openAddonsCatalog");
+}
+
+async function openAddonsCatalogWindow(): Promise<Record<string, unknown>> {
+  if (addOnsCatalogLaunch) return addOnsCatalogLaunch;
+  addOnsCatalogLaunch = (async () => {
+    const target = parseAllowedUrl(MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES)
+      ?? parseAllowedUrl(MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL_RULES);
+    if (!target) return { ok: false, error: "The configured App Store URL is invalid." };
+    if (addOnsCatalogWindowId !== null) {
+      try {
+        await chrome.windows.update(addOnsCatalogWindowId, { focused: true });
+        return { ok: true, reused: true };
+      } catch {
+        addOnsCatalogWindowId = null;
+      }
+    }
+    try {
+      const created = await chrome.windows.create({ url: target.href, type: "normal", width: 1040, height: 780, focused: true });
+      addOnsCatalogWindowId = typeof created?.id === "number" ? created.id : null;
+      return { ok: true, reused: false };
+    } catch (error) {
+      return { ok: false, error: error instanceof Error ? error.message : "Could not open the App Store window." };
+    }
+  })();
+  try {
+    return await addOnsCatalogLaunch;
+  } finally {
+    addOnsCatalogLaunch = null;
+  }
 }
 
 async function readLocalAddonStatus(): Promise<Record<string, unknown>> {

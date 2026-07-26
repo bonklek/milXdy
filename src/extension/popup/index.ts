@@ -9,6 +9,7 @@ declare const MILXDY_BUILD_TARGET: string;
 
 import type { AppPreset, MilxdyAppManifest } from "../../platform/app-sdk/app-platform";
 import { FIRST_PARTY_APPS } from "../../platform/app-sdk/first-party-registry";
+import { MILXDY_ADDONS_CATALOG_URL } from "../../platform/app-sdk/addons-catalog";
 import {
   BENCHMARK_RESULT_PREFIX,
   BENCHMARK_START_MESSAGE,
