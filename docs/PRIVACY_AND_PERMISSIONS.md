@@ -23,6 +23,13 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 
 The main milXdy content runtime currently runs on X/Twitter pages. RemiliaNET, Remilia Wiki, and Miladychan host permissions support declared background services, validated embedded Wiki frames, user-opened overlay apps, and web-accessible assets; they do not by themselves mean the full app runtime injects into those sites.
 
+A separate minimal bridge runs only on
+`https://bonklek.github.io/milXdy/*`. It accepts the catalog's explicit folder
+or rebuild navigation request, independently validates that exact origin and
+path in the background, and opens milXdy's Add-ons settings tab. It does not
+read page content, accept package bytes or build commands, or run the main
+X/Twitter content runtime on the catalog.
+
 ## Local-Only Composer Helpers
 
 Composer Tools runs inside the existing X/Twitter content runtime and reads only the active post composer text around the caret to convert typed double dashes into em dashes. It does not add host permissions, network calls, background messages, or remote services, and it ignores DMs, search fields, native inputs, and textareas.
@@ -86,6 +93,13 @@ MusicBrainz lookup sends track metadata needed for candidate search. AcoustID lo
 ## Local Persistence
 
 Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.
+
+The Add-ons settings tab stores a user-selected `local-app-packages` directory
+handle in extension IndexedDB when the browser allows it. Scanning is
+read-only and reports only top-level `.zip` filenames, sizes, and modification
+dates in the settings UI. Folder access requires an explicit picker choice and
+can be revoked through browser site or extension storage controls. ZIP contents
+are not uploaded or passed through the public catalog bridge.
 
 ## RemiliaNET Client Support
 

@@ -665,6 +665,7 @@ await buildOrWatch({
   entryPoints: {
     content: source("src/extension/content/index.ts"),
     background: source("src/extension/background/index.ts"),
+    catalogBridge: source("src/extension/catalog-bridge.ts"),
     popup: source("src/extension/popup/index.ts"),
     wikiFrame: source("src/extension/frames/wiki-frame.ts"),
     reminetChatBridge: source("src/extension/frames/reminet-chat-bridge.ts"),
@@ -711,6 +712,7 @@ if (!watch) {
   }, null, 2)}\n`);
   const required = [
     `${outDir}/content.js`,
+    `${outDir}/catalogBridge.js`,
     `${outDir}/wikiFrame.js`,
     `${outDir}/reminetChatBridge.js`,
     `${outDir}/reminetCraftFastPath.js`,

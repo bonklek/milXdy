@@ -79,6 +79,25 @@ const RAIL_PIN_KEY = "milxdy.apps.railPinned";
 const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
 const BUILD_PROFILE = normalizeBuildProfile(MILXDY_BUILD_PROFILE);
 const BUILD_TARGET = normalizeBuildTarget(MILXDY_BUILD_TARGET);
+const ADDONS_FOLDER_DATABASE = "milxdy-addons";
+const ADDONS_FOLDER_STORE = "directory-handles";
+const ADDONS_FOLDER_KEY = "local-app-packages";
+
+type AddonsDirectoryPickerWindow = Window & {
+  showDirectoryPicker?: (options?: { id?: string; mode?: "read" | "readwrite" }) => Promise<FileSystemDirectoryHandle>;
+};
+
+type AddonsDirectoryHandle = FileSystemDirectoryHandle & {
+  values(): AsyncIterableIterator<FileSystemHandle>;
+  queryPermission(options?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
+  requestPermission(options?: { mode?: "read" | "readwrite" }): Promise<PermissionState>;
+};
+
+type AddonsZipFile = {
+  name: string;
+  size: number;
+  lastModified: number;
+};
 
 type UpdateStatus = {
   checkedAt: number;
@@ -205,6 +224,7 @@ async function boot(): Promise<void> {
   setupTabs();
   await setupThemeControls();
   setupUpdateStatus();
+  await setupAddonsPanel();
   await migrateBeetolSettings();
   await loadControls();
   setupPerformanceModeControl();
@@ -1387,13 +1407,170 @@ async function migrateBeetolSettings(): Promise<void> {
 function setupTabs(): void {
   const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>(".tab"));
   const panels = Array.from(document.querySelectorAll<HTMLElement>(".panel"));
+  const activate = (target: string, updateHash = true) => {
+    if (!tabs.some((tab) => tab.dataset.panel === target) || !panels.some((panel) => panel.dataset.panel === target)) return;
+    for (const entry of tabs) entry.classList.toggle("is-active", entry.dataset.panel === target);
+    for (const panel of panels) panel.classList.toggle("is-active", panel.dataset.panel === target);
+    if (updateHash) history.replaceState(null, "", `${location.pathname}${location.search}#${target}`);
+  };
+  const requestedPanel = location.hash.slice(1);
+  if (requestedPanel) activate(requestedPanel, false);
   for (const tab of tabs) {
     tab.addEventListener("click", () => {
       const target = tab.dataset.panel;
-      for (const entry of tabs) entry.classList.toggle("is-active", entry === tab);
-      for (const panel of panels) panel.classList.toggle("is-active", panel.dataset.panel === target);
+      if (target) activate(target);
     });
   }
+}
+
+function openAddonsFolderDatabase(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(ADDONS_FOLDER_DATABASE, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(ADDONS_FOLDER_STORE);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readAddonsFolder(): Promise<AddonsDirectoryHandle | null> {
+  const database = await openAddonsFolderDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(ADDONS_FOLDER_STORE).objectStore(ADDONS_FOLDER_STORE).get(ADDONS_FOLDER_KEY);
+      request.onsuccess = () => resolve((request.result as AddonsDirectoryHandle | undefined) ?? null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function saveAddonsFolder(handle: AddonsDirectoryHandle): Promise<void> {
+  const database = await openAddonsFolderDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const request = database.transaction(ADDONS_FOLDER_STORE, "readwrite").objectStore(ADDONS_FOLDER_STORE).put(handle, ADDONS_FOLDER_KEY);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function scanAddonsFolder(handle: AddonsDirectoryHandle): Promise<AddonsZipFile[]> {
+  const files: AddonsZipFile[] = [];
+  for await (const entry of handle.values()) {
+    if (entry.kind !== "file" || !entry.name.toLowerCase().endsWith(".zip")) continue;
+    const file = await (entry as FileSystemFileHandle).getFile();
+    files.push({ name: file.name, size: file.size, lastModified: file.lastModified });
+  }
+  return files.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function formatAddonsFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 102.4) / 10} KB`;
+  return `${Math.round(bytes / 1024 / 102.4) / 10} MB`;
+}
+
+function renderAddonsZipFiles(files: AddonsZipFile[]): void {
+  const list = document.getElementById("addonsZipList");
+  const count = document.getElementById("addonsZipCount");
+  if (!list || !count) return;
+  count.textContent = String(files.length);
+  list.replaceChildren();
+  if (files.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "No ZIP files found in local-app-packages.";
+    list.append(empty);
+    return;
+  }
+  for (const file of files) {
+    const row = document.createElement("div");
+    row.className = "addons-zip-row";
+    const name = document.createElement("strong");
+    name.textContent = file.name;
+    name.title = file.name;
+    const metadata = document.createElement("span");
+    metadata.textContent = `${formatAddonsFileSize(file.size)} · ${new Date(file.lastModified).toLocaleDateString()}`;
+    row.append(name, metadata);
+    list.append(row);
+  }
+}
+
+async function setupAddonsPanel(): Promise<void> {
+  const choose = document.getElementById("addonsChooseFolder") as HTMLButtonElement | null;
+  const scan = document.getElementById("addonsScanFolder") as HTMLButtonElement | null;
+  const status = document.getElementById("addonsFolderStatus");
+  if (!choose || !scan || !status) return;
+  const pickerWindow = window as AddonsDirectoryPickerWindow;
+  if (!pickerWindow.showDirectoryPicker || !("indexedDB" in window)) {
+    choose.disabled = true;
+    status.textContent = "Directory scanning requires a supported Chromium settings page.";
+    status.dataset.kind = "warn";
+    return;
+  }
+
+  let activeHandle: AddonsDirectoryHandle | null = null;
+  const scanHandle = async (handle: AddonsDirectoryHandle, requestAccess: boolean) => {
+    let permission = await handle.queryPermission({ mode: "read" });
+    if (permission !== "granted" && requestAccess) permission = await handle.requestPermission({ mode: "read" });
+    if (permission !== "granted") {
+      status.textContent = "Folder saved. Click Scan again to reconnect.";
+      status.dataset.kind = "warn";
+      scan.disabled = false;
+      return;
+    }
+    status.textContent = "Scanning local-app-packages…";
+    delete status.dataset.kind;
+    const files = await scanAddonsFolder(handle);
+    renderAddonsZipFiles(files);
+    status.textContent = `${files.length} ZIP file${files.length === 1 ? "" : "s"} found. Package validation still runs during rebuild.`;
+    scan.disabled = false;
+  };
+
+  try {
+    const saved = await readAddonsFolder();
+    if (saved?.name.toLowerCase() === ADDONS_FOLDER_KEY) {
+      activeHandle = saved;
+      await scanHandle(saved, false);
+    }
+  } catch {
+    status.textContent = "Saved folder access is unavailable. Choose the folder again.";
+    status.dataset.kind = "warn";
+  }
+
+  choose.addEventListener("click", () => {
+    void pickerWindow.showDirectoryPicker?.({ id: "milxdy-local-app-packages", mode: "read" }).then(async (selected) => {
+      if (selected.name.toLowerCase() !== ADDONS_FOLDER_KEY) {
+        status.textContent = `Choose local-app-packages, not ${selected.name}.`;
+        status.dataset.kind = "warn";
+        return;
+      }
+      activeHandle = selected as AddonsDirectoryHandle;
+      await saveAddonsFolder(activeHandle).catch(() => undefined);
+      await scanHandle(activeHandle, false);
+    }).catch((error: unknown) => {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      status.textContent = "Folder access was unavailable.";
+      status.dataset.kind = "warn";
+    });
+  });
+
+  scan.addEventListener("click", () => {
+    if (!activeHandle) return;
+    scan.disabled = true;
+    void scanHandle(activeHandle, true).catch(() => {
+      status.textContent = "The folder could not be scanned.";
+      status.dataset.kind = "warn";
+      scan.disabled = false;
+    });
+  });
+
+  const focusTarget = new URLSearchParams(location.search).get("focus");
+  if (focusTarget === "folder") choose.focus();
+  if (focusTarget === "rebuild") document.getElementById("addonsRebuildStatus")?.focus();
 }
 
 async function loadControls(): Promise<void> {

@@ -38,6 +38,9 @@ async function verifyRuntimeOwnership() {
   const background = await readFile("src/extension/background/index.ts", "utf8");
   const backgroundRouter = await readFile("src/platform/background/router.ts", "utf8");
   const postReadingBackground = await readFile("src/apps/post-reading/background.ts", "utf8");
+  const catalogBridge = await readFile("src/extension/catalog-bridge.ts", "utf8");
+  const popup = await readFile("src/extension/popup/index.ts", "utf8");
+  const popupHtml = await readFile("assets/extension/popup/popup.html", "utf8");
   const overlayDock = await readFile("src/platform/overlay/dock.ts", "utf8");
   const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
@@ -67,6 +70,11 @@ async function verifyRuntimeOwnership() {
   assert(background.includes("combineAbortSignals(init?.signal, signal)"), "central budgeted fetches must compose caller and queue cancellation");
   assert(background.includes("createBackgroundNetworkDeadlineSignal()"), "central budgeted fetches must retain a deadline while response bodies are read");
   assert(postReadingBackground.includes("AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()])"), "Post-reading response bodies must retain queue cancellation and a read deadline");
+  assert(catalogBridge.includes('CATALOG_ORIGIN = "https://bonklek.github.io"') && catalogBridge.includes('CATALOG_PATH_PREFIX = "/milXdy/"'), "catalog bridge must stay pinned to the public milXdy Pages path");
+  assert(catalogBridge.includes('message.target === "folder" || message.target === "rebuild"'), "catalog bridge must accept only folder and rebuild settings targets");
+  assert(background.includes('parsed.origin !== "https://bonklek.github.io"') && background.includes('parsed.pathname.startsWith("/milXdy/")'), "background must independently validate catalog bridge senders");
+  assert(popupHtml.includes('data-panel="addons"') && popupHtml.includes('id="addonsChooseFolder"') && popupHtml.includes('id="addonsRebuild"'), "popup must include the Add-ons tab, folder picker, and rebuild boundary");
+  assert(popup.includes("scanAddonsFolder") && popup.includes('endsWith(".zip")') && popup.includes("showDirectoryPicker"), "Add-ons settings must scan only user-selected local ZIP files");
   assert(!reskinStyles.includes('html[data-milxdy-reskin-profile="max"] [role="button"],'), "Root Visuals must not override transition properties on every native X button");
   assert(reskinStyles.includes('data-milxdy-visual-hide-message-request-dot="true"') && reskinStyles.includes('a[href="/messages"] span[aria-hidden="true"]:empty'), "Messages request-dot suppression must stay opt-in and limited to empty dot-style badges");
   assert(!maxxerStyles.includes("transition: transform 0.3s ease, box-shadow 0.3s ease"), "Maxxer cards must not animate large multi-layer shadows during Like state changes");

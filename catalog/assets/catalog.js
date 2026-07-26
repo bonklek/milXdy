@@ -1,6 +1,10 @@
 import { selectionJson } from "./selection.js";
 
 const dataUrl = new URL("../data/catalog.json", import.meta.url);
+const folderDatabase = "milxdy-catalog";
+const folderStore = "directory-handles";
+const packagesFolderKey = "local-app-packages";
+let extensionBridgeReady = false;
 
 const escapeHtml = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -24,6 +28,133 @@ const isPublishedDownload = (pkg) => {
     return false;
   }
 };
+
+function openFolderDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(folderDatabase, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(folderStore);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSavedFolder() {
+  const database = await openFolderDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(folderStore).objectStore(folderStore).get(packagesFolderKey);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function saveFolder(handle) {
+  const database = await openFolderDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const request = database.transaction(folderStore, "readwrite").objectStore(folderStore).put(handle, packagesFolderKey);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+function setFolderState(button, status, state, message) {
+  button.dataset.state = state;
+  status.textContent = message;
+}
+
+function requestAddonsSettings(target) {
+  window.postMessage({ source: "milxdy-catalog", type: "milxdy-open-addon-settings", target }, window.location.origin);
+}
+
+function bindExtensionBridge() {
+  const folderStatus = document.querySelector("#packages-folder-status");
+  const rebuildStatus = document.querySelector("#rebuild-step-status");
+  window.addEventListener("message", (event) => {
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    const message = event.data;
+    if (!message || message.source !== "milxdy-extension") return;
+    if (message.type === "milxdy-addon-bridge-ready") {
+      extensionBridgeReady = true;
+      if (folderStatus?.textContent === "Choose local-app-packages/") folderStatus.textContent = "Open Add-ons settings";
+      return;
+    }
+    if (message.type !== "milxdy-addon-settings-opened") return;
+    const status = message.target === "rebuild" ? rebuildStatus : folderStatus;
+    if (status) status.textContent = message.ok ? "Opened Add-ons settings" : "Open milXdy from the toolbar";
+  });
+  window.postMessage({ source: "milxdy-catalog", type: "milxdy-addon-bridge-ping" }, window.location.origin);
+}
+
+async function bindFolderPicker() {
+  const button = document.querySelector("#choose-packages-folder");
+  const status = document.querySelector("#packages-folder-status");
+  if (!button || !status) return;
+
+  if (!("showDirectoryPicker" in window) || !("indexedDB" in window)) {
+    button.disabled = true;
+    setFolderState(button, status, "unsupported", "Choose manually · Chromium only");
+    return;
+  }
+
+  setFolderState(button, status, "ready", "Choose local-app-packages/");
+
+  try {
+    const saved = await readSavedFolder();
+    if (saved?.name?.toLowerCase() === packagesFolderKey && typeof saved.queryPermission === "function") {
+      const permission = await saved.queryPermission({ mode: "readwrite" });
+      setFolderState(button, status, permission === "granted" ? "selected" : "saved", permission === "granted" ? "Selected: local-app-packages/" : "Saved · click to reconnect");
+    }
+  } catch {
+    // Private browsing and storage policies can block IndexedDB. The picker can
+    // still provide a useful one-session selection when clicked.
+  }
+
+  button.addEventListener("click", async () => {
+    if (extensionBridgeReady) {
+      status.textContent = "Opening Add-ons settings…";
+      requestAddonsSettings("folder");
+      return;
+    }
+    try {
+      const handle = await window.showDirectoryPicker({ id: "milxdy-local-app-packages", mode: "readwrite" });
+      if (handle.name.toLowerCase() !== packagesFolderKey) {
+        setFolderState(button, status, "wrong-folder", `Choose local-app-packages/ · not ${handle.name}`);
+        return;
+      }
+      let saved = true;
+      try {
+        await saveFolder(handle);
+      } catch {
+        saved = false;
+      }
+      setFolderState(button, status, "selected", saved ? "Selected: local-app-packages/" : "Selected for this tab");
+    } catch (error) {
+      if (error?.name !== "AbortError") setFolderState(button, status, "error", "Folder access unavailable");
+    }
+  });
+}
+
+function bindAddonsSettingsLauncher() {
+  const button = document.querySelector("#open-addon-settings");
+  const status = document.querySelector("#rebuild-step-status");
+  if (!button || !status) return;
+  button.addEventListener("click", () => {
+    window.postMessage({ source: "milxdy-catalog", type: "milxdy-addon-bridge-ping" }, window.location.origin);
+    if (!extensionBridgeReady) {
+      status.textContent = "Update milXdy · open settings manually";
+      return;
+    }
+    status.textContent = "Opening Add-ons settings…";
+    requestAddonsSettings("rebuild");
+  });
+}
 
 function downloadSelection(packages) {
   const blob = new Blob([selectionJson(packages)], { type: "application/json" });
@@ -87,7 +218,7 @@ function renderIndex(catalog) {
       <div class="package-grid">
         ${section.packages.length
           ? section.packages.map((pkg) => packageCard(pkg, section)).join("")
-          : '<div class="empty-state"><span aria-hidden="true">—</span><p><strong>No packages published</strong><span>Verified records will appear here.</span></p></div>'}
+          : '<div class="empty-state"><span aria-hidden="true">—</span><p><strong>No add-ons published yet</strong><span>Verified records will appear here.</span></p></div>'}
       </div>
     </section>`).join("");
 
@@ -99,7 +230,7 @@ function renderIndex(catalog) {
     const count = checkboxes.filter((input) => input.checked).length;
     button.disabled = count === 0;
     status.textContent = count === 0
-      ? (checkboxes.length ? "Select one or more published packages." : "No published packages are available to select.")
+      ? (checkboxes.length ? "Select one or more published packages." : "No add-ons are published yet, so there is nothing to select.")
       : `${count} package${count === 1 ? "" : "s"} selected. Download one pinned selection file for the local manager.`;
   };
 
@@ -164,6 +295,10 @@ function renderDetail(catalog) {
     ${downloadable ? '<p><button id="download-package-selection" class="download-link" type="button">Download selection file</button></p>' : ""}`;
   document.querySelector("#download-package-selection")?.addEventListener("click", () => downloadSelection([pkg]));
 }
+
+bindExtensionBridge();
+bindFolderPicker();
+bindAddonsSettingsLauncher();
 
 try {
   const catalog = await loadCatalog();

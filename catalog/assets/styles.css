@@ -144,6 +144,8 @@ p, li, dt, dd { font-size: 12px; }
 .journey-folder::before { content: ""; position: absolute; left: 7px; top: 14px; width: 28px; height: 20px; border: 1px solid var(--line-strong); border-radius: 3px; background: var(--accent-soft); }
 .journey-folder::after { content: ""; position: absolute; left: 10px; top: 10px; width: 13px; height: 6px; border: 1px solid var(--line-strong); border-bottom: 0; border-radius: 3px 3px 0 0; background: var(--accent-soft); }
 .journey-terminal { font: 700 14px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.settings-launch-button { min-height: 44px; padding: 0; border-color: var(--line-strong); background: color-mix(in srgb, var(--surface-muted) 82%, var(--milxdy-highlight) 18%); color: var(--accent-strong); }
+.settings-launch-button:hover { border-color: var(--accent); background: var(--accent-soft); }
 .journey-reload { font-size: 25px; }
 .journey-number { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
 .workflow-steps strong { font-size: 12px; }
