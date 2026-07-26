@@ -1755,17 +1755,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtor) return;
       const context = new AudioCtor();
+      void context.resume();
       const oscillator = context.createOscillator();
       const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.setValueAtTime(360, context.currentTime);
-      oscillator.frequency.exponentialRampToValueAtTime(980, context.currentTime + 0.16);
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(260, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(1_180, context.currentTime + 0.17);
       gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.12), context.currentTime + 0.025);
-      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.32), context.currentTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.24);
       oscillator.connect(gain).connect(context.destination);
       oscillator.start();
-      oscillator.stop(context.currentTime + 0.21);
+      oscillator.stop(context.currentTime + 0.25);
       oscillator.addEventListener("ended", () => void context.close());
     } catch {
       // Audio restrictions must never block the catalog tab.
