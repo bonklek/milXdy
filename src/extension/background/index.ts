@@ -73,6 +73,11 @@ type LocalAddonStatusMessage = {
   type: "milxdy:getLocalAddonStatus";
 };
 
+type OpenAddonsSettingsMessage = {
+  type: "milxdy:openAddonsSettings";
+  target: "folder" | "rebuild";
+};
+
 type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
   url: string;
@@ -162,6 +167,11 @@ setupBackgroundMessageRouter([
     type: "milxdy:getLocalAddonStatus",
     matches: isLocalAddonStatusMessage,
     handle: readLocalAddonStatus,
+  },
+  {
+    type: "milxdy:openAddonsSettings",
+    matches: isOpenAddonsSettingsMessage,
+    handle: (message, sender) => openAddonsSettings(message.target, sender),
   },
   {
     type: "milxdy:checkUpdate",
@@ -264,6 +274,30 @@ async function readLocalAddonStatus(): Promise<Record<string, unknown>> {
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
+}
+
+function isOpenAddonsSettingsMessage(message: unknown): message is OpenAddonsSettingsMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:openAddonsSettings" && (record.target === "folder" || record.target === "rebuild");
+}
+
+async function openAddonsSettings(target: "folder" | "rebuild", sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  const senderUrl = sender.tab?.url;
+  if (!senderUrl) return { ok: false, error: "Unsupported catalog sender." };
+  try {
+    const parsed = new URL(senderUrl);
+    if (parsed.origin !== "https://bonklek.github.io" || !parsed.pathname.startsWith("/milXdy/")) {
+      return { ok: false, error: "Unsupported catalog sender." };
+    }
+  } catch {
+    return { ok: false, error: "Unsupported catalog sender." };
+  }
+  const optionsUrl = new URL(chrome.runtime.getURL("popup.html"));
+  optionsUrl.searchParams.set("focus", target);
+  optionsUrl.hash = "addons";
+  await chrome.tabs.create({ url: optionsUrl.toString() });
+  return { ok: true };
 }
 
 function isFetchImageDataUrlMessage(message: unknown): message is FetchImageDataUrlMessage {

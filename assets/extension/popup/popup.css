@@ -172,7 +172,7 @@ p {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 10px;
 }
@@ -292,6 +292,13 @@ textarea:focus-visible {
   text-transform: uppercase;
   letter-spacing: 0;
 }
+
+.addons-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.addons-count { display: inline-grid; min-width: 24px; min-height: 20px; place-items: center; border: 1px solid var(--line); border-radius: 999px; background: var(--surface-muted); color: var(--muted); padding: 2px 6px; font-size: 10px; font-weight: 700; }
+.addons-zip-list { display: grid; gap: 5px; }
+.addons-zip-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: baseline; padding: 7px 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.addons-zip-row strong { min-width: 0; overflow: hidden; color: var(--text); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.addons-zip-row span { color: var(--muted); font: 10px ui-monospace, SFMono-Regular, Consolas, monospace; }
 
 .setting {
   display: flex;

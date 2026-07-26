@@ -55,6 +55,11 @@
       "js": ["reminetCraftFastPath.js"],
       "run_at": "document_start",
       "world": "MAIN"
+    },
+    {
+      "matches": ["https://bonklek.github.io/milXdy/*"],
+      "js": ["catalogBridge.js"],
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [

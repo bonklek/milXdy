@@ -22,6 +22,7 @@
         <button class="tab" type="button" data-panel="audio"><span>Audio</span></button>
         <button class="tab" type="button" data-panel="remistats"><span>RemiNet</span><small>Stats</small></button>
         <button class="tab" type="button" data-panel="wiki"><span>Wiki</span></button>
+        <button class="tab" type="button" data-panel="addons"><span>Add-ons</span></button>
       </nav>
 
       <section class="panel is-active" data-panel="suite">
@@ -150,6 +151,41 @@
           </div>
           <p class="benchmark-message" id="benchmarkMessage" role="status"></p>
           <div class="status-grid" id="benchmarkReport"></div>
+        </section>
+      </section>
+
+      <section class="panel" data-panel="addons">
+        <div class="panel-heading">
+          <h2>Add-ons</h2>
+          <p>Scan local package ZIPs before preparing a custom Chromium build.</p>
+        </div>
+        <section id="addonsFolderSection" class="setting-group" aria-labelledby="addonsFolderTitle">
+          <div class="setting-group-header">
+            <h3 id="addonsFolderTitle">Local package folder</h3>
+          </div>
+          <p class="setting-note">Choose the source checkout's <code>local-app-packages</code> folder. milXdy receives read-only access after your browser confirms it.</p>
+          <div class="addons-actions">
+            <button class="secondary-button" id="addonsChooseFolder" type="button">Choose folder</button>
+            <button class="secondary-button" id="addonsScanFolder" type="button" disabled>Scan again</button>
+          </div>
+          <p class="message" id="addonsFolderStatus" role="status">No folder selected.</p>
+        </section>
+        <section class="setting-group" aria-labelledby="addonsZipTitle">
+          <div class="setting-group-header">
+            <h3 id="addonsZipTitle">ZIP files</h3>
+            <span class="addons-count" id="addonsZipCount">0</span>
+          </div>
+          <div class="addons-zip-list" id="addonsZipList">
+            <p>No ZIP files scanned yet.</p>
+          </div>
+        </section>
+        <section id="addonsRebuildSection" class="setting-group" aria-labelledby="addonsRebuildTitle">
+          <div class="setting-group-header">
+            <h3 id="addonsRebuildTitle">Rebuild</h3>
+          </div>
+          <p class="setting-note">The extension can inspect the folder, but it cannot run the local Node composer. A separately installed native helper is required for one-click rebuilds.</p>
+          <button class="secondary-button" id="addonsRebuild" type="button" disabled>Rebuild helper required</button>
+          <p class="message" id="addonsRebuildStatus" tabindex="-1">No build has been started.</p>
         </section>
       </section>
 

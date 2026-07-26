@@ -52,6 +52,18 @@ Local packages
 run as privileged extension code after composition, so review, declarations,
 and explicit consent remain part of the security boundary.
 
+When the compatible extension is installed, the catalog's Rebuild icon may open
+the extension's Add-ons settings through the exact-origin catalog bridge. The
+bridge accepts only the public `https://bonklek.github.io/milXdy/` path and the
+`folder` or `rebuild` settings targets; it never accepts package bytes or build
+commands from the page.
+
+When a compatible milXdy build is installed, the catalog's Add-ons settings
+button can open `popup.html#addons` through the exact-origin catalog bridge.
+The bridge accepts only the public `https://bonklek.github.io/milXdy/` path,
+validates the requested settings target, and does not accept package bytes or
+build commands from the page.
+
 ## Maintaining Inventory
 
 `catalog/data/catalog.json` is the single source of truth for both the index
