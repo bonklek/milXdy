@@ -1,7 +1,9 @@
 # Add-ons Catalog
 
-The static source for the milXdy Add-ons Catalog lives in
-[`catalog/`](../catalog/). It provides a catalog index, a shared per-package
+The static onboarding source for the Pages root lives in [`pages/`](../pages/),
+and the milXdy Add-ons Catalog source lives in [`catalog/`](../catalog/). The
+build stages the onboarding walkthrough at `/` and the catalog at `/addons/`.
+The catalog provides an index, a shared per-package
 detail route, official and approved-external sections, security and browser
 download disclosures, and the supported local custom-build workflow.
 
@@ -15,7 +17,9 @@ plus the shared overlay's shallow highlight and bevel geometry. Images and
 visual cues use square or near-square frames with slightly rounded corners.
 The header uses the existing square beveled mark from `assets/brand/`.
 
-The public catalog is available at <https://bonklek.github.io/milXdy/>. No
+The Pages root at <https://bonklek.github.io/milXdy/> is the project onboarding
+site. The public catalog is linked from there and lives at
+<https://bonklek.github.io/milXdy/addons/>. No
 add-ons are published yet: both the official and approved-external inventories
 are empty, and all download controls are disabled. It
 does not claim runtime ZIP installation, and it does not allow a package into a
@@ -81,16 +85,17 @@ npm.cmd run build:pages-catalog
 python -m http.server 8765 --bind 127.0.0.1 --directory tmp/pages-catalog-site
 ```
 
-Then open `http://127.0.0.1:8765/`. The build copies only the two checked-in
-brand images used by the site alongside the catalog source; generated preview
-output stays under the gitignored `tmp/` directory.
+Then open `http://127.0.0.1:8765/` for onboarding or
+`http://127.0.0.1:8765/addons/` for the catalog. The build copies only the two
+checked-in brand images used by the site alongside the static sources;
+generated preview output stays under the gitignored `tmp/` directory.
 
 ## Publishing
 
 `.github/workflows/pages-catalog.yml` is intentionally manual-only. It has no
 push, pull-request, release, or schedule trigger. A maintainer must first
 configure the repository's Pages source for GitHub Actions, then explicitly
-dispatch **Deploy Add-ons Catalog to Pages** when publication is approved.
+dispatch **Deploy milXdy Site to Pages** when publication is approved.
 
 Do not dispatch that workflow merely to validate a change; use
 `verify:pages-catalog` or normal CI instead. Publishing, changing GitHub Pages

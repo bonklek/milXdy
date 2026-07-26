@@ -7,6 +7,8 @@ const failures = [];
 const notes = [];
 
 const requiredFiles = [
+  "pages/index.html",
+  "pages/assets/onboarding.css",
   "catalog/index.html",
   "catalog/add-ons/index.html",
   "catalog/assets/catalog.js",
@@ -129,6 +131,23 @@ for (const phrase of [
 ]) {
   if (!index.includes(phrase)) failures.push(`catalog index is missing required disclosure or workflow text: ${phrase}`);
 }
+
+const onboarding = contents.get("pages/index.html") || "";
+for (const phrase of [
+  "milXdy · Setup and guides",
+  "Install in four steps",
+  "Lite, Balanced, and Full",
+  "Add-ons Catalog",
+  'href="addons/"',
+  "No add-ons are published yet.",
+]) {
+  if (!onboarding.includes(phrase)) failures.push(`Pages onboarding is missing required content: ${phrase}`);
+}
+
+const onboardingStyles = contents.get("pages/assets/onboarding.css") || "";
+for (const phrase of ["onboarding-tabs", "onboarding-hero", "setup-options", "feature-list", "addons-strip"]) {
+  if (!onboardingStyles.includes(phrase)) failures.push(`Pages onboarding styles are missing: ${phrase}`);
+}
 for (const phrase of ["milxdy-logo-square-bevel.png", "workflow-steps", "catalog-window", "tabs", ">Steps</p>"]) {
   if (!index.includes(phrase)) failures.push(`catalog index is missing established milXdy UI reference: ${phrase}`);
 }
@@ -163,7 +182,7 @@ for (const forbidden of ["push:", "pull_request:", "schedule:", "release:"]) {
   if (workflow.includes(forbidden)) failures.push(`Pages workflow must not include automatic trigger: ${forbidden}`);
 }
 if (!workflow.includes("build-pages-catalog.mjs") || !workflow.includes("tmp/pages-catalog-site")) {
-  failures.push("Pages workflow must build and upload the staged catalog with checked-in brand assets");
+  failures.push("Pages workflow must build and upload the staged onboarding site and catalog with checked-in brand assets");
 }
 
 const docs = contents.get("docs/ADD_ONS_CATALOG.md") || "";
@@ -177,5 +196,6 @@ if (failures.length) {
 
 console.log("Pages catalog verification passed.");
 notes.forEach((note) => console.log(`  ${note}`));
+console.log("  onboarding root and /addons catalog sources: present");
 console.log("  official and approved-external sections: present");
 console.log("  download, security, local-build, and manual-deployment gates: present");
