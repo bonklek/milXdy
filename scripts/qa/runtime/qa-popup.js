@@ -2,6 +2,7 @@
   const RUNNING_BUILD = __MILXDY_QA_BUILD_JSON__;
   const REQUEST_KEY = "milxdy.qa.reloadRequest";
   const RESULT_KEY = "milxdy.qa.lastReloadResult";
+  const RELOAD_GUARD_KEY = "milxdy.qa.reloadGuard";
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void renderQaPanel(), { once: true });
@@ -40,6 +41,7 @@
       reload.disabled = true;
       status.textContent = "Reload requested; this popup will close and matching X/Twitter tabs will refresh.";
       diskBuild = await readDiskBuild() || diskBuild;
+      await chrome.storage.local.remove(RELOAD_GUARD_KEY).catch(() => undefined);
       await chrome.storage.local.set({
         [REQUEST_KEY]: {
           desiredBuildId: diskBuild?.buildId || RUNNING_BUILD.buildId,

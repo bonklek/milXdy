@@ -1,27 +1,32 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { cp, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import { watch as watchFiles } from "node:fs";
-import { basename, dirname, resolve } from "node:path";
+import { homedir } from "node:os";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { assertSafeGeneratedOutputDir } from "../build/generated-output-dir-safety.mjs";
 
-const DEFAULT_OUTPUT = "dist/qa-chromium";
+const DEFAULT_OUTPUT = resolve(homedir(), "Documents", "dev", "milXdy-QA", "chromium");
+const DEFAULT_STAGING_ROOT = "tmp/qa-reload";
 const DEFAULT_PORT = 7319;
 const DEBOUNCE_MS = 450;
 const POLL_TIMEOUT_MS = 20_000;
 const ignoredWatchRoots = new Set([".git", "dist", "node_modules", "release", "tmp"]);
+const QA_MANIFEST_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0K0sWrJ0FvFhcoctS5V2OohpDKZSw9mj8cPrKrUjAgz/s2iKSXqElg6mrHcx7GqBxJJXtwWu11rIlIhPpgDZsrN63FC4ezf39V4WxElAX/zmJ4+le/PQw7KQv2Us/K28EDGDpMFcQf4QrVXKaW0i7vw/z3UWX8goKm9s1SUIMT0s/JDcHY4f2p8oqeWJXbVhk0pM5wSgxhX+hX5s9XqjB0/py9PsWLPMp9TS2QoiVueSaPbz8vzwzErw+wMNCDes/gDDQreo0U0GHLeGU4KQELLPArIs/ef3OG6/hg5m3kLFWhVzY2E1cqQ2tcfgylNoql/5m/JK5ThO0NIdkNd+kwIDAQAB";
 
 export async function main(argv = process.argv.slice(2)) {
   const once = argv.includes("--once");
   const watch = argv.includes("--watch") || !once;
-  const outputDir = assertSafeGeneratedOutputDir(readArg(argv, "--output-dir") || DEFAULT_OUTPUT, "QA output directory");
+  const outputDir = resolvePersistentQaOutput(readArg(argv, "--publish-dir") || process.env.MILXDY_QA_OUTPUT_DIR || DEFAULT_OUTPUT);
   const builder = readArg(argv, "--builder") || "scripts/build/build-extension.mjs";
   const port = readIntegerArg(argv, "--port", DEFAULT_PORT);
   const state = { build: null, waiters: new Set() };
-  const server = watch ? await startCoordinator(state, port) : null;
+  const publisherLock = await acquirePublisherLock(outputDir);
+  let server = null;
+  let watcher = null;
 
   let building = false;
   let queued = false;
@@ -49,29 +54,33 @@ export async function main(argv = process.argv.slice(2)) {
     building = false;
   };
 
-  await runBuild();
-  if (!watch) return;
+  try {
+    server = watch ? await startCoordinator(state, port) : null;
+    await runBuild();
+    if (!watch) return;
 
-  const trigger = createDebouncer(() => void runBuild(), DEBOUNCE_MS);
-  const watcher = watchFiles(resolve("."), { recursive: true }, (_event, filename) => {
-    if (!filename || shouldIgnoreWatchPath(String(filename))) return;
-    trigger();
-  });
-  const close = () => {
+    const trigger = createDebouncer(() => void runBuild(), DEBOUNCE_MS);
+    watcher = watchFiles(resolve("."), { recursive: true }, (_event, filename) => {
+      if (!filename || shouldIgnoreWatchPath(String(filename))) return;
+      trigger();
+    });
+    console.log(`[milXdy QA] watching source changes (debounce ${DEBOUNCE_MS}ms; coordinator http://127.0.0.1:${port})`);
+    await new Promise((resolvePromise) => {
+      process.once("SIGINT", resolvePromise);
+      process.once("SIGTERM", resolvePromise);
+    });
     trigger.cancel();
-    watcher.close();
+  } finally {
+    watcher?.close();
     for (const waiter of state.waiters) waiter.end();
     server?.close();
-  };
-  process.once("SIGINT", close);
-  process.once("SIGTERM", close);
-  console.log(`[milXdy QA] watching source changes (debounce ${DEBOUNCE_MS}ms; coordinator http://127.0.0.1:${port})`);
+    await publisherLock.release();
+  }
 }
 
 export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", port = DEFAULT_PORT, quiet = false } = {}) {
-  const safeOutput = assertSafeGeneratedOutputDir(outputDir, "QA output directory");
-  const outputRoot = resolve(safeOutput);
-  const stagingRelative = `${dirname(safeOutput).replaceAll("\\", "/")}/.${basename(safeOutput)}-staging-${process.pid}-${Date.now()}`;
+  const outputRoot = resolveQaBuildOutput(outputDir);
+  const stagingRelative = `${DEFAULT_STAGING_ROOT}/staging-${process.pid}-${Date.now()}`;
   const staging = resolve(assertSafeGeneratedOutputDir(stagingRelative, "QA staging directory"));
   const before = await collectSourceIdentity();
   await rm(staging, { recursive: true, force: true });
@@ -82,14 +91,13 @@ export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scrip
     if (before.sourceSha256 !== after.sourceSha256) {
       throw new Error("source changed during the build; discarded mixed-source output and queued a clean rebuild");
     }
-    const provenance = createProvenance(after, safeOutput, port);
+    const provenance = createProvenance(after, outputRoot, port);
     await injectQaRuntime(staging, provenance);
     await verifyStagedOutput(staging, provenance);
     await promoteLastKnownGood(staging, outputRoot);
     return provenance;
-  } catch (error) {
+  } finally {
     await rm(staging, { recursive: true, force: true });
-    throw error;
   }
 }
 
@@ -107,6 +115,44 @@ export function createDebouncer(callback, delayMs) {
     timer = null;
   };
   return trigger;
+}
+
+export function resolvePersistentQaOutput(value = DEFAULT_OUTPUT) {
+  const output = resolve(value);
+  if (basename(output).toLowerCase() !== "chromium" || basename(dirname(output)).toLowerCase() !== "milxdy-qa") {
+    throw new Error("Persistent QA output must be the chromium/ folder directly inside a milXdy-QA/ directory.");
+  }
+  return output;
+}
+
+export async function acquirePublisherLock(outputDir) {
+  const output = resolveQaBuildOutput(outputDir);
+  const lockPath = resolve(dirname(output), ".milxdy-qa-publisher.lock");
+  const token = randomUUID();
+  await mkdir(dirname(lockPath), { recursive: true });
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const handle = await open(lockPath, "wx");
+      await handle.writeFile(`${JSON.stringify({ token, pid: process.pid, source: resolve("."), acquiredAt: new Date().toISOString() }, null, 2)}\n`);
+      await handle.close();
+      return {
+        path: lockPath,
+        async release() {
+          const current = await readJson(lockPath).catch(() => null);
+          if (current?.token === token) await rm(lockPath, { force: true });
+        },
+      };
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const current = await readJson(lockPath).catch(() => null);
+      if (current?.pid && processIsRunning(current.pid)) {
+        throw new Error(`QA publisher is already active (PID ${current.pid}, source ${current.source || "unknown"}). Stop it before starting another publisher.`);
+      }
+      await rm(lockPath, { force: true });
+    }
+  }
+  throw new Error("Could not acquire the QA publisher lock.");
 }
 
 export async function collectSourceIdentity() {
@@ -154,12 +200,12 @@ export async function startCoordinator(state, port = DEFAULT_PORT) {
     }
     const runningBuildId = url.searchParams.get("buildId");
     if (state.build?.buildId && state.build.buildId !== runningBuildId) {
-      response.end(`${JSON.stringify({ action: "reload", buildId: state.build.buildId })}\n`);
+      response.end(`${JSON.stringify(coordinatorMessage("reload", state.build))}\n`);
       return;
     }
     const timer = setTimeout(() => {
       state.waiters.delete(response);
-      response.end(`${JSON.stringify({ action: "noop", buildId: state.build?.buildId || null })}\n`);
+      response.end(`${JSON.stringify(coordinatorMessage("noop", state.build))}\n`);
     }, POLL_TIMEOUT_MS);
     response.on("close", () => {
       clearTimeout(timer);
@@ -193,6 +239,7 @@ function createProvenance(source, outputDir, coordinatorPort) {
       fileCount: source.fileCount,
     },
     build: { target: "chromium", profile: "full", node: process.version },
+    extensionId: extensionIdFromManifestKey(QA_MANIFEST_KEY),
     output: resolve(outputDir),
     worktree: resolve("."),
     coordinatorPort,
@@ -226,6 +273,7 @@ async function injectQaRuntime(staging, provenance) {
     .replace('<script src="popup.js"></script>', '<script src="qa-popup.js"></script>\n    <script src="popup.js"></script>');
   const manifest = JSON.parse(manifestText);
   manifest.name = "milXdy QA";
+  manifest.key = QA_MANIFEST_KEY;
   manifest.version_name = `${manifest.version} QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
   manifest.action.default_title = `milXdy QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
 
@@ -248,20 +296,51 @@ async function verifyStagedOutput(staging, provenance) {
   if (parsed.buildId !== provenance.buildId || parsed.channel !== "developer-qa") throw new Error("QA provenance verification failed");
   const manifest = JSON.parse(await readFile(resolve(staging, "manifest.json"), "utf8"));
   if (manifest.name !== "milXdy QA") throw new Error("QA manifest label was not injected");
+  if (manifest.key !== QA_MANIFEST_KEY || provenance.extensionId !== extensionIdFromManifestKey(manifest.key)) {
+    throw new Error("QA stable extension identity verification failed");
+  }
 }
 
 async function promoteLastKnownGood(staging, output) {
   await mkdir(dirname(output), { recursive: true });
+  const publishStaging = `${output}.staging-${process.pid}-${Date.now()}`;
   const backup = `${output}.previous-${process.pid}`;
+  await rm(publishStaging, { recursive: true, force: true });
   await rm(backup, { recursive: true, force: true });
-  const hadOutput = existsSync(output);
   try {
+    await cp(staging, publishStaging, { recursive: true });
+    const hadOutput = existsSync(output);
     if (hadOutput) await rename(output, backup);
-    await rename(staging, output);
+    await rename(publishStaging, output);
     await rm(backup, { recursive: true, force: true });
   } catch (error) {
     if (!existsSync(output) && existsSync(backup)) await rename(backup, output);
     throw new Error(`could not promote QA output atomically: ${error instanceof Error ? error.message : error}`);
+  } finally {
+    await rm(publishStaging, { recursive: true, force: true });
+  }
+}
+
+function resolveQaBuildOutput(value) {
+  if (isAbsolute(value)) return resolvePersistentQaOutput(value);
+  return resolve(assertSafeGeneratedOutputDir(value, "QA output directory"));
+}
+
+function extensionIdFromManifestKey(key) {
+  const digest = createHash("sha256").update(Buffer.from(key, "base64")).digest().subarray(0, 16);
+  return Array.from(digest).flatMap((byte) => [byte >> 4, byte & 0x0f]).map((nibble) => String.fromCharCode(97 + nibble)).join("");
+}
+
+async function readJson(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+function processIsRunning(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === "EPERM";
   }
 }
 
@@ -270,10 +349,19 @@ function releaseWaiters(state) {
     clearTimeout(response.qaTimer);
     if (!response.writableEnded) {
       const action = response.qaRunningBuildId === state.build?.buildId ? "noop" : "reload";
-      response.end(`${JSON.stringify({ action, buildId: state.build?.buildId || null })}\n`);
+      response.end(`${JSON.stringify(coordinatorMessage(action, state.build))}\n`);
     }
   }
   state.waiters.clear();
+}
+
+function coordinatorMessage(action, build) {
+  return {
+    action,
+    buildId: build?.buildId || null,
+    output: build?.output || null,
+    extensionId: build?.extensionId || null,
+  };
 }
 
 function runBuilder(builder, stagingRelative, quiet = false) {

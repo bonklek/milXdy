@@ -1379,12 +1379,20 @@ export const RESKIN_CSS = `
     overflow: visible !important;
   }
 
-  html[data-milxdy-reskin-profile] :is(:fullscreen, :fullscreen *) {
+  html[data-milxdy-reskin-profile] :is(:fullscreen, :-webkit-full-screen) {
+    border-radius: 0 !important;
+    height: 100vh !important;
+    max-height: none !important;
+    max-width: none !important;
+    width: 100vw !important;
+  }
+
+  html[data-milxdy-reskin-profile] :is(:fullscreen, :-webkit-full-screen) * {
     border-radius: 0 !important;
     max-height: none !important;
   }
 
-  html[data-milxdy-reskin-profile] :is(:fullscreen, :fullscreen *) :is(
+  html[data-milxdy-reskin-profile] :is(:fullscreen, :-webkit-full-screen) :is(
     [data-testid="tweetPhoto"],
     [data-testid="videoPlayer"],
     div[aria-label="Image"],
@@ -1398,8 +1406,8 @@ export const RESKIN_CSS = `
     width: 100% !important;
   }
 
-  html[data-milxdy-reskin-profile] :is(:fullscreen, :fullscreen *) :is(img, video),
-  html[data-milxdy-reskin-profile] :is(img, video):fullscreen {
+  html[data-milxdy-reskin-profile] :is(:fullscreen, :-webkit-full-screen) :is(img, video),
+  html[data-milxdy-reskin-profile] :is(img, video):is(:fullscreen, :-webkit-full-screen) {
     border-radius: 0 !important;
     height: 100% !important;
     max-height: 100vh !important;
