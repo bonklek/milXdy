@@ -769,7 +769,9 @@ function mountBeetolGame(context = {}) {
       const percent = total ? Math.round((processed / total) * 100) : 0;
       els.crunchProgressFill.style.width = `${percent}%`;
       const active = progress.phase === 'processing' && processed < total ? ` · crunching ${processed + 1}` : '';
-      els.crunchProgressLabel.textContent = `Crunching: ${processed} / ${total}${active} — ${progress.made || 0} cube(s), ${progress.skipped || 0} skipped`;
+      const skippedPair = progress.lastSkippedPair;
+      const skippedDetail = skippedPair ? ` · last skip: ${itemName(skippedPair.slot1)} + ${itemName(skippedPair.slot2)}` : '';
+      els.crunchProgressLabel.textContent = `Crunching: ${processed} / ${total}${active} — ${progress.made || 0} cube(s), ${progress.skipped || 0} skipped${skippedDetail}`;
     }
 
     if (!state.signedIn) {
@@ -1015,7 +1017,10 @@ function mountBeetolGame(context = {}) {
     }
     state.crunchProgress = null;
     if (response.pairs > 0) playCrunchCompleteSound();
-    const skipped = response.skipped ? ` (${response.skipped} skipped)` : '';
+    const lastSkippedPair = Array.isArray(response.skippedPairs) ? response.skippedPairs.at(-1) : null;
+    const skipped = response.skipped
+      ? ` (${response.skipped} skipped${lastSkippedPair ? `; last: ${itemName(lastSkippedPair.slot1)} + ${itemName(lastSkippedPair.slot2)}` : ''})`
+      : '';
     setMessage(`Crunch All Junk: made ${response.made}/${response.pairs} Junk Cube(s)${skipped}.`);
     render();
   }
@@ -1060,6 +1065,9 @@ function mountBeetolGame(context = {}) {
       made: Math.max(0, Number(message.made) || 0),
       skipped: Math.max(0, Number(message.skipped) || 0),
       phase: message.phase === 'processing' ? 'processing' : '',
+      lastSkippedPair: message.skippedPair?.slot1 && message.skippedPair?.slot2
+        ? { slot1: message.skippedPair.slot1, slot2: message.skippedPair.slot2 }
+        : state.crunchProgress?.lastSkippedPair || null,
     };
     if (message.phase === 'processing') playCrunchSuccessSound();
     render();

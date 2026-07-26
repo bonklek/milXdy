@@ -238,13 +238,15 @@ async function crunchJunk({ runId, onProgress } = {}) {
   const pairs = Math.floor(pool.length / 2);
   let made = 0;
   let skipped = 0;
-  const reportProgress = (outcome = null) => onProgress?.({
+  const skippedPairs = [];
+  const reportProgress = (outcome = null, skippedPair = null) => onProgress?.({
     runId,
     total: pairs,
     processed: made + skipped,
     made,
     skipped,
     outcome,
+    skippedPair,
   });
 
   reportProgress();
@@ -271,8 +273,10 @@ async function crunchJunk({ runId, onProgress } = {}) {
       reportProgress('made');
     } else if (result.data?.message === 'INVALID_RECIPE') {
       skipped += 1;
+      const skippedPair = { slot1: pool[i], slot2: pool[i + 1] };
+      skippedPairs.push(skippedPair);
       await sleep(Math.max(0, CRUNCH_STEP_MS - (Date.now() - startedAt)));
-      reportProgress('skipped');
+      reportProgress('skipped', skippedPair);
     }
     else return { ok: false, error: result.data?.message || 'Failed mid-crunch.', made, skipped, pairs };
   }
@@ -282,6 +286,7 @@ async function crunchJunk({ runId, onProgress } = {}) {
     ok: true,
     made,
     skipped,
+    skippedPairs,
     pairs,
     user: after.ok ? after.user : null,
     fetchedAt: after.ok ? after.fetchedAt : Date.now(),
