@@ -1,0 +1,104 @@
+name: Add-on catalog submission
+description: Propose a milXdy app, feature, or theme package for maintainer-curated catalog review.
+title: "[Add-on submission]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for proposing an add-on. This is a GitHub-based maintainer review process, not automatic publication.
+
+        Do not post secrets, API keys, tokens, cookies, passwords, private credentials, private user data, or unredacted production logs. Use redacted evidence and a safe contact route instead.
+  - type: input
+    id: package-name
+    attributes:
+      label: Package name
+      description: The user-facing name.
+    validations:
+      required: true
+  - type: input
+    id: package-id
+    attributes:
+      label: Package ID
+      description: The stable `milxdy.app.json` ID.
+      placeholder: example.add-on
+    validations:
+      required: true
+  - type: input
+    id: package-version
+    attributes:
+      label: Package version
+      description: The exact version proposed for review.
+      placeholder: 1.0.0
+    validations:
+      required: true
+  - type: dropdown
+    id: package-kind
+    attributes:
+      label: Package kind
+      options:
+        - app
+        - feature
+        - theme
+    validations:
+      required: true
+  - type: input
+    id: compatibility
+    attributes:
+      label: milXdy and App SDK compatibility target
+      description: Include the minimum/target milXdy or SDK version and supported browsers where relevant.
+      placeholder: milXdy >= 0.2.2; App SDK 0.2.2; Chromium
+    validations:
+      required: true
+  - type: textarea
+    id: description-and-screenshots
+    attributes:
+      label: User-facing description and screenshots
+      description: Briefly explain what it does and attach or link screenshots/a short recording of its visible surfaces.
+    validations:
+      required: true
+  - type: textarea
+    id: source-or-artifact
+    attributes:
+      label: Source repository or reviewable package artifact
+      description: Link source and/or an artifact. Identify the reviewed tag/commit/version and checksum when available.
+    validations:
+      required: true
+  - type: textarea
+    id: capabilities-and-network
+    attributes:
+      label: Capabilities, permissions, and network use
+      description: List host/optional permissions, injected/lifecycle surfaces, storage, background/message use, and every endpoint, WebSocket, remote service, or data transfer. Write `none` where applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: qa-evidence
+    attributes:
+      label: Test and QA evidence
+      description: Include commands/results, supported browser and milXdy versions, and manual test steps/results for normal, update, removal/disablement, and rollback behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: assets-license
+    attributes:
+      label: Asset license and attribution
+      description: List the license and source/attribution for non-original icons, images, fonts, audio, code samples, and other shipped assets. State `all original` if applicable.
+    validations:
+      required: true
+  - type: textarea
+    id: maintainer-contact
+    attributes:
+      label: Maintainer contact and update expectations
+      description: Give the GitHub account or repository issue location for review feedback, compatibility changes, security reports, and future updates.
+    validations:
+      required: true
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Submission acknowledgements
+      options:
+        - label: I understand that submission does not mean automatic publication or a safety/signing guarantee.
+          required: true
+        - label: I have not included secrets, API keys, tokens, cookies, private credentials, or private user data.
+          required: true
+        - label: I can respond to maintainer review feedback and update compatibility/capability disclosures for later versions.
+          required: true

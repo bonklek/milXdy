@@ -71,6 +71,11 @@ and detail pages. Keep official packages under `official` and reviewed
 third-party packages under `approved-external`; never represent an external
 publisher as official.
 
+For contributor submissions and the maintainer review decision, use the
+[Add-on catalog submission process](ADD_ON_CATALOG_SUBMISSIONS.md). This guide
+does not turn a catalog record into an automated publication, signing, or trust
+guarantee.
+
 Every package record must include its availability, publisher, review status,
 capabilities, permissions, privacy notes, and download state. A Published
 record additionally requires:
