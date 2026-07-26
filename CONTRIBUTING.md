@@ -60,6 +60,10 @@ npm run verify:app-smoke
 npm run verify:app-smoke:020
 ```
 
+For the maintainer-only unpacked Chrome rebuild/reload loop, see
+[Developer QA reload loop](docs/DEVELOPER_QA_RELOAD.md). Its stable output is
+`dist/qa-chromium` and is separate from release packaging.
+
 Choose verification by the files and behavior touched. Most changes should run
 the nearest relevant checks instead of the whole release pipeline; for example,
 docs-only changes usually need focused link/text checks, shared TypeScript
