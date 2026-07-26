@@ -90,6 +90,13 @@ Then open `http://127.0.0.1:8765/` for onboarding or
 checked-in brand images used by the site alongside the static sources;
 generated preview output stays under the gitignored `tmp/` directory.
 
+The staged HTML stamps CSS and JavaScript URLs with the deployment SHA so a
+new document cannot silently reuse assets from an older layout. The root also
+retains the former catalog asset and data paths as a migration shim: browsers
+holding the pre-onboarding root document are redirected to a cache-busted
+onboarding URL, while a fully cached old module can still resolve its metadata
+instead of showing a partial 404 state.
+
 ## Publishing
 
 `.github/workflows/pages-catalog.yml` is intentionally manual-only. It has no
