@@ -9,6 +9,7 @@ milXdy `0.2.3` is the reliability and accessibility follow-up to `0.2.2`. It bri
 - Restore reversible feature teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan.
 - Improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior across the popup and in-page app surfaces.
 - Keep Beetol hunts responsive by returning the mutation result before a separate background state reconciliation.
+- Keep fast RemiliaNET Hunt available through all three charges, immediately darken resolved Claim and exhausted Hunt controls, and refresh the fast-result display from current Beetle state.
 - Recover RemiNet Chat from stalled authentication or WebSocket opening instead of leaving the composer permanently disconnected on Connecting.
 - Keep connector logout authoritative over cached/in-flight Chat authentication and abort background fetches when their shared deadline expires.
 - Group Root Visual controls by their actual X/app ownership while preserving existing visual-theme storage and profile-pack compatibility.
