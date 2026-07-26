@@ -1787,7 +1787,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       filter.frequency.setValueAtTime(810, now + 0.14);
       filter.frequency.setValueAtTime(1_240, now + 0.2);
       gain.gain.setValueAtTime(0.0001, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.48), now + 0.035);
+      // Band-pass wind loses a lot of perceived loudness on laptop speakers.
+      // Compensate here while retaining the user's 0–1 volume scale.
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, Math.min(0.78, state.interfaceSoundsVolume * 1.15)), now + 0.035);
       gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
       source.connect(filter).connect(shaper).connect(gain).connect(context.destination);
       source.start();
