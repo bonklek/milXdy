@@ -350,9 +350,9 @@ function updateHomeLogoVariant(homeLink: HTMLAnchorElement, wrapper: HTMLElement
     justify-content: center;
     flex: 0 0 auto;
     z-index: 10000;
-    border-radius: 0;
+    border-radius: 6px;
     transition: none;
-    overflow: visible;
+    overflow: hidden;
   `;
   wrapper.style.width = fullNavigation ? "220px" : "38px";
   wrapper.style.height = fullNavigation ? "54px" : "38px";
