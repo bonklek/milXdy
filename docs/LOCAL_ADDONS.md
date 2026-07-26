@@ -13,6 +13,29 @@ milXdy builds trusted App SDK ZIP packages into a stable local Chromium extensio
 
 The output folder is stable. Do not load the temporary build under `tmp/`.
 
+## Settings handoff
+
+**Settings → Apps & Features → Local Add-ons** is the local control panel for
+this workflow:
+
+1. **Get more add-ons** opens the public GitHub catalog in a new tab.
+2. After Chrome downloads package ZIPs, **Load downloaded add-ons** opens a
+   user-initiated multi-file picker. milXdy does not scan Downloads or request
+   broad Downloads permission.
+3. The queued list performs a browser preflight for archive safety and readable
+   package metadata. Rejected files show a reason. The local composer remains
+   the authoritative validator.
+4. **Rebuild custom extension** becomes available when at least one ZIP passes
+   preflight. Where Chromium supports a writable directory picker, choose the
+   checkout's `local-addons/manual/` folder to place those ZIPs.
+5. Run the command shown by Settings in the milXdy checkout. The separate local
+   builder creates `dist/chromium-local-apps/`; the running extension never
+   claims to rebuild itself.
+
+After the first successful build, Settings shows the exact output folder and
+the Chrome **Load unpacked** step. When Chrome already has that custom folder
+loaded, later successful builds show the **Reload** handoff instead.
+
 ## Later package changes
 
 1. Add, replace, or remove ZIPs in `local-addons/manual/`.

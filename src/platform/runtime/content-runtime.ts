@@ -43,6 +43,20 @@ declare const MILXDY_BUILD_TARGET: "chromium" | "firefox" | undefined;
 declare const MILXDY_VERSION: string | undefined;
 declare const MILXDY_LOCAL_ADDON_BUILD_ID: string | undefined;
 
+const MILXDY_ADDONS_CATALOG_URL = "https://bonklek.github.io/milXdy/";
+const LOCAL_ADDON_MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
+const LOCAL_ADDON_MAX_ENTRY_BYTES = 25 * 1024 * 1024;
+const LOCAL_ADDON_MAX_ENTRIES = 2000;
+
+type LocalAddonQueueItem = {
+  file: File;
+  state: "checking" | "accepted" | "rejected";
+  id?: string;
+  name?: string;
+  version?: string;
+  reason?: string;
+};
+
 type LocalAddonStatus = {
   schemaVersion: 1 | 2;
   mode: "standard" | "custom-composition" | "managed-local-addons";
@@ -52,6 +66,7 @@ type LocalAddonStatus = {
   compositionFingerprint?: string;
   extensionVersion?: string;
   generatedAt?: string;
+  workflowStage?: "select" | "place" | "rebuild" | "reload";
   addOnsDirectory?: string;
   outputDirectory?: string;
   reportPath?: string;
@@ -88,6 +103,8 @@ type RuntimeState = {
   hubDockSettingsOpen: boolean;
   localAddonStatus: LocalAddonStatus | null;
   localAddonStatusLoading: boolean;
+  localAddonQueue: LocalAddonQueueItem[];
+  localAddonQueueMessage: string;
   hubAppDrag: {
     appId: MilxdyAppId;
     pointerId: number;
@@ -265,6 +282,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubDockSettingsOpen: false,
     localAddonStatus: null,
     localAddonStatusLoading: false,
+    localAddonQueue: [],
+    localAddonQueueMessage: "",
     hubAppDrag: null,
     iconTheme: currentAppIconTheme(),
     firstRunPending: false,
@@ -1973,62 +1992,316 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       && ["prepared", "built", "validation-failed", "build-failed"].includes(String(record.state));
   }
 
+  async function stageQueuedAddonsForLocalBuilder(): Promise<void> {
+    const accepted = state.localAddonQueue.filter((entry) => entry.state === "accepted");
+    if (!accepted.length) return;
+    const directoryPicker = (window as typeof window & {
+      showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<{
+        getFileHandle(name: string, options: { create: boolean }): Promise<{
+          createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>;
+        }>;
+      }>;
+    }).showDirectoryPicker;
+    if (!directoryPicker) {
+      state.localAddonQueueMessage = "This browser cannot hand files to the local builder. Copy the accepted ZIPs into local-addons/manual, then run npm run addons:rebuild.";
+      renderHubPanel();
+      return;
+    }
+    state.localAddonQueueMessage = "Choose the checkout's local-addons/manual folder. The extension will place the accepted ZIPs there; the separate local builder still performs the rebuild.";
+    try {
+      const directory = await directoryPicker.call(window, { mode: "readwrite" });
+      for (const entry of accepted) {
+        const handle = await directory.getFileHandle(entry.file.name, { create: true });
+        const writable = await handle.createWritable();
+        await writable.write(entry.file);
+        await writable.close();
+      }
+      try {
+        await navigator.clipboard.writeText("npm run addons:rebuild");
+      } catch {
+        // The visible status retains the exact command when clipboard access is unavailable.
+      }
+      state.localAddonQueueMessage = `${accepted.length} ZIP${accepted.length === 1 ? "" : "s"} placed. Run npm run addons:rebuild in the milXdy checkout. The local builder creates dist/chromium-local-apps; this running extension did not rebuild itself.`;
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") {
+        state.localAddonQueueMessage = "Folder selection canceled. The queued ZIPs remain available in this panel.";
+      } else {
+        state.localAddonQueueMessage = `Could not place ZIPs for the local builder: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+    renderHubPanel();
+  }
+
   function localAddonManagerPanel(): HTMLElement {
     const panel = document.createElement("section");
     panel.className = "milxdy-app-hub-addons";
-    const heading = document.createElement("strong");
-    heading.textContent = "Local Add-ons";
     const status = state.localAddonStatus;
     const loadedBuildId = typeof MILXDY_LOCAL_ADDON_BUILD_ID === "string" ? MILXDY_LOCAL_ADDON_BUILD_ID : "";
     const buildWaitingForReload = Boolean(status?.buildId && loadedBuildId && status.buildId !== loadedBuildId);
+    const buildNeedsFirstLoad = Boolean(status?.state === "built" && status.buildId && !loadedBuildId);
+    const hasFailure = status?.state === "validation-failed" || status?.state === "build-failed";
+    const currentStep = !status || status.mode === "standard"
+      ? 0
+      : status.state === "prepared"
+        ? 2
+        : hasFailure
+          ? status.workflowStage === "place" ? 1 : status.workflowStage === "select" ? 0 : 2
+          : buildWaitingForReload || buildNeedsFirstLoad
+            ? 3
+            : 4;
+
+    const header = document.createElement("div");
+    header.className = "milxdy-app-hub-addon-header";
+    const brand = document.createElement("img");
+    brand.src = runtimeAssetUrl("assets/brand/milxdy-logo-square-bevel.png");
+    brand.alt = "";
+    brand.width = 40;
+    brand.height = 40;
+    const headingGroup = document.createElement("div");
+    const eyebrow = document.createElement("span");
+    eyebrow.className = "milxdy-app-hub-addon-eyebrow";
+    eyebrow.textContent = "Custom build";
+    const heading = document.createElement("strong");
+    heading.id = "milxdy-local-addons-title";
+    heading.textContent = "Local Add-ons";
+    headingGroup.append(eyebrow, heading);
+    const badge = document.createElement("span");
+    badge.className = "milxdy-app-hub-addon-badge";
+    badge.dataset.tone = hasFailure ? "warning" : buildWaitingForReload || buildNeedsFirstLoad || status?.state === "prepared" ? "active" : "neutral";
+    badge.textContent = state.localAddonStatusLoading && !status
+      ? "Checking"
+      : hasFailure
+        ? "Needs attention"
+        : status?.state === "prepared"
+          ? "Validated"
+          : buildNeedsFirstLoad
+            ? "Load unpacked"
+            : buildWaitingForReload
+              ? "Reload ready"
+              : status?.state === "built"
+                ? "Current"
+                : "Local setup";
+    header.append(brand, headingGroup, badge);
     const summary = document.createElement("p");
+    summary.className = "milxdy-app-hub-addon-summary";
+    summary.setAttribute("aria-live", "polite");
     if (state.localAddonStatusLoading && !status) {
       summary.textContent = "Checking this build…";
     } else if (!status || status.mode === "standard") {
-      summary.textContent = "This is a standard build. Put trusted ZIP packages in local-addons/manual, then run the local rebuild command.";
+      summary.textContent = "Add trusted ZIPs to the local package folder, validate them, then rebuild this stable Chromium edition.";
     } else if (status.state === "prepared") {
-      summary.textContent = "The selected package set is prepared and validated. Run the apply command with the listed trust acknowledgements.";
+      summary.textContent = "The selected package set is prepared and validated. Apply it with the trust acknowledgements shown by the local helper.";
     } else if (status.state !== "built") {
       summary.textContent = `Last rebuild ${status.state === "validation-failed" ? "failed validation" : "failed"}. The previous working build remains in place.`;
+    } else if (buildNeedsFirstLoad) {
+      summary.textContent = `Custom build ready at ${status.outputDirectory || "dist/chromium-local-apps"}. Open chrome://extensions, choose Load unpacked, and select that exact folder.`;
     } else if (buildWaitingForReload) {
       summary.textContent = "A validated rebuild is ready. Reload the existing milXdy unpacked extension in Chrome, then refresh X.";
     } else {
       const count = status.packages?.length ?? 0;
       summary.textContent = `${count} validated local add-on${count === 1 ? " is" : "s are"} loaded from the stable custom build.`;
     }
+    const workflow = document.createElement("ol");
+    workflow.className = "milxdy-app-hub-addon-workflow";
+    workflow.setAttribute("aria-label", "Local add-on build journey");
+    const workflowSteps = [
+      ["ZIP", "Select", "Trusted package"],
+      ["DIR", "Place ZIPs", "Local folder"],
+      [">_", "Rebuild", "Validate + build"],
+      ["\u21bb", "Reload", "Chrome handoff"],
+    ] as const;
+    workflowSteps.forEach(([iconText, label, detail], index) => {
+      const item = document.createElement("li");
+      const stepState = index < currentStep ? "complete" : index === currentStep ? hasFailure ? "error" : "current" : "pending";
+      item.dataset.state = currentStep === 4 ? "complete" : stepState;
+      if (item.dataset.state === "current") item.setAttribute("aria-current", "step");
+      const icon = document.createElement("span");
+      icon.className = "milxdy-app-hub-addon-step-icon";
+      icon.setAttribute("aria-hidden", "true");
+      icon.textContent = iconText;
+      const number = document.createElement("span");
+      number.className = "milxdy-app-hub-addon-step-number";
+      number.textContent = `0${index + 1}`;
+      const labelElement = document.createElement("strong");
+      labelElement.textContent = label;
+      const detailElement = document.createElement("small");
+      detailElement.textContent = detail;
+      item.append(icon, number, labelElement, detailElement);
+      workflow.append(item);
+    });
+
+    const packageSection = document.createElement("div");
+    packageSection.className = "milxdy-app-hub-addon-packages";
+    const packageHeading = document.createElement("div");
+    packageHeading.className = "milxdy-app-hub-addon-section-heading";
+    const packageTitle = document.createElement("strong");
+    packageTitle.textContent = status?.state === "prepared" ? "Selected add-ons" : "Installed add-ons";
+    const packageCount = document.createElement("span");
+    packageCount.textContent = String(status?.packages?.length ?? 0);
+    packageHeading.append(packageTitle, packageCount);
+    packageSection.append(packageHeading);
+    if (status?.packages?.length) {
+      const packages = document.createElement("ul");
+      packages.className = "milxdy-app-hub-addon-package-list";
+      for (const entry of status.packages) {
+        const item = document.createElement("li");
+        const mark = document.createElement("span");
+        mark.className = "milxdy-app-hub-addon-package-mark";
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = (entry.name || entry.id).trim().slice(0, 1).toUpperCase() || "A";
+        const copy = document.createElement("span");
+        const name = document.createElement("strong");
+        name.textContent = entry.name || entry.id;
+        const meta = document.createElement("small");
+        meta.textContent = `${entry.id}${entry.version ? ` / ${entry.version}` : ""}${entry.reviewStatus ? ` / ${entry.reviewStatus}` : ""}`;
+        copy.append(name, meta);
+        item.append(mark, copy);
+        packages.append(item);
+      }
+      packageSection.append(packages);
+    } else {
+      const empty = document.createElement("div");
+      empty.className = "milxdy-app-hub-addon-empty";
+      const emptyMark = document.createElement("span");
+      emptyMark.setAttribute("aria-hidden", "true");
+      emptyMark.textContent = "+";
+      const emptyCopy = document.createElement("span");
+      const emptyTitle = document.createElement("strong");
+      emptyTitle.textContent = "No local ZIPs selected";
+      const emptyDetail = document.createElement("small");
+      emptyDetail.textContent = "Place or import trusted packages with File Explorer; milXdy never installs ZIP code at runtime.";
+      emptyCopy.append(emptyTitle, emptyDetail);
+      empty.append(emptyMark, emptyCopy);
+      packageSection.append(empty);
+    }
+
+    const queueSection = document.createElement("div");
+    queueSection.className = "milxdy-app-hub-addon-queue";
+    const queueHeading = document.createElement("div");
+    queueHeading.className = "milxdy-app-hub-addon-section-heading";
+    const queueTitle = document.createElement("strong");
+    queueTitle.textContent = "Queued add-ons";
+    const queueCount = document.createElement("span");
+    queueCount.textContent = String(state.localAddonQueue.length);
+    queueHeading.append(queueTitle, queueCount);
+    queueSection.append(queueHeading);
+    if (state.localAddonQueue.length) {
+      const queue = document.createElement("ul");
+      queue.className = "milxdy-app-hub-addon-queue-list";
+      for (const entry of state.localAddonQueue) {
+        const item = document.createElement("li");
+        item.dataset.state = entry.state;
+        const mark = document.createElement("span");
+        mark.className = "milxdy-app-hub-addon-queue-mark";
+        mark.setAttribute("aria-hidden", "true");
+        mark.textContent = entry.state === "checking" ? "..." : entry.state === "accepted" ? "OK" : "!";
+        const copy = document.createElement("span");
+        const name = document.createElement("strong");
+        name.textContent = entry.name || entry.file.name;
+        const detail = document.createElement("small");
+        detail.textContent = entry.state === "checking"
+          ? "Reading ZIP package metadata"
+          : entry.state === "accepted"
+            ? `${entry.id}${entry.version ? ` / ${entry.version}` : ""} / browser preflight accepted`
+            : entry.reason || "Package rejected";
+        copy.append(name, detail);
+        item.append(mark, copy);
+        queue.append(item);
+      }
+      queueSection.append(queue);
+    } else {
+      const queueEmpty = document.createElement("p");
+      queueEmpty.className = "milxdy-app-hub-addon-queue-empty";
+      queueEmpty.textContent = "Download ZIPs from the catalog, then select them here. Files remain local.";
+      queueSection.append(queueEmpty);
+    }
+    if (state.localAddonQueueMessage) {
+      const queueMessage = document.createElement("p");
+      queueMessage.className = "milxdy-app-hub-addon-queue-message";
+      queueMessage.setAttribute("aria-live", "polite");
+      queueMessage.textContent = state.localAddonQueueMessage;
+      queueSection.append(queueMessage);
+    }
+
+    const notices = [...(status?.errors || []).slice(0, 2), ...(status?.warnings || []).slice(0, 1)];
+    let noticeList: HTMLUListElement | null = null;
+    if (notices.length) {
+      noticeList = document.createElement("ul");
+      noticeList.className = "milxdy-app-hub-addon-notices";
+      noticeList.dataset.tone = status?.errors?.length ? "warning" : "neutral";
+      for (const notice of notices) {
+        const item = document.createElement("li");
+        item.textContent = notice;
+        noticeList.append(item);
+      }
+    }
+
     const paths = document.createElement("span");
-    paths.textContent = `Packages: ${status?.addOnsDirectory || "local-addons"} | Build: ${status?.outputDirectory || "dist/chromium-local-apps"}`;
+    paths.textContent = `ZIPs: ${status?.addOnsDirectory || "local-addons"} | Build: ${status?.outputDirectory || "dist/chromium-local-apps"}`;
     const actions = document.createElement("div");
     actions.className = "milxdy-app-hub-addon-actions";
-    const copy = document.createElement("button");
-    copy.type = "button";
-    copy.textContent = "Copy rebuild command";
-    copy.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText("npm run addons:rebuild");
-        copy.textContent = "Copied";
-      } catch {
-        copy.textContent = "Run: npm run addons:rebuild";
-      }
+    const getMore = document.createElement("button");
+    getMore.type = "button";
+    getMore.textContent = "Get more add-ons";
+    getMore.addEventListener("click", () => {
+      window.open(MILXDY_ADDONS_CATALOG_URL, "_blank", "noopener,noreferrer");
     });
+    const picker = document.createElement("input");
+    picker.id = "milxdy-local-addon-picker";
+    picker.className = "milxdy-app-hub-addon-picker";
+    picker.type = "file";
+    picker.accept = ".zip,application/zip";
+    picker.multiple = true;
+    const pickerLabel = document.createElement("label");
+    pickerLabel.className = "milxdy-app-hub-addon-picker-label";
+    pickerLabel.htmlFor = picker.id;
+    pickerLabel.textContent = "Load downloaded add-ons";
+    pickerLabel.tabIndex = 0;
+    pickerLabel.setAttribute("role", "button");
+    pickerLabel.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      picker.click();
+    });
+    picker.addEventListener("change", () => {
+      const files = Array.from(picker.files || []);
+      if (!files.length) return;
+      state.localAddonQueue = files.map((file) => ({ file, state: "checking" }));
+      state.localAddonQueueMessage = `Checking ${files.length} selected ZIP${files.length === 1 ? "" : "s"}...`;
+      renderHubPanel();
+      void Promise.all(files.map(preflightLocalAddonZip)).then((queue) => {
+        state.localAddonQueue = queue;
+        const accepted = queue.filter((entry) => entry.state === "accepted").length;
+        const rejected = queue.length - accepted;
+        state.localAddonQueueMessage = `${accepted} accepted by browser preflight${rejected ? `; ${rejected} rejected` : ""}. The local composer performs the authoritative validation before building.`;
+        renderHubPanel();
+      });
+    });
+    const rebuild = document.createElement("button");
+    rebuild.type = "button";
+    rebuild.textContent = "Rebuild custom extension";
+    rebuild.disabled = !state.localAddonQueue.some((entry) => entry.state === "accepted");
+    rebuild.addEventListener("click", () => void stageQueuedAddonsForLocalBuilder());
     const refresh = document.createElement("button");
     refresh.type = "button";
     refresh.textContent = "Refresh status";
     refresh.disabled = state.localAddonStatusLoading;
     refresh.addEventListener("click", () => void refreshLocalAddonStatus());
-    actions.append(copy, refresh);
-    if (status?.packages?.length) {
-      const packages = document.createElement("span");
-      packages.textContent = status.packages.map((entry) => `${entry.name || entry.id}${entry.version ? ` ${entry.version}` : ""}`).join("; ");
-      panel.append(heading, summary, paths, packages, actions);
-    } else {
-      panel.append(heading, summary, paths, actions);
-    }
+    actions.append(getMore, picker, pickerLabel, rebuild, refresh);
+    const details = document.createElement("details");
+    details.className = "milxdy-app-hub-addon-details";
+    const detailsTitle = document.createElement("summary");
+    detailsTitle.textContent = "Local paths and build identity";
+    details.append(detailsTitle, paths);
     if (status?.compositionFingerprint) {
       const fingerprint = document.createElement("span");
       fingerprint.textContent = `Composition ${status.compositionFingerprint.slice(0, 16)}…`;
-      panel.insertBefore(fingerprint, actions);
+      details.append(fingerprint);
     }
+    panel.setAttribute("aria-labelledby", heading.id);
+    panel.append(header, summary, workflow, packageSection, queueSection);
+    if (noticeList) panel.append(noticeList);
+    panel.append(actions, details);
     return panel;
   }
 
@@ -3428,6 +3701,140 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   return { boot, loadApp, notifyRoute, dispose, diagnostics };
 }
 
+type LocalAddonZipEntry = {
+  fileName: string;
+  flags: number;
+  compressionMethod: number;
+  compressedSize: number;
+  uncompressedSize: number;
+  localHeaderOffset: number;
+};
+
+export async function preflightLocalAddonZip(file: File): Promise<LocalAddonQueueItem> {
+  try {
+    if (!/\.zip$/iu.test(file.name)) throw new Error("Choose a .zip package.");
+    if (file.size === 0) throw new Error("ZIP package is empty.");
+    if (file.size > LOCAL_ADDON_MAX_ARCHIVE_BYTES) throw new Error("ZIP package exceeds the 100 MB archive limit.");
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const entries = readLocalAddonZipDirectory(bytes);
+    if (!entries.length) throw new Error("ZIP archive is empty.");
+    if (entries.length > LOCAL_ADDON_MAX_ENTRIES) throw new Error(`ZIP archive has too many files: ${entries.length}.`);
+    const manifests = entries.filter((entry) => entry.fileName === "milxdy.app.json" || entry.fileName.endsWith("/milxdy.app.json"));
+    if (!manifests.some((entry) => entry.fileName === "milxdy.app.json")) throw new Error("milxdy.app.json must be at the ZIP root.");
+    if (manifests.length !== 1) throw new Error("ZIP package must contain exactly one milxdy.app.json.");
+    let totalUncompressed = 0;
+    for (const entry of entries) {
+      if (!safeLocalAddonArchivePath(entry.fileName)) throw new Error(`Unsafe ZIP path: ${entry.fileName}.`);
+      if ((entry.flags & 1) !== 0) throw new Error(`Encrypted ZIP entry cannot be inspected: ${entry.fileName}.`);
+      if (entry.compressionMethod !== 0 && entry.compressionMethod !== 8) throw new Error(`Unsupported ZIP compression method for ${entry.fileName}.`);
+      if (entry.uncompressedSize > LOCAL_ADDON_MAX_ENTRY_BYTES) throw new Error(`ZIP entry is too large: ${entry.fileName}.`);
+      totalUncompressed += entry.uncompressedSize;
+      if (totalUncompressed > LOCAL_ADDON_MAX_ARCHIVE_BYTES) throw new Error("ZIP package exceeds the 100 MB extracted limit.");
+    }
+    const manifestBytes = await readLocalAddonZipEntry(bytes, manifests[0]!);
+    const manifest = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(manifestBytes)) as Record<string, unknown>;
+    if (manifest.manifestVersion !== 1) throw new Error("Unsupported or missing manifestVersion; expected 1.");
+    for (const field of ["id", "name", "version", "description", "contentEntry"] as const) {
+      if (typeof manifest[field] !== "string" || !String(manifest[field]).trim()) throw new Error(`Manifest field ${field} is required.`);
+    }
+    if (!new Set(["app", "feature", "theme"]).has(String(manifest.packageKind))) throw new Error("packageKind must be app, feature, or theme.");
+    const sdk = manifest.sdk as Record<string, unknown> | undefined;
+    if (!sdk || typeof sdk.minVersion !== "string") throw new Error("sdk.minVersion is required.");
+    return {
+      file,
+      state: "accepted",
+      id: String(manifest.id),
+      name: String(manifest.name),
+      version: String(manifest.version),
+    };
+  } catch (error) {
+    return {
+      file,
+      state: "rejected",
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+function readLocalAddonZipDirectory(bytes: Uint8Array): LocalAddonZipEntry[] {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const minimum = Math.max(0, bytes.byteLength - 22 - 0xffff);
+  let eocd = -1;
+  for (let offset = bytes.byteLength - 22; offset >= minimum; offset -= 1) {
+    if (view.getUint32(offset, true) === 0x06054b50) {
+      eocd = offset;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error("ZIP end-of-directory record is missing.");
+  const count = view.getUint16(eocd + 10, true);
+  const directoryOffset = view.getUint32(eocd + 16, true);
+  if (count === 0xffff || directoryOffset === 0xffffffff) throw new Error("ZIP64 packages require local builder validation.");
+  const decoder = new TextDecoder("utf-8", { fatal: true });
+  const entries: LocalAddonZipEntry[] = [];
+  let offset = directoryOffset;
+  for (let index = 0; index < count; index += 1) {
+    if (offset + 46 > bytes.byteLength || view.getUint32(offset, true) !== 0x02014b50) throw new Error("ZIP central directory is malformed.");
+    const nameLength = view.getUint16(offset + 28, true);
+    const extraLength = view.getUint16(offset + 30, true);
+    const commentLength = view.getUint16(offset + 32, true);
+    const nextOffset = offset + 46 + nameLength + extraLength + commentLength;
+    if (nextOffset > bytes.byteLength) throw new Error("ZIP central directory entry is truncated.");
+    entries.push({
+      fileName: decoder.decode(bytes.subarray(offset + 46, offset + 46 + nameLength)),
+      flags: view.getUint16(offset + 8, true),
+      compressionMethod: view.getUint16(offset + 10, true),
+      compressedSize: view.getUint32(offset + 20, true),
+      uncompressedSize: view.getUint32(offset + 24, true),
+      localHeaderOffset: view.getUint32(offset + 42, true),
+    });
+    offset = nextOffset;
+  }
+  return entries;
+}
+
+function safeLocalAddonArchivePath(fileName: string): boolean {
+  if (!fileName || fileName.includes("\0") || fileName.includes("\\") || fileName.startsWith("/") || /^[A-Za-z]:/u.test(fileName)) return false;
+  return !fileName.split("/").some((segment) => segment === "..");
+}
+
+async function readLocalAddonZipEntry(bytes: Uint8Array, entry: LocalAddonZipEntry): Promise<Uint8Array> {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const offset = entry.localHeaderOffset;
+  if (offset + 30 > bytes.byteLength || view.getUint32(offset, true) !== 0x04034b50) throw new Error(`ZIP local header is malformed: ${entry.fileName}.`);
+  const dataOffset = offset + 30 + view.getUint16(offset + 26, true) + view.getUint16(offset + 28, true);
+  const dataEnd = dataOffset + entry.compressedSize;
+  if (dataEnd > bytes.byteLength) throw new Error(`ZIP entry is truncated: ${entry.fileName}.`);
+  const compressed = bytes.slice(dataOffset, dataEnd);
+  if (entry.compressionMethod === 0) {
+    if (compressed.byteLength !== entry.uncompressedSize) throw new Error(`ZIP entry size mismatch: ${entry.fileName}.`);
+    return compressed;
+  }
+  if (typeof DecompressionStream !== "function") throw new Error("This Chromium version cannot preflight compressed ZIP packages.");
+  const stream = new Blob([compressed]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > entry.uncompressedSize || total > LOCAL_ADDON_MAX_ENTRY_BYTES) {
+      await reader.cancel("Inflated ZIP entry exceeded its declared size.");
+      throw new Error(`ZIP entry exceeded its declared size: ${entry.fileName}.`);
+    }
+    chunks.push(value);
+  }
+  const inflated = new Uint8Array(total);
+  let writeOffset = 0;
+  for (const chunk of chunks) {
+    inflated.set(chunk, writeOffset);
+    writeOffset += chunk.byteLength;
+  }
+  if (inflated.byteLength !== entry.uncompressedSize) throw new Error(`ZIP entry size mismatch after extraction: ${entry.fileName}.`);
+  return inflated;
+}
+
 function createTweetScaffoldStats(): TweetScaffoldStats {
   return {
     attempts: 0,
@@ -3882,21 +4289,226 @@ function injectTweetScaffoldStyles(): void {
       line-height: 1.2;
     }
     .milxdy-app-hub-addons {
+      --milxdy-addon-surface: #171820;
+      --milxdy-addon-surface-muted: #20222d;
+      --milxdy-addon-line: #4c5064;
+      --milxdy-addon-line-strong: #858cc9;
+      --milxdy-addon-highlight: rgba(255, 255, 255, 0.12);
+      --milxdy-addon-text: #f0f1f8;
+      --milxdy-addon-muted: rgba(240, 241, 248, 0.62);
+      --milxdy-addon-accent: #9ea7ff;
+      --milxdy-addon-accent-strong: #cbd0ff;
+      --milxdy-addon-accent-soft: color-mix(in srgb, #9ea7ff 12%, #171820);
+      --milxdy-addon-warn: #ffd978;
+      --milxdy-addon-warn-soft: color-mix(in srgb, #ffd978 12%, #171820);
+      --milxdy-addon-focus: #ffc2d2;
       display: grid;
-      gap: 5px;
-      padding: 8px 10px;
-      border: 2px solid var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-panel);
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-dark),
-        inset -1px -1px 0 var(--milxdy-hub-border-light);
+      gap: 8px;
+      max-height: min(390px, 52vh);
+      overflow: auto;
+      padding: 9px;
+      border: 1px solid var(--milxdy-addon-line);
+      border-right: 3px solid color-mix(in srgb, var(--milxdy-addon-line-strong) 78%, var(--milxdy-addon-line));
+      border-bottom: 4px solid color-mix(in srgb, var(--milxdy-addon-line-strong) 78%, var(--milxdy-addon-line));
+      border-radius: 6px;
+      background:
+        linear-gradient(180deg, color-mix(in srgb, var(--milxdy-addon-highlight) 72%, transparent) 0, transparent 42px),
+        var(--milxdy-addon-surface);
+      color: var(--milxdy-addon-text);
+      box-shadow: inset 2px 2px 1px color-mix(in srgb, var(--milxdy-addon-highlight) 78%, transparent);
       font-size: 11px;
       line-height: 1.35;
+      scrollbar-width: thin;
     }
-    .milxdy-app-hub-addons strong { color: var(--milxdy-hub-accent); font-size: 12px; }
-    .milxdy-app-hub-addons p { margin: 0; }
-    .milxdy-app-hub-addons > span { color: var(--milxdy-hub-muted); overflow-wrap: anywhere; }
-    .milxdy-app-hub-addon-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+    .milxdy-app-hub-addon-header {
+      display: grid;
+      grid-template-columns: 40px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 8px;
+    }
+    .milxdy-app-hub-addon-header img {
+      width: 40px;
+      height: 40px;
+      border: 1px solid var(--milxdy-addon-line);
+      border-radius: 6px;
+      object-fit: cover;
+      box-shadow: 0 4px 2px rgba(0, 0, 0, 0.2);
+    }
+    .milxdy-app-hub-addon-header > div { display: grid; gap: 1px; min-width: 0; }
+    .milxdy-app-hub-addon-header strong { color: var(--milxdy-addon-text); font-size: 14px; line-height: 1.15; }
+    .milxdy-app-hub-addon-eyebrow {
+      color: var(--milxdy-addon-accent-strong);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .milxdy-app-hub-addon-badge,
+    .milxdy-app-hub-addon-section-heading > span {
+      display: inline-grid;
+      min-height: 20px;
+      place-items: center;
+      border: 1px solid var(--milxdy-addon-line);
+      border-radius: 999px;
+      background: var(--milxdy-addon-surface-muted);
+      color: var(--milxdy-addon-muted);
+      padding: 2px 6px;
+      font-size: 9px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+    .milxdy-app-hub-addon-badge[data-tone="active"] { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
+    .milxdy-app-hub-addon-badge[data-tone="warning"] { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
+    .milxdy-app-hub-addon-summary { margin: 0; color: var(--milxdy-addon-muted); }
+    .milxdy-app-hub-addon-workflow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin: 0;
+      padding: 7px 0;
+      border-top: 1px solid var(--milxdy-addon-line);
+      border-bottom: 1px solid var(--milxdy-addon-line);
+      list-style: none;
+    }
+    .milxdy-app-hub-addon-workflow li {
+      position: relative;
+      display: grid;
+      min-width: 0;
+      justify-items: center;
+      gap: 1px;
+      padding: 2px 4px;
+      color: var(--milxdy-addon-muted);
+      text-align: center;
+    }
+    .milxdy-app-hub-addon-workflow li:not(:last-child)::after {
+      position: absolute;
+      top: 15px;
+      right: -3px;
+      color: var(--milxdy-addon-line-strong);
+      content: ">";
+    }
+    .milxdy-app-hub-addon-step-icon {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid var(--milxdy-addon-line-strong);
+      border-radius: 6px;
+      background: color-mix(in srgb, var(--milxdy-addon-surface-muted) 82%, var(--milxdy-addon-highlight));
+      color: var(--milxdy-addon-accent-strong);
+      box-shadow:
+        inset 1px 1px 0 color-mix(in srgb, var(--milxdy-addon-highlight) 64%, transparent),
+        inset -1px -1px 0 color-mix(in srgb, var(--milxdy-addon-line-strong) 44%, transparent);
+      font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .milxdy-app-hub-addon-workflow li[data-state="pending"] { opacity: 0.5; }
+    .milxdy-app-hub-addon-workflow li[data-state="current"] .milxdy-app-hub-addon-step-icon,
+    .milxdy-app-hub-addon-workflow li[data-state="complete"] .milxdy-app-hub-addon-step-icon { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); }
+    .milxdy-app-hub-addon-workflow li[data-state="error"] .milxdy-app-hub-addon-step-icon { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
+    .milxdy-app-hub-addon-step-number { font: 8px ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .milxdy-app-hub-addon-workflow strong { color: inherit; font-size: 9px; line-height: 1.15; }
+    .milxdy-app-hub-addon-workflow small { max-width: 100%; font-size: 8px; line-height: 1.15; overflow-wrap: anywhere; }
+    .milxdy-app-hub-addon-packages { display: grid; }
+    .milxdy-app-hub-addon-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 4px; }
+    .milxdy-app-hub-addon-section-heading > strong { color: var(--milxdy-addon-accent-strong); font-size: 10px; text-transform: uppercase; }
+    .milxdy-app-hub-addon-package-list { max-height: 94px; margin: 0; padding: 0; overflow: auto; border-top: 1px solid var(--milxdy-addon-line); list-style: none; }
+    .milxdy-app-hub-addon-package-list li,
+    .milxdy-app-hub-addon-empty {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 6px 2px;
+      border-bottom: 1px solid var(--milxdy-addon-line);
+    }
+    .milxdy-app-hub-addon-package-list li > span:last-child,
+    .milxdy-app-hub-addon-empty > span:last-child { display: grid; min-width: 0; gap: 1px; }
+    .milxdy-app-hub-addon-package-list strong,
+    .milxdy-app-hub-addon-empty strong { color: var(--milxdy-addon-text); font-size: 11px; }
+    .milxdy-app-hub-addon-package-list small,
+    .milxdy-app-hub-addon-empty small { color: var(--milxdy-addon-muted); font-size: 9px; overflow-wrap: anywhere; }
+    .milxdy-app-hub-addon-package-mark,
+    .milxdy-app-hub-addon-empty > span:first-child {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid var(--milxdy-addon-line);
+      border-radius: 6px;
+      background: var(--milxdy-addon-surface-muted);
+      color: var(--milxdy-addon-accent-strong);
+      font-weight: 800;
+    }
+    .milxdy-app-hub-addon-queue { display: grid; gap: 3px; }
+    .milxdy-app-hub-addon-queue-list { max-height: 112px; margin: 0; padding: 0; overflow: auto; border-top: 1px solid var(--milxdy-addon-line); list-style: none; }
+    .milxdy-app-hub-addon-queue-list li {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+      padding: 6px 2px;
+      border-bottom: 1px solid var(--milxdy-addon-line);
+    }
+    .milxdy-app-hub-addon-queue-list li > span:last-child { display: grid; min-width: 0; gap: 1px; }
+    .milxdy-app-hub-addon-queue-list strong { color: var(--milxdy-addon-text); font-size: 11px; }
+    .milxdy-app-hub-addon-queue-list small,
+    .milxdy-app-hub-addon-queue-empty,
+    .milxdy-app-hub-addon-queue-message { margin: 0; color: var(--milxdy-addon-muted); font-size: 9px; overflow-wrap: anywhere; }
+    .milxdy-app-hub-addon-queue-empty { padding: 5px 2px; border-top: 1px solid var(--milxdy-addon-line); }
+    .milxdy-app-hub-addon-queue-message { padding: 5px 7px; border-left: 2px solid var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); }
+    .milxdy-app-hub-addon-queue-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      place-items: center;
+      border: 1px solid var(--milxdy-addon-line);
+      border-radius: 6px;
+      background: var(--milxdy-addon-surface-muted);
+      color: var(--milxdy-addon-muted);
+      font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace;
+    }
+    .milxdy-app-hub-addon-queue-list li[data-state="accepted"] .milxdy-app-hub-addon-queue-mark { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
+    .milxdy-app-hub-addon-queue-list li[data-state="rejected"] .milxdy-app-hub-addon-queue-mark { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
+    .milxdy-app-hub-addon-notices { margin: 0; padding: 6px 8px 6px 22px; border: 1px solid var(--milxdy-addon-line); border-radius: 6px; background: var(--milxdy-addon-surface-muted); color: var(--milxdy-addon-muted); }
+    .milxdy-app-hub-addon-notices[data-tone="warning"] { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
+    .milxdy-app-hub-addon-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+    .milxdy-app-hub-addon-picker { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button,
+    .milxdy-app-hub-addon-picker-label {
+      display: grid;
+      min-height: 32px;
+      place-items: center;
+      box-sizing: border-box;
+      border: 1px solid var(--milxdy-addon-line);
+      border-radius: 6px;
+      background: var(--milxdy-addon-surface-muted);
+      color: var(--milxdy-addon-text);
+      padding: 5px 6px;
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.14);
+      cursor: pointer;
+      font-size: 9px;
+      font-weight: 800;
+      line-height: 1.2;
+      text-align: center;
+    }
+    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:first-child { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
+    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:disabled { cursor: not-allowed; opacity: 0.48; }
+    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:focus-visible,
+    .milxdy-app-hub-addon-picker-label:focus-visible,
+    .milxdy-app-hub-addon-details summary:focus-visible { outline: 2px solid var(--milxdy-addon-focus); outline-offset: 2px; }
+    .milxdy-app-hub-addon-details { display: grid; gap: 3px; padding-top: 2px; color: var(--milxdy-addon-muted); }
+    .milxdy-app-hub-addon-details summary { cursor: pointer; color: var(--milxdy-addon-accent-strong); font-size: 10px; font-weight: 700; }
+    .milxdy-app-hub-addon-details:not([open]) > :not(summary) { display: none; }
+    .milxdy-app-hub-addon-details > span { overflow-wrap: anywhere; }
+    @media (forced-colors: active) {
+      .milxdy-app-hub-addons,
+      .milxdy-app-hub-addon-step-icon,
+      .milxdy-app-hub-addon-package-mark,
+      .milxdy-app-hub-addon-queue-mark,
+      .milxdy-app-hub-addon-badge,
+      #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button,
+      .milxdy-app-hub-addon-picker-label { border-color: CanvasText; forced-color-adjust: auto; }
+      .milxdy-app-hub-addon-workflow li[data-state="current"] .milxdy-app-hub-addon-step-icon { outline: 2px solid Highlight; }
+    }
     .milxdy-app-hub-runtime span,
     .milxdy-app-hub-runtime-state {
       color: var(--milxdy-hub-muted);
@@ -4351,6 +4963,23 @@ function injectTweetScaffoldStyles(): void {
         inset 2px 2px 0 var(--milxdy-hub-border-light),
         inset -2px -2px 0 var(--milxdy-hub-border-dark),
         8px 8px 0 rgba(15, 23, 42, 0.18);
+    }
+    html[data-milxdy-x-theme="light"] .milxdy-app-hub-addons,
+    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-addons,
+    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-addons {
+      --milxdy-addon-surface: #fbfbfb;
+      --milxdy-addon-surface-muted: #e5e5e5;
+      --milxdy-addon-line: #b4b4b4;
+      --milxdy-addon-line-strong: #464a6c;
+      --milxdy-addon-highlight: #ffffff;
+      --milxdy-addon-text: #19191d;
+      --milxdy-addon-muted: rgba(0, 0, 0, 0.56);
+      --milxdy-addon-accent: #626bb2;
+      --milxdy-addon-accent-strong: #171f82;
+      --milxdy-addon-accent-soft: color-mix(in srgb, #626bb2 10%, #fbfbfb);
+      --milxdy-addon-warn: #8c6800;
+      --milxdy-addon-warn-soft: color-mix(in srgb, #f2bc21 14%, #fbfbfb);
+      --milxdy-addon-focus: #b35e7d;
     }
     html[data-milxdy-x-theme="light"] .milxdy-app-hub-card,
     html[data-milxdy-settings-theme="light"] .milxdy-app-hub-card,
