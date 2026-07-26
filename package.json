@@ -59,6 +59,7 @@
     "addons:apply": "node scripts/addons/manage-local-addons.mjs apply",
     "verify:local-addon-manager": "node scripts/verify/local-addon-manager.mjs",
     "verify:local-addon-selection": "node scripts/verify/local-addon-selection.mjs",
+    "verify:local-addon-selection-workflow": "node scripts/verify/local-addon-selection-workflow.mjs",
     "verify:url-allowlist": "node scripts/verify/url-allowlist.mjs",
     "verify:platform": "node scripts/verify/platform.mjs",
     "verify:release": "node scripts/release/verify-release-current.mjs",
