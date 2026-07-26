@@ -64,6 +64,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [App SDK](docs/APP_SDK.md)
 - [App SDK starter kit](sdk/README.md)
 - [Local Add-ons](docs/LOCAL_ADDONS.md)
+- [Add-ons Catalog source and publishing guide](docs/ADD_ONS_CATALOG.md)
 - [App platform support contract](docs/APP_PLATFORM_PRODUCTION_READINESS.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](docs/CONTRIBUTING.md)

@@ -1,0 +1,19 @@
+{
+  "$schema": "./catalog.schema.json",
+  "schemaVersion": 1,
+  "catalogStatus": "preview",
+  "sections": [
+    {
+      "id": "official",
+      "name": "Official milXdy add-ons",
+      "description": "Packages published and maintained by the milXdy project.",
+      "packages": []
+    },
+    {
+      "id": "approved-external",
+      "name": "Approved external add-ons",
+      "description": "Third-party packages that have completed the project review recorded in their catalog metadata. Approval does not make an external package an official milXdy package.",
+      "packages": []
+    }
+  ]
+}
