@@ -1,6 +1,9 @@
 import { selectionJson } from "./selection.js";
 
 const dataUrl = new URL("../data/catalog.json", import.meta.url);
+const folderDatabase = "milxdy-catalog";
+const folderStore = "directory-handles";
+const packagesFolderKey = "local-app-packages";
 
 const escapeHtml = (value) => String(value)
   .replaceAll("&", "&amp;")
@@ -24,6 +27,90 @@ const isPublishedDownload = (pkg) => {
     return false;
   }
 };
+
+function openFolderDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(folderDatabase, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore(folderStore);
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function readSavedFolder() {
+  const database = await openFolderDatabase();
+  try {
+    return await new Promise((resolve, reject) => {
+      const request = database.transaction(folderStore).objectStore(folderStore).get(packagesFolderKey);
+      request.onsuccess = () => resolve(request.result || null);
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+async function saveFolder(handle) {
+  const database = await openFolderDatabase();
+  try {
+    await new Promise((resolve, reject) => {
+      const request = database.transaction(folderStore, "readwrite").objectStore(folderStore).put(handle, packagesFolderKey);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+}
+
+function setFolderState(button, status, state, message) {
+  button.dataset.state = state;
+  status.textContent = message;
+}
+
+async function bindFolderPicker() {
+  const button = document.querySelector("#choose-packages-folder");
+  const status = document.querySelector("#packages-folder-status");
+  if (!button || !status) return;
+
+  if (!("showDirectoryPicker" in window) || !("indexedDB" in window)) {
+    button.disabled = true;
+    setFolderState(button, status, "unsupported", "Choose manually · Chromium only");
+    return;
+  }
+
+  setFolderState(button, status, "ready", "Choose local-app-packages/");
+
+  try {
+    const saved = await readSavedFolder();
+    if (saved?.name?.toLowerCase() === packagesFolderKey && typeof saved.queryPermission === "function") {
+      const permission = await saved.queryPermission({ mode: "readwrite" });
+      setFolderState(button, status, permission === "granted" ? "selected" : "saved", permission === "granted" ? "Selected: local-app-packages/" : "Saved · click to reconnect");
+    }
+  } catch {
+    // Private browsing and storage policies can block IndexedDB. The picker can
+    // still provide a useful one-session selection when clicked.
+  }
+
+  button.addEventListener("click", async () => {
+    try {
+      const handle = await window.showDirectoryPicker({ id: "milxdy-local-app-packages", mode: "readwrite" });
+      if (handle.name.toLowerCase() !== packagesFolderKey) {
+        setFolderState(button, status, "wrong-folder", `Choose local-app-packages/ · not ${handle.name}`);
+        return;
+      }
+      let saved = true;
+      try {
+        await saveFolder(handle);
+      } catch {
+        saved = false;
+      }
+      setFolderState(button, status, "selected", saved ? "Selected: local-app-packages/" : "Selected for this tab");
+    } catch (error) {
+      if (error?.name !== "AbortError") setFolderState(button, status, "error", "Folder access unavailable");
+    }
+  });
+}
 
 function downloadSelection(packages) {
   const blob = new Blob([selectionJson(packages)], { type: "application/json" });
@@ -164,6 +251,8 @@ function renderDetail(catalog) {
     ${downloadable ? '<p><button id="download-package-selection" class="download-link" type="button">Download selection file</button></p>' : ""}`;
   document.querySelector("#download-package-selection")?.addEventListener("click", () => downloadSelection([pkg]));
 }
+
+bindFolderPicker();
 
 try {
   const catalog = await loadCatalog();

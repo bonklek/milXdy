@@ -32,7 +32,11 @@ The catalog shows the supported Chromium journey without claiming that the
 site can install an add-on:
 
 1. Discover and select only records explicitly marked **Published**.
-2. Put the verified package ZIPs in the source checkout's local add-ons folder.
+2. Use the folder icon to choose the source checkout's `local-app-packages`
+   folder in supported Chromium browsers, then put the verified package ZIPs
+   there. The site remembers the directory handle when browser permissions and
+   storage policy allow it; the picker does not launch Explorer or grant access
+   without an explicit user choice.
 3. Review the declared capabilities and consent requirements, then create a new
    local build in `dist/chromium-local-apps/` with the matching milXdy release's
    documented add-on tooling.
@@ -41,8 +45,8 @@ site can install an add-on:
    card, and refresh X/Twitter tabs.
 
 No add-ons are published yet, so that journey cannot currently be started from
-the catalog. This is not a runtime package manager: the site cannot place ZIPs,
-run a build, modify the loaded extension, or reload Chrome. Local packages run
+the catalog. Selecting a folder does not download or install anything. This is
+not a runtime package manager: the site cannot run a build, modify the loaded extension, or reload Chrome. Local packages run
 as privileged extension code after composition, so review, declarations, hash
 verification, and explicit consent remain part of the security boundary.
 
