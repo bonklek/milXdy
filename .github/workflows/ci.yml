@@ -47,6 +47,9 @@ jobs:
       - name: Verify platform
         run: npm run verify:platform
 
+      - name: Verify Pages add-ons catalog
+        run: npm run verify:pages-catalog
+
       - name: Verify extension smoke
         run: npm run verify:smoke:020
 

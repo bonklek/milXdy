@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="The milXdy Add-ons Catalog. No add-ons are published yet.">
+    <title>milXdy Add-ons Catalog</title>
+    <link rel="icon" href="assets/brand/milxdy-logo-square.png">
+    <link rel="stylesheet" href="assets/styles.css">
+    <script type="module" src="assets/catalog.js"></script>
+  </head>
+  <body data-page="index">
+    <div class="app-shell">
+      <header class="site-header">
+        <a class="brand" href="./" aria-label="milXdy Add-ons Catalog home">
+          <img src="assets/brand/milxdy-logo-square-bevel.png" alt="milXdy" width="56" height="56">
+          <span><strong>Add-ons Catalog</strong><small>reviewed custom-build packages</small></span>
+        </a>
+        <a class="secondary-button repo-link" href="https://github.com/bonklek/milXdy">Source repository</a>
+      </header>
+      <nav class="tabs" aria-label="Catalog sections">
+        <a class="tab is-active" href="#packages-title">Catalog</a>
+        <a class="tab" href="#workflow-title">Build guide</a>
+        <a class="tab" href="https://github.com/bonklek/milXdy/blob/main/docs/APP_SDK.md">App SDK</a>
+      </nav>
+
+      <main>
+      <section class="hero" aria-labelledby="catalog-title">
+        <div class="panel-heading">
+          <p class="eyebrow">Public catalog</p>
+          <h1 id="catalog-title">milXdy Add-ons Catalog</h1>
+          <p class="lede">Published ZIPs become part of a new local milXdy build—not a running extension.</p>
+        </div>
+        <div class="status-banner" role="status">
+          <span class="status-dot" aria-hidden="true"></span><strong>No add-ons are published yet.</strong><span>Official and approved external inventory is empty · downloads disabled</span>
+        </div>
+      </section>
+
+      <section class="workflow" aria-labelledby="workflow-title">
+        <div class="workflow-heading">
+          <p class="eyebrow">Steps</p>
+          <h2 id="workflow-title">From catalog to Chrome</h2>
+        </div>
+        <ol class="workflow-steps" aria-label="ZIP to Chrome reload workflow">
+          <li>
+            <span class="journey-icon journey-package" aria-hidden="true"><img src="assets/brand/milxdy-logo-square.png" alt=""></span>
+            <span class="journey-number">01</span><strong>Select</strong><small>Published packages</small>
+          </li>
+          <li>
+            <span class="journey-icon journey-folder" aria-hidden="true"></span>
+            <span class="journey-number">02</span><strong>Place ZIPs</strong><code>local-app-packages/</code>
+          </li>
+          <li>
+            <span class="journey-icon journey-terminal" aria-hidden="true">&gt;_</span>
+            <span class="journey-number">03</span><strong>Rebuild</strong><code>dist/chromium-local-apps/</code>
+          </li>
+          <li>
+            <span class="journey-icon journey-reload" aria-hidden="true">↻</span>
+            <span class="journey-number">04</span><strong>Reload</strong><code>chrome://extensions</code>
+          </li>
+        </ol>
+        <p class="workflow-note"><strong>No runtime ZIP install.</strong> Review the generated plan and any extra trust acknowledgement. Keep the same loaded output folder to preserve local extension state.</p>
+      </section>
+
+      <section class="catalog-window" aria-labelledby="packages-title">
+        <div class="catalog-controls">
+          <div>
+            <p class="eyebrow">Inventory</p>
+            <h2 id="packages-title">Add-ons</h2>
+          </div>
+          <button id="download-selected" type="button" disabled>Download selection file</button>
+        </div>
+        <p id="selection-status" class="selection-status" aria-live="polite">No add-ons are published yet, so there is nothing to select.</p>
+        <div id="catalog-sections" class="catalog-sections" aria-live="polite">
+          <p>Loading catalog metadata…</p>
+        </div>
+      </section>
+      </main>
+
+      <footer>
+        <p>Catalog metadata is versioned with the milXdy source. See the <a href="https://github.com/bonklek/milXdy/blob/main/docs/ADD_ONS_CATALOG.md">catalog guide</a> and <a href="https://github.com/bonklek/milXdy/blob/main/docs/APP_SDK.md">App SDK</a>.</p>
+      </footer>
+    </div>
+  </body>
+</html>

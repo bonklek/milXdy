@@ -1,0 +1,48 @@
+name: Deploy Add-ons Catalog to Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-catalog
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Validate and deploy catalog
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify catalog metadata and disclosures
+        run: node scripts/verify/pages-catalog.mjs
+
+      - name: Build static catalog
+        run: node scripts/build/build-pages-catalog.mjs
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static catalog
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: tmp/pages-catalog-site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
