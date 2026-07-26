@@ -62,6 +62,10 @@ For the maintainer-only unpacked Chrome rebuild/reload loop, see
 [Developer QA reload loop](docs/DEVELOPER_QA_RELOAD.md). Its stable output is
 `dist/qa-chromium` and is separate from release packaging.
 
+For pre-commit QA from a dedicated implementation worktree, use the documented
+single-handoff `qa:submit`, `qa:apply-next`, and `qa:status` commands. The QA
+host applies no merges and restores its source after the one-shot QA build.
+
 Choose verification by the files and behavior touched. Most changes should run
 the nearest relevant checks instead of the whole release pipeline; for example,
 docs-only changes usually need focused link/text checks, shared TypeScript
