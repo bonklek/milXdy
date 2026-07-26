@@ -1797,7 +1797,7 @@
           "area": "sync",
           "key": "milxdy.remistats.likeAutoPoke"
         },
-        "defaultValue": false,
+        "defaultValue": true,
         "control": {
           "type": "toggle"
         },

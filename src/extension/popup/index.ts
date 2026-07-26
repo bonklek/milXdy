@@ -169,7 +169,7 @@ const bindings: Record<string, ControlBinding> = {
   "post-reading.keyPlayPause": { area: "sync", key: "keyPlayPause", kind: "string", fallback: "Ctrl+Alt+\\" },
   "remistats.enabled": { area: "sync", key: "milxdy.remistats.enabled", kind: "boolean", fallback: true },
   "remistats.showTooltips": { area: "sync", key: "showTooltips", kind: "boolean", fallback: true },
-  "remistats.likeAutoPoke": { area: "sync", key: "milxdy.remistats.likeAutoPoke", kind: "boolean", fallback: false },
+  "remistats.likeAutoPoke": { area: "sync", key: "milxdy.remistats.likeAutoPoke", kind: "boolean", fallback: true },
   "remistats.pokeAutoLike": { area: "sync", key: "milxdy.remistats.pokeAutoLike", kind: "boolean", fallback: false },
   "remistats.soundsEnabled": { area: "sync", key: "soundsEnabled", kind: "boolean", fallback: true },
   "remistats.soundVolume": { area: "sync", key: "soundVolume", kind: "number", fallback: 0.6 },

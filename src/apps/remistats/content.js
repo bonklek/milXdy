@@ -322,7 +322,7 @@ async function loadIconSettings() {
 
 async function loadPokeAutoLikeSetting() {
   const settings = await chrome.storage.sync.get({
-    'milxdy.remistats.likeAutoPoke': false,
+    'milxdy.remistats.likeAutoPoke': true,
     'milxdy.remistats.pokeAutoLike': false,
   });
   likeAutoPokeEnabled = settings['milxdy.remistats.likeAutoPoke'] === true;
