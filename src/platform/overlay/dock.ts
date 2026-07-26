@@ -849,11 +849,31 @@ function injectStyles(): void {
     }
     .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] {
       border-color: var(--milxdy-dock-active);
-      background:
-        linear-gradient(135deg, color-mix(in srgb, var(--milxdy-dock-panel) 82%, var(--milxdy-dock-active)) 0 50%, var(--milxdy-dock-panel) 50% 100%);
-      color: var(--milxdy-dock-active);
-      font-size: 29px;
-      font-weight: 400;
+      background: var(--milxdy-dock-panel);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      font-size: 0;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::before,
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      border-radius: 999px;
+      background: var(--milxdy-dock-active);
+      transform: translate(-50%, -50%);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::before {
+      width: 22px;
+      height: 5px;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::after {
+      width: 5px;
+      height: 22px;
     }
     .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"]:active {
       transform: translate(1px, 1px);
