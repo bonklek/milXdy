@@ -1896,7 +1896,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return;
     }
 
-    root.append(appHubRuntimeSummary(), localAddonManagerPanel());
+    root.append(appHubRuntimeSummary());
 
     const search = document.createElement("label");
     search.className = "milxdy-app-hub-search";

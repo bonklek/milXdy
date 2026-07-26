@@ -46,6 +46,7 @@ assert.match(runtime, /showDirectoryPicker/u);
 assert.match(runtime, /this running extension did not rebuild itself/u);
 assert.match(runtime, /choose Load unpacked/u);
 assert.match(runtime, /milxdy-app-hub-addon-workflow/u);
+assert.doesNotMatch(runtime, /root\.append\(appHubRuntimeSummary\(\), localAddonManagerPanel\(\)\)/u);
 assert.match(runtime, /milxdy-logo-square-bevel\.png/u);
 assert.match(manager, /The stable build was not replaced/u);
 assert.match(manager, /chrome:\/\/extensions/u);
