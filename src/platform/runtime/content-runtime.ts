@@ -1720,12 +1720,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       title: "Get more add-ons",
       active: false,
       onActivate: () => {
-        playAddOnsLaunchSound();
-        // Give the user-gesture cue time to finish before the newly focused
-        // tab can background this X page.
-        window.setTimeout(() => {
-          void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
-        }, 300);
+        // Create and schedule the cue while this click still has a user gesture,
+        // but let the new tab take focus before the first note lands.
+        playAddOnsLaunchSound(0.25);
+        void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
       },
     });
   }
@@ -1753,14 +1751,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
   }
 
-  function playAddOnsLaunchSound(): void {
+  function playAddOnsLaunchSound(delay = 0): void {
     if (!state.interfaceSoundsEnabled || state.interfaceSoundsVolume <= 0) return;
     try {
       const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AudioCtor) return;
       const context = new AudioCtor();
       void context.resume();
-      const now = context.currentTime;
+      const now = context.currentTime + delay;
       const master = context.createGain();
       // Ten percent below the previous cue's compensation, while preserving the
       // user's global 0–1 Interface sounds preference.
@@ -1792,7 +1790,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           oscillator.stop(start + note.release + 0.02);
         }
       }
-      window.setTimeout(() => void context.close(), 1_000);
+      window.setTimeout(() => void context.close(), Math.ceil((delay + 1) * 1_000));
     } catch {
       // Audio restrictions must never block the catalog tab.
     }
