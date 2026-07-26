@@ -30,7 +30,7 @@ const planPath = `${compositionDirectory}/build-plan.json`;
 const buildPromotionJournal = `${managerStateDirectory}/build-promotion.json`;
 const catalogPromotionJournal = `${managerStateDirectory}/catalog-promotion.json`;
 const catalogBackupDirectory = `${addOnsDirectory}/.catalog-backup`;
-const buildBackupDirectory = "dist/.chromium-local-apps-backup";
+const buildBackupDirectory = testRoot ? `${testRoot}/.stable-backup` : "dist/.chromium-local-apps-backup";
 const packageJson = await readJson("package.json", {});
 
 const supportedTrustFlags = new Set([
@@ -45,10 +45,10 @@ const unsupportedFlags = process.argv.slice(3).filter((arg) => arg.startsWith("-
 if (unsupportedFlags.length > 0) throw new Error(`Unsupported Add-on Manager flag(s): ${unsupportedFlags.join(", ")}`);
 
 await mkdir(manualPackagesDirectory, { recursive: true });
-await mkdir(catalogPackagesDirectory, { recursive: true });
 await mkdir(managerStateDirectory, { recursive: true });
 await recoverPromotion(buildPromotionJournal, stableOutputDirectory, buildBackupDirectory);
 await recoverPromotion(catalogPromotionJournal, catalogPackagesDirectory, catalogBackupDirectory);
+await mkdir(catalogPackagesDirectory, { recursive: true });
 
 if (command === "prepare") {
   await prepareSelection(managerArgs[0]?.slice("--selection=".length) || ".milxdy-selection.json");
@@ -57,9 +57,18 @@ if (command === "prepare") {
 
 if (command === "apply") {
   const lock = await readJson(selectionLockPath, null);
-  if (!lock) fail("selection-not-prepared", `No prepared selection found. Run npm run addons:prepare -- --selection=<file> first.`);
-  await verifyMaterializedSelection(lock.packages || [], catalogPackagesDirectory);
+  if (!lock) {
+    await recordFailure("validation-failed", "selection-not-prepared", null, await activeBuildIdentity());
+    fail("selection-not-prepared", `No prepared selection found. Run npm run addons:prepare -- --selection=<file> first.`);
+  }
+  try {
+    await verifyMaterializedSelection(lock.packages || [], catalogPackagesDirectory);
+  } catch (error) {
+    await recordFailure("validation-failed", error.code || "materialized-package", null, await activeBuildIdentity());
+    fail(error.code || "materialized-package", error.message);
+  }
   if (lock.packages?.some((entry) => entry.reviewTrusted !== true) && !forwardedTrustFlags.includes("--allow-local-review")) {
+    await recordFailure("validation-failed", "catalog-review-untrusted", null, await activeBuildIdentity());
     fail("catalog-review-untrusted", "Selection includes packages without a checked-in trusted catalog review. Inspect them, then pass --allow-local-review to continue.");
   }
 }
@@ -105,27 +114,43 @@ const ready = managerStatus("built", report, {
   compositionFingerprint: plan.compositionFingerprint,
 }, selectionLock);
 await writeFile(`${stagingDirectory}/local-addon-status.json`, `${JSON.stringify(ready, null, 2)}\n`);
-await promoteWithJournal({
-  journalPath: buildPromotionJournal,
-  stablePath: stableOutputDirectory,
-  stagingPath: stagingDirectory,
-  backupPath: buildBackupDirectory,
-});
+try {
+  await promoteWithJournal({
+    journalPath: buildPromotionJournal,
+    stablePath: stableOutputDirectory,
+    stagingPath: stagingDirectory,
+    backupPath: buildBackupDirectory,
+  });
+} catch (error) {
+  await recordFailure("build-failed", "promotion", report, await activeBuildIdentity());
+  throw error;
+}
 await writeManagerStatus(ready);
 printStatus(ready, "Stable local app build updated.");
 console.log("Stage 4/4 — Reload: open chrome://extensions, click Reload on the existing milXdy unpacked extension, then refresh X.");
 
 async function prepareSelection(selectionPath) {
-  const loaded = await loadSelection(
-    selectionPath,
-    "scripts/addons/catalog-policy.json",
-    "scripts/addons/trusted-catalog-reviews.json",
-  ).catch((error) => fail(error.code || "selection-read", error.message));
+  let loaded;
+  try {
+    loaded = await loadSelection(
+      selectionPath,
+      "scripts/addons/catalog-policy.json",
+      "scripts/addons/trusted-catalog-reviews.json",
+    );
+  } catch (error) {
+    await recordFailure("validation-failed", error.code || "selection-read", null, await activeBuildIdentity());
+    fail(error.code || "selection-read", error.message);
+  }
   console.log(`Stage 1/4 — Select: ${loaded.packages.length} package(s) from ${selectionPath}`);
-  await stageSelectionPackages(loaded, {
-    cacheDirectory,
-    stagingDirectory: catalogStagingDirectory,
-  }).catch((error) => fail(error.code || "download", error.message));
+  try {
+    await stageSelectionPackages(loaded, {
+      cacheDirectory,
+      stagingDirectory: catalogStagingDirectory,
+    });
+  } catch (error) {
+    await recordFailure("validation-failed", error.code || "download", null, await activeBuildIdentity());
+    fail(error.code || "download", error.message);
+  }
   console.log(`Stage 2/4 — Place ZIPs: pinned archives verified in ${catalogStagingDirectory}`);
 
   await rm(compositionDirectory, { recursive: true, force: true });
@@ -137,12 +162,17 @@ async function prepareSelection(selectionPath) {
   }
   verifySelectionAgainstReport(loaded.packages, report, catalogStagingDirectory);
   printCapabilitySummary(report);
-  await promoteWithJournal({
-    journalPath: catalogPromotionJournal,
-    stablePath: catalogPackagesDirectory,
-    stagingPath: catalogStagingDirectory,
-    backupPath: catalogBackupDirectory,
-  });
+  try {
+    await promoteWithJournal({
+      journalPath: catalogPromotionJournal,
+      stablePath: catalogPackagesDirectory,
+      stagingPath: catalogStagingDirectory,
+      backupPath: catalogBackupDirectory,
+    });
+  } catch (error) {
+    await recordFailure("validation-failed", "placement-promotion", report, await activeBuildIdentity());
+    throw error;
+  }
   const lock = {
     schemaVersion: 1,
     selectionSchemaVersion: loaded.selection.schemaVersion,
@@ -249,7 +279,11 @@ function managerStatus(state, compositionReport, identity, selectionLock) {
 async function recordFailure(state, failureClass, report, identity) {
   const status = managerStatus(state, report, identity, await readJson(selectionLockPath, null));
   status.failureClass = failureClass;
-  status.workflowStage = failureClass === "download" ? "place" : failureClass === "composition" || failureClass === "build" ? "rebuild" : "select";
+  status.workflowStage = /download|materialized|placement/u.test(failureClass)
+    ? "place"
+    : /composition|build|promotion/u.test(failureClass)
+      ? "rebuild"
+      : "select";
   status.errors = [
     ...(Array.isArray(report?.diagnostics?.errors) ? report.diagnostics.errors : []),
     ...(Array.isArray(report?.rejectedPackages) ? report.rejectedPackages.flatMap((entry) => [entry.reason, ...(entry.diagnostics || [])]) : []),
@@ -300,7 +334,6 @@ async function writeJsonAtomic(filePath, value) {
   await mkdir(path.dirname(filePath), { recursive: true });
   const temporary = `${filePath}.partial`;
   await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`);
-  await rm(filePath, { force: true });
   await rename(temporary, filePath);
 }
 

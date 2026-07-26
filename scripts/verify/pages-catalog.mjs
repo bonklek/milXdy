@@ -10,9 +10,12 @@ const requiredFiles = [
   "catalog/index.html",
   "catalog/add-ons/index.html",
   "catalog/assets/catalog.js",
+  "catalog/assets/selection.js",
   "catalog/assets/styles.css",
   "catalog/data/catalog.json",
   "catalog/data/catalog.schema.json",
+  "scripts/addons/catalog-policy.json",
+  "scripts/addons/trusted-catalog-reviews.json",
   "scripts/build/build-pages-catalog.mjs",
   "docs/ADD_ONS_CATALOG.md",
   ".github/workflows/pages-catalog.yml",
@@ -28,10 +31,18 @@ for (const file of requiredFiles) {
 }
 
 let catalog;
+let catalogPolicy;
+let trustedReviews;
 try {
   catalog = JSON.parse(contents.get("catalog/data/catalog.json") || "");
 } catch (error) {
   failures.push(`catalog/data/catalog.json is invalid JSON: ${error.message}`);
+}
+try {
+  catalogPolicy = JSON.parse(contents.get("scripts/addons/catalog-policy.json") || "");
+  trustedReviews = JSON.parse(contents.get("scripts/addons/trusted-catalog-reviews.json") || "");
+} catch (error) {
+  failures.push(`catalog trust policy JSON is invalid: ${error.message}`);
 }
 
 if (catalog) {
@@ -53,6 +64,8 @@ if (catalog) {
   }
 
   const ids = new Set();
+  const allowedDownloadHosts = new Set(catalogPolicy?.allowedDownloadHosts || []);
+  const trustedReviewKeys = new Set((trustedReviews?.reviews || []).map((entry) => [entry.id, entry.sha256, entry.reviewedBy, entry.reviewedAt].join("\n")));
   let publishedCount = 0;
   for (const section of catalog.sections || []) {
     if (!section.name || !section.description || !Array.isArray(section.packages)) {
@@ -88,12 +101,16 @@ if (catalog) {
           failures.push(`${pkg.id}: published packages require verified download metadata`);
         } else {
           try {
-            if (new URL(pkg.download.url).protocol !== "https:") failures.push(`${pkg.id}: download URL must use HTTPS`);
+            const downloadUrl = new URL(pkg.download.url);
+            if (downloadUrl.protocol !== "https:") failures.push(`${pkg.id}: download URL must use HTTPS`);
+            if (!allowedDownloadHosts.has(downloadUrl.hostname.toLowerCase())) failures.push(`${pkg.id}: download URL host is not allowed by the local catalog policy`);
           } catch {
             failures.push(`${pkg.id}: download URL is invalid`);
           }
           if (!/^[A-Za-z0-9._-]+\.zip$/.test(pkg.download.filename || "")) failures.push(`${pkg.id}: download filename must be a simple .zip filename`);
           if (!/^[a-f0-9]{64}$/.test(pkg.download.sha256 || "")) failures.push(`${pkg.id}: download sha256 must be 64 lowercase hex characters`);
+          const reviewKey = [pkg.id, pkg.download.sha256, pkg.review.reviewedBy, pkg.review.reviewedAt].join("\n");
+          if (!trustedReviewKeys.has(reviewKey)) failures.push(`${pkg.id}: published package review is not pinned in trusted-catalog-reviews.json`);
         }
       } else if (pkg.download !== null) {
         failures.push(`${pkg.id}: unpublished packages must use download: null`);
@@ -106,9 +123,9 @@ if (catalog) {
 const index = contents.get("catalog/index.html") || "";
 for (const phrase of [
   "No runtime ZIP install.",
-  "Start selected downloads",
-  "local-app-packages/",
-  "dist/chromium-local-apps/",
+  "Download selection file",
+  "npm run addons:prepare",
+  "npm run addons:apply",
 ]) {
   if (!index.includes(phrase)) failures.push(`catalog index is missing required disclosure or workflow text: ${phrase}`);
 }
@@ -125,8 +142,19 @@ const detail = contents.get("catalog/add-ons/index.html") || "";
 if (!detail.includes("addon-detail")) failures.push("detail page mount is missing");
 
 const script = contents.get("catalog/assets/catalog.js") || "";
-for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "download.sha256"]) {
+for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "selectionJson", ".milxdy-selection.json"]) {
   if (!script.includes(phrase)) failures.push(`catalog renderer is missing required behavior: ${phrase}`);
+}
+const { selectionFor } = await import(new URL("../../catalog/assets/selection.js", import.meta.url));
+const selectionFixture = selectionFor([
+  { id: "z-package", download: { url: "https://github.com/z.zip", filename: "z.zip", sha256: "z".repeat(64) }, review: { reviewedBy: "Z", reviewedAt: "2026-07-26" } },
+  { id: "a-package", download: { url: "https://github.com/a.zip", filename: "a.zip", sha256: "a".repeat(64) }, review: { reviewedBy: "A", reviewedAt: "2026-07-25" } },
+]);
+if (selectionFixture.schemaVersion !== 1 || selectionFixture.catalog.id !== "milxdy-github-catalog") failures.push("catalog selection serializer is missing stable schema/catalog identity");
+if (selectionFixture.packages.map((entry) => entry.id).join(",") !== "a-package,z-package") failures.push("catalog selection serializer must sort package IDs deterministically");
+if (selectionFixture.packages[0].review.identity !== "A" || selectionFixture.packages[0].review.date !== "2026-07-25") failures.push("catalog selection serializer must preserve review identity/date");
+if (script.includes("window.setTimeout") || script.includes("Starting ${downloads.length} browser download")) {
+  failures.push("catalog renderer must emit one selection file instead of orchestrating browser multi-downloads");
 }
 
 const workflow = contents.get(".github/workflows/pages-catalog.yml") || "";

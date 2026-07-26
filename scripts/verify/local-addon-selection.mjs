@@ -35,6 +35,8 @@ assert.throws(() => validateSelection({ ...selection, packages: [{ ...selection.
 assert.throws(() => validateSelection({ ...selection, packages: [{ ...selection.packages[0], url: "https://example.com/file.zip" }] }, policy), /allowed HTTPS/u);
 assert.throws(() => validateSelection({ ...selection, packages: [{ ...selection.packages[0], filename: "..\\evil.zip" }] }, policy), /Invalid ZIP filename/u);
 assert.throws(() => validateSelection({ ...selection, packages: [selection.packages[0], { ...selection.packages[0] }] }, policy), /Duplicate package id/u);
+assert.throws(() => validateSelection({ ...selection, catalog: { id: "verify", unexpected: true } }, policy), /Unknown catalog field/u);
+assert.throws(() => validateSelection({ ...selection, packages: [{ ...selection.packages[0], review: { identity: "reviewer", date: "2026-02-31" } }] }, policy), /Invalid review identity/u);
 
 await writeFile(`${root}/selection.json`, JSON.stringify(selection));
 await writeFile(`${root}/policy.json`, JSON.stringify(policy));

@@ -3,7 +3,7 @@ import { createReadStream, existsSync } from "node:fs";
 import { copyFile, mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-const PACKAGE_ID = /^[a-z][a-z0-9-]{1,63}$/u;
+const PACKAGE_ID = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/u;
 const FILENAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.zip$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
 

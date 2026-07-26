@@ -26,6 +26,32 @@ await writeFile(selectionPath, JSON.stringify({
   }],
 }, null, 2));
 
+const invalidSelectionPath = `${root}/invalid-selection.json`;
+await writeFile(invalidSelectionPath, JSON.stringify({
+  schemaVersion: 1,
+  packages: [{
+    id: "dev-note",
+    url: "https://example.com/dev-note.zip",
+    filename: "dev-note.zip",
+    sha256,
+    review: { identity: "invalid", date: "2026-07-26" },
+  }],
+}));
+await mkdir(`${addOnsRoot}/.state`, { recursive: true });
+await mkdir(`${addOnsRoot}/.stable-backup`, { recursive: true });
+await writeFile(`${addOnsRoot}/.stable-backup/recovered.txt`, "stable");
+await writeFile(`${addOnsRoot}/.state/build-promotion.json`, JSON.stringify({ schemaVersion: 1, state: "backed-up" }));
+await mkdir(`${addOnsRoot}/.catalog-backup`, { recursive: true });
+await writeFile(`${addOnsRoot}/.catalog-backup/recovered.zip`, "catalog");
+await writeFile(`${addOnsRoot}/.state/catalog-promotion.json`, JSON.stringify({ schemaVersion: 1, state: "backed-up" }));
+const invalidPrepare = spawn(["prepare", `--selection=${invalidSelectionPath}`]);
+assert.notEqual(invalidPrepare.status, 0);
+assert.equal(await readFile(`${addOnsRoot}/stable/recovered.txt`, "utf8"), "stable");
+assert.equal(await readFile(`${addOnsRoot}/catalog/recovered.zip`, "utf8"), "catalog");
+const invalidStatus = JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8"));
+assert.equal(invalidStatus.failureClass, "selection-url");
+assert.equal(invalidStatus.workflowStage, "select");
+
 run(["prepare", `--selection=${selectionPath}`]);
 const lock = JSON.parse(await readFile(`${addOnsRoot}/.state/selection-lock.json`, "utf8"));
 assert.equal(lock.packages.length, 1);
@@ -36,6 +62,7 @@ assert.deepEqual(await readFile(`${addOnsRoot}/catalog/dev-note.zip`), archiveBy
 const rejected = spawn(["apply", "--acknowledge-package-consent"]);
 assert.notEqual(rejected.status, 0);
 assert.match(`${rejected.stdout}\n${rejected.stderr}`, /catalog-review-untrusted/u);
+assert.equal(JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8")).failureClass, "catalog-review-untrusted");
 
 run(["apply", "--allow-local-review", "--acknowledge-package-consent"]);
 const status = JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8"));

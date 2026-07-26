@@ -1,3 +1,5 @@
+import { selectionJson } from "./selection.js";
+
 const dataUrl = new URL("../data/catalog.json", import.meta.url);
 
 const escapeHtml = (value) => String(value)
@@ -23,6 +25,18 @@ const isPublishedDownload = (pkg) => {
   }
 };
 
+function downloadSelection(packages) {
+  const blob = new Blob([selectionJson(packages)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = ".milxdy-selection.json";
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 async function loadCatalog() {
   const response = await fetch(dataUrl, { cache: "no-store" });
   if (!response.ok) throw new Error(`catalog request failed (${response.status})`);
@@ -41,7 +55,7 @@ function packageCard(pkg, section) {
       <div class="package-card-heading">
         <label class="package-check">
           <input type="checkbox" data-package-id="${escapeHtml(pkg.id)}" ${selectable ? "" : "disabled"}>
-          <span class="sr-only">Select ${escapeHtml(pkg.name)} for download</span>
+          <span class="sr-only">Add ${escapeHtml(pkg.name)} to the selection file</span>
         </label>
         <div>
           <span class="status status-${escapeHtml(pkg.availability)}">${displayStatus(pkg.availability)}</span>
@@ -86,26 +100,16 @@ function renderIndex(catalog) {
     button.disabled = count === 0;
     status.textContent = count === 0
       ? (checkboxes.length ? "Select one or more published packages." : "No published packages are available to select.")
-      : `${count} package${count === 1 ? "" : "s"} selected. Your browser may ask permission for multiple downloads.`;
+      : `${count} package${count === 1 ? "" : "s"} selected. Download one pinned selection file for the local manager.`;
   };
 
   checkboxes.forEach((input) => input.addEventListener("change", updateSelection));
   button.addEventListener("click", () => {
     const selected = checkboxes.filter((input) => input.checked);
-    const downloads = selected.map((input) => packageMap.get(input.dataset.packageId)).filter(isPublishedDownload);
-    if (!downloads.length) return updateSelection();
-    status.textContent = `Starting ${downloads.length} browser download${downloads.length === 1 ? "" : "s"}. Check your browser's download tray and warnings.`;
-    downloads.forEach((pkg, index) => {
-      window.setTimeout(() => {
-        const link = document.createElement("a");
-        link.href = pkg.download.url;
-        link.download = pkg.download.filename;
-        link.rel = "noopener noreferrer";
-        document.body.append(link);
-        link.click();
-        link.remove();
-      }, index * 250);
-    });
+    const packages = selected.map((input) => packageMap.get(input.dataset.packageId)).filter(isPublishedDownload);
+    if (!packages.length) return updateSelection();
+    downloadSelection(packages);
+    status.textContent = `Selection file created for ${packages.length} package${packages.length === 1 ? "" : "s"}. Run the local Prepare command next.`;
   });
   updateSelection();
 }
@@ -147,7 +151,7 @@ function renderDetail(catalog) {
     </dl>
     <div class="status-banner ${downloadable ? "" : "status-unavailable"}">
       ${downloadable
-        ? `<strong>Published package.</strong> Verify the SHA-256 value before using the ZIP: <code>${escapeHtml(pkg.download.sha256)}</code>`
+        ? `<strong>Published package.</strong> The generated selection pins this ZIP SHA-256: <code>${escapeHtml(pkg.download.sha256)}</code>`
         : "<strong>No download is published.</strong> This detail record cannot install, download, or imply availability without a verified HTTPS ZIP and SHA-256 value."}
     </div>
     ${detailSection("Capabilities", pkg.capabilities, "No capabilities have been claimed in the catalog record.")}
@@ -155,9 +159,10 @@ function renderDetail(catalog) {
     ${detailSection("Privacy and data use", pkg.privacy, "No privacy claims have been listed in the catalog record.")}
     <section>
       <h2>Installation model</h2>
-      <p>This package is a privileged custom-build input. Place its ZIP in <code>local-app-packages/</code>, run the reviewed local Chromium build, inspect the generated plan, and reload the unpacked build from <code>dist/chromium-local-apps/</code>. It is not installed at runtime.</p>
+      <p>This package is a privileged custom-build input. Select it in the catalog, download the generated <code>.milxdy-selection.json</code>, run <code>npm run addons:prepare -- --selection=&lt;file&gt;</code>, review the consolidated report, then run <code>npm run addons:apply</code> with the listed acknowledgements. Reload the existing unpacked build from <code>dist/chromium-local-apps/</code>. It is not installed at runtime.</p>
     </section>
-    ${downloadable ? `<p><a class="download-link" href="${escapeHtml(pkg.download.url)}" download="${escapeHtml(pkg.download.filename)}">Download verified ZIP</a></p>` : ""}`;
+    ${downloadable ? '<p><button id="download-package-selection" class="download-link" type="button">Download selection file</button></p>' : ""}`;
+  document.querySelector("#download-package-selection")?.addEventListener("click", () => downloadSelection([pkg]));
 }
 
 try {
