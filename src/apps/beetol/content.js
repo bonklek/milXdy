@@ -33,6 +33,7 @@ function mountBeetolGame(context = {}) {
     key,
     chrome.runtime.getURL(`beetol/icons/${icon}`),
   ]));
+  const CRUNCH_LOOP_URL = chrome.runtime.getURL('beetol/sounds/ticket-crunch-cell.wav');
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
@@ -72,6 +73,7 @@ function mountBeetolGame(context = {}) {
       junkFaucet: null,
     },
     huntCharges: 3,
+    crunchProgress: null,
     message: '',
     messageKind: '',
     menuSoundArmed: false,
@@ -157,6 +159,10 @@ function mountBeetolGame(context = {}) {
         </div>
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
+        <div id="beetol-crunch-progress" class="beetol-crunch-progress" hidden>
+          <div class="beetol-crunch-progress-track" aria-hidden="true"><span></span></div>
+          <span id="beetol-crunch-progress-label"></span>
+        </div>
         <div class="beetol-footer">
           <span id="beetol-message" role="status" aria-live="polite" aria-atomic="true"></span>
         </div>
@@ -178,6 +184,9 @@ function mountBeetolGame(context = {}) {
     retrySession: root.querySelector('#beetol-retry-session'),
     actions: root.querySelector('#beetol-actions'),
     crunchJunk: root.querySelector('#beetol-crunch-junk'),
+    crunchProgress: root.querySelector('#beetol-crunch-progress'),
+    crunchProgressFill: root.querySelector('#beetol-crunch-progress .beetol-crunch-progress-track > span'),
+    crunchProgressLabel: root.querySelector('#beetol-crunch-progress-label'),
     message: root.querySelector('#beetol-message'),
     refresh: root.querySelector('#beetol-refresh'),
     minimize: root.querySelector('#beetol-minimize'),
@@ -298,6 +307,55 @@ function mountBeetolGame(context = {}) {
   [TAB_ICON_URL, ...Object.values(ACTION_ICON_URLS)].forEach(preloadIcon);
 
   let audioContext = null;
+  let crunchCellPromise = null;
+
+  function crunchAudioContext() {
+    const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AudioContext) return null;
+    audioContext ||= new AudioContext();
+    return audioContext;
+  }
+
+  async function loadCrunchCell() {
+    if (!crunchCellPromise) {
+      crunchCellPromise = (async () => {
+        const context = crunchAudioContext();
+        if (!context) throw new Error('Audio unavailable.');
+        const response = await fetch(CRUNCH_LOOP_URL);
+        if (!response.ok) throw new Error('Crunch sound asset unavailable.');
+        return context.decodeAudioData(await response.arrayBuffer());
+      })().catch(error => {
+        crunchCellPromise = null;
+        throw error;
+      });
+    }
+    return crunchCellPromise;
+  }
+
+  function warmCrunchAudio() {
+    const context = crunchAudioContext();
+    context?.resume?.();
+    void loadCrunchCell().catch(() => {});
+  }
+
+  async function playCrunchCell() {
+    const context = crunchAudioContext();
+    if (!context) return;
+    try {
+      context.resume?.();
+      const cell = await loadCrunchCell();
+      if (!lifecycleActive()) return;
+      const source = context.createBufferSource();
+      const gain = context.createGain();
+      source.buffer = cell;
+      gain.gain.value = 0.78;
+      source.connect(gain);
+      gain.connect(context.destination);
+      source.start();
+    } catch {
+      // The visual progress flow must still work when the audio asset cannot play.
+    }
+  }
 
   function playTone(frequency, duration = 0.08, gain = 0.035) {
     try {
@@ -354,7 +412,11 @@ function mountBeetolGame(context = {}) {
     playDefaultActionSound();
   }
 
-  function playCrunchSound() {
+  function playCrunchSuccessSound() {
+    void playCrunchCell();
+  }
+
+  function playCrunchCompleteSound() {
     try {
       const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContext) return;
@@ -362,8 +424,10 @@ function mountBeetolGame(context = {}) {
       audioContext.resume?.();
       const start = audioContext.currentTime;
 
-      for (let i = 0; i < 7; i += 1) {
-        const duration = 0.035 + i * 0.006;
+      const munches = [620, 780, 980, 760, 1080];
+      munches.forEach((frequency, index) => {
+        const offset = index * 0.052;
+        const duration = 0.045;
         const buffer = audioContext.createBuffer(1, audioContext.sampleRate * duration, audioContext.sampleRate);
         const data = buffer.getChannelData(0);
         for (let j = 0; j < data.length; j += 1) {
@@ -373,31 +437,31 @@ function mountBeetolGame(context = {}) {
         const filter = audioContext.createBiquadFilter();
         const gain = audioContext.createGain();
         filter.type = 'bandpass';
-        filter.frequency.value = 480 + Math.random() * 780;
-        filter.Q.value = 2.8;
-        gain.gain.setValueAtTime(0.0001, start + i * 0.055);
-        gain.gain.exponentialRampToValueAtTime(0.075, start + i * 0.055 + 0.006);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + i * 0.055 + duration);
+        filter.frequency.value = frequency;
+        filter.Q.value = 2.2;
+        gain.gain.setValueAtTime(0.0001, start + offset);
+        gain.gain.exponentialRampToValueAtTime(0.2, start + offset + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + duration);
         source.buffer = buffer;
         source.connect(filter);
         filter.connect(gain);
         gain.connect(audioContext.destination);
-        source.start(start + i * 0.055);
-      }
+        source.start(start + offset);
+      });
 
-      [120, 95, 72].forEach((frequency, index) => {
+      [660, 880, 1320].forEach((frequency, index) => {
+        const offset = 0.285 + index * 0.065;
         const oscillator = audioContext.createOscillator();
         const gain = audioContext.createGain();
-        oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(frequency, start + index * 0.11);
-        oscillator.frequency.exponentialRampToValueAtTime(frequency * 0.62, start + index * 0.11 + 0.09);
-        gain.gain.setValueAtTime(0.0001, start + index * 0.11);
-        gain.gain.exponentialRampToValueAtTime(0.035, start + index * 0.11 + 0.01);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + index * 0.11 + 0.1);
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(frequency, start + offset);
+        gain.gain.setValueAtTime(0.0001, start + offset);
+        gain.gain.exponentialRampToValueAtTime(0.12, start + offset + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.105);
         oscillator.connect(gain);
         gain.connect(audioContext.destination);
-        oscillator.start(start + index * 0.11);
-        oscillator.stop(start + index * 0.11 + 0.11);
+        oscillator.start(start + offset);
+        oscillator.stop(start + offset + 0.115);
       });
     } catch {
       // Best-effort UI sound; audio may be blocked or unavailable.
@@ -697,6 +761,16 @@ function mountBeetolGame(context = {}) {
     els.actions.hidden = !state.signedIn;
     els.crunchJunk.hidden = !state.signedIn;
     els.crunchJunk.disabled = state.loading;
+    const progress = state.crunchProgress;
+    els.crunchProgress.hidden = !progress;
+    if (progress) {
+      const total = Math.max(0, Number(progress.total) || 0);
+      const processed = Math.min(total, Math.max(0, Number(progress.processed) || 0));
+      const percent = total ? Math.round((processed / total) * 100) : 0;
+      els.crunchProgressFill.style.width = `${percent}%`;
+      const active = progress.phase === 'processing' && processed < total ? ` · crunching ${processed + 1}` : '';
+      els.crunchProgressLabel.textContent = `Crunching: ${processed} / ${total}${active} — ${progress.made || 0} cube(s), ${progress.skipped || 0} skipped`;
+    }
 
     if (!state.signedIn) {
       els.user.textContent = 'Not signed in';
@@ -911,21 +985,26 @@ function mountBeetolGame(context = {}) {
 
   async function crunchJunk() {
     if (!lifecycleActive()) return;
+    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    state.crunchProgress = { runId, total: 0, processed: 0, made: 0, skipped: 0 };
+    warmCrunchAudio();
     state.loading = true;
     setMessage('Crunching all junk...');
     render();
 
-    const response = await send({ type: 'beetol:crunchJunk' });
+    const response = await send({ type: 'beetol:crunchJunk', runId });
     if (!lifecycleActive()) return;
     state.loading = false;
 
     if (response?.authRequired) {
       state.signedIn = false;
+      state.crunchProgress = null;
       setMessage('Session expired.', 'warn');
       render();
       return;
     }
     if (!response?.ok) {
+      state.crunchProgress = null;
       setMessage(response?.data?.message || response?.error || 'Crunch All Junk failed.', 'warn');
       render();
       return;
@@ -934,7 +1013,8 @@ function mountBeetolGame(context = {}) {
       state.user = response.user;
       mergeCooldowns(response.user);
     }
-    if (response.made > 0) playCrunchSound();
+    state.crunchProgress = null;
+    if (response.pairs > 0) playCrunchCompleteSound();
     const skipped = response.skipped ? ` (${response.skipped} skipped)` : '';
     setMessage(`Crunch All Junk: made ${response.made}/${response.pairs} Junk Cube(s)${skipped}.`);
     render();
@@ -968,9 +1048,24 @@ function mountBeetolGame(context = {}) {
 
   els.crunchJunk.addEventListener('click', () => {
     if (state.loading) return;
-    playActionSound();
     crunchJunk();
   });
+
+  const crunchProgressListener = message => {
+    if (message?.type !== 'beetol:crunchProgress' || message.runId !== state.crunchProgress?.runId) return;
+    state.crunchProgress = {
+      runId: message.runId,
+      total: Math.max(0, Number(message.total) || 0),
+      processed: Math.max(0, Number(message.processed) || 0),
+      made: Math.max(0, Number(message.made) || 0),
+      skipped: Math.max(0, Number(message.skipped) || 0),
+      phase: message.phase === 'processing' ? 'processing' : '',
+    };
+    if (message.phase === 'processing') playCrunchSuccessSound();
+    render();
+  };
+  chrome.runtime.onMessage.addListener(crunchProgressListener);
+  addDisposable(() => chrome.runtime.onMessage.removeListener(crunchProgressListener));
 
   function startDrag(event) {
     const button = event.target.closest('button');

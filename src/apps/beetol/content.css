@@ -614,6 +614,31 @@
   cursor: wait;
 }
 
+.beetol-crunch-progress {
+  display: grid;
+  gap: 4px;
+  margin: 6px 8px 0;
+  color: var(--beetol-muted);
+  font: 700 10px/1.15 var(--milxdy-font-ui, "Milxdy Remilia Hei", ui-monospace, monospace);
+}
+
+.beetol-crunch-progress-track {
+  height: 6px;
+  overflow: hidden;
+  border: 1px solid var(--beetol-border);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.beetol-crunch-progress-track > span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--beetol-accent-strong);
+  transition: width 120ms linear;
+}
+
 .beetol-footer {
   display: flex;
   align-items: center;
