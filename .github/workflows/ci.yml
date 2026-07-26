@@ -63,6 +63,9 @@ jobs:
       - name: Verify App SDK production contract
         run: npm run verify:app-sdk-production
 
+      - name: Verify Pages add-ons catalog
+        run: npm run verify:pages-catalog
+
       - name: Verify external Post-reading App SDK reference
         env:
           POST_READING_REPO: ${{ github.workspace }}/post-reading-sdk
