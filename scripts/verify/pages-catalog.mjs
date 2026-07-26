@@ -175,7 +175,7 @@ for (const phrase of ["milxdy-logo-square-bevel.png", "workflow-steps", "catalog
 }
 
 const styles = contents.get("catalog/assets/styles.css") || "";
-for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark", "wip-banner-scroll", "prefers-reduced-motion: reduce"]) {
+for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark", "wip-banner-scroll", "prefers-reduced-motion: reduce", 'font-family: "Milxdy Remilia Hei"', 'url("fonts/Hei.ttf")']) {
   if (!styles.includes(phrase)) failures.push(`catalog styles are missing established X-facing token or geometry: ${phrase}`);
 }
 
@@ -210,6 +210,9 @@ if (!workflow.includes("build-pages-catalog.mjs") || !workflow.includes("tmp/pag
 const buildScript = contents.get("scripts/build/build-pages-catalog.mjs") || "";
 for (const phrase of ["PAGES_ASSET_VERSION", "GITHUB_SHA", 'path.join(outputDir, "data")', 'path.join(outputDir, "assets", "styles.css")']) {
   if (!buildScript.includes(phrase)) failures.push(`Pages build is missing cache-safe migration handling: ${phrase}`);
+}
+if (!buildScript.includes('"shared", "fonts", "Hei.ttf"') || !buildScript.includes('"assets", "fonts"')) {
+  failures.push("Pages build must package the bundled Remilia Hei font for both site routes");
 }
 
 const docs = contents.get("docs/ADD_ONS_CATALOG.md") || "";

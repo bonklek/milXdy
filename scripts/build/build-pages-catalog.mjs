@@ -22,10 +22,13 @@ await cp(path.join(catalogDir, "data"), path.join(outputDir, "data"), { recursiv
 
 for (const destination of [outputDir, catalogOutputDir]) {
   const brandOutputDir = path.join(destination, "assets", "brand");
+  const fontOutputDir = path.join(destination, "assets", "fonts");
   await mkdir(brandOutputDir, { recursive: true });
+  await mkdir(fontOutputDir, { recursive: true });
   for (const filename of ["milxdy-logo-square-bevel.png", "milxdy-logo-square.png"]) {
     await cp(path.join(root, "assets", "brand", filename), path.join(brandOutputDir, filename));
   }
+  await cp(path.join(root, "assets", "shared", "fonts", "Hei.ttf"), path.join(fontOutputDir, "Hei.ttf"));
 }
 
 const assetVersion = (process.env.PAGES_ASSET_VERSION || process.env.GITHUB_SHA || "local").slice(0, 16);
