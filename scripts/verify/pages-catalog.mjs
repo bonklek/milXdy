@@ -137,6 +137,7 @@ const onboarding = contents.get("pages/index.html") || "";
 for (const phrase of [
   "milXdy · Setup and guides",
   "Install in four steps",
+  '<a class="journey-icon journey-download" href="https://github.com/bonklek/milXdy/releases/latest" aria-label="Download the latest milXdy release">',
   "Lite, Balanced, and Full",
   "Add-ons Catalog",
   'href="addons/"',
