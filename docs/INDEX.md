@@ -18,6 +18,8 @@
 - [Max profile benchmark](MAX_PROFILE_BENCHMARK.md)
 - [Troubleshooting](TROUBLESHOOTING.md)
 - [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/) — no add-ons are published yet
+- [Catalog source and publishing guide](ADD_ONS_CATALOG.md)
 - [App SDK](APP_SDK.md)
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Settings migration audit](SETTINGS_MIGRATION_AUDIT.md)

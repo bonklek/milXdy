@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://bonklek.github.io/milXdy/data/catalog.schema.json",
+  "title": "milXdy add-ons catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "catalogStatus", "sections"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 1 },
+    "catalogStatus": { "enum": ["preview", "live"] },
+    "sections": {
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/section" }
+    }
+  },
+  "$defs": {
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "description", "packages"],
+      "properties": {
+        "id": { "enum": ["official", "approved-external"] },
+        "name": { "type": "string", "minLength": 1 },
+        "description": { "type": "string", "minLength": 1 },
+        "packages": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/package" }
+        }
+      }
+    },
+    "package": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "summary", "availability", "publisher", "review", "capabilities", "privacy", "permissions", "download"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+        "name": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "availability": { "enum": ["planned", "under-review", "published"] },
+        "publisher": { "type": "string", "minLength": 1 },
+        "sourceUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "documentationUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status"],
+          "properties": {
+            "status": { "enum": ["not-started", "in-progress", "approved"] },
+            "reviewedBy": { "type": "string", "minLength": 1 },
+            "reviewedAt": { "type": "string", "format": "date" },
+            "notes": { "type": "string", "minLength": 1 }
+          }
+        },
+        "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "privacy": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "permissions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "download": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["url", "filename", "sha256"],
+              "properties": {
+                "url": { "type": "string", "format": "uri", "pattern": "^https://" },
+                "filename": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.zip$" },
+                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+              }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "review": { "properties": { "status": { "const": "approved" } } } }
+          },
+          "then": {
+            "properties": { "review": { "required": ["status", "reviewedBy", "reviewedAt"] } }
+          }
+        },
+        {
+          "if": { "properties": { "availability": { "const": "published" } } },
+          "then": {
+            "required": ["sourceUrl"],
+            "properties": {
+              "review": { "properties": { "status": { "const": "approved" } } },
+              "download": { "type": "object" }
+            }
+          },
+          "else": { "properties": { "download": { "type": "null" } } }
+        }
+      ]
+    }
+  }
+}
