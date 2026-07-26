@@ -23,6 +23,8 @@ declared App SDK contract.
   responsive overlay primitives used by the docked starter.
 - `UI.md`, `ACCESSIBILITY.md`, and `ASSETS_AND_LICENSING.md`: the author-facing
   UI, interaction, review, and redistribution baseline.
+- [`AI_AUTHORING.md`](AI_AUTHORING.md): a reusable prompt that keeps AI-assisted
+  package drafts inside the public SDK, disclosure, consent, and review contract.
 - `../docs/local-app-package.schema.json`: JSON Schema for
   `milxdy.app.json` authoring.
 - `../docs/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.

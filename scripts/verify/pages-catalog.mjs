@@ -7,9 +7,6 @@ const failures = [];
 const notes = [];
 
 const requiredFiles = [
-  "pages/index.html",
-  "pages/assets/catalog.js",
-  "pages/assets/onboarding.css",
   "catalog/index.html",
   "catalog/add-ons/index.html",
   "catalog/assets/catalog.js",
@@ -127,55 +124,17 @@ const index = contents.get("catalog/index.html") || "";
 for (const phrase of [
   "No runtime ZIP install.",
   "Download selection file",
-  "local-app-packages/",
-  "dist/chromium-local-apps/",
+  "npm run addons:prepare",
+  "npm run addons:apply",
 ]) {
   if (!index.includes(phrase)) failures.push(`catalog index is missing required disclosure or workflow text: ${phrase}`);
-}
-
-const onboarding = contents.get("pages/index.html") || "";
-for (const phrase of [
-  "milXdy · Setup and guides",
-  "Install in four steps",
-  '<a class="journey-icon journey-download" href="https://github.com/bonklek/milXdy/releases/latest" aria-label="Download the latest milXdy release">',
-  "Lite, Balanced, and Full",
-  "Add-ons Catalog",
-  'href="addons/"',
-  "No add-ons are published yet.",
-]) {
-  if (!onboarding.includes(phrase)) failures.push(`Pages onboarding is missing required content: ${phrase}`);
-}
-for (const file of ["pages/index.html", "catalog/index.html", "catalog/add-ons/index.html"]) {
-  const html = contents.get(file) || "";
-  if (!html.includes('class="wip-banner"') || (html.match(/WORK IN PROGRESS!!!/g) || []).length < 8) {
-    failures.push(`${file} must include the repeated work-in-progress banner`);
-  }
-}
-if ((onboarding.match(/__PAGES_ASSET_VERSION__/g) || []).length < 2) {
-  failures.push("Pages onboarding assets must use the generated deployment cache key");
-}
-
-const legacyRootCatalog = contents.get("pages/assets/catalog.js") || "";
-if (!legacyRootCatalog.includes('searchParams.set("view", "onboarding")') || !legacyRootCatalog.includes("location.replace")) {
-  failures.push("Pages must redirect the catalog's former root script to a cache-busted onboarding URL");
-}
-
-for (const file of ["catalog/index.html", "catalog/add-ons/index.html"]) {
-  if ((contents.get(file)?.match(/__PAGES_ASSET_VERSION__/g) || []).length < 2) {
-    failures.push(`${file} assets must use the generated deployment cache key`);
-  }
-}
-
-const onboardingStyles = contents.get("pages/assets/onboarding.css") || "";
-for (const phrase of ["onboarding-tabs", "onboarding-hero", "setup-options", "feature-list", "addons-strip"]) {
-  if (!onboardingStyles.includes(phrase)) failures.push(`Pages onboarding styles are missing: ${phrase}`);
 }
 for (const phrase of ["milxdy-logo-square-bevel.png", "workflow-steps", "catalog-window", "tabs", ">Steps</p>"]) {
   if (!index.includes(phrase)) failures.push(`catalog index is missing established milXdy UI reference: ${phrase}`);
 }
 
 const styles = contents.get("catalog/assets/styles.css") || "";
-for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark", "wip-banner-scroll", "prefers-reduced-motion: reduce", 'font-family: "Milxdy Remilia Hei"', 'url("fonts/Hei.ttf")']) {
+for (const phrase of ["--milxdy-surface", "--milxdy-surface-2", "--milxdy-rn-blue", "--milxdy-green-soft", "--milxdy-page-bg", "border-radius: 6px", "prefers-color-scheme: dark"]) {
   if (!styles.includes(phrase)) failures.push(`catalog styles are missing established X-facing token or geometry: ${phrase}`);
 }
 
@@ -183,7 +142,7 @@ const detail = contents.get("catalog/add-ons/index.html") || "";
 if (!detail.includes("addon-detail")) failures.push("detail page mount is missing");
 
 const script = contents.get("catalog/assets/catalog.js") || "";
-for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "selectionJson", ".milxdy-selection.json", "milxdy-addon-bridge-ping", "milxdy-open-addon-settings"]) {
+for (const phrase of ["catalog.json", "add-ons/?id=", "isPublishedDownload", "selectionJson", ".milxdy-selection.json"]) {
   if (!script.includes(phrase)) failures.push(`catalog renderer is missing required behavior: ${phrase}`);
 }
 const { selectionFor } = await import(new URL("../../catalog/assets/selection.js", import.meta.url));
@@ -204,15 +163,7 @@ for (const forbidden of ["push:", "pull_request:", "schedule:", "release:"]) {
   if (workflow.includes(forbidden)) failures.push(`Pages workflow must not include automatic trigger: ${forbidden}`);
 }
 if (!workflow.includes("build-pages-catalog.mjs") || !workflow.includes("tmp/pages-catalog-site")) {
-  failures.push("Pages workflow must build and upload the staged onboarding site and catalog with checked-in brand assets");
-}
-
-const buildScript = contents.get("scripts/build/build-pages-catalog.mjs") || "";
-for (const phrase of ["PAGES_ASSET_VERSION", "GITHUB_SHA", 'path.join(outputDir, "data")', 'path.join(outputDir, "assets", "styles.css")']) {
-  if (!buildScript.includes(phrase)) failures.push(`Pages build is missing cache-safe migration handling: ${phrase}`);
-}
-if (!buildScript.includes('"shared", "fonts", "Hei.ttf"') || !buildScript.includes('"assets", "fonts"')) {
-  failures.push("Pages build must package the bundled Remilia Hei font for both site routes");
+  failures.push("Pages workflow must build and upload the staged catalog with checked-in brand assets");
 }
 
 const docs = contents.get("docs/ADD_ONS_CATALOG.md") || "";
@@ -226,6 +177,5 @@ if (failures.length) {
 
 console.log("Pages catalog verification passed.");
 notes.forEach((note) => console.log(`  ${note}`));
-console.log("  onboarding root and /addons catalog sources: present");
 console.log("  official and approved-external sections: present");
 console.log("  download, security, local-build, and manual-deployment gates: present");

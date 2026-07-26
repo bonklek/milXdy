@@ -129,7 +129,8 @@ export class SpeechController {
 
   jumpToCharIndex(charIndex: number): void {
     if (!this.state.text) return;
-    this.restartFrom(this.state.text, this.state.title || "Post-reading", charIndex, false, true);
+    const wasPaused = this.state.status === "paused";
+    this.restartFrom(this.state.text, this.state.title || "Post-reading", charIndex, wasPaused, true);
   }
 
   previousChunk(): void {
