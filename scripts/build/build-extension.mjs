@@ -24,6 +24,7 @@ const nonWebAccessibleAssetDirs = new Set(userDownloadAssetDirs);
 const outDir = localAppPlan?.outputDir ?? (buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`);
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
+const localAddonBuildId = localAppPlan?.buildId ?? `standard-${target}-${buildProfile}-${extensionVersion}`;
 const registryApps = localAppPlan?.apps ?? JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const firstPartyApps = registryApps;
 const sourceBuiltApps = firstPartyApps.filter((app) => app.entryName && app.entryPoint);
@@ -99,6 +100,7 @@ const common = {
     MILXDY_BUILD_PROFILE: JSON.stringify(buildProfile),
     MILXDY_BUILD_TARGET: JSON.stringify(target),
     MILXDY_VERSION: JSON.stringify(extensionVersion),
+    MILXDY_LOCAL_ADDON_BUILD_ID: JSON.stringify(localAddonBuildId),
   },
   plugins: [profileRegistryPlugin()],
 };
@@ -182,6 +184,12 @@ function validateLocalAppPlan(plan) {
     throw new Error("Local app plan is missing a safe output directory.");
   }
   plan.outputDir = assertSafeGeneratedOutputDir(plan.outputDir, "Local app plan outputDir");
+  if (typeof plan.buildId !== "string" || !/^[a-f0-9]{24}$/u.test(plan.buildId)) {
+    throw new Error("Local app plan is missing a valid build identity.");
+  }
+  if (typeof plan.compositionFingerprint !== "string" || !/^[a-f0-9]{64}$/u.test(plan.compositionFingerprint)) {
+    throw new Error("Local app plan is missing a valid composition fingerprint.");
+  }
   if (!Array.isArray(plan.diagnostics)) {
     throw new Error("Local app plan is missing composer diagnostics and trust decisions.");
   }
@@ -589,6 +597,7 @@ async function copyLocalPackageAssets() {
     schemaVersion: localAppPlan.schemaVersion,
     composer: localAppPlan.composer,
     sdkVersion: localAppPlan.sdkVersion,
+    compositionFingerprint: localAppPlan.compositionFingerprint,
     selectedPackageIds: localAppPlan.selectedPackageIds,
     packageSources: localAppPlan.packageSources,
     diagnostics: localAppPlan.diagnostics,
@@ -684,6 +693,19 @@ if (watch) {
 }
 
 if (!watch) {
+  await writeFile(`${outDir}/local-addon-status.json`, `${JSON.stringify({
+    schemaVersion: 1,
+    mode: localAppPlan ? "custom-composition" : "standard",
+    state: "built",
+    buildId: localAddonBuildId,
+    compositionFingerprint: localAppPlan?.compositionFingerprint,
+    extensionVersion,
+    packages: (localAppPlan?.diagnostics || []).map((entry) => ({
+      id: entry.packageId,
+      reviewStatus: entry.trust?.reviewStatus || "unknown",
+      packageSha256: entry.packageSha256 || "",
+    })),
+  }, null, 2)}\n`);
   const required = [
     `${outDir}/content.js`,
     `${outDir}/wikiFrame.js`,

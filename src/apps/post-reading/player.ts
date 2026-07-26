@@ -109,13 +109,13 @@ export class MiniPlayer {
     this.controls = controls;
 
     const prev = controlButton("Previous post", "prev", actions.onPrevious);
-    const prevChunk = controlButton("Previous paragraph", "prevChunk", actions.onPreviousChunk);
+    const prevChunk = controlButton("Previous line", "prevChunk", actions.onPreviousChunk);
     this.playButton = controlButton("Play or pause", "play", () => {
       const nextIsSpeaking = this.lastSpeechStatus !== "speaking";
       this.setPlayButtonIcon(nextIsSpeaking);
       actions.onPauseResume();
     });
-    const nextChunk = controlButton("Next paragraph", "nextChunk", actions.onNextChunk);
+    const nextChunk = controlButton("Next line", "nextChunk", actions.onNextChunk);
     const next = controlButton("Next post", "next", actions.onNext);
     this.skipOcrButton = document.createElement("button");
     this.skipOcrButton.type = "button";
@@ -599,8 +599,8 @@ export class MiniPlayer {
     const expand = checkbox('Expand "Show more"', this.settings.expandShowMore, (checked) => this.update({ expandShowMore: checked }));
     const keyNextTweet = keybindInput("Next post", this.settings.keyNextTweet, (value) => this.update({ keyNextTweet: value }));
     const keyPreviousTweet = keybindInput("Previous post", this.settings.keyPreviousTweet, (value) => this.update({ keyPreviousTweet: value }));
-    const keyNextChunk = keybindInput("Next paragraph", this.settings.keyNextChunk, (value) => this.update({ keyNextChunk: value }));
-    const keyPreviousChunk = keybindInput("Previous paragraph", this.settings.keyPreviousChunk, (value) => this.update({ keyPreviousChunk: value }));
+    const keyNextChunk = keybindInput("Next line", this.settings.keyNextChunk, (value) => this.update({ keyNextChunk: value }));
+    const keyPreviousChunk = keybindInput("Previous line", this.settings.keyPreviousChunk, (value) => this.update({ keyPreviousChunk: value }));
     const keySkipOcr = keybindInput("Skip OCR", this.settings.keySkipOcr, (value) => this.update({ keySkipOcr: value }));
     const keyPlayPause = keybindInput("Play / pause", this.settings.keyPlayPause, (value) => this.update({ keyPlayPause: value }));
     const body = this.settingsBody;

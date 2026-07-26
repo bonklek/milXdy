@@ -267,8 +267,8 @@ export function splitSpeechText(text: string, absoluteOffset = 0): SpeechChunk[]
   if (!normalized) return [];
   const leadingTrim = text.search(/\S/);
   const baseOffset = absoluteOffset + (leadingTrim >= 0 ? leadingTrim : 0);
-  const maxChunkLength = 220;
-  const minBoundaryLength = 80;
+  const maxChunkLength = 1200;
+  const minBoundaryLength = 650;
   if (normalized.length <= maxChunkLength) return [{ text: normalized, offset: baseOffset }];
 
   const chunks: SpeechChunk[] = [];
