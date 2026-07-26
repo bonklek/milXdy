@@ -66,6 +66,7 @@ try {
   const manifest = JSON.parse(await readFile(resolve(qaOutput, "manifest.json"), "utf8"));
   const background = await readFile(resolve(qaOutput, "background.js"), "utf8");
   const qaBackground = await readFile(resolve(qaOutput, "qa-background.js"), "utf8");
+  const qaPopup = await readFile(resolve(qaOutput, "qa-popup.js"), "utf8");
   const popup = await readFile(resolve(qaOutput, "popup.html"), "utf8");
   assert.equal(provenance.channel, "developer-qa");
   assert.match(provenance.buildId, /^[0-9TZ]+-[a-f0-9]{8}-[a-f0-9]{12}$/u);
@@ -74,10 +75,18 @@ try {
   assert.match(provenance.extensionId || "", /^[a-p]{32}$/u);
   assert.match(background, /^importScripts\("qa-background\.js"\);/u);
   assert.match(qaBackground, /milxdy\.qa\.reloadGuard/u);
+  assert.match(qaPopup, /Last reload:/u);
   assert.match(popup, /id="milxdyQaBuild"/u);
   assert.match(popup, /src="qa-popup\.js"/u);
 } finally {
   await rm(qaOutput, { recursive: true, force: true });
 }
+
+const productionManifest = await readFile("assets/extension/manifest.json", "utf8");
+const productionPopup = await readFile("assets/extension/popup/popup.html", "utf8");
+const productionBuilder = await readFile("scripts/build/build-extension.mjs", "utf8");
+assert.doesNotMatch(productionManifest, /milXdy QA|qa-build\.json/u, "production manifest must not carry QA identity");
+assert.doesNotMatch(productionPopup, /milxdyQaBuild|DEVELOPER QA BUILD/u, "production popup must not carry QA controls");
+assert.doesNotMatch(productionBuilder, /injectQaRuntime|qa-popup\.js/u, "production builder must not inject QA runtime files");
 
 console.log("QA reload tool verification passed.");

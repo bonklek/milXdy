@@ -3,6 +3,7 @@
   const REQUEST_KEY = "milxdy.qa.reloadRequest";
   const RESULT_KEY = "milxdy.qa.lastReloadResult";
   const RELOAD_GUARD_KEY = "milxdy.qa.reloadGuard";
+  let elapsedTimer = null;
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", () => void renderQaPanel(), { once: true });
@@ -30,7 +31,12 @@
     const stored = await chrome.storage.local.get(RESULT_KEY).catch(() => ({}));
     const last = stored[RESULT_KEY];
     if (runningBuild && last?.buildId === runningBuild.buildId) {
-      status.textContent = `Last reload refreshed ${last.refreshedTabs} X/Twitter tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}.`;
+      const renderLastReload = () => {
+        status.textContent = `Last reload: ${formatElapsed(last.completedAt)} ago · refreshed ${last.refreshedTabs} X/Twitter tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}.`;
+      };
+      renderLastReload();
+      if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
+      elapsedTimer = window.setInterval(renderLastReload, 1_000);
     } else {
       status.textContent = buildIsCurrent
         ? "Watcher automation is connected when qa:watch is running."
@@ -51,6 +57,18 @@
       });
       window.setTimeout(() => chrome.runtime.reload(), 150);
     });
+  }
+
+  function formatElapsed(value) {
+    const elapsedMs = Date.now() - Date.parse(String(value || ""));
+    if (!Number.isFinite(elapsedMs) || elapsedMs < 0) return "unknown";
+    const seconds = Math.floor(elapsedMs / 1_000);
+    if (seconds < 10) return "just now";
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m`;
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ${minutes % 60}m`;
   }
 
   async function readDiskBuild() {
