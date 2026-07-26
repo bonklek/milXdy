@@ -1721,7 +1721,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       active: false,
       onActivate: () => {
         playAddOnsLaunchSound();
-        void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
+        // Give the user-gesture audio context one render quantum before the
+        // newly focused tab can background this X page.
+        window.setTimeout(() => {
+          void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
+        }, 120);
       },
     });
   }
