@@ -9,7 +9,12 @@ milXdy has several docs that intentionally overlap at the edges. Keep each doc f
 - `docs/RELEASE_NOTES_*.md`: detailed shipped scope for one release.
 - `docs/RELEASES.md`: reproducible build mechanics, archive expectations, and GitHub release policy.
 - `docs/USER_GUIDE.md` and `docs/user-guides/*`: user-facing behavior for shipped features.
-- `docs/APP_SDK.md`: app/platform developer contract and future app-package shape.
+- `docs/APP_SDK_OVERVIEW.md`: short public SDK front door organized by reader goal.
+- `docs/LOCAL_ADDONS.md`: canonical install, validation, rebuild, status, and reload procedure.
+- `sdk/README.md`: canonical first-package tutorial and starter-kit entry point.
+- `docs/APP_SDK.md`: manifest, lifecycle, runtime, and composition reference.
+- `docs/APP_PLATFORM_PRODUCTION_READINESS.md`: distribution, security, support, compatibility, and versioning contract.
+- `docs/ADD_ONS_CATALOG.md`: catalog inventory and publication maintenance.
 - GitHub Issues: concrete bugs, enhancements, and contributor tasks.
 - GitHub Milestones: target-version grouping for issues.
 - GitHub Projects: triage/status board for issues.

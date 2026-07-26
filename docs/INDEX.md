@@ -1,7 +1,14 @@
 # milXdy Docs
 
+## Start Here
+
 - [Install and update](INSTALL_AND_UPDATE.md)
 - [User guide](USER_GUIDE.md)
+- [Troubleshooting](TROUBLESHOOTING.md)
+- [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
+
+## App And Feature Guides
+
 - [Apps & Features and side rail guide](user-guides/apps-hub-and-side-rail.md)
 - [Link Browser guide](user-guides/link-browser.md)
 - [Root Visual Enhancements guide](user-guides/root-visual-enhancements.md)
@@ -17,20 +24,29 @@
 - [Miladychan Portal guide](user-guides/miladychan-portal.md)
 - [Music guide](user-guides/music.md)
 - [Max profile benchmark](MAX_PROFILE_BENCHMARK.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
-- [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md)
-- [App SDK](APP_SDK.md)
-- [Local Add-ons](LOCAL_ADDONS.md)
-- [Add-ons Catalog source and publishing guide](ADD_ONS_CATALOG.md)
+
+## App SDK
+
+- [App SDK overview](APP_SDK_OVERVIEW.md)
+- [Use Local Add-ons](LOCAL_ADDONS.md)
+- [Build an add-on](../sdk/README.md)
+- [App SDK reference](APP_SDK.md)
+- [App platform support contract](APP_PLATFORM_PRODUCTION_READINESS.md)
 - [App SDK compatibility policy](APP_SDK_COMPATIBILITY.md)
 - [Post-reading App SDK reference](POST_READING_SDK_REFERENCE.md)
-- [App platform support contract](APP_PLATFORM_PRODUCTION_READINESS.md)
+
+## Contributors And Maintainers
+
+- [Add-ons Catalog source and publishing guide](ADD_ONS_CATALOG.md)
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Localization scope and contributions](LOCALIZATION.md)
 - [Roadmap](ROADMAP.md)
 - [Documentation maintenance](DOCS_MAINTENANCE.md)
 - [Contributing](CONTRIBUTING.md)
 - [Firefox and Waterfox](FIREFOX_QA.md)
+
+## Release Notes
+
 - [0.2.3 release notes](RELEASE_NOTES_0.2.3.md)
 - [0.2.2 release notes](RELEASE_NOTES_0.2.2.md)
 - [0.2.1 release notes](RELEASE_NOTES_0.2.1.md)
