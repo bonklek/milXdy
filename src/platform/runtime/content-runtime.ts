@@ -78,13 +78,23 @@ type LocalAddonStatus = {
 type OpenAppsFeaturesMessage = {
   type: "milxdy:open-apps-features";
   section?: "local-addons";
+  appId?: string;
 };
 
 function isOpenAppsFeaturesMessage(value: unknown): value is OpenAppsFeaturesMessage {
   if (!value || typeof value !== "object") return false;
-  const message = value as { type?: unknown; section?: unknown };
+  const message = value as { type?: unknown; section?: unknown; appId?: unknown };
   return message.type === "milxdy:open-apps-features"
-    && (message.section === undefined || message.section === "local-addons");
+    && (message.section === undefined || message.section === "local-addons")
+    && (message.appId === undefined || typeof message.appId === "string");
+}
+
+function normalizedStringSet(value: unknown): Set<string> {
+  return new Set(
+    Array.isArray(value)
+      ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
+      : [],
+  );
 }
 
 type RuntimeState = {
@@ -117,6 +127,7 @@ type RuntimeState = {
   localAddonStatusLoading: boolean;
   localAddonQueue: LocalAddonQueueItem[];
   localAddonQueueMessage: string;
+  localAddonPendingRemovals: Set<string>;
   hubAppDrag: {
     appId: MilxdyAppId;
     pointerId: number;
@@ -173,6 +184,7 @@ const TWEET_SCAFFOLD_STYLE_ID = "milxdy-tweet-scaffold-style";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
 const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
 const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
+const PENDING_LOCAL_ADDON_REMOVALS_KEY = "milxdy.localAddons.pendingRemovals";
 const HUB_PANEL_ID = "milxdy-app-hub-panel";
 
 type IdleTask = {
@@ -296,6 +308,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     localAddonStatusLoading: false,
     localAddonQueue: [],
     localAddonQueueMessage: "",
+    localAddonPendingRemovals: new Set(),
     hubAppDrag: null,
     iconTheme: currentAppIconTheme(),
     firstRunPending: false,
@@ -415,6 +428,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeRailPins();
     observePerformanceMode();
     observeHubGeneratedSettings();
+    observeLocalAddonRemovals();
     observeAppIconTheme();
     scheduleIdlePreloads();
     maybeOpenFirstRunHub();
@@ -744,6 +758,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (area !== "local" && area !== "sync") return;
       const keys = tracked.get(area);
       if (!keys || !Object.keys(changes).some((key) => keys.has(key))) return;
+      renderHubPanel();
+    };
+    chrome.storage.onChanged.addListener(listener);
+    state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
+  }
+
+  function observeLocalAddonRemovals(): void {
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area !== "local" || !changes[PENDING_LOCAL_ADDON_REMOVALS_KEY]) return;
+      state.localAddonPendingRemovals = normalizedStringSet(changes[PENDING_LOCAL_ADDON_REMOVALS_KEY].newValue);
       renderHubPanel();
     };
     chrome.storage.onChanged.addListener(listener);
@@ -1716,11 +1740,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     ): void => {
       if (!isOpenAppsFeaturesMessage(message)) return;
       openHubPanel();
-      if (message.section === "local-addons") {
+      if (message.section === "local-addons" || message.appId) {
         requestAnimationFrame(() => {
-          const addOns = document.getElementById("milxdy-local-addons");
-          addOns?.scrollIntoView({ behavior: "smooth", block: "start" });
-          addOns?.focus({ preventScroll: true });
+          const target = message.appId
+            ? Array.from(document.querySelectorAll<HTMLElement>("[data-hub-app-id]"))
+              .find((card) => card.dataset.hubAppId === message.appId) ?? null
+            : document.getElementById("milxdy-local-addons");
+          target?.scrollIntoView({ behavior: "smooth", block: "start" });
+          target?.focus({ preventScroll: true });
         });
       }
       sendResponse({ ok: true });
@@ -2009,9 +2036,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.localAddonStatusLoading = true;
     renderHubPanel();
     try {
-      const response = await safeRuntimeMessage({ type: "milxdy:getLocalAddonStatus" }) as Record<string, unknown> | undefined;
+      const [response, stored] = await Promise.all([
+        safeRuntimeMessage({ type: "milxdy:getLocalAddonStatus" }) as Promise<Record<string, unknown> | undefined>,
+        safeLocalGet({ [PENDING_LOCAL_ADDON_REMOVALS_KEY]: [] }),
+      ]);
       const candidate = response?.ok === true ? response.status : null;
       state.localAddonStatus = isLocalAddonStatus(candidate) ? candidate : null;
+      state.localAddonPendingRemovals = normalizedStringSet(stored?.[PENDING_LOCAL_ADDON_REMOVALS_KEY]);
     } finally {
       state.localAddonStatusLoading = false;
       renderHubPanel();
@@ -2028,7 +2059,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   async function stageQueuedAddonsForLocalBuilder(): Promise<void> {
     const accepted = state.localAddonQueue.filter((entry) => entry.state === "accepted");
-    if (!accepted.length) return;
+    const pendingRemovals = Array.from(state.localAddonPendingRemovals).sort();
+    if (!accepted.length && !pendingRemovals.length) return;
+    if (!accepted.length) {
+      try {
+        await navigator.clipboard.writeText("npm run addons:rebuild");
+      } catch {
+        // The visible message retains the exact command.
+      }
+      state.localAddonQueueMessage = `Remove the package ZIP${pendingRemovals.length === 1 ? "" : "s"} for ${pendingRemovals.join(", ")} from local-addons/manual or local-addons/catalog, then run npm run addons:rebuild. The running extension cannot delete checkout files by itself.`;
+      renderHubPanel();
+      return;
+    }
     const directoryPicker = (window as typeof window & {
       showDirectoryPicker?: (options?: { mode?: "read" | "readwrite" }) => Promise<{
         getFileHandle(name: string, options: { create: boolean }): Promise<{
@@ -2055,7 +2097,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       } catch {
         // The visible status retains the exact command when clipboard access is unavailable.
       }
-      state.localAddonQueueMessage = `${accepted.length} ZIP${accepted.length === 1 ? "" : "s"} placed. Run npm run addons:rebuild in the milXdy checkout. The local builder creates dist/chromium-local-apps; this running extension did not rebuild itself.`;
+      const removalNote = pendingRemovals.length
+        ? ` Remove the package ZIP${pendingRemovals.length === 1 ? "" : "s"} for ${pendingRemovals.join(", ")} before running the command.`
+        : "";
+      state.localAddonQueueMessage = `${accepted.length} ZIP${accepted.length === 1 ? "" : "s"} placed.${removalNote} Run npm run addons:rebuild in the milXdy checkout. The local builder creates dist/chromium-local-apps; this running extension did not rebuild itself.`;
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") {
         state.localAddonQueueMessage = "Folder selection canceled. The queued ZIPs remain available in this panel.";
@@ -2316,7 +2361,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const rebuild = document.createElement("button");
     rebuild.type = "button";
     rebuild.textContent = "Rebuild custom extension";
-    rebuild.disabled = !state.localAddonQueue.some((entry) => entry.state === "accepted");
+    rebuild.disabled = !state.localAddonQueue.some((entry) => entry.state === "accepted")
+      && state.localAddonPendingRemovals.size === 0;
     rebuild.addEventListener("click", () => void stageQueuedAddonsForLocalBuilder());
     const refresh = document.createElement("button");
     refresh.type = "button";

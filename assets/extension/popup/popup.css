@@ -172,7 +172,7 @@ p {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 10px;
 }
@@ -211,6 +211,86 @@ p {
 
 .tab.is-active small {
   color: var(--active-muted);
+}
+
+.installed-addons {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.installed-addon {
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 1px 0 var(--shadow-subtle);
+}
+
+.installed-addon[data-pending-removal="true"] {
+  border-color: var(--accent);
+  opacity: 0.78;
+}
+
+.installed-addon-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px;
+}
+
+.installed-addon-summary > div:first-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.installed-addon-summary strong,
+.installed-addon-summary small {
+  overflow-wrap: anywhere;
+}
+
+.installed-addon-summary small {
+  color: var(--muted);
+}
+
+.installed-addon-actions,
+.installed-addon-build-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.installed-addon-actions .secondary-button {
+  min-height: 30px;
+  padding: 6px 8px;
+}
+
+.installed-addon-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.installed-addon-settings {
+  display: grid;
+  gap: 8px;
+  padding: 0 9px 9px;
+  border-top: 1px solid var(--line);
+}
+
+.installed-addon-settings[hidden] {
+  display: none;
+}
+
+.installed-addon-settings > .setting-group,
+.installed-addon-settings > .settings-list {
+  margin-top: 8px;
+}
+
+.installed-addon-build-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
 }
 
 .tab:focus-visible,
