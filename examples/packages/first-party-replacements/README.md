@@ -1,6 +1,7 @@
 # Local App Package Pilots
 
-These fixtures are first-party package-shape pilots from `docs/APP_SDK.md`.
+These fixtures exercise the low-level first-party replacement and trust policy
+documented in `docs/APP_SDK.md`.
 They intentionally shadow built-in app IDs so registry compatibility and
 replacement review gates stay covered.
 
@@ -61,8 +62,7 @@ The generated artifacts live under `tmp/local-app-composition/`:
 - `manifest-permissions.generated.json`
 - `web-accessible-assets.generated.json`
 
-To produce the first local Chromium custom extension build from the generated
-plan:
+To exercise the direct author-level Chromium builder against these fixtures:
 
 ```powershell
 pnpm.cmd run build:local-apps:chromium -- --allow-local-review --acknowledge-package-consent --acknowledge-first-party-replacement
@@ -91,5 +91,11 @@ URL access, unsafe dynamic code, and remote script loading while skipping binary
 assets. The scan is a conservative review gate, not runtime sandboxing or
 capability enforcement; a clean scan only means no known scanner pattern
 matched. File/archive SHA-256 hashes are included in generated reports and
-build plans. Marketplace discovery, full cryptographic signature enforcement,
-and polished GUI install/update UX remain future #101 follow-up work.
+build plans.
+
+The supported user workflow wraps this composer with canonical manual and
+catalog package folders, pinned catalog downloads, transactional promotion,
+durable status, and a stable unpacked-extension target. See
+[`docs/LOCAL_ADDONS.md`](../../../docs/LOCAL_ADDONS.md). Runtime ZIP injection,
+automatic package updates, and remote marketplace installation remain outside
+the App SDK 0.2.3 distribution model.

@@ -2,9 +2,10 @@
 
 This directory is the standalone author kit for milXdy App SDK 0.2.3.
 
-The supported distribution path composes a reviewed package into a custom
-Chromium build. Package JavaScript runs through the generated extension content
-runtime under the declared App SDK contract.
+The supported distribution path uses the local Add-on Manager to validate and
+compose reviewed packages into a stable custom Chromium build. Package
+JavaScript runs through the generated extension content runtime under the
+declared App SDK contract.
 
 ## Contents
 
@@ -28,6 +29,10 @@ runtime under the declared App SDK contract.
 - `../docs/APP_SDK_COMPATIBILITY.md`: version and compatibility policy.
 - `../docs/APP_PLATFORM_PRODUCTION_READINESS.md`: platform guarantees, security
   model, and supported distribution contract.
+- `../docs/LOCAL_ADDONS.md`: the managed manual and catalog installation,
+  rebuild, and Chrome reload workflow.
+- `../docs/ADD_ONS_CATALOG.md`: catalog selection format, publication gates,
+  preview, and maintenance contract.
 
 ## Try The Template
 
@@ -37,11 +42,36 @@ From the repository root:
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/docked-app --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:app-sdk-harness
+```
+
+These commands validate the templates and public lifecycle contract without
+changing the installed extension build.
+
+## Test A Package In Chromium
+
+Create a ZIP whose root contains `milxdy.app.json`, place it in
+`local-addons/manual/`, and run:
+
+```powershell
+npm run addons:status
+npm run addons:rebuild -- --allow-local-review --acknowledge-package-consent
+```
+
+Read the capability and trust summary before supplying its requested
+acknowledgements. Load `dist/chromium-local-apps/` once from
+`chrome://extensions`. On later rebuilds, click **Reload** on the existing
+extension card and refresh X/Twitter. Apps & Features displays the loaded
+package IDs, deterministic composition fingerprint, and reload status.
+
+For lower-level author inspection of one package without using the managed
+folders:
+
+```powershell
 pnpm.cmd run build:local-apps:chromium -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 ```
 
-Review the generated composition report and package hashes, then load
-`dist/chromium-local-apps/` as an unpacked extension.
+That direct builder exercises the same composer but does not provide the local
+manager's package placement, transaction recovery, or persistent status flow.
 
 ## Author Rules
 

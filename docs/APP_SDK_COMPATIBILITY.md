@@ -15,6 +15,13 @@ the same numeric value for more than one of them.
 - `milxdy.app.json.sdk.minVersion`: oldest App SDK version the package supports.
 - `milxdy.app.json.sdk.targetVersion`: App SDK version against which the package
   was built and tested.
+- `.milxdy-selection.json.schemaVersion`: catalog-to-manager selection document
+  version, currently `1`; this is independent of the package manifest and App
+  SDK versions.
+- `compositionFingerprint`: deterministic identity of the extension version,
+  SDK version, build target, and exact sorted package ID/version/hash tuples.
+- `buildInstanceId`: unique identity of one successful local build, used to
+  detect when Chrome still has an earlier build loaded.
 
 `manifestVersion` changes only when the package document cannot be interpreted
 under the previous schema. It does not change for every App SDK release.
@@ -81,8 +88,11 @@ declare background-service, embedded-frame, or overlay integrations.
 | Surface | Support |
 | --- | --- |
 | First-party bundled apps | Supported by the extension release contract. |
-| Reviewed local folder/ZIP composed into Chromium | Supported App SDK distribution path. |
+| Catalog selection prepared and applied by the local manager | Supported App SDK distribution path. |
+| Trusted ZIPs in `local-addons/manual/` | Supported App SDK distribution path. |
+| Direct folder/ZIP composer commands | Supported author and repository tooling. |
 | Novel app enable/disable through generated Apps & Features metadata | Supported in composed builds. |
+| Stable output, composition fingerprint, and reload detection | Supported for managed Chromium builds. |
 | Package-owned background module | Use host-provided declared services. |
 | Runtime install into an already-installed extension | Outside the custom-build distribution model. |
 | Remote marketplace install/update/remove | Outside the custom-build distribution model. |

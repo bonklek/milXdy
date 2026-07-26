@@ -19,6 +19,26 @@ reviewable composition report, and generates a deterministic unpacked Chromium
 build. Apps & Features provides package enablement, disclosure, reset, rail,
 and diagnostics behavior in the generated extension.
 
+The supported local workflow has four explicit stages:
+
+1. **Select:** the catalog exports one `.milxdy-selection.json` containing the
+   exact package IDs, HTTPS ZIP URLs, filenames, SHA-256 hashes, and review
+   identities.
+2. **Place ZIPs:** `npm run addons:prepare` downloads from allowed GitHub hosts,
+   verifies every pinned hash, validates the complete set, and transactionally
+   places it in `local-addons/catalog/`. Users may instead put trusted ZIPs in
+   `local-addons/manual/` and inspect them with `npm run addons:status`.
+3. **Rebuild:** `npm run addons:apply` builds a prepared catalog selection;
+   `npm run addons:rebuild` builds the manual set. Both preserve the previous
+   working build if the operation fails.
+4. **Reload:** the stable output remains `dist/chromium-local-apps/`. Load it
+   once, then use Chrome's **Reload** action after each successful rebuild.
+
+The catalog owns selection, the checked-in local manager owns downloads,
+filesystem placement and composition, and the generated extension owns loaded
+build identity and reload confirmation. The low-level composer commands remain
+available for package authors and repository verification.
+
 This is a custom-build SDK. Packages become part of the generated extension;
 they are not downloaded into an already-installed browser extension. Package
 JavaScript therefore receives extension content-script authority and must pass
@@ -41,6 +61,15 @@ The App SDK provides:
 - **Deterministic composition:** folder and ZIP inputs, normalized package
   paths, generated registries, copied assets, merged permissions, package
   hashes, and reproducible build metadata.
+- **Pinned acquisition:** versioned selection files, exact HTTPS package URLs,
+  allowed download hosts, manually validated redirects, streaming archive size
+  limits, SHA-256 verification, and a content-addressed download cache.
+- **Transactional local builds:** exact catalog package-set replacement,
+  recoverable promotion journals, a stable unpacked-extension target, and
+  preservation of the last known-good output on failure.
+- **Durable identity and status:** a new `buildInstanceId` for every successful
+  rebuild, a deterministic `compositionFingerprint` for equivalent package
+  sets, classified stage failures, and Apps & Features reload state.
 - **Fail-closed trust:** incompatible versions, malformed archives, unsafe
   paths, undeclared privileges, storage or route conflicts, asset collisions,
   tampered plans, blocked review status, and unacknowledged sensitive surfaces
@@ -65,12 +94,24 @@ Built-in app replacement requires repository-owned source and package hashes in
 addition to explicit reviewer acknowledgement. Novel packages start disabled
 when they request privileged capabilities or consent.
 
+Package-authored and selection-authored review claims are not trust roots. A
+catalog package is accepted as reviewed only when its ID, archive hash,
+reviewer, and review date match the checked-in trusted-review registry.
+Otherwise the user must explicitly pass `--allow-local-review`. Prepare never
+executes package code, and the extension never imports a downloaded ZIP at
+runtime.
+
 ## Supported Capabilities
 
 | Capability | Support |
 | --- | --- |
 | Reviewed folder or ZIP package | Supported |
+| Catalog `.milxdy-selection.json` export | Supported; published entries require pinned artifacts and trusted review metadata |
+| Managed download, hash verification, and cache | Supported for checked-in GitHub hosts |
+| Manual ZIP folder and validation-only status | Supported in `local-addons/manual/` |
 | Deterministic Chromium custom build | Supported |
+| Transactional stable output and recovery | Supported in `dist/chromium-local-apps/` |
+| Composition fingerprint and reload detection | Supported in generated Apps & Features metadata |
 | Feature and docked overlay packages | Supported |
 | Manifest-generated enablement and reset | Supported |
 | X route and surface lifecycle | Supported |
@@ -103,6 +144,10 @@ The production verification suite covers:
 - internal bridge restrictions;
 - package fixtures and novel-package integration;
 - folder and ZIP trust gates;
+- catalog selection schema, deterministic serialization, and publication gates;
+- managed prepare/apply, pinned downloads, cache resume, transaction recovery,
+  stable-output preservation, and reload identity;
+- static catalog build and route validation;
 - Post-reading cross-repository integration;
 - Chromium and Firefox extension builds;
 - platform, privacy, URL allowlist, smoke, checksum, and reproducibility gates.
