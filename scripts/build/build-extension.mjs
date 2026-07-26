@@ -12,6 +12,7 @@ const watch = process.argv.includes("--watch");
 const target = readTarget();
 const buildProfile = readProfile();
 const localAppPlanPath = readStringArg("--local-app-plan");
+const explicitOutputDir = readStringArg("--output-dir");
 const localAppPlan = localAppPlanPath ? JSON.parse(await readFile(localAppPlanPath, "utf8")) : null;
 const firstPartyReplacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const firstPartyReplacementPolicyById = new Map((firstPartyReplacementPolicy.replacements || []).map((item) => [item.id, item]));
@@ -21,7 +22,9 @@ if (localAppPlan && target !== "chromium") {
 if (localAppPlan) validateLocalAppPlan(localAppPlan);
 const userDownloadAssetDirs = ["wiki-helper"];
 const nonWebAccessibleAssetDirs = new Set(userDownloadAssetDirs);
-const outDir = localAppPlan?.outputDir ?? (buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`);
+const outDir = explicitOutputDir
+  ? assertSafeGeneratedOutputDir(explicitOutputDir, "Build output directory")
+  : localAppPlan?.outputDir ?? (buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`);
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const localAddonBuildId = localAppPlan?.buildId ?? `standard-${target}-${buildProfile}-${extensionVersion}`;
@@ -541,7 +544,7 @@ async function pruneSourceMaps(dir) {
 }
 
 async function mirrorChromiumRootOutput() {
-  if (target !== "chromium" || watch || localAppPlan) return;
+  if (target !== "chromium" || watch || localAppPlan || explicitOutputDir) return;
   const rootOutDir = "dist";
   const entries = [
     "background.js",

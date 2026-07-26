@@ -1,0 +1,37 @@
+.milxdy-qa-build {
+  margin: 12px 12px 0;
+  padding: 10px 12px;
+  border: 2px solid #ff4fbf;
+  border-radius: 10px;
+  background: #23111f;
+  color: #fff;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.milxdy-qa-build[data-current="false"] {
+  border-color: #ffb020;
+  background: #2b1b07;
+}
+
+.milxdy-qa-build strong,
+.milxdy-qa-build span,
+.milxdy-qa-build small {
+  display: block;
+}
+
+.milxdy-qa-build button {
+  margin-top: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: #ff4fbf;
+  color: #140811;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.milxdy-qa-build button:disabled {
+  opacity: .6;
+  cursor: wait;
+}
