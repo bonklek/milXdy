@@ -1,3 +1,11 @@
+@font-face {
+  font-family: "Milxdy Remilia Hei";
+  src: url("fonts/Hei.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light dark;
   font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -80,7 +88,7 @@ body {
 .wip-banner { width: 100%; overflow: hidden; border-bottom: 2px solid #7d004f; background: #c60086; color: #ffc1e3; }
 .wip-banner-track { display: flex; width: max-content; animation: wip-banner-scroll 15s linear infinite; }
 .wip-banner-group { display: flex; flex: 0 0 100vw; align-items: center; justify-content: space-around; gap: 28px; min-width: 100vw; padding: 6px 14px; }
-.wip-banner-group span { flex: 0 0 auto; font-size: 13px; font-weight: 900; letter-spacing: 0.08em; line-height: 1.2; }
+.wip-banner-group span { flex: 0 0 auto; font-family: "Milxdy Remilia Hei", ui-monospace, monospace; font-size: 13px; font-weight: 900; letter-spacing: 0.08em; line-height: 1.2; }
 @keyframes wip-banner-scroll { to { transform: translateX(-50%); } }
 @media (prefers-reduced-motion: reduce) { .wip-banner-track { animation: none; } }
 a { color: var(--accent-strong); text-underline-offset: 0.18em; }
