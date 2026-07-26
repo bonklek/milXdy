@@ -75,6 +75,18 @@ type LocalAddonStatus = {
   warnings?: string[];
 };
 
+type OpenAppsFeaturesMessage = {
+  type: "milxdy:open-apps-features";
+  section?: "local-addons";
+};
+
+function isOpenAppsFeaturesMessage(value: unknown): value is OpenAppsFeaturesMessage {
+  if (!value || typeof value !== "object") return false;
+  const message = value as { type?: unknown; section?: unknown };
+  return message.type === "milxdy:open-apps-features"
+    && (message.section === undefined || message.section === "local-addons");
+}
+
 type RuntimeState = {
   apps: readonly MilxdyAppManifest[];
   enabledApps: Set<MilxdyAppId>;
@@ -370,6 +382,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     startRouteService();
     await loadRailPins();
     registerHubDockMetadata();
+    registerHubMessageHandler();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -1695,6 +1708,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.resetAppPositions", null));
   }
 
+  function registerHubMessageHandler(): void {
+    const listener = (
+      message: unknown,
+      _sender: chrome.runtime.MessageSender,
+      sendResponse: (response: { ok: boolean }) => void,
+    ): void => {
+      if (!isOpenAppsFeaturesMessage(message)) return;
+      openHubPanel();
+      if (message.section === "local-addons") {
+        requestAnimationFrame(() => {
+          const addOns = document.getElementById("milxdy-local-addons");
+          addOns?.scrollIntoView({ behavior: "smooth", block: "start" });
+          addOns?.focus({ preventScroll: true });
+        });
+      }
+      sendResponse({ ok: true });
+    };
+    chrome.runtime.onMessage.addListener(listener);
+    state.runtimeDisposables.add(() => chrome.runtime.onMessage.removeListener(listener));
+  }
+
   function registerHideAllDockMetadata(): void {
     if (state.hideAllDockRegistration) return;
     state.hideAllDockRegistration = getOverlayDock().register({
@@ -2034,7 +2068,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function localAddonManagerPanel(): HTMLElement {
     const panel = document.createElement("section");
+    panel.id = "milxdy-local-addons";
     panel.className = "milxdy-app-hub-addons";
+    panel.tabIndex = -1;
     const status = state.localAddonStatus;
     const loadedBuildId = typeof MILXDY_LOCAL_ADDON_BUILD_ID === "string" ? MILXDY_LOCAL_ADDON_BUILD_ID : "";
     const buildWaitingForReload = Boolean(status?.buildId && loadedBuildId && status.buildId !== loadedBuildId);

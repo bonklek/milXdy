@@ -222,6 +222,7 @@ void boot();
 async function boot(): Promise<void> {
   applyBuildProfileAvailability();
   setupTabs();
+  setupLocalAddonsEntry();
   await setupThemeControls();
   setupUpdateStatus();
   await setupAddonsPanel();
@@ -1497,6 +1498,37 @@ function renderAddonsZipFiles(files: AddonsZipFile[]): void {
     row.append(name, metadata);
     list.append(row);
   }
+}
+
+function setupLocalAddonsEntry(): void {
+  const button = document.getElementById("openLocalAddons") as HTMLButtonElement | null;
+  const message = document.getElementById("openLocalAddonsMessage");
+  if (!button || !message) return;
+
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    message.textContent = "Opening Local Add-ons on X...";
+    try {
+      const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] });
+      const target = tabs.find((tab) => tab.active) ?? tabs[0];
+      if (typeof target?.id !== "number") {
+        await chrome.tabs.create({ url: X_HOME_URL, active: true });
+        message.textContent = "X opened. After it finishes loading, click Apps in the milXdy side rail.";
+        return;
+      }
+      await chrome.tabs.update(target.id, { active: true });
+      const response = await chrome.tabs.sendMessage(target.id, {
+        type: "milxdy:open-apps-features",
+        section: "local-addons",
+      }) as { ok?: boolean } | undefined;
+      if (!response?.ok) throw new Error("Local Add-ons did not acknowledge the request");
+      message.textContent = "Local Add-ons opened on X.";
+    } catch {
+      message.textContent = "Could not open the panel. Reload the X tab, then try again or click Apps in the milXdy side rail.";
+    } finally {
+      button.disabled = false;
+    }
+  });
 }
 
 async function setupAddonsPanel(): Promise<void> {

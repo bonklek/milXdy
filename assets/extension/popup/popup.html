@@ -25,6 +25,21 @@
         <button class="tab" type="button" data-panel="addons"><span>Add-ons</span></button>
       </nav>
 
+      <section class="panel" data-panel="addons">
+        <div class="panel-heading">
+          <h2>Local Add-ons</h2>
+          <p>Review the loaded custom build, select trusted ZIPs, and continue the local rebuild workflow.</p>
+        </div>
+        <section class="setting-group" aria-labelledby="localAddonsPopupTitle">
+          <div class="setting-group-header">
+            <h3 id="localAddonsPopupTitle">Open Apps &amp; Features</h3>
+          </div>
+          <p class="setting-note">The Add-ons control panel runs on X/Twitter, where milXdy can show the loaded package set and the Load unpacked or Reload handoff. The running extension does not rebuild itself.</p>
+          <button class="secondary-button primary-action" id="openLocalAddons" type="button">Open Local Add-ons on X</button>
+          <p class="message" id="openLocalAddonsMessage" aria-live="polite"></p>
+        </section>
+      </section>
+
       <section class="panel is-active" data-panel="suite">
         <div class="panel-heading">
           <h2>Suite Controls</h2>
