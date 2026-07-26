@@ -30,9 +30,10 @@
 
     const stored = await chrome.storage.local.get(RESULT_KEY).catch(() => ({}));
     const last = stored[RESULT_KEY];
-    if (runningBuild && last?.buildId === runningBuild.buildId) {
+    if (last?.completedAt) {
       const renderLastReload = () => {
-        status.textContent = `Last reload: ${formatElapsed(last.completedAt)} ago · refreshed ${last.refreshedTabs} X/Twitter tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}.`;
+        const matchesRunningBuild = runningBuild?.buildId === last.buildId;
+        status.textContent = `Last reload: ${formatElapsed(last.completedAt)} ago · refreshed ${last.refreshedTabs} X/Twitter tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}${matchesRunningBuild ? "" : " · different build than currently running."}`;
       };
       renderLastReload();
       if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
