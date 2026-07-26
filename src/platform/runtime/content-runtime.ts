@@ -62,39 +62,17 @@ type LocalAddonStatus = {
   mode: "standard" | "custom-composition" | "managed-local-addons";
   state: "prepared" | "built" | "validation-failed" | "build-failed";
   buildId?: string;
-  buildInstanceId?: string;
   compositionFingerprint?: string;
-  extensionVersion?: string;
-  generatedAt?: string;
-  workflowStage?: "select" | "place" | "rebuild" | "reload";
-  addOnsDirectory?: string;
   outputDirectory?: string;
-  reportPath?: string;
-  packages?: Array<{ id: string; name?: string; version?: string; reviewStatus?: string; packageSha256?: string }>;
+  addOnsDirectory?: string;
+  workflowStage?: "select" | "place" | "rebuild" | "reload";
+  packages?: Array<{ id: string; name?: string; version?: string; reviewStatus?: string }>;
   errors?: string[];
   warnings?: string[];
 };
 
-type OpenAppsFeaturesMessage = {
-  type: "milxdy:open-apps-features";
-  section?: "local-addons";
-  appId?: string;
-};
-
-function isOpenAppsFeaturesMessage(value: unknown): value is OpenAppsFeaturesMessage {
-  if (!value || typeof value !== "object") return false;
-  const message = value as { type?: unknown; section?: unknown; appId?: unknown };
-  return message.type === "milxdy:open-apps-features"
-    && (message.section === undefined || message.section === "local-addons")
-    && (message.appId === undefined || typeof message.appId === "string");
-}
-
 function normalizedStringSet(value: unknown): Set<string> {
-  return new Set(
-    Array.isArray(value)
-      ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
-      : [],
-  );
+  return new Set(Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string" && entry.length > 0) : []);
 }
 
 type RuntimeState = {
@@ -395,7 +373,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     startRouteService();
     await loadRailPins();
     registerHubDockMetadata();
-    registerHubMessageHandler();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -428,7 +405,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeRailPins();
     observePerformanceMode();
     observeHubGeneratedSettings();
-    observeLocalAddonRemovals();
     observeAppIconTheme();
     scheduleIdlePreloads();
     maybeOpenFirstRunHub();
@@ -758,16 +734,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (area !== "local" && area !== "sync") return;
       const keys = tracked.get(area);
       if (!keys || !Object.keys(changes).some((key) => keys.has(key))) return;
-      renderHubPanel();
-    };
-    chrome.storage.onChanged.addListener(listener);
-    state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
-  }
-
-  function observeLocalAddonRemovals(): void {
-    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-      if (area !== "local" || !changes[PENDING_LOCAL_ADDON_REMOVALS_KEY]) return;
-      state.localAddonPendingRemovals = normalizedStringSet(changes[PENDING_LOCAL_ADDON_REMOVALS_KEY].newValue);
       renderHubPanel();
     };
     chrome.storage.onChanged.addListener(listener);
@@ -1732,30 +1698,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.resetAppPositions", null));
   }
 
-  function registerHubMessageHandler(): void {
-    const listener = (
-      message: unknown,
-      _sender: chrome.runtime.MessageSender,
-      sendResponse: (response: { ok: boolean }) => void,
-    ): void => {
-      if (!isOpenAppsFeaturesMessage(message)) return;
-      openHubPanel();
-      if (message.section === "local-addons" || message.appId) {
-        requestAnimationFrame(() => {
-          const target = message.appId
-            ? Array.from(document.querySelectorAll<HTMLElement>("[data-hub-app-id]"))
-              .find((card) => card.dataset.hubAppId === message.appId) ?? null
-            : document.getElementById("milxdy-local-addons");
-          target?.scrollIntoView({ behavior: "smooth", block: "start" });
-          target?.focus({ preventScroll: true });
-        });
-      }
-      sendResponse({ ok: true });
-    };
-    chrome.runtime.onMessage.addListener(listener);
-    state.runtimeDisposables.add(() => chrome.runtime.onMessage.removeListener(listener));
-  }
-
   function registerHideAllDockMetadata(): void {
     if (state.hideAllDockRegistration) return;
     state.hideAllDockRegistration = getOverlayDock().register({
@@ -1799,7 +1741,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function openHubPanel(): void {
     ensureHubPanel();
     renderHubPanel();
-    void refreshLocalAddonStatus();
     state.hubDockRegistration?.update({ active: true, title: "Apps & Features" });
   }
 
