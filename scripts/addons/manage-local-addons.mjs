@@ -11,14 +11,17 @@ if (!new Set(["prepare", "apply", "status", "rebuild"]).has(command)) {
   throw new Error('Use "prepare", "apply", "status", or "rebuild".');
 }
 
-const addOnsDirectory = "local-addons";
+const testRoot = process.env.MILXDY_ADDON_MANAGER_TEST_ROOT
+  ? assertSafeGeneratedOutputDir(process.env.MILXDY_ADDON_MANAGER_TEST_ROOT, "Local Add-on Manager test root")
+  : null;
+const addOnsDirectory = testRoot || "local-addons";
 const manualPackagesDirectory = `${addOnsDirectory}/manual`;
 const catalogPackagesDirectory = `${addOnsDirectory}/catalog`;
 const managerStateDirectory = `${addOnsDirectory}/.state`;
 const cacheDirectory = `${addOnsDirectory}/.cache`;
 const selectionLockPath = `${managerStateDirectory}/selection-lock.json`;
-const stableOutputDirectory = assertSafeGeneratedOutputDir("dist/chromium-local-apps", "Stable local app output");
-const workDirectory = assertSafeGeneratedOutputDir("tmp/local-addon-manager", "Local Add-on Manager work directory");
+const stableOutputDirectory = assertSafeGeneratedOutputDir(testRoot ? `${testRoot}/stable` : "dist/chromium-local-apps", "Stable local app output");
+const workDirectory = assertSafeGeneratedOutputDir(testRoot ? `${testRoot}/work` : "tmp/local-addon-manager", "Local Add-on Manager work directory");
 const compositionDirectory = `${workDirectory}/composition`;
 const stagingDirectory = `${workDirectory}/build-staging`;
 const catalogStagingDirectory = `${workDirectory}/catalog-staging`;
