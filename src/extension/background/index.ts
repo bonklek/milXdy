@@ -88,7 +88,7 @@ type FetchImageDataUrlMessage = {
 
 const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
-let addOnsCatalogWindowId: number | null = null;
+let addOnsCatalogTabId: number | null = null;
 let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
 
 type MiladychanFetchJsonMessage = {
@@ -282,17 +282,17 @@ async function openAddonsCatalogWindow(): Promise<Record<string, unknown>> {
     const target = parseAllowedUrl(MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES)
       ?? parseAllowedUrl(MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL_RULES);
     if (!target) return { ok: false, error: "The configured App Store URL is invalid." };
-    if (addOnsCatalogWindowId !== null) {
+    if (addOnsCatalogTabId !== null) {
       try {
-        await chrome.windows.update(addOnsCatalogWindowId, { focused: true });
+        await chrome.tabs.update(addOnsCatalogTabId, { active: true });
         return { ok: true, reused: true };
       } catch {
-        addOnsCatalogWindowId = null;
+        addOnsCatalogTabId = null;
       }
     }
     try {
-      const created = await chrome.windows.create({ url: target.href, type: "normal", width: 1040, height: 780, focused: true });
-      addOnsCatalogWindowId = typeof created?.id === "number" ? created.id : null;
+      const created = await chrome.tabs.create({ url: target.href, active: true });
+      addOnsCatalogTabId = typeof created.id === "number" ? created.id : null;
       return { ok: true, reused: false };
     } catch (error) {
       return { ok: false, error: error instanceof Error ? error.message : "Could not open the App Store window." };

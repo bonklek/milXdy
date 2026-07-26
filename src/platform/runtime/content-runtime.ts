@@ -14,6 +14,7 @@ import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { MILXDY_ADDONS_CATALOG_URL } from "../app-sdk/addons-catalog";
+import { DEFAULT_INTERFACE_SOUNDS_VOLUME, INTERFACE_SOUNDS_ENABLED_KEY, INTERFACE_SOUNDS_VOLUME_KEY } from "../settings/interface-sounds";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../overlay/app-chrome";
 import { resetOverlayAppLayouts } from "../overlay/app-layout";
 import {
@@ -102,6 +103,8 @@ type RuntimeState = {
   hubSearchQuery: string;
   hubExpandedApps: Set<MilxdyAppId>;
   hubDockSettingsOpen: boolean;
+  interfaceSoundsEnabled: boolean;
+  interfaceSoundsVolume: number;
   localAddonStatus: LocalAddonStatus | null;
   localAddonStatusLoading: boolean;
   localAddonQueue: LocalAddonQueueItem[];
@@ -284,6 +287,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubSearchQuery: "",
     hubExpandedApps: new Set(),
     hubDockSettingsOpen: false,
+    interfaceSoundsEnabled: true,
+    interfaceSoundsVolume: DEFAULT_INTERFACE_SOUNDS_VOLUME,
     localAddonStatus: null,
     localAddonStatusLoading: false,
     localAddonQueue: [],
@@ -374,6 +379,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     configurePerformanceObservers();
     startRouteService();
     await loadRailPins();
+    await loadInterfaceSoundSettings();
     registerHubDockMetadata();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
@@ -408,6 +414,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeRailPins();
     observePerformanceMode();
     observeHubGeneratedSettings();
+    observeInterfaceSoundSettings();
     observeAppIconTheme();
     scheduleIdlePreloads();
     maybeOpenFirstRunHub();
@@ -1713,9 +1720,56 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       title: "Get more add-ons",
       active: false,
       onActivate: () => {
+        playAddOnsLaunchSound();
         void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
       },
     });
+  }
+
+  async function loadInterfaceSoundSettings(): Promise<void> {
+    const stored = await safeLocalGet({
+      [INTERFACE_SOUNDS_ENABLED_KEY]: true,
+      [INTERFACE_SOUNDS_VOLUME_KEY]: DEFAULT_INTERFACE_SOUNDS_VOLUME,
+    });
+    state.interfaceSoundsEnabled = stored?.[INTERFACE_SOUNDS_ENABLED_KEY] !== false;
+    const volume = Number(stored?.[INTERFACE_SOUNDS_VOLUME_KEY]);
+    state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
+  }
+
+  function observeInterfaceSoundSettings(): void {
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string): void => {
+      if (area !== "local") return;
+      if (changes[INTERFACE_SOUNDS_ENABLED_KEY]) state.interfaceSoundsEnabled = changes[INTERFACE_SOUNDS_ENABLED_KEY].newValue !== false;
+      if (changes[INTERFACE_SOUNDS_VOLUME_KEY]) {
+        const volume = Number(changes[INTERFACE_SOUNDS_VOLUME_KEY].newValue);
+        state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
+  }
+
+  function playAddOnsLaunchSound(): void {
+    if (!state.interfaceSoundsEnabled || state.interfaceSoundsVolume <= 0) return;
+    try {
+      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtor) return;
+      const context = new AudioCtor();
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(360, context.currentTime);
+      oscillator.frequency.exponentialRampToValueAtTime(980, context.currentTime + 0.16);
+      gain.gain.setValueAtTime(0.0001, context.currentTime);
+      gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.interfaceSoundsVolume * 0.12), context.currentTime + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.2);
+      oscillator.connect(gain).connect(context.destination);
+      oscillator.start();
+      oscillator.stop(context.currentTime + 0.21);
+      oscillator.addEventListener("ended", () => void context.close());
+    } catch {
+      // Audio restrictions must never block the catalog tab.
+    }
   }
 
   function registerHideAllDockMetadata(): void {

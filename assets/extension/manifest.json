@@ -4,7 +4,7 @@
   "version": "0.2.3",
   "default_locale": "en",
   "description": "__MSG_extensionDescription__",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs", "windows"],
+  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs"],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
