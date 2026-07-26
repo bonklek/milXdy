@@ -576,7 +576,12 @@ function buildGeneratedPlan(records) {
     packageSha256: record.packageSha256,
   })).sort((a, b) => a.id.localeCompare(b.id));
   const compositionFingerprint = createHash("sha256")
-    .update(JSON.stringify({ sdkVersion: currentSdkVersion, packages: buildFingerprint }))
+    .update(JSON.stringify({
+      extensionVersion: packageJson.extensionVersion || packageJson.version,
+      sdkVersion: currentSdkVersion,
+      target: "chromium",
+      packages: buildFingerprint,
+    }))
     .digest("hex");
   const buildId = requestedBuildId ?? compositionFingerprint.slice(0, 24);
   const buildPlan = {
