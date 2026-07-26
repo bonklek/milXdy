@@ -44,6 +44,7 @@ declare const MILXDY_VERSION: string | undefined;
 declare const MILXDY_LOCAL_ADDON_BUILD_ID: string | undefined;
 
 const MILXDY_ADDONS_CATALOG_URL = "https://bonklek.github.io/milXdy/";
+const MILXDY_ADDONS_CATALOG_PAGE_URL = "https://bonklek.github.io/milXdy/addons/";
 const LOCAL_ADDON_MAX_ARCHIVE_BYTES = 100 * 1024 * 1024;
 const LOCAL_ADDON_MAX_ENTRY_BYTES = 25 * 1024 * 1024;
 const LOCAL_ADDON_MAX_ENTRIES = 2000;
@@ -97,6 +98,7 @@ type RuntimeState = {
   dockRegistrations: Map<MilxdyAppId, OverlayDockRegistration>;
   hideAllDockRegistration: OverlayDockRegistration | null;
   hubDockRegistration: OverlayDockRegistration | null;
+  addOnsCatalogDockRegistration: OverlayDockRegistration | null;
   hubPanelRoot: HTMLElement | null;
   hubSearchQuery: string;
   hubExpandedApps: Set<MilxdyAppId>;
@@ -278,6 +280,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     dockRegistrations: new Map(),
     hideAllDockRegistration: null,
     hubDockRegistration: null,
+    addOnsCatalogDockRegistration: null,
     hubPanelRoot: null,
     hubSearchQuery: "",
     hubExpandedApps: new Set(),
@@ -389,6 +392,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       else updateAppDiagnostics(app, "disabled");
     }
+    registerAddOnsCatalogDockItem();
     syncHiddenRailItems();
     updateScannerConfiguration();
     recordRuntimeDiagnostic("runtime.metadata", {
@@ -585,6 +589,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hideAllDockRegistration = null;
     state.hubDockRegistration?.remove();
     state.hubDockRegistration = null;
+    state.addOnsCatalogDockRegistration?.remove();
+    state.addOnsCatalogDockRegistration = null;
     state.hubPanelRoot?.remove();
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
@@ -1696,6 +1702,21 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.addApps", null));
     state.runtimeDisposables.add(() => getOverlayDock().setSettingsAction("milxdy.resetAppPositions", null));
+  }
+
+  function registerAddOnsCatalogDockItem(): void {
+    if (state.addOnsCatalogDockRegistration) return;
+    state.addOnsCatalogDockRegistration = getOverlayDock().register({
+      id: "milxdyAddOnsCatalog",
+      label: "Get more add-ons",
+      icon: "+",
+      stackable: false,
+      title: "Get more add-ons",
+      active: false,
+      onActivate: () => {
+        window.open(MILXDY_ADDONS_CATALOG_PAGE_URL, "_blank", "noopener,noreferrer");
+      },
+    });
   }
 
   function registerHideAllDockMetadata(): void {
