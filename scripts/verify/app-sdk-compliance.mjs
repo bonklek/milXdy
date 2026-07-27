@@ -75,7 +75,10 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "const shadow = panel.attachShadow({ mode: \"open\" });", "Composer actions must render package content in an isolated host-owned panel root");
   requireIncludes(contentRuntime, "await installComposerActionPackageStyles(app, shadow);", "Composer actions must load declared package CSS before their callback renders");
   requireIncludes(contentRuntime, "for (const sheet of app.css || [])", "Composer action styling must be limited to declared package stylesheets");
+  requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
+  requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
+  requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
 }
 
 function verifySdkVersionSource() {

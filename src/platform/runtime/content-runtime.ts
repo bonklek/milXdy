@@ -1365,19 +1365,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function refreshComposerActionButtons(): void {
     const apps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.composerAction);
+    const actionRows = new Set<HTMLElement>();
     for (const composer of Array.from(document.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))) {
       if (composer.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) continue;
-      const composerRoot = composer.closest<HTMLElement>('[role="dialog"]') || composer.parentElement?.parentElement || composer.parentElement;
-      const host = composerRoot?.querySelector<HTMLElement>('[data-testid="toolBar"]')
-        || composerRoot?.querySelector<HTMLElement>('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]')?.parentElement
-        || composerRoot;
-      if (!host) continue;
-      let slot = host.querySelector<HTMLElement>(":scope > [data-milxdy-composer-actions]");
+      const actionRow = composerActionRowFor(composer);
+      if (actionRow) actionRows.add(actionRow);
+    }
+    for (const slot of Array.from(document.querySelectorAll<HTMLElement>("[data-milxdy-composer-actions]"))) {
+      if (!Array.from(actionRows).some((row) => row.contains(slot))) slot.remove();
+    }
+    for (const actionRow of actionRows) {
+      let slot = actionRow.querySelector<HTMLElement>(":scope > [data-milxdy-composer-actions]");
       if (!slot) {
         slot = document.createElement("span");
         slot.setAttribute("data-milxdy-composer-actions", "true");
         slot.className = "milxdy-composer-actions";
-        host.append(slot);
+        actionRow.append(slot);
       }
       const expected = new Set(apps.map((app) => app.id));
       for (const button of Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))) {
@@ -1393,7 +1396,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           button.type = "button";
           button.dataset.appId = app.id;
           button.className = "milxdy-composer-action";
-          button.addEventListener("click", () => void openComposerAction(app, composer, button!));
+          button.addEventListener("click", () => void openComposerAction(app, button!));
           slot.append(button);
         }
         button.title = action.label;
@@ -1410,9 +1413,20 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     injectComposerActionStyles();
   }
 
+  function composerActionRowFor(composer: HTMLElement): HTMLElement | null {
+    for (let scope: HTMLElement | null = composer; scope; scope = scope.parentElement) {
+      const toolbar = scope.querySelector<HTMLElement>('[data-testid="toolBar"]');
+      if (!toolbar) continue;
+      return toolbar.querySelector<HTMLElement>('[data-testid="ScrollSnap-List"]')
+        || toolbar.querySelector<HTMLElement>('[role="tablist"]')
+        || toolbar;
+    }
+    return null;
+  }
+
   let activeComposerActionClose: (() => void) | null = null;
 
-  async function openComposerAction(app: MilxdyAppManifest, composer: HTMLElement, button: HTMLButtonElement): Promise<void> {
+  async function openComposerAction(app: MilxdyAppManifest, button: HTMLButtonElement): Promise<void> {
     activeComposerActionClose?.();
     const module = await loadApp(app, "composerAction");
     if (!module?.onComposerAction) {
@@ -1457,7 +1471,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     try {
       await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onComposerAction({
-        kind: composer.closest('[role="dialog"]') ? "reply" : "post",
+        kind: button.closest('[role="dialog"]') ? "reply" : "post",
         panel: surface,
         signal: controller.signal,
         close,
@@ -1481,12 +1495,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     `;
     shadow.append(hostStyle);
     for (const sheet of app.css || []) {
-      const response = await fetch(runtimeAssetUrl(sheet.path));
-      if (!response.ok) throw new Error(`Unable to load declared package stylesheet ${sheet.id || sheet.path}`);
-      const style = document.createElement("style");
-      style.dataset.packageStylesheet = sheet.id || sheet.path;
-      style.textContent = await response.text();
-      shadow.append(style);
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = runtimeAssetUrl(sheet.path);
+      stylesheet.dataset.packageStylesheet = sheet.id || sheet.path;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.addEventListener("load", () => resolve(), { once: true });
+        stylesheet.addEventListener("error", () => reject(new Error(`Unable to load declared package stylesheet ${sheet.id || sheet.path}`)), { once: true });
+      });
+      shadow.append(stylesheet);
+      await loaded;
     }
   }
 
@@ -1495,7 +1513,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const style = document.createElement("style");
     style.id = "milxdy-composer-action-styles";
     style.textContent = `
-      .milxdy-composer-actions { display: inline-flex; gap: 4px; margin: 4px 0 0 8px; vertical-align: middle; }
+      .milxdy-composer-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: 4px; vertical-align: middle; }
       .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }

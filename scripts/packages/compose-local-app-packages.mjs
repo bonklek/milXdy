@@ -610,6 +610,7 @@ function buildGeneratedPlan(records) {
   ]).sort();
   const webResources = unique([
     ...records.map((record) => record.contentEntry.target),
+    ...records.flatMap((record) => record.css.map((sheet) => sheet.target)),
     ...records.flatMap((record) => record.webAccessibleAssets.map((asset) => asset.target)),
   ]).sort();
   const webAccessibleAssets = [{

@@ -16,7 +16,10 @@ try {
   manifest.surfaces = ["composerAction"];
   manifest.loadTriggers = ["userAction"];
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
+  manifest.css = [{ id: "developer-note.styles", path: "dev-note.css" }];
+  manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  await writeFile(path.join(externalPackage, "dev-note.css"), ".developer-note { color: canvastext; }\n");
   const entryPath = path.join(externalPackage, "dist", "content.js");
   await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\n`);
   run([
@@ -51,6 +54,9 @@ try {
     /id:\s*"dev-note"[\s\S]{0,1500}?packageKind:\s*"app"[\s\S]{0,1500}?role:\s*"enablement"/u,
     "staged external composer app must be compiled into the runtime app registry with its generated enablement control",
   );
+  const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
+  const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
+  assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");
 
   run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);
   const baseline = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
