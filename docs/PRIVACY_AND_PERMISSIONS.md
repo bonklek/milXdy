@@ -82,7 +82,7 @@ RemiStats may show profile images from pfp.remilia.net in tooltips and Milady Ma
 
 ## Miladychan Portal
 
-Miladychan Portal is a docked reader for public Miladychan board, thread, post, and media metadata over HTTPS. For an explicitly confirmed board or thread, it can submit a text-only anonymous post to the fixed native create-thread or create-reply endpoint with credentials omitted. It does not read or reuse a Miladychan browser session, RemiNet login, cookies, tokens, wallet, X/Twitter, or extension identity, and it does not upload media. The portal saves drafts locally on failure and keeps native Miladychan links for CAPTCHA, session, media, unsupported-board, and full-board behavior.
+Miladychan Portal is a docked reader for public Miladychan board, thread, post, and media metadata over HTTPS. It does not use a Miladychan WebSocket, read a Miladychan browser session, or post to Miladychan. The portal can save a user's text-only draft locally for an explicitly confirmed board or thread; it never attaches X/Twitter, RemiNet, wallet, or extension identity. Users explicitly copy a draft and open native Miladychan, where upstream session, CAPTCHA, media, and final submission stay under the user's control.
 
 ## Music
 

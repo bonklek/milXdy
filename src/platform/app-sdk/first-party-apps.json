@@ -3148,7 +3148,7 @@
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Fetches public Miladychan board and thread JSON and can explicitly submit a text-only anonymous post through fixed native endpoints with credentials omitted; no Miladychan content-script runtime loads today."
+          "Fetches public Miladychan board and thread JSON through a routed background service for the X side-rail portal; no Miladychan content-script runtime loads today."
         ]
       }
     ],
@@ -3177,7 +3177,7 @@
     },
     "hub": {
       "category": "social",
-      "shortDescription": "Browse public Miladychan boards and threads, or explicitly submit text-only anonymous posts from the shared side rail.",
+      "shortDescription": "Browse public Miladychan boards and threads from the shared side rail.",
       "rail": {
         "supported": true,
         "defaultPinned": true
@@ -3186,16 +3186,16 @@
         "full"
       ],
       "permissionNotes": [
-        "Fetches public board and thread JSON when opened. An explicit text-only submission can call the fixed native create-thread or create-reply endpoint without cookies or account credentials."
+        "Fetches public board and thread JSON when opened."
       ],
       "dataNotes": [
-        "Requests selected board and thread data from Miladychan. On an explicit confirmed submit, sends the user-entered text and board/thread destination anonymously; it does not send a RemiNet, X/Twitter, wallet, or extension identity."
+        "Requests selected board and thread data from Miladychan."
       ],
       "remoteServices": [
         "boards.miladychan.org"
       ],
       "localStorageNotes": [
-        "Stores panel layout, theme settings, and locally recoverable text drafts."
+        "Stores panel layout and theme settings."
       ],
       "privacyLabels": [
         "remote-api"
@@ -3208,8 +3208,7 @@
     },
     "background": {
       "messageTypes": [
-        "miladychan:fetchJson",
-        "miladychan:postText"
+        "miladychan:fetchJson"
       ]
     },
     "permissions": {
