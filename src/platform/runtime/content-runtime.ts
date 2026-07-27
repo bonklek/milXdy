@@ -1425,6 +1425,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     panel.dataset.appId = app.id;
     panel.setAttribute("role", "dialog");
     panel.setAttribute("aria-label", app.composerAction?.label || app.name);
+    const shadow = panel.attachShadow({ mode: "open" });
+    const surface = document.createElement("div");
+    surface.className = "milxdy-composer-action-surface";
+    shadow.append(surface);
     const rect = button.getBoundingClientRect();
     panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 360))}px`;
     panel.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - 160)}px`;
@@ -1451,9 +1455,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismissOnEscape, true);
     try {
+      await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onComposerAction({
         kind: composer.closest('[role="dialog"]') ? "reply" : "post",
-        panel,
+        panel: surface,
         signal: controller.signal,
         close,
       }));
@@ -1465,6 +1470,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function closeComposerActionPanel(): void {
     activeComposerActionClose?.();
+  }
+
+  async function installComposerActionPackageStyles(app: MilxdyAppManifest, shadow: ShadowRoot): Promise<void> {
+    const hostStyle = document.createElement("style");
+    hostStyle.textContent = `
+      :host { color: CanvasText; font: 400 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      .milxdy-composer-action-surface, .milxdy-composer-action-surface *, .milxdy-composer-action-surface *::before, .milxdy-composer-action-surface *::after { box-sizing: border-box; }
+      .milxdy-composer-action-surface { min-width: 0; }
+    `;
+    shadow.append(hostStyle);
+    for (const sheet of app.css || []) {
+      const response = await fetch(runtimeAssetUrl(sheet.path));
+      if (!response.ok) throw new Error(`Unable to load declared package stylesheet ${sheet.id || sheet.path}`);
+      const style = document.createElement("style");
+      style.dataset.packageStylesheet = sheet.id || sheet.path;
+      style.textContent = await response.text();
+      shadow.append(style);
+    }
   }
 
   function injectComposerActionStyles(): void {
@@ -2137,9 +2160,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const headingLabel = document.createElement("strong");
     headingLabel.textContent = label;
     heading.append(headingLabel);
-    if (label === "Apps") {
+    if (label === "Apps" && apps.some((app) => isHubRailApp(app))) {
       const hint = document.createElement("span");
-      hint.textContent = "reorder to change stacking priority";
+      hint.textContent = "reorder rail apps to change stacking priority";
       heading.append(hint);
     }
     section.append(heading);
@@ -2570,6 +2593,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     card.dataset.tier = hubPackageKind(app);
     card.dataset.available = String(app.available !== false);
     card.dataset.enabled = String(state.enabledApps.has(app.id));
+    card.dataset.railApp = String(isHubRailApp(app));
     card.dataset.pinned = String(isRailPinned(app));
     card.dataset.expanded = String(state.hubExpandedApps.has(app.id));
 
@@ -4846,7 +4870,7 @@ function injectTweetScaffoldStyles(): void {
       font: inherit;
       text-align: left;
     }
-    .milxdy-app-hub-card[data-tier="app"] .milxdy-app-hub-card-summary {
+    .milxdy-app-hub-card[data-tier="app"][data-rail-app="true"] .milxdy-app-hub-card-summary {
       grid-template-columns: 14px 32px minmax(0, 1fr) 18px;
     }
     .milxdy-app-hub-drag-handle {

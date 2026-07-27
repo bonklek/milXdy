@@ -373,7 +373,9 @@ An app or feature can declare a `composerAction` only for a user-initiated,
 composer-adjacent panel. It is not a rail action and must not call the package's
 standalone `open()` lifecycle. The platform owns the trigger, anchor,
 positioning, Escape/outside-click dismissal, and focus return; the package only
-renders into the supplied panel.
+renders into the supplied panel. Every declared package stylesheet is loaded
+into that panel's isolated shadow root before `onComposerAction()` runs. It does
+not style the X document, and the runtime never loads undeclared package files.
 
 ```json
 "composerAction": {
