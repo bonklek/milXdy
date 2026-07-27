@@ -40,7 +40,6 @@ try {
     /id:\s*"dev-note"[\s\S]{0,1500}?role:\s*"enablement"/u,
     "staged external package must be compiled into the runtime app registry with its generated enablement control",
   );
-
   run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);
   const baseline = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
   assert.equal(baseline.composition.state, "release-baseline");
