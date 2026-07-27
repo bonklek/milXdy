@@ -357,14 +357,14 @@ function mountBeetolGame(context = {}) {
     }
   }
 
-  function playTone(frequency, duration = 0.08, gain = 0.035) {
+  function playTone(frequency, duration = 0.08, gain = 0.035, type = 'triangle') {
     try {
       const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContext) return;
       audioContext ||= new AudioContext();
       const oscillator = audioContext.createOscillator();
       const volume = audioContext.createGain();
-      oscillator.type = 'triangle';
+      oscillator.type = type;
       oscillator.frequency.value = frequency;
       volume.gain.setValueAtTime(0.0001, audioContext.currentTime);
       volume.gain.exponentialRampToValueAtTime(gain, audioContext.currentTime + 0.01);
@@ -400,6 +400,28 @@ function mountBeetolGame(context = {}) {
     setTimeout(() => playTone(392, 0.045, 0.012), 88);
   }
 
+  function playFinalHuntFanfare() {
+    [
+      [523.25, 0, 0.07],
+      [659.25, 62, 0.07],
+      [783.99, 124, 0.09],
+      [1046.5, 210, 0.18],
+    ].forEach(([frequency, delay, duration]) => {
+      setTimeout(() => playTone(frequency, duration, 0.038, 'square'), delay);
+    });
+  }
+
+  function playCheeseClaimSound() {
+    playTone(466.16, 0.09, 0.045, 'sawtooth');
+    setTimeout(() => playTone(349.23, 0.2, 0.04, 'sawtooth'), 105);
+  }
+
+  function playJunkClaimSound() {
+    playTone(146.83, 0.11, 0.05, 'square');
+    playTone(932.33, 0.07, 0.023, 'square');
+    setTimeout(() => playTone(1396.91, 0.11, 0.018, 'square'), 18);
+  }
+
   function playActionSound(action = '') {
     if (action === 'catchBeetle' || action === 'claimUBC') {
       playClaimSound();
@@ -410,6 +432,18 @@ function mountBeetolGame(context = {}) {
       return;
     }
     playDefaultActionSound();
+  }
+
+  function playSuccessfulActionSound(action, finalHunt) {
+    if (finalHunt) {
+      playFinalHuntFanfare();
+      return;
+    }
+    if (action === 'claimUBC') {
+      playCheeseClaimSound();
+      return;
+    }
+    if (action === 'junkFaucet') playJunkClaimSound();
   }
 
   function playCrunchSuccessSound() {
@@ -973,6 +1007,7 @@ function mountBeetolGame(context = {}) {
     ));
     setMessage(gained.length ? `${label}: ${gained.join(', ')}` : `${label}: done.`);
     render();
+    playSuccessfulActionSound(action, finalHunt);
     if (finalHunt) scheduleFinalHuntDone();
     if (response.needsRefresh) void reconcileStateAfterAction();
   }
