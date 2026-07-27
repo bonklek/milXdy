@@ -38,6 +38,8 @@
 
 - [Add-ons Catalog source and publishing guide](ADD_ONS_CATALOG.md)
 - [Add-on catalog submissions](ADD_ON_CATALOG_SUBMISSIONS.md)
+- [milXdy setup and guides](https://bonklek.github.io/milXdy/)
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — no add-ons are published yet
 - [Contributor UI style guide](CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Localization scope and contributions](LOCALIZATION.md)
 - [Roadmap](ROADMAP.md)

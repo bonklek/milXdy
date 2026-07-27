@@ -63,6 +63,9 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [Privacy and permissions](docs/PRIVACY_AND_PERMISSIONS.md)
 - [App SDK and Local Add-ons](docs/APP_SDK_OVERVIEW.md)
 - [Add-on catalog submissions](docs/ADD_ON_CATALOG_SUBMISSIONS.md)
+- [milXdy setup and guides](https://bonklek.github.io/milXdy/)
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — no add-ons are published yet
+- [App SDK](docs/APP_SDK.md)
 - [Roadmap](docs/ROADMAP.md)
 - [Contributing](docs/CONTRIBUTING.md)
 - [Changelog](CHANGELOG.md)
