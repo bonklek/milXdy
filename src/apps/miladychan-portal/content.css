@@ -495,8 +495,7 @@
   font: 12px/1.35 var(--mc-font-text);
 }
 
-.milxdy-chan-compose textarea,
-.milxdy-chan-compose-subject {
+.milxdy-chan-compose textarea {
   width: 100%;
   min-height: 82px;
   box-sizing: border-box;
@@ -538,11 +537,6 @@
 
 .milxdy-chan-compose-actions .milxdy-chan-compose-discard {
   color: var(--mc-board-muted);
-}
-
-.milxdy-chan-compose-actions .milxdy-chan-compose-submit {
-  border-color: var(--mc-board-title);
-  color: var(--mc-board-title);
 }
 
 .milxdy-chan-empty {
