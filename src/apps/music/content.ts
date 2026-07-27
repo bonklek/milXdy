@@ -2032,8 +2032,28 @@ function trackRow(track: MusicTrack): HTMLElement {
   if (!isDefaultAchievementTrack(track)) {
     actions.append(iconButton("I", "Edit ISRC", () => void editTrackIsrc(track)));
   }
-  row.append(trackThumbnail(track), main, right, actions);
+  row.append(trackThumbnail(track), main, right, trackOverflow(actions));
   return row;
+}
+
+function trackOverflow(actions: HTMLElement): HTMLDetailsElement {
+  const overflow = document.createElement("details");
+  overflow.className = "milxdy-music-track-overflow";
+  const summary = document.createElement("summary");
+  summary.textContent = "…";
+  summary.setAttribute("aria-label", "Track actions");
+  const menu = document.createElement("div");
+  menu.className = "milxdy-music-track-overflow-menu";
+  for (const action of Array.from(actions.children)) {
+    if (!(action instanceof HTMLButtonElement)) continue;
+    const label = document.createElement("span");
+    label.className = "milxdy-music-track-overflow-label";
+    label.textContent = action.getAttribute("aria-label") || action.title || "Track action";
+    action.append(label);
+    menu.append(action);
+  }
+  overflow.append(summary, menu);
+  return overflow;
 }
 
 function trackThumbnail(track: MusicTrack): HTMLElement {

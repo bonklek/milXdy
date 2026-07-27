@@ -844,6 +844,9 @@
 }
 
 .milxdy-music-track-overflow-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   width: 100%;
   min-height: 30px;
   padding: 5px 8px;
@@ -853,6 +856,13 @@
   color: var(--music-text);
   font: 12px/1.2 var(--music-font-ui);
   text-align: left;
+}
+
+.milxdy-music-track-overflow-menu .milxdy-music-track-overflow-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .milxdy-music-track-overflow-menu button:hover,

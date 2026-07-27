@@ -388,7 +388,7 @@ export function injectStyles(): void {
     .post-reading-settings {
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
-      max-height: min(var(--post-reading-settings-max-height, 520px), calc(100vh - 260px));
+      max-height: var(--post-reading-settings-max-height, 660px);
       overflow: hidden;
       padding: 0;
       background: var(--post-reading-surface-1);
@@ -633,7 +633,7 @@ export function injectStyles(): void {
       border-radius: 4px;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
-      transition: background var(--post-reading-fill-duration) linear;
+      transition: none;
     }
     [data-post-reading-smooth-word="true"][data-post-reading-smooth-filled="true"] {
       --post-reading-fill: 100%;

@@ -17,7 +17,7 @@ import { MiniPlayer } from "./player";
 import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
 import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./shared/types";
 import { playEndDing } from "./sounds";
-import { SpeechController } from "./speech";
+import { SpeechController, type BoundarySupport } from "./speech";
 import { injectStyles } from "./styles";
 import { configurePostReadingStorage, loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
@@ -154,9 +154,12 @@ type HighlightSpeechState = {
   charLength: number | null;
   boundaryElapsedTime: number | null;
   hasSyncedBoundaries: boolean;
+  hasStarted?: boolean;
+  isPriming?: boolean;
 };
 
 let activeWikiDocument: WikiReadableDocument | null = null;
+let voiceBoundarySupport: Record<string, BoundarySupport> = {};
 let wikiPlayerSlot: HTMLElement | null = null;
 
 export async function boot(context?: MilxdyContentAppContext): Promise<void> {
@@ -255,9 +258,18 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   player.setAppFrame(appFrame);
   void loadVoiceBoundarySupport().then((results) => {
     if (lifecycleActive()) {
-      player.setBoundarySupport(results);
-      wikiPlayer.setBoundarySupport(results);
+      // Preserve an observed boundary that arrived while storage was loading.
+      voiceBoundarySupport = { ...results, ...voiceBoundarySupport };
+      player.setBoundarySupport(voiceBoundarySupport);
+      wikiPlayer.setBoundarySupport(voiceBoundarySupport);
     }
+  });
+  speech.onBoundaryObserved((voiceURI) => {
+    if (voiceBoundarySupport[voiceURI] === "supported") return;
+    voiceBoundarySupport = { ...voiceBoundarySupport, [voiceURI]: "supported" };
+    void saveVoiceBoundarySupport(voiceBoundarySupport);
+    player.setBoundarySupport(voiceBoundarySupport);
+    wikiPlayer.setBoundarySupport(voiceBoundarySupport);
   });
   addDisposable(speech.subscribe((state) => {
     player.updateState(state);
@@ -1628,6 +1640,9 @@ function markActiveButton(tweet: HTMLElement): void {
 }
 
 function updateTweetHighlight(state: HighlightSpeechState): void {
+  // Voice priming is intentionally invisible to the post text. The player
+  // reports it separately so a silent probe cannot move or paint a cursor.
+  if (state.isPriming) return;
   if (currentTweet) updatePostNavigationAvailability();
   if (state.status === "idle") {
     if (deferNextIdleHighlightCleanup) {
@@ -1659,6 +1674,13 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     clearActiveTweets();
     updateOcrSkipAvailability(null);
     lastChunkIndex = null;
+    return;
+  }
+  // Do not create a synthetic first-token paint while the utterance is merely
+  // queued. A native boundary or the bounded estimated-progress fallback owns
+  // the first visible cursor position.
+  if (state.hasStarted === false) {
+    clearEstimatedHighlightLoop();
     return;
   }
   if (currentTweet) {
@@ -1737,6 +1759,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     charLength: state.charLength,
     textLength: paintTarget.text.length,
     snapToCurrent: highlightJumped || state.status !== "speaking",
+    animate: true,
     boundaryElapsedTime: state.boundaryElapsedTime ?? null,
   });
   const paintMs = performance.now() - paintStartedAt;
@@ -1746,7 +1769,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
 }
 
 function updateEstimatedHighlightLoop(state: HighlightSpeechState): void {
-  if (state.status !== "speaking") return;
+  if (state.status !== "speaking" || state.hasStarted === false) return;
   const delay = highlightProgressClock.nextUpdateDelay(state, performance.now());
   if (delay === null) return;
   if (estimatedHighlightTimer !== null) window.clearTimeout(estimatedHighlightTimer);
@@ -1832,7 +1855,6 @@ function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlight
 
 function currentSpeechAbsoluteIndex(state: HighlightSpeechState): number | null {
   if (state.chunkStart === null) return null;
-  if (state.hasSyncedBoundaries) return state.charIndex ?? state.chunkStart;
   return highlightProgressClock.resolveIndex(
     state,
     performance.now(),

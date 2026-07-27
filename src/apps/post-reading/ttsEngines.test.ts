@@ -7,6 +7,7 @@ class FakeUtterance {
   volume = 1;
   voice: SpeechSynthesisVoice | null = null;
   onboundary: ((event: SpeechSynthesisEvent) => void) | null = null;
+  onstart: (() => void) | null = null;
   onend: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
@@ -25,7 +26,12 @@ describe("WebSpeechEngine", () => {
       resume: vi.fn(() => calls.push("resume")),
       speak: vi.fn(() => calls.push("speak")),
     };
-    vi.stubGlobal("window", { speechSynthesis, SpeechSynthesisUtterance: FakeUtterance });
+    vi.stubGlobal("window", {
+      speechSynthesis,
+      SpeechSynthesisUtterance: FakeUtterance,
+      setTimeout: globalThis.setTimeout.bind(globalThis),
+      clearTimeout: globalThis.clearTimeout.bind(globalThis),
+    });
     vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
 
     const engine = new WebSpeechEngine(() => null);
@@ -33,6 +39,7 @@ describe("WebSpeechEngine", () => {
       text: "Reader playback should start.",
       settings: { speed: 1, volume: 1, voiceURI: null, autoVoice: true } as PostReadingSettings,
       onBoundary: vi.fn(),
+      onStart: vi.fn(),
       onEnd: vi.fn(),
       onError: vi.fn(),
     });

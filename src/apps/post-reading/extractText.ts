@@ -391,7 +391,11 @@ function extractTweetTextNodeText(node: HTMLElement, includeHyperlinks: boolean)
 }
 
 export function removeNonReadableTweetTextArtifacts(root: HTMLElement): void {
-  for (const element of Array.from(root.querySelectorAll("style, script, noscript, template, svg, canvas, number-flow-react"))) {
+  // RemiStats injects score and beetle badges beside tweet and quote content.
+  // Those numbers are interface context, not part of the post being read.
+  for (const element of Array.from(root.querySelectorAll(
+    "style, script, noscript, template, svg, canvas, number-flow-react, [data-reminet-badge], [data-reminet-badge-row], [data-reminet-badge-slot], [data-reminet-icon], [data-reminet-poke], [data-milxdy-tweet-slot=\"remistats-badge\"], .reminet-score-badge, .reminet-badge-content, .reminet-badge-group",
+  ))) {
     element.remove();
   }
 }
@@ -426,6 +430,7 @@ function extractAuthorDisplayName(container: HTMLElement, quoteElement: HTMLElem
 function extractDisplayNameFromUserName(userName: HTMLElement): string | null {
   const spans = Array.from(userName.querySelectorAll("span"));
   for (const span of spans) {
+    if (span.closest("[data-reminet-badge], [data-reminet-badge-row], [data-reminet-badge-slot], [data-reminet-icon], .reminet-score-badge, .reminet-badge-content, .reminet-badge-group")) continue;
     const text = cleanText(span.textContent || "");
     if (!text || text === "·" || text.startsWith("@")) continue;
     if (/^\d+[smhd]$/.test(text)) continue;
