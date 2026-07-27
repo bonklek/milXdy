@@ -134,7 +134,7 @@ type SpotlightState = {
   theme: "light" | "dark" | "system";
   lastLoadedAt: number;
   layoutReady: boolean;
-  draft: PostDraft | null;
+  drafts: PostDraft[];
   draftNotice: string;
 };
 
@@ -159,7 +159,7 @@ const state: SpotlightState = {
   theme: "system",
   lastLoadedAt: 0,
   layoutReady: false,
-  draft: null,
+  drafts: [],
   draftNotice: "",
 };
 let booted = false;
@@ -279,7 +279,7 @@ async function loadTheme(): Promise<void> {
 async function loadDraft(): Promise<void> {
   const stored: Record<string, unknown> = await chrome.storage.local.get(DRAFT_KEY).catch(() => ({}));
   if (!lifecycleActive()) return;
-  state.draft = normalizeDraft(stored[DRAFT_KEY]);
+  state.drafts = normalizeDrafts(stored[DRAFT_KEY]);
   render();
 }
 
@@ -683,21 +683,21 @@ function createPostHandoff(board: string, threadId: number | null): HTMLElement 
 }
 
 function draftForDestination(board: string, threadId: number | null): PostDraft | null {
-  const draft = state.draft;
-  return draft?.board === board && draft.threadId === threadId ? draft : null;
+  return state.drafts.find((draft) => draft.board === board && draft.threadId === threadId) || null;
 }
 
 async function saveDraft(draft: PostDraft): Promise<void> {
-  state.draft = draft;
+  state.drafts = [...state.drafts.filter((current) => current.board !== draft.board || current.threadId !== draft.threadId), draft];
   state.draftNotice = "Draft saved locally.";
-  await chrome.storage.local.set({ [DRAFT_KEY]: draft }).catch(() => undefined);
+  await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
 }
 
 async function clearDraft(board: string, threadId: number | null): Promise<void> {
   if (!draftForDestination(board, threadId)) return;
-  state.draft = null;
+  state.drafts = state.drafts.filter((draft) => draft.board !== board || draft.threadId !== threadId);
   state.draftNotice = "Saved draft discarded.";
-  await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
+  if (state.drafts.length) await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
+  else await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
   render();
 }
 
@@ -713,6 +713,15 @@ async function copyDraft(body: string, notice: HTMLElement): Promise<void> {
 
 function nativeDestinationUrl(board: string, threadId: number | null): string {
   return threadId === null ? `${API_ROOT}/${board}/` : `${API_ROOT}/${board}/${threadId}`;
+}
+
+function normalizeDrafts(value: unknown): PostDraft[] {
+  if (Array.isArray(value)) return value.map(normalizeDraft).filter((draft): draft is PostDraft => draft !== null);
+  if (value && typeof value === "object" && Array.isArray((value as { drafts?: unknown }).drafts)) {
+    return (value as { drafts: unknown[] }).drafts.map(normalizeDraft).filter((draft): draft is PostDraft => draft !== null);
+  }
+  const legacyDraft = normalizeDraft(value);
+  return legacyDraft ? [legacyDraft] : [];
 }
 
 function normalizeDraft(value: unknown): PostDraft | null {
