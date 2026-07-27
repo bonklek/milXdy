@@ -80,6 +80,29 @@
         "defaultSide": { "enum": ["left", "right"] }
       }
     },
+    "composerAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["label", "presentation"],
+      "properties": {
+        "label": { "type": "string", "minLength": 1 },
+        "presentation": { "const": "anchoredPanel" },
+        "icon": {
+          "oneOf": [
+            { "$ref": "#/$defs/relativePath" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["light", "dark"],
+              "properties": {
+                "light": { "$ref": "#/$defs/relativePath" },
+                "dark": { "$ref": "#/$defs/relativePath" }
+              }
+            }
+          ]
+        }
+      }
+    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
