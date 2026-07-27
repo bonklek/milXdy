@@ -661,14 +661,35 @@ function isUsableMessagesTimelineCell(element: HTMLElement): boolean {
 function findDmConversationPane(): HTMLElement | null {
   const container = findDmContainer();
   if (!container) return null;
-  const panel = container.querySelector<HTMLElement>('[data-testid="dm-conversation-panel"]');
-  if (panel && panel.offsetWidth >= 320) return panel;
-  const candidates = Array.from(container.querySelectorAll<HTMLElement>('[role="region"], main, section, div'))
-    .filter((element) => element.id !== ROOT_ID && element.offsetWidth >= 320 && element.offsetHeight >= 260);
   const listMount = findDmListMount();
-  return candidates
+  if (!listMount) return null;
+  const listRect = listMount.getBoundingClientRect();
+  if (listRect.width < 240 || listRect.height < 260) return null;
+  const panel = container.querySelector<HTMLElement>('[data-testid="dm-conversation-panel"]');
+  if (panel && isAdjacentDmConversationPane(panel, listRect)) return panel;
+  const candidates = Array.from(container.querySelectorAll<HTMLElement>('[role="region"], main, section, div'))
     .filter((element) => element !== listMount && !element.contains(listMount))
-    .sort((left, right) => right.offsetWidth * right.offsetHeight - left.offsetWidth * left.offsetHeight)[0] || null;
+    .filter((element) => isAdjacentDmConversationPane(element, listRect));
+  return candidates
+    .sort((left, right) => {
+      const leftRect = left.getBoundingClientRect();
+      const rightRect = right.getBoundingClientRect();
+      const leftGap = Math.abs(leftRect.left - listRect.right);
+      const rightGap = Math.abs(rightRect.left - listRect.right);
+      if (leftGap !== rightGap) return leftGap - rightGap;
+      return leftRect.width - rightRect.width;
+    })[0] || null;
+}
+
+function isAdjacentDmConversationPane(element: HTMLElement, listRect: DOMRect): boolean {
+  if (element.id === ROOT_ID || element.closest('[data-testid="sidebarColumn"]')) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 320 || rect.height < 260) return false;
+  const horizontalGap = rect.left - listRect.right;
+  const verticalOverlap = Math.max(0, Math.min(rect.bottom, listRect.bottom) - Math.max(rect.top, listRect.top));
+  return horizontalGap >= -8
+    && horizontalGap <= 32
+    && verticalOverlap >= Math.min(rect.height, listRect.height) * 0.6;
 }
 
 function ensurePseudoChatRow(): void {
