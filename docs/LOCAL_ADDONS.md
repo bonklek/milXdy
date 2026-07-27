@@ -66,6 +66,19 @@ The composer may require additional explicit consent flags for privileged surfac
 
 Local add-ons use the existing App SDK package schema, archive limits, path checks, file hashes, permission/privacy declarations, lifecycle checks, and sensitive-API scanner. These checks support review; they are not a JavaScript sandbox. Only build packages you trust.
 
+## External author shared-QA route
+
+An author does not need to manually copy a reviewed folder or ZIP into this
+repository to reach maintainer Chrome QA. The release steward runs the active QA
+host's documented `qa:build -- --local-app-package=...` route in
+[Developer QA reload](DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
+It accepts one explicitly selected package, validates it with the same composer,
+and publishes it to the release's one persistent QA extension. The generated QA
+provenance records package identity and hashes, never the author's local path.
+
+This is a build-time review path only: it does not download packages, update
+them automatically, add marketplace behavior, or load package code dynamically.
+
 The current manager targets Chromium. It does not watch a download folder, update packages automatically, remove packages from inside Chrome, or execute package code dynamically. Catalog downloads happen only when the user supplies a selection and runs Prepare. See the [App SDK guide](APP_SDK.md) for package authoring and trust requirements.
 
 ## Catalog selections

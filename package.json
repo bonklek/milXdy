@@ -31,6 +31,7 @@
     "qa:status": "node scripts/qa/qa-handoff.mjs status",
     "verify:qa-reload": "node scripts/verify/qa-reload-tool.mjs",
     "verify:qa-handoff": "node scripts/verify/qa-handoff-tool.mjs",
+    "verify:qa-external-local-package": "node scripts/verify/qa-external-local-package.mjs",
     "typecheck": "tsc --noEmit",
     "lint:firefox": "node scripts/verify/firefox-lint.mjs",
     "verify:music": "node scripts/verify/music-build.mjs",

@@ -20,7 +20,14 @@ const QA_MANIFEST_KEY = "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0K0sWrJ0FvF
 export async function main(argv = process.argv.slice(2)) {
   const once = argv.includes("--once");
   const watch = argv.includes("--watch") || !once;
-  const replaceForeignOutput = argv.includes("--replace-foreign-output");
+  const returnToBaseline = argv.includes("--return-to-baseline");
+  const localAppPackages = readRepeatedArg(argv, "--local-app-package");
+  const trustFlags = ["--allow-local-review", "--acknowledge-package-consent", "--acknowledge-first-party-replacement", "--allow-sensitive-package-apis"]
+    .filter((flag) => argv.includes(flag));
+  if (returnToBaseline && localAppPackages.length > 0) throw new Error("--return-to-baseline cannot be combined with --local-app-package.");
+  if (localAppPackages.length > 1) throw new Error("QA external composition accepts exactly one explicitly selected package.");
+  if (localAppPackages.length > 0 && !once) throw new Error("QA external composition is one-shot only; use --once.");
+  const replaceForeignOutput = argv.includes("--replace-foreign-output") || returnToBaseline;
   const outputDir = resolvePersistentQaOutput(readArg(argv, "--publish-dir") || process.env.MILXDY_QA_OUTPUT_DIR || DEFAULT_OUTPUT);
   const builder = readArg(argv, "--builder") || "scripts/build/build-extension.mjs";
   const port = readIntegerArg(argv, "--port", DEFAULT_PORT);
@@ -40,7 +47,10 @@ export async function main(argv = process.argv.slice(2)) {
     do {
       queued = false;
       try {
-        const build = await buildQaOnce({ outputDir, builder, port, replaceForeignOutput });
+        const composition = localAppPackages.length === 1
+          ? await prepareExternalLocalPackageComposition(localAppPackages[0], trustFlags)
+          : baselineComposition();
+        const build = await buildQaOnce({ outputDir, builder, builderArgs: composition.builderArgs, composition: composition.provenance, port, replaceForeignOutput });
         state.build = build;
         process.exitCode = 0;
         releaseWaiters(state);
@@ -79,7 +89,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", port = DEFAULT_PORT, quiet = false, replaceForeignOutput = false } = {}) {
+export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", builderArgs = [], composition = baselineComposition(), port = DEFAULT_PORT, quiet = false, replaceForeignOutput = false } = {}) {
   const outputRoot = resolveQaBuildOutput(outputDir);
   const stagingRelative = `${DEFAULT_STAGING_ROOT}/staging-${process.pid}-${Date.now()}`;
   const staging = resolve(assertSafeGeneratedOutputDir(stagingRelative, "QA staging directory"));
@@ -87,12 +97,12 @@ export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scrip
   await rm(staging, { recursive: true, force: true });
 
   try {
-    await runBuilder(builder, stagingRelative, quiet);
+    await runBuilder(builder, stagingRelative, builderArgs, quiet);
     const after = await collectSourceIdentity();
     if (before.sourceSha256 !== after.sourceSha256) {
       throw new Error("source changed during the build; discarded mixed-source output and queued a clean rebuild");
     }
-    const provenance = createProvenance(after, outputRoot, port);
+    const provenance = createProvenance(after, outputRoot, port, composition);
     await injectQaRuntime(staging, provenance);
     await verifyStagedOutput(staging, provenance);
     await assertOutputCanBeReplaced(outputRoot, provenance, replaceForeignOutput);
@@ -117,6 +127,72 @@ export function createDebouncer(callback, delayMs) {
     timer = null;
   };
   return trigger;
+}
+
+function baselineComposition() {
+  return {
+    builderArgs: [],
+    provenance: {
+      state: "release-baseline",
+      fingerprint: "release-baseline",
+      packages: [],
+    },
+  };
+}
+
+async function prepareExternalLocalPackageComposition(packagePath, trustFlags) {
+  const compositionDir = "tmp/qa-local-app-composition";
+  const planPath = `${compositionDir}/build-plan.json`;
+  await rm(resolve(compositionDir), { recursive: true, force: true });
+  await runNode([
+    "scripts/packages/compose-local-app-packages.mjs",
+    `--package=${packagePath}`,
+    `--out-dir=${compositionDir}`,
+    `--plan-out=${planPath}`,
+    "--stage-external-packages",
+    ...trustFlags,
+  ]);
+  const plan = JSON.parse(await readFile(resolve(planPath), "utf8"));
+  if (!Array.isArray(plan.selectedPackageIds) || plan.selectedPackageIds.length !== 1) {
+    throw new Error("QA external composition requires exactly one accepted package.");
+  }
+  const diagnostic = (plan.diagnostics || []).find((entry) => entry.packageId === plan.selectedPackageIds[0]);
+  if (!diagnostic?.manifestSha256 || !diagnostic?.contentSha256 || !diagnostic?.packageSha256) {
+    throw new Error("QA external composition plan is missing package hash provenance.");
+  }
+  const serializedPlan = JSON.stringify(plan);
+  if (pathContainsAbsoluteLocalPath(serializedPlan)) {
+    throw new Error("QA external composition plan must not retain an absolute package path.");
+  }
+  return {
+    builderArgs: [`--local-app-plan=${planPath}`],
+    provenance: {
+      state: "external-local-package",
+      fingerprint: plan.compositionFingerprint,
+      packages: [{
+        id: diagnostic.packageId,
+        version: diagnostic.version,
+        manifestSha256: diagnostic.manifestSha256,
+        contentSha256: diagnostic.contentSha256,
+        packageSha256: diagnostic.packageSha256,
+      }],
+    },
+  };
+}
+
+function pathContainsAbsoluteLocalPath(value) {
+  return /(?<![A-Za-z])[A-Za-z]:[\\/]/u.test(value);
+}
+
+function runNode(args) {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(process.execPath, args, { cwd: resolve("."), stdio: "inherit", windowsHide: true });
+    child.once("error", reject);
+    child.once("exit", (code, signal) => {
+      if (code === 0) resolvePromise();
+      else reject(new Error(`local package composer exited ${signal ? `for signal ${signal}` : `with code ${code}`}`));
+    });
+  });
 }
 
 export function resolvePersistentQaOutput(value = DEFAULT_OUTPUT) {
@@ -224,12 +300,12 @@ export async function startCoordinator(state, port = DEFAULT_PORT) {
   return server;
 }
 
-function createProvenance(source, outputDir, coordinatorPort) {
+function createProvenance(source, outputDir, coordinatorPort, composition) {
   const builtAt = new Date().toISOString();
   const stamp = builtAt.replaceAll(/[-:.]/g, "").replace("Z", "Z");
   const shortCommit = source.commit.slice(0, 8);
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     channel: "developer-qa",
     buildId: `${stamp}-${shortCommit}-${source.sourceSha256.slice(0, 12)}`,
     builtAt,
@@ -241,6 +317,7 @@ function createProvenance(source, outputDir, coordinatorPort) {
       fileCount: source.fileCount,
     },
     build: { target: "chromium", profile: "full", node: process.version },
+    composition,
     extensionId: extensionIdFromManifestKey(QA_MANIFEST_KEY),
     output: resolve(outputDir),
     worktree: resolve("."),
@@ -311,7 +388,8 @@ async function verifyStagedOutput(staging, provenance) {
 async function assertOutputCanBeReplaced(output, provenance, replaceForeignOutput) {
   const existingProvenance = await readJson(resolve(output, "qa-build.json")).catch(() => null);
   if (!existingProvenance || replaceForeignOutput) return;
-  if (existingProvenance.source?.sha256 === provenance.source?.sha256) return;
+  if (existingProvenance.source?.sha256 === provenance.source?.sha256
+    && existingProvenance.composition?.fingerprint === provenance.composition?.fingerprint) return;
   throw new Error("QA output belongs to a different source snapshot. Use qa:apply-next for a submitted handoff, or rerun qa:build with --replace-foreign-output after intentionally switching sources.");
 }
 
@@ -378,9 +456,9 @@ function coordinatorMessage(action, build) {
   };
 }
 
-function runBuilder(builder, stagingRelative, quiet = false) {
+function runBuilder(builder, stagingRelative, builderArgs = [], quiet = false) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", `--output-dir=${stagingRelative}`], {
+    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", `--output-dir=${stagingRelative}`, ...builderArgs], {
       cwd: resolve("."),
       stdio: quiet ? "ignore" : "inherit",
       windowsHide: true,
@@ -416,6 +494,11 @@ function shouldIgnoreWatchPath(filename) {
 function readArg(argv, name) {
   const prefix = `${name}=`;
   return argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+}
+
+function readRepeatedArg(argv, name) {
+  const prefix = `${name}=`;
+  return argv.filter((arg) => arg.startsWith(prefix)).map((arg) => arg.slice(prefix.length));
 }
 
 function readIntegerArg(argv, name, fallback) {
