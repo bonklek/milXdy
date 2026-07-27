@@ -132,6 +132,10 @@ export class MiniPlayer {
     const settingsButton = controlButton("Settings", "settings", () => {
       this.settingsPanel.hidden = !this.settingsPanel.hidden;
       this.root.dataset.settingsOpen = String(!this.settingsPanel.hidden);
+      if (!this.settingsPanel.hidden && !this.root.dataset.attached) {
+        const available = Math.max(120, window.innerHeight - this.y - 16);
+        this.height = Math.min(available, Math.max(this.height, 660));
+      }
       this.applyFrameLayout();
       if (!this.settingsPanel.hidden) this.renderSettings();
     });
@@ -203,16 +207,21 @@ export class MiniPlayer {
       this.setVisible(!(state.status === "idle" && !state.title));
     }
     const progress = state.chunkCount > 1 ? ` ${state.chunkIndex}/${state.chunkCount}` : "";
-    this.title.textContent = state.error || `${state.title || "Post-reading"}${progress}`;
+    this.title.textContent = state.error || (state.isPriming
+      ? "Preparing selected voice…"
+      : `${state.title || "Post-reading"}${progress}`);
     this.lastSpeechStatus = state.status;
     this.setPlayButtonIcon(state.status === "speaking");
   }
 
   setPostNavigationAvailability(availability: { previous: boolean; next: boolean }): void {
-    this.previousPostButton.disabled = !availability.previous;
-    this.nextPostButton.disabled = !availability.next;
-    this.previousPostButton.title = availability.previous ? "Previous post" : "No previous post";
-    this.nextPostButton.title = availability.next ? "Next post" : "No next post";
+    // Explicit navigation may scroll and rescan beyond currently mounted posts.
+    // Availability is informational only; never turn a discoverable direction
+    // into a dead control.
+    this.previousPostButton.disabled = false;
+    this.nextPostButton.disabled = false;
+    this.previousPostButton.title = availability.previous ? "Previous post" : "Find previous post";
+    this.nextPostButton.title = availability.next ? "Next post" : "Find next post";
   }
 
   updateSettings(settings: PostReadingSettings): void {
@@ -357,7 +366,7 @@ export class MiniPlayer {
     this.root.style.top = `${this.y}px`;
     this.root.style.width = `${this.width}px`;
     this.root.style.height = this.settingsPanel.hidden ? "auto" : `${this.height}px`;
-    this.root.style.setProperty("--post-reading-settings-max-height", `${this.height}px`);
+    this.root.style.setProperty("--post-reading-settings-max-height", `${Math.max(120, this.height)}px`);
     this.root.dataset.panelSide = side;
     markOverlayAppLayoutReady(this.root, this.layoutReady);
   }
@@ -462,7 +471,7 @@ export class MiniPlayer {
     const sortedVoices = sortVoicesByBoundarySupport(filteredVoices, this.boundarySupport);
     const currentVoice = voices.find((voice) => voice.voiceURI === this.settings.voiceURI) || null;
     const preferredVoice = this.actions.getPreferredVoice();
-    const probeVoices = voicesForProbe(currentVoice || preferredVoice, sortedVoices);
+    const probeVoice = currentVoice || preferredVoice || sortedVoices[0] || null;
     const voiceFilterRow = document.createElement("div");
     voiceFilterRow.className = "post-reading-voice-row";
     const languageLabel = document.createElement("label");
@@ -500,8 +509,14 @@ export class MiniPlayer {
       voiceSelect.append(new Option(`${currentVoice.name} (${currentVoice.lang})`, currentVoice.voiceURI));
     }
     for (const voice of sortedVoices) {
-      const support = this.boundarySupport.get(voice.voiceURI) ?? knownVoiceBoundarySupport(voice);
-      const suffix = support === "supported" ? " - highlights" : support === "unsupported" ? " - no word sync" : "";
+      const storedSupport = this.boundarySupport.get(voice.voiceURI) ?? "unknown";
+      const suffix = storedSupport === "supported"
+        ? " - ✓ Synced highlighting"
+        : storedSupport === "unsupported"
+          ? " - ~ Estimated highlighting"
+          : knownVoiceBoundarySupport(voice) === "supported"
+            ? " - Likely synced"
+            : " - Checks on first use";
       voiceSelect.append(new Option(`${voice.name} (${voice.lang})${suffix}`, voice.voiceURI));
     }
     voiceSelect.value = this.settings.voiceURI || "";
@@ -536,11 +551,11 @@ export class MiniPlayer {
     const probeButton = document.createElement("button");
     probeButton.type = "button";
     probeButton.className = "post-reading-secondary";
-    probeButton.textContent = this.probingVoices ? "Stop testing voices" : "Test voice highlighting";
-    probeButton.disabled = !this.probingVoices && probeVoices.length === 0;
+    probeButton.textContent = this.probingVoices ? "Stop rechecking voice" : "Recheck selected voice";
+    probeButton.disabled = !this.probingVoices && !probeVoice;
     probeButton.addEventListener("click", () => {
       if (this.probingVoices) this.stopProbe();
-      else void this.probeVoices(probeVoices);
+      else if (probeVoice) void this.probeVoices([probeVoice]);
     });
 
     const speedLabel = document.createElement("label");
@@ -662,12 +677,6 @@ export class MiniPlayer {
       for (const voice of voices) {
         if (signal.aborted) break;
         if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
-        if (knownVoiceBoundarySupport(voice) === "supported") {
-          this.boundarySupport.set(voice.voiceURI, "supported");
-          this.actions.onBoundarySupportChange(Object.fromEntries(this.boundarySupport));
-          this.renderSettings();
-          continue;
-        }
         const supported = await this.actions.probeBoundarySupport(voice, signal);
         if (signal.aborted) break;
         this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");
@@ -691,8 +700,8 @@ function sortVoicesByBoundarySupport(
   boundarySupport: Map<string, BoundarySupport>,
 ): SpeechSynthesisVoice[] {
   return [...voices].sort((left, right) => {
-    const leftRank = supportRank(boundarySupport.get(left.voiceURI) ?? knownVoiceBoundarySupport(left));
-    const rightRank = supportRank(boundarySupport.get(right.voiceURI) ?? knownVoiceBoundarySupport(right));
+    const leftRank = supportRank(boundarySupport.get(left.voiceURI) ?? "unknown");
+    const rightRank = supportRank(boundarySupport.get(right.voiceURI) ?? "unknown");
     if (leftRank !== rightRank) return leftRank - rightRank;
     const leftEnglish = /^en[-_]?/i.test(left.lang) ? 0 : 1;
     const rightEnglish = /^en[-_]?/i.test(right.lang) ? 0 : 1;

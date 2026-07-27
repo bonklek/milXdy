@@ -1,5 +1,4 @@
 import type { PostReadingSettings } from "./shared/types";
-import { hasKnownSyncedBoundaries } from "./voiceSupport";
 
 export type TtsBoundary = {
   charIndex: number;
@@ -17,6 +16,7 @@ export type TtsRequest = {
   text: string;
   settings: PostReadingSettings;
   signal?: AbortSignal;
+  onStart: () => void;
   onBoundary: (boundary: TtsBoundary) => void;
   onEnd: () => void;
   onError: (message: string) => void;
@@ -38,7 +38,10 @@ export type TtsEngine = {
   getVoices?: () => SpeechSynthesisVoice[];
   getPreferredVoice?: () => SpeechSynthesisVoice | null;
   probeBoundarySupport?: (voice: SpeechSynthesisVoice, signal?: AbortSignal) => Promise<boolean>;
+  primeSelectedVoice?: (settings: PostReadingSettings, signal?: AbortSignal) => Promise<void>;
 };
+
+const primedVoiceUris = new Set<string>();
 
 type CustomSpeechResponse = {
   audioUrl?: unknown;
@@ -73,15 +76,24 @@ export class WebSpeechEngine implements TtsEngine {
     }
 
     const utterance = new SpeechSynthesisUtterance(request.text);
+    const speechSynthesis = window.speechSynthesis;
     utterance.rate = request.settings.speed;
     utterance.volume = request.settings.volume;
     const voice = this.chooseVoice(this.getVoices(), request.settings.voiceURI, request.settings.autoVoice);
     if (voice) utterance.voice = voice;
-    const startsWithKnownSyncedBoundaries = hasKnownSyncedBoundaries(voice);
-
     let stopped = false;
+    let started = false;
+    let startFallback: number | null = null;
+    const acknowledgeStart = () => {
+      if (stopped || started) return;
+      started = true;
+      if (startFallback !== null) window.clearTimeout(startFallback);
+      startFallback = null;
+      request.onStart();
+    };
     const abortPlayback = () => {
       stopped = true;
+      if (startFallback !== null) window.clearTimeout(startFallback);
       window.speechSynthesis.cancel();
     };
     request.signal?.addEventListener("abort", abortPlayback, { once: true });
@@ -94,6 +106,7 @@ export class WebSpeechEngine implements TtsEngine {
         elapsedTime: event.elapsedTime,
       });
     };
+    utterance.onstart = acknowledgeStart;
     utterance.onend = () => {
       request.signal?.removeEventListener("abort", abortPlayback);
       if (!stopped) request.onEnd();
@@ -108,13 +121,19 @@ export class WebSpeechEngine implements TtsEngine {
     // optimistically reports "speaking". Clear that stale state before enqueueing.
     window.speechSynthesis.resume();
     window.speechSynthesis.speak(utterance);
+    // Some Chromium voices speak without dispatching onstart. The synthesizer's
+    // own live state is a bounded fallback acknowledgement, never a boundary.
+    startFallback = window.setTimeout(() => {
+      if (!stopped && speechSynthesis.speaking) acknowledgeStart();
+    }, 120);
 
     return {
-      hasSyncedBoundaries: startsWithKnownSyncedBoundaries,
+      hasSyncedBoundaries: false,
       pause: () => window.speechSynthesis.pause(),
       resume: () => window.speechSynthesis.resume(),
       stop: () => {
         stopped = true;
+        if (startFallback !== null) window.clearTimeout(startFallback);
         request.signal?.removeEventListener("abort", abortPlayback);
         window.speechSynthesis.cancel();
       },
@@ -124,6 +143,53 @@ export class WebSpeechEngine implements TtsEngine {
   getVoices(): SpeechSynthesisVoice[] {
     if (!("speechSynthesis" in window)) return [];
     return window.speechSynthesis.getVoices();
+  }
+
+  async primeSelectedVoice(settings: PostReadingSettings, signal?: AbortSignal): Promise<void> {
+    const browserWindow = globalThis.window;
+    if (!browserWindow || !("speechSynthesis" in browserWindow) || !("SpeechSynthesisUtterance" in browserWindow) || signal?.aborted) return;
+    // A partial Web Speech shim cannot be primed safely. Browsers expose these
+    // live state flags; their absence means leave the normal utterance alone.
+    if (typeof browserWindow.speechSynthesis.speaking !== "boolean" && typeof browserWindow.speechSynthesis.pending !== "boolean") return;
+    const voice = this.chooseVoice(this.getVoices(), settings.voiceURI, settings.autoVoice);
+    const key = voice?.voiceURI || "default";
+    if (primedVoiceUris.has(key)) return;
+    await new Promise<void>((resolve) => {
+      const utterance = new browserWindow.SpeechSynthesisUtterance("one two three four");
+      utterance.voice = voice || null;
+      // Chromium may not initialize a voice at near-zero volume. This is the
+      // lowest level already proven by the manual boundary probe.
+      utterance.volume = 0.05;
+      utterance.rate = 2.5;
+      let settled = false;
+      let boundaries = 0;
+      let lastIndex = -1;
+      const schedule = globalThis.window?.setTimeout || globalThis.setTimeout;
+      const cancelSchedule = globalThis.window?.clearTimeout || globalThis.clearTimeout;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        cancelSchedule(timeout);
+        signal?.removeEventListener("abort", finish);
+        browserWindow.speechSynthesis.cancel();
+        schedule(resolve, 0);
+      };
+      const timeout = schedule(finish, 750);
+      utterance.onboundary = (event) => {
+        if (event.charIndex > lastIndex) {
+          lastIndex = event.charIndex;
+          boundaries += 1;
+          if (boundaries >= 2) finish();
+        }
+      };
+      utterance.onend = finish;
+      utterance.onerror = finish;
+      signal?.addEventListener("abort", finish, { once: true });
+      browserWindow.speechSynthesis.cancel();
+      browserWindow.speechSynthesis.resume();
+      browserWindow.speechSynthesis.speak(utterance);
+    });
+    if (!signal?.aborted) primedVoiceUris.add(key);
   }
 }
 
@@ -233,6 +299,7 @@ export class CustomHttpTtsEngine implements TtsEngine {
       if (startDeadline !== null) window.clearTimeout(startDeadline);
       if (rejectPendingPlayback) request.signal?.removeEventListener("abort", rejectPendingPlayback);
     }
+    request.onStart();
     scheduleBoundaries(0);
 
     return {

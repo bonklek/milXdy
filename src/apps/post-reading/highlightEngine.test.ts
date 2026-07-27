@@ -16,7 +16,7 @@ beforeEach(() => {
 
   const browserWindow = {
     requestAnimationFrame: (callback: FrameRequestCallback) =>
-      globalThis.setTimeout(() => callback(performance.now()), 0) as unknown as number,
+      globalThis.setTimeout(() => callback(performance.now() + 2_000), 0) as unknown as number,
     cancelAnimationFrame: (handle: number) => globalThis.clearTimeout(handle),
     setTimeout: globalThis.setTimeout.bind(globalThis),
     clearTimeout: globalThis.clearTimeout.bind(globalThis),
@@ -123,29 +123,18 @@ describe("TextHighlightEngine smooth mode", () => {
     vi.advanceTimersByTime(1);
 
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("100%");
-<<<<<<< HEAD
     expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
     expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
-=======
-    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
-    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
->>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
     expect(diagnostics).toHaveLength(1);
     expect(diagnostics[0]?.animatedTokenCount).toBe(1);
 
     engine.paintSmooth(tokens, 3, { textLength: 16 });
-<<<<<<< HEAD
     expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
     expect(diagnostics).toHaveLength(2);
-=======
-    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
-    expect(diagnostics).toHaveLength(1);
->>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
 
     engine.paintSmooth(tokens, 4, { textLength: 16 });
     expect(first.dataset.postReadingSmoothFilled).toBe("true");
     expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
-<<<<<<< HEAD
     expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
     expect(diagnostics).toHaveLength(3);
     expect(diagnostics[2]).toMatchObject({ animatedTokenCount: 1, boundaryIndex: 4 });
@@ -153,20 +142,6 @@ describe("TextHighlightEngine smooth mode", () => {
     vi.advanceTimersByTime(1);
     expect(second.style.getPropertyValue("--post-reading-fill")).toBe("100%");
     expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
-=======
-    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
-    expect(diagnostics).toHaveLength(2);
-    expect(diagnostics[1]).toMatchObject({
-      animatedTokenCount: 1,
-      interrupted: true,
-      pendingToIndex: 4,
-    });
-    expect(diagnostics[1]!.durationMs).toBeGreaterThan(diagnostics[0]!.durationMs);
-
-    vi.advanceTimersByTime(1);
-    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("100%");
-    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
->>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
   });
 
   it("advances continuously from an in-word position instead of snapping at a boundary", () => {

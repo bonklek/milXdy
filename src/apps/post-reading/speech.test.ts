@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS } from "./shared/defaults";
 import { SpeechController, splitSpeechText } from "./speech";
+import type { TtsEngine } from "./ttsEngines";
 
 describe("splitSpeechText", () => {
   it("keeps short text in one transport chunk", () => {
@@ -65,12 +66,63 @@ describe("SpeechController movement", () => {
 
       await Promise.resolve();
       await Promise.resolve();
-      expect(pause).toHaveBeenCalled();
+      expect(controller.getState().status).toBe("paused");
     } finally {
       if (originalWindow) Object.defineProperty(globalThis, "window", originalWindow);
       else Reflect.deleteProperty(globalThis, "window");
       if (originalUtterance) Object.defineProperty(globalThis, "SpeechSynthesisUtterance", originalUtterance);
       else Reflect.deleteProperty(globalThis, "SpeechSynthesisUtterance");
     }
+  });
+});
+
+describe("SpeechController selected-voice priming", () => {
+  it("waits for an isolated prime, then queues the real utterance on a later task", async () => {
+    let finishPrime: (() => void) | undefined;
+    const speak = vi.fn(async () => ({ pause: vi.fn(), resume: vi.fn(), stop: vi.fn(), hasSyncedBoundaries: false }));
+    const engine: TtsEngine = {
+      id: "web-speech",
+      label: "Test",
+      capabilities: { voices: true, boundaryEvents: true, seek: false },
+      primeSelectedVoice: vi.fn(() => new Promise<void>((resolve) => { finishPrime = resolve; })),
+      speak,
+    };
+    const controller = new SpeechController({ ...DEFAULT_SETTINGS });
+    (controller as unknown as { engine: TtsEngine }).engine = engine;
+
+    controller.speak("First real post.", "Post");
+    expect(engine.primeSelectedVoice).toHaveBeenCalledOnce();
+    expect(speak).not.toHaveBeenCalled();
+    expect(controller.getState().isPriming).toBe(true);
+
+    finishPrime?.();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(speak).toHaveBeenCalledOnce();
+    expect(controller.getState().isPriming).toBe(false);
+  });
+
+  it("does not queue stale real speech when stopped during priming", async () => {
+    let finishPrime: (() => void) | undefined;
+    const speak = vi.fn(async () => ({ pause: vi.fn(), resume: vi.fn(), stop: vi.fn(), hasSyncedBoundaries: false }));
+    const engine: TtsEngine = {
+      id: "web-speech",
+      label: "Test",
+      capabilities: { voices: true, boundaryEvents: true, seek: false },
+      primeSelectedVoice: vi.fn((_settings, signal) => new Promise<void>((resolve) => {
+        finishPrime = resolve;
+        signal?.addEventListener("abort", resolve, { once: true });
+      })),
+      speak,
+    };
+    const controller = new SpeechController({ ...DEFAULT_SETTINGS });
+    (controller as unknown as { engine: TtsEngine }).engine = engine;
+
+    controller.speak("A post that must not revive.", "Post");
+    controller.stop();
+    finishPrime?.();
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(speak).not.toHaveBeenCalled();
   });
 });

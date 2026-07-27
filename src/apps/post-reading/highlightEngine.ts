@@ -26,6 +26,7 @@ type SmoothPaintOptions = {
   textLength?: number;
   boundaryElapsedTime?: number | null;
   anchor?: "boundary" | "midpoint";
+  animate?: boolean;
 };
 
 type SmoothAnimationDiagnostic = {
@@ -179,7 +180,6 @@ export class TextHighlightEngine {
       return null;
     }
 
-<<<<<<< HEAD
     if (this.pendingSmoothAnimation && previousRelativeIndex === relativeIndex && !options.snapToCurrent) return currentToken;
 
     // This is the v0.2.0 cursor model: a real boundary starts the cursor's
@@ -188,47 +188,14 @@ export class TextHighlightEngine {
     // That leaves exactly one possible partial fill before CSS begins the next run.
     this.clearSmoothAnimation();
     if (options.snapToCurrent) this.smoothVisualIndex = relativeIndex;
+    if (options.animate === false) {
+      this.snapSmoothAt(tokens, relativeIndex);
+      return currentToken;
+    }
     const visualStart = relativeIndex;
     const predictedNextBoundary = findNextBoundaryIndex(tokens, relativeIndex);
     const minimumLead = Math.round(this.calibratedCharsPerSecond * 0.18);
     const animationEnd = Math.min(textLength, Math.max(visualStart, predictedNextBoundary, relativeIndex + minimumLead));
-=======
-    const currentTokenStart = tokenStart(currentToken);
-    const currentTokenEnd = Math.min(textLength, currentTokenStart + tokenReadableLength(currentToken));
-    if (currentTokenEnd <= currentTokenStart) return currentToken;
-    const animationEnd = currentTokenEnd;
-    const interrupted = this.recordBoundaryInterruption(relativeIndex);
-    if (interrupted) {
-      this.clearSmoothAnimation({ completePending: true });
-      this.activeSmoothToken = null;
-    }
-
-    if (
-      this.pendingSmoothAnimation?.token === currentToken
-      && this.activeSmoothToken === currentToken
-    ) {
-      return currentToken;
-    }
-    if (this.activeSmoothToken === currentToken) {
-      if (options.snapToCurrent && relativeIndex > this.smoothVisualIndex) {
-        this.snapSmoothAt(tokens, relativeIndex);
-      }
-      return currentToken;
-    }
-
-    const tokenChanged = this.activeSmoothToken !== null && this.activeSmoothToken !== currentToken;
-    this.clearSmoothAnimation({ completePending: tokenChanged });
-
-    if (options.snapToCurrent) {
-      this.snapSmoothAt(tokens, relativeIndex);
-    }
-
-    const visualStart = Math.max(
-      this.smoothVisualIndex,
-      currentTokenStart,
-      Math.min(relativeIndex, currentTokenEnd - 1),
-    );
->>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
     if (visualStart >= animationEnd) {
       this.snapSmoothAt(tokens, animationEnd);
       return currentToken;
@@ -388,14 +355,9 @@ export class TextHighlightEngine {
       return;
     }
     this.pendingSmoothAnimation = { tokens, token, toIndex };
-    const animatedTokens = tokens.filter((item) => {
-      const start = tokenStart(item);
-      const end = start + tokenLength(item);
-      return end > fromIndex && start < toIndex;
-    });
     this.onSmoothAnimation?.({
       tokenCount: tokens.length,
-      animatedTokenCount: animatedTokens.length,
+      animatedTokenCount: 1,
       durationMs,
       interrupted: Boolean(interrupted),
       pendingToIndex: interrupted?.pendingToIndex,
@@ -403,24 +365,23 @@ export class TextHighlightEngine {
       catchUpActive: this.catchUpActive(),
     });
 
-    this.smoothAnimationFrame = window.requestAnimationFrame(() => {
-      this.smoothAnimationFrame = null;
+    const startedAt = performance.now();
+    const paintFrame = (now: number) => {
       if (!tokens.some((item) => item.isConnected)) return;
-      this.smoothVisualIndex = Math.max(this.smoothVisualIndex, toIndex);
-      for (const item of animatedTokens) {
-        item.style.setProperty("--post-reading-fill-duration", `${durationMs}ms`);
-        item.style.setProperty("--post-reading-fill", `${rangeFillPercentForToken(item, toIndex)}%`);
-        if (tokenStart(item) + tokenReadableLength(item) <= toIndex) item.dataset.postReadingSmoothFilled = "true";
-        else delete item.dataset.postReadingSmoothFilled;
+      const progress = Math.max(0, Math.min(1, (now - startedAt) / durationMs));
+      const cursor = fromIndex + (toIndex - fromIndex) * progress;
+      // A single cursor repaints every token each frame. This deliberately
+      // avoids CSS endpoint transitions, which can leave several partial fills.
+      this.snapSmoothAt(tokens, cursor);
+      if (progress < 1) {
+        this.smoothAnimationFrame = window.requestAnimationFrame(paintFrame);
+      } else {
+        for (const item of tokens) item.style.setProperty("--post-reading-fill-duration", `${durationMs}ms`);
+        this.smoothAnimationFrame = null;
+        this.pendingSmoothAnimation = null;
       }
-    });
-
-    this.smoothAnimationTimer = window.setTimeout(() => {
-      this.smoothAnimationTimer = null;
-      this.pendingSmoothAnimation = null;
-      if (!tokens.some((item) => item.isConnected)) return;
-      this.snapSmoothAt(tokens, toIndex);
-    }, durationMs + 24);
+    };
+    this.smoothAnimationFrame = window.requestAnimationFrame(paintFrame);
   }
 
   private estimateTokenDurationMs(length: number): number {

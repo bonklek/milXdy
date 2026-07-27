@@ -17,7 +17,11 @@ export class SpeechController {
   private index = 0;
   private generation = 0;
   private pendingAbort: AbortController | null = null;
-  private activeHasSyncedBoundaries = true;
+  private primingAbort: AbortController | null = null;
+  private currentStartPrimed = false;
+  private activeHasSyncedBoundaries = false;
+  private activeStarted = false;
+  private startWatchdog: number | null = null;
   private state: SpeechState = {
     status: "idle",
     title: "",
@@ -29,9 +33,12 @@ export class SpeechController {
     charIndex: null,
     charLength: null,
     boundaryElapsedTime: null,
-    hasSyncedBoundaries: true,
+    hasSyncedBoundaries: false,
+    hasStarted: false,
   };
   private onEnded: (() => void) | null = null;
+  private onObservedBoundary: ((voiceURI: string) => void) | null = null;
+  private observedVoiceURI: string | null = null;
 
   constructor(settings: PostReadingSettings) {
     this.settings = settings;
@@ -93,11 +100,17 @@ export class SpeechController {
     this.onEnded = callback;
   }
 
+  onBoundaryObserved(callback: ((voiceURI: string) => void) | null): void {
+    this.onObservedBoundary = callback;
+  }
+
   speak(text: string, title: string): void {
     this.stopActiveSession();
     this.index = 0;
     this.chunks = splitSpeechText(text);
-    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
+    this.activeHasSyncedBoundaries = false;
+    this.activeStarted = false;
+    this.currentStartPrimed = false;
     if (this.chunks.length === 0) {
       this.setState("idle", title, text, null);
       return;
@@ -118,9 +131,17 @@ export class SpeechController {
     this.stopActiveSession();
     this.index = 0;
     this.chunks = splitSpeechText(remaining, startAt + trimOffset);
-    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
+    this.activeHasSyncedBoundaries = false;
+    this.activeStarted = false;
+    this.currentStartPrimed = false;
     this.setState(pauseAfterStart ? "paused" : "speaking", title, text, null, startAt + trimOffset, null);
-    this.startCurrentChunk(title, text, pauseAfterStart);
+    const restartGeneration = this.generation;
+    // Web Speech must observe cancel before its replacement is queued.
+    // A macrotask also keeps stale cancellation callbacks from reviving it.
+    (window.setTimeout || globalThis.setTimeout)(() => {
+      if (restartGeneration !== this.generation) return;
+      this.startCurrentChunk(title, text, pauseAfterStart);
+    }, 0);
   }
 
   nextChunk(): void {
@@ -139,15 +160,15 @@ export class SpeechController {
 
   pauseOrResume(): void {
     if (this.state.status === "paused") {
-      const restartAt = this.state.charIndex ?? this.state.chunkStart ?? 0;
-      this.restartFrom(this.state.text, this.state.title || "Post-reading", restartAt, false, true);
+      this.session?.resume();
+      this.setState("speaking", this.state.title, this.state.text, null, this.state.charIndex, this.state.charLength, this.state.boundaryElapsedTime);
     } else if (this.state.status === "speaking") {
       const pauseAt = this.state.charIndex ?? this.state.chunkStart ?? null;
       const charLength = this.state.charLength;
       const boundaryElapsedTime = this.state.boundaryElapsedTime;
       const title = this.state.title;
       const text = this.state.text;
-      this.stopActiveSession();
+      this.session?.pause();
       this.setState("paused", title, text, null, pauseAt, charLength, boundaryElapsedTime);
     } else if (this.state.text) {
       this.speak(this.state.text, this.state.title || "Post-reading");
@@ -177,6 +198,23 @@ export class SpeechController {
   private startCurrentChunk(title: string, fullText: string, pauseAfterStart = false): void {
     const chunk = this.chunks[this.index];
     if (!chunk) return;
+    if (this.index === 0 && !this.currentStartPrimed && this.engine.primeSelectedVoice) {
+      this.currentStartPrimed = true;
+      // The probe deliberately produces no post highlight progress, but the
+      // player must make this short initialization visible.
+      this.setState("speaking", title, fullText, null, this.state.charIndex ?? chunk.offset, null, null, true);
+      const primeGeneration = ++this.generation;
+      const primingAbort = new AbortController();
+      this.primingAbort = primingAbort;
+      void this.engine.primeSelectedVoice(this.settings, primingAbort.signal).finally(() => {
+        if (this.primingAbort === primingAbort) this.primingAbort = null;
+        if (primingAbort.signal.aborted || primeGeneration !== this.generation) return;
+        (globalThis.window?.setTimeout || globalThis.setTimeout)(() => {
+          if (primeGeneration === this.generation && !primingAbort.signal.aborted) this.startCurrentChunk(title, fullText, pauseAfterStart);
+        }, 0);
+      });
+      return;
+    }
     const generation = ++this.generation;
     const pendingAbort = new AbortController();
     this.pendingAbort = pendingAbort;
@@ -184,8 +222,22 @@ export class SpeechController {
       text: chunk.text,
       settings: this.settings,
       signal: pendingAbort.signal,
+      onStart: () => {
+        if (generation !== this.generation) return;
+        this.activeStarted = true;
+        this.clearStartWatchdog();
+        this.setState(this.state.status, title, fullText, null, this.state.charIndex, this.state.charLength, this.state.boundaryElapsedTime);
+      },
       onBoundary: (event) => {
         if (generation !== this.generation) return;
+        this.activeStarted = true;
+        this.activeHasSyncedBoundaries = true;
+        const voiceURI = this.engine.getPreferredVoice?.()?.voiceURI || null;
+        if (voiceURI && this.observedVoiceURI !== voiceURI) {
+          this.observedVoiceURI = voiceURI;
+          this.onObservedBoundary?.(voiceURI);
+        }
+        this.clearStartWatchdog();
         const charIndex = chunk.offset + event.charIndex;
         this.setState(this.state.status === "paused" ? "paused" : "speaking", title, fullText, null, charIndex, event.charLength, event.elapsedTime ?? null);
       },
@@ -211,8 +263,13 @@ export class SpeechController {
         return;
       }
       this.session = session;
-      this.activeHasSyncedBoundaries = session.hasSyncedBoundaries;
+      this.activeHasSyncedBoundaries = session.hasSyncedBoundaries && this.activeHasSyncedBoundaries;
       this.setState(this.state.status, title, fullText, null, this.state.charIndex, this.state.charLength, this.state.boundaryElapsedTime);
+      this.startWatchdog = (window.setTimeout || globalThis.setTimeout)(() => {
+        if (generation !== this.generation || this.activeStarted) return;
+        this.setState("error", title, fullText, "Speech playback did not start.");
+        this.stopActiveSession();
+      }, 5_000);
       if (pauseAfterStart || this.state.status === "paused") {
         session.pause();
       }
@@ -226,15 +283,25 @@ export class SpeechController {
 
   private stopActiveSession(): void {
     this.generation += 1;
+    this.primingAbort?.abort();
+    this.primingAbort = null;
     this.pendingAbort?.abort();
     this.pendingAbort = null;
     this.session?.stop();
     this.session = null;
-    this.activeHasSyncedBoundaries = this.engine.capabilities.boundaryEvents;
+    this.clearStartWatchdog();
+    this.activeHasSyncedBoundaries = false;
+    this.activeStarted = false;
+    this.observedVoiceURI = null;
   }
 
   hasSyncedBoundaries(): boolean {
     return this.activeHasSyncedBoundaries;
+  }
+
+  private clearStartWatchdog(): void {
+    if (this.startWatchdog !== null) (window.clearTimeout || globalThis.clearTimeout)(this.startWatchdog);
+    this.startWatchdog = null;
   }
 
   private setState(
@@ -245,6 +312,7 @@ export class SpeechController {
     charIndex: number | null = null,
     charLength: number | null = null,
     boundaryElapsedTime: number | null = null,
+    isPriming = false,
   ): void {
     this.state = {
       status,
@@ -258,6 +326,8 @@ export class SpeechController {
       charLength,
       boundaryElapsedTime,
       hasSyncedBoundaries: this.hasSyncedBoundaries(),
+      hasStarted: this.activeStarted,
+      isPriming,
     };
     for (const listener of this.listeners) listener(this.state);
   }

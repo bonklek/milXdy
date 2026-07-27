@@ -6,6 +6,7 @@ export type HighlightProgressState = {
   hasSyncedBoundaries: boolean;
 };
 
+const BOUNDARY_STALL_MS = 420;
 const LIVE_TICK_MS = 90;
 
 export class HighlightProgressClock {
@@ -54,10 +55,16 @@ export class HighlightProgressClock {
     if (state.status !== "speaking") {
       return this.lastResolvedIndex ?? boundaryIndex ?? state.chunkStart;
     }
-    if (state.hasSyncedBoundaries) {
+    const boundaryAge = Math.max(0, now - this.boundaryObservedAt);
+    if (state.hasSyncedBoundaries && boundaryIndex !== null && boundaryAge < BOUNDARY_STALL_MS) {
       this.lastResolvedIndex = boundaryIndex;
       return boundaryIndex ?? state.chunkStart;
     }
+
+    // Give Web Speech a short opportunity to provide its first real boundary.
+    // Without this grace period a queued/just-started utterance paints the
+    // first token before the spoken author/prefix has reached post body text.
+    if (boundaryIndex === null && now - this.chunkStartedAt < BOUNDARY_STALL_MS) return null;
 
     const anchorIndex = boundaryIndex ?? state.chunkStart;
     const anchorTime = boundaryIndex === null ? this.chunkStartedAt : this.boundaryObservedAt;
@@ -70,7 +77,9 @@ export class HighlightProgressClock {
   nextUpdateDelay(state: HighlightProgressState, now: number): number | null {
     if (state.status !== "speaking" || state.chunkStart === null) return null;
     this.observe(state, now);
-    return state.hasSyncedBoundaries ? null : LIVE_TICK_MS;
+    if (!state.hasSyncedBoundaries || this.boundaryIndex === null) return LIVE_TICK_MS;
+    const boundaryAge = Math.max(0, now - this.boundaryObservedAt);
+    return boundaryAge < BOUNDARY_STALL_MS ? Math.max(1, BOUNDARY_STALL_MS - boundaryAge) : LIVE_TICK_MS;
   }
 
   reset(): void {

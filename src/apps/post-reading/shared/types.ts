@@ -75,4 +75,8 @@ export type SpeechState = {
   charLength: number | null;
   boundaryElapsedTime: number | null;
   hasSyncedBoundaries: boolean;
+  /** The active engine has acknowledged actual playback start. */
+  hasStarted?: boolean;
+  /** A private selected-voice probe is running before real playback. */
+  isPriming?: boolean;
 };

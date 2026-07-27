@@ -21,7 +21,6 @@ describe("Post-reading content regression contracts", () => {
     expect(body).not.toContain("scheduleInitialTweetHighlight");
     expect(source).not.toContain("function scheduleInitialTweetHighlight");
     expect(source).not.toContain("function prepareInitialTweetHighlight");
-<<<<<<< HEAD
   });
 
   it("delivers tweet speech state directly instead of coalescing it through an animation frame", () => {
@@ -32,8 +31,6 @@ describe("Post-reading content regression contracts", () => {
     expect(source).not.toContain("function scheduleTweetHighlight");
     expect(source).not.toContain("pendingTweetHighlightState");
     expect(source).not.toContain("tweetHighlightFrame");
-=======
->>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
   });
 
   it("keeps smooth mode for estimated progress and retains long-text segmentation", () => {
