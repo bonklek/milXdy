@@ -3400,8 +3400,11 @@
         "target": "content.css"
       }
     ],
-    "assets": [
-      "music"
-    ]
-  }
+  "assets": [
+    "music"
+  ],
+  "requiredOutputs": [
+    "features/chromaprint.wasm"
+  ]
+}
 ]
