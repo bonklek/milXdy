@@ -15,7 +15,6 @@ import { absoluteRemiliaMediaUrl, isRemiliaMediaUrl } from "../../platform/media
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
-const PSEUDO_ROW_HOST_ID = "milxdy-reminet-chat-pseudo-row-host";
 const NATIVE_DM_HIDDEN_ATTR = "data-milxdy-native-dm-hidden";
 const CHAT_ID = 1;
 const SOCKET_PORT_NAME = "reminetChat:socket";
@@ -602,9 +601,14 @@ function findDmContainer(): HTMLElement | null {
 function findDmListMount(): HTMLElement | null {
   const container = findDmContainer();
   if (!container) return null;
+  const conversationRow = findFirstDmConversationRow();
+  if (conversationRow?.parentElement && container.contains(conversationRow.parentElement)) return conversationRow.parentElement;
+  const existing = document.getElementById(PSEUDO_ROW_ID);
+  if (existing?.parentElement && container.contains(existing.parentElement)) return existing.parentElement;
   const timeline = findMessagesTimeline();
-  if (timeline?.parentElement && container.contains(timeline.parentElement)) return timeline.parentElement;
-  return container;
+  const firstCell = firstMessagesTimelineCell(timeline);
+  if (firstCell?.parentElement && container.contains(firstCell.parentElement)) return firstCell.parentElement;
+  return timeline?.querySelector<HTMLElement>(":scope > div") || timeline;
 }
 
 function findFirstDmConversationRow(): HTMLElement | null {
@@ -698,19 +702,16 @@ function ensurePseudoChatRow(): void {
     removePseudoChatRow();
     return;
   }
-  const timeline = findMessagesTimeline();
-  let host = document.getElementById(PSEUDO_ROW_HOST_ID) as HTMLElement | null;
-  if (host?.parentElement !== mount) {
-    host?.remove();
-    host = document.createElement("div");
-    host.id = PSEUDO_ROW_HOST_ID;
-    host.dataset.milxdyReminetChatHost = "true";
-    // This sits beside the virtualized timeline, never inside a recycled row.
-    if (timeline?.parentElement === mount) mount.insertBefore(host, timeline);
-    else mount.prepend(host);
-  }
+  const before = findFirstDmConversationRow();
   const row = document.getElementById(PSEUDO_ROW_ID) as HTMLButtonElement | null || createPseudoChatRow();
-  if (row.parentElement !== host) host.append(row);
+  if (before?.parentElement === mount) {
+    const nativeRowIsBeforePseudoRow = (before.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    if (row.parentElement !== mount || nativeRowIsBeforePseudoRow) {
+      mount.insertBefore(row, before);
+    }
+  } else if (row.parentElement !== mount || row !== mount.firstElementChild) {
+    mount.insertBefore(row, mount.firstElementChild);
+  }
   updatePseudoChatRowState();
 }
 
@@ -748,7 +749,6 @@ function updatePseudoChatRowState(): void {
 }
 
 function removePseudoChatRow(): void {
-  document.getElementById(PSEUDO_ROW_HOST_ID)?.remove();
   document.getElementById(PSEUDO_ROW_ID)?.remove();
 }
 
@@ -790,11 +790,7 @@ function observeMessagesList(): void {
         removePseudoChatRow();
         return;
       }
-      const host = document.getElementById(PSEUDO_ROW_HOST_ID);
-      const row = document.getElementById(PSEUDO_ROW_ID);
-      // X mutates and recycles conversation rows on every scroll. Only repair
-      // an actually removed/replaced host; a correctly mounted row is stable.
-      if (!host || !row || row.parentElement !== host) ensurePseudoChatRow();
+      ensurePseudoChatRow();
     }, 150);
   };
   const observer = new MutationObserver(scheduleCheck);
@@ -804,10 +800,12 @@ function observeMessagesList(): void {
     childList: true,
     subtree: true,
   });
+  window.addEventListener("scroll", scheduleCheck, true);
   addRuntimeDisposable(() => {
     cancelCheckTimer?.();
     cancelCheckTimer = null;
     observer.disconnect();
+    window.removeEventListener("scroll", scheduleCheck, true);
   });
 }
 
