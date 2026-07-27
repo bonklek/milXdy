@@ -73,6 +73,8 @@ try {
   assert.equal(manifest.name, "milXdy QA");
   assert.match(manifest.key || "", /^MIIB/u);
   assert.match(provenance.extensionId || "", /^[a-p]{32}$/u);
+  assert.equal(provenance.output, "shared-qa-chromium");
+  assert.equal(Object.hasOwn(provenance, "worktree"), false);
   assert.match(background, /^importScripts\("qa-background\.js"\);/u);
   assert.match(qaBackground, /milxdy\.qa\.reloadGuard/u);
   assert.match(qaPopup, /Last reload:/u);
