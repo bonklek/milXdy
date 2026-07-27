@@ -1,5 +1,7 @@
 import { setOverlayAppStackOrder } from "./app-layout";
 
+const TERMINAL_DOCK_ITEM_ID = "milxdyAddOnsCatalog";
+
 export type OverlayDockSide = "left" | "right";
 
 export type OverlayDockItem = {
@@ -191,7 +193,15 @@ function createDockApi(): DockApi {
       .map((id) => state.items.get(id))
       .filter((item): item is OverlayDockItem => item != null && !state.hiddenItems.has(item.id));
     applyBeforePlacements(items);
+    placeTerminalItemLast(items);
     return items;
+  }
+
+  function placeTerminalItemLast(items: OverlayDockItem[]): void {
+    const terminalIndex = items.findIndex((item) => item.id === TERMINAL_DOCK_ITEM_ID);
+    if (terminalIndex === -1 || terminalIndex === items.length - 1) return;
+    const [terminalItem] = items.splice(terminalIndex, 1);
+    items.push(terminalItem);
   }
 
   function applyBeforePlacements(items: OverlayDockItem[]): void {
