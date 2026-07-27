@@ -10,6 +10,12 @@ export type TwitterSurfaceKind =
 
 export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp";
 
+export interface AppComposerAction {
+  label: string;
+  icon?: string | { light: string; dark: string };
+  presentation: "anchoredPanel";
+}
+
 export interface TwitterSurface {
   kind: TwitterSurfaceKind;
   element: HTMLElement;
@@ -61,6 +67,7 @@ export interface PublicAppManifest {
   description: string;
   surfaces: MilxdyAppSurface[];
   loadTriggers: Array<"startup" | "surface" | "dockOpen" | "idle" | "userAction">;
+  composerAction?: AppComposerAction;
 }
 
 export interface MilxdyContentAppContext {
@@ -82,7 +89,15 @@ export interface MilxdyContentAppModule {
   disable?(): Promise<void> | void;
   onRouteChange?(route: MilxdyRouteChange): Promise<void> | void;
   onSurface?(surface: TwitterSurface): Promise<void> | void;
+  onComposerAction?(context: MilxdyComposerActionContext): Promise<void> | void;
   open?(): Promise<void> | void;
   close?(): Promise<void> | void;
   dispose?(): Promise<void> | void;
+}
+
+export interface MilxdyComposerActionContext {
+  readonly kind: "post" | "reply";
+  readonly panel: HTMLElement;
+  readonly signal: AbortSignal;
+  close(): void;
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import { cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
@@ -10,6 +10,13 @@ const qaOutput = path.join(root, "milXdy-QA", "chromium");
 
 try {
   await cp("examples/packages/local-dev/dev-note", externalPackage, { recursive: true });
+  const manifestPath = path.join(externalPackage, "milxdy.app.json");
+  const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.loadTriggers = ["userAction"];
+  manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+  const entryPath = path.join(externalPackage, "dist", "content.js");
+  await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\n`);
   run([
     "scripts/qa/qa-reload.mjs",
     "--once",
