@@ -9,6 +9,7 @@ import {
 } from "../scanner/twitter-scanner";
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
+import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
@@ -1351,11 +1352,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function installComposerActionHost(): void {
-    const refresh = () => refreshComposerActionButtons();
-    refresh();
-    const observer = new MutationObserver(refresh);
+    const refreshScheduler = createComposerActionRefreshScheduler(refreshComposerActionButtons);
+    refreshComposerActionButtons();
+    const observer = new MutationObserver(() => refreshScheduler.request());
     observer.observe(document.documentElement, { childList: true, subtree: true });
-    state.runtimeDisposables.add(() => observer.disconnect());
+    state.runtimeDisposables.add(() => {
+      observer.disconnect();
+      refreshScheduler.dispose();
+    });
     state.runtimeDisposables.add(closeComposerActionPanel);
   }
 

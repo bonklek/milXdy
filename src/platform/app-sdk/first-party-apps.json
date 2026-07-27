@@ -2801,7 +2801,7 @@
     "entryName": "features/reminetChat",
     "entryPoint": "src/apps/reminet-chat/entry.ts",
     "contentEntry": "features/reminetChat.js",
-    "defaultEnabled": true,
+    "defaultEnabled": false,
     "storageKeys": {
       "local": [
         "milxdy.reminetChat.enabled",
@@ -2833,7 +2833,7 @@
           "area": "local",
           "key": "milxdy.reminetChat.enabled"
         },
-        "defaultValue": true,
+        "defaultValue": false,
         "control": {
           "type": "toggle"
         },
