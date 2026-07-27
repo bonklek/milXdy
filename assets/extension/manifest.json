@@ -25,7 +25,8 @@
     "https://www.remilia.net/*",
     "wss://www.remilia.net/*",
     "https://boards.miladychan.org/*",
-    "https://musicbrainz.org/*"
+    "https://musicbrainz.org/*",
+    "https://api.acoustid.org/*"
   ],
   "background": {
     "service_worker": "background.js"
