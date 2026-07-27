@@ -218,7 +218,6 @@ const bindings: Record<string, ControlBinding> = {
   "remistats.beetol.enabled": { area: "local", key: "milxdy.remistats.beetol.enabled", kind: "boolean", fallback: true },
   "reminet.beetleReducedMotion": { area: "sync", key: "milxdy.reminet.beetleReducedMotion", kind: "boolean", fallback: false },
   "reminet.beetleInstantResults": { area: "sync", key: "milxdy.reminet.beetleInstantResults", kind: "boolean", fallback: false },
-  "reminetChat.enabled": { area: "local", key: "milxdy.reminetChat.enabled", kind: "boolean", fallback: false },
 };
 
 void boot();
@@ -580,7 +579,6 @@ async function applyFullStartSetup(): Promise<void> {
   setControlValue("milady.showLevelBadge", true);
   setControlValue("milady.includeRemiStatsBeetles", true);
   setControlValue("remistats.beetol.enabled", true);
-  setControlValue("reminetChat.enabled", true);
   writeVisualEditor(fullTheme);
   renderVisualPresetButtons();
   showOnboardingMessage(blockedApps.length
