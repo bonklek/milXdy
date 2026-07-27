@@ -22,6 +22,7 @@ const STYLE_THEME_KEY = "milxdy.settings.theme";
 const WIDTH_KEY = "milxdy.miladychan.width";
 const HEIGHT_KEY = "milxdy.miladychan.height";
 const TOP_KEY = "milxdy.miladychan.top";
+const DRAFT_KEY = "milxdy.miladychan.postDraft";
 const DEFAULT_BOARDS = ["milady", "remilio", "a", "ai", "kpop", "pol", "v", "all"];
 const BOARD_THEME_BY_BOARD: Record<string, BoardTheme> = {
   milady: "tea",
@@ -105,6 +106,13 @@ type BoardSummary = BoardInfo & {
 type ViewMode = "boards" | "threads" | "thread";
 type BoardTheme = "tea" | "yotsuba" | "yots_b" | "console" | "moon";
 
+type PostDraft = {
+  board: string;
+  threadId: number | null;
+  body: string;
+  updatedAt: number;
+};
+
 type SpotlightState = {
   root: HTMLElement | null;
   appFrame: OverlayAppFrame | null;
@@ -126,6 +134,8 @@ type SpotlightState = {
   theme: "light" | "dark" | "system";
   lastLoadedAt: number;
   layoutReady: boolean;
+  draft: PostDraft | null;
+  draftNotice: string;
 };
 
 const state: SpotlightState = {
@@ -149,6 +159,8 @@ const state: SpotlightState = {
   theme: "system",
   lastLoadedAt: 0,
   layoutReady: false,
+  draft: null,
+  draftNotice: "",
 };
 let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
@@ -168,6 +180,7 @@ export function boot(context?: MilxdyContentAppContext): void {
   registerDockItem();
   void loadLayoutSettings();
   void loadTheme();
+  void loadDraft();
   observeSettings(addRuntimeDisposable);
 }
 
@@ -261,6 +274,13 @@ async function loadTheme(): Promise<void> {
   if (!lifecycleActive()) return;
   state.theme = normalizeTheme(stored[STYLE_THEME_KEY]);
   applyTheme();
+}
+
+async function loadDraft(): Promise<void> {
+  const stored: Record<string, unknown> = await chrome.storage.local.get(DRAFT_KEY).catch(() => ({}));
+  if (!lifecycleActive()) return;
+  state.draft = normalizeDraft(stored[DRAFT_KEY]);
+  render();
 }
 
 function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]): void {
@@ -526,6 +546,7 @@ function renderThreads(body: HTMLElement): void {
   header.dataset.boardTheme = boardTheme(state.selectedBoard);
   header.textContent = `/${state.selectedBoard}/ ${board?.title || ""}`;
   body.append(header);
+  body.append(createPostHandoff(state.selectedBoard, null));
   if (state.loadingThreads) body.append(loadingState(`Loading /${state.selectedBoard}/ threads`));
   if (state.loadingThreads && !board?.threads.length) {
     return;
@@ -587,12 +608,129 @@ function renderThread(body: HTMLElement): void {
   link.textContent = `/${thread.board}/${thread.id}`;
   header.append(title, link);
   body.append(header);
+  body.append(createPostHandoff(thread.board, thread.id));
   if (state.loadingThread) body.append(loadingState("Loading posts"));
   const posts = [thread, ...(thread.posts || [])];
   const list = document.createElement("div");
   list.className = "milxdy-chan-post-list";
   for (const post of posts) list.append(createPost(post, thread.board));
   body.append(list);
+}
+
+function createPostHandoff(board: string, threadId: number | null): HTMLElement {
+  const form = document.createElement("section");
+  form.className = "milxdy-chan-compose";
+  form.dataset.boardTheme = boardTheme(board);
+  const destination = threadId === null ? `New thread in /${board}/` : `Reply in /${board}/ No. ${threadId}`;
+  const heading = document.createElement("strong");
+  heading.textContent = "Post via native Miladychan";
+  const target = document.createElement("span");
+  target.className = "milxdy-chan-compose-target";
+  target.textContent = `Destination: ${destination}`;
+  const note = document.createElement("p");
+  note.textContent = "MilXdy keeps this draft locally. Native Miladychan handles your session, CAPTCHA, media, and final submission.";
+  const textarea = document.createElement("textarea");
+  textarea.placeholder = "Write a draft to copy into Miladychan…";
+  textarea.value = draftForDestination(board, threadId)?.body || "";
+  textarea.rows = 4;
+  textarea.setAttribute("aria-label", `Draft for ${destination}`);
+  const confirm = document.createElement("label");
+  confirm.className = "milxdy-chan-compose-confirm";
+  const checkbox = document.createElement("input");
+  checkbox.type = "checkbox";
+  checkbox.checked = false;
+  confirm.append(checkbox, document.createTextNode(` I confirm this destination: ${destination}.`));
+  const actions = document.createElement("div");
+  actions.className = "milxdy-chan-compose-actions";
+  const copy = document.createElement("button");
+  copy.type = "button";
+  copy.textContent = "Copy draft";
+  const open = document.createElement("a");
+  open.href = nativeDestinationUrl(board, threadId);
+  open.target = "_blank";
+  open.rel = "noreferrer";
+  open.textContent = "Open native composer";
+  open.setAttribute("aria-disabled", "true");
+  const discard = document.createElement("button");
+  discard.type = "button";
+  discard.className = "milxdy-chan-compose-discard";
+  discard.textContent = "Discard saved draft";
+  discard.hidden = !draftForDestination(board, threadId)?.body;
+  const notice = document.createElement("span");
+  notice.className = "milxdy-chan-compose-notice";
+  notice.textContent = state.draftNotice;
+  const updateActions = () => {
+    const enabled = checkbox.checked;
+    copy.disabled = !enabled || !textarea.value.trim();
+    open.tabIndex = enabled ? 0 : -1;
+    open.setAttribute("aria-disabled", String(!enabled));
+  };
+  textarea.addEventListener("input", () => {
+    void saveDraft({ board, threadId, body: textarea.value, updatedAt: Date.now() });
+    discard.hidden = !textarea.value.trim();
+    updateActions();
+  });
+  checkbox.addEventListener("change", updateActions);
+  copy.addEventListener("click", () => void copyDraft(textarea.value, notice));
+  open.addEventListener("click", (event) => {
+    if (!checkbox.checked) event.preventDefault();
+  });
+  discard.addEventListener("click", () => void clearDraft(board, threadId));
+  actions.append(copy, open, discard);
+  form.append(heading, target, note, textarea, confirm, actions, notice);
+  updateActions();
+  return form;
+}
+
+function draftForDestination(board: string, threadId: number | null): PostDraft | null {
+  const draft = state.draft;
+  return draft?.board === board && draft.threadId === threadId ? draft : null;
+}
+
+async function saveDraft(draft: PostDraft): Promise<void> {
+  state.draft = draft;
+  state.draftNotice = "Draft saved locally.";
+  await chrome.storage.local.set({ [DRAFT_KEY]: draft }).catch(() => undefined);
+}
+
+async function clearDraft(board: string, threadId: number | null): Promise<void> {
+  if (!draftForDestination(board, threadId)) return;
+  state.draft = null;
+  state.draftNotice = "Saved draft discarded.";
+  await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
+  render();
+}
+
+async function copyDraft(body: string, notice: HTMLElement): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(body);
+    state.draftNotice = "Draft copied. Paste it on native Miladychan, then review and submit there.";
+  } catch {
+    state.draftNotice = "Could not copy automatically. Select the saved draft and copy it manually.";
+  }
+  notice.textContent = state.draftNotice;
+}
+
+function nativeDestinationUrl(board: string, threadId: number | null): string {
+  return threadId === null ? `${API_ROOT}/${board}/` : `${API_ROOT}/${board}/${threadId}`;
+}
+
+function normalizeDraft(value: unknown): PostDraft | null {
+  if (!value || typeof value !== "object") return null;
+  const raw = value as Partial<PostDraft>;
+  if (typeof raw.board !== "string" || !raw.board || typeof raw.body !== "string") return null;
+  const candidateThreadId = raw.threadId;
+  const threadId: number | null = candidateThreadId === null
+    ? null
+    : typeof candidateThreadId === "number" && Number.isInteger(candidateThreadId) && candidateThreadId > 0
+      ? candidateThreadId
+      : null;
+  return {
+    board: raw.board,
+    threadId,
+    body: raw.body,
+    updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : 0,
+  };
 }
 
 function createPost(post: ChanPost, fallbackBoard: string): HTMLElement {

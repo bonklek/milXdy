@@ -13,8 +13,9 @@ Miladychan Portal browses public Miladychan boards, threads, posts, and media fr
 - Open a board to view its thread list.
 - Open a thread to read posts and media previews.
 - Use thread headers and media links to open the native Miladychan site.
+- On a board or thread, write a text-only local draft, confirm the visible destination, then explicitly copy it and open native Miladychan to review and submit it.
 - Adjust the panel layout and theme; these choices are stored locally.
 
 ## Notes
 
-The portal is a reader and browser surface. Posting and full-board actions remain on the native Miladychan site.
+The portal does not submit posts, read a Miladychan session, upload media, or attach an X/Twitter, RemiNet, wallet, or extension identity. It keeps text-only drafts locally until you explicitly discard them. Native Miladychan remains responsible for session, CAPTCHA, media, and final submission.
