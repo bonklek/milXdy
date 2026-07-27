@@ -70,7 +70,6 @@ jobs:
         env:
           POST_READING_REPO: ${{ github.workspace }}/post-reading-sdk
         run: npm run verify:post-reading-sdk-reference
-
       - name: Verify extension smoke
         run: npm run verify:smoke:020
 
