@@ -82,7 +82,7 @@ describe("TextHighlightEngine smooth mode", () => {
     expect(current.dataset.postReadingSmoothFilled).toBeUndefined();
     expect(current.style.getPropertyValue("--post-reading-fill")).toBe("50%");
     expect(future.dataset.postReadingSmoothFilled).toBeUndefined();
-    expect(future.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(future.style.getPropertyValue("--post-reading-fill")).toBe("0%");
   });
 
   it("changes the fill through the timed animation path", () => {
@@ -107,6 +107,66 @@ describe("TextHighlightEngine smooth mode", () => {
       boundaryIndex: 0,
       interrupted: false,
     });
+  });
+
+  it("animates only the current token until speech enters the next token", () => {
+    const diagnostics: SmoothDiagnostic[] = [];
+    const engine = new TextHighlightEngine({
+      onSmoothAnimation: (diagnostic) => diagnostics.push(diagnostic),
+    });
+    const first = token(0, "abcd");
+    const second = token(4, "efghijkl");
+    const third = token(12, "mnop");
+    const tokens = [first, second, third];
+
+    engine.paintSmooth(tokens, 0, { textLength: 16 });
+    vi.advanceTimersByTime(1);
+
+    expect(first.style.getPropertyValue("--post-reading-fill")).toBe("100%");
+<<<<<<< HEAD
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+=======
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
+>>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
+    expect(diagnostics).toHaveLength(1);
+    expect(diagnostics[0]?.animatedTokenCount).toBe(1);
+
+    engine.paintSmooth(tokens, 3, { textLength: 16 });
+<<<<<<< HEAD
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+    expect(diagnostics).toHaveLength(2);
+=======
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(diagnostics).toHaveLength(1);
+>>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
+
+    engine.paintSmooth(tokens, 4, { textLength: 16 });
+    expect(first.dataset.postReadingSmoothFilled).toBe("true");
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+<<<<<<< HEAD
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+    expect(diagnostics).toHaveLength(3);
+    expect(diagnostics[2]).toMatchObject({ animatedTokenCount: 1, boundaryIndex: 4 });
+
+    vi.advanceTimersByTime(1);
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("100%");
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+=======
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics[1]).toMatchObject({
+      animatedTokenCount: 1,
+      interrupted: true,
+      pendingToIndex: 4,
+    });
+    expect(diagnostics[1]!.durationMs).toBeGreaterThan(diagnostics[0]!.durationMs);
+
+    vi.advanceTimersByTime(1);
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("100%");
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
+>>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
   });
 
   it("advances continuously from an in-word position instead of snapping at a boundary", () => {
@@ -142,17 +202,32 @@ describe("TextHighlightEngine smooth mode", () => {
     expect(first.dataset.postReadingSmoothFilled).toBe("true");
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("100%");
     expect(diagnostics).toHaveLength(2);
-    expect(diagnostics[1]).toMatchObject({
-      animatedTokenCount: 1,
-      boundaryIndex: 6,
-      interrupted: true,
-      pendingToIndex: 5,
-    });
+    expect(diagnostics[1]).toMatchObject({ animatedTokenCount: 1, boundaryIndex: 6 });
 
     vi.advanceTimersByTime(1);
 
     expect(second.style.getPropertyValue("--post-reading-fill")).toBe("100%");
     expect(Number.parseInt(second.style.getPropertyValue("--post-reading-fill-duration"), 10)).toBeGreaterThanOrEqual(80);
+  });
+
+  it("keeps one visual fill front through rapid The, Chuck, E. boundaries", () => {
+    const engine = new TextHighlightEngine();
+    const tokens = [token(0, "The "), token(4, "Chuck "), token(10, "E.")];
+    const partialCount = () => tokens.filter((item) => {
+      const fill = Number.parseFloat(item.style.getPropertyValue("--post-reading-fill"));
+      return fill > 0 && fill < 100;
+    }).length;
+
+    engine.paintSmooth(tokens, 0, { textLength: 12 });
+    expect(partialCount()).toBe(0);
+    engine.paintSmooth(tokens, 4, { textLength: 12 });
+    expect(tokens[0]!.style.getPropertyValue("--post-reading-fill")).toBe("100%");
+    expect(partialCount()).toBe(0);
+    engine.paintSmooth(tokens, 10, { textLength: 12 });
+    expect(tokens[1]!.style.getPropertyValue("--post-reading-fill")).toBe("100%");
+    expect(partialCount()).toBe(0);
+    vi.advanceTimersByTime(1);
+    expect(partialCount()).toBe(0);
   });
 
   it("repaints backward resynchronization without stale future fill", () => {
@@ -171,8 +246,8 @@ describe("TextHighlightEngine smooth mode", () => {
     engine.paintSmooth(tokens, 2, { snapToCurrent: true, textLength: 12 });
 
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("50%");
-    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
-    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
+    expect(third.style.getPropertyValue("--post-reading-fill")).toBe("0%");
     expect(second.dataset.postReadingSmoothFilled).toBeUndefined();
     expect(third.dataset.postReadingSmoothFilled).toBeUndefined();
   });
@@ -183,16 +258,16 @@ describe("TextHighlightEngine smooth mode", () => {
     const second = token(8, "ijklmnop");
     const tokens = [first, second];
 
-    engine.paintSmooth(tokens, 0, { leadToNextToken: true, textLength: 16 });
+    engine.paintSmooth(tokens, 0, { textLength: 16 });
     vi.advanceTimersByTime(1);
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("100%");
 
     engine.suspendSmoothTracking(3);
     engine.paintSmooth(tokens, 3, { snapToCurrent: true, textLength: 16 });
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("37.5%");
-    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("");
+    expect(second.style.getPropertyValue("--post-reading-fill")).toBe("0%");
 
-    engine.paintSmooth(tokens, 3, { leadToNextToken: true, textLength: 16 });
+    engine.paintSmooth(tokens, 3, { textLength: 16 });
     vi.advanceTimersByTime(1);
     expect(first.style.getPropertyValue("--post-reading-fill")).toBe("100%");
     expect(Number.parseInt(first.style.getPropertyValue("--post-reading-fill-duration"), 10)).toBeGreaterThanOrEqual(80);

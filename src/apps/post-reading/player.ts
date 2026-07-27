@@ -34,6 +34,8 @@ export class MiniPlayer {
   private originalParent: HTMLElement | null = null;
   private title: HTMLSpanElement;
   private playButton: HTMLButtonElement;
+  private previousPostButton: HTMLButtonElement;
+  private nextPostButton: HTMLButtonElement;
   private skipOcrButton: HTMLButtonElement;
   private header: HTMLDivElement;
   private controls: HTMLDivElement;
@@ -109,6 +111,7 @@ export class MiniPlayer {
     this.controls = controls;
 
     const prev = controlButton("Previous post", "prev", actions.onPrevious);
+    this.previousPostButton = prev;
     const prevChunk = controlButton("Previous line", "prevChunk", actions.onPreviousChunk);
     this.playButton = controlButton("Play or pause", "play", () => {
       const nextIsSpeaking = this.lastSpeechStatus !== "speaking";
@@ -117,6 +120,7 @@ export class MiniPlayer {
     });
     const nextChunk = controlButton("Next line", "nextChunk", actions.onNextChunk);
     const next = controlButton("Next post", "next", actions.onNext);
+    this.nextPostButton = next;
     this.skipOcrButton = document.createElement("button");
     this.skipOcrButton.type = "button";
     this.skipOcrButton.className = "post-reading-control post-reading-ocr-control";
@@ -202,6 +206,13 @@ export class MiniPlayer {
     this.title.textContent = state.error || `${state.title || "Post-reading"}${progress}`;
     this.lastSpeechStatus = state.status;
     this.setPlayButtonIcon(state.status === "speaking");
+  }
+
+  setPostNavigationAvailability(availability: { previous: boolean; next: boolean }): void {
+    this.previousPostButton.disabled = !availability.previous;
+    this.nextPostButton.disabled = !availability.next;
+    this.previousPostButton.title = availability.previous ? "Previous post" : "No previous post";
+    this.nextPostButton.title = availability.next ? "Next post" : "No next post";
   }
 
   updateSettings(settings: PostReadingSettings): void {

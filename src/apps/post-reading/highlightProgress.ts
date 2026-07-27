@@ -6,7 +6,6 @@ export type HighlightProgressState = {
   hasSyncedBoundaries: boolean;
 };
 
-const BOUNDARY_STALL_MS = 420;
 const LIVE_TICK_MS = 90;
 
 export class HighlightProgressClock {
@@ -52,13 +51,12 @@ export class HighlightProgressClock {
     if (state.chunkStart === null) return null;
     this.observe(state, now);
     const boundaryIndex = state.charIndex ?? this.boundaryIndex;
-    const boundaryAge = Math.max(0, now - this.boundaryObservedAt);
     if (state.status !== "speaking") {
       return this.lastResolvedIndex ?? boundaryIndex ?? state.chunkStart;
     }
-    if (state.hasSyncedBoundaries && boundaryIndex !== null && boundaryAge < BOUNDARY_STALL_MS) {
+    if (state.hasSyncedBoundaries) {
       this.lastResolvedIndex = boundaryIndex;
-      return boundaryIndex;
+      return boundaryIndex ?? state.chunkStart;
     }
 
     const anchorIndex = boundaryIndex ?? state.chunkStart;
@@ -72,10 +70,7 @@ export class HighlightProgressClock {
   nextUpdateDelay(state: HighlightProgressState, now: number): number | null {
     if (state.status !== "speaking" || state.chunkStart === null) return null;
     this.observe(state, now);
-    if (!state.hasSyncedBoundaries || this.boundaryIndex === null) return LIVE_TICK_MS;
-    const boundaryAge = Math.max(0, now - this.boundaryObservedAt);
-    if (boundaryAge >= BOUNDARY_STALL_MS) return LIVE_TICK_MS;
-    return Math.max(1, BOUNDARY_STALL_MS - boundaryAge);
+    return state.hasSyncedBoundaries ? null : LIVE_TICK_MS;
   }
 
   reset(): void {

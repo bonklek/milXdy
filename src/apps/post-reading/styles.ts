@@ -525,11 +525,6 @@ export function injectStyles(): void {
     .post-reading-checkbox input {
       margin: 0;
     }
-    @property --post-reading-fill {
-      syntax: "<percentage>";
-      inherits: false;
-      initial-value: 0%;
-    }
     article[data-post-reading-active="true"][data-post-reading-active-background="true"] {
       box-shadow: inset 3px 0 0 rgba(199, 102, 147, 0.9);
       background: linear-gradient(90deg, rgba(199, 102, 147, 0.08), transparent 42%);
@@ -638,7 +633,7 @@ export function injectStyles(): void {
       border-radius: 4px;
       box-decoration-break: clone;
       -webkit-box-decoration-break: clone;
-      transition: --post-reading-fill var(--post-reading-fill-duration) linear;
+      transition: background var(--post-reading-fill-duration) linear;
     }
     [data-post-reading-smooth-word="true"][data-post-reading-smooth-filled="true"] {
       --post-reading-fill: 100%;

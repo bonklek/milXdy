@@ -26,7 +26,6 @@ type SmoothPaintOptions = {
   textLength?: number;
   boundaryElapsedTime?: number | null;
   anchor?: "boundary" | "midpoint";
-  leadToNextToken?: boolean;
 };
 
 type SmoothAnimationDiagnostic = {
@@ -169,6 +168,7 @@ export class TextHighlightEngine {
 
   paintSmooth(tokens: HTMLElement[], relativeIndex: number, options: SmoothPaintOptions = {}): HTMLElement | null {
     if (tokens.length === 0) return null;
+    const previousRelativeIndex = this.lastRelativeIndex;
     this.updateBoundaryCalibration(relativeIndex, options.boundaryElapsedTime);
     const textLength = options.textLength ?? inferTextLength(tokens);
     const currentToken = options.anchor === "midpoint"
@@ -179,19 +179,24 @@ export class TextHighlightEngine {
       return null;
     }
 
+<<<<<<< HEAD
+    if (this.pendingSmoothAnimation && previousRelativeIndex === relativeIndex && !options.snapToCurrent) return currentToken;
+
+    // This is the v0.2.0 cursor model: a real boundary starts the cursor's
+    // next run, rather than waiting for the following word boundary to paint.
+    // Cancel first, then paint the whole cursor synchronously at its new start.
+    // That leaves exactly one possible partial fill before CSS begins the next run.
+    this.clearSmoothAnimation();
+    if (options.snapToCurrent) this.smoothVisualIndex = relativeIndex;
+    const visualStart = relativeIndex;
+    const predictedNextBoundary = findNextBoundaryIndex(tokens, relativeIndex);
+    const minimumLead = Math.round(this.calibratedCharsPerSecond * 0.18);
+    const animationEnd = Math.min(textLength, Math.max(visualStart, predictedNextBoundary, relativeIndex + minimumLead));
+=======
     const currentTokenStart = tokenStart(currentToken);
     const currentTokenEnd = Math.min(textLength, currentTokenStart + tokenReadableLength(currentToken));
     if (currentTokenEnd <= currentTokenStart) return currentToken;
-    const animationEnd = options.leadToNextToken
-      ? Math.min(
-          textLength,
-          Math.max(
-            currentTokenEnd,
-            this.findNextBoundaryIndex(tokens, relativeIndex),
-            relativeIndex + Math.round(this.calibratedCharsPerSecond * 0.18),
-          ),
-        )
-      : currentTokenEnd;
+    const animationEnd = currentTokenEnd;
     const interrupted = this.recordBoundaryInterruption(relativeIndex);
     if (interrupted) {
       this.clearSmoothAnimation({ completePending: true });
@@ -201,7 +206,6 @@ export class TextHighlightEngine {
     if (
       this.pendingSmoothAnimation?.token === currentToken
       && this.activeSmoothToken === currentToken
-      && (!options.leadToNextToken || this.pendingSmoothAnimation.toIndex >= animationEnd)
     ) {
       return currentToken;
     }
@@ -209,11 +213,7 @@ export class TextHighlightEngine {
       if (options.snapToCurrent && relativeIndex > this.smoothVisualIndex) {
         this.snapSmoothAt(tokens, relativeIndex);
       }
-      if (options.leadToNextToken && animationEnd > this.smoothVisualIndex) {
-        this.clearSmoothAnimation({ completePending: true });
-      } else {
-        return currentToken;
-      }
+      return currentToken;
     }
 
     const tokenChanged = this.activeSmoothToken !== null && this.activeSmoothToken !== currentToken;
@@ -228,15 +228,15 @@ export class TextHighlightEngine {
       currentTokenStart,
       Math.min(relativeIndex, currentTokenEnd - 1),
     );
+>>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
     if (visualStart >= animationEnd) {
       this.snapSmoothAt(tokens, animationEnd);
       return currentToken;
     }
-
-    const duration = this.estimateSmoothFillDurationMs(animationEnd - visualStart);
     this.snapSmoothAt(tokens, visualStart);
+    const duration = Math.max(80, this.estimateSmoothFillDurationMs(Math.max(1, animationEnd - visualStart || tokenReadableLength(currentToken))));
     this.activeSmoothToken = currentToken;
-    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, interrupted, relativeIndex);
+    this.animateSmoothRange(tokens, currentToken, visualStart, animationEnd, duration, null, relativeIndex);
     return currentToken;
   }
 
@@ -248,8 +248,7 @@ export class TextHighlightEngine {
     }
   }
 
-  clearSmoothAnimation(options: { completePending?: boolean } = {}): void {
-    const pending = this.pendingSmoothAnimation;
+  clearSmoothAnimation(_options: { completePending?: boolean } = {}): void {
     this.pendingSmoothAnimation = null;
     if (this.smoothAnimationFrame !== null) {
       window.cancelAnimationFrame(this.smoothAnimationFrame);
@@ -258,9 +257,6 @@ export class TextHighlightEngine {
     if (this.smoothAnimationTimer !== null) {
       window.clearTimeout(this.smoothAnimationTimer);
       this.smoothAnimationTimer = null;
-    }
-    if (options.completePending && pending && pending.tokens.some((token) => token.isConnected)) {
-      this.snapSmoothAt(pending.tokens, pending.toIndex);
     }
   }
 
@@ -291,17 +287,6 @@ export class TextHighlightEngine {
     const numeric = typeof speed === "number" && Number.isFinite(speed) ? speed : 1;
     this.baselineCharsPerSecond = 13 * Math.max(0.5, numeric);
     if (this.lastBoundaryAt === null) this.calibratedCharsPerSecond = this.baselineCharsPerSecond;
-  }
-
-  findNextBoundaryIndex(tokens: HTMLElement[], relativeIndex: number): number {
-    const sorted = [...tokens].sort((left, right) => tokenStart(left) - tokenStart(right));
-    const current = findNearestToken(sorted, relativeIndex);
-    if (!current) return relativeIndex;
-    const currentIndex = sorted.indexOf(current);
-    for (const token of sorted.slice(currentIndex + 1)) {
-      if (token.dataset.postReadingTokenKind !== "space") return tokenStart(token);
-    }
-    return tokenStart(current) + tokenReadableLength(current);
   }
 
   private prepareTextOverrideTokens(
@@ -604,10 +589,18 @@ function rangeFillPercentForToken(token: HTMLElement, cursorIndex: number): numb
 }
 
 function setSmoothFillImmediate(token: HTMLElement, percent: number | null): void {
-  token.style.setProperty("transition", "none");
   token.style.setProperty("--post-reading-fill-duration", "0ms");
-  if (percent === null || !Number.isFinite(percent)) token.style.removeProperty("--post-reading-fill");
+  if (percent === null || !Number.isFinite(percent)) token.style.setProperty("--post-reading-fill", "0%");
   else token.style.setProperty("--post-reading-fill", `${Math.max(0, Math.min(100, percent))}%`);
-  token.style.removeProperty("transition");
-  if (percent === null || !Number.isFinite(percent)) token.style.removeProperty("--post-reading-fill-duration");
+}
+
+function findNextBoundaryIndex(tokens: HTMLElement[], relativeIndex: number): number {
+  const sorted = [...tokens].sort((left, right) => tokenStart(left) - tokenStart(right));
+  const current = findTokenContaining(sorted, relativeIndex) || findNearestToken(sorted, relativeIndex);
+  if (!current) return relativeIndex;
+  const currentIndex = sorted.indexOf(current);
+  for (const token of sorted.slice(currentIndex + 1)) {
+    if (token.dataset.postReadingTokenKind !== "space") return tokenStart(token);
+  }
+  return tokenStart(current) + tokenLength(current);
 }
