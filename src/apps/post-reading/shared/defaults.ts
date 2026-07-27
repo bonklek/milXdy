@@ -17,7 +17,7 @@ export const DEFAULT_SETTINGS: PostReadingSettings = {
   endOfTweetDing: true,
   includeQuotes: true,
   fetchFullQuotes: false,
-  fullQuoteDisplay: "scroll",
+  fullQuoteDisplay: "hidden",
   includeHyperlinks: false,
   includeImageAltText: true,
   includeImageOcr: true,
