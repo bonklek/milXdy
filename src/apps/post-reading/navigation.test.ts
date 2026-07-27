@@ -4,6 +4,7 @@ import {
   findExplicitPostTarget,
   findVisibleAutoplayTarget,
   jumpToAdjacentSpeechBoundary,
+  postNavigationAvailability,
   readableLineStarts,
   readableSpeechBoundaryStarts,
   shouldRestartCurrentPost,
@@ -100,5 +101,11 @@ describe("Post-reading post navigation", () => {
     expect(shouldRestartCurrentPost(14)).toBe(true);
     expect(shouldRestartCurrentPost(0)).toBe(false);
     expect(shouldRestartCurrentPost(null)).toBe(false);
+  });
+
+  it("exposes unavailable post arrows while retaining previous restart availability", () => {
+    expect(postNavigationAvailability([current], current, 0)).toEqual({ previous: false, next: false });
+    expect(postNavigationAvailability([current], current, 4)).toEqual({ previous: true, next: false });
+    expect(postNavigationAvailability(ordered, current, 0)).toEqual({ previous: true, next: true });
   });
 });

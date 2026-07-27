@@ -9,6 +9,7 @@ import {
   findExplicitPostTarget,
   findVisibleAutoplayTarget,
   jumpToAdjacentSpeechBoundary,
+  postNavigationAvailability,
   shouldRestartCurrentPost,
 } from "./navigation";
 import { recognizeImageText, type OcrImage } from "./ocr";
@@ -56,8 +57,6 @@ let estimatedHighlightKey = "";
 let estimatedHighlightStartedAt = 0;
 let estimatedHighlightPausedAt: number | null = null;
 const highlightProgressClock = new HighlightProgressClock();
-let pendingTweetHighlightState: HighlightSpeechState | null = null;
-let tweetHighlightFrame: number | null = null;
 let highlightWorkGeneration = 0;
 let deferNextIdleHighlightCleanup = false;
 let lastHighlightDiagnosticSignature = "";
@@ -262,7 +261,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   });
   addDisposable(speech.subscribe((state) => {
     player.updateState(state);
-    scheduleTweetHighlight(state);
+    updateTweetHighlight(state);
     updateDockState();
   }));
   addDisposable(wikiSpeech.subscribe((state) => {
@@ -670,6 +669,7 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   const readable = extractReadablePost(tweet, settings);
   if (!readable) return;
   currentTweet = tweet;
+  updatePostNavigationAvailability();
   markActiveButton(tweet);
   await enrichFullQuote(readable);
   if (!lifecycleActive() || readRunId !== activeReadRunId) return;
@@ -679,41 +679,7 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   currentHighlightTargets = findHighlightTargets(tweet, text, readable);
   currentOcrSpeechRanges = findOcrSpeechRanges(text, readable.imageTexts);
   speech.speak(text, readable.authorDisplayName);
-  scheduleInitialTweetHighlight(text, readRunId);
   tweet.scrollIntoView({ block: "nearest", inline: "nearest" });
-}
-
-function scheduleInitialTweetHighlight(text: string, readRunId: number): void {
-  window.requestAnimationFrame(() => {
-    if (!lifecycleActive() || readRunId !== activeReadRunId) return;
-    try {
-      prepareInitialTweetHighlight(text, readRunId);
-    } catch (error) {
-      console.warn("Post-reading initial highlight failed", error);
-      recordRuntimeDiagnostic("highlightPaint", {
-        reason: "initial-highlight-error",
-        error: error instanceof Error ? error.message : String(error),
-        updatedAt: Date.now(),
-      });
-    }
-  });
-}
-
-function prepareInitialTweetHighlight(text: string, readRunId: number): void {
-  if (!currentTweet || settings.bodyHighlightMode === "off" || currentHighlightTargets.length === 0) return;
-  if (!lifecycleActive() || readRunId !== activeReadRunId) return;
-  const firstTarget = currentHighlightTargets[0];
-  updateTweetHighlight({
-    status: "paused",
-    text,
-    chunkIndex: 0,
-    chunkCount: 1,
-    chunkStart: firstTarget.start,
-    charIndex: firstTarget.start,
-    charLength: null,
-    boundaryElapsedTime: null,
-    hasSyncedBoundaries: true,
-  });
 }
 
 function playReadableDocument(target: WikiReadableDocument): void {
@@ -1357,10 +1323,9 @@ function showTransientOcrStatus(status: string): void {
   }, 1400);
 }
 
-function playAdjacentExplicit(direction: 1 | -1): void {
+function playAdjacentExplicit(direction: 1 | -1, allowScroll = true): void {
   if (!lifecycleActive()) return;
   const tweets = timelineTweets();
-  if (tweets.length === 0) return;
   const next = findExplicitPostTarget(
     tweets,
     currentTweet,
@@ -1370,7 +1335,18 @@ function playAdjacentExplicit(direction: 1 | -1): void {
   if (next) {
     playTweet(next);
     next.scrollIntoView({ block: "center", behavior: "smooth" });
+    return;
   }
+  if (!allowScroll) {
+    updatePostNavigationAvailability();
+    return;
+  }
+  window.scrollBy({ top: Math.round(window.innerHeight * 0.8) * direction, behavior: "smooth" });
+  runtimeScheduler.timeout(() => {
+    if (!lifecycleActive()) return;
+    scheduleScan();
+    playAdjacentExplicit(direction, false);
+  }, 550);
 }
 
 function playAdjacentAutoplay(): void {
@@ -1415,10 +1391,23 @@ function previousTweetOrStart(): void {
   ) {
     speech.jumpToCharIndex(0);
     resyncHighlightAfterSpeechJump();
+    updatePostNavigationAvailability();
     currentTweet.scrollIntoView({ block: "nearest", inline: "nearest" });
     return;
   }
   playAdjacentExplicit(-1);
+}
+
+function updatePostNavigationAvailability(): void {
+  if (!player || !currentTweet) return;
+  const state = speech.getState();
+  const tweets = timelineTweets();
+  player.setPostNavigationAvailability(postNavigationAvailability(
+    tweets,
+    currentTweet,
+    currentSpeechAbsoluteIndex(state),
+    (tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet),
+  ));
 }
 
 function jumpFromQuoteToMainText(): boolean {
@@ -1638,27 +1627,8 @@ function markActiveButton(tweet: HTMLElement): void {
   }
 }
 
-function scheduleTweetHighlight(state: HighlightSpeechState): void {
-  if (state.status === "idle" || state.status === "error") {
-    if (tweetHighlightFrame !== null) {
-      window.cancelAnimationFrame(tweetHighlightFrame);
-      tweetHighlightFrame = null;
-    }
-    pendingTweetHighlightState = null;
-    updateTweetHighlight(state);
-    return;
-  }
-  pendingTweetHighlightState = state;
-  if (tweetHighlightFrame !== null) return;
-  tweetHighlightFrame = window.requestAnimationFrame(() => {
-    tweetHighlightFrame = null;
-    const next = pendingTweetHighlightState;
-    pendingTweetHighlightState = null;
-    if (next) updateTweetHighlight(next);
-  });
-}
-
 function updateTweetHighlight(state: HighlightSpeechState): void {
+  if (currentTweet) updatePostNavigationAvailability();
   if (state.status === "idle") {
     if (deferNextIdleHighlightCleanup) {
       deferNextIdleHighlightCleanup = false;
@@ -1768,7 +1738,6 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     textLength: paintTarget.text.length,
     snapToCurrent: highlightJumped || state.status !== "speaking",
     boundaryElapsedTime: state.boundaryElapsedTime ?? null,
-    leadToNextToken: state.status === "speaking",
   });
   const paintMs = performance.now() - paintStartedAt;
   recordHighlightTimingDiagnostic(target, paintTarget, words, tokenizeMs, paintMs);
@@ -1863,6 +1832,7 @@ function canTokenizeHighlightTarget(target: HighlightTarget, mode: BodyHighlight
 
 function currentSpeechAbsoluteIndex(state: HighlightSpeechState): number | null {
   if (state.chunkStart === null) return null;
+  if (state.hasSyncedBoundaries) return state.charIndex ?? state.chunkStart;
   return highlightProgressClock.resolveIndex(
     state,
     performance.now(),
@@ -2109,7 +2079,6 @@ function getVisibleQuoteTweetBody(tweet: HTMLElement): HTMLElement | null {
 }
 
 function clearBodyHighlight(): void {
-  clearPendingTweetHighlight();
   clearEstimatedHighlightLoop();
   clearHighlightVisuals();
   const removedSegmentSurfaces = removeAllSegmentSurfaces();
@@ -2133,17 +2102,8 @@ function removeAllSegmentSurfaces(): number {
   return removed;
 }
 
-function clearPendingTweetHighlight(): void {
-  if (tweetHighlightFrame !== null) {
-    window.cancelAnimationFrame(tweetHighlightFrame);
-    tweetHighlightFrame = null;
-  }
-  pendingTweetHighlightState = null;
-}
-
 function cancelPendingHighlightWork(): void {
   highlightWorkGeneration += 1;
-  clearPendingTweetHighlight();
   clearSmoothAnimation();
 }
 

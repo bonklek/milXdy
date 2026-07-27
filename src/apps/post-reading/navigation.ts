@@ -70,6 +70,19 @@ export function shouldRestartCurrentPost(currentIndex: number | null, startIndex
   return currentIndex !== null && currentIndex > startIndex;
 }
 
+export function postNavigationAvailability<T>(
+  orderedPosts: readonly T[],
+  currentPost: T | null,
+  currentIndex: number | null,
+  isEligible: (post: T) => boolean = () => true,
+): { previous: boolean; next: boolean } {
+  return {
+    previous: shouldRestartCurrentPost(currentIndex)
+      || findExplicitPostTarget(orderedPosts, currentPost, -1, isEligible) !== null,
+    next: findExplicitPostTarget(orderedPosts, currentPost, 1, isEligible) !== null,
+  };
+}
+
 type SpeechNavigationState = {
   status: string;
   text: string;

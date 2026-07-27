@@ -16,17 +16,17 @@ describe("HighlightProgressClock", () => {
     expect(clock.resolveIndex(stateAt(12), 400, 10, 200)).toBe(12);
   });
 
-  it("continues live progress when a native boundary stalls", () => {
+  it("never synthesizes progress or ticks when a synchronized boundary stalls", () => {
     const clock = new HighlightProgressClock();
     clock.observe(stateAt(0), 100);
-    expect(clock.resolveIndex(stateAt(0), 600, 10, 200)).toBe(5);
-    expect(clock.nextUpdateDelay(stateAt(0), 600)).toBe(90);
+    expect(clock.resolveIndex(stateAt(0), 6_000, 10, 200)).toBe(0);
+    expect(clock.nextUpdateDelay(stateAt(0), 6_000)).toBeNull();
   });
 
   it("returns immediately to a resumed native boundary", () => {
     const clock = new HighlightProgressClock();
     clock.observe(stateAt(0), 100);
-    expect(clock.resolveIndex(stateAt(0), 600, 10, 200)).toBe(5);
+    expect(clock.resolveIndex(stateAt(0), 600, 10, 200)).toBe(0);
     clock.observe(stateAt(18), 650);
     expect(clock.resolveIndex(stateAt(18), 700, 10, 200)).toBe(18);
   });
@@ -34,9 +34,17 @@ describe("HighlightProgressClock", () => {
   it("does not advance while paused", () => {
     const clock = new HighlightProgressClock();
     clock.observe(stateAt(null), 100);
-    expect(clock.resolveIndex(stateAt(null), 600, 10, 200)).toBe(5);
+    expect(clock.resolveIndex(stateAt(null), 600, 10, 200)).toBe(0);
     const paused = { ...stateAt(null), status: "paused" };
     clock.observe(paused, 600);
-    expect(clock.resolveIndex(paused, 2_000, 10, 200)).toBe(5);
+    expect(clock.resolveIndex(paused, 2_000, 10, 200)).toBe(0);
+  });
+
+  it("keeps estimated ticks exclusively for voices without synchronized boundaries", () => {
+    const clock = new HighlightProgressClock();
+    const unsynced = { ...stateAt(null), hasSyncedBoundaries: false };
+    clock.observe(unsynced, 100);
+    expect(clock.resolveIndex(unsynced, 600, 10, 200)).toBe(5);
+    expect(clock.nextUpdateDelay(unsynced, 600)).toBe(90);
   });
 });

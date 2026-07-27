@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 const source = readFileSync(new URL("./content.ts", import.meta.url), "utf8");
 
 describe("Post-reading content regression contracts", () => {
-  it("uses the animated smooth painter with the complete boundary options", () => {
+  it("uses the animated smooth painter without predictive token lead", () => {
     const body = functionBody("updateTweetHighlight");
     expect(body).toContain("highlightEngine.paintSmooth(words, paintTarget.relativeIndex");
     expect(body).not.toContain("highlightEngine.paintSmoothAt(");
@@ -12,7 +12,28 @@ describe("Post-reading content regression contracts", () => {
     expect(body).toContain("textLength: paintTarget.text.length");
     expect(body).toContain('snapToCurrent: highlightJumped || state.status !== "speaking"');
     expect(body).toContain("boundaryElapsedTime: state.boundaryElapsedTime ?? null");
-    expect(body).toContain('leadToNextToken: state.status === "speaking"');
+    expect(body).not.toContain("leadToNextToken");
+  });
+
+  it("starts highlighting only from real SpeechController state", () => {
+    const body = functionBody("playTweet");
+    expect(body).toContain("speech.speak(text, readable.authorDisplayName)");
+    expect(body).not.toContain("scheduleInitialTweetHighlight");
+    expect(source).not.toContain("function scheduleInitialTweetHighlight");
+    expect(source).not.toContain("function prepareInitialTweetHighlight");
+<<<<<<< HEAD
+  });
+
+  it("delivers tweet speech state directly instead of coalescing it through an animation frame", () => {
+    const start = source.indexOf("addDisposable(speech.subscribe");
+    const subscription = source.slice(start, source.indexOf("addDisposable(wikiSpeech.subscribe", start));
+    expect(subscription).toContain("updateTweetHighlight(state)");
+    expect(subscription).not.toContain("scheduleTweetHighlight");
+    expect(source).not.toContain("function scheduleTweetHighlight");
+    expect(source).not.toContain("pendingTweetHighlightState");
+    expect(source).not.toContain("tweetHighlightFrame");
+=======
+>>>>>>> a3dd718 (Recover strict Post-reading QA refinements)
   });
 
   it("keeps smooth mode for estimated progress and retains long-text segmentation", () => {
