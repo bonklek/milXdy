@@ -37,6 +37,8 @@ try {
   assert.equal(composed.version, "0.1.0");
   for (const key of ["manifestSha256", "contentSha256", "packageSha256"]) assert.match(composed[key], /^[a-f0-9]{64}$/u);
   assert.equal(JSON.stringify(provenance).includes(externalPackage), false);
+  assert.equal(provenance.output, "shared-qa-chromium", "QA provenance must use a stable shared-output identity instead of a local path");
+  assert.equal(Object.hasOwn(provenance, "worktree"), false, "QA provenance must not retain a local worktree path");
   const compositionReport = await readFile("tmp/qa-local-app-composition/composition-report.json", "utf8");
   assert.equal(compositionReport.includes(externalPackage), false);
 

@@ -324,8 +324,9 @@ function createProvenance(source, outputDir, coordinatorPort, composition) {
     build: { target: "chromium", profile: "full", node: process.version },
     composition,
     extensionId: extensionIdFromManifestKey(QA_MANIFEST_KEY),
-    output: resolve(outputDir),
-    worktree: resolve("."),
+    // QA artifacts may be shared outside this workstation. Keep the output
+    // identity stable for reload coordination without serializing local paths.
+    output: "shared-qa-chromium",
     coordinatorPort,
   };
 }
