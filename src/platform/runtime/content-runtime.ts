@@ -165,6 +165,7 @@ const RUNTIME_IMPORT_FLAG = "__milxdyContentRuntimeLoading";
 const TWEET_SCAFFOLD_STYLE_ID = "milxdy-tweet-scaffold-style";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
 const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
+const COMPOSER_SELECTOR = '[data-testid="tweetTextarea_0"], [data-testid^="tweetTextarea_"], [role="textbox"][aria-label*="Post" i], [role="textbox"][aria-label*="Tweet" i]';
 const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
 const PENDING_LOCAL_ADDON_REMOVALS_KEY = "milxdy.localAddons.pendingRemovals";
 const HUB_PANEL_ID = "milxdy-app-hub-panel";
@@ -381,6 +382,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     await loadRailPins();
     await loadInterfaceSoundSettings();
     registerHubDockMetadata();
+    installComposerActionHost();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -398,6 +400,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       else updateAppDiagnostics(app, "disabled");
     }
     registerAddOnsCatalogDockItem();
+    refreshComposerActionButtons();
     syncHiddenRailItems();
     updateScannerConfiguration();
     recordRuntimeDiagnostic("runtime.metadata", {
@@ -687,6 +690,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             updateScannerConfiguration();
             void disableApp(app);
           }
+          refreshComposerActionButtons();
           syncHiddenRailItems();
           renderHubPanel();
         });
@@ -1344,6 +1348,133 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return rows;
     });
     return candidates.find((row) => row !== displayRow && !row.contains(displayRow)) || (displayRow?.parentElement ?? null);
+  }
+
+  function installComposerActionHost(): void {
+    const refresh = () => refreshComposerActionButtons();
+    refresh();
+    const observer = new MutationObserver(refresh);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+    state.runtimeDisposables.add(() => observer.disconnect());
+    state.runtimeDisposables.add(closeComposerActionPanel);
+  }
+
+  function refreshComposerActionButtons(): void {
+    const apps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.composerAction);
+    for (const composer of Array.from(document.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))) {
+      if (composer.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) continue;
+      const composerRoot = composer.closest<HTMLElement>('[role="dialog"]') || composer.parentElement?.parentElement || composer.parentElement;
+      const host = composerRoot?.querySelector<HTMLElement>('[data-testid="toolBar"]')
+        || composerRoot?.querySelector<HTMLElement>('[data-testid="tweetButtonInline"], [data-testid="tweetButton"]')?.parentElement
+        || composerRoot;
+      if (!host) continue;
+      let slot = host.querySelector<HTMLElement>(":scope > [data-milxdy-composer-actions]");
+      if (!slot) {
+        slot = document.createElement("span");
+        slot.setAttribute("data-milxdy-composer-actions", "true");
+        slot.className = "milxdy-composer-actions";
+        host.append(slot);
+      }
+      const expected = new Set(apps.map((app) => app.id));
+      for (const button of Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))) {
+        if (!expected.has(button.dataset.appId || "")) button.remove();
+      }
+      for (const app of apps) {
+        const action = app.composerAction;
+        if (!action) continue;
+        let button = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))
+          .find((candidate) => candidate.dataset.appId === app.id) || null;
+        if (!button) {
+          button = document.createElement("button");
+          button.type = "button";
+          button.dataset.appId = app.id;
+          button.className = "milxdy-composer-action";
+          button.addEventListener("click", () => void openComposerAction(app, composer, button!));
+          slot.append(button);
+        }
+        button.title = action.label;
+        button.setAttribute("aria-label", action.label);
+        button.textContent = action.icon ? "" : action.label.slice(0, 1).toUpperCase();
+        if (action.icon) {
+          const icon = document.createElement("img");
+          icon.src = runtimeAssetUrl(resolveAppIconAsset(action.icon));
+          icon.alt = "";
+          button.replaceChildren(icon);
+        }
+      }
+    }
+    injectComposerActionStyles();
+  }
+
+  let activeComposerActionClose: (() => void) | null = null;
+
+  async function openComposerAction(app: MilxdyAppManifest, composer: HTMLElement, button: HTMLButtonElement): Promise<void> {
+    activeComposerActionClose?.();
+    const module = await loadApp(app, "composerAction");
+    if (!module?.onComposerAction) {
+      recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "Package declares composerAction but does not export onComposerAction" });
+      return;
+    }
+    const controller = new AbortController();
+    const panel = document.createElement("section");
+    panel.className = "milxdy-composer-action-panel";
+    panel.dataset.appId = app.id;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", app.composerAction?.label || app.name);
+    const rect = button.getBoundingClientRect();
+    panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 360))}px`;
+    panel.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - 160)}px`;
+    document.body.append(panel);
+    const close = () => {
+      if (!panel.isConnected) return;
+      controller.abort();
+      panel.remove();
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismissOnEscape, true);
+      if (activeComposerActionClose === close) activeComposerActionClose = null;
+      button.focus();
+    };
+    const dismiss = (event: PointerEvent) => {
+      if (panel.contains(event.target as Node) || button.contains(event.target as Node)) return;
+      close();
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
+    activeComposerActionClose = close;
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", dismissOnEscape, true);
+    try {
+      await Promise.resolve(module.onComposerAction({
+        kind: composer.closest('[role="dialog"]') ? "reply" : "post",
+        panel,
+        signal: controller.signal,
+        close,
+      }));
+    } catch (error) {
+      close();
+      recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: errorMessage(error) });
+    }
+  }
+
+  function closeComposerActionPanel(): void {
+    activeComposerActionClose?.();
+  }
+
+  function injectComposerActionStyles(): void {
+    if (document.getElementById("milxdy-composer-action-styles")) return;
+    const style = document.createElement("style");
+    style.id = "milxdy-composer-action-styles";
+    style.textContent = `
+      .milxdy-composer-actions { display: inline-flex; gap: 4px; margin: 4px 0 0 8px; vertical-align: middle; }
+      .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
+      .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
+      .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
+      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(344px, calc(100vw - 16px)); max-height: min(420px, calc(100vh - 16px)); overflow: auto; padding: 12px; border: 1px solid rgba(83, 100, 113, .45); border-radius: 16px; background: Canvas; color: CanvasText; box-shadow: 0 8px 28px rgba(0, 0, 0, .28); }
+    `;
+    document.documentElement.append(style);
   }
 
   function registerDockMetadata(app: MilxdyAppManifest): void {
