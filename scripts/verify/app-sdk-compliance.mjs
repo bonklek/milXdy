@@ -71,6 +71,7 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
+  requireIncludes(contentRuntime, "createComposerActionRefreshScheduler", "Composer action DOM mutations must be coalesced before rescanning X");
 }
 
 function verifySdkVersionSource() {
