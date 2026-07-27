@@ -234,8 +234,9 @@ export async function acquirePublisherLock(outputDir) {
 }
 
 export async function collectSourceIdentity() {
-  const [commit, status, listed] = await Promise.all([
+  const [commit, branch, status, listed] = await Promise.all([
     runGit(["rev-parse", "HEAD"]),
+    runGit(["branch", "--show-current"]),
     runGit(["status", "--porcelain=v1", "--untracked-files=all"]),
     runGit(["ls-files", "-co", "--exclude-standard", "-z"]),
   ]);
@@ -255,6 +256,7 @@ export async function collectSourceIdentity() {
   }
   return {
     commit: commit.trim(),
+    branch: branch.trim(),
     dirty: status.trim().length > 0,
     sourceSha256: hash.digest("hex"),
     fileCount: files.length,
@@ -304,6 +306,7 @@ function createProvenance(source, outputDir, coordinatorPort, composition) {
   const builtAt = new Date().toISOString();
   const stamp = builtAt.replaceAll(/[-:.]/g, "").replace("Z", "Z");
   const shortCommit = source.commit.slice(0, 8);
+  const release = releaseLabelForBranch(source.branch);
   return {
     schemaVersion: 2,
     channel: "developer-qa",
@@ -312,10 +315,12 @@ function createProvenance(source, outputDir, coordinatorPort, composition) {
     source: {
       commit: source.commit,
       shortCommit,
+      branch: source.branch,
       dirty: source.dirty,
       sha256: source.sourceSha256,
       fileCount: source.fileCount,
     },
+    release,
     build: { target: "chromium", profile: "full", node: process.version },
     composition,
     extensionId: extensionIdFromManifestKey(QA_MANIFEST_KEY),
@@ -353,8 +358,9 @@ async function injectQaRuntime(staging, provenance) {
   const manifest = JSON.parse(manifestText);
   manifest.name = "milXdy QA";
   manifest.key = QA_MANIFEST_KEY;
-  manifest.version_name = `${manifest.version} QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
-  manifest.action.default_title = `milXdy QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
+  const displayVersion = provenance.release || manifest.version;
+  manifest.version_name = `${displayVersion} QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
+  manifest.action.default_title = `milXdy QA ${displayVersion} ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
 
   await Promise.all([
     writeFile(resolve(staging, "qa-build.json"), `${JSON.stringify(provenance, null, 2)}\n`),
@@ -421,6 +427,10 @@ function resolveQaBuildOutput(value) {
 function extensionIdFromManifestKey(key) {
   const digest = createHash("sha256").update(Buffer.from(key, "base64")).digest().subarray(0, 16);
   return Array.from(digest).flatMap((byte) => [byte >> 4, byte & 0x0f]).map((nibble) => String.fromCharCode(97 + nibble)).join("");
+}
+
+function releaseLabelForBranch(branch) {
+  return /(?:^|\/)release[-/](\d+\.\d+\.\d+)$/u.exec(branch || "")?.[1] || null;
 }
 
 async function readJson(filePath) {
