@@ -25,7 +25,7 @@ const failures = [];
 const warnings = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validSites = new Set(["x", "remiliaNet", "remiliaWiki", "miladychan"]);
@@ -68,6 +68,7 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
+  requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
@@ -77,6 +78,8 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "for (const sheet of app.css || [])", "Composer action styling must be limited to declared package stylesheets");
   requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
   requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
+  requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
+  requireIncludes(contentRuntime, "Send a reply", "Reply actions must retain an untemplated native-reply choice");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
 }
@@ -402,7 +405,7 @@ async function verifyContentModules() {
     if (app.surfaces?.includes("route") && !exports.has("onRouteChange")) {
       warn(`${app.id}: route surface is inferred from runtime behavior but onRouteChange() is not exported`);
     }
-    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["overlayApp", "route", "directMessage"].includes(surface));
+    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["overlayApp", "route", "directMessage", "composerAction", "replyAction"].includes(surface));
     if (twitterSurfaces.length > 0 && !exports.has("onSurface")) {
       fail(`${app.id}: declares Twitter/X delivery surfaces but does not export onSurface()`);
     }

@@ -6,7 +6,7 @@ export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageCh
 
 export type MilxdyAppId = string;
 
-export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp";
+export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp" | "composerAction" | "replyAction";
 export type AppCostLevel = "cheap" | "moderate" | "heavy";
 export type AppNetworkCost = "none" | "batched" | "eager";
 export type AppWorkerCost = "none" | "optional" | "heavy";
@@ -39,6 +39,15 @@ export type AppComposerAction = {
   label: string;
   icon?: AppIconAsset;
   presentation: "anchoredPanel";
+};
+export type AppReplyActionTemplate = {
+  id: string;
+  label: string;
+  text?: string;
+  storageKey?: string;
+};
+export type AppReplyAction = {
+  templates: AppReplyActionTemplate[];
 };
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
@@ -145,6 +154,7 @@ export type MilxdyAppManifest = {
     defaultSide?: "left" | "right";
   };
   composerAction?: AppComposerAction;
+  replyAction?: AppReplyAction;
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];

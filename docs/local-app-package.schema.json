@@ -103,6 +103,33 @@
         }
       }
     },
+    "replyAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["templates"],
+      "properties": {
+        "templates": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "label"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+              "label": { "type": "string", "minLength": 1 },
+              "text": { "type": "string" },
+              "storageKey": { "type": "string", "minLength": 1 }
+            },
+            "oneOf": [
+              { "required": ["text"] },
+              { "required": ["storageKey"] }
+            ]
+          }
+        }
+      }
+    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
@@ -304,7 +331,7 @@
       "items": { "type": "string" }
     },
     "surface": {
-      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp"]
+      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]
     },
     "setting": {
       "type": "object",

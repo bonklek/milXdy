@@ -13,9 +13,11 @@ try {
   const manifestPath = path.join(externalPackage, "milxdy.app.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   manifest.packageKind = "app";
-  manifest.surfaces = ["composerAction"];
+  manifest.surfaces = ["composerAction", "replyAction"];
   manifest.loadTriggers = ["userAction"];
+  manifest.siteScopes = manifest.siteScopes.map((scope) => ({ ...scope, surfaces: ["composerAction", "replyAction"] }));
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
+  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply" }] };
   manifest.css = [{ id: "developer-note.styles", path: "dev-note.css" }];
   manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -54,6 +56,7 @@ try {
     /id:\s*"dev-note"[\s\S]{0,1500}?packageKind:\s*"app"[\s\S]{0,1500}?role:\s*"enablement"/u,
     "staged external composer app must be compiled into the runtime app registry with its generated enablement control",
   );
+  assert.match(runtimeRegistry, /replyAction:\s*\{\s*templates:/u, "staged external reply action must reach the runtime registry");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");

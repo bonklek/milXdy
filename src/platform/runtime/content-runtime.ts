@@ -384,6 +384,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     await loadInterfaceSoundSettings();
     registerHubDockMetadata();
     installComposerActionHost();
+    installReplyActionHost();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -1363,6 +1364,119 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(closeComposerActionPanel);
   }
 
+  let activeReplyActionClose: (() => void) | null = null;
+
+  function installReplyActionHost(): void {
+    const onReplyClick = (event: MouseEvent) => {
+      const target = event.target;
+      const button = target instanceof Element ? target.closest<HTMLElement>('[data-testid="reply"]') : null;
+      if (!button) return;
+      if (button.dataset.milxdyNativeReply === "true") {
+        delete button.dataset.milxdyNativeReply;
+        return;
+      }
+      const apps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.replyAction);
+      if (apps.length === 0) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      void openReplyActionMenu(button, apps);
+    };
+    document.addEventListener("click", onReplyClick, true);
+    state.runtimeDisposables.add(() => document.removeEventListener("click", onReplyClick, true));
+    state.runtimeDisposables.add(() => activeReplyActionClose?.());
+    injectReplyActionStyles();
+  }
+
+  async function openReplyActionMenu(button: HTMLElement, apps: MilxdyAppManifest[]): Promise<void> {
+    activeReplyActionClose?.();
+    const menu = document.createElement("section");
+    menu.className = "milxdy-reply-action-menu";
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Reply options");
+    const rect = button.getBoundingClientRect();
+    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 300))}px`;
+    menu.style.top = `${Math.max(8, rect.top - 8)}px`;
+    menu.style.transform = "translateY(-100%)";
+    const close = () => {
+      if (!menu.isConnected) return;
+      menu.remove();
+      document.removeEventListener("pointerdown", dismiss, true);
+      document.removeEventListener("keydown", dismissOnEscape, true);
+      if (activeReplyActionClose === close) activeReplyActionClose = null;
+      button.focus();
+    };
+    const dismiss = (event: PointerEvent) => {
+      if (menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+      close();
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
+    const nativeReply = document.createElement("button");
+    nativeReply.type = "button";
+    nativeReply.className = "milxdy-reply-action-menu-row";
+    nativeReply.setAttribute("role", "menuitem");
+    nativeReply.textContent = "↩  Send a reply";
+    nativeReply.addEventListener("click", () => {
+      close();
+      triggerNativeReply(button);
+    });
+    menu.append(nativeReply);
+    for (const app of apps) {
+      const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
+        .filter((template) => template.storageKey)
+        .map((template) => [template.storageKey!, ""]));
+      const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
+      for (const template of app.replyAction?.templates || []) {
+        const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
+        // A custom local setting becomes an option only after the user has set it.
+        if (template.storageKey && !text.trim()) continue;
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "milxdy-reply-action-menu-row";
+        row.setAttribute("role", "menuitem");
+        row.textContent = template.label;
+        row.addEventListener("click", () => {
+          close();
+          triggerNativeReply(button, text);
+          recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: template.storageKey ? "stored" : template.text, updatedAt: Date.now() });
+        });
+        menu.append(row);
+      }
+    }
+    document.body.append(menu);
+    activeReplyActionClose = close;
+    document.addEventListener("pointerdown", dismiss, true);
+    document.addEventListener("keydown", dismissOnEscape, true);
+    nativeReply.focus();
+  }
+
+  function triggerNativeReply(button: HTMLElement, text = ""): void {
+    if (text) waitForReplyComposerText(text);
+    button.dataset.milxdyNativeReply = "true";
+    button.click();
+  }
+
+  function waitForReplyComposerText(text: string): void {
+    const tryInsert = () => {
+      const editor = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] [data-testid^="tweetTextarea_"]'))
+        .find((candidate) => candidate.offsetParent !== null && candidate.isContentEditable);
+      if (!editor) return false;
+      editor.focus();
+      return document.execCommand("insertText", false, text);
+    };
+    if (tryInsert()) return;
+    const observer = new MutationObserver(() => {
+      if (!tryInsert()) return;
+      observer.disconnect();
+      window.clearTimeout(timeout);
+    });
+    const timeout = window.setTimeout(() => observer.disconnect(), 1500);
+    observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
   function refreshComposerActionButtons(): void {
     const apps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.composerAction);
     const actionRows = new Set<HTMLElement>();
@@ -1489,9 +1603,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   async function installComposerActionPackageStyles(app: MilxdyAppManifest, shadow: ShadowRoot): Promise<void> {
     const hostStyle = document.createElement("style");
     hostStyle.textContent = `
-      :host { color: CanvasText; font: 400 15px/1.45 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      :host { display: block; color: #1d1b19; font: 400 14px/1.45 Arial, Helvetica, sans-serif; }
       .milxdy-composer-action-surface, .milxdy-composer-action-surface *, .milxdy-composer-action-surface *::before, .milxdy-composer-action-surface *::after { box-sizing: border-box; }
-      .milxdy-composer-action-surface { min-width: 0; }
+      .milxdy-composer-action-surface { min-width: 0; padding: 14px; background: #f4f1e9; }
+      .milxdy-composer-action-surface button { min-height: 32px; border: 1px solid #25211d; border-radius: 3px; background: #fffdf7; color: #1d1b19; box-shadow: 1px 1px 0 rgba(37, 33, 29, .34); font: 700 12px/1 Arial, Helvetica, sans-serif; cursor: pointer; }
+      .milxdy-composer-action-surface button:hover, .milxdy-composer-action-surface button:focus-visible { background: #fff3c5; outline: 2px solid #2483c5; outline-offset: 2px; }
+      .milxdy-composer-action-surface input, .milxdy-composer-action-surface textarea { border: 1px solid #756e64; border-radius: 3px; background: #fffdf7; color: #1d1b19; font: inherit; }
+      .milxdy-composer-action-surface a { color: #075f9f; font-weight: 700; }
     `;
     shadow.append(hostStyle);
     for (const sheet of app.css || []) {
@@ -1517,7 +1635,20 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
-      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(344px, calc(100vw - 16px)); max-height: min(420px, calc(100vh - 16px)); overflow: auto; padding: 12px; border: 1px solid rgba(83, 100, 113, .45); border-radius: 16px; background: Canvas; color: CanvasText; box-shadow: 0 8px 28px rgba(0, 0, 0, .28); }
+      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(420px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 2px solid #25211d; border-radius: 8px; background: #f4f1e9; color: #1d1b19; box-shadow: 5px 5px 0 rgba(37, 33, 29, .35), 0 12px 30px rgba(0, 0, 0, .24); }
+    `;
+    document.documentElement.append(style);
+  }
+
+  function injectReplyActionStyles(): void {
+    if (document.getElementById("milxdy-reply-action-styles")) return;
+    const style = document.createElement("style");
+    style.id = "milxdy-reply-action-styles";
+    style.textContent = `
+      .milxdy-reply-action-menu { position: fixed; z-index: 2147483646; display: grid; min-width: 236px; padding: 5px; border: 2px solid #25211d; border-radius: 6px; background: #f4f1e9; box-shadow: 4px 4px 0 rgba(37, 33, 29, .35), 0 10px 26px rgba(0, 0, 0, .24); }
+      .milxdy-reply-action-menu-row { display: block; min-height: 38px; padding: 8px 10px; border: 0; border-bottom: 1px solid #c9c1b7; background: transparent; color: #1d1b19; cursor: pointer; font: 700 13px/1.2 Arial, Helvetica, sans-serif; text-align: left; }
+      .milxdy-reply-action-menu-row:last-child { border-bottom: 0; }
+      .milxdy-reply-action-menu-row:hover, .milxdy-reply-action-menu-row:focus-visible { background: #fff3c5; color: #075f9f; outline: 2px solid #2483c5; outline-offset: -2px; }
     `;
     document.documentElement.append(style);
   }

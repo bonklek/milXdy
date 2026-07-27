@@ -12,7 +12,7 @@ const failures = [];
 const notes = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validLoadTriggers = new Set(["startup", "surface", "dockOpen", "idle", "userAction"]);
