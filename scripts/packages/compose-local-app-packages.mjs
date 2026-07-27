@@ -511,7 +511,11 @@ async function analyzePackage(source, manifest) {
   for (const iconPath of dockIconPaths(manifest.dock?.icon)) {
     collectFile(source, iconPath, "dock icon", files, errors);
   }
+  for (const iconPath of dockIconPaths(manifest.composerAction?.icon)) {
+    collectFile(source, iconPath, "composer action icon", files, errors);
+  }
   verifyKindRules(id, manifest, errors);
+  verifyComposerAction(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -845,6 +849,14 @@ function verifyKindRules(id, manifest, errors) {
     if (manifest.permissions?.hosts?.length > 0) errors.push(`${id}: theme packages must not request host permissions`);
     if (manifest.background) errors.push(`${id}: theme packages must not declare background services`);
   }
+}
+
+function verifyComposerAction(id, manifest, errors) {
+  const action = manifest.composerAction;
+  if (!action) return;
+  if (!action.label || typeof action.label !== "string") errors.push(`${id}: composerAction requires a label`);
+  if (action.presentation !== "anchoredPanel") errors.push(`${id}: composerAction presentation must be anchoredPanel`);
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: composerAction packages must declare the userAction load trigger`);
 }
 
 function verifyPermissionsAndPrivacy(id, manifest, errors) {
