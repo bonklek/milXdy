@@ -12,6 +12,8 @@ try {
   await cp("examples/packages/local-dev/dev-note", externalPackage, { recursive: true });
   const manifestPath = path.join(externalPackage, "milxdy.app.json");
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+  manifest.packageKind = "app";
+  manifest.surfaces = ["composerAction"];
   manifest.loadTriggers = ["userAction"];
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -44,8 +46,8 @@ try {
   const runtimeRegistry = await readFile(path.join(qaOutput, "content.js"), "utf8");
   assert.match(
     runtimeRegistry,
-    /id:\s*"dev-note"[\s\S]{0,1500}?role:\s*"enablement"/u,
-    "staged external package must be compiled into the runtime app registry with its generated enablement control",
+    /id:\s*"dev-note"[\s\S]{0,1500}?packageKind:\s*"app"[\s\S]{0,1500}?role:\s*"enablement"/u,
+    "staged external composer app must be compiled into the runtime app registry with its generated enablement control",
   );
 
   run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);

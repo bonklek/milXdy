@@ -69,6 +69,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
+  requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
+  requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
 }
 
 function verifySdkVersionSource() {

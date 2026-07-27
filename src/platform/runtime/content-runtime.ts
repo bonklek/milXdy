@@ -2092,10 +2092,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const hubApps = state.apps
       .filter((candidate) => candidate.hub)
       .filter((app) => appMatchesHubSearch(app, state.hubSearchQuery));
-    const railApps = orderedHubRailApps(hubApps.filter((app) => hubPackageKind(app) === "app"));
+    const appCards = orderedHubApps(hubApps.filter((app) => hubPackageKind(app) === "app"));
     const featureApps = hubApps.filter((app) => hubPackageKind(app) === "feature");
     const packageApps = hubApps.filter((app) => hubPackageKind(app) === "theme");
-    appendHubSection(list, "Apps", railApps);
+    appendHubSection(list, "Apps", appCards);
     appendHubSection(list, "Features", featureApps);
     appendHubSection(list, "Themes", packageApps);
     if (hubApps.length === 0) {
@@ -2108,8 +2108,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     markOverlayAppLayoutReady(root, true);
   }
 
-  function orderedHubRailApps(apps: MilxdyAppManifest[]): MilxdyAppManifest[] {
-    const byId = new Map(apps.filter(isHubRailApp).map((app) => [app.id, app]));
+  function orderedHubApps(apps: MilxdyAppManifest[]): MilxdyAppManifest[] {
+    const railApps = apps.filter(isHubRailApp);
+    const nonRailApps = apps.filter((app) => !isHubRailApp(app));
+    const byId = new Map(railApps.map((app) => [app.id, app]));
     const ordered: MilxdyAppManifest[] = [];
     for (const id of getOverlayDock().getAppOrder()) {
       const app = byId.get(id as MilxdyAppId);
@@ -2118,7 +2120,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       byId.delete(id as MilxdyAppId);
     }
     ordered.push(...Array.from(byId.values()));
-    return ordered;
+    return [...ordered, ...nonRailApps];
   }
 
   function appendHubSection(list: HTMLElement, label: string, apps: MilxdyAppManifest[]): void {
