@@ -516,6 +516,7 @@ async function analyzePackage(source, manifest) {
   }
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
+  verifyReplyAction(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -858,6 +859,28 @@ function verifyComposerAction(id, manifest, errors) {
   if (!action.label || typeof action.label !== "string") errors.push(`${id}: composerAction requires a label`);
   if (action.presentation !== "anchoredPanel") errors.push(`${id}: composerAction presentation must be anchoredPanel`);
   if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: composerAction packages must declare the userAction load trigger`);
+}
+
+function verifyReplyAction(id, manifest, errors) {
+  const action = manifest.replyAction;
+  if (!action) return;
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: replyAction packages must declare the userAction load trigger`);
+  if (!manifest.surfaces?.includes("replyAction")) errors.push(`${id}: replyAction packages must declare the replyAction surface`);
+  const templates = action.templates;
+  if (!Array.isArray(templates) || templates.length === 0 || templates.length > 6) {
+    errors.push(`${id}: replyAction requires between one and six templates`);
+    return;
+  }
+  const ids = new Set();
+  for (const template of templates) {
+    if (!template?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(template.id) || ids.has(template.id)) errors.push(`${id}: replyAction template ids must be unique safe identifiers`);
+    ids.add(template?.id);
+    if (!template?.label || typeof template.label !== "string") errors.push(`${id}: replyAction templates require a label`);
+    const hasText = typeof template?.text === "string";
+    const hasStorageKey = typeof template?.storageKey === "string" && template.storageKey.length > 0;
+    if (hasText === hasStorageKey) errors.push(`${id}: replyAction template must declare exactly one of text or storageKey`);
+    if (hasStorageKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageKey)) errors.push(`${id}: replyAction storageKey must be declared in storageKeys`);
+  }
 }
 
 function verifyPermissionsAndPrivacy(id, manifest, errors) {

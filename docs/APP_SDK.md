@@ -390,6 +390,32 @@ Composer-action packages declare `"userAction"` in `loadTriggers` and export
 not provide composer text, selection/caret access, media handoff, upload, or
 posting capabilities.
 
+### Reply actions
+
+An app or feature can declare `replyAction` to add reviewed local reply
+templates to the platform-owned menu opened by an explicit click on X's Reply
+control. The menu always retains its first **Send a reply** row, which opens
+X's normal reply flow with no inserted text. Template rows follow it in
+deterministic package/template order. Selecting one opens the native reply UI,
+types the declared local template, and never sends the reply.
+
+```json
+"replyAction": {
+  "templates": [
+    { "id": "hello", "label": "Hello", "text": "Hello" },
+    { "id": "custom", "label": "Custom", "storageKey": "example.customReply" }
+  ]
+}
+```
+
+Each template has an ID and label and exactly one of `text` or `storageKey`.
+The latter must be a package-declared local storage key and is hidden until it
+has a non-empty local value. Reply-action packages
+declare the `replyAction` surface, include `"userAction"` in `loadTriggers`,
+and disclose that a user-selected local template is typed into X's native reply
+editor. Package code receives no reply callback and must not inspect or mutate
+X's DOM, caret, composer content, media, or posting controls.
+
 ### Package To Custom Build
 
 `examples/packages/local-dev/dev-note/` is the smallest checked-in third-party
