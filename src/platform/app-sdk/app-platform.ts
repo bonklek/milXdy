@@ -6,7 +6,7 @@ export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageCh
 
 export type MilxdyAppId = string;
 
-export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp";
+export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp" | "composerAction";
 export type AppCostLevel = "cheap" | "moderate" | "heavy";
 export type AppNetworkCost = "none" | "batched" | "eager";
 export type AppWorkerCost = "none" | "optional" | "heavy";
@@ -138,6 +138,11 @@ export type MilxdyAppManifest = {
     label: string;
     icon?: AppIconAsset;
     defaultSide?: "left" | "right";
+  };
+  /** A user-initiated icon action in X's inline and pop-out post composers. */
+  composerAction?: {
+    label: string;
+    icon?: AppIconAsset;
   };
   chrome?: {
     nativeStyle: AppChromeStyle;
