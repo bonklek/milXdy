@@ -3387,7 +3387,8 @@
     },
     "permissions": {
       "hosts": [
-        "https://musicbrainz.org/*"
+        "https://musicbrainz.org/*",
+        "https://api.acoustid.org/*"
       ]
     },
     "css": [
