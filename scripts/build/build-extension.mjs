@@ -412,7 +412,7 @@ function profileRegistryPlugin() {
   return {
     name: "milxdy-profile-registry",
     setup(build) {
-      build.onLoad({ filter: /firstPartyApps\.json$/ }, () => ({
+      build.onLoad({ filter: /first-party-apps\.json$/ }, () => ({
         contents: JSON.stringify(registryApps),
         loader: "json",
       }));

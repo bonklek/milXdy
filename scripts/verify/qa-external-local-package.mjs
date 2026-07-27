@@ -31,6 +31,16 @@ try {
   const compositionReport = await readFile("tmp/qa-local-app-composition/composition-report.json", "utf8");
   assert.equal(compositionReport.includes(externalPackage), false);
 
+  // The generated registry is compiled into content.js. Checking this runtime
+  // bundle catches a plan/provenance-only integration that never reaches Apps
+  // & Features, which is the registry consumed by the content runtime.
+  const runtimeRegistry = await readFile(path.join(qaOutput, "content.js"), "utf8");
+  assert.match(
+    runtimeRegistry,
+    /id:\s*"dev-note"[\s\S]{0,1500}?role:\s*"enablement"/u,
+    "staged external package must be compiled into the runtime app registry with its generated enablement control",
+  );
+
   run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);
   const baseline = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
   assert.equal(baseline.composition.state, "release-baseline");
