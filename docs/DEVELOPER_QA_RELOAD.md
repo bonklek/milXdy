@@ -20,6 +20,44 @@ Load that folder once and keep using the same extension card. The QA-only manife
 
 The first migration from an older worktree-local QA card requires removing that orphaned card and loading this persistent folder once. Later source-worktree changes do not require another migration.
 
+## Reviewed external local package QA
+
+The active release QA host can compose **one explicitly selected** reviewed local
+package from an external folder or ZIP into that same persistent Chrome card.
+The package is still validated with the ordinary manifest, consent, archive/path,
+file-hash, permission, trust, and sensitive-API checks. It is not copied into
+core source and it is never dynamically loaded at runtime.
+
+From the active release QA host, after reviewing the package, run:
+
+```powershell
+npm.cmd run qa:build -- --local-app-package="D:\reviewed-packages\my-package" --acknowledge-package-consent
+```
+
+For a ZIP, pass its path to `--local-app-package` instead. If the validation
+report says the package is local/unreviewed, include `--allow-local-review`; pass
+any other acknowledgement exactly as reported. The command stages only
+`milxdy.app.json` and the package files declared by that validated manifest into
+a composer-owned, content-addressed temporary directory. It rechecks each staged
+file hash and builds the usual `%USERPROFILE%\Documents\dev\milXdy-QA\chromium`
+output. Do not load another unpacked extension.
+
+`qa-build.json` records `composition.state`, its deterministic composition
+fingerprint, and each selected package's ID, version, manifest hash, content
+hash, and package hash. It deliberately excludes the author-supplied folder or
+ZIP path.
+
+To intentionally restore the ordinary release-host baseline into the same Chrome
+card, run:
+
+```powershell
+npm.cmd run qa:build -- --return-to-baseline
+```
+
+This replaces only the generated QA output. It does not reset a branch, delete a
+worktree, or change the fixed QA extension ID. Reopen the popup afterward and
+confirm its **Running** and **On disk** build IDs match.
+
 ## Watch loop
 
 ```powershell

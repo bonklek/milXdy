@@ -71,6 +71,11 @@ folders:
 pnpm.cmd run build:local-apps:chromium -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 ```
 
+For a reviewed external author package that needs the release's single Chrome QA
+extension, give its folder or ZIP to the active QA host rather than copying it
+into core source. The maintainer flow is documented in
+[Developer QA reload](../docs/DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
+
 That direct builder exercises the same composer but does not provide the local
 manager's package placement, transaction recovery, or persistent status flow.
 

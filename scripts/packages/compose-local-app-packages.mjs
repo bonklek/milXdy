@@ -1,5 +1,5 @@
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import os from "node:os";
 import path from "node:path";
@@ -33,6 +33,7 @@ const acknowledgePackageConsent = args.includes("--acknowledge-package-consent")
 const acknowledgeFirstPartyReplacement = args.includes("--acknowledge-first-party-replacement");
 const allowSensitivePackageApis = args.includes("--allow-sensitive-package-apis");
 const previewTrustRequirements = args.includes("--preview-trust-requirements");
+const stageExternalPackages = args.includes("--stage-external-packages");
 const requestedPackages = [
   ...readRepeatedArg("--package"),
   ...args.filter((arg) => !arg.startsWith("--")),
@@ -284,6 +285,9 @@ async function composeLocalPackages(sources) {
   }
 
   const acceptedWithoutSetConflicts = errors.length === 0 ? accepted : [];
+  if (stageExternalPackages && acceptedWithoutSetConflicts.length > 0) {
+    await stageExternalPackageSources(acceptedWithoutSetConflicts);
+  }
   const generated = buildGeneratedPlan(acceptedWithoutSetConflicts);
   const report = {
     schemaVersion: 1,
@@ -292,7 +296,7 @@ async function composeLocalPackages(sources) {
       currentVersion: currentSdkVersion,
       acceptedRange: `<=${currentSdkVersion}`,
     },
-    packageRoots: discovered,
+    packageRoots: stageExternalPackages ? redactExternalPackageRoots(discovered) : discovered,
     summary: {
       discovered: discovered.length,
       accepted: acceptedWithoutSetConflicts.length,
@@ -329,6 +333,45 @@ async function composeLocalPackages(sources) {
     manifestPermissions: generated.manifestPermissions,
     webAccessibleAssets: generated.webAccessibleAssets,
   };
+}
+
+async function stageExternalPackageSources(records) {
+  for (const record of records) {
+    if (!isExternalPackageRoot(record.root) && !isExternalPackageRoot(record.source.input)) continue;
+    const stageRoot = path.resolve(outDir, "staged-packages", `${record.id}-${record.contentSha256.slice(0, 16)}`);
+    await rm(stageRoot, { recursive: true, force: true });
+    await mkdir(stageRoot, { recursive: true });
+    const stagedFiles = ["milxdy.app.json", ...record.files.map((file) => file.source)].sort();
+    for (const relativePath of stagedFiles) {
+      const sourcePath = path.resolve(record.root, relativePath);
+      const targetPath = resolveInside(stageRoot, relativePath);
+      const expectedHash = relativePath === "milxdy.app.json"
+        ? record.manifestSha256
+        : record.files.find((file) => file.source === relativePath)?.sha256;
+      if (!expectedHash || sha256File(sourcePath) !== expectedHash) {
+        throw new Error(`${record.id}: validated package file changed before staging: ${relativePath}`);
+      }
+      await mkdir(path.dirname(targetPath), { recursive: true });
+      await copyFile(sourcePath, targetPath);
+    }
+    record.compositionRoot = normalizeWorkspaceRelativePath(stageRoot);
+    record.compositionSourceType = "staged-external";
+  }
+}
+
+function isExternalPackageRoot(root) {
+  const relativePath = path.relative(process.cwd(), path.resolve(root));
+  return relativePath.startsWith("..") || path.isAbsolute(relativePath);
+}
+
+function redactExternalPackageRoots(sources) {
+  return sources.map((source) => {
+    if (!isExternalPackageRoot(source.root) && !isExternalPackageRoot(source.input)) return source;
+    return {
+      type: "staged-external",
+      status: source.error ? "rejected" : "staged",
+    };
+  });
 }
 
 async function resolvePackageSources() {
@@ -484,7 +527,9 @@ async function analyzePackage(source, manifest) {
     if ((manifest.package?.webAccessibleAssets || []).includes(source)) webAccessibleAssets.push(asset);
   }
   const packageFiles = unique(files);
-  const packageSha256 = source.archiveSha256 ?? sha256Files(root, packageFiles);
+  const contentSha256 = sha256Files(root, packageFiles);
+  const manifestSha256 = sha256File(path.join(root, "milxdy.app.json"));
+  const packageSha256 = source.archiveSha256 ?? contentSha256;
   const payloadScan = scanPackagePayloads(id, root, packageFiles);
   const trust = evaluatePackageTrust(id, source, manifest, packageFiles, webAccessibleAssets, payloadScan, packageSha256);
   verifySensitivePresetParticipation(id, manifest, errors);
@@ -534,6 +579,8 @@ async function analyzePackage(source, manifest) {
     storageOwnership: storageOwnershipFor(manifest),
     siteRoutes: siteRoutesFor(manifest),
     packageSha256,
+    contentSha256,
+    manifestSha256,
   };
 }
 
@@ -547,7 +594,7 @@ function buildGeneratedPlan(records) {
   ];
   const packageCopyMap = records.flatMap((record) => record.files.map((file) => ({
     packageId: record.id,
-    fromRoot: record.root,
+    fromRoot: record.compositionRoot || record.root,
     from: file.source,
     to: file.target,
     kind: file.kind,
@@ -630,10 +677,13 @@ function buildGeneratedPlan(records) {
     diagnostics: records.map((record) => ({
       packageId: record.id,
       label: `${record.manifest.name} ${record.manifest.version}`,
+      version: record.manifest.version,
       reviewStatus: record.manifest.review?.status || "local",
       localPackage: true,
-      sourceType: record.source.type,
+      sourceType: record.compositionSourceType || record.source.type,
       packageSha256: record.packageSha256,
+      contentSha256: record.contentSha256,
+      manifestSha256: record.manifestSha256,
       archiveSha256: record.source.archiveSha256,
       trust: record.trustDecision,
       payloadScan: {
@@ -680,12 +730,13 @@ function toGeneratedRegistryApp(record) {
     assets: undefined,
     requiredOutputs: undefined,
     localPackage: {
-      root: record.root,
-      sourceType: record.source.type,
-      archivePath: record.source.archivePath,
+      root: record.compositionRoot || record.root,
+      sourceType: record.compositionSourceType || record.source.type,
       reviewStatus: record.manifest.review?.status || "local",
       sourceVersion: record.manifest.version,
       packageSha256: record.packageSha256,
+      contentSha256: record.contentSha256,
+      manifestSha256: record.manifestSha256,
       archiveSha256: record.source.archiveSha256,
     },
   };
@@ -1820,7 +1871,9 @@ function printHumanReport(report) {
       console.log("Local app composition check passed.");
     } else {
       console.log(`Generated local app composition artifacts in ${outDir}.`);
-      console.log(`Use ${recommendedLocalBuildCommand(composition.report)} to emit dist/chromium-local-apps/.`);
+      console.log(stageExternalPackages
+        ? "External package files were staged without retaining the author path."
+        : `Use ${recommendedLocalBuildCommand(composition.report)} to emit dist/chromium-local-apps/.`);
     }
   }
 }
@@ -1829,7 +1882,7 @@ function toReportPackage(record) {
   return {
     id: record.id,
     source: sourceSummary(record),
-    root: record.root,
+    root: record.compositionRoot || record.root,
     name: record.manifest.name,
     version: record.manifest.version,
     packageKind: record.manifest.packageKind,
@@ -1838,6 +1891,8 @@ function toReportPackage(record) {
     css: record.css,
     files: record.files,
     packageSha256: record.packageSha256,
+    contentSha256: record.contentSha256,
+    manifestSha256: record.manifestSha256,
     permissions: record.permissions,
     webAccessibleAssets: record.webAccessibleAssets,
     background: record.background,
@@ -1863,16 +1918,21 @@ function toReportPackage(record) {
 }
 
 function sourceSummary(record) {
-  return {
+  const summary = {
     packageId: record.id,
-    type: record.source.type,
-    input: record.source.input,
-    root: record.root,
-    archivePath: record.source.archivePath,
-    archiveSha256: record.source.archiveSha256,
+    type: record.compositionSourceType || record.source.type,
+    root: record.compositionRoot || record.root,
     packageSha256: record.packageSha256,
+    contentSha256: record.contentSha256,
+    manifestSha256: record.manifestSha256,
     reviewStatus: record.manifest.review?.status || "local",
   };
+  if (!record.compositionRoot) {
+    summary.input = record.source.input;
+    summary.archivePath = record.source.archivePath;
+    summary.archiveSha256 = record.source.archiveSha256;
+  }
+  return summary;
 }
 
 function presetParticipation(manifest) {

@@ -1,0 +1,50 @@
+import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
+import { cp, mkdtemp, readFile, rm } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+
+const root = await mkdtemp(path.join(os.tmpdir(), "milxdy-external-package-"));
+const externalPackage = path.join(root, "dev-note");
+const qaOutput = path.join(root, "milXdy-QA", "chromium");
+
+try {
+  await cp("examples/packages/local-dev/dev-note", externalPackage, { recursive: true });
+  run([
+    "scripts/qa/qa-reload.mjs",
+    "--once",
+    `--publish-dir=${qaOutput}`,
+    `--local-app-package=${externalPackage}`,
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ]);
+
+  const provenance = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
+  assert.equal(provenance.composition.state, "external-local-package");
+  assert.match(provenance.composition.fingerprint, /^[a-f0-9]{64}$/u);
+  assert.equal(provenance.composition.packages.length, 1);
+  const composed = provenance.composition.packages[0];
+  assert.equal(composed.id, "dev-note");
+  assert.equal(composed.version, "0.1.0");
+  for (const key of ["manifestSha256", "contentSha256", "packageSha256"]) assert.match(composed[key], /^[a-f0-9]{64}$/u);
+  assert.equal(JSON.stringify(provenance).includes(externalPackage), false);
+  const compositionReport = await readFile("tmp/qa-local-app-composition/composition-report.json", "utf8");
+  assert.equal(compositionReport.includes(externalPackage), false);
+
+  run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);
+  const baseline = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
+  assert.equal(baseline.composition.state, "release-baseline");
+  assert.equal(baseline.extensionId, provenance.extensionId);
+} finally {
+  await rm(root, { recursive: true, force: true });
+}
+
+console.log("External local-package QA composition verification passed.");
+
+function run(args) {
+  const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+  if (result.status === 0) return;
+  process.stderr.write(result.stdout || "");
+  process.stderr.write(result.stderr || "");
+  throw new Error(`Verification command failed: ${args.join(" ")}`);
+}
