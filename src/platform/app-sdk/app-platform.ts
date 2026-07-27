@@ -35,11 +35,6 @@ export type AppIconAsset = string | {
   light: string;
   dark: string;
 };
-export type AppComposerAction = {
-  label: string;
-  icon?: AppIconAsset;
-  presentation: "anchoredPanel";
-};
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
 export type MilxdyPackageAssetKind = "icon" | "image" | "style" | "font" | "audio" | "worker" | "wasm" | "html" | "other";
@@ -144,7 +139,6 @@ export type MilxdyAppManifest = {
     icon?: AppIconAsset;
     defaultSide?: "left" | "right";
   };
-  composerAction?: AppComposerAction;
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];
@@ -265,13 +259,6 @@ export type MilxdyContentAppContext = {
   addDisposable: (disposable: Disposable) => void;
 };
 
-export type MilxdyComposerActionContext = {
-  kind: "post" | "reply";
-  panel: HTMLElement;
-  signal: AbortSignal;
-  close: () => void;
-};
-
 export type MilxdyContentAppModule = {
   id?: string;
   boot?: (context: MilxdyContentAppContext) => Promise<void> | void;
@@ -279,7 +266,6 @@ export type MilxdyContentAppModule = {
   disable?: () => Promise<void> | void;
   onRouteChange?: (route: MilxdyRouteChange) => Promise<void> | void;
   onSurface?: (surface: TwitterSurface) => Promise<void> | void;
-  onComposerAction?: (context: MilxdyComposerActionContext) => Promise<void> | void;
   open?: () => Promise<void> | void;
   close?: () => Promise<void> | void;
   dispose?: () => Promise<void> | void;

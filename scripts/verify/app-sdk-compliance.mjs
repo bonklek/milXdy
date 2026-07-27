@@ -66,8 +66,6 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "scheduler: AppRuntimeScheduler", "App SDK context must expose the shared scheduler");
   requireIncludes(appPlatform, "sendMessage:", "App SDK context must expose routed background messaging");
   requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
-  requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
-  requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
 }
 
@@ -97,7 +95,6 @@ function verifyLocalPackageShapeContract() {
   requireIncludes(appSdkDocs, "## Distribution Boundary", "package docs must define the custom-build distribution boundary");
   requireIncludes(appSdkDocs, "deterministic manifest, archive, path, asset, lifecycle, settings, background-message, permission, privacy, and URL metadata validation", "package docs must record implemented validation safeguards");
   requireIncludes(appSdkDocs, "does not inject new JavaScript into an already-installed extension", "package docs must distinguish composition from runtime injection");
-  requireIncludes(appSdkDocs, "## Composer actions", "package docs must define composer-adjacent actions");
 
   requireIncludes(privacyDocs, "## Future Local App Packages", "privacy docs must describe future local package permissions");
   requireIncludes(privacyDocs, "stay disabled until validation", "privacy docs must keep copied packages disabled before validation/consent");
