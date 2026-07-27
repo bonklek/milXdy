@@ -430,14 +430,25 @@ function extractAuthorDisplayName(container: HTMLElement, quoteElement: HTMLElem
 function extractDisplayNameFromUserName(userName: HTMLElement): string | null {
   const spans = Array.from(userName.querySelectorAll("span"));
   for (const span of spans) {
-    if (span.closest("[data-reminet-badge], [data-reminet-badge-row], [data-reminet-badge-slot], [data-reminet-icon], .reminet-score-badge, .reminet-badge-content, .reminet-badge-group")) continue;
+    if (isRemiStatsBadgeSurface(span)) continue;
     const text = cleanText(span.textContent || "");
-    if (!text || text === "·" || text.startsWith("@")) continue;
-    if (/^\d+[smhd]$/.test(text)) continue;
+    if (!isDisplayNameCandidate(text)) continue;
     return text;
   }
 
-  return cleanText(userName.textContent || "") || null;
+  // A quoted card may have only a handle plus a badge. Its aggregate text
+  // would turn RemiStats numbers into the author announced by the reader.
+  return null;
+}
+
+function isRemiStatsBadgeSurface(element: Element): boolean {
+  const selector = "[data-reminet-badge], [data-reminet-badge-row], [data-reminet-badge-slot], [data-reminet-icon], [data-reminet-poke], [data-milxdy-tweet-slot=\"remistats-badge\"], .reminet-score-badge, .reminet-badge-content, .reminet-badge-group";
+  return Boolean(element.closest(selector) || element.querySelector(selector));
+}
+
+function isDisplayNameCandidate(value: string): boolean {
+  if (!value || value === "·" || value.startsWith("@")) return false;
+  return !/^\d+(?:[,.]\d+)?(?:[kmb])?$/i.test(value);
 }
 
 function extractFallbackQuoteAuthor(container: HTMLElement, mainAuthorDisplayName: string): string | null {
