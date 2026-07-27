@@ -193,10 +193,6 @@ First-party runtime manifests may provide `setEnabled(enabled)`. Apps & Features
 
 ## Apps & Features IA
 
-### Composer actions
-
-Packages can declare `composerAction` with a required `label` and optional declared `icon`. When enabled, milXdy renders its compact action in both X's inline post composer and the expanded composer dialog. Selecting it is always user initiated: the runtime loads the package and calls its existing `open()` lifecycle hook. The platform does not provide composer text, caret access, or automatic insertion; those capabilities require a separately reviewed SDK contract. Declare `surfaces: ["composerAction"]`, `loadTriggers: ["userAction"]`, an X `siteScope`, and export `open()` plus `close()`.
-
 Enablement and rail visibility are separate platform state. An enabled app may process declared surfaces or load on user action, while a pinned app gets a side-rail button.
 
 The content runtime owns the lightweight Apps & Features rail item and stores explicit rail choices in `milxdy.apps.railPinned`. If that key is absent, existing users keep the previous behavior: enabled dock apps remain visible on the rail. Once the user pins or unpins an app, the runtime treats the stored list as the source of truth.

@@ -8,7 +8,7 @@ export type TwitterSurfaceKind =
   | "directMessage"
   | "profile";
 
-export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp" | "composerAction";
+export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp";
 
 export interface TwitterSurface {
   kind: TwitterSurfaceKind;
@@ -61,10 +61,6 @@ export interface PublicAppManifest {
   description: string;
   surfaces: MilxdyAppSurface[];
   loadTriggers: Array<"startup" | "surface" | "dockOpen" | "idle" | "userAction">;
-  composerAction?: {
-    label: string;
-    icon?: string | { light: string; dark: string };
-  };
 }
 
 export interface MilxdyContentAppContext {

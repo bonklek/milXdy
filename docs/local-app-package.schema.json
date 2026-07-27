@@ -80,27 +80,6 @@
         "defaultSide": { "enum": ["left", "right"] }
       }
     },
-    "composerAction": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["label"],
-      "properties": {
-        "label": { "type": "string", "minLength": 1 },
-        "icon": {
-          "oneOf": [
-            { "$ref": "#/$defs/relativePath" },
-            {
-              "type": "object",
-              "additionalProperties": false,
-              "properties": {
-                "light": { "$ref": "#/$defs/relativePath" },
-                "dark": { "$ref": "#/$defs/relativePath" }
-              }
-            }
-          ]
-        }
-      }
-    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
@@ -302,7 +281,7 @@
       "items": { "type": "string" }
     },
     "surface": {
-      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction"]
+      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp"]
     },
     "setting": {
       "type": "object",
