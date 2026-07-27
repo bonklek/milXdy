@@ -109,6 +109,7 @@ type BoardTheme = "tea" | "yotsuba" | "yots_b" | "console" | "moon";
 type PostDraft = {
   board: string;
   threadId: number | null;
+  subject: string;
   body: string;
   updatedAt: number;
 };
@@ -623,12 +624,20 @@ function createPostHandoff(board: string, threadId: number | null): HTMLElement 
   form.dataset.boardTheme = boardTheme(board);
   const destination = threadId === null ? `New thread in /${board}/` : `Reply in /${board}/ No. ${threadId}`;
   const heading = document.createElement("strong");
-  heading.textContent = "Post via native Miladychan";
+  heading.textContent = "Post to Miladychan";
   const target = document.createElement("span");
   target.className = "milxdy-chan-compose-target";
   target.textContent = `Destination: ${destination}`;
   const note = document.createElement("p");
-  note.textContent = "MilXdy keeps this draft locally. Native Miladychan handles your session, CAPTCHA, media, and final submission.";
+  note.textContent = "Submit text anonymously without using a Miladychan, RemiNet, wallet, or extension session. Media, CAPTCHA, and unsupported board requirements stay on native Miladychan.";
+  const subject = document.createElement("input");
+  subject.type = "text";
+  subject.className = "milxdy-chan-compose-subject";
+  subject.placeholder = "Thread subject";
+  subject.value = draftForDestination(board, threadId)?.subject || "";
+  subject.maxLength = 200;
+  subject.hidden = threadId !== null;
+  subject.setAttribute("aria-label", `Subject for ${destination}`);
   const textarea = document.createElement("textarea");
   textarea.placeholder = "Write a draft to copy into Miladychan…";
   textarea.value = draftForDestination(board, threadId)?.body || "";
@@ -645,6 +654,10 @@ function createPostHandoff(board: string, threadId: number | null): HTMLElement 
   const copy = document.createElement("button");
   copy.type = "button";
   copy.textContent = "Copy draft";
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.className = "milxdy-chan-compose-submit";
+  submit.textContent = "Submit anonymously";
   const open = document.createElement("a");
   open.href = nativeDestinationUrl(board, threadId);
   open.target = "_blank";
@@ -662,24 +675,50 @@ function createPostHandoff(board: string, threadId: number | null): HTMLElement 
   const updateActions = () => {
     const enabled = checkbox.checked;
     copy.disabled = !enabled || !textarea.value.trim();
+    submit.disabled = !enabled || !textarea.value.trim() || (threadId === null && !subject.value.trim());
     open.tabIndex = enabled ? 0 : -1;
     open.setAttribute("aria-disabled", String(!enabled));
   };
-  textarea.addEventListener("input", () => {
-    void saveDraft({ board, threadId, body: textarea.value, updatedAt: Date.now() });
+  const persistDraft = () => {
+    void saveDraft({ board, threadId, subject: subject.value, body: textarea.value, updatedAt: Date.now() });
     discard.hidden = !textarea.value.trim();
     updateActions();
-  });
+  };
+  textarea.addEventListener("input", persistDraft);
+  subject.addEventListener("input", persistDraft);
   checkbox.addEventListener("change", updateActions);
   copy.addEventListener("click", () => void copyDraft(textarea.value, notice));
+  submit.addEventListener("click", () => void submitDraft({ board, threadId, subject: subject.value, body: textarea.value }, submit, notice));
   open.addEventListener("click", (event) => {
     if (!checkbox.checked) event.preventDefault();
   });
   discard.addEventListener("click", () => void clearDraft(board, threadId));
-  actions.append(copy, open, discard);
-  form.append(heading, target, note, textarea, confirm, actions, notice);
+  actions.append(submit, copy, open, discard);
+  form.append(heading, target, note, subject, textarea, confirm, actions, notice);
   updateActions();
   return form;
+}
+
+async function submitDraft(draft: Omit<PostDraft, "updatedAt">, submit: HTMLButtonElement, notice: HTMLElement): Promise<void> {
+  if (!appSdkSendMessage) {
+    notice.textContent = "Extension posting is unavailable. Your local draft was kept.";
+    return;
+  }
+  submit.disabled = true;
+  notice.textContent = "Submitting anonymously to the confirmed destination…";
+  const response = await appSdkSendMessage<{ ok?: boolean; status?: number; error?: string }>({
+    type: "miladychan:postText",
+    destination: { board: draft.board, threadId: draft.threadId },
+    subject: draft.threadId === null ? draft.subject : undefined,
+    body: draft.body,
+  }, "miladychan:postText").catch(() => undefined);
+  if (response?.ok) {
+    await clearDraft(draft.board, draft.threadId, "Submitted anonymously. Refresh the board or thread to see the result.");
+    return;
+  }
+  state.draftNotice = response?.error || "Submission failed. Your local draft was kept.";
+  notice.textContent = state.draftNotice;
+  submit.disabled = false;
 }
 
 function draftForDestination(board: string, threadId: number | null): PostDraft | null {
@@ -692,10 +731,10 @@ async function saveDraft(draft: PostDraft): Promise<void> {
   await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
 }
 
-async function clearDraft(board: string, threadId: number | null): Promise<void> {
+async function clearDraft(board: string, threadId: number | null, notice = "Saved draft discarded."): Promise<void> {
   if (!draftForDestination(board, threadId)) return;
   state.drafts = state.drafts.filter((draft) => draft.board !== board || draft.threadId !== threadId);
-  state.draftNotice = "Saved draft discarded.";
+  state.draftNotice = notice;
   if (state.drafts.length) await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
   else await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
   render();
@@ -737,6 +776,7 @@ function normalizeDraft(value: unknown): PostDraft | null {
   return {
     board: raw.board,
     threadId,
+    subject: typeof raw.subject === "string" ? raw.subject.slice(0, 200) : "",
     body: raw.body,
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : 0,
   };
