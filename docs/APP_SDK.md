@@ -367,27 +367,6 @@ Package-kind rules:
 - `feature` packages may declare scanner-delivered surfaces, generated Apps & Features controls, background routes, and user-action tools. They must not declare dock metadata or pretend to be rail apps.
 - `theme` packages are for visual, texture, icon, chrome, or preset resources. They should not declare content-script surfaces, host permissions, background services, or remote services unless a later platform pass adds explicit theme runtime support and review rules.
 
-### Composer actions
-
-An app or feature can declare a `composerAction` only for a user-initiated,
-composer-adjacent panel. It is not a rail action and must not call the package's
-standalone `open()` lifecycle. The platform owns the trigger, anchor,
-positioning, Escape/outside-click dismissal, and focus return; the package only
-renders into the supplied panel.
-
-```json
-"composerAction": {
-  "label": "Composer Kit",
-  "presentation": "anchoredPanel"
-}
-```
-
-Composer-action packages declare `"userAction"` in `loadTriggers` and export
-`onComposerAction(context)`. `context` provides a platform-owned `panel`, a
-`kind` of `post` or `reply`, an abort `signal`, and `close()`. This surface does
-not provide composer text, selection/caret access, media handoff, upload, or
-posting capabilities.
-
 ### Package To Custom Build
 
 `examples/packages/local-dev/dev-note/` is the smallest checked-in third-party

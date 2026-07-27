@@ -76,11 +76,6 @@ extension, give its folder or ZIP to the active QA host rather than copying it
 into core source. The maintainer flow is documented in
 [Developer QA reload](../docs/DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
 
-For a native-style composer-adjacent panel, use the documented
-`composerAction` manifest field and `onComposerAction(context)` callback in
-[the App SDK guide](../docs/APP_SDK.md#composer-actions). Do not call an
-overlay app's `open()` lifecycle from a composer action.
-
 That direct builder exercises the same composer but does not provide the local
 manager's package placement, transaction recovery, or persistent status flow.
 
