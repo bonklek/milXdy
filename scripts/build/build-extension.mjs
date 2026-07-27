@@ -39,6 +39,7 @@ await mkdir(outDir, { recursive: true });
 await mkdir(`${outDir}/features`, { recursive: true });
 
 await writeManifest();
+await copyFile("THIRD_PARTY_NOTICES.md", `${outDir}/THIRD_PARTY_NOTICES.md`);
 await copyFile("assets/extension/popup/popup.html", `${outDir}/popup.html`);
 await copyFile("assets/extension/popup/popup.css", `${outDir}/popup.css`);
 if (existsSync("assets/extension/_locales")) {
