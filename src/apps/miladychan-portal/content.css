@@ -468,6 +468,77 @@
   min-height: 58px;
 }
 
+.milxdy-chan-compose {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid var(--mc-board-border);
+  background: var(--mc-board-surface);
+  color: var(--mc-board-text);
+}
+
+.milxdy-chan-compose > strong {
+  color: var(--mc-board-title);
+  font: 700 13px/1.2 var(--mc-font-ui);
+}
+
+.milxdy-chan-compose-target,
+.milxdy-chan-compose-notice {
+  color: var(--mc-board-link);
+  font: 12px/1.3 var(--mc-font-mono);
+}
+
+.milxdy-chan-compose p {
+  margin: 0;
+  color: var(--mc-board-muted);
+  font: 12px/1.35 var(--mc-font-text);
+}
+
+.milxdy-chan-compose textarea {
+  width: 100%;
+  min-height: 82px;
+  box-sizing: border-box;
+  resize: vertical;
+  border: 1px solid var(--mc-board-border);
+  background: var(--mc-board-bg);
+  color: var(--mc-board-text);
+  font: 13px/1.35 var(--mc-font-text);
+}
+
+.milxdy-chan-compose-confirm {
+  color: var(--mc-board-text);
+  font: 12px/1.35 var(--mc-font-text);
+}
+
+.milxdy-chan-compose-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.milxdy-chan-compose-actions button,
+.milxdy-chan-compose-actions a {
+  border: 1px solid var(--mc-board-border);
+  background: var(--mc-board-bg);
+  color: var(--mc-board-link);
+  cursor: pointer;
+  font: 700 12px/1.2 var(--mc-font-ui);
+  padding: 6px 8px;
+  text-decoration: none;
+}
+
+.milxdy-chan-compose-actions a[aria-disabled="true"],
+.milxdy-chan-compose-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+.milxdy-chan-compose-actions .milxdy-chan-compose-discard {
+  color: var(--mc-board-muted);
+}
+
 .milxdy-chan-empty {
   padding: 12px;
   border: 1px dashed rgba(98, 107, 178, 0.42);

@@ -3104,7 +3104,8 @@
         "milxdy.settings.theme",
         "milxdy.miladychan.width",
         "milxdy.miladychan.height",
-        "milxdy.miladychan.top"
+        "milxdy.miladychan.top",
+        "milxdy.miladychan.postDraft"
       ]
     },
     "settings": [
