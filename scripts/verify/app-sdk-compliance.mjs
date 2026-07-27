@@ -25,7 +25,7 @@ const failures = [];
 const warnings = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validSites = new Set(["x", "remiliaNet", "remiliaWiki", "miladychan"]);
@@ -67,7 +67,6 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "sendMessage:", "App SDK context must expose routed background messaging");
   requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
-  requireIncludes(appPlatform, "composerAction?:", "App manifest type must expose composer-action metadata");
 }
 
 function verifySdkVersionSource() {
@@ -115,7 +114,6 @@ function verifyRootAndRuntimeOwnership() {
   requireIncludes(contentRuntime, "extractBackgroundMessageType", "runtime must extract App SDK background message types before sending");
   requireIncludes(contentRuntime, "appCanSendBackgroundMessage", "runtime must enforce App SDK background message capability metadata");
   requireIncludes(contentRuntime, "backgroundMessage.denied", "runtime must record denied App SDK background message diagnostics");
-  requireIncludes(contentRuntime, "installComposerActionSurface()", "runtime must mount declared composer actions in X composers");
   if (/from\s+["'][^"']*features\//.test(contentRuntime) || /import\s*\([^)]*features\//.test(contentRuntime)) {
     fail("content runtime must not import feature bundles directly");
   }

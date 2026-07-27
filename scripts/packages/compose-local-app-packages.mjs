@@ -511,9 +511,6 @@ async function analyzePackage(source, manifest) {
   for (const iconPath of dockIconPaths(manifest.dock?.icon)) {
     collectFile(source, iconPath, "dock icon", files, errors);
   }
-  for (const iconPath of dockIconPaths(manifest.composerAction?.icon)) {
-    collectFile(source, iconPath, "composer action icon", files, errors);
-  }
   verifyKindRules(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
@@ -713,7 +710,6 @@ function toGeneratedRegistryApp(record) {
     path: sheet.target,
   }));
   manifest.dock = rewriteDockIcon(manifest.dock, record.id);
-  manifest.composerAction = rewriteDockIcon(manifest.composerAction, record.id);
   manifest.package = {
     assets: record.files.map((file) => file.target),
     webAccessibleAssets: record.webAccessibleAssets.map((asset) => asset.target),
@@ -1726,7 +1722,7 @@ function verifyLifecycleExports(id, root, manifest, errors) {
   const exports = lifecycleExports(source);
   if (manifest.lifecycle?.mode === "invoked" && exports.has("boot")) errors.push(`${id}: invoked package content entry must not export boot()`);
   if ((manifest.lifecycle?.mode ?? "runtime") === "runtime" && !exports.has("boot")) errors.push(`${id}: runtime package content entry must export boot()`);
-  if ((manifest.surfaces || []).includes("overlayApp") || (manifest.surfaces || []).includes("composerAction") || manifest.loadTriggers?.includes("dockOpen") || manifest.dock || manifest.composerAction) {
+  if ((manifest.surfaces || []).includes("overlayApp") || manifest.loadTriggers?.includes("dockOpen") || manifest.dock) {
     if (!exports.has("open") || !exports.has("close")) errors.push(`${id}: docked/overlay package content entry must export open() and close()`);
   }
 }

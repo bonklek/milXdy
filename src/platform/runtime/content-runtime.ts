@@ -163,7 +163,6 @@ const DIAGNOSTIC_FLUSH_MS = 1200;
 const CONTENT_NETWORK_DEADLINE_MS = 35_000;
 const RUNTIME_IMPORT_FLAG = "__milxdyContentRuntimeLoading";
 const TWEET_SCAFFOLD_STYLE_ID = "milxdy-tweet-scaffold-style";
-const COMPOSER_ACTION_STYLE_ID = "milxdy-composer-action-style";
 const RAIL_PIN_KEY = "milxdy.apps.railPinned";
 const RAIL_UNPIN_KEY = "milxdy.apps.railUnpinned";
 const FIRST_RUN_STATUS_KEY = "milxdy.apps.firstRun.status";
@@ -399,7 +398,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       else updateAppDiagnostics(app, "disabled");
     }
     registerAddOnsCatalogDockItem();
-    installComposerActionSurface();
     syncHiddenRailItems();
     updateScannerConfiguration();
     recordRuntimeDiagnostic("runtime.metadata", {
@@ -690,7 +688,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             void disableApp(app);
           }
           syncHiddenRailItems();
-          syncComposerActionButtons();
           renderHubPanel();
         });
       }
@@ -1368,80 +1365,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       },
     });
     state.dockRegistrations.set(app.id, registration);
-  }
-
-  function installComposerActionSurface(): void {
-    injectComposerActionStyles();
-    syncComposerActionButtons();
-    let scheduled = false;
-    const schedule = () => {
-      if (scheduled) return;
-      scheduled = true;
-      window.requestAnimationFrame(() => {
-        scheduled = false;
-        syncComposerActionButtons();
-      });
-    };
-    const observer = new MutationObserver(schedule);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-    state.runtimeDisposables.add(() => observer.disconnect());
-  }
-
-  function syncComposerActionButtons(): void {
-    const actionApps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.composerAction);
-    for (const button of document.querySelectorAll<HTMLButtonElement>("button[data-milxdy-composer-action]")) {
-      if (!actionApps.some((app) => app.id === button.dataset.milxdyComposerAction)) button.remove();
-    }
-    if (actionApps.length === 0) return;
-    for (const editor of document.querySelectorAll<HTMLElement>('[data-testid="tweetTextarea_0"]')) {
-      const toolbar = composerToolbarFor(editor);
-      if (!toolbar) continue;
-      for (const app of actionApps) {
-        if (Array.from(toolbar.querySelectorAll<HTMLButtonElement>("button[data-milxdy-composer-action]")).some((button) => button.dataset.milxdyComposerAction === app.id)) continue;
-        toolbar.append(createComposerActionButton(app));
-      }
-    }
-  }
-
-  function composerToolbarFor(editor: HTMLElement): HTMLElement | null {
-    const scope = editor.closest('[role="dialog"], form') || editor.parentElement;
-    if (!scope) return null;
-    const anchor = Array.from(scope.querySelectorAll<HTMLButtonElement>("button")).find((button) => {
-      const testId = button.getAttribute("data-testid") || "";
-      const label = button.getAttribute("aria-label") || "";
-      return /emoji|gif|media|photo/i.test(testId) || /emoji|gif|media|photo/i.test(label);
-    });
-    if (!anchor) return null;
-    let current: HTMLElement | null = anchor.parentElement;
-    while (current && current !== scope) {
-      if (current.querySelectorAll("button").length >= 4) return current;
-      current = current.parentElement;
-    }
-    return anchor.parentElement;
-  }
-
-  function createComposerActionButton(app: MilxdyAppManifest): HTMLButtonElement {
-    const action = app.composerAction!;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "milxdy-composer-action";
-    button.dataset.milxdyComposerAction = app.id;
-    button.title = action.label;
-    button.setAttribute("aria-label", action.label);
-    if (action.icon) {
-      const image = document.createElement("img");
-      image.alt = "";
-      image.src = runtimeAssetUrl(resolveAppIconAsset(action.icon));
-      button.append(image);
-    } else {
-      button.textContent = action.label.trim().slice(0, 1).toUpperCase() || "+";
-    }
-    button.addEventListener("click", (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void loadApp(app, "composerAction").then((module) => void Promise.resolve(module?.open?.()));
-    });
-    return button;
   }
 
   function updateThemedAppIcons(): void {
@@ -4173,33 +4096,6 @@ function injectStylesheets(app: MilxdyAppManifest): void {
     link.href = chrome.runtime.getURL(sheet.path);
     document.documentElement.appendChild(link);
   }
-}
-
-function injectComposerActionStyles(): void {
-  if (document.getElementById(COMPOSER_ACTION_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = COMPOSER_ACTION_STYLE_ID;
-  style.textContent = `
-    .milxdy-composer-action {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 34px;
-      height: 34px;
-      min-width: 34px;
-      padding: 0;
-      border: 0;
-      border-radius: 999px;
-      background: transparent;
-      color: rgb(29, 155, 240);
-      font: 700 16px/1 system-ui, sans-serif;
-      cursor: pointer;
-    }
-    .milxdy-composer-action:hover { background: rgba(29, 155, 240, .1); }
-    .milxdy-composer-action:focus-visible { outline: 2px solid rgb(29, 155, 240); outline-offset: 2px; }
-    .milxdy-composer-action > img { width: 20px; height: 20px; object-fit: contain; }
-  `;
-  document.documentElement.appendChild(style);
 }
 
 function injectTweetScaffoldStyles(): void {
