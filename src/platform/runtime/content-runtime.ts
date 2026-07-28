@@ -1662,7 +1662,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             drafts.textContent = "D";
             drafts.title = "Drafts";
             drafts.setAttribute("aria-label", "Open X Drafts");
-            drafts.addEventListener("click", () => openNativeDraftsFor(button!));
+            // Resolve from the companion itself. The package action can be
+            // reconciled independently by X, while this host control remains
+            // the explicit user gesture that opens native Drafts.
+            drafts.addEventListener("click", () => openNativeDraftsFor(drafts!));
             slot.append(drafts);
           }
         }
@@ -1684,12 +1687,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function openNativeDraftsFor(button: HTMLButtonElement, close?: () => void): void {
     const composer = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]');
-    const nativeDrafts = Array.from((composer || document).querySelectorAll<HTMLElement>(
-      'a[href*="/compose/tweet/unsent/drafts"], button, [role="button"]',
-    )).find((candidate) => candidate.offsetParent !== null && (
-      candidate.matches('a[href*="/compose/tweet/unsent/drafts"]')
-      || (candidate.textContent || "").trim() === "Drafts"
-    ));
+    // X's real Drafts entry is a route link. Do not opportunistically click
+    // arbitrary controls with the same visible label: those can be stale
+    // dialog descendants or unrelated feature controls after X reconciles.
+    const nativeDrafts = Array.from((composer || document).querySelectorAll<HTMLAnchorElement>(
+      'a[href*="/compose/tweet/unsent/drafts"]',
+    )).find((candidate) => candidate.offsetParent !== null);
     close?.();
     if (nativeDrafts) {
       nativeDrafts.click();
