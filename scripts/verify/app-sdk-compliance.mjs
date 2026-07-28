@@ -87,6 +87,8 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "panel.style.visibility = hiddenBehindHeader ? \"hidden\" : \"visible\"", "Reply-action panels must not draw through X's sticky column header");
   requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
   requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
+  requireIncludes(contentRuntime, "[contenteditable=\"true\"][data-testid^=\"tweetTextarea_\"]", "Reply insertion must target X's actual editable element, not an inherited editable wrapper");
+  requireIncludes(contentRuntime, "if (normalizedText(editor.innerText || editor.textContent || \"\")) return false;", "Reply insertion must fail closed rather than append to an existing native draft");
   requireIncludes(contentRuntime, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
   requireIncludes(contentRuntime, "root.dataset.theme = currentHubTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
