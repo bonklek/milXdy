@@ -112,8 +112,12 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "Ready in composer + reply", "Composer/reply packages must receive a generic ready lifecycle state");
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
   requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
-  requireIncludes(background, "populateRemiliaMaker", "External maker handoffs must be host-owned adapter code");
+  requireIncludes(background, "renderRemiliaMakerImage", "External maker handoffs must be host-owned adapter code");
   requireIncludes(background, "active: false", "Reviewed maker handoffs must open inactive tabs");
+  requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
+  requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
+  requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
+  requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
 }
 
 function verifySdkVersionSource() {

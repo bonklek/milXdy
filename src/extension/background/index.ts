@@ -54,6 +54,15 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 
+// `attributeDisplay` is the reviewed maker's own top-level renderer. This
+// declaration is used only by `world: "MAIN"` injected code; the extension
+// never reads or writes the maker page outside the explicit reviewed handoff.
+declare const attributeDisplay: {
+  currentlyDisplaying?: boolean;
+  canvas?: HTMLCanvasElement;
+  drawSelectedLayers?: (full?: boolean, canvas?: boolean) => Promise<void>;
+} | undefined;
+
 type RemiStatsMessage = {
   type: "remistats:getUser";
   handle: string;
@@ -401,12 +410,14 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     await waitForExternalHandoffTab(tab.id, targetUrl.href);
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
-      func: populateRemiliaMaker,
+      world: "MAIN",
+      func: renderRemiliaMakerImage,
       args: [message.topText, message.bottomText],
     });
-    const result = results[0]?.result as { ok?: boolean; error?: string } | undefined;
+    const result = results[0]?.result as { ok?: boolean; error?: string; imageDataUrl?: string } | undefined;
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
-    return { ok: true };
+    if (!isSafeMakerImageDataUrl(result.imageDataUrl)) return { ok: false, error: "The maker did not return a usable image." };
+    return { ok: true, imageDataUrl: result.imageDataUrl };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
@@ -436,13 +447,30 @@ function waitForExternalHandoffTab(tabId: number, expectedHref: string): Promise
   });
 }
 
+function isSafeMakerImageDataUrl(value: unknown): value is string {
+  return typeof value === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(value) && value.length <= 15_000_000;
+}
+
 /** Runs only in the reviewed maker tab after an explicit package gesture. */
-function populateRemiliaMaker(topText: string, bottomText: string): { ok: boolean; error?: string } {
+async function renderRemiliaMakerImage(topText: string, bottomText: string): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
+  // `chrome.scripting.executeScript` serializes only this function, so the
+  // wait helper must remain inside it rather than closing over extension code.
+  const waitForRender = async (): Promise<void> => {
+    const deadline = Date.now() + 15_000;
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
+    while (Date.now() < deadline) {
+      const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
+      if (display && display.currentlyDisplaying === false && display.canvas?.width && display.canvas.height) return;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+    }
+    throw new Error("The maker did not finish rendering in time.");
+  };
   const top = document.querySelector<HTMLInputElement>("#topText");
   const bottom = document.querySelector<HTMLInputElement>("#bottomText");
   const random = document.querySelector<HTMLElement>("#randomButton");
   if (!top || !bottom || !random) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
   random.click();
+  await waitForRender();
   const setInput = (input: HTMLInputElement, value: string) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -450,7 +478,15 @@ function populateRemiliaMaker(topText: string, bottomText: string): { ok: boolea
   };
   setInput(top, topText);
   setInput(bottom, bottomText);
-  return { ok: true };
+  // The reviewed maker exposes its complete renderer only from its own main
+  // world. Rendering there preserves its selected layers, text treatment, and
+  // pixel-art settings instead of trying to recreate its DOM in the extension.
+  const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
+  if (!display?.drawSelectedLayers) return { ok: false, error: "This maker no longer exposes its reviewed renderer." };
+  await display.drawSelectedLayers(false, true);
+  const image = document.querySelector<HTMLImageElement>("#downloadable");
+  if (!image?.src.startsWith("data:image/png;base64,")) return { ok: false, error: "The maker did not render a PNG." };
+  return { ok: true, imageDataUrl: image.src };
 }
 
 function isMiladychanFetchJsonMessage(message: unknown): message is MiladychanFetchJsonMessage {
