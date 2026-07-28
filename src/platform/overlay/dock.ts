@@ -78,6 +78,8 @@ const sideListeners = new Set<(side: OverlayDockSide) => void>();
 
 function createDockApi(): DockApi {
   let railIndicatorFrame = 0;
+  let mediaViewerObserverAttached = false;
+  let mediaViewerCheckQueued = false;
   const state: DockState = {
     root: null,
     items: new Map(),
@@ -183,6 +185,53 @@ function createDockApi(): DockApi {
       document.documentElement.appendChild(root);
     }
     state.root = root;
+    observeHostMediaViewer();
+  }
+
+  function observeHostMediaViewer(): void {
+    const update = () => {
+      mediaViewerCheckQueued = false;
+      const root = state.root;
+      if (!root) return;
+      root.dataset.hostMediaViewerOpen = String(isHostMediaViewerOpen());
+    };
+    if (mediaViewerObserverAttached) {
+      update();
+      return;
+    }
+    mediaViewerObserverAttached = true;
+    const scheduleUpdate = () => {
+      if (mediaViewerCheckQueued) return;
+      mediaViewerCheckQueued = true;
+      queueMicrotask(update);
+    };
+    const observer = new MutationObserver(scheduleUpdate);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["aria-label", "aria-modal", "data-testid", "role"],
+      childList: true,
+      subtree: true,
+    });
+    document.addEventListener("fullscreenchange", scheduleUpdate);
+    update();
+  }
+
+  function isHostMediaViewerOpen(): boolean {
+    if (document.fullscreenElement) return true;
+    return Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"], [aria-modal="true"]'))
+      .some(isHostMediaViewerDialog);
+  }
+
+  function isHostMediaViewerDialog(dialog: HTMLElement): boolean {
+    if (dialog.closest(`#${ROOT_ID}`) || !isVisibleElement(dialog)) return false;
+    if (/\/photo\/\d+(?:$|[/?#])/.test(location.pathname)) return true;
+    const mediaViewer = dialog.querySelector<HTMLElement>('[data-testid="swipe-to-dismiss"]');
+    return Boolean(mediaViewer?.querySelector('img[src*="twimg.com/media"], video'));
+  }
+
+  function isVisibleElement(element: HTMLElement): boolean {
+    const rect = element.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0 && getComputedStyle(element).visibility !== "hidden";
   }
 
   function orderedItems(): OverlayDockItem[] {
@@ -678,6 +727,9 @@ function injectStyles(): void {
       color-scheme: light dark;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       user-select: none;
+    }
+    #${ROOT_ID}[data-host-media-viewer-open="true"] {
+      display: none !important;
     }
     html[data-milxdy-x-theme="light"] #${ROOT_ID},
     html[data-milxdy-settings-theme="light"] #${ROOT_ID},
