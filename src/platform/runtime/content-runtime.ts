@@ -263,6 +263,10 @@ export type ContentRuntime = {
 };
 
 export function createContentRuntime(apps: readonly MilxdyAppManifest[]): ContentRuntime {
+  // Chrome keeps content-script DOM across an extension reload, while the old
+  // script's event listeners disappear with its runtime. A per-runtime token
+  // lets the next runtime replace those inert host controls exactly once.
+  const composerActionBindingToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   const state: RuntimeState = {
     apps,
     enabledApps: new Set(),
@@ -1358,6 +1362,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function installComposerActionHost(): void {
+    // Panels created by an earlier content-runtime instance have no live
+    // lifecycle owner after an extension reload. Remove them before binding
+    // this runtime's controls so they cannot block or visually mask a reopen.
+    for (const panel of Array.from(document.querySelectorAll<HTMLElement>(".milxdy-composer-action-panel[data-app-id]"))) {
+      panel.remove();
+    }
     const refreshScheduler = createComposerActionRefreshScheduler(refreshComposerActionButtons);
     refreshComposerActionButtons();
     const observer = new MutationObserver(() => refreshScheduler.request());
@@ -1633,10 +1643,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if (!action) continue;
         let button = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))
           .find((candidate) => candidate.dataset.appId === app.id) || null;
-        if (!button) {
-          button = document.createElement("button");
+        if (button?.dataset.milxdyComposerActionBinding !== composerActionBindingToken) {
+          const replacement = button ? button.cloneNode(false) as HTMLButtonElement : document.createElement("button");
+          if (button) button.replaceWith(replacement);
+          else slot.append(replacement);
+          button = replacement;
           button.type = "button";
           button.dataset.appId = app.id;
+          button.dataset.milxdyComposerActionBinding = composerActionBindingToken;
           button.className = "milxdy-composer-action";
           // This is an extension-owned control mounted in X's delegated
           // toolbar. Keep its user gesture out of X's toolbar handlers so a
@@ -1646,7 +1660,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             event.stopPropagation();
             void openComposerAction(app, button!);
           });
-          slot.append(button);
         }
         button.title = action.label;
         button.setAttribute("aria-label", action.label);
@@ -1664,11 +1677,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if ((app.hostComposerActions || []).includes("nativeDrafts")) {
           let drafts = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id][data-host-action='nativeDrafts']"))
             .find((candidate) => candidate.dataset.appId === app.id) || null;
-          if (!drafts) {
-            drafts = document.createElement("button");
+          if (drafts?.dataset.milxdyComposerActionBinding !== composerActionBindingToken) {
+            const replacement = drafts ? drafts.cloneNode(false) as HTMLButtonElement : document.createElement("button");
+            if (drafts) drafts.replaceWith(replacement);
+            else slot.append(replacement);
+            drafts = replacement;
             drafts.type = "button";
             drafts.dataset.appId = app.id;
             drafts.dataset.hostAction = "nativeDrafts";
+            drafts.dataset.milxdyComposerActionBinding = composerActionBindingToken;
             drafts.className = "milxdy-composer-action milxdy-composer-host-action";
             drafts.textContent = "D";
             drafts.title = "Drafts";
@@ -1677,7 +1694,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             // reconciled independently by X, while this host control remains
             // the explicit user gesture that opens native Drafts.
             drafts.addEventListener("click", () => openNativeDraftsFor(drafts!));
-            slot.append(drafts);
           }
         }
       }
