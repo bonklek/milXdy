@@ -1556,17 +1556,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (normalizedText(editor.innerText || editor.textContent || "")) return false;
       insertionAttempted = true;
       editor.focus();
-      // X's reply composer is DraftJS. `execCommand("insertText")` changes
-      // the visible contenteditable DOM but can bypass DraftJS state, leaving
-      // an undeletable visual artifact and a disabled Reply button. Send the
-      // same beforeinput contract X receives from a real text gesture, then
-      // verify that its controlled editor rendered the exact declared value.
-      editor.dispatchEvent(new InputEvent("beforeinput", {
+      // X's reply composer is DraftJS. Raw DOM insertion and synthetic
+      // beforeinput can be ignored by its controlled editor, leaving a visual
+      // artifact and a disabled Reply button. DraftJS owns text pasted into
+      // its focused editor, so use that text-transfer contract and verify its
+      // rendered controlled value before ever considering submission.
+      const clipboardData = new DataTransfer();
+      clipboardData.setData("text/plain", text);
+      editor.dispatchEvent(new ClipboardEvent("paste", {
         bubbles: true,
         cancelable: true,
         composed: true,
-        data: text,
-        inputType: "insertText",
+        clipboardData,
       }));
       const verifyControlledInsertion = () => {
         if (normalizedText(editor.innerText || editor.textContent || "") === normalizedText(text)) {

@@ -90,7 +90,8 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
   requireIncludes(contentRuntime, "[contenteditable=\"true\"][data-testid^=\"tweetTextarea_\"]", "Reply insertion must target X's actual editable element, not an inherited editable wrapper");
   requireIncludes(contentRuntime, "if (normalizedText(editor.innerText || editor.textContent || \"\")) return false;", "Reply insertion must fail closed rather than append to an existing native draft");
-  requireIncludes(contentRuntime, "new InputEvent(\"beforeinput\"", "Reply insertion must update X's controlled editor through its native input contract");
+  requireIncludes(contentRuntime, "new ClipboardEvent(\"paste\"", "Reply insertion must update X's controlled editor through its text-transfer contract");
+  requireIncludes(contentRuntime, "clipboardData.setData(\"text/plain\", text)", "Reply insertion must transfer only the explicit declared template text");
   requireIncludes(contentRuntime, "if (++verificationFrames < 30) window.requestAnimationFrame(verifyControlledInsertion);", "Reply insertion must wait for X's controlled state without a second DOM insertion");
   requireIncludes(contentRuntime, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
