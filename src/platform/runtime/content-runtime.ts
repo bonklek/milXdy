@@ -1865,7 +1865,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hostStyle.textContent = `
       :host { display: block; color: #1d1b19; font: 400 14px/1.45 Arial, Helvetica, sans-serif; }
       .milxdy-composer-action-surface, .milxdy-composer-action-surface *, .milxdy-composer-action-surface *::before, .milxdy-composer-action-surface *::after { box-sizing: border-box; }
-      .milxdy-composer-action-surface { min-width: 0; padding: 14px; background: #f4f1e9; }
+      .milxdy-composer-action-surface { display: inline-block; min-width: 0; padding: 0; background: transparent; }
       .milxdy-composer-action-surface button { min-height: 32px; border: 1px solid #25211d; border-radius: 3px; background: #fffdf7; color: #1d1b19; box-shadow: 1px 1px 0 rgba(37, 33, 29, .34); font: 700 12px/1 Arial, Helvetica, sans-serif; cursor: pointer; }
       .milxdy-composer-action-surface button:hover, .milxdy-composer-action-surface button:focus-visible { background: #fff3c5; outline: 2px solid #2483c5; outline-offset: 2px; }
       .milxdy-composer-action-surface input, .milxdy-composer-action-surface textarea { border: 1px solid #756e64; border-radius: 3px; background: #fffdf7; color: #1d1b19; font: inherit; }
@@ -1895,7 +1895,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
-      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(420px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 2px solid #25211d; border-radius: 8px; background: #f4f1e9; color: #1d1b19; box-shadow: 5px 5px 0 rgba(37, 33, 29, .35), 0 12px 30px rgba(0, 0, 0, .24); }
+      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
       .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
     document.documentElement.append(style);
