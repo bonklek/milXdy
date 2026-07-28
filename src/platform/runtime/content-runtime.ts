@@ -1369,6 +1369,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   let activeReplyActionClose: (() => void) | null = null;
+  let activeReplyActionButton: HTMLElement | null = null;
 
   function installReplyActionHost(): void {
     const onReplyClick = (event: MouseEvent) => {
@@ -1383,6 +1384,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (apps.length === 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();
+      // Reply is the invoker for this package panel. A second explicit click
+      // on that same X control is a toggle-off, rather than a close/reopen
+      // cycle that leaves the panel visibly unchanged.
+      if (activeReplyActionButton === button && activeReplyActionClose) {
+        activeReplyActionClose();
+        return;
+      }
       void openReplyActionPanel(button, apps);
     };
     document.addEventListener("click", onReplyClick, true);
@@ -1448,6 +1456,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       document.removeEventListener("scroll", positionReplyActionPanel, true);
       window.removeEventListener("resize", positionReplyActionPanel);
       if (activeReplyActionClose === close) activeReplyActionClose = null;
+      if (activeReplyActionButton === button) activeReplyActionButton = null;
       if (button.isConnected) button.focus({ preventScroll: true });
     };
     const dismiss = (event: PointerEvent) => {
@@ -1470,6 +1479,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     document.body.append(panel);
     activeReplyActionClose = close;
+    activeReplyActionButton = button;
     document.addEventListener("pointerdown", dismiss, true);
     // Window capture runs before X's document handlers and also receives keys
     // dispatched from the package panel's shadow root.

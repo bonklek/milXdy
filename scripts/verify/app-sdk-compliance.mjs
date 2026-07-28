@@ -81,6 +81,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
   requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
+  requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
   requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
   requireIncludes(contentRuntime, "panel.style.top = `${anchoredTop + window.scrollY}px`", "Reply-action panels must leave the viewport with their scrolling Reply control instead of pinning to an edge");
