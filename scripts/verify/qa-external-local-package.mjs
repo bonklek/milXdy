@@ -16,7 +16,7 @@ try {
   manifest.surfaces = ["composerAction", "replyAction"];
   manifest.loadTriggers = ["userAction"];
   manifest.siteScopes = manifest.siteScopes.map((scope) => ({ ...scope, surfaces: ["composerAction", "replyAction"] }));
-  manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
+  manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel", icon: "dev-note-icon.svg" };
   manifest.hostComposerActions = ["nativeDrafts"];
   manifest.storageKeys.local = [...new Set([...(manifest.storageKeys.local || []), "milxdy.local.dev-note.replyPhrases"])];
   manifest.settings.push({
@@ -34,6 +34,10 @@ try {
   manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(path.join(externalPackage, "dev-note.css"), ".developer-note { color: canvastext; }\n");
+  await writeFile(path.join(externalPackage, "dev-note-icon.svg"), '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><path d="M0 0h1v1H0z"/></svg>\n');
+  manifest.package.assets.push({ id: "developer-note.icon", path: "dev-note-icon.svg", kind: "icon", webAccessible: true });
+  manifest.package.webAccessibleAssets.push("dev-note-icon.svg");
+  await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   const entryPath = path.join(externalPackage, "dist", "content.js");
   await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\nexport function onReplyAction({ panel, openNativeReply, templates, selectTemplate }) { panel.replaceChildren(); const nativeReply = document.createElement("button"); nativeReply.textContent = "Send a reply"; nativeReply.addEventListener("click", openNativeReply); panel.append(nativeReply); for (const template of templates) { const row = document.createElement("button"); row.textContent = template.label; row.addEventListener("click", () => selectTemplate(template.id)); panel.append(row); } }\n`);
   run([
@@ -72,6 +76,7 @@ try {
   assert.match(runtimeRegistry, /sendAfterInsert:\s*true/u, "staged external reply action must preserve its explicit send opt-in");
   assert.match(runtimeRegistry, /hostComposerActions:\s*\["nativeDrafts"\]/u, "staged external apps must preserve declared host companion actions");
   assert.match(runtimeRegistry, /storageListKey:\s*"milxdy\.local\.dev-note\.replyPhrases"/u, "staged external reply actions must preserve bounded storage-list templates");
+  assert.match(runtimeRegistry, /composerAction:[\s\S]{0,240}?icon:\s*"local-apps\/dev-note\/dev-note-icon\.svg"/u, "staged external composer icons must be rebased to the package output prefix");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");
