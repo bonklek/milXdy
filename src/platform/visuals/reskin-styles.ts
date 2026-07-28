@@ -1416,13 +1416,11 @@ export const RESKIN_CSS = `
     width: 100% !important;
   }
 
-  /* Beat the inline-media cap while X promotes this video into the fullscreen layer. */
-  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) article [data-testid="videoPlayer"] video:is(:fullscreen, :-webkit-full-screen),
-  html[data-milxdy-reskin-profile="moderate"]:not([data-milxdy-visual-max-media-height="0"]) article [data-testid="videoPlayer"] video:is(:fullscreen, :-webkit-full-screen) {
-    height: 100vh !important;
+  /* X can promote the player wrapper rather than the <video> itself into fullscreen. */
+  html[data-milxdy-reskin-profile]:has(:fullscreen, :-webkit-full-screen) article [data-testid="videoPlayer"],
+  html[data-milxdy-reskin-profile]:has(:fullscreen, :-webkit-full-screen) article [data-testid="videoPlayer"] video {
     max-height: none !important;
-    max-width: none !important;
-    width: 100vw !important;
+    overflow: visible !important;
   }
 
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-pfp-shape="circle"] [data-testid="Tweet-User-Avatar"],
