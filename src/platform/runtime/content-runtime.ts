@@ -1737,7 +1737,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         || (candidate.textContent || "").trim() === "Drafts"
       ));
       if (!nativeDrafts) {
-        recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "X native Drafts control was unavailable" });
+        // Inline X composers do not render a visible Drafts control. The
+        // native route is still X-owned and opens the same drafts surface;
+        // use it only after the package's explicit Drafts gesture.
+        close();
+        window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString());
         return;
       }
       close();
