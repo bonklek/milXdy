@@ -17,7 +17,19 @@ try {
   manifest.loadTriggers = ["userAction"];
   manifest.siteScopes = manifest.siteScopes.map((scope) => ({ ...scope, surfaces: ["composerAction", "replyAction"] }));
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
-  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply", sendAfterInsert: true }] };
+  manifest.hostComposerActions = ["nativeDrafts"];
+  manifest.storageKeys.local = [...new Set([...(manifest.storageKeys.local || []), "milxdy.local.dev-note.replyPhrases"])];
+  manifest.settings.push({
+    id: "dev-note.replyPhrases",
+    label: "Reply phrases",
+    scope: "app",
+    location: "appsAndFeatures",
+    storage: { area: "local", key: "milxdy.local.dev-note.replyPhrases" },
+    defaultValue: [],
+    control: { type: "textList", maxItems: 5, maxLength: 120, placeholder: "Add a phrase" },
+    reset: { behavior: "restoreDefault" },
+  });
+  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply", sendAfterInsert: true }, { id: "custom", label: "Custom", storageListKey: "milxdy.local.dev-note.replyPhrases" }] };
   manifest.css = [{ id: "developer-note.styles", path: "dev-note.css" }];
   manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -58,6 +70,8 @@ try {
   );
   assert.match(runtimeRegistry, /replyAction:\s*\{\s*templates:/u, "staged external reply action must reach the runtime registry");
   assert.match(runtimeRegistry, /sendAfterInsert:\s*true/u, "staged external reply action must preserve its explicit send opt-in");
+  assert.match(runtimeRegistry, /hostComposerActions:\s*\["nativeDrafts"\]/u, "staged external apps must preserve declared host companion actions");
+  assert.match(runtimeRegistry, /storageListKey:\s*"milxdy\.local\.dev-note\.replyPhrases"/u, "staged external reply actions must preserve bounded storage-list templates");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");

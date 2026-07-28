@@ -27,7 +27,7 @@ export type AppSettingStorageArea = "local" | "sync";
 export type AppSettingScope = "global" | "app" | "feature";
 export type AppSettingLocation = "appearance" | "appsAndFeatures" | "appSurface" | "advanced";
 export type AppSettingRole = "preference" | "enablement" | "open" | "reset";
-export type AppSettingControlType = "toggle" | "select" | "segmented" | "slider" | "number" | "text" | "textarea" | "action" | "status";
+export type AppSettingControlType = "toggle" | "select" | "segmented" | "slider" | "number" | "text" | "textarea" | "textList" | "action" | "status";
 export type AppSettingPreset = "visual" | "audio" | "performance" | "firstRun" | "profilePack";
 export type AppSettingResetBehavior = "removeKey" | "restoreDefault" | "restoreAppDefault" | "custom";
 export type AppSettingValue = string | number | boolean | null | string[] | Record<string, unknown>;
@@ -40,11 +40,15 @@ export type AppComposerAction = {
   icon?: AppIconAsset;
   presentation: "anchoredPanel";
 };
+/** Narrow host-owned companion action; packages cannot inject arbitrary toolbar UI. */
+export type AppHostComposerAction = "nativeDrafts";
 export type AppReplyActionTemplate = {
   id: string;
   label: string;
   text?: string;
   storageKey?: string;
+  /** A bounded, host-rendered local text-list setting expanded into reply rows. */
+  storageListKey?: string;
   /** Explicit reviewed opt-in: submit after the host inserts this template. */
   sendAfterInsert?: boolean;
 };
@@ -57,6 +61,8 @@ export type AppExternalHandoff = {
   label: string;
   adapter: string;
   target: string;
+  /** Explicit reviewed behavior choices; packages cannot pass arbitrary adapter options. */
+  modes?: Array<"captioned" | "randomMeme">;
 };
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
@@ -108,6 +114,8 @@ export type AppSettingDefinition = {
     max?: number;
     step?: number;
     placeholder?: string;
+    maxItems?: number;
+    maxLength?: number;
   };
   reset: {
     behavior: AppSettingResetBehavior;
@@ -163,6 +171,7 @@ export type MilxdyAppManifest = {
     defaultSide?: "left" | "right";
   };
   composerAction?: AppComposerAction;
+  hostComposerActions?: AppHostComposerAction[];
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
   chrome?: {
@@ -297,7 +306,7 @@ export type MilxdyComposerActionContext = {
    * click; the host reads, splits, and transfers the X draft itself.
    */
   externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
-  launchExternalHandoff: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  launchExternalHandoff: (id: string, options?: { mode?: "captioned" | "randomMeme" }) => Promise<{ ok: boolean; error?: string }>;
 };
 
 /**

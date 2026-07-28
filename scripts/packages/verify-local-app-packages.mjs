@@ -236,6 +236,13 @@ function verifyStorageAndSettings(label, manifest) {
       fail(`${settingLabel}: setting storage key collides with built-in registry storage`);
     }
     if (!setting.control || !validControlTypes.has(setting.control.type)) fail(`${settingLabel}: invalid control metadata`);
+    if (setting.control?.type === "textList") {
+      if (!Number.isInteger(setting.control.maxItems) || setting.control.maxItems < 1 || setting.control.maxItems > 20) fail(`${settingLabel}: textList requires a bounded maxItems between 1 and 20`);
+      if (!Number.isInteger(setting.control.maxLength) || setting.control.maxLength < 1 || setting.control.maxLength > 280) fail(`${settingLabel}: textList requires a bounded maxLength between 1 and 280`);
+      if (setting.defaultValue !== undefined && (!Array.isArray(setting.defaultValue) || setting.defaultValue.some((value) => typeof value !== "string" || value.length > setting.control.maxLength))) {
+        fail(`${settingLabel}: textList defaultValue must be strings within maxLength`);
+      }
+    }
     if ((setting.control?.type === "select" || setting.control?.type === "segmented") && !Array.isArray(setting.control.options) && !setting.control.dynamicOptions) {
       fail(`${settingLabel}: select-like controls must declare static or dynamic options`);
     }

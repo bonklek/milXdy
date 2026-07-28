@@ -424,6 +424,25 @@ explicit click. The package never receives image bytes or X/maker DOM access;
 there is no raw upload API, no attachment to another composer, and no post is
 sent automatically.
 
+#### Bounded local reply lists and composer companions
+
+Packages may declare a `textList` Apps & Features setting backed by a declared
+local or sync storage key. The host renders bounded add, edit, delete, and
+reorder controls; `maxItems` must be 1–20 and `maxLength` 1–280. A reply
+template with `storageListKey` expands only that validated list into ephemeral
+host reply rows. Package code receives row IDs and labels, and still invokes
+`selectTemplate(id)`—it does not read storage itself.
+
+`hostComposerActions: ["nativeDrafts"]` is an allowlisted host companion that
+renders X Drafts beside a package composer action. It is not a second package
+panel or arbitrary toolbar insertion API.
+
+An external handoff can declare `modes: ["captioned", "randomMeme"]`. A
+package can request only one of its declared modes from an explicit click.
+`captioned` requires a non-empty X draft; `randomMeme` may produce an
+uncaptioned result. No mode grants package DOM, draft, image, tab, or posting
+access.
+
 ```json
 "externalHandoffs": [
   { "id": "milady-maker", "label": "Milady Maker", "adapter": "remilia-maker", "target": "milady" }

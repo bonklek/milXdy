@@ -391,17 +391,19 @@ function isExternalHandoffMessage(message: unknown): message is ExternalHandoffM
     && isExternalHandoffAdapter(record.adapter)
     && isExternalHandoffTarget(record.target)
     && typeof record.topText === "string"
-    && typeof record.bottomText === "string";
+    && typeof record.bottomText === "string"
+    && (record.mode === "captioned" || record.mode === "randomMeme");
 }
 
 async function launchExternalHandoff(message: ExternalHandoffMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
-  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string }> }>)
+  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string; modes?: string[] }> }>)
     .find((candidate) => candidate.id === message.appId);
   const declaration = app?.externalHandoffs?.find((candidate) => candidate.id === message.handoffId);
   if (!declaration || declaration.adapter !== message.adapter || declaration.target !== message.target) {
     return { ok: false, error: "The requested handoff is not declared by this package." };
   }
+  if (!(declaration.modes || ["captioned"]).includes(message.mode)) return { ok: false, error: "The requested handoff mode is not declared by this package." };
   const targetUrl = externalHandoffUrl(message.adapter, message.target);
   if (!targetUrl) return { ok: false, error: "Unsupported maker destination." };
   try {
@@ -412,7 +414,7 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
       target: { tabId: tab.id },
       world: "MAIN",
       func: renderRemiliaMakerImage,
-      args: [message.topText, message.bottomText],
+      args: [message.topText, message.bottomText, message.mode],
     });
     const result = results[0]?.result as { ok?: boolean; error?: string; imageDataUrl?: string } | undefined;
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
@@ -452,7 +454,7 @@ function isSafeMakerImageDataUrl(value: unknown): value is string {
 }
 
 /** Runs only in the reviewed maker tab after an explicit package gesture. */
-async function renderRemiliaMakerImage(topText: string, bottomText: string): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
+async function renderRemiliaMakerImage(topText: string, bottomText: string, mode: "captioned" | "randomMeme"): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
   // `chrome.scripting.executeScript` serializes only this function, so the
   // wait helper must remain inside it rather than closing over extension code.
   const waitForRender = async (): Promise<void> => {
@@ -476,8 +478,10 @@ async function renderRemiliaMakerImage(topText: string, bottomText: string): Pro
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   };
-  setInput(top, topText);
-  setInput(bottom, bottomText);
+  if (mode === "captioned") {
+    setInput(top, topText);
+    setInput(bottom, bottomText);
+  }
   // The reviewed maker exposes its complete renderer only from its own main
   // world. Rendering there preserves its selected layers, text treatment, and
   // pixel-art settings instead of trying to recreate its DOM in the extension.

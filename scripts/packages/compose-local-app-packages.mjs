@@ -866,6 +866,12 @@ function verifyComposerAction(id, manifest, errors) {
   if (!action.label || typeof action.label !== "string") errors.push(`${id}: composerAction requires a label`);
   if (action.presentation !== "anchoredPanel") errors.push(`${id}: composerAction presentation must be anchoredPanel`);
   if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: composerAction packages must declare the userAction load trigger`);
+  if (manifest.hostComposerActions && (!Array.isArray(manifest.hostComposerActions)
+    || manifest.hostComposerActions.length > 1
+    || new Set(manifest.hostComposerActions).size !== manifest.hostComposerActions.length
+    || manifest.hostComposerActions.some((actionId) => actionId !== "nativeDrafts"))) {
+    errors.push(`${id}: hostComposerActions supports only the reviewed nativeDrafts companion`);
+  }
 }
 
 function verifyReplyAction(id, manifest, errors) {
@@ -885,8 +891,10 @@ function verifyReplyAction(id, manifest, errors) {
     if (!template?.label || typeof template.label !== "string") errors.push(`${id}: replyAction templates require a label`);
     const hasText = typeof template?.text === "string";
     const hasStorageKey = typeof template?.storageKey === "string" && template.storageKey.length > 0;
-    if (hasText === hasStorageKey) errors.push(`${id}: replyAction template must declare exactly one of text or storageKey`);
+    const hasStorageListKey = typeof template?.storageListKey === "string" && template.storageListKey.length > 0;
+    if ([hasText, hasStorageKey, hasStorageListKey].filter(Boolean).length !== 1) errors.push(`${id}: replyAction template must declare exactly one of text, storageKey, or storageListKey`);
     if (hasStorageKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageKey)) errors.push(`${id}: replyAction storageKey must be declared in storageKeys`);
+    if (hasStorageListKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageListKey)) errors.push(`${id}: replyAction storageListKey must be declared in storageKeys`);
     if (template.sendAfterInsert !== undefined && typeof template.sendAfterInsert !== "boolean") errors.push(`${id}: replyAction sendAfterInsert must be boolean when declared`);
   }
 }
@@ -917,6 +925,9 @@ function verifyExternalHandoffs(id, manifest, errors) {
       continue;
     }
     if (!adapter.targets.has(handoff?.target)) errors.push(`${id}: externalHandoff target is not supported by ${handoff.adapter}`);
+    if (handoff.modes !== undefined && (!Array.isArray(handoff.modes) || handoff.modes.length === 0 || handoff.modes.some((mode) => mode !== "captioned" && mode !== "randomMeme"))) {
+      errors.push(`${id}: externalHandoff modes must be reviewed captioned or randomMeme modes`);
+    }
     if (!(manifest.permissions?.hosts || []).includes(adapter.host)) {
       errors.push(`${id}: externalHandoff ${handoff.id} must declare host permission ${adapter.host}`);
     }
