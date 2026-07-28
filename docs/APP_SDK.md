@@ -396,7 +396,11 @@ Composer-action packages declare `"userAction"` in `loadTriggers` and export
 `onComposerAction(context)`. `context` provides a platform-owned `panel`, a
 `kind` of `post` or `reply`, an abort `signal`, and `close()`. This surface does
 not provide composer text, selection/caret access, media handoff, upload, or
-posting capabilities.
+posting capabilities. The host keeps the panel within the current viewport:
+it opens below its action when that fits, flips above when that side has more
+reachable room, and constrains only the host container when neither side can
+fit the package content. It reevaluates placement on window, scroll, and
+package-content size changes.
 
 ### Reply actions
 

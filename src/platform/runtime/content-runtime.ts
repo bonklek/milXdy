@@ -1672,16 +1672,49 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const surface = document.createElement("div");
     surface.className = "milxdy-composer-action-surface";
     shadow.append(surface);
-    const rect = button.getBoundingClientRect();
-    panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 360))}px`;
-    panel.style.top = `${Math.min(rect.bottom + 8, window.innerHeight - 160)}px`;
+    panel.style.visibility = "hidden";
     document.body.append(panel);
+    let resizeFrame = 0;
+    const positionComposerActionPanel = () => {
+      const gap = 8;
+      const viewportInset = 8;
+      const rect = button.getBoundingClientRect();
+      const naturalHeight = panel.getBoundingClientRect().height;
+      const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - gap - viewportInset);
+      const spaceAbove = Math.max(0, rect.top - gap - viewportInset);
+      // Prefer the natural downward popover. If that would overflow, open on
+      // the larger side; when neither side can fit it, constrain the panel to
+      // the available side so its own scroll area remains reachable.
+      const openBelow = spaceBelow >= naturalHeight || spaceBelow >= spaceAbove;
+      const availableHeight = Math.max(48, openBelow ? spaceBelow : spaceAbove);
+      panel.style.maxHeight = `${availableHeight}px`;
+      const panelHeight = Math.min(panel.getBoundingClientRect().height, availableHeight);
+      panel.style.top = `${openBelow
+        ? Math.max(viewportInset, rect.bottom + gap)
+        : Math.max(viewportInset, rect.top - gap - panelHeight)}px`;
+      const panelWidth = panel.getBoundingClientRect().width;
+      panel.style.left = `${Math.max(viewportInset, Math.min(rect.left, window.innerWidth - panelWidth - viewportInset))}px`;
+      panel.dataset.placement = openBelow ? "bottom" : "top";
+      panel.style.visibility = "visible";
+    };
+    const scheduleComposerActionPosition = () => {
+      if (resizeFrame) return;
+      resizeFrame = window.requestAnimationFrame(() => {
+        resizeFrame = 0;
+        positionComposerActionPanel();
+      });
+    };
+    let panelSizeObserver: ResizeObserver | null = null;
     const close = () => {
       if (!panel.isConnected) return;
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
       window.removeEventListener("keydown", dismissOnEscape, true);
+      document.removeEventListener("scroll", scheduleComposerActionPosition, true);
+      window.removeEventListener("resize", scheduleComposerActionPosition);
+      panelSizeObserver?.disconnect();
+      window.cancelAnimationFrame(resizeFrame);
       if (activeComposerActionClose === close) activeComposerActionClose = null;
       button.focus();
     };
@@ -1698,6 +1731,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     activeComposerActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
+    document.addEventListener("scroll", scheduleComposerActionPosition, true);
+    window.addEventListener("resize", scheduleComposerActionPosition);
     try {
       await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onComposerAction({
@@ -1706,6 +1741,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         signal: controller.signal,
         close,
       }));
+      panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
+      panelSizeObserver.observe(surface);
+      positionComposerActionPanel();
     } catch (error) {
       close();
       recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: errorMessage(error) });
