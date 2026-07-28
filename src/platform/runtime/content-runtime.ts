@@ -1420,7 +1420,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       // The panel lives in the document flow rather than the viewport so it
       // follows its invoking Reply control as its post scrolls.
       panel.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, document.documentElement.scrollWidth - 300))}px`;
-      panel.style.top = `${Math.max(8, rect.bottom + window.scrollY + 8)}px`;
+      // Keep following the post, but never allow a document-anchored panel to
+      // disappear above the currently visible viewport.
+      panel.style.top = `${Math.max(window.scrollY + 8, rect.bottom + window.scrollY + 8)}px`;
       panel.style.maxHeight = `${Math.max(48, window.innerHeight - Math.max(8, rect.bottom) - 16)}px`;
     };
     positionReplyActionPanel();
