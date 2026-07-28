@@ -1,12 +1,14 @@
 export type ExternalHandoffAdapter = "remilia-maker";
 
 export type ExternalHandoffTarget = "milady" | "remilio" | "bonkler" | "kagami";
+export type ExternalHandoffMode = "captioned" | "randomMeme";
 
 export type ExternalHandoffRequest = {
   appId: string;
   handoffId: string;
   adapter: ExternalHandoffAdapter;
   target: ExternalHandoffTarget;
+  mode: ExternalHandoffMode;
   topText: string;
   bottomText: string;
 };

@@ -232,7 +232,7 @@ type SurfaceImportDecision =
 
 type ScaffoldResult = "created" | "present" | "missing";
 type ResetStorageArea = "local" | "sync";
-type AppSettingUiValue = string | number | boolean | null;
+type AppSettingUiValue = string | number | boolean | null | string[];
 
 type AppResetPlan = {
   localKeys: string[];
@@ -1471,10 +1471,21 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
-      .filter((template) => template.storageKey)
-      .map((template) => [template.storageKey!, ""]));
+      .flatMap((template) => [template.storageKey, template.storageListKey].filter(Boolean))
+      .map((storageKey) => [storageKey!, ""]));
     const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
     const templates = (app.replyAction?.templates || []).flatMap((template) => {
+      if (template.storageListKey) {
+        const setting = (app.settings || []).find((candidate) => candidate.storage.key === template.storageListKey && candidate.control.type === "textList");
+        const maxItems = setting?.control.maxItems || 0;
+        const maxLength = setting?.control.maxLength || 0;
+        const rawValues = stored?.[template.storageListKey];
+        const values: unknown[] = Array.isArray(rawValues) ? rawValues : [];
+        return values
+          .filter((value): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= maxLength)
+          .slice(0, maxItems)
+          .map((text, index) => ({ id: `${template.id}.${index}`, label: text, text, sendAfterInsert: template.sendAfterInsert === true }));
+      }
       const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
       return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text, sendAfterInsert: template.sendAfterInsert === true }];
     });
@@ -1612,9 +1623,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         slot.className = "milxdy-composer-actions";
         actionRow.append(slot);
       }
-      const expected = new Set(apps.map((app) => app.id));
+      const expected = new Set(apps.flatMap((app) => [app.id, ...(app.hostComposerActions || []).map((actionId) => `${app.id}:${actionId}`)]));
       for (const button of Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))) {
-        if (!expected.has(button.dataset.appId || "")) button.remove();
+        const key = button.dataset.hostAction ? `${button.dataset.appId}:${button.dataset.hostAction}` : button.dataset.appId || "";
+        if (!expected.has(key)) button.remove();
       }
       for (const app of apps) {
         const action = app.composerAction;
@@ -1638,6 +1650,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           icon.alt = "";
           button.replaceChildren(icon);
         }
+        if ((app.hostComposerActions || []).includes("nativeDrafts")) {
+          let drafts = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id][data-host-action='nativeDrafts']"))
+            .find((candidate) => candidate.dataset.appId === app.id) || null;
+          if (!drafts) {
+            drafts = document.createElement("button");
+            drafts.type = "button";
+            drafts.dataset.appId = app.id;
+            drafts.dataset.hostAction = "nativeDrafts";
+            drafts.className = "milxdy-composer-action milxdy-composer-host-action";
+            drafts.textContent = "D";
+            drafts.title = "Drafts";
+            drafts.setAttribute("aria-label", "Open X Drafts");
+            drafts.addEventListener("click", () => openNativeDraftsFor(button!));
+            slot.append(drafts);
+          }
+        }
       }
     }
     injectComposerActionStyles();
@@ -1652,6 +1680,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         || toolbar;
     }
     return null;
+  }
+
+  function openNativeDraftsFor(button: HTMLButtonElement, close?: () => void): void {
+    const composer = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]');
+    const nativeDrafts = Array.from((composer || document).querySelectorAll<HTMLElement>(
+      'a[href*="/compose/tweet/unsent/drafts"], button, [role="button"]',
+    )).find((candidate) => candidate.offsetParent !== null && (
+      candidate.matches('a[href*="/compose/tweet/unsent/drafts"]')
+      || (candidate.textContent || "").trim() === "Drafts"
+    ));
+    close?.();
+    if (nativeDrafts) {
+      nativeDrafts.click();
+      return;
+    }
+    window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString());
   }
 
   let activeComposerAction: { appId: string; button: HTMLButtonElement; close: () => void } | null = null;
@@ -1735,43 +1779,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.stopImmediatePropagation();
       close();
     };
-    const openNativeDrafts = () => {
-      const composer = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]');
-      const nativeDrafts = Array.from((composer || document).querySelectorAll<HTMLElement>(
-        'a[href*="/compose/tweet/unsent/drafts"], button, [role="button"]',
-      )).find((candidate) => candidate.offsetParent !== null && (
-        candidate.matches('a[href*="/compose/tweet/unsent/drafts"]')
-        || (candidate.textContent || "").trim() === "Drafts"
-      ));
-      if (!nativeDrafts) {
-        // Inline X composers do not render a visible Drafts control. The
-        // native route is still X-owned and opens the same drafts surface;
-        // use it only after the package's explicit Drafts gesture.
-        close();
-        window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString());
-        return;
-      }
-      close();
-      nativeDrafts.click();
-    };
-    const launchExternalHandoff = async (id: string): Promise<{ ok: boolean; error?: string }> => {
+    const openNativeDrafts = () => openNativeDraftsFor(button, close);
+    const launchExternalHandoff = async (id: string, options?: { mode?: "captioned" | "randomMeme" }): Promise<{ ok: boolean; error?: string }> => {
       if (!navigator.userActivation?.isActive) {
         return { ok: false, error: "Open a maker directly from its control." };
       }
       const handoff = (app.externalHandoffs || []).find((candidate) => candidate.id === id);
       if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
+      const mode = options?.mode || "captioned";
+      if (!(handoff.modes || ["captioned"]).includes(mode)) return { ok: false, error: "This handoff mode is not declared by the package." };
       const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
         .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
       const split = splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
-      if (!split?.topText && !split?.bottomText) return { ok: false, error: "Write a draft before opening a maker." };
+      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme") return { ok: false, error: "Write a draft before opening a maker." };
       const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string }>({
         type: "milxdy:externalHandoff",
         appId: app.id,
         handoffId: handoff.id,
         adapter: handoff.adapter,
         target: handoff.target,
-        ...split,
+        mode,
+        ...(split || { topText: "", bottomText: "" }),
       });
       const result = response && response.ok === true
         ? await attachExternalHandoffImage(composerScope, response.imageDataUrl)
@@ -3164,18 +3193,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const section = document.createElement("section");
     section.className = "milxdy-app-hub-generated-settings";
     const title = document.createElement("strong");
-    title.textContent = "Feature settings";
+    title.textContent = "Settings";
     section.append(title);
     for (const setting of settings) section.append(appHubGeneratedSettingRow(setting));
     return section;
   }
 
   function hubGeneratedFeatureSettings(app: MilxdyAppManifest): AppSettingDefinition[] {
-    if (hubPackageKind(app) !== "feature" || app.packageKind !== "feature") return [];
+    if (hubPackageKind(app) !== "feature" && hubPackageKind(app) !== "app") return [];
     return (app.settings || []).filter((setting) => (
       setting.location === "appsAndFeatures"
       && setting.advanced !== true
-      && setting.scope === "feature"
+      && (setting.scope === "feature" || setting.scope === "app")
       && setting.control.type !== "action"
       && setting.control.type !== "status"
     ));
@@ -3217,6 +3246,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       case "text":
       case "textarea":
         return appHubGeneratedText(setting);
+      case "textList":
+        return appHubGeneratedTextList(setting);
       default:
         return appHubUnsupportedSetting(setting);
     }
@@ -3290,6 +3321,35 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       void persistGeneratedControl(setting, input);
     });
     return input;
+  }
+
+  function appHubGeneratedTextList(setting: AppSettingDefinition): HTMLElement {
+    const control = document.createElement("div");
+    control.className = "milxdy-app-hub-generated-text-list";
+    control.dataset.maxItems = String(setting.control.maxItems || 0);
+    control.dataset.maxLength = String(setting.control.maxLength || 0);
+    control.setAttribute("aria-label", setting.label);
+    const items = document.createElement("div");
+    items.className = "milxdy-app-hub-generated-text-list-items";
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = setting.control.placeholder || "Add item";
+    input.maxLength = setting.control.maxLength || 280;
+    const add = document.createElement("button");
+    add.type = "button";
+    add.textContent = "Add";
+    const persist = () => void writeManifestSettingValue(setting, textListValues(control));
+    add.addEventListener("click", () => {
+      const value = input.value.trim();
+      const values = textListValues(control);
+      if (!value || values.length >= (setting.control.maxItems || 0)) return;
+      values.push(value);
+      input.value = "";
+      setGeneratedControlValue(control, values);
+      persist();
+    });
+    control.append(items, input, add);
+    return control;
   }
 
   function appHubUnsupportedSetting(setting: AppSettingDefinition): HTMLElement {
@@ -3369,11 +3429,58 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function normalizeSettingUiValue(value: unknown): AppSettingUiValue {
+    if (Array.isArray(value)) return value.filter((item): item is string => typeof item === "string");
     if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null) return value;
     return "";
   }
 
   function setGeneratedControlValue(control: HTMLElement, value: AppSettingUiValue): void {
+    if (control.classList.contains("milxdy-app-hub-generated-text-list")) {
+      const items = control.querySelector<HTMLElement>(".milxdy-app-hub-generated-text-list-items");
+      if (!items) return;
+      items.replaceChildren(...(Array.isArray(value) ? value : []).map((item, index) => {
+        const row = document.createElement("span");
+        const edit = document.createElement("input");
+        edit.type = "text";
+        edit.value = item;
+        edit.maxLength = Number(control.dataset.maxLength) || 280;
+        edit.addEventListener("change", () => {
+          const values = textListValues(control);
+          values[index] = edit.value.trim();
+          setGeneratedControlValue(control, values.filter(Boolean));
+          void writeManifestSettingValueFromControl(control, values.filter(Boolean));
+        });
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          const values = textListValues(control).filter((_, current) => current !== index);
+          setGeneratedControlValue(control, values);
+          void writeManifestSettingValueFromControl(control, values);
+        });
+        const move = (delta: -1 | 1) => {
+          const values = textListValues(control);
+          const next = index + delta;
+          if (next < 0 || next >= values.length) return;
+          [values[index], values[next]] = [values[next], values[index]];
+          setGeneratedControlValue(control, values);
+          void writeManifestSettingValueFromControl(control, values);
+        };
+        const up = document.createElement("button");
+        up.type = "button";
+        up.textContent = "Up";
+        up.disabled = index === 0;
+        up.addEventListener("click", () => move(-1));
+        const down = document.createElement("button");
+        down.type = "button";
+        down.textContent = "Down";
+        down.disabled = index === (Array.isArray(value) ? value.length - 1 : 0);
+        down.addEventListener("click", () => move(1));
+        row.append(edit, up, down, remove);
+        return row;
+      }));
+      return;
+    }
     if (control instanceof HTMLButtonElement && control.classList.contains("milxdy-app-hub-generated-toggle")) {
       const checked = value === true;
       control.dataset.checked = String(checked);
@@ -3388,6 +3495,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function readGeneratedControlValue(setting: AppSettingDefinition, control: HTMLElement): AppSettingUiValue {
+    if (setting.control.type === "textList") return textListValues(control);
     if (control instanceof HTMLInputElement && (setting.control.type === "number" || setting.control.type === "slider")) {
       const value = Number(control.value);
       return Number.isFinite(value) ? value : Number(setting.defaultValue || 0);
@@ -3398,6 +3506,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     if (control instanceof HTMLInputElement || control instanceof HTMLTextAreaElement) return control.value;
     return normalizeSettingUiValue(setting.defaultValue);
+  }
+
+  function textListValues(control: HTMLElement): string[] {
+    return Array.from(control.querySelectorAll<HTMLInputElement>(".milxdy-app-hub-generated-text-list-items input"))
+      .map((input) => input.value.trim())
+      .filter(Boolean)
+      .slice(0, Number(control.dataset.maxItems) || 0);
+  }
+
+  function writeManifestSettingValueFromControl(control: HTMLElement, value: string[]): Promise<void> {
+    const settingId = control.closest<HTMLElement>("[data-setting-id]")?.dataset.settingId;
+    const setting = state.apps.flatMap((app) => app.settings || []).find((candidate) => candidate.id === settingId);
+    return setting ? writeManifestSettingValue(setting, value) : Promise.resolve();
   }
 
   function settingOptionValue(value: string | number | boolean | null): string {

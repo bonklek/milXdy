@@ -103,6 +103,12 @@
         }
       }
     },
+    "hostComposerActions": {
+      "type": "array",
+      "items": { "enum": ["nativeDrafts"] },
+      "uniqueItems": true,
+      "maxItems": 1
+    },
     "replyAction": {
       "type": "object",
       "additionalProperties": false,
@@ -121,11 +127,13 @@
               "label": { "type": "string", "minLength": 1 },
               "text": { "type": "string" },
               "storageKey": { "type": "string", "minLength": 1 },
+              "storageListKey": { "type": "string", "minLength": 1 },
               "sendAfterInsert": { "type": "boolean" }
             },
             "oneOf": [
               { "required": ["text"] },
-              { "required": ["storageKey"] }
+              { "required": ["storageKey"] },
+              { "required": ["storageListKey"] }
             ]
           }
         }
@@ -142,7 +150,8 @@
           "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
           "label": { "type": "string", "minLength": 1 },
           "adapter": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
-          "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" }
+          "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "modes": { "type": "array", "items": { "enum": ["captioned", "randomMeme"] }, "uniqueItems": true, "maxItems": 2 }
         }
       }
     },
@@ -376,7 +385,7 @@
           "additionalProperties": false,
           "required": ["type"],
           "properties": {
-            "type": { "enum": ["toggle", "select", "segmented", "slider", "number", "text", "textarea", "action", "status"] },
+            "type": { "enum": ["toggle", "select", "segmented", "slider", "number", "text", "textarea", "textList", "action", "status"] },
             "options": {
               "type": "array",
               "items": {
@@ -406,7 +415,9 @@
             "min": { "type": "number" },
             "max": { "type": "number" },
             "step": { "type": "number" },
-            "placeholder": { "type": "string" }
+            "placeholder": { "type": "string" },
+            "maxItems": { "type": "integer", "minimum": 1, "maximum": 20 },
+            "maxLength": { "type": "integer", "minimum": 1, "maximum": 280 }
           }
         },
         "reset": {
