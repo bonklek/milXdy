@@ -402,7 +402,7 @@ posting capabilities.
 
 An app or feature can declare `replyAction` to open its own reviewed local
 panel after an explicit click on X's Reply control. The platform owns the X
-control, below-control anchoring, scroll/Escape/outside-click dismissal, focus
+control, below-control anchoring, scroll tracking, Escape/outside-click dismissal, focus
 return, and the only native-composer operation. The package owns all visible
 rows, labels, icons, and styling inside the isolated panel.
 
@@ -428,8 +428,8 @@ or mutate X's DOM, caret, composer content, media, or posting controls.
 The package should render its own **Send a reply** row and invoke
 `openNativeReply()`. It may render its own artwork for template rows and call
 `selectTemplate(id)` only from an explicit user gesture. The platform does not
-ship a generic quick-reply menu or iconography. Reply panels close on scroll so
-they cannot detach from the reply control that invoked them.
+ship a generic quick-reply menu or iconography. Reply panels remain anchored
+below their invoking Reply control as its post scrolls.
 
 ### Package To Custom Build
 
