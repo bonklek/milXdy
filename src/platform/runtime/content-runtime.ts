@@ -1521,6 +1521,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function waitForReplyComposerText(text: string, { sendAfterInsert = false }: { sendAfterInsert?: boolean } = {}): void {
     let inserted = false;
     let insertionAttempted = false;
+    let verificationFrames = 0;
     let submitted = false;
     let attempts = 0;
     let observer: MutationObserver | null = null;
@@ -1555,12 +1556,29 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (normalizedText(editor.innerText || editor.textContent || "")) return false;
       insertionAttempted = true;
       editor.focus();
-      if (!document.execCommand("insertText", false, text)) return false;
-      // Do not retry a completed edit. A second insertion can create a
-      // duplicated literal while X is reconciling its Draft editor.
-      if (normalizedText(editor.innerText || editor.textContent || "") !== normalizedText(text)) return false;
-      inserted = true;
-      if (sendAfterInsert) window.requestAnimationFrame(() => submitWhenReady(editor));
+      // X's reply composer is DraftJS. `execCommand("insertText")` changes
+      // the visible contenteditable DOM but can bypass DraftJS state, leaving
+      // an undeletable visual artifact and a disabled Reply button. Send the
+      // same beforeinput contract X receives from a real text gesture, then
+      // verify that its controlled editor rendered the exact declared value.
+      editor.dispatchEvent(new InputEvent("beforeinput", {
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+        data: text,
+        inputType: "insertText",
+      }));
+      const verifyControlledInsertion = () => {
+        if (normalizedText(editor.innerText || editor.textContent || "") === normalizedText(text)) {
+          inserted = true;
+          if (sendAfterInsert) window.requestAnimationFrame(() => submitWhenReady(editor));
+          return;
+        }
+        // State updates can render on the following animation frame. Do not
+        // mutate the DOM or dispatch a second insertion while waiting.
+        if (++verificationFrames < 30) window.requestAnimationFrame(verifyControlledInsertion);
+      };
+      window.requestAnimationFrame(verifyControlledInsertion);
       return true;
     };
     if (tryInsert()) return;
