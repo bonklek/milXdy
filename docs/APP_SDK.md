@@ -351,11 +351,19 @@ A folder or ZIP has one package root and one required `milxdy.app.json` at that 
 - `contentEntry` for the prebuilt executable `.js` or `.mjs` content bundle, plus optional `css`
 - `defaultEnabled`, `storageKeys`, `settings`, `surfaces`, `cost`, and `loadTriggers`
 - `hub` metadata for category, descriptions, rail support/default pinning, presets, disclosure notes, remote services, local storage notes, and privacy labels
-- `package.assets` and `package.webAccessibleAssets` for icons, media, workers, WASM, HTML helpers, and other files the platform may copy or expose
+- `package.assets` and `package.webAccessibleAssets` for icons, media, workers, WASM, HTML helpers, and other shipping files the platform may copy or expose; reference material is not a shipping asset
 - `lifecycle`, `siteScopes`, `dock`, `chrome`, `permissions`, and `background` when the package uses those capabilities
 - `privacy` with permission notes, data notes, local-storage notes, privacy labels, optional remote services, and whether sensitive consent is required before enabling
 
 Package paths are package-root-relative, must not be absolute, and must not contain `..` traversal segments. Host access belongs in `permissions.hosts` and matching `siteScopes.hosts`; hidden remote services, undeclared WebSocket endpoints, and broad optional host permissions are not valid local-package defaults.
+
+The local-package validator is license-neutral: an asset declaration, hash, or
+package claim does not establish VPL eligibility or any other rights approval.
+The future official VPL catalog has a separate file-level provenance, evidence,
+and human-review process. Packages vendor only their declared shipping exports;
+they must not hot-load arbitrary remote assets at runtime. Keep reference URLs,
+screenshots, and visual research out of package asset declarations unless the
+actual file is deliberately shipped and its redistribution rights are documented.
 
 First-party build-only registry fields do not belong in `milxdy.app.json`. Keep `entryName`, `entryPoint`, CSS `source`/`target`/`targetDir`, `requiredOutputs`, and other source-build wiring inside `src/platform/app-sdk/first-party-apps.json` and `scripts/build/build-extension.mjs`. Local packages should reference the built files they contain, not the source files used to create them. The local composer copies package files as-is and does not transpile TypeScript or JSX, so `contentEntry` must point at an executable `.js` or `.mjs` module.
 
