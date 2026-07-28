@@ -433,8 +433,8 @@ The package should render its own **Send a reply** row and invoke
 `openNativeReply()`. It may render its own artwork for template rows and call
 `selectTemplate(id)` only from an explicit user gesture. The platform does not
 ship a generic quick-reply menu or iconography. Reply panels remain anchored
-below their invoking Reply control as its post scrolls, while clamping to the
-visible viewport top when that control scrolls above it.
+below their invoking Reply control as its post scrolls, while clamping below
+the active X primary-column header when that control scrolls above it.
 
 ### Package To Custom Build
 
