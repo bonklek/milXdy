@@ -12,6 +12,7 @@ import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
+import { splitExternalHandoffText } from "../app-sdk/external-handoff";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { MILXDY_ADDONS_CATALOG_URL } from "../app-sdk/addons-catalog";
@@ -1747,6 +1748,31 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
       nativeDrafts.click();
     };
+    const launchExternalHandoff = async (id: string): Promise<{ ok: boolean; error?: string }> => {
+      if (!navigator.userActivation?.isActive) {
+        return { ok: false, error: "Open a maker directly from its control." };
+      }
+      const handoff = (app.externalHandoffs || []).find((candidate) => candidate.id === id);
+      if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
+      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
+        .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
+      const split = splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
+      if (!split?.topText && !split?.bottomText) return { ok: false, error: "Write a draft before opening a maker." };
+      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string }>({
+        type: "milxdy:externalHandoff",
+        appId: app.id,
+        handoffId: handoff.id,
+        adapter: handoff.adapter,
+        target: handoff.target,
+        ...split,
+      });
+      const result = response && response.ok === true
+        ? { ok: true }
+        : { ok: false, error: response?.error || "The maker handoff could not start." };
+      recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
+      return result;
+    };
     activeComposerActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
@@ -1760,6 +1786,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         signal: controller.signal,
         close,
         openNativeDrafts,
+        externalHandoffs: (app.externalHandoffs || []).map(({ id, label }) => ({ id, label })),
+        launchExternalHandoff,
       }));
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
       panelSizeObserver.observe(surface);

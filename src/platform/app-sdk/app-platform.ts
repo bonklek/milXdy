@@ -51,6 +51,13 @@ export type AppReplyActionTemplate = {
 export type AppReplyAction = {
   templates: AppReplyActionTemplate[];
 };
+/** A reviewed host adapter; packages never receive X draft text or remote DOM access. */
+export type AppExternalHandoff = {
+  id: string;
+  label: string;
+  adapter: string;
+  target: string;
+};
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
 export type MilxdyPackageAssetKind = "icon" | "image" | "style" | "font" | "audio" | "worker" | "wasm" | "html" | "other";
@@ -157,6 +164,7 @@ export type MilxdyAppManifest = {
   };
   composerAction?: AppComposerAction;
   replyAction?: AppReplyAction;
+  externalHandoffs?: AppExternalHandoff[];
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];
@@ -284,6 +292,12 @@ export type MilxdyComposerActionContext = {
   close: () => void;
   /** Opens X's native drafts surface after an explicit package control click. */
   openNativeDrafts: () => void;
+  /**
+   * Host-filtered declarations. A package may start one only from an explicit
+   * click; the host reads, splits, and transfers the X draft itself.
+   */
+  externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
+  launchExternalHandoff: (id: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 /**

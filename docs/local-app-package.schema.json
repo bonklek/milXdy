@@ -131,6 +131,21 @@
         }
       }
     },
+    "externalHandoffs": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "adapter", "target"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "adapter": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" }
+        }
+      }
+    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
