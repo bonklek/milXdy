@@ -58,10 +58,11 @@ emitted.
 An approved external handoff is also explicit and one-time. When a user clicks
 a declared maker control, milXdy may read the active X draft only for that
 gesture, split it into the reviewed maker's caption fields, and open that maker
-in an inactive tab. The package itself does not receive the draft or remote-page
-access. No handoff may automatically upload generated media back to X or post
-on the user's behalf; a changed destination, unavailable controls, or missing
-consent stops the transfer.
+in an inactive tab. The package itself does not receive the draft, image bytes,
+or remote-page access. A reviewed host adapter may return the generated PNG and
+attach it to that same active X composer; this never posts on the user's behalf.
+A changed destination, unavailable controls, invalid image, or missing consent
+stops the transfer.
 
 ## RemiNet And Beetol Login
 

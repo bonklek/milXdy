@@ -418,8 +418,11 @@ midpoint, opens the reviewed destination in an inactive tab, and applies the
 adapter's fixed field mapping. The package never receives the draft text, X
 nodes, remote-page nodes, tab identity, or a raw URL. Unsupported adapters,
 changed remote controls, empty drafts, and navigation away from the reviewed
-origin fail closed. This contract does not return media to X, upload a file, or
-send a post.
+origin fail closed. A reviewed adapter may return its generated PNG only to the
+host, which may attach it to the same active X composer from the original
+explicit click. The package never receives image bytes or X/maker DOM access;
+there is no raw upload API, no attachment to another composer, and no post is
+sent automatically.
 
 ```json
 "externalHandoffs": [

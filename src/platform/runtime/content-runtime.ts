@@ -1759,7 +1759,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
       const split = splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
       if (!split?.topText && !split?.bottomText) return { ok: false, error: "Write a draft before opening a maker." };
-      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string }>({
+      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string }>({
         type: "milxdy:externalHandoff",
         appId: app.id,
         handoffId: handoff.id,
@@ -1768,10 +1768,33 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         ...split,
       });
       const result = response && response.ok === true
-        ? { ok: true }
+        ? await attachExternalHandoffImage(composerScope, response.imageDataUrl)
         : { ok: false, error: response?.error || "The maker handoff could not start." };
       recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
       return result;
+    };
+    const attachExternalHandoffImage = async (composerScope: ParentNode, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
+      if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,")) {
+        return { ok: false, error: "The maker did not return a PNG." };
+      }
+      try {
+        const blob = await fetch(imageDataUrl).then((response) => response.blob());
+        if (blob.type !== "image/png" || blob.size === 0 || blob.size > 10 * 1024 * 1024) {
+          return { ok: false, error: "The generated image is unavailable or too large." };
+        }
+        const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
+          .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
+        if (!input) return { ok: false, error: "X's media control is unavailable." };
+        const transfer = new DataTransfer();
+        transfer.items.add(new File([blob], "remilia-maker.png", { type: "image/png" }));
+        input.files = transfer.files;
+        if (input.files?.length !== 1) return { ok: false, error: "X's media control rejected the generated image." };
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        return { ok: true };
+      } catch (error) {
+        return { ok: false, error: errorMessage(error) };
+      }
     };
     activeComposerActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
