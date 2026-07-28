@@ -83,7 +83,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
   requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
-  requireIncludes(contentRuntime, "Math.max(window.scrollY + 8, rect.bottom + window.scrollY + 8)", "Reply-action panels must remain below the visible viewport top while tracking a scrolling post");
+  requireIncludes(contentRuntime, "window.scrollY + stickyHeaderBottom", "Reply-action panels must stay below X's active sticky primary-column header");
   requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
   requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
   requireIncludes(contentRuntime, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
