@@ -1698,14 +1698,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString());
   }
 
-  let activeComposerAction: { appId: string; button: HTMLButtonElement; close: () => void } | null = null;
+  let activeComposerAction: { appId: string; button: HTMLButtonElement; panel: HTMLElement; close: () => void } | null = null;
 
   async function openComposerAction(app: MilxdyAppManifest, button: HTMLButtonElement): Promise<void> {
     // A repeated activation of the same action is a toggle, not a close/open
     // cycle. This is host lifecycle behavior shared by every package.
     if (activeComposerAction?.appId === app.id && activeComposerAction.button === button) {
+      if (activeComposerAction.panel.isConnected) {
+        activeComposerAction.close();
+        return;
+      }
+      // X may reconcile a transient composer and detach the panel first. The
+      // host must clean that stale record before treating this as a new open.
       activeComposerAction.close();
-      return;
     }
     activeComposerAction?.close();
     const module = await loadApp(app, "composerAction");
@@ -1757,7 +1762,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     };
     let panelSizeObserver: ResizeObserver | null = null;
     const close = () => {
-      if (!panel.isConnected) return;
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
@@ -1831,7 +1835,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         return { ok: false, error: errorMessage(error) };
       }
     };
-    activeComposerAction = { appId: app.id, button, close };
+    activeComposerAction = { appId: app.id, button, panel, close };
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
