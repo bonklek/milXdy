@@ -120,7 +120,8 @@
               "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
               "label": { "type": "string", "minLength": 1 },
               "text": { "type": "string" },
-              "storageKey": { "type": "string", "minLength": 1 }
+              "storageKey": { "type": "string", "minLength": 1 },
+              "sendAfterInsert": { "type": "boolean" }
             },
             "oneOf": [
               { "required": ["text"] },

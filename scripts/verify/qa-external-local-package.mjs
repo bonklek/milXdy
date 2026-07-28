@@ -17,7 +17,7 @@ try {
   manifest.loadTriggers = ["userAction"];
   manifest.siteScopes = manifest.siteScopes.map((scope) => ({ ...scope, surfaces: ["composerAction", "replyAction"] }));
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel" };
-  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply" }] };
+  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply", sendAfterInsert: true }] };
   manifest.css = [{ id: "developer-note.styles", path: "dev-note.css" }];
   manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -57,6 +57,7 @@ try {
     "staged external composer app must be compiled into the runtime app registry with its generated enablement control",
   );
   assert.match(runtimeRegistry, /replyAction:\s*\{\s*templates:/u, "staged external reply action must reach the runtime registry");
+  assert.match(runtimeRegistry, /sendAfterInsert:\s*true/u, "staged external reply action must preserve its explicit send opt-in");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");

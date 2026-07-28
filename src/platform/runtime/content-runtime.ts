@@ -1451,7 +1451,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
     const templates = (app.replyAction?.templates || []).flatMap((template) => {
       const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
-      return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text }];
+      return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text, sendAfterInsert: template.sendAfterInsert === true }];
     });
     document.body.append(panel);
     activeReplyActionClose = close;
@@ -1476,7 +1476,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           const template = templates.find((candidate) => candidate.id === id);
           if (!template) return;
           close();
-          triggerNativeReply(button, template.text);
+          triggerNativeReply(button, template.text, { sendAfterInsert: template.sendAfterInsert });
           recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: id, updatedAt: Date.now() });
         },
       }));
@@ -1487,27 +1487,52 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function triggerNativeReply(button: HTMLElement, text = ""): void {
-    if (text) waitForReplyComposerText(text);
+  function triggerNativeReply(button: HTMLElement, text = "", options: { sendAfterInsert?: boolean } = {}): void {
+    if (text) waitForReplyComposerText(text, options);
     button.dataset.milxdyNativeReply = "true";
     button.click();
   }
 
-  function waitForReplyComposerText(text: string): void {
+  function waitForReplyComposerText(text: string, { sendAfterInsert = false }: { sendAfterInsert?: boolean } = {}): void {
+    let inserted = false;
+    let submitted = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    let timeout = 0;
+    const normalizedText = (value: string) => value.replace(/\u00a0/gu, " ").trim();
+    const submitWhenReady = (editor: HTMLElement) => {
+      if (submitted) return;
+      const submit = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] [data-testid="tweetButton"]'))
+        .find((candidate) => candidate.offsetParent !== null && !candidate.disabled && candidate.getAttribute("aria-disabled") !== "true");
+      // Fail closed: never submit if X has not rendered exactly the explicit
+      // reviewed template the user chose.
+      if (!submit || normalizedText(editor.innerText || editor.textContent || "") !== normalizedText(text)) {
+        if (++attempts < 30) window.requestAnimationFrame(() => submitWhenReady(editor));
+        return;
+      }
+      submitted = true;
+      submit.click();
+    };
     const tryInsert = () => {
+      if (inserted) return true;
       const editor = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] [data-testid^="tweetTextarea_"]'))
         .find((candidate) => candidate.offsetParent !== null && candidate.isContentEditable);
       if (!editor) return false;
       editor.focus();
-      return document.execCommand("insertText", false, text);
+      if (!document.execCommand("insertText", false, text)) return false;
+      // Mutation delivery can occur again while X is creating its composer.
+      // Mark the selection consumed before any later observer callback.
+      inserted = true;
+      if (sendAfterInsert) window.requestAnimationFrame(() => submitWhenReady(editor));
+      return true;
     };
     if (tryInsert()) return;
-    const observer = new MutationObserver(() => {
+    observer = new MutationObserver(() => {
       if (!tryInsert()) return;
-      observer.disconnect();
+      observer?.disconnect();
       window.clearTimeout(timeout);
     });
-    const timeout = window.setTimeout(() => observer.disconnect(), 1500);
+    timeout = window.setTimeout(() => observer?.disconnect(), 1500);
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
 
