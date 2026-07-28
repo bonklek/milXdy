@@ -1417,20 +1417,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     shadow.append(surface);
     const positionReplyActionPanel = () => {
       const rect = button.getBoundingClientRect();
-      const primaryColumn = button.closest<HTMLElement>('[data-testid="primaryColumn"]');
-      const stickyHeaderBottom = Array.from(primaryColumn?.querySelectorAll<HTMLElement>("header, div") || [])
-        .reduce((bottom, candidate) => {
-          if (candidate.offsetParent === null) return bottom;
-          const position = window.getComputedStyle(candidate).position;
-          const candidateRect = candidate.getBoundingClientRect();
-          if ((position !== "sticky" && position !== "fixed") || candidateRect.top > 8 || candidateRect.bottom <= 8) return bottom;
-          return Math.max(bottom, candidateRect.bottom + 8);
-        }, 8);
       // The panel lives in the document flow rather than the viewport so it
-      // follows its invoking Reply control as its post scrolls. X's sticky
-      // column header reserves the visible top edge for its own controls.
+      // follows its invoking Reply control as its post scrolls and leaves the
+      // viewport with that post instead of detaching beneath a sticky header.
       panel.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, document.documentElement.scrollWidth - 300))}px`;
-      panel.style.top = `${Math.max(window.scrollY + stickyHeaderBottom, rect.bottom + window.scrollY + 8)}px`;
+      panel.style.top = `${Math.max(8, rect.bottom + window.scrollY + 8)}px`;
       panel.style.maxHeight = `${Math.max(48, window.innerHeight - Math.max(8, rect.bottom) - 16)}px`;
     };
     positionReplyActionPanel();
