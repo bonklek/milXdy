@@ -723,6 +723,7 @@ function toGeneratedRegistryApp(record) {
     path: sheet.target,
   }));
   manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  manifest.composerAction = rewriteComposerActionIcon(manifest.composerAction, record.id);
   manifest.package = {
     assets: record.files.map((file) => file.target),
     webAccessibleAssets: record.webAccessibleAssets.map((asset) => asset.target),
@@ -761,6 +762,16 @@ function rewriteDockIcon(dock, packageId) {
   return {
     ...dock,
     icon: Object.fromEntries(Object.entries(dock.icon).map(([key, value]) => [key, packageOutputPath(packageId, value)])),
+  };
+}
+
+function rewriteComposerActionIcon(action, packageId) {
+  if (!action?.icon) return action;
+  return {
+    ...action,
+    icon: typeof action.icon === "string"
+      ? packageOutputPath(packageId, action.icon)
+      : Object.fromEntries(Object.entries(action.icon).map(([key, value]) => [key, packageOutputPath(packageId, value)])),
   };
 }
 
