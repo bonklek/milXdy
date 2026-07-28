@@ -1415,18 +1415,23 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const surface = document.createElement("div");
     surface.className = "milxdy-reply-action-surface";
     shadow.append(surface);
-    const rect = button.getBoundingClientRect();
-    panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 300))}px`;
-    panel.style.top = `${Math.max(8, rect.bottom + 8)}px`;
-    panel.style.maxHeight = `${Math.max(48, window.innerHeight - rect.bottom - 16)}px`;
+    const positionReplyActionPanel = () => {
+      const rect = button.getBoundingClientRect();
+      // The panel lives in the document flow rather than the viewport so it
+      // follows its invoking Reply control as its post scrolls.
+      panel.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, document.documentElement.scrollWidth - 300))}px`;
+      panel.style.top = `${Math.max(8, rect.bottom + window.scrollY + 8)}px`;
+      panel.style.maxHeight = `${Math.max(48, window.innerHeight - Math.max(8, rect.bottom) - 16)}px`;
+    };
+    positionReplyActionPanel();
     const close = () => {
       if (!panel.isConnected) return;
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
       window.removeEventListener("keydown", dismissOnEscape, true);
-      document.removeEventListener("scroll", dismissOnViewportChange, true);
-      window.removeEventListener("resize", dismissOnViewportChange);
+      document.removeEventListener("scroll", positionReplyActionPanel, true);
+      window.removeEventListener("resize", positionReplyActionPanel);
       if (activeReplyActionClose === close) activeReplyActionClose = null;
       if (button.isConnected) button.focus({ preventScroll: true });
     };
@@ -1440,8 +1445,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.stopImmediatePropagation();
       close();
     };
-    // A fixed popover must never detach from the post that invoked it.
-    const dismissOnViewportChange = () => close();
     const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
       .filter((template) => template.storageKey)
       .map((template) => [template.storageKey!, ""]));
@@ -1456,8 +1459,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     // Window capture runs before X's document handlers and also receives keys
     // dispatched from the package panel's shadow root.
     window.addEventListener("keydown", dismissOnEscape, true);
-    document.addEventListener("scroll", dismissOnViewportChange, true);
-    window.addEventListener("resize", dismissOnViewportChange);
+    document.addEventListener("scroll", positionReplyActionPanel, true);
+    window.addEventListener("resize", positionReplyActionPanel);
     try {
       await installReplyActionPackageStyles(app, shadow);
       await Promise.resolve(module.onReplyAction({
@@ -1668,7 +1671,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(420px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 2px solid #25211d; border-radius: 8px; background: #f4f1e9; color: #1d1b19; box-shadow: 5px 5px 0 rgba(37, 33, 29, .35), 0 12px 30px rgba(0, 0, 0, .24); }
-      .milxdy-reply-action-panel { position: fixed; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
+      .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
     document.documentElement.append(style);
   }
