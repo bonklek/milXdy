@@ -400,12 +400,11 @@ posting capabilities.
 
 ### Reply actions
 
-An app or feature can declare `replyAction` to add reviewed local reply
-templates to the platform-owned menu opened by an explicit click on X's Reply
-control. The menu always retains its first **Send a reply** row, which opens
-X's normal reply flow with no inserted text. Template rows follow it in
-deterministic package/template order. Selecting one opens the native reply UI,
-types the declared local template, and never sends the reply.
+An app or feature can declare `replyAction` to open its own reviewed local
+panel after an explicit click on X's Reply control. The platform owns the X
+control, below-control anchoring, scroll/Escape/outside-click dismissal, focus
+return, and the only native-composer operation. The package owns all visible
+rows, labels, icons, and styling inside the isolated panel.
 
 ```json
 "replyAction": {
@@ -417,12 +416,20 @@ types the declared local template, and never sends the reply.
 ```
 
 Each template has an ID and label and exactly one of `text` or `storageKey`.
-The latter must be a package-declared local storage key and is hidden until it
-has a non-empty local value. Reply-action packages
+The latter must be a package-declared local storage key and is omitted from
+`context.templates` until it has a non-empty local value. Reply-action packages
 declare the `replyAction` surface, include `"userAction"` in `loadTriggers`,
-and disclose that a user-selected local template is typed into X's native reply
-editor. Package code receives no reply callback and must not inspect or mutate
-X's DOM, caret, composer content, media, or posting controls.
+and export `onReplyAction(context)`. The callback receives only the resolved
+template IDs/labels plus `openNativeReply()` and `selectTemplate(id)`. The
+latter accepts only a currently declared template ID, opens X's native reply
+editor, types that local value, and never sends. Package code must not inspect
+or mutate X's DOM, caret, composer content, media, or posting controls.
+
+The package should render its own **Send a reply** row and invoke
+`openNativeReply()`. It may render its own artwork for template rows and call
+`selectTemplate(id)` only from an explicit user gesture. The platform does not
+ship a generic quick-reply menu or iconography. Reply panels close on scroll so
+they cannot detach from the reply control that invoked them.
 
 ### Package To Custom Build
 
