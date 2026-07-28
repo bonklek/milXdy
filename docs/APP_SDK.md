@@ -435,6 +435,8 @@ The package should render its own **Send a reply** row and invoke
 ship a generic quick-reply menu or iconography. Reply panels remain anchored
 below their invoking Reply control as its post scrolls and leave the viewport
 with that post when it scrolls away; they are not pinned to a viewport edge.
+When the Reply control moves under X's sticky column header, its still-anchored
+panel is hidden rather than drawn through the header.
 
 ### Package To Custom Build
 
