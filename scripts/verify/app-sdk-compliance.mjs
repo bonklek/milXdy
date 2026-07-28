@@ -68,6 +68,7 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
+  requireIncludes(appPlatform, "openNativeDrafts: () => void", "Composer actions must expose only the host-mediated native Drafts handoff");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
   requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
   requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
@@ -83,6 +84,8 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "const openBelow = spaceBelow >= naturalHeight || spaceBelow >= spaceAbove;", "Composer panels must choose the viewport side with enough reachable space");
   requireIncludes(contentRuntime, "panel.dataset.placement = openBelow ? \"bottom\" : \"top\";", "Composer panels must record their responsive above/below placement");
   requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);", "Composer panels must adapt when package content changes size");
+  requireIncludes(contentRuntime, "const openNativeDrafts = () => {", "Composer packages must use the host-owned X Drafts handoff");
+  requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");

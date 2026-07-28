@@ -394,9 +394,10 @@ not style the X document, and the runtime never loads undeclared package files.
 
 Composer-action packages declare `"userAction"` in `loadTriggers` and export
 `onComposerAction(context)`. `context` provides a platform-owned `panel`, a
-`kind` of `post` or `reply`, an abort `signal`, and `close()`. This surface does
-not provide composer text, selection/caret access, media handoff, upload, or
-posting capabilities. The host keeps the panel within the current viewport:
+`kind` of `post` or `reply`, an abort `signal`, `close()`, and
+`openNativeDrafts()`. The latter opens X's own Drafts UI only after an explicit
+package-control click; it does not expose draft contents, selection/caret
+access, media handoff, upload, or posting capabilities. The host keeps the panel within the current viewport:
 it opens below its action when that fits, flips above when that side has more
 reachable room, and constrains only the host container when neither side can
 fit the package content. It reevaluates placement on window, scroll, and

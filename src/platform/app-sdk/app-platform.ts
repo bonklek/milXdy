@@ -282,6 +282,8 @@ export type MilxdyComposerActionContext = {
   panel: HTMLElement;
   signal: AbortSignal;
   close: () => void;
+  /** Opens X's native drafts surface after an explicit package control click. */
+  openNativeDrafts: () => void;
 };
 
 /**
