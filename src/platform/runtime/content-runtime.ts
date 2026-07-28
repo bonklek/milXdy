@@ -1638,11 +1638,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           button.type = "button";
           button.dataset.appId = app.id;
           button.className = "milxdy-composer-action";
-          button.addEventListener("click", () => void openComposerAction(app, button!));
+          // This is an extension-owned control mounted in X's delegated
+          // toolbar. Keep its user gesture out of X's toolbar handlers so a
+          // reconciliation cannot consume the package action before it opens.
+          button.addEventListener("click", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            void openComposerAction(app, button!);
+          });
           slot.append(button);
         }
         button.title = action.label;
         button.setAttribute("aria-label", action.label);
+        button.setAttribute("aria-haspopup", "dialog");
+        button.setAttribute("aria-expanded", String(
+          activeComposerAction?.button === button && activeComposerAction.panel.isConnected,
+        ));
         button.textContent = action.icon ? "" : action.label.slice(0, 1).toUpperCase();
         if (action.icon) {
           const icon = document.createElement("img");
@@ -1733,6 +1744,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     shadow.append(surface);
     panel.style.visibility = "hidden";
     document.body.append(panel);
+    button.setAttribute("aria-expanded", "true");
     let resizeFrame = 0;
     const positionComposerActionPanel = () => {
       const gap = 8;
@@ -1774,6 +1786,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       panelSizeObserver?.disconnect();
       window.cancelAnimationFrame(resizeFrame);
       if (activeComposerAction?.close === close) activeComposerAction = null;
+      button.setAttribute("aria-expanded", "false");
       button.focus();
     };
     const dismiss = (event: PointerEvent) => {
@@ -1901,6 +1914,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: 4px; vertical-align: middle; }
       .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
+      .milxdy-composer-action[aria-expanded="true"] { background: rgba(29, 155, 240, .12); }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
       .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
