@@ -853,6 +853,7 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 
 .milxdy-chat-message:hover .milxdy-chat-message-actions,
 .milxdy-chat-message:focus-within .milxdy-chat-message-actions,
+.milxdy-chat-message-actions[data-open="true"],
 .milxdy-chat-message-actions:hover {
   pointer-events: auto;
   display: flex;
