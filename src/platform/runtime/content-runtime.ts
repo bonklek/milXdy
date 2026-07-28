@@ -761,9 +761,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function observeAppIconTheme(): void {
     const update = () => {
       const nextTheme = currentAppIconTheme();
-      if (state.iconTheme === nextTheme) return;
-      state.iconTheme = nextTheme;
-      updateThemedAppIcons();
+      const iconThemeChanged = state.iconTheme !== nextTheme;
+      const hubThemeChanged = state.hubPanelRoot?.dataset.theme !== currentHubTheme();
+      if (!iconThemeChanged && !hubThemeChanged) return;
+      if (iconThemeChanged) {
+        state.iconTheme = nextTheme;
+        updateThemedAppIcons();
+      }
       renderHubPanel();
     };
     const observer = new MutationObserver(update);
@@ -2182,6 +2186,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (!root?.isConnected) return;
     const dockSide = getOverlayDock().getSide();
     root.dataset.side = dockSide;
+    root.dataset.theme = currentHubTheme();
     root.style.setProperty("--milxdy-overlay-app-transform-origin", dockSide === "right" ? "top right" : "top left");
     root.innerHTML = "";
 
@@ -2745,6 +2750,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     card.dataset.railApp = String(isHubRailApp(app));
     card.dataset.pinned = String(isRailPinned(app));
     card.dataset.expanded = String(state.hubExpandedApps.has(app.id));
+    const lifecycle = appHubLifecycle(app);
+    card.dataset.lifecycle = lifecycle.state;
 
     const icon = document.createElement("span");
     icon.className = "milxdy-app-hub-icon";
@@ -2775,9 +2782,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     const summaryTitle = document.createElement("strong");
     summaryTitle.textContent = app.name;
+    summaryTitle.title = app.name;
+    const summaryText = document.createElement("span");
+    summaryText.className = "milxdy-app-hub-card-title";
+    const lifecycleBadge = document.createElement("span");
+    lifecycleBadge.className = "milxdy-app-hub-lifecycle";
+    lifecycleBadge.dataset.state = lifecycle.state;
+    lifecycleBadge.textContent = lifecycle.label;
+    summaryText.append(summaryTitle, lifecycleBadge);
     const expandIcon = document.createElement("span");
     expandIcon.className = "milxdy-app-hub-expand-icon";
-    summary.append(icon, summaryTitle, expandIcon);
+    summary.append(icon, summaryText, expandIcon);
     summary.addEventListener("click", () => {
       if (state.hubExpandedApps.has(app.id)) state.hubExpandedApps.delete(app.id);
       else state.hubExpandedApps.add(app.id);
@@ -2794,7 +2809,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const notes = appHubMetadataNotes(app);
     const runtime = document.createElement("span");
     runtime.className = "milxdy-app-hub-runtime-state";
-    runtime.textContent = appRuntimeSummary(app);
+    runtime.textContent = `${lifecycle.detail} | ${appRuntimeSummary(app)}`;
     if (enableControl) body.append(enableControl);
     body.append(description, meta, notes);
     if (app.available === false && app.unavailableReason) {
@@ -3622,6 +3637,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.loading.has(app.id)) parts.push("import:loading");
     if (state.loaded.has(app.id)) parts.push("import:loaded");
     return parts.join(" | ");
+  }
+
+  function appHubLifecycle(app: MilxdyAppManifest): { state: string; label: string; detail: string } {
+    if (app.available === false) return { state: "unavailable", label: "Unavailable", detail: app.unavailableReason || "Unavailable in this build" };
+    if (!state.enabledApps.has(app.id)) return { state: "disabled", label: "Off", detail: "Disabled" };
+    if (state.loading.has(app.id)) return { state: "loading", label: "Loading", detail: "Loading package" };
+    const diagnostic = state.diagnostics.get(app.id);
+    if (diagnostic?.state === "failed") return { state: "failed", label: "Needs attention", detail: diagnostic.error || "Package failed to load" };
+    if (state.loaded.has(app.id)) return { state: "ready", label: "Ready", detail: "Loaded" };
+    if (app.composerAction && app.replyAction) return { state: "ready", label: "Ready in composer + reply", detail: "Enabled; loads on a composer or reply action" };
+    if (app.composerAction) return { state: "ready", label: "Ready in composer", detail: "Enabled; loads on a composer action" };
+    if (app.replyAction) return { state: "ready", label: "Ready on reply", detail: "Enabled; loads on a reply action" };
+    return { state: "ready", label: "Enabled", detail: "Enabled; waiting for its declared trigger" };
   }
 
   function appEnableBlockedByPerformance(app: MilxdyAppManifest): string | null {
@@ -4497,6 +4525,7 @@ function injectTweetScaffoldStyles(): void {
       --milxdy-hub-switch-on: #0f6b52;
       --milxdy-hub-switch-on-border: #69e0af;
       --milxdy-hub-switch-on-text: #ffffff;
+      --milxdy-hub-danger: #ff9a95;
       position: fixed;
       top: 16px;
       bottom: 136px;
@@ -4516,6 +4545,54 @@ function injectTweetScaffoldStyles(): void {
         inset -2px -2px 0 var(--milxdy-hub-border-dark),
         8px 8px 0 rgba(0, 0, 0, 0.34);
       font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    #${HUB_PANEL_ID}[data-theme="light"] {
+      --milxdy-hub-face: #f4f1e9;
+      --milxdy-hub-panel: #fffdf7;
+      --milxdy-hub-list: #ebe6da;
+      --milxdy-hub-input: #ffffff;
+      --milxdy-hub-border-light: #ffffff;
+      --milxdy-hub-border-dark: #756e64;
+      --milxdy-hub-outline: #514b43;
+      --milxdy-hub-title: #1f5f92;
+      --milxdy-hub-title-text: #ffffff;
+      --milxdy-hub-button: #f7f3e8;
+      --milxdy-hub-row: #fffdf7;
+      --milxdy-hub-row-hover: #fff3c5;
+      --milxdy-hub-row-line: #c9c1b7;
+      --milxdy-hub-text: #1d1b19;
+      --milxdy-hub-muted: #625c54;
+      --milxdy-hub-soft: #47423c;
+      --milxdy-hub-accent: #075f9f;
+      --milxdy-hub-button-border: #8c8478;
+      --milxdy-hub-switch-on: #08724d;
+      --milxdy-hub-switch-on-border: #07583d;
+      --milxdy-hub-switch-on-text: #ffffff;
+      --milxdy-hub-danger: #a51212;
+    }
+    #${HUB_PANEL_ID}[data-theme="dim"] {
+      --milxdy-hub-face: #182a3a;
+      --milxdy-hub-panel: #132331;
+      --milxdy-hub-list: #0d1b27;
+      --milxdy-hub-input: #10202e;
+      --milxdy-hub-border-light: #42627a;
+      --milxdy-hub-border-dark: #08141e;
+      --milxdy-hub-outline: #a48b46;
+      --milxdy-hub-title: #234f77;
+      --milxdy-hub-title-text: #fff3c5;
+      --milxdy-hub-button: #1c3447;
+      --milxdy-hub-row: #132331;
+      --milxdy-hub-row-hover: #1c384b;
+      --milxdy-hub-row-line: rgba(215, 186, 99, 0.46);
+      --milxdy-hub-text: #f2ecd5;
+      --milxdy-hub-muted: rgba(242, 236, 213, 0.67);
+      --milxdy-hub-soft: rgba(242, 236, 213, 0.83);
+      --milxdy-hub-accent: #ffd36c;
+      --milxdy-hub-button-border: rgba(215, 186, 99, 0.58);
+      --milxdy-hub-switch-on: #0d7c5a;
+      --milxdy-hub-switch-on-border: #70e0af;
+      --milxdy-hub-switch-on-text: #ffffff;
+      --milxdy-hub-danger: #ffaaa3;
     }
     #${HUB_PANEL_ID}[data-side="left"] { left: 76px; }
     #${HUB_PANEL_ID}[data-side="right"] { right: 76px; }
@@ -5038,6 +5115,11 @@ function injectTweetScaffoldStyles(): void {
       color: var(--milxdy-hub-accent);
       cursor: grabbing;
     }
+    .milxdy-app-hub-card-title {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+    }
     .milxdy-app-hub-card-summary strong {
       min-width: 0;
       overflow: hidden;
@@ -5047,6 +5129,26 @@ function injectTweetScaffoldStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+    .milxdy-app-hub-card[data-rail-app="false"] .milxdy-app-hub-card-summary strong {
+      overflow: visible;
+      text-overflow: clip;
+      white-space: normal;
+    }
+    .milxdy-app-hub-lifecycle {
+      width: fit-content;
+      max-width: 100%;
+      overflow: hidden;
+      color: var(--milxdy-hub-muted);
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1.2;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .milxdy-app-hub-lifecycle[data-state="ready"] { color: var(--milxdy-hub-accent); }
+    .milxdy-app-hub-lifecycle[data-state="failed"],
+    .milxdy-app-hub-lifecycle[data-state="unavailable"] { color: var(--milxdy-hub-danger); }
+    .milxdy-app-hub-lifecycle[data-state="loading"] { color: var(--milxdy-hub-soft); }
     .milxdy-app-hub-expand-icon {
       position: relative;
       display: inline-grid;
@@ -5571,6 +5673,16 @@ function currentAppIconTheme(): "light" | "dark" {
   if (xTheme === "dark" || xTheme === "dim" || settingsTheme === "dark") return "dark";
   if (xTheme === "light" || settingsTheme === "light") return "light";
   if (root.style.colorScheme === "dark") return "dark";
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+function currentHubTheme(): "light" | "dim" | "dark" {
+  const root = document.documentElement;
+  const xTheme = root.dataset.milxdyXTheme;
+  const settingsTheme = root.dataset.milxdySettingsTheme;
+  if (settingsTheme === "light" || xTheme === "light") return "light";
+  if (xTheme === "dim") return "dim";
+  if (settingsTheme === "dark" || xTheme === "dark" || root.style.colorScheme === "dark") return "dark";
   return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
