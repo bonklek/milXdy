@@ -1399,8 +1399,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     menu.setAttribute("aria-label", "Reply options");
     const rect = button.getBoundingClientRect();
     menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 300))}px`;
-    menu.style.top = `${Math.max(8, rect.top - 8)}px`;
-    menu.style.transform = "translateY(-100%)";
+    menu.style.top = `${Math.max(8, rect.bottom + 8)}px`;
+    menu.style.maxHeight = `${Math.max(48, window.innerHeight - rect.bottom - 16)}px`;
     const close = () => {
       if (!menu.isConnected) return;
       menu.remove();
@@ -1418,11 +1418,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.preventDefault();
       close();
     };
-    const nativeReply = document.createElement("button");
-    nativeReply.type = "button";
-    nativeReply.className = "milxdy-reply-action-menu-row";
-    nativeReply.setAttribute("role", "menuitem");
-    nativeReply.textContent = "↩  Send a reply";
+    const nativeReply = replyActionMenuRow("Send a reply", false);
     nativeReply.addEventListener("click", () => {
       close();
       triggerNativeReply(button);
@@ -1437,11 +1433,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
         // A custom local setting becomes an option only after the user has set it.
         if (template.storageKey && !text.trim()) continue;
-        const row = document.createElement("button");
-        row.type = "button";
-        row.className = "milxdy-reply-action-menu-row";
-        row.setAttribute("role", "menuitem");
-        row.textContent = template.label;
+        const row = replyActionMenuRow(template.label, true);
         row.addEventListener("click", () => {
           close();
           triggerNativeReply(button, text);
@@ -1455,6 +1447,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismissOnEscape, true);
     nativeReply.focus();
+  }
+
+  function replyActionMenuRow(label: string, quickReply: boolean): HTMLButtonElement {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "milxdy-reply-action-menu-row";
+    row.setAttribute("role", "menuitem");
+    const icon = document.createElement("span");
+    icon.className = "milxdy-reply-action-menu-icon";
+    icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "↩";
+    if (quickReply) {
+      const bolt = document.createElement("span");
+      bolt.className = "milxdy-reply-action-menu-bolt";
+      bolt.textContent = "ϟ";
+      icon.append(bolt);
+      row.dataset.quickReply = "true";
+    }
+    const text = document.createElement("span");
+    text.textContent = label;
+    row.append(icon, text);
+    return row;
   }
 
   function triggerNativeReply(button: HTMLElement, text = ""): void {
@@ -1649,10 +1663,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const style = document.createElement("style");
     style.id = "milxdy-reply-action-styles";
     style.textContent = `
-      .milxdy-reply-action-menu { position: fixed; z-index: 2147483646; display: grid; min-width: 236px; padding: 5px; border: 2px solid #25211d; border-radius: 6px; background: #f4f1e9; box-shadow: 4px 4px 0 rgba(37, 33, 29, .35), 0 10px 26px rgba(0, 0, 0, .24); }
-      .milxdy-reply-action-menu-row { display: block; min-height: 38px; padding: 8px 10px; border: 0; border-bottom: 1px solid #c9c1b7; background: transparent; color: #1d1b19; cursor: pointer; font: 700 13px/1.2 Arial, Helvetica, sans-serif; text-align: left; }
+      .milxdy-reply-action-menu { position: fixed; z-index: 2147483646; display: grid; min-width: 236px; max-width: calc(100vw - 16px); overflow: auto; padding: 5px; border: 2px solid #25211d; border-radius: 6px; background: #f4f1e9; box-shadow: 4px 4px 0 rgba(37, 33, 29, .35), 0 10px 26px rgba(0, 0, 0, .24); }
+      .milxdy-reply-action-menu-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 7px; min-height: 38px; padding: 8px 10px; border: 0; border-bottom: 1px solid #c9c1b7; background: transparent; color: #1d1b19; cursor: pointer; font: 700 13px/1.2 Arial, Helvetica, sans-serif; text-align: left; }
       .milxdy-reply-action-menu-row:last-child { border-bottom: 0; }
       .milxdy-reply-action-menu-row:hover, .milxdy-reply-action-menu-row:focus-visible { background: #fff3c5; color: #075f9f; outline: 2px solid #2483c5; outline-offset: -2px; }
+      .milxdy-reply-action-menu-icon { position: relative; display: inline-grid; width: 20px; height: 20px; place-items: center; color: currentColor; font: 700 19px/1 system-ui, sans-serif; }
+      .milxdy-reply-action-menu-bolt { position: absolute; top: -5px; right: -3px; color: #c48a00; font: 900 13px/1 system-ui, sans-serif; text-shadow: 0 1px 0 #fff3c5; }
+      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu { border: 1px solid #cfd9df; border-radius: 4px; background: #ffffff; box-shadow: 0 6px 18px rgba(15, 20, 25, .16); }
+      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row { border-bottom-color: #eff3f4; color: #536471; font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row:hover, html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row:focus-visible { background: #f7f9f9; color: #0f1419; outline-color: #1d9bf0; }
+      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-icon { color: #8299a7; }
+      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-bolt { color: #aebdc6; text-shadow: 0 1px 0 #ffffff; }
     `;
     document.documentElement.append(style);
   }
