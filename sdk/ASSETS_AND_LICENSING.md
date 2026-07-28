@@ -22,3 +22,11 @@ Before review:
 Independently authored packages retain their own licensing obligations. Package
 acceptance, composition, or static scanning is not legal approval and does not
 transfer copyright or trademark rights.
+
+This general package policy is license-neutral. Declaring an asset, supplying a
+hash, or calling material VPL does not admit it to any official VPL catalog;
+that future catalog requires separate file-level provenance evidence and human
+review. Treat visual URLs and screenshots as reference material, not package
+assets, unless the exact file is an intentionally declared shipping export.
+Packages vendor those declared files into the reviewed build and must not
+hot-load arbitrary remote assets at runtime.
