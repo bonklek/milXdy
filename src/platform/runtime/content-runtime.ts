@@ -1654,10 +1654,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return null;
   }
 
-  let activeComposerActionClose: (() => void) | null = null;
+  let activeComposerAction: { appId: string; button: HTMLButtonElement; close: () => void } | null = null;
 
   async function openComposerAction(app: MilxdyAppManifest, button: HTMLButtonElement): Promise<void> {
-    activeComposerActionClose?.();
+    // A repeated activation of the same action is a toggle, not a close/open
+    // cycle. This is host lifecycle behavior shared by every package.
+    if (activeComposerAction?.appId === app.id && activeComposerAction.button === button) {
+      activeComposerAction.close();
+      return;
+    }
+    activeComposerAction?.close();
     const module = await loadApp(app, "composerAction");
     if (!module?.onComposerAction) {
       recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "Package declares composerAction but does not export onComposerAction" });
@@ -1716,7 +1722,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       window.removeEventListener("resize", scheduleComposerActionPosition);
       panelSizeObserver?.disconnect();
       window.cancelAnimationFrame(resizeFrame);
-      if (activeComposerActionClose === close) activeComposerActionClose = null;
+      if (activeComposerAction?.close === close) activeComposerAction = null;
       button.focus();
     };
     const dismiss = (event: PointerEvent) => {
@@ -1796,7 +1802,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         return { ok: false, error: errorMessage(error) };
       }
     };
-    activeComposerActionClose = close;
+    activeComposerAction = { appId: app.id, button, close };
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
@@ -1822,7 +1828,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function closeComposerActionPanel(): void {
-    activeComposerActionClose?.();
+    activeComposerAction?.close();
   }
 
   async function installComposerActionPackageStyles(app: MilxdyAppManifest, shadow: ShadowRoot): Promise<void> {

@@ -118,6 +118,7 @@ function verifyPlatformContract() {
   requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
   requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
+  requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
 }
 
 function verifySdkVersionSource() {
