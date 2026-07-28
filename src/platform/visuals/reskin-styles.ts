@@ -1416,6 +1416,15 @@ export const RESKIN_CSS = `
     width: 100% !important;
   }
 
+  /* Beat the inline-media cap while X promotes this video into the fullscreen layer. */
+  html[data-milxdy-reskin-profile="max"]:not([data-milxdy-visual-max-media-height="0"]) article [data-testid="videoPlayer"] video:is(:fullscreen, :-webkit-full-screen),
+  html[data-milxdy-reskin-profile="moderate"]:not([data-milxdy-visual-max-media-height="0"]) article [data-testid="videoPlayer"] video:is(:fullscreen, :-webkit-full-screen) {
+    height: 100vh !important;
+    max-height: none !important;
+    max-width: none !important;
+    width: 100vw !important;
+  }
+
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-pfp-shape="circle"] [data-testid="Tweet-User-Avatar"],
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-pfp-shape="circle"] [data-testid="Tweet-User-Avatar"] *,
   html[data-milxdy-reskin-profile="max"][data-milxdy-visual-pfp-shape="circle"] [data-testid="UserAvatar-Container-unknown"],
