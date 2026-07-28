@@ -55,6 +55,14 @@ package surfaces require a consent acknowledgement, and sensitive direct
 extension API use requires a reviewed exception before a local build plan can be
 emitted.
 
+An approved external handoff is also explicit and one-time. When a user clicks
+a declared maker control, milXdy may read the active X draft only for that
+gesture, split it into the reviewed maker's caption fields, and open that maker
+in an inactive tab. The package itself does not receive the draft or remote-page
+access. No handoff may automatically upload generated media back to X or post
+on the user's behalf; a changed destination, unavailable controls, or missing
+consent stops the transfer.
+
 ## RemiNet And Beetol Login
 
 - milXdy uses the user's RemiliaNET browser session for connector login. Direct username/password login is no longer supported by RemiliaNET for this extension path.

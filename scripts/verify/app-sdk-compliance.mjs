@@ -69,6 +69,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
   requireIncludes(appPlatform, "openNativeDrafts: () => void", "Composer actions must expose only the host-mediated native Drafts handoff");
+  requireIncludes(appPlatform, "externalHandoffs?: AppExternalHandoff[]", "App SDK must expose declared external handoffs");
+  requireIncludes(appPlatform, "launchExternalHandoff:", "Composer actions must expose the host-mediated external handoff callback");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
   requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
   requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
@@ -87,6 +89,8 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "const openNativeDrafts = () => {", "Composer packages must use the host-owned X Drafts handoff");
   requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
   requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
+  requireIncludes(contentRuntime, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
+  requireIncludes(contentRuntime, 'type: "milxdy:externalHandoff"', "External handoffs must use a host-routed background request");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
@@ -107,6 +111,9 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "function appHubLifecycle", "Apps & Features must present package lifecycle state without package-owned UI code");
   requireIncludes(contentRuntime, "Ready in composer + reply", "Composer/reply packages must receive a generic ready lifecycle state");
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
+  requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
+  requireIncludes(background, "populateRemiliaMaker", "External maker handoffs must be host-owned adapter code");
+  requireIncludes(background, "active: false", "Reviewed maker handoffs must open inactive tabs");
 }
 
 function verifySdkVersionSource() {

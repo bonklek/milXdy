@@ -51,6 +51,8 @@ import {
 } from "../../platform/background/update-check";
 import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
+import appRegistry from "../../platform/app-sdk/first-party-apps.json";
+import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -85,6 +87,8 @@ type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
   url: string;
 };
+
+type ExternalHandoffMessage = ExternalHandoffRequest & { type: "milxdy:externalHandoff" };
 
 const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
@@ -175,6 +179,7 @@ const WIKI_SIDEBAR_NAVIGATION_RULES: readonly UrlAllowRule[] = [
   { origin: "https://wiki.remilia.org" },
   { origin: "https://remilia.wiki" },
 ];
+const EXTERNAL_HANDOFF_TAB_TIMEOUT_MS = 15_000;
 
 setupBackgroundMessageRouter([
   {
@@ -201,6 +206,11 @@ setupBackgroundMessageRouter([
     type: "milxdy:fetchImageDataUrl",
     matches: isFetchImageDataUrlMessage,
     handle: (message, sender) => fetchImageDataUrlForSender(message.url, sender),
+  },
+  {
+    type: "milxdy:externalHandoff",
+    matches: isExternalHandoffMessage,
+    handle: (message, sender) => launchExternalHandoff(message, sender),
   },
   {
     type: "miladychan:fetchJson",
@@ -361,6 +371,86 @@ function isFetchImageDataUrlMessage(message: unknown): message is FetchImageData
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
   return record.type === "milxdy:fetchImageDataUrl" && typeof record.url === "string";
+}
+
+function isExternalHandoffMessage(message: unknown): message is ExternalHandoffMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:externalHandoff"
+    && typeof record.appId === "string"
+    && typeof record.handoffId === "string"
+    && isExternalHandoffAdapter(record.adapter)
+    && isExternalHandoffTarget(record.target)
+    && typeof record.topText === "string"
+    && typeof record.bottomText === "string";
+}
+
+async function launchExternalHandoff(message: ExternalHandoffMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string }> }>)
+    .find((candidate) => candidate.id === message.appId);
+  const declaration = app?.externalHandoffs?.find((candidate) => candidate.id === message.handoffId);
+  if (!declaration || declaration.adapter !== message.adapter || declaration.target !== message.target) {
+    return { ok: false, error: "The requested handoff is not declared by this package." };
+  }
+  const targetUrl = externalHandoffUrl(message.adapter, message.target);
+  if (!targetUrl) return { ok: false, error: "Unsupported maker destination." };
+  try {
+    const tab = await chrome.tabs.create({ url: targetUrl.href, active: false });
+    if (typeof tab.id !== "number") return { ok: false, error: "The maker tab could not be created." };
+    await waitForExternalHandoffTab(tab.id, targetUrl.href);
+    const results = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: populateRemiliaMaker,
+      args: [message.topText, message.bottomText],
+    });
+    const result = results[0]?.result as { ok?: boolean; error?: string } | undefined;
+    if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function waitForExternalHandoffTab(tabId: number, expectedHref: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => finish(new Error("The maker did not finish loading in time.")), EXTERNAL_HANDOFF_TAB_TIMEOUT_MS);
+    const finish = (error?: Error) => {
+      clearTimeout(timeout);
+      chrome.tabs.onUpdated.removeListener(onUpdated);
+      if (error) reject(error);
+      else resolve();
+    };
+    const onUpdated = (updatedTabId: number, change: chrome.tabs.OnUpdatedInfo, tab: chrome.tabs.Tab) => {
+      if (updatedTabId !== tabId || change.status !== "complete") return;
+      if (tab.url !== expectedHref) {
+        finish(new Error("The maker tab navigated away from its reviewed destination."));
+        return;
+      }
+      finish();
+    };
+    chrome.tabs.onUpdated.addListener(onUpdated);
+    void chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === "complete") onUpdated(tabId, { status: "complete" }, tab);
+    }).catch(() => finish(new Error("The maker tab closed before it loaded.")));
+  });
+}
+
+/** Runs only in the reviewed maker tab after an explicit package gesture. */
+function populateRemiliaMaker(topText: string, bottomText: string): { ok: boolean; error?: string } {
+  const top = document.querySelector<HTMLInputElement>("#topText");
+  const bottom = document.querySelector<HTMLInputElement>("#bottomText");
+  const random = document.querySelector<HTMLElement>("#randomButton");
+  if (!top || !bottom || !random) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
+  random.click();
+  const setInput = (input: HTMLInputElement, value: string) => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  setInput(top, topText);
+  setInput(bottom, bottomText);
+  return { ok: true };
 }
 
 function isMiladychanFetchJsonMessage(message: unknown): message is MiladychanFetchJsonMessage {

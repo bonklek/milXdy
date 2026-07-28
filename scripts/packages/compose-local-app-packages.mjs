@@ -66,6 +66,12 @@ const forbiddenManifestFields = new Set([
   "requiredOutputs",
 ]);
 const forbiddenCssFields = new Set(["source", "target", "targetDir"]);
+const supportedExternalHandoffAdapters = new Map([
+  ["remilia-maker", {
+    host: "https://maker.remilia.org/*",
+    targets: new Set(["milady", "remilio", "bonkler", "kagami"]),
+  }],
+]);
 const sensitiveStorageNeedles = [
   "auth",
   "cache",
@@ -517,6 +523,7 @@ async function analyzePackage(source, manifest) {
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
+  verifyExternalHandoffs(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -884,9 +891,54 @@ function verifyReplyAction(id, manifest, errors) {
   }
 }
 
+function verifyExternalHandoffs(id, manifest, errors) {
+  const handoffs = manifest.externalHandoffs;
+  if (!handoffs) return;
+  if (!manifest.composerAction || !manifest.surfaces?.includes("composerAction")) {
+    errors.push(`${id}: externalHandoffs require the composerAction surface`);
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) {
+    errors.push(`${id}: externalHandoffs require the userAction load trigger`);
+  }
+  if (!Array.isArray(handoffs) || handoffs.length === 0 || handoffs.length > 8) {
+    errors.push(`${id}: externalHandoffs require between one and eight declarations`);
+    return;
+  }
+  const ids = new Set();
+  for (const handoff of handoffs) {
+    if (!handoff?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(handoff.id) || ids.has(handoff.id)) {
+      errors.push(`${id}: externalHandoff ids must be unique safe identifiers`);
+    }
+    ids.add(handoff?.id);
+    if (!handoff?.label || typeof handoff.label !== "string") errors.push(`${id}: externalHandoff labels are required`);
+    const adapter = supportedExternalHandoffAdapters.get(handoff?.adapter);
+    if (!adapter) {
+      errors.push(`${id}: externalHandoff adapter is not a reviewed host adapter`);
+      continue;
+    }
+    if (!adapter.targets.has(handoff?.target)) errors.push(`${id}: externalHandoff target is not supported by ${handoff.adapter}`);
+    if (!(manifest.permissions?.hosts || []).includes(adapter.host)) {
+      errors.push(`${id}: externalHandoff ${handoff.id} must declare host permission ${adapter.host}`);
+    }
+  }
+  if (!(manifest.privacy?.remoteServices || []).length) {
+    errors.push(`${id}: externalHandoffs require privacy.remoteServices disclosure`);
+  }
+  if (manifest.privacy?.consentRequired !== true) {
+    errors.push(`${id}: externalHandoffs require consent before enablement`);
+  }
+  if ((manifest.background?.messageTypes || []).some((type) => type === "milxdy:externalHandoff")) {
+    errors.push(`${id}: externalHandoffs must use the host callback, not declare the host handoff message type`);
+  }
+}
+
 function verifyPermissionsAndPrivacy(id, manifest, errors) {
   const hosts = manifest.permissions?.hosts || [];
   const optional = manifest.permissions?.optional || [];
+  const adapterHosts = new Set((manifest.externalHandoffs || []).flatMap((handoff) => {
+    const adapter = supportedExternalHandoffAdapters.get(handoff?.adapter);
+    return adapter ? [adapter.host] : [];
+  }));
   const permissionNotes = [
     ...(manifest.hub?.permissionNotes || []),
     ...(manifest.privacy?.permissionNotes || []),
@@ -899,7 +951,9 @@ function verifyPermissionsAndPrivacy(id, manifest, errors) {
       errors.push(`${id}: invalid permission host pattern ${host}; expected http(s) or wss origin pattern ending in /* without wildcards`);
       continue;
     }
-    if (!manifest.siteScopes?.some((scope) => scope.hosts?.includes(host))) {
+    // A host-owned external adapter is not a package content-script scope.
+    // Requiring one would incorrectly imply package code runs on that site.
+    if (!adapterHosts.has(host) && !manifest.siteScopes?.some((scope) => scope.hosts?.includes(host))) {
       errors.push(`${id}: permission host ${host} must be represented by a matching site scope host`);
     }
   }

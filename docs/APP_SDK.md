@@ -403,6 +403,35 @@ reachable room, and constrains only the host container when neither side can
 fit the package content. It reevaluates placement on window, scroll, and
 package-content size changes.
 
+#### Reviewed external handoffs
+
+`externalHandoffs` is the narrow exception for a reviewed package that needs a
+host-owned transfer to a known external tool. It is not a general browser DOM,
+clipboard, tab, or network API. A package declares a host-recognized adapter and
+target, lists the matching host permission and remote-service/data disclosure,
+and remains disabled until consent is acknowledged. The package receives only
+its own `{ id, label }` declarations plus `launchExternalHandoff(id)`.
+
+The call is valid only from an explicit package click. The host—not package
+code—reads the active X composer, splits it on the newline nearest the text
+midpoint, opens the reviewed destination in an inactive tab, and applies the
+adapter's fixed field mapping. The package never receives the draft text, X
+nodes, remote-page nodes, tab identity, or a raw URL. Unsupported adapters,
+changed remote controls, empty drafts, and navigation away from the reviewed
+origin fail closed. This contract does not return media to X, upload a file, or
+send a post.
+
+```json
+"externalHandoffs": [
+  { "id": "milady-maker", "label": "Milady Maker", "adapter": "remilia-maker", "target": "milady" }
+]
+```
+
+The first reviewed adapter is `remilia-maker`, with targets `milady`, `remilio`,
+`bonkler`, and `kagami`; it requires `https://maker.remilia.org/*`. Adding a
+new adapter is host work with a deterministic allowlist, verified remote control
+mapping, consent disclosure, and focused tests—not a package-only change.
+
 ### Reply actions
 
 An app or feature can declare `replyAction` to open its own reviewed local
