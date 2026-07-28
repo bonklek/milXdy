@@ -1510,6 +1510,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function waitForReplyComposerText(text: string, { sendAfterInsert = false }: { sendAfterInsert?: boolean } = {}): void {
     let inserted = false;
+    let insertionAttempted = false;
     let submitted = false;
     let attempts = 0;
     let observer: MutationObserver | null = null;
@@ -1529,14 +1530,25 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       submit.click();
     };
     const tryInsert = () => {
-      if (inserted) return true;
-      const editor = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] [data-testid^="tweetTextarea_"]'))
-        .find((candidate) => candidate.offsetParent !== null && candidate.isContentEditable);
+      if (inserted || insertionAttempted) return inserted;
+      // X gives its rich-text input and several wrapping containers matching
+      // `tweetTextarea_*` IDs. `isContentEditable` is inherited, so it also
+      // matches those wrappers. Restrict this bridge to the real editor: a
+      // wrapper's text includes X's placeholder and makes both verification
+      // and React's editor state unreliable.
+      const editor = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] [contenteditable="true"][data-testid^="tweetTextarea_"]'))
+        .find((candidate) => candidate.offsetParent !== null);
       if (!editor) return false;
+      // A template action must never append to an existing native draft. It
+      // is safer to leave that draft alone than to guess whether it is stale
+      // platform text or user-authored content.
+      if (normalizedText(editor.innerText || editor.textContent || "")) return false;
+      insertionAttempted = true;
       editor.focus();
       if (!document.execCommand("insertText", false, text)) return false;
-      // Mutation delivery can occur again while X is creating its composer.
-      // Mark the selection consumed before any later observer callback.
+      // Do not retry a completed edit. A second insertion can create a
+      // duplicated literal while X is reconciling its Draft editor.
+      if (normalizedText(editor.innerText || editor.textContent || "") !== normalizedText(text)) return false;
       inserted = true;
       if (sendAfterInsert) window.requestAnimationFrame(() => submitWhenReady(editor));
       return true;
