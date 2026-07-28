@@ -880,6 +880,7 @@ function verifyReplyAction(id, manifest, errors) {
     const hasStorageKey = typeof template?.storageKey === "string" && template.storageKey.length > 0;
     if (hasText === hasStorageKey) errors.push(`${id}: replyAction template must declare exactly one of text or storageKey`);
     if (hasStorageKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageKey)) errors.push(`${id}: replyAction storageKey must be declared in storageKeys`);
+    if (template.sendAfterInsert !== undefined && typeof template.sendAfterInsert !== "boolean") errors.push(`${id}: replyAction sendAfterInsert must be boolean when declared`);
   }
 }
 

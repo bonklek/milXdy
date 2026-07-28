@@ -410,19 +410,23 @@ rows, labels, icons, and styling inside the isolated panel.
 "replyAction": {
   "templates": [
     { "id": "hello", "label": "Hello", "text": "Hello" },
-    { "id": "custom", "label": "Custom", "storageKey": "example.customReply" }
+    { "id": "custom", "label": "Custom", "storageKey": "example.customReply", "sendAfterInsert": true }
   ]
 }
 ```
 
 Each template has an ID and label and exactly one of `text` or `storageKey`.
 The latter must be a package-declared local storage key and is omitted from
-`context.templates` until it has a non-empty local value. Reply-action packages
+`context.templates` until it has a non-empty local value. `sendAfterInsert`
+defaults to `false`; when a reviewed package explicitly sets it to `true`, the
+host submits only after it has inserted and verified the exact user-selected
+declared value. Reply-action packages
 declare the `replyAction` surface, include `"userAction"` in `loadTriggers`,
 and export `onReplyAction(context)`. The callback receives only the resolved
 template IDs/labels plus `openNativeReply()` and `selectTemplate(id)`. The
 latter accepts only a currently declared template ID, opens X's native reply
-editor, types that local value, and never sends. Package code must not inspect
+editor, types that local value, and submits only when its template explicitly
+declares `sendAfterInsert`. Package code must not inspect
 or mutate X's DOM, caret, composer content, media, or posting controls.
 
 The package should render its own **Send a reply** row and invoke

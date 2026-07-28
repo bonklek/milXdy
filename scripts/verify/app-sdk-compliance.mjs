@@ -69,6 +69,7 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
+  requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
   requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
@@ -84,6 +85,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
   requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
   requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
+  requireIncludes(contentRuntime, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
   requireIncludes(contentRuntime, "root.dataset.theme = currentHubTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
   requireIncludes(contentRuntime, "function currentHubTheme", "Apps & Features must resolve distinct light, dim, and dark host palettes");

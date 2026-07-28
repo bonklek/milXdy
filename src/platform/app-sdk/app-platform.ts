@@ -45,6 +45,8 @@ export type AppReplyActionTemplate = {
   label: string;
   text?: string;
   storageKey?: string;
+  /** Explicit reviewed opt-in: submit after the host inserts this template. */
+  sendAfterInsert?: boolean;
 };
 export type AppReplyAction = {
   templates: AppReplyActionTemplate[];
