@@ -434,7 +434,7 @@ The package should render its own **Send a reply** row and invoke
 `selectTemplate(id)` only from an explicit user gesture. The platform does not
 ship a generic quick-reply menu or iconography. Reply panels remain anchored
 below their invoking Reply control as its post scrolls and leave the viewport
-with that post when it scrolls away.
+with that post when it scrolls away; they are not pinned to a viewport edge.
 
 ### Package To Custom Build
 
