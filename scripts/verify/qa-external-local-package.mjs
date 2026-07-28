@@ -23,7 +23,7 @@ try {
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   await writeFile(path.join(externalPackage, "dev-note.css"), ".developer-note { color: canvastext; }\n");
   const entryPath = path.join(externalPackage, "dist", "content.js");
-  await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\n`);
+  await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\nexport function onReplyAction({ panel, openNativeReply, templates, selectTemplate }) { panel.replaceChildren(); const nativeReply = document.createElement("button"); nativeReply.textContent = "Send a reply"; nativeReply.addEventListener("click", openNativeReply); panel.append(nativeReply); for (const template of templates) { const row = document.createElement("button"); row.textContent = template.label; row.addEventListener("click", () => selectTemplate(template.id)); panel.append(row); } }\n`);
   run([
     "scripts/qa/qa-reload.mjs",
     "--once",

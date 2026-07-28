@@ -282,6 +282,20 @@ export type MilxdyComposerActionContext = {
   close: () => void;
 };
 
+/**
+ * A reviewed, package-rendered reply panel. The host owns the X control,
+ * anchoring, dismissal, focus return, and the narrow native type-only bridge;
+ * packages own every visible row, label, and asset inside `panel`.
+ */
+export type MilxdyReplyActionContext = {
+  panel: HTMLElement;
+  signal: AbortSignal;
+  close: () => void;
+  templates: ReadonlyArray<Pick<AppReplyActionTemplate, "id" | "label">>;
+  openNativeReply: () => void;
+  selectTemplate: (id: string) => void;
+};
+
 export type MilxdyContentAppModule = {
   id?: string;
   boot?: (context: MilxdyContentAppContext) => Promise<void> | void;
@@ -290,6 +304,7 @@ export type MilxdyContentAppModule = {
   onRouteChange?: (route: MilxdyRouteChange) => Promise<void> | void;
   onSurface?: (surface: TwitterSurface) => Promise<void> | void;
   onComposerAction?: (context: MilxdyComposerActionContext) => Promise<void> | void;
+  onReplyAction?: (context: MilxdyReplyActionContext) => Promise<void> | void;
   open?: () => Promise<void> | void;
   close?: () => Promise<void> | void;
   dispose?: () => Promise<void> | void;

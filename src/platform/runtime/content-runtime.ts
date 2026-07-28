@@ -1383,34 +1383,55 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (apps.length === 0) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      void openReplyActionMenu(button, apps);
+      void openReplyActionPanel(button, apps);
     };
     document.addEventListener("click", onReplyClick, true);
     state.runtimeDisposables.add(() => document.removeEventListener("click", onReplyClick, true));
     state.runtimeDisposables.add(() => activeReplyActionClose?.());
-    injectReplyActionStyles();
   }
 
-  async function openReplyActionMenu(button: HTMLElement, apps: MilxdyAppManifest[]): Promise<void> {
+  async function openReplyActionPanel(button: HTMLElement, apps: MilxdyAppManifest[]): Promise<void> {
+    // A Reply control has one native action. Avoid an unowned host chooser when
+    // more than one package is enabled; the original X action remains available.
+    if (apps.length !== 1) {
+      triggerNativeReply(button);
+      return;
+    }
     activeReplyActionClose?.();
-    const menu = document.createElement("section");
-    menu.className = "milxdy-reply-action-menu";
-    menu.setAttribute("role", "menu");
-    menu.setAttribute("aria-label", "Reply options");
+    const app = apps[0];
+    const module = await loadApp(app, "replyAction");
+    if (!module?.onReplyAction) {
+      recordRuntimeDiagnostic(`replyAction.${app.id}`, { error: "Package declares replyAction but does not export onReplyAction" });
+      triggerNativeReply(button);
+      return;
+    }
+    const controller = new AbortController();
+    const panel = document.createElement("section");
+    panel.className = "milxdy-reply-action-panel";
+    panel.dataset.appId = app.id;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", `${app.name} reply options`);
+    const shadow = panel.attachShadow({ mode: "open" });
+    const surface = document.createElement("div");
+    surface.className = "milxdy-reply-action-surface";
+    shadow.append(surface);
     const rect = button.getBoundingClientRect();
-    menu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 300))}px`;
-    menu.style.top = `${Math.max(8, rect.bottom + 8)}px`;
-    menu.style.maxHeight = `${Math.max(48, window.innerHeight - rect.bottom - 16)}px`;
+    panel.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 300))}px`;
+    panel.style.top = `${Math.max(8, rect.bottom + 8)}px`;
+    panel.style.maxHeight = `${Math.max(48, window.innerHeight - rect.bottom - 16)}px`;
     const close = () => {
-      if (!menu.isConnected) return;
-      menu.remove();
+      if (!panel.isConnected) return;
+      controller.abort();
+      panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
       document.removeEventListener("keydown", dismissOnEscape, true);
+      document.removeEventListener("scroll", dismissOnViewportChange, true);
+      window.removeEventListener("resize", dismissOnViewportChange);
       if (activeReplyActionClose === close) activeReplyActionClose = null;
-      button.focus();
+      if (button.isConnected) button.focus({ preventScroll: true });
     };
     const dismiss = (event: PointerEvent) => {
-      if (menu.contains(event.target as Node) || button.contains(event.target as Node)) return;
+      if (panel.contains(event.target as Node) || button.contains(event.target as Node)) return;
       close();
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
@@ -1418,57 +1439,46 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.preventDefault();
       close();
     };
-    const nativeReply = replyActionMenuRow("Send a reply", false);
-    nativeReply.addEventListener("click", () => {
-      close();
-      triggerNativeReply(button);
+    // A fixed popover must never detach from the post that invoked it.
+    const dismissOnViewportChange = () => close();
+    const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
+      .filter((template) => template.storageKey)
+      .map((template) => [template.storageKey!, ""]));
+    const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
+    const templates = (app.replyAction?.templates || []).flatMap((template) => {
+      const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
+      return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text }];
     });
-    menu.append(nativeReply);
-    for (const app of apps) {
-      const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
-        .filter((template) => template.storageKey)
-        .map((template) => [template.storageKey!, ""]));
-      const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
-      for (const template of app.replyAction?.templates || []) {
-        const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
-        // A custom local setting becomes an option only after the user has set it.
-        if (template.storageKey && !text.trim()) continue;
-        const row = replyActionMenuRow(template.label, true);
-        row.addEventListener("click", () => {
-          close();
-          triggerNativeReply(button, text);
-          recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: template.storageKey ? "stored" : template.text, updatedAt: Date.now() });
-        });
-        menu.append(row);
-      }
-    }
-    document.body.append(menu);
+    document.body.append(panel);
     activeReplyActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
     document.addEventListener("keydown", dismissOnEscape, true);
-    nativeReply.focus();
-  }
-
-  function replyActionMenuRow(label: string, quickReply: boolean): HTMLButtonElement {
-    const row = document.createElement("button");
-    row.type = "button";
-    row.className = "milxdy-reply-action-menu-row";
-    row.setAttribute("role", "menuitem");
-    const icon = document.createElement("span");
-    icon.className = "milxdy-reply-action-menu-icon";
-    icon.setAttribute("aria-hidden", "true");
-    icon.textContent = "↩";
-    if (quickReply) {
-      const bolt = document.createElement("span");
-      bolt.className = "milxdy-reply-action-menu-bolt";
-      bolt.textContent = "ϟ";
-      icon.append(bolt);
-      row.dataset.quickReply = "true";
+    document.addEventListener("scroll", dismissOnViewportChange, true);
+    window.addEventListener("resize", dismissOnViewportChange);
+    try {
+      await installReplyActionPackageStyles(app, shadow);
+      await Promise.resolve(module.onReplyAction({
+        panel: surface,
+        signal: controller.signal,
+        close,
+        templates: templates.map(({ id, label }) => ({ id, label })),
+        openNativeReply: () => {
+          close();
+          triggerNativeReply(button);
+        },
+        selectTemplate: (id) => {
+          const template = templates.find((candidate) => candidate.id === id);
+          if (!template) return;
+          close();
+          triggerNativeReply(button, template.text);
+          recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: id, updatedAt: Date.now() });
+        },
+      }));
+      surface.querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus();
+    } catch (error) {
+      close();
+      recordRuntimeDiagnostic(`replyAction.${app.id}`, { error: errorMessage(error) });
     }
-    const text = document.createElement("span");
-    text.textContent = label;
-    row.append(icon, text);
-    return row;
   }
 
   function triggerNativeReply(button: HTMLElement, text = ""): void {
@@ -1654,28 +1664,31 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
       .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: min(420px, calc(100vw - 16px)); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 2px solid #25211d; border-radius: 8px; background: #f4f1e9; color: #1d1b19; box-shadow: 5px 5px 0 rgba(37, 33, 29, .35), 0 12px 30px rgba(0, 0, 0, .24); }
+      .milxdy-reply-action-panel { position: fixed; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
     document.documentElement.append(style);
   }
 
-  function injectReplyActionStyles(): void {
-    if (document.getElementById("milxdy-reply-action-styles")) return;
-    const style = document.createElement("style");
-    style.id = "milxdy-reply-action-styles";
-    style.textContent = `
-      .milxdy-reply-action-menu { position: fixed; z-index: 2147483646; display: grid; min-width: 236px; max-width: calc(100vw - 16px); overflow: auto; padding: 5px; border: 2px solid #25211d; border-radius: 6px; background: #f4f1e9; box-shadow: 4px 4px 0 rgba(37, 33, 29, .35), 0 10px 26px rgba(0, 0, 0, .24); }
-      .milxdy-reply-action-menu-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: center; gap: 7px; min-height: 38px; padding: 8px 10px; border: 0; border-bottom: 1px solid #c9c1b7; background: transparent; color: #1d1b19; cursor: pointer; font: 700 13px/1.2 Arial, Helvetica, sans-serif; text-align: left; }
-      .milxdy-reply-action-menu-row:last-child { border-bottom: 0; }
-      .milxdy-reply-action-menu-row:hover, .milxdy-reply-action-menu-row:focus-visible { background: #fff3c5; color: #075f9f; outline: 2px solid #2483c5; outline-offset: -2px; }
-      .milxdy-reply-action-menu-icon { position: relative; display: inline-grid; width: 20px; height: 20px; place-items: center; color: currentColor; font: 700 19px/1 system-ui, sans-serif; }
-      .milxdy-reply-action-menu-bolt { position: absolute; top: -5px; right: -3px; color: #c48a00; font: 900 13px/1 system-ui, sans-serif; text-shadow: 0 1px 0 #fff3c5; }
-      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu { border: 1px solid #cfd9df; border-radius: 4px; background: #ffffff; box-shadow: 0 6px 18px rgba(15, 20, 25, .16); }
-      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row { border-bottom-color: #eff3f4; color: #536471; font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row:hover, html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-row:focus-visible { background: #f7f9f9; color: #0f1419; outline-color: #1d9bf0; }
-      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-icon { color: #8299a7; }
-      html[data-milxdy-reskin-profile="min"] .milxdy-reply-action-menu-bolt { color: #aebdc6; text-shadow: 0 1px 0 #ffffff; }
+  async function installReplyActionPackageStyles(app: MilxdyAppManifest, shadow: ShadowRoot): Promise<void> {
+    const hostStyle = document.createElement("style");
+    hostStyle.textContent = `
+      :host { display: block; }
+      .milxdy-reply-action-surface, .milxdy-reply-action-surface *, .milxdy-reply-action-surface *::before, .milxdy-reply-action-surface *::after { box-sizing: border-box; }
+      .milxdy-reply-action-surface { min-width: 0; }
     `;
-    document.documentElement.append(style);
+    shadow.append(hostStyle);
+    for (const sheet of app.css || []) {
+      const stylesheet = document.createElement("link");
+      stylesheet.rel = "stylesheet";
+      stylesheet.href = runtimeAssetUrl(sheet.path);
+      stylesheet.dataset.packageStylesheet = sheet.id || sheet.path;
+      const loaded = new Promise<void>((resolve, reject) => {
+        stylesheet.addEventListener("load", () => resolve(), { once: true });
+        stylesheet.addEventListener("error", () => reject(new Error(`Unable to load declared package stylesheet ${sheet.id || sheet.path}`)), { once: true });
+      });
+      shadow.append(stylesheet);
+      await loaded;
+    }
   }
 
   function registerDockMetadata(app: MilxdyAppManifest): void {

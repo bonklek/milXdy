@@ -69,6 +69,7 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
   requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
+  requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
@@ -79,11 +80,9 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
   requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
-  requireIncludes(contentRuntime, "Send a reply", "Reply actions must retain an untemplated native-reply choice");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
-  requireIncludes(contentRuntime, "function replyActionMenuRow", "Reply-action menu affordances must remain host-owned and generic");
-  requireIncludes(contentRuntime, "milxdy-reply-action-menu-bolt", "Quick-reply templates must have a visible host-owned quick-action cue");
-  requireIncludes(contentRuntime, "html[data-milxdy-reskin-profile=\"min\"] .milxdy-reply-action-menu", "Minimal visual profile must use the native light reply-menu treatment");
+  requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", dismissOnViewportChange, true)", "Reply-action panels must close on scroll rather than detach from their X reply control");
+  requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
   requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
   requireIncludes(contentRuntime, "root.dataset.theme = currentHubTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
   requireIncludes(contentRuntime, "function currentHubTheme", "Apps & Features must resolve distinct light, dim, and dark host palettes");
