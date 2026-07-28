@@ -219,6 +219,7 @@ type ChatState = {
   appFrame: OverlayAppFrame | null;
   layoutReady: boolean;
   hostImageViewerOpen: boolean;
+  activeMessageActionId: number | null;
 };
 
 const state: ChatState = {
@@ -265,6 +266,7 @@ const state: ChatState = {
   appFrame: null,
   layoutReady: false,
   hostImageViewerOpen: false,
+  activeMessageActionId: null,
 };
 
 export function boot(context?: MilxdyContentAppContext): void {
@@ -978,7 +980,11 @@ function createRoot(): HTMLElement {
     const kind = action.dataset.chatAction;
     if (kind === "attach") root.querySelector<HTMLInputElement>('[data-role="file"]')?.click();
     if (kind === "remove-attachment") removePendingAttachment(action.dataset.attachmentId || "");
-    if (kind === "react") reactToMessage(Number(action.dataset.messageId), action.dataset.emoji || "");
+    if (kind === "react") {
+      const messageId = Number(action.dataset.messageId);
+      state.activeMessageActionId = Number.isFinite(messageId) ? messageId : null;
+      reactToMessage(messageId, action.dataset.emoji || "");
+    }
     if (kind === "reply") setReplyTo(Number(action.dataset.messageId));
     if (kind === "cancel-reply") clearReplyTo();
     if (kind === "poke") void pokeUser(action.dataset.username || "");
@@ -2211,8 +2217,9 @@ function cssEscape(value: string): string {
 }
 
 function renderMessageActions(message: ApiMessage): string {
+  const open = state.activeMessageActionId === message.id;
   return `
-    <div class="milxdy-chat-message-actions">
+    <div class="milxdy-chat-message-actions" data-open="${String(open)}">
       ${renderReactions(message)}
       <button class="milxdy-chat-reply-action" type="button" data-chat-action="reply" data-message-id="${message.id}" title="Reply" aria-label="Reply">${replyIconSvg()}</button>
     </div>
