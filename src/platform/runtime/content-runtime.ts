@@ -1469,6 +1469,21 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.stopImmediatePropagation();
       close();
     };
+    const openNativeDrafts = () => {
+      const composer = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"]');
+      const nativeDrafts = Array.from((composer || document).querySelectorAll<HTMLElement>(
+        'a[href*="/compose/tweet/unsent/drafts"], button, [role="button"]',
+      )).find((candidate) => candidate.offsetParent !== null && (
+        candidate.matches('a[href*="/compose/tweet/unsent/drafts"]')
+        || (candidate.textContent || "").trim() === "Drafts"
+      ));
+      if (!nativeDrafts) {
+        recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "X native Drafts control was unavailable" });
+        return;
+      }
+      close();
+      nativeDrafts.click();
+    };
     const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
       .filter((template) => template.storageKey)
       .map((template) => [template.storageKey!, ""]));
@@ -1740,6 +1755,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         panel: surface,
         signal: controller.signal,
         close,
+        openNativeDrafts,
       }));
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
       panelSizeObserver.observe(surface);
