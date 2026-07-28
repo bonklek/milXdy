@@ -387,6 +387,13 @@
   padding: 8px 8px 0;
 }
 
+.beetol-actions[hidden],
+.beetol-crunch-junk[hidden],
+.beetol-crunch-progress[hidden],
+.beetol-footer[hidden] {
+  display: none !important;
+}
+
 .beetol-action {
   display: grid;
   grid-template-rows: 46px 24px 16px;

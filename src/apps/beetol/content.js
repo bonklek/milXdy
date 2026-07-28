@@ -163,7 +163,7 @@ function mountBeetolGame(context = {}) {
           <div class="beetol-crunch-progress-track" aria-hidden="true"><span></span></div>
           <span id="beetol-crunch-progress-label"></span>
         </div>
-        <div class="beetol-footer">
+        <div id="beetol-footer" class="beetol-footer">
           <span id="beetol-message" role="status" aria-live="polite" aria-atomic="true"></span>
         </div>
       </section>
@@ -187,6 +187,7 @@ function mountBeetolGame(context = {}) {
     crunchProgress: root.querySelector('#beetol-crunch-progress'),
     crunchProgressFill: root.querySelector('#beetol-crunch-progress .beetol-crunch-progress-track > span'),
     crunchProgressLabel: root.querySelector('#beetol-crunch-progress-label'),
+    footer: root.querySelector('#beetol-footer'),
     message: root.querySelector('#beetol-message'),
     refresh: root.querySelector('#beetol-refresh'),
     minimize: root.querySelector('#beetol-minimize'),
@@ -794,6 +795,7 @@ function mountBeetolGame(context = {}) {
     els.signedOut.hidden = state.signedIn;
     els.actions.hidden = !state.signedIn;
     els.crunchJunk.hidden = !state.signedIn;
+    els.footer.hidden = !state.signedIn;
     els.crunchJunk.disabled = state.loading;
     const progress = state.crunchProgress;
     els.crunchProgress.hidden = !progress;
@@ -864,6 +866,15 @@ function mountBeetolGame(context = {}) {
     return next ? fmtBadgeMs(next) : '';
   }
 
+  function enterSignedOutState(message) {
+    cancelFinalHuntTransition();
+    state.signedIn = false;
+    state.user = null;
+    state.loading = false;
+    state.crunchProgress = null;
+    setMessage(message, 'warn');
+  }
+
   async function checkAuthStatus(silent = false) {
     if (!lifecycleActive()) return false;
     state.loading = true;
@@ -872,12 +883,12 @@ function mountBeetolGame(context = {}) {
     const response = await send({ type: 'beetol:authStatus' });
     if (!lifecycleActive()) return false;
     state.loading = false;
-    state.signedIn = Boolean(response?.signedIn);
-    if (!state.signedIn) {
-      setMessage(response?.error || 'No RemiliaNET browser session detected.', 'warn');
+    if (!response?.signedIn) {
+      enterSignedOutState(response?.error || 'No RemiliaNET browser session detected.');
       render();
       return false;
     }
+    state.signedIn = true;
     setMessage('Session detected.');
     render();
     await refreshState(true);
@@ -895,8 +906,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      state.signedIn = false;
-      setMessage('Session expired.', 'warn');
+      enterSignedOutState('Session expired.');
       render();
       return;
     }
@@ -936,8 +946,7 @@ function mountBeetolGame(context = {}) {
     const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
 
     if (response?.authRequired) {
-      state.signedIn = false;
-      setMessage('Session expired.', 'warn');
+      enterSignedOutState('Session expired.');
       render();
       return;
     }
@@ -1034,9 +1043,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      state.signedIn = false;
-      state.crunchProgress = null;
-      setMessage('Session expired.', 'warn');
+      enterSignedOutState('Session expired.');
       render();
       return;
     }
@@ -1238,7 +1245,7 @@ function mountBeetolGame(context = {}) {
       state.signedIn = Boolean(changes['beetol.accessToken'].newValue);
       if (state.signedIn) refreshState(true);
       else {
-        state.user = null;
+        enterSignedOutState('No RemiliaNET browser session detected.');
         render();
       }
     } else {
