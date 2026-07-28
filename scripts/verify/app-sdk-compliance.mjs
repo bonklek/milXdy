@@ -119,6 +119,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
+  requireIncludes(contentRuntime, "activeComposerAction.panel.isConnected", "Composer actions must discard stale panels reconciled away by X before reopening");
 }
 
 function verifySdkVersionSource() {
