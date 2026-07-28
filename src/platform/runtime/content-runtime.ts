@@ -1747,6 +1747,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     button.setAttribute("aria-expanded", "true");
     let resizeFrame = 0;
     const positionComposerActionPanel = () => {
+      // A stylesheet or package callback may settle after the user has
+      // already closed this action. Never revive or reposition that stale
+      // panel during a later toolbar interaction.
+      if (controller.signal.aborted || !panel.isConnected) return;
       const gap = 8;
       const viewportInset = 8;
       const rect = button.getBoundingClientRect();
@@ -1772,11 +1776,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (resizeFrame) return;
       resizeFrame = window.requestAnimationFrame(() => {
         resizeFrame = 0;
+        if (controller.signal.aborted || !panel.isConnected) return;
         positionComposerActionPanel();
       });
     };
     let panelSizeObserver: ResizeObserver | null = null;
+    let closed = false;
     const close = () => {
+      if (closed) return;
+      closed = true;
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
@@ -1858,6 +1866,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     window.addEventListener("resize", scheduleComposerActionPosition);
     try {
       await installComposerActionPackageStyles(app, shadow);
+      if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       await Promise.resolve(module.onComposerAction({
         kind: button.closest('[role="dialog"]') ? "reply" : "post",
         panel: surface,
@@ -1867,6 +1876,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         externalHandoffs: (app.externalHandoffs || []).map(({ id, label }) => ({ id, label })),
         launchExternalHandoff,
       }));
+      if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
       panelSizeObserver.observe(surface);
       positionComposerActionPanel();
@@ -1912,10 +1922,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     style.id = "milxdy-composer-action-styles";
     style.textContent = `
       .milxdy-composer-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: 4px; vertical-align: middle; }
-      .milxdy-composer-action { width: 32px; height: 32px; border: 0; border-radius: 999px; background: transparent; color: rgb(29, 155, 240); font: 700 15px/1 system-ui; cursor: pointer; }
-      .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible { background: rgba(29, 155, 240, .12); outline: none; }
-      .milxdy-composer-action[aria-expanded="true"] { background: rgba(29, 155, 240, .12); }
-      .milxdy-composer-action img { width: 18px; height: 18px; object-fit: contain; }
+      .milxdy-composer-action { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: rgb(83, 100, 113); font: 700 15px/1 system-ui; line-height: 0; cursor: pointer; }
+      .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible, .milxdy-composer-action[aria-expanded="true"] { background: rgba(15, 20, 25, .10); outline: none; }
+      .milxdy-composer-action img { display: block; width: 18px; height: 18px; margin: 0; object-fit: contain; }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
       .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
