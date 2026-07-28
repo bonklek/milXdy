@@ -86,6 +86,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);", "Composer panels must adapt when package content changes size");
   requireIncludes(contentRuntime, "const openNativeDrafts = () => {", "Composer packages must use the host-owned X Drafts handoff");
   requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
+  requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
