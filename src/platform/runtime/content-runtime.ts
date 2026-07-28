@@ -1424,7 +1424,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
-      document.removeEventListener("keydown", dismissOnEscape, true);
+      window.removeEventListener("keydown", dismissOnEscape, true);
       document.removeEventListener("scroll", dismissOnViewportChange, true);
       window.removeEventListener("resize", dismissOnViewportChange);
       if (activeReplyActionClose === close) activeReplyActionClose = null;
@@ -1435,8 +1435,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" && event.key !== "Esc" && event.code !== "Escape" && event.keyCode !== 27) return;
       event.preventDefault();
+      event.stopImmediatePropagation();
       close();
     };
     // A fixed popover must never detach from the post that invoked it.
@@ -1452,7 +1453,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     document.body.append(panel);
     activeReplyActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
-    document.addEventListener("keydown", dismissOnEscape, true);
+    // Window capture runs before X's document handlers and also receives keys
+    // dispatched from the package panel's shadow root.
+    window.addEventListener("keydown", dismissOnEscape, true);
     document.addEventListener("scroll", dismissOnViewportChange, true);
     window.addEventListener("resize", dismissOnViewportChange);
     try {
@@ -1594,7 +1597,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       controller.abort();
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
-      document.removeEventListener("keydown", dismissOnEscape, true);
+      window.removeEventListener("keydown", dismissOnEscape, true);
       if (activeComposerActionClose === close) activeComposerActionClose = null;
       button.focus();
     };
@@ -1603,13 +1606,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" && event.key !== "Esc" && event.code !== "Escape" && event.keyCode !== 27) return;
       event.preventDefault();
+      event.stopImmediatePropagation();
       close();
     };
     activeComposerActionClose = close;
     document.addEventListener("pointerdown", dismiss, true);
-    document.addEventListener("keydown", dismissOnEscape, true);
+    window.addEventListener("keydown", dismissOnEscape, true);
     try {
       await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onComposerAction({
