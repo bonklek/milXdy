@@ -1421,7 +1421,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       // follows its invoking Reply control as its post scrolls and leaves the
       // viewport with that post instead of detaching beneath a sticky header.
       panel.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, document.documentElement.scrollWidth - 300))}px`;
-      panel.style.top = `${Math.max(8, rect.bottom + window.scrollY + 8)}px`;
+      panel.style.top = `${rect.bottom + window.scrollY + 8}px`;
       panel.style.maxHeight = `${Math.max(48, window.innerHeight - Math.max(8, rect.bottom) - 16)}px`;
     };
     positionReplyActionPanel();
