@@ -427,7 +427,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     observeInterfaceSoundSettings();
     observeAppIconTheme();
     scheduleIdlePreloads();
-    maybeOpenFirstRunHub();
     recordRuntimeDiagnostic("runtime.bootstrap", {
       mode: state.performanceMode,
       bootMs: Math.round((performance.now() - bootStartedAt) * 10) / 10,
@@ -2232,14 +2231,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         });
         renderHubPanel();
       });
-  }
-
-  function maybeOpenFirstRunHub(): void {
-    if (!state.firstRunPending || document.hidden) return;
-    scheduler.timeout(() => {
-      if (state.disposed || !state.firstRunPending) return;
-      openHubPanel();
-    }, 800);
   }
 
   function completeFirstRun(status: "complete" | "skipped"): void {
