@@ -7,6 +7,7 @@ const registry = JSON.parse(await readFile(registryPath, "utf8"));
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
 const contentRuntime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+const backgroundMessagePolicy = await readFile("src/platform/runtime/background-message-policy.ts", "utf8");
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
 const background = await readFile("src/extension/background/index.ts", "utf8");
 const composerSource = await readFile("scripts/packages/compose-local-app-packages.mjs", "utf8");
@@ -170,8 +171,8 @@ function verifyRootAndRuntimeOwnership() {
   requireIncludes(contentRuntime, "currentAppSiteId()", "runtime route scope loading must resolve the current site");
   requireIncludes(contentRuntime, "siteScopeMatchesCurrentHost", "runtime route scope loading must check host-aware site metadata");
   requireIncludes(contentRuntime, "scheduler,", "runtime must provide shared scheduling through context.scheduler");
-  requireIncludes(contentRuntime, "extractBackgroundMessageType", "runtime must extract App SDK background message types before sending");
-  requireIncludes(contentRuntime, "appCanSendBackgroundMessage", "runtime must enforce App SDK background message capability metadata");
+  requireIncludes(backgroundMessagePolicy, "extractBackgroundMessageType", "runtime policy must extract App SDK background message types before sending");
+  requireIncludes(contentRuntime, "authorizeBackgroundMessage", "runtime must enforce App SDK background message capability metadata");
   requireIncludes(contentRuntime, "backgroundMessage.denied", "runtime must record denied App SDK background message diagnostics");
   if (/from\s+["'][^"']*features\//.test(contentRuntime) || /import\s*\([^)]*features\//.test(contentRuntime)) {
     fail("content runtime must not import feature bundles directly");
