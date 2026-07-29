@@ -1847,6 +1847,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
       const mode = options?.mode || "captioned";
       if (!(handoff.modes || ["captioned"]).includes(mode)) return { ok: false, error: "This handoff mode is not declared by the package." };
+      // The package owns its loading treatment; the host owns optional audio
+      // feedback so it remains consistent, user-preference-respecting, and
+      // unavailable to unreviewed package code.
+      playInterfaceLaunchSound();
       const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
         .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
@@ -2360,7 +2364,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       onActivate: () => {
         // Create and schedule the cue while this click still has a user gesture,
         // but let the new tab take focus before the first note lands.
-        playAddOnsLaunchSound(0.25);
+        playInterfaceLaunchSound(0.25);
         void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
       },
     });
@@ -2389,7 +2393,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
   }
 
-  function playAddOnsLaunchSound(delay = 0): void {
+  function playInterfaceLaunchSound(delay = 0): void {
     if (!state.interfaceSoundsEnabled || state.interfaceSoundsVolume <= 0) return;
     try {
       const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
