@@ -413,8 +413,9 @@ function mountBeetolGame(context = {}) {
   }
 
   function playCheeseClaimSound() {
-    playTone(466.16, 0.09, 0.045, 'sawtooth');
-    setTimeout(() => playTone(349.23, 0.2, 0.04, 'sawtooth'), 105);
+    playTone(466.16, 0.08, 0.05, 'sawtooth');
+    setTimeout(() => playTone(349.23, 0.15, 0.044, 'sawtooth'), 92);
+    setTimeout(() => playTone(698.46, 0.12, 0.028, 'triangle'), 220);
   }
 
   function playJunkClaimSound() {
@@ -445,6 +446,29 @@ function mountBeetolGame(context = {}) {
       return;
     }
     if (action === 'junkFaucet') playJunkClaimSound();
+  }
+
+  function celebrateCheeseClaim() {
+    const button = els.actions.querySelector('[data-action="claimUBC"]');
+    if (!(button instanceof HTMLElement)) return;
+    button.dataset.celebrating = 'true';
+    button.querySelector('.beetol-cheese-celebration')?.remove();
+    const celebration = document.createElement('span');
+    celebration.className = 'beetol-cheese-celebration';
+    celebration.setAttribute('aria-hidden', 'true');
+    for (let index = 0; index < 14; index += 1) {
+      const sparkle = document.createElement('i');
+      sparkle.style.setProperty('--beetol-burst-x', `${(Math.random() * 90 - 45).toFixed(0)}px`);
+      sparkle.style.setProperty('--beetol-burst-y', `${(-28 - Math.random() * 58).toFixed(0)}px`);
+      sparkle.style.setProperty('--beetol-burst-delay', `${(Math.random() * 120).toFixed(0)}ms`);
+      sparkle.style.setProperty('--beetol-burst-color', ['#ffe479', '#ffffff', '#f7a8d5', '#99e6ff'][index % 4]);
+      celebration.append(sparkle);
+    }
+    button.append(celebration);
+    window.setTimeout(() => {
+      celebration.remove();
+      delete button.dataset.celebrating;
+    }, 1500);
   }
 
   function playCrunchSuccessSound() {
@@ -1017,6 +1041,7 @@ function mountBeetolGame(context = {}) {
     setMessage(gained.length ? `${label}: ${gained.join(', ')}` : `${label}: done.`);
     render();
     playSuccessfulActionSound(action, finalHunt);
+    if (action === 'claimUBC') celebrateCheeseClaim();
     if (finalHunt) scheduleFinalHuntDone();
     if (response.needsRefresh) void reconcileStateAfterAction();
   }

@@ -427,6 +427,46 @@
   z-index: 1;
 }
 
+.beetol-action[data-celebrating="true"] {
+  overflow: visible;
+  z-index: 3;
+}
+
+.beetol-cheese-celebration {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.beetol-cheese-celebration i {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 1px;
+  background: var(--beetol-burst-color);
+  box-shadow: 0 0 7px var(--beetol-burst-color);
+  animation: beetol-cheese-burst 1.35s cubic-bezier(.14,.72,.25,1) var(--beetol-burst-delay) both;
+}
+
+.beetol-cheese-celebration i:nth-child(3n) {
+  width: 5px;
+  height: 11px;
+  border-radius: 3px;
+}
+
+.beetol-cheese-celebration i:nth-child(4n) {
+  transform: rotate(45deg);
+}
+
+@keyframes beetol-cheese-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.25) rotate(0deg); }
+  14% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--beetol-burst-x)), calc(-50% + var(--beetol-burst-y))) scale(.6) rotate(210deg); }
+}
+
 .beetol-action:not(:disabled):hover {
   filter: brightness(0.98);
   transform: translate(1px, 1px);
