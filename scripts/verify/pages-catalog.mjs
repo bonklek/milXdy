@@ -17,7 +17,7 @@ const requiredFiles = [
   "scripts/addons/catalog-policy.json",
   "scripts/addons/trusted-catalog-reviews.json",
   "scripts/build/build-pages-catalog.mjs",
-  "docs/ADD_ONS_CATALOG.md",
+  "docs/contributors/ADD_ONS_CATALOG.md",
   ".github/workflows/pages-catalog.yml",
 ];
 
@@ -166,7 +166,7 @@ if (!workflow.includes("build-pages-catalog.mjs") || !workflow.includes("tmp/pag
   failures.push("Pages workflow must build and upload the staged catalog with checked-in brand assets");
 }
 
-const docs = contents.get("docs/ADD_ONS_CATALOG.md") || "";
+const docs = contents.get("docs/contributors/ADD_ONS_CATALOG.md") || "";
 if (!docs.includes("intentionally manual-only")) failures.push("catalog docs must explain the manual-only deployment gate");
 
 if (failures.length) {

@@ -5,7 +5,7 @@ package:
 
 > Draft a contributor-owned milXdy App SDK 0.2.3 package for maintainer review.
 > Start from the closest template under `sdk/templates/`, validate the manifest
-> against `docs/local-app-package.schema.json`, and use only the public contracts
+> against `docs/schemas/local-app-package.schema.json`, and use only the public contracts
 > in `sdk/types/`, `sdk/ui/`, and the documented App SDK context.
 >
 > Keep a novel package disabled by default. Declare its package kind, lifecycle,
@@ -34,7 +34,7 @@ package:
 > pnpm.cmd run verify:app-sdk-harness
 > ```
 >
-> Also run any package-specific checks named by `docs/APP_SDK.md`. Report the
+> Also run any package-specific checks named by `docs/sdk/APP_SDK.md`. Report the
 > files drafted, declared capabilities, checks and exact results, and unresolved
 > review concerns.
 

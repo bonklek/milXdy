@@ -18,4 +18,4 @@ Temporary add-ons are removed when the browser closes. Reload the same extracted
 - X/Twitter can emit its own Content Security Policy messages in the browser console. A message is relevant to milXdy only when it names a milXdy extension URL or blocks a milXdy asset.
 - Update downloads select the Firefox archive rather than the Chromium archive.
 
-For general problems, see [Troubleshooting](TROUBLESHOOTING.md).
+For general problems, see [Troubleshooting](../getting-started/TROUBLESHOOTING.md).

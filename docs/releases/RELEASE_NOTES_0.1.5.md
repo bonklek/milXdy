@@ -20,7 +20,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 - `npm run build:firefox` emits Firefox output under `dist/firefox`.
 - `npm run build:all` builds both targets.
 - `npm run lint:firefox` runs `web-ext lint --source-dir dist/firefox`.
-- Added [Firefox and Waterfox](FIREFOX_QA.md) installation and compatibility notes.
+- Added [Firefox and Waterfox](../contributors/FIREFOX_QA.md) installation and compatibility notes.
 
 ### RemiNet and RemiChat
 
@@ -64,7 +64,7 @@ milXdy `0.1.5` focuses on RemiNet polish, profile identity surfaces, Tweet PNG e
 
 ## Known Limits
 
-- Firefox features that depend on Chromium's File System Access API have reduced behavior; see [Firefox and Waterfox](FIREFOX_QA.md).
+- Firefox features that depend on Chromium's File System Access API have reduced behavior; see [Firefox and Waterfox](../contributors/FIREFOX_QA.md).
 - Direct RemiNet upload/share for Tweet PNG exports is still blocked until a suitable endpoint and privacy behavior are confirmed.
 - X/Twitter DOM changes can affect share-menu injection, RemiNet surfaces, and profile banner rendering.
 

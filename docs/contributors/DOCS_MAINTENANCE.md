@@ -4,17 +4,17 @@ milXdy has several docs that intentionally overlap at the edges. Keep each doc f
 
 ## Source Of Truth
 
-- `docs/ROADMAP.md`: current release baseline plus future product direction. It should not archive old releases, list GitHub labels, or list suggested milestones.
+- `docs/roadmap/ROADMAP.md`: current release baseline plus future product direction. It should not archive old releases, list GitHub labels, or list suggested milestones.
 - `CHANGELOG.md`: historical release summary in descending version order.
-- `docs/RELEASE_NOTES_*.md`: detailed shipped scope for one release.
-- `docs/RELEASES.md`: reproducible build mechanics, archive expectations, and GitHub release policy.
-- `docs/USER_GUIDE.md` and `docs/user-guides/*`: user-facing behavior for shipped features.
-- `docs/APP_SDK_OVERVIEW.md`: short public SDK front door organized by reader goal.
-- `docs/LOCAL_ADDONS.md`: canonical install, validation, rebuild, status, and reload procedure.
+- `docs/releases/RELEASE_NOTES_*.md`: detailed shipped scope for one release.
+- `docs/releases/RELEASES.md`: reproducible build mechanics, archive expectations, and GitHub release policy.
+- `docs/guides/README.md` and `docs/guides/*`: user-facing behavior for shipped features.
+- `docs/sdk/APP_SDK_OVERVIEW.md`: short public SDK front door organized by reader goal.
+- `docs/sdk/LOCAL_ADDONS.md`: canonical install, validation, rebuild, status, and reload procedure.
 - `sdk/README.md`: canonical first-package tutorial and starter-kit entry point.
-- `docs/APP_SDK.md`: manifest, lifecycle, runtime, and composition reference.
-- `docs/APP_PLATFORM_PRODUCTION_READINESS.md`: distribution, security, support, compatibility, and versioning contract.
-- `docs/ADD_ONS_CATALOG.md`: catalog inventory and publication maintenance.
+- `docs/sdk/APP_SDK.md`: manifest, lifecycle, runtime, and composition reference.
+- `docs/sdk/APP_PLATFORM_PRODUCTION_READINESS.md`: distribution, security, support, compatibility, and versioning contract.
+- `docs/contributors/ADD_ONS_CATALOG.md`: catalog inventory and publication maintenance.
 - GitHub Issues: concrete bugs, enhancements, and contributor tasks.
 - GitHub Milestones: target-version grouping for issues.
 - GitHub Projects: triage/status board for issues.
@@ -34,9 +34,9 @@ When release status changes:
 
 - Verify GitHub Releases first.
 - Update `CHANGELOG.md`.
-- Update or add the matching `docs/RELEASE_NOTES_*.md`.
+- Update or add the matching `docs/releases/RELEASE_NOTES_*.md`.
 - Update `docs/INDEX.md` if a new release notes file is added.
-- Update `docs/RELEASES.md` only if release policy or mechanics changed.
+- Update `docs/releases/RELEASES.md` only if release policy or mechanics changed.
 
 When labels, milestones, or project boards change:
 
@@ -91,7 +91,7 @@ Before committing documentation changes, run targeted searches for stale terms:
 
 ```powershell
 rg -n "Postreader|postreader|Diag|browser-compat|prerelease|release candidate" README.md CHANGELOG.md docs assets src examples scripts
-rg -n "Planning Labels|Suggested GitHub milestones|^## Released:" docs/ROADMAP.md
+rg -n "Planning Labels|Suggested GitHub milestones|^## Released:" docs/roadmap/ROADMAP.md
 ```
 
 Use judgment for intentional hits, such as internal code identifiers or docs explaining old release behavior.

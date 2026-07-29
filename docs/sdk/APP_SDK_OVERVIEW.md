@@ -17,7 +17,7 @@ and SHA-256 hashes.
 
 ### Build An Add-on
 
-Start with the [SDK starter kit](../sdk/README.md). It includes two package
+Start with the [SDK starter kit](../../sdk/README.md). It includes two package
 templates, public TypeScript declarations, a lifecycle test harness, UI
 primitives, accessibility guidance, and package verification commands.
 
@@ -64,7 +64,7 @@ content execution, and package-owned background modules are outside the App SDK
 
 ## Additional Resources
 
-- [Local package manifest schema](local-app-package.schema.json)
-- [Catalog selection schema](milxdy-selection.schema.json)
+- [Local package manifest schema](../schemas/local-app-package.schema.json)
+- [Catalog selection schema](../schemas/milxdy-selection.schema.json)
 - [Post-reading production reference](POST_READING_SDK_REFERENCE.md)
-- [Catalog maintenance and publishing](ADD_ONS_CATALOG.md)
+- [Catalog maintenance and publishing](../contributors/ADD_ONS_CATALOG.md)

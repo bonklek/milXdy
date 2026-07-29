@@ -1,5 +1,5 @@
 {
-  "$schema": "../../../docs/local-app-package.schema.json",
+  "$schema": "../../../docs/schemas/local-app-package.schema.json",
   "manifestVersion": 1,
   "id": "dev-note",
   "name": "Developer Note",

@@ -76,9 +76,9 @@ Developers should treat `0.2.0` as the app-platform preview and planning target:
 
 ## Documentation
 
-- Added [App SDK](APP_SDK.md) covering manifests, runtime lifecycle, Apps Hub, Performance modes, overlay panels, background services, and the future GitHub app package path.
-- Updated [User guide](USER_GUIDE.md) with Apps Hub, side rail, Performance modes, Miladychan Portal, and Music workflows.
-- Updated [Post-reading user guide](user-guides/post-reading.md) and [Post-reading standalone notes](POST_READING_STANDALONE.md) with Wiki read-aloud handoff, voice timing behavior, custom TTS timing support, and the extracted Chromium build scope.
-- Updated [Privacy and permissions](PRIVACY_AND_PERMISSIONS.md) for Miladychan and Music data flows.
-- Updated [Troubleshooting](TROUBLESHOOTING.md) for Apps Hub, Miladychan, Music folders, enrichment, and QR import.
+- Added [App SDK](../sdk/APP_SDK.md) covering manifests, runtime lifecycle, Apps Hub, Performance modes, overlay panels, background services, and the future GitHub app package path.
+- Updated [User guide](../guides/README.md) with Apps Hub, side rail, Performance modes, Miladychan Portal, and Music workflows.
+- Updated [Post-reading user guide](../guides/post-reading.md) and [Post-reading standalone notes](../reference/POST_READING_STANDALONE.md) with Wiki read-aloud handoff, voice timing behavior, custom TTS timing support, and the extracted Chromium build scope.
+- Updated [Privacy and permissions](../getting-started/PRIVACY_AND_PERMISSIONS.md) for Miladychan and Music data flows.
+- Updated [Troubleshooting](../getting-started/TROUBLESHOOTING.md) for Apps Hub, Miladychan, Music folders, enrichment, and QR import.
 - Updated the GitHub README presentation with the high-resolution full milXdy logo from `assets/brand/milxdy-home-logo-wide.png`.

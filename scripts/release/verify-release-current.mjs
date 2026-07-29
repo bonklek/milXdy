@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const manifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
-const releases = await readFile("docs/RELEASES.md", "utf8");
+const releases = await readFile("docs/releases/RELEASES.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
 const contributing = await readFile("CONTRIBUTING.md", "utf8");
 const releaseGate = await readFile("scripts/release/verify-release-gates.mjs", "utf8");
@@ -11,8 +11,8 @@ const packageRelease = await readFile("scripts/release/package-release.mjs", "ut
 const releaseChecksums = await readFile("scripts/release/verify-release-checksums.mjs", "utf8");
 const releaseReproducible = await readFile("scripts/release/verify-reproducible-release.mjs", "utf8");
 const releaseLock = await readFile("scripts/release/release-artifact-lock.mjs", "utf8");
-const roadmap = await readFile("docs/ROADMAP.md", "utf8");
-const releaseNotes = await readFile(`docs/RELEASE_NOTES_${packageJson.version}.md`, "utf8");
+const roadmap = await readFile("docs/roadmap/ROADMAP.md", "utf8");
+const releaseNotes = await readFile(`docs/releases/RELEASE_NOTES_${packageJson.version}.md`, "utf8");
 
 assertSemver(packageJson.version, "package.json version");
 assertSemver(packageJson.appSdkVersion, "package.json appSdkVersion");

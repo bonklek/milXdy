@@ -210,8 +210,8 @@ async function verifyManifestDisclosureContracts() {
   const [manifest, registry, privacyDocs, userGuide] = await Promise.all([
     readJson("assets/extension/manifest.json"),
     readJson("src/platform/app-sdk/first-party-apps.json"),
-    readFile("docs/PRIVACY_AND_PERMISSIONS.md", "utf8"),
-    readFile("docs/USER_GUIDE.md", "utf8"),
+    readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8"),
+    readFile("docs/guides/README.md", "utf8"),
   ]);
   const manifestHosts = manifest.host_permissions || [];
   const metadataHosts = new Set();

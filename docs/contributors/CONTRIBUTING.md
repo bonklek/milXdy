@@ -22,7 +22,7 @@ Use GitHub Discussions for early ideas and roadmap feedback. Use GitHub Issues w
 
 Before opening a feature request, check:
 
-- [Roadmap](ROADMAP.md)
+- [Roadmap](../roadmap/ROADMAP.md)
 - existing Issues
 - existing Discussions
 
@@ -46,4 +46,3 @@ For app UI changes, follow the [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE
 ## Performance Expectations
 
 milXdy combines several X/Twitter enhancement features, so performance is a release requirement. Avoid new page-wide scans, repeated mutation observers, unbounded network calls, and eager OCR/model initialization.
-

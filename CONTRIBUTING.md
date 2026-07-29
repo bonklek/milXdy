@@ -59,7 +59,7 @@ npm run verify:app-smoke:020
 ```
 
 For the maintainer-only unpacked Chrome rebuild/reload loop, see
-[Developer QA reload loop](docs/DEVELOPER_QA_RELOAD.md). Its stable output is
+[Developer QA reload loop](docs/contributors/DEVELOPER_QA_RELOAD.md). Its stable output is
 `dist/qa-chromium` and is separate from release packaging.
 
 For pre-commit QA from a dedicated implementation worktree, use the documented
@@ -72,7 +72,7 @@ docs-only changes usually need focused link/text checks, shared TypeScript
 changes usually need `npm run typecheck`, and manifest or build-output changes
 usually need the affected browser build plus nearby contract verifiers.
 
-For final release readiness, use the release gate documented in [docs/RELEASES.md](docs/RELEASES.md):
+For final release readiness, use the release gate documented in [docs/releases/RELEASES.md](docs/releases/RELEASES.md):
 
 ```powershell
 npm run verify:release:gates

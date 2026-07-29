@@ -25,14 +25,14 @@ declared App SDK contract.
   UI, interaction, review, and redistribution baseline.
 - [`AI_AUTHORING.md`](AI_AUTHORING.md): a reusable prompt that keeps AI-assisted
   package drafts inside the public SDK, disclosure, consent, and review contract.
-- `../docs/local-app-package.schema.json`: JSON Schema for
+- `../docs/schemas/local-app-package.schema.json`: JSON Schema for
   `milxdy.app.json` authoring.
-- `../docs/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.
-- `../docs/APP_PLATFORM_PRODUCTION_READINESS.md`: platform guarantees,
+- `../docs/sdk/APP_SDK.md`: full manifest, composition, privacy, and runtime guide.
+- `../docs/sdk/APP_PLATFORM_PRODUCTION_READINESS.md`: platform guarantees,
   security, compatibility, versioning, and the supported distribution contract.
-- `../docs/LOCAL_ADDONS.md`: the managed manual and catalog installation,
+- `../docs/sdk/LOCAL_ADDONS.md`: the managed manual and catalog installation,
   rebuild, and Chrome reload workflow.
-- `../docs/ADD_ONS_CATALOG.md`: catalog selection format, publication gates,
+- `../docs/contributors/ADD_ONS_CATALOG.md`: catalog selection format, publication gates,
   preview, and maintenance contract.
 
 ## Try The Template
@@ -74,11 +74,11 @@ pnpm.cmd run build:local-apps:chromium -- --package=sdk/templates/basic-feature 
 For a reviewed external author package that needs the release's single Chrome QA
 extension, give its folder or ZIP to the active QA host rather than copying it
 into core source. The maintainer flow is documented in
-[Developer QA reload](../docs/DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
+[Developer QA reload](../docs/contributors/DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
 
 For a native-style composer-adjacent panel, use the documented
 `composerAction` manifest field and `onComposerAction(context)` callback in
-[the App SDK guide](../docs/APP_SDK.md#composer-actions). Do not call an
+[the App SDK guide](../docs/sdk/APP_SDK.md#composer-actions). Do not call an
 overlay app's `open()` lifecycle from a composer action.
 
 That direct builder exercises the same composer but does not provide the local

@@ -15,7 +15,7 @@ catalog selection files or manually supplied ZIPs, pinned download verification,
 transactional package placement, a stable build folder, and durable status for
 Apps & Features.
 
-Start with the [SDK starter kit](../sdk/README.md), then use this guide as the
+Start with the [SDK starter kit](../../sdk/README.md), then use this guide as the
 authoritative manifest, runtime, composition, and security reference. The
 [App Platform Support Contract](APP_PLATFORM_PRODUCTION_READINESS.md) defines
 the supported distribution, security, compatibility, and versioning contract.
@@ -209,7 +209,7 @@ Manifest `hub.rail.supported` controls whether an app can be pinned. `hub.rail.d
 
 Current first-party Apps & Features-managed enablement keys include Post-reading `enabled`, Composer Tools `milxdy.composerTools.enabled`, RemiStats `milxdy.remistats.enabled`, Beetol `milxdy.remistats.beetol.enabled`, RemiNet Chat `milxdy.reminetChat.enabled`, Miladychan Portal `milxdy.miladychan.enabled`, Music `milxdy.music.enabled`, Wiki links `remiliaWikiHyperlink.settings.enabled`, Wiki sidebar `remiliaWikiHyperlink.settings.sidebarEnabled` with fallback migration from the legacy Wiki links bit when unset, and Milady Maxxer `mode` as a legacy enablement/mode key.
 
-Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets the content runtime open Apps & Features once on X. The background install seeder keeps first-party apps enabled by default until the user chooses a setup. Choosing Lite, Balanced, or Full converges toggleable apps to the exact manifest `hub.presets` set, disables toggleable apps excluded from that preset, applies `hub.rail.defaultPinned`, and applies the matching Performance mode without importing app bundles just to change settings. Core entries without enablement toggles are preserved. The same setup choices remain available from the Apps & Features settings menu after first-run.
+Fresh installs set `milxdy.apps.firstRun.status` to `pending`, which lets Apps & Features present setup choices when the user explicitly opens it on X; the content runtime does not auto-open the panel. The background install seeder keeps first-party apps enabled by default until the user chooses a setup. Choosing Lite, Balanced, or Full converges toggleable apps to the exact manifest `hub.presets` set, disables toggleable apps excluded from that preset, applies `hub.rail.defaultPinned`, and applies the matching Performance mode without importing app bundles just to change settings. Core entries without enablement toggles are preserved. The same setup choices remain available from the Apps & Features settings menu after first-run.
 
 Release builds keep the full first-party app set, assets, and host permissions. Lite, Balanced, and Full are setup/preset choices inside milXdy; they must not make an app unavailable or remove its enable, pin, or open controls.
 
@@ -252,7 +252,7 @@ Use the shared overlay drag and resize helpers for movable app windows. Header b
 
 Overlay layout records live in `local:milxdy.overlayApps.layouts.v1`. They may store app IDs, pixel bounds, rail side, viewport size, snap metadata, and timestamps; they must not store page URLs, account identifiers, iframe contents, board/thread payloads, music library paths, auth state, or remote-service data. Keep legacy per-app width, height, and top keys readable during migration.
 
-For public contributor-facing UI expectations, including classic utility-window styling, side-rail behavior, app headers, controls, and semantic theme variables, see the [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md).
+For public contributor-facing UI expectations, including classic utility-window styling, side-rail behavior, app headers, controls, and semantic theme variables, see the [Contributor UI Style Guide](../contributors/CONTRIBUTOR_UI_STYLE_GUIDE.md).
 
 ## App Chrome Styles
 
@@ -497,7 +497,7 @@ panel is hidden rather than drawn through the header.
 ### Package To Custom Build
 
 `examples/packages/local-dev/dev-note/` is the smallest checked-in third-party
-package. Use the [starter kit](../sdk/README.md) to build and validate a package,
+package. Use the [starter kit](../../sdk/README.md) to build and validate a package,
 then follow [Local Add-ons](LOCAL_ADDONS.md) to compose it into Chromium. A ZIP
 contains one package root with `milxdy.app.json` at that root.
 
@@ -510,7 +510,7 @@ Expected managed artifacts:
 - `dist/chromium-local-apps/local-apps/<package-id>/...` containing copied declared package files
 - `dist/chromium-local-apps/local-app-composition.json` preserving package source, review, diagnostics, privacy, and settings metadata for inspection
 
-`docs/local-app-package.schema.json` is the authoring schema for `milxdy.app.json`. It includes the supported enum values for package kind, lifecycle mode, surfaces, site scopes, settings locations, controls, reset behavior, presets, privacy labels, cost classes, asset kinds, review status, and current background metadata.
+`docs/schemas/local-app-package.schema.json` is the authoring schema for `milxdy.app.json`. It includes the supported enum values for package kind, lifecycle mode, surfaces, site scopes, settings locations, controls, reset behavior, presets, privacy labels, cost classes, asset kinds, review status, and current background metadata.
 
 ### Starter Templates And Author Harness
 
@@ -521,7 +521,7 @@ The docked template also demonstrates `boot`/`open`/`close`/`disable`/`dispose`,
 guarded asset URLs, and declared-key storage.
 
 For AI-assisted package drafting, use the reusable
-[AI authoring prompt](../sdk/AI_AUTHORING.md). It constrains assistants to the
+[AI authoring prompt](../../sdk/AI_AUTHORING.md). It constrains assistants to the
 public SDK and keeps validation, consent, trust, licensing, privacy, and
 maintainer review as required gates.
 
@@ -586,7 +586,7 @@ or focuses a normal browser tab, and its optional cue uses the shared Interface
 sounds control in the extension Audio settings.
 
 The catalog selection document is defined by
-[`milxdy-selection.schema.json`](milxdy-selection.schema.json). Catalog review
+[`milxdy-selection.schema.json`](../schemas/milxdy-selection.schema.json). Catalog review
 claims become trusted only when their package ID, archive hash, reviewer, and
 review date match the checked-in trusted-review registry.
 
@@ -704,4 +704,4 @@ surface, overlay, settings, and diagnostic APIs.
 
 For the stable end-user ZIP folder, rebuild, and Chrome reload workflow, see
 [Local Add-ons](LOCAL_ADDONS.md).
-For the current GitHub-based maintainer submission and catalog-review process, see [Submit a milXdy Add-on for Catalog Consideration](ADD_ON_CATALOG_SUBMISSIONS.md). It describes the required review materials and outcomes without changing the local package contract or creating a package registry, signing guarantee, or automated publishing system.
+For the current GitHub-based maintainer submission and catalog-review process, see [Submit a milXdy Add-on for Catalog Consideration](../contributors/ADD_ON_CATALOG_SUBMISSIONS.md). It describes the required review materials and outcomes without changing the local package contract or creating a package registry, signing guarantee, or automated publishing system.

@@ -39,7 +39,7 @@ The shared side rail appears on X/Twitter and opens Apps & Features. This menu s
 - Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
-- On fresh installs, Apps & Features opens once with Lite, Balanced, and Full setup choices. These choices apply exact app enablement, default rail pins, and the matching Performance mode while keeping every first-party app available and toggleable. Apps excluded from the chosen setup are disabled, not removed. The same setup choices remain available from the Apps & Features settings menu later.
+- On fresh installs, explicitly open Apps & Features to choose Lite, Balanced, or Full setup; milXdy does not surprise-open the panel. These choices apply exact app enablement, default rail pins, and the matching Performance mode while keeping every first-party app available and toggleable. Apps excluded from the chosen setup are disabled, not removed. The same setup choices remain available from the Apps & Features settings menu later.
 
 Enabled and pinned are different states: an app or feature can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions. Whole-extension controls, global presets, and Performance mode remain in the popup rather than Apps & Features.
 
@@ -202,7 +202,7 @@ The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunt
 - Click **Log in** on RemiliaNET so the site can start its current OIDC login flow.
 - Finish RemiliaNET login in the opened tab, including any 2FA step.
 - Return to milXdy and click **Retry session**.
-- RemiNet connector state and the short-lived RemiliaNET access token are stored in Chrome extension local storage. Rotating OIDC refresh tokens are kept in extension background memory when available and are not intentionally persisted.
+- Non-sensitive RemiNet connector state is stored in Chrome extension local storage. RemiNet access and refresh tokens stay only in extension background memory and are not intentionally persisted.
 - Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
 
 After **Retry session**, milXdy checks the RemiliaNET browser session and reuses or silently renews the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.

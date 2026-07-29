@@ -74,7 +74,7 @@ Also verify:
 - SHA-256 checksum manifest in `release/milXdy-<version>-checksums.sha256`
 - reproducibility verification with `npm run verify:release:reproducible`
 - changelog entry
-- version-specific release notes, such as `docs/RELEASE_NOTES_0.2.1.md`
+- version-specific release notes, such as `docs/releases/RELEASE_NOTES_0.2.1.md`
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
 - no local browser caches or machine-specific test output in source or release archives
