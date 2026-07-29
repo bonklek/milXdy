@@ -18,5 +18,6 @@ local-addons/
 *.tmp
 .codex-review-notes-*.tmp.md
 *.map
+*.tsbuildinfo
 __pycache__/
 *.pyc

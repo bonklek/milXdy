@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { verifyAppMessageAuthorizationWiring } from "./app-message-authorization-wiring.mjs";
 
 const registryPath = "src/platform/app-sdk/first-party-apps.json";
 const registry = JSON.parse(await readFile(registryPath, "utf8"));
@@ -48,6 +49,7 @@ verifyPlatformContract();
 verifySdkVersionSource();
 verifyLocalPackageShapeContract();
 verifyRootAndRuntimeOwnership();
+verifyAppMessageAuthorizationWiring();
 verifyRegistry();
 await verifyContentModules();
 await verifyBackgroundMetadata();
@@ -172,7 +174,7 @@ function verifyRootAndRuntimeOwnership() {
   requireIncludes(contentRuntime, "siteScopeMatchesCurrentHost", "runtime route scope loading must check host-aware site metadata");
   requireIncludes(contentRuntime, "scheduler,", "runtime must provide shared scheduling through context.scheduler");
   requireIncludes(backgroundMessagePolicy, "extractBackgroundMessageType", "runtime policy must extract App SDK background message types before sending");
-  requireIncludes(contentRuntime, "authorizeBackgroundMessage", "runtime must enforce App SDK background message capability metadata");
+  requireIncludes(contentRuntime, "dispatchAuthorizedBackgroundMessage", "runtime must enforce App SDK background message capability metadata before queueing");
   requireIncludes(contentRuntime, "backgroundMessage.denied", "runtime must record denied App SDK background message diagnostics");
   if (/from\s+["'][^"']*features\//.test(contentRuntime) || /import\s*\([^)]*features\//.test(contentRuntime)) {
     fail("content runtime must not import feature bundles directly");

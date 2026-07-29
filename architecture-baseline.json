@@ -1,0 +1,375 @@
+{
+  "schemaVersion": 1,
+  "limits": {
+    "fileSoft": 300,
+    "fileHard": 500,
+    "fileEmergency": 800,
+    "functionSoft": 40,
+    "functionHard": 80
+  },
+  "oversizedFiles": {
+    "scripts/build/build-extension.mjs": 703,
+    "scripts/packages/compose-local-app-packages.mjs": 2235,
+    "scripts/packages/verify-local-app-trust-gates.mjs": 1097,
+    "scripts/verify/app-sdk-compliance.mjs": 775,
+    "src/apps/beetol/background.js": 744,
+    "src/apps/beetol/content.js": 1254,
+    "src/apps/link-browser/content.ts": 572,
+    "src/apps/milady-maxxer/content.ts": 1958,
+    "src/apps/milady-maxxer/effects.ts": 508,
+    "src/apps/milady-maxxer/popup.tsx": 1391,
+    "src/apps/milady-maxxer/styles.ts": 1916,
+    "src/apps/miladychan-portal/content.ts": 927,
+    "src/apps/music/content.ts": 3299,
+    "src/apps/post-reading/content.ts": 2528,
+    "src/apps/post-reading/player.ts": 817,
+    "src/apps/post-reading/styles.ts": 748,
+    "src/apps/reminet-chat/content.ts": 2873,
+    "src/apps/remistats/content.js": 2531,
+    "src/apps/root-visuals/content.ts": 935,
+    "src/apps/tweet-png/content.ts": 860,
+    "src/apps/wiki-links/content.ts": 1188,
+    "src/apps/wiki-sidebar/content.ts": 968,
+    "src/apps/wiki-sidebar/frameContent.ts": 1038,
+    "src/extension/background/index.ts": 1236,
+    "src/extension/frames/reminet-chat-bridge.ts": 596,
+    "src/extension/popup/index.ts": 2599,
+    "src/platform/overlay/app-layout.ts": 798,
+    "src/platform/overlay/dock.ts": 1075,
+    "src/platform/runtime/content-runtime.ts": 5838,
+    "src/platform/scanner/twitter-scanner.ts": 680,
+    "src/platform/visuals/reskin-styles.ts": 1795
+  },
+  "oversizedFunctions": {
+    "scripts/packages/compose-local-app-packages.mjs:analyzePackage#1": 119,
+    "scripts/packages/compose-local-app-packages.mjs:buildGeneratedPlan#1": 117,
+    "scripts/packages/compose-local-app-packages.mjs:evaluatePackageTrust#1": 104,
+    "scripts/packages/compose-local-app-packages.mjs:composeLocalPackages#1": 98,
+    "scripts/qa/runtime/qa-popup.js:<anonymous@1>#1": 87,
+    "scripts/release/verify-release-020.mjs:verifyDocsCoverage#1": 268,
+    "scripts/smoke/live-rail-app-probe.js:<anonymous@1>#1": 102,
+    "scripts/smoke/live-smoke-probe-020.js:<anonymous@1>#1": 87,
+    "scripts/verify/app-sdk-compliance.mjs:verifyLifecycleAndSiteMetadata#1": 85,
+    "scripts/verify/platform.mjs:verifyRuntimeOwnership#1": 135,
+    "sdk/testing/app-harness.mjs:createAppHarness#1": 122,
+    "src/apps/beetol/content.js:mountBeetolGame#1": 1226,
+    "src/apps/beetol/content.js:runAction#1": 86,
+    "src/apps/link-browser/content.ts:injectStyles#1": 154,
+    "src/apps/link-browser/content.ts:render#1": 82,
+    "src/apps/milady-maxxer/content.ts:processTweet#1": 135,
+    "src/apps/milady-maxxer/content.ts:processDirectMessage#1": 97,
+    "src/apps/milady-maxxer/effects.ts:applyMode#1": 137,
+    "src/apps/milady-maxxer/popup.tsx:App#1": 566,
+    "src/apps/milady-maxxer/styles.ts:injectStyles#1": 1915,
+    "src/apps/music/content.ts:renderPlayer#1": 97,
+    "src/apps/post-reading/content.ts:boot#1": 180,
+    "src/apps/post-reading/content.ts:enrichFullQuote#1": 157,
+    "src/apps/post-reading/content.ts:updateTweetHighlight#1": 118,
+    "src/apps/post-reading/player.ts:renderSettings#1": 219,
+    "src/apps/post-reading/player.ts:constructor#1": 122,
+    "src/apps/post-reading/speech.ts:startCurrentChunk#1": 83,
+    "src/apps/post-reading/styles.ts:injectStyles#1": 748,
+    "src/apps/post-reading/ttsEngines.ts:speak#2": 126,
+    "src/apps/reminet-chat/content.ts:createRoot#1": 82,
+    "src/apps/remistats/content.js:insertProfileBadge#1": 122,
+    "src/apps/remistats/content.js:installRemiStatsDelegation#1": 87,
+    "src/apps/remistats/content.js:createScoreBadge#1": 84,
+    "src/apps/root-visuals/content.ts:setupHomeLogoReplacement#1": 88,
+    "src/apps/tweet-png/content.ts:renderTweetPng#1": 107,
+    "src/apps/tweet-png/content.ts:injectTweetPngStyles#1": 81,
+    "src/apps/wiki-links/content.ts:showGrokWikiCta#1": 182,
+    "src/apps/wiki-links/styles.ts:injectStyles#1": 88,
+    "src/apps/wiki-sidebar/content.ts:injectStyles#1": 252,
+    "src/apps/wiki-sidebar/content.ts:render#1": 167,
+    "src/apps/wiki-sidebar/frameContent.ts:injectSidebarThemeStyles#1": 160,
+    "src/apps/wiki-sidebar/frameContent.ts:injectPostReadingStyles#1": 99,
+    "src/extension/frames/reminet-chat-bridge.ts:syncBeetleWelcome#1": 109,
+    "src/extension/popup/index.ts:setupVisualSettings#1": 110,
+    "src/extension/popup/index.ts:applyFullStartSetup#1": 98,
+    "src/extension/popup/index.ts:setupUpdateStatus#1": 86,
+    "src/platform/diagnostics/max-profile-benchmark.ts:runBenchmark#1": 99,
+    "src/platform/overlay/app-chrome.ts:ensureOverlayAppChromeStyles#1": 178,
+    "src/platform/overlay/dock.ts:createDockApi#1": 567,
+    "src/platform/overlay/dock.ts:injectStyles#1": 436,
+    "src/platform/overlay/panel-base.ts:startFreeformResize#1": 84,
+    "src/platform/runtime/content-runtime.ts:createContentRuntime#1": 4017,
+    "src/platform/runtime/content-runtime.ts:injectTweetScaffoldStyles#1": 1212,
+    "src/platform/runtime/content-runtime.ts:localAddonManagerPanel#1": 270,
+    "src/platform/runtime/content-runtime.ts:openComposerAction#1": 173,
+    "src/platform/runtime/content-runtime.ts:appHubCard#1": 122,
+    "src/platform/runtime/content-runtime.ts:openReplyActionPanel#1": 115,
+    "src/platform/runtime/content-runtime.ts:loadApp#1": 109,
+    "src/platform/runtime/content-runtime.ts:renderHubPanel#1": 101,
+    "src/platform/runtime/content-runtime.ts:createRuntimeScheduler#1": 90,
+    "src/platform/runtime/content-runtime.ts:refreshComposerActionButtons#1": 88
+  },
+  "uncheckedProduction": [
+    "src/apps/beetol/background.js",
+    "src/apps/beetol/content.js",
+    "src/apps/beetol/hunt-cooldown.js",
+    "src/apps/milady-maxxer/popup.tsx",
+    "src/apps/milady-maxxer/shared/node-image.ts",
+    "src/apps/remistats/background.js",
+    "src/apps/remistats/content.js",
+    "src/apps/remistats/sounds.js"
+  ],
+  "wildcardAppEntries": [
+    "src/apps/beetol/entry.ts",
+    "src/apps/composer-tools/entry.ts",
+    "src/apps/link-browser/entry.ts",
+    "src/apps/milady-maxxer/entry.ts",
+    "src/apps/miladychan-portal/entry.ts",
+    "src/apps/music/entry.ts",
+    "src/apps/post-reading/entry.ts",
+    "src/apps/reminet-chat/entry.ts",
+    "src/apps/remistats/entry.ts",
+    "src/apps/root-visuals/entry.ts",
+    "src/apps/tweet-png/entry.ts",
+    "src/apps/wiki-links/entry.ts",
+    "src/apps/wiki-sidebar/entry.ts"
+  ],
+  "waivers": [
+    {
+      "id": "existing-emergency-scripts-packages-compose-local-app-packages-mjs",
+      "path": "scripts/packages/compose-local-app-packages.mjs",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 2235
+    },
+    {
+      "id": "existing-emergency-scripts-packages-verify-local-app-trust-gates-mjs",
+      "path": "scripts/packages/verify-local-app-trust-gates.mjs",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1097
+    },
+    {
+      "id": "existing-emergency-src-apps-beetol-content-js",
+      "path": "src/apps/beetol/content.js",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1254
+    },
+    {
+      "id": "existing-emergency-src-apps-milady-maxxer-content-ts",
+      "path": "src/apps/milady-maxxer/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1958
+    },
+    {
+      "id": "existing-emergency-src-apps-milady-maxxer-popup-tsx",
+      "path": "src/apps/milady-maxxer/popup.tsx",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1391
+    },
+    {
+      "id": "existing-emergency-src-apps-milady-maxxer-styles-ts",
+      "path": "src/apps/milady-maxxer/styles.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1916
+    },
+    {
+      "id": "existing-emergency-src-apps-miladychan-portal-content-ts",
+      "path": "src/apps/miladychan-portal/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 927
+    },
+    {
+      "id": "existing-emergency-src-apps-music-content-ts",
+      "path": "src/apps/music/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 3299
+    },
+    {
+      "id": "existing-emergency-src-apps-post-reading-content-ts",
+      "path": "src/apps/post-reading/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 2528
+    },
+    {
+      "id": "existing-emergency-src-apps-post-reading-player-ts",
+      "path": "src/apps/post-reading/player.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 817
+    },
+    {
+      "id": "existing-emergency-src-apps-reminet-chat-content-ts",
+      "path": "src/apps/reminet-chat/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 2873
+    },
+    {
+      "id": "existing-emergency-src-apps-remistats-content-js",
+      "path": "src/apps/remistats/content.js",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 2531
+    },
+    {
+      "id": "existing-emergency-src-apps-root-visuals-content-ts",
+      "path": "src/apps/root-visuals/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 935
+    },
+    {
+      "id": "existing-emergency-src-apps-tweet-png-content-ts",
+      "path": "src/apps/tweet-png/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 860
+    },
+    {
+      "id": "existing-emergency-src-apps-wiki-links-content-ts",
+      "path": "src/apps/wiki-links/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1188
+    },
+    {
+      "id": "existing-emergency-src-apps-wiki-sidebar-content-ts",
+      "path": "src/apps/wiki-sidebar/content.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 968
+    },
+    {
+      "id": "existing-emergency-src-apps-wiki-sidebar-framecontent-ts",
+      "path": "src/apps/wiki-sidebar/frameContent.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1038
+    },
+    {
+      "id": "existing-emergency-src-extension-background-index-ts",
+      "path": "src/extension/background/index.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1236
+    },
+    {
+      "id": "existing-emergency-src-extension-popup-index-ts",
+      "path": "src/extension/popup/index.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 2599
+    },
+    {
+      "id": "existing-emergency-src-platform-overlay-dock-ts",
+      "path": "src/platform/overlay/dock.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1075
+    },
+    {
+      "id": "existing-emergency-src-platform-runtime-content-runtime-ts",
+      "path": "src/platform/runtime/content-runtime.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 5838
+    },
+    {
+      "id": "existing-emergency-src-platform-visuals-reskin-styles-ts",
+      "path": "src/platform/visuals/reskin-styles.ts",
+      "owner": "release-maintainer",
+      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
+      "removalMilestone": "post-0.2.4 architecture reduction",
+      "tests": [
+        "npm run verify:architecture"
+      ],
+      "maximumLogicalLines": 1795
+    }
+  ]
+}
