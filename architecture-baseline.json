@@ -8,7 +8,7 @@
     "functionHard": 80
   },
   "oversizedFiles": {
-    "scripts/build/build-extension.mjs": 703,
+    "scripts/build/build-extension.mjs": 704,
     "scripts/packages/compose-local-app-packages.mjs": 2235,
     "scripts/packages/verify-local-app-trust-gates.mjs": 1097,
     "scripts/verify/app-sdk-compliance.mjs": 775,
@@ -34,7 +34,6 @@
     "src/extension/frames/reminet-chat-bridge.ts": 596,
     "src/extension/popup/index.ts": 2599,
     "src/platform/overlay/app-layout.ts": 798,
-    "src/platform/overlay/dock.ts": 1075,
     "src/platform/runtime/content-runtime.ts": 5838,
     "src/platform/scanner/twitter-scanner.ts": 680,
     "src/platform/visuals/reskin-styles.ts": 1795
@@ -49,7 +48,7 @@
     "scripts/smoke/live-rail-app-probe.js:<anonymous@1>#1": 102,
     "scripts/smoke/live-smoke-probe-020.js:<anonymous@1>#1": 87,
     "scripts/verify/app-sdk-compliance.mjs:verifyLifecycleAndSiteMetadata#1": 85,
-    "scripts/verify/platform.mjs:verifyRuntimeOwnership#1": 135,
+    "scripts/verify/platform.mjs:verifyRuntimeOwnership#1": 137,
     "sdk/testing/app-harness.mjs:createAppHarness#1": 122,
     "src/apps/beetol/content.js:mountBeetolGame#1": 1226,
     "src/apps/beetol/content.js:runAction#1": 86,
@@ -87,8 +86,6 @@
     "src/extension/popup/index.ts:setupUpdateStatus#1": 86,
     "src/platform/diagnostics/max-profile-benchmark.ts:runBenchmark#1": 99,
     "src/platform/overlay/app-chrome.ts:ensureOverlayAppChromeStyles#1": 178,
-    "src/platform/overlay/dock.ts:createDockApi#1": 567,
-    "src/platform/overlay/dock.ts:injectStyles#1": 436,
     "src/platform/overlay/panel-base.ts:startFreeformResize#1": 84,
     "src/platform/runtime/content-runtime.ts:createContentRuntime#1": 4017,
     "src/platform/runtime/content-runtime.ts:injectTweetScaffoldStyles#1": 1212,
@@ -107,7 +104,8 @@
     "src/apps/beetol/hunt-cooldown.js",
     "src/apps/remistats/background.js",
     "src/apps/remistats/content.js",
-    "src/apps/remistats/sounds.js"
+    "src/apps/remistats/sounds.js",
+    "src/platform/overlay/dock.css.d.ts"
   ],
   "wildcardAppEntries": [
     "src/apps/beetol/entry.ts",
@@ -322,17 +320,6 @@
         "npm run verify:architecture"
       ],
       "maximumLogicalLines": 2599
-    },
-    {
-      "id": "existing-emergency-src-platform-overlay-dock-ts",
-      "path": "src/platform/overlay/dock.ts",
-      "owner": "release-maintainer",
-      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
-      "removalMilestone": "post-0.2.4 architecture reduction",
-      "tests": [
-        "npm run verify:architecture"
-      ],
-      "maximumLogicalLines": 1075
     },
     {
       "id": "existing-emergency-src-platform-runtime-content-runtime-ts",

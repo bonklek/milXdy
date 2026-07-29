@@ -1,0 +1,429 @@
+
+    #milxdy-overlay-dock-root {
+      --milxdy-dock-bg: #1f222a;
+      --milxdy-dock-panel: #101218;
+      --milxdy-dock-border: #8f7932;
+      --milxdy-dock-highlight: #454953;
+      --milxdy-dock-shadow: #050608;
+      --milxdy-dock-scrollbar: #b68e24;
+      --milxdy-dock-icon-bg: #101218;
+      --milxdy-dock-icon-border: #5e5228;
+      --milxdy-dock-icon-shadow: #050608;
+      --milxdy-dock-active: #f0b72d;
+      --milxdy-dock-top: 16px;
+      --milxdy-dock-bottom-clearance: 136px;
+      position: fixed;
+      top: var(--milxdy-dock-top);
+      z-index: 2147483646;
+      color-scheme: light dark;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      user-select: none;
+    }
+    #milxdy-overlay-dock-root[data-host-media-viewer-open="true"] {
+      display: none !important;
+    }
+    html[data-milxdy-x-theme="light"] #milxdy-overlay-dock-root,
+    html[data-milxdy-settings-theme="light"] #milxdy-overlay-dock-root,
+    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) #milxdy-overlay-dock-root {
+      --milxdy-dock-bg: #d4d0c8;
+      --milxdy-dock-panel: #ece9df;
+      --milxdy-dock-border: #808080;
+      --milxdy-dock-highlight: #ffffff;
+      --milxdy-dock-shadow: #404040;
+      --milxdy-dock-scrollbar: #808080;
+      --milxdy-dock-icon-bg: #ece9df;
+      --milxdy-dock-icon-border: #808080;
+      --milxdy-dock-icon-shadow: #404040;
+      --milxdy-dock-active: #000080;
+      color-scheme: light;
+    }
+    html[data-milxdy-x-theme="dark"] #milxdy-overlay-dock-root,
+    html[data-milxdy-x-theme="dim"] #milxdy-overlay-dock-root,
+    html[data-milxdy-settings-theme="dark"] #milxdy-overlay-dock-root,
+    html:not([data-milxdy-settings-theme="light"])[style*="color-scheme: dark"] #milxdy-overlay-dock-root {
+      --milxdy-dock-bg: #1f222a;
+      --milxdy-dock-panel: #101218;
+      --milxdy-dock-border: #8f7932;
+      --milxdy-dock-highlight: #454953;
+      --milxdy-dock-shadow: #050608;
+      --milxdy-dock-scrollbar: #b68e24;
+      --milxdy-dock-icon-bg: #101218;
+      --milxdy-dock-icon-border: #5e5228;
+      --milxdy-dock-icon-shadow: #050608;
+      --milxdy-dock-active: #f0b72d;
+      color-scheme: dark;
+    }
+    @media (prefers-color-scheme: light) {
+      html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]):not([data-milxdy-settings-theme="dark"]):not([style*="color-scheme: dark"]) #milxdy-overlay-dock-root {
+        --milxdy-dock-bg: #d4d0c8;
+        --milxdy-dock-panel: #ece9df;
+        --milxdy-dock-border: #808080;
+        --milxdy-dock-highlight: #ffffff;
+        --milxdy-dock-shadow: #404040;
+        --milxdy-dock-scrollbar: #808080;
+        --milxdy-dock-icon-bg: #ece9df;
+        --milxdy-dock-icon-border: #808080;
+        --milxdy-dock-icon-shadow: #404040;
+        --milxdy-dock-active: #000080;
+        color-scheme: light;
+      }
+    }
+    #milxdy-overlay-dock-root[data-side="left"] {
+      --milxdy-dock-top: 72px;
+      --milxdy-dock-bottom-clearance: 80px;
+      left: 8px;
+    }
+    #milxdy-overlay-dock-root[data-side="right"] { right: 8px; }
+    #milxdy-overlay-dock-root::before,
+    #milxdy-overlay-dock-root::after {
+      pointer-events: none;
+      position: absolute;
+      left: 19px;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 14px;
+      border: 1px solid var(--milxdy-dock-border);
+      background: var(--milxdy-dock-panel);
+      color: var(--milxdy-dock-active);
+      font-size: 10px;
+      line-height: 1;
+      opacity: 0;
+      box-shadow: 2px 2px 0 var(--milxdy-dock-shadow);
+      transition: opacity 120ms ease;
+    }
+    #milxdy-overlay-dock-root::before {
+      content: "▲";
+      top: -16px;
+    }
+    #milxdy-overlay-dock-root::after {
+      content: "▼";
+      bottom: -16px;
+    }
+    #milxdy-overlay-dock-root[data-can-scroll-up="true"]::before,
+    #milxdy-overlay-dock-root[data-can-scroll-down="true"]::after {
+      opacity: 1;
+    }
+    .milxdy-overlay-dock-rail {
+      display: grid;
+      justify-items: center;
+      gap: 4px;
+      width: 56px;
+      max-height: calc(100vh - var(--milxdy-dock-top) - var(--milxdy-dock-bottom-clearance));
+      padding: 6px 4px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      border: 2px solid var(--milxdy-dock-border);
+      border-radius: 0;
+      background: var(--milxdy-dock-bg);
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-highlight),
+        inset -2px -2px 0 var(--milxdy-dock-shadow),
+        5px 5px 0 rgba(0, 0, 0, 0.26);
+      scrollbar-width: thin;
+      scrollbar-color: var(--milxdy-dock-scrollbar) transparent;
+      scroll-snap-type: y proximity;
+    }
+    .milxdy-overlay-dock-rail::-webkit-scrollbar {
+      width: 5px;
+    }
+    .milxdy-overlay-dock-rail::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .milxdy-overlay-dock-rail::-webkit-scrollbar-thumb {
+      border-radius: 0;
+      background: var(--milxdy-dock-scrollbar);
+    }
+    .milxdy-overlay-dock-item {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 48px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--milxdy-dock-icon-border);
+      border-radius: 0;
+      background: var(--milxdy-dock-panel);
+      color: #fff4cf;
+      cursor: pointer;
+      font: 900 18px/1 inherit;
+      scroll-snap-align: center;
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-highlight),
+        inset -2px -2px 0 var(--milxdy-dock-shadow);
+      transition: none;
+    }
+    .milxdy-overlay-dock-item[data-hovered="true"],
+    .milxdy-overlay-dock-item[data-active="true"] {
+      background: var(--milxdy-dock-panel);
+      filter: none;
+    }
+    .milxdy-overlay-dock-item[data-hovered="true"] {
+      filter: none;
+    }
+    .milxdy-overlay-dock-item[data-active="true"]::before {
+      content: "";
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      width: 3px;
+      border-radius: 0;
+      background: var(--milxdy-dock-active);
+      box-shadow: none;
+    }
+    #milxdy-overlay-dock-root[data-side="left"] .milxdy-overlay-dock-item[data-active="true"]::before { left: 0; }
+    #milxdy-overlay-dock-root[data-side="right"] .milxdy-overlay-dock-item[data-active="true"]::before { right: 0; }
+    .milxdy-overlay-dock-item[data-active="true"] {
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-shadow),
+        inset -2px -2px 0 var(--milxdy-dock-highlight);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyHideAll"] {
+      width: 48px;
+      height: 16px;
+      min-height: 16px;
+      border-width: 1px;
+      font: 800 8px/1 var(--milxdy-font-ui, system-ui, sans-serif);
+      text-transform: lowercase;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyHideAll"] .milxdy-overlay-dock-icon {
+      width: 100%;
+      height: 100%;
+      padding: 0 2px;
+      color: var(--milxdy-dock-active);
+      font: inherit;
+      line-height: 14px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyHideAll"]:active {
+      transform: translate(1px, 1px);
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-shadow),
+        inset -1px -1px 0 var(--milxdy-dock-highlight);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyHideAll"]:active .milxdy-overlay-dock-icon {
+      color: color-mix(in srgb, var(--milxdy-dock-active) 78%, var(--milxdy-dock-shadow));
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] {
+      border-color: var(--milxdy-dock-active);
+      background: var(--milxdy-dock-panel);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon {
+      position: relative;
+      width: 24px;
+      height: 24px;
+      font-size: 0;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::before,
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::after {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      border-radius: 999px;
+      background: var(--milxdy-dock-active);
+      transform: translate(-50%, -50%);
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::before {
+      width: 22px;
+      height: 5px;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"] .milxdy-overlay-dock-icon::after {
+      width: 5px;
+      height: 22px;
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"][data-launching="true"] .milxdy-overlay-dock-icon {
+      animation: milxdy-addons-launch 240ms cubic-bezier(.2,.8,.2,1);
+    }
+    @keyframes milxdy-addons-launch {
+      50% { transform: scale(1.24) rotate(90deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"][data-launching="true"] .milxdy-overlay-dock-icon { animation: none; opacity: .55; }
+    }
+    .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"]:active {
+      transform: translate(1px, 1px);
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-shadow),
+        inset -1px -1px 0 var(--milxdy-dock-highlight);
+    }
+    #milxdy-overlay-dock-root[data-reorder="true"] .milxdy-overlay-dock-item {
+      cursor: grab;
+      animation: milxdy-dock-wiggle 150ms infinite alternate ease-in-out;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #milxdy-overlay-dock-root[data-reorder="true"] .milxdy-overlay-dock-item {
+        animation: none;
+      }
+    }
+    .milxdy-overlay-dock-icon,
+    .milxdy-overlay-dock-icon img {
+      display: block;
+      width: 40px;
+      height: 40px;
+    }
+    .milxdy-overlay-dock-icon {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+      transform-origin: center;
+      transition: none;
+      will-change: transform;
+      pointer-events: none;
+    }
+    .milxdy-overlay-dock-item[data-active="true"] .milxdy-overlay-dock-icon {
+      box-shadow: none;
+    }
+    .milxdy-overlay-dock-item[data-hovered="true"] .milxdy-overlay-dock-icon {
+      border-color: transparent;
+    }
+    .milxdy-overlay-dock-item[data-hovered="true"] .milxdy-overlay-dock-icon {
+      transform: none;
+    }
+    .milxdy-overlay-dock-icon img {
+      object-fit: contain;
+      filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.38));
+    }
+    html[data-milxdy-settings-theme="light"] .milxdy-overlay-dock-icon img[src^="data:image/svg+xml"] {
+      filter: saturate(0.95) drop-shadow(0 2px 3px rgba(15, 23, 42, 0.12));
+    }
+    .milxdy-overlay-dock-badge {
+      position: absolute;
+      right: -4px;
+      bottom: -5px;
+      max-width: 52px;
+      overflow: hidden;
+      padding: 2px 5px;
+      border: 1px solid rgba(0, 0, 0, 0.4);
+      border-radius: 0;
+      background: #f8d35d;
+      color: #191713;
+      font: 900 10px/1.2 inherit;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      pointer-events: none;
+    }
+    .milxdy-overlay-dock-item[data-item-id="beetol"] .milxdy-overlay-dock-badge {
+      right: -2px;
+      bottom: -3px;
+      max-width: 32px;
+      padding: 1px 3px;
+      font-size: 8px;
+      line-height: 1.15;
+    }
+    .milxdy-overlay-dock-item[data-item-id="music"] .milxdy-overlay-dock-badge {
+      right: -2px;
+      bottom: -3px;
+      max-width: 32px;
+      padding: 1px 3px;
+      font-size: 8px;
+      line-height: 1.15;
+    }
+    .milxdy-overlay-dock-settings {
+      position: absolute;
+      top: 0;
+      display: grid;
+      gap: 8px;
+      width: 150px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 0;
+      background: rgba(14, 15, 19, 0.94);
+      color: #fff4cf;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.34);
+    }
+    #milxdy-overlay-dock-root[data-side="left"] .milxdy-overlay-dock-settings { left: 70px; }
+    #milxdy-overlay-dock-root[data-side="right"] .milxdy-overlay-dock-settings { right: 70px; }
+    .milxdy-overlay-dock-settings strong {
+      font-size: 12px;
+      line-height: 1.2;
+    }
+    .milxdy-overlay-dock-settings-section {
+      display: grid;
+      gap: 5px;
+      padding-top: 3px;
+      border-top: 1px solid rgba(250, 220, 130, 0.18);
+    }
+    .milxdy-overlay-dock-settings-section > strong {
+      color: var(--milxdy-dock-active);
+      font-size: 10px;
+      text-transform: uppercase;
+    }
+    .milxdy-overlay-dock-settings-row {
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) 28px 28px;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      color: inherit;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    .milxdy-overlay-dock-settings-drag {
+      display: none;
+    }
+    .milxdy-overlay-dock-settings-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+    .milxdy-overlay-dock-settings-icon,
+    .milxdy-overlay-dock-settings-icon img {
+      width: 22px;
+      height: 22px;
+    }
+    .milxdy-overlay-dock-settings-icon {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+    }
+    .milxdy-overlay-dock-settings-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .milxdy-overlay-dock-settings-empty {
+      color: rgba(255, 244, 207, 0.62);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+    .milxdy-overlay-dock-settings button {
+      min-height: 28px;
+      border: 1px solid rgba(250, 220, 130, 0.24);
+      border-radius: 0;
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff4cf;
+      cursor: pointer;
+      font: 700 11px/1 inherit;
+    }
+    .milxdy-overlay-dock-segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 5px;
+    }
+    .milxdy-overlay-dock-segment button[data-active="true"] {
+      background: rgba(250, 220, 130, 0.22);
+      border-color: rgba(250, 220, 130, 0.48);
+    }
+    @keyframes milxdy-dock-wiggle {
+      from { transform: rotate(-1.3deg); }
+      to { transform: rotate(1.3deg); }
+    }
+    @media (max-width: 720px) {
+      #milxdy-overlay-dock-root {
+        --milxdy-dock-top: 8px;
+        --milxdy-dock-bottom-clearance: 96px;
+      }
+      #milxdy-overlay-dock-root[data-side="left"] {
+        --milxdy-dock-top: 72px;
+        --milxdy-dock-bottom-clearance: 80px;
+      }
+    }

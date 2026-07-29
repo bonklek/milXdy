@@ -42,7 +42,7 @@ async function verifyRuntimeOwnership() {
   const catalogBridge = await readFile("src/extension/catalog-bridge.ts", "utf8");
   const popup = await readFile("src/extension/popup/index.ts", "utf8");
   const popupHtml = await readFile("assets/extension/popup/popup.html", "utf8");
-  const overlayDock = await readFile("src/platform/overlay/dock.ts", "utf8");
+  const overlayDock = await readOverlayDockSources();
   const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
   const maxxerStyles = await readFile("src/apps/milady-maxxer/styles.ts", "utf8");
@@ -102,7 +102,7 @@ async function verifyRuntimeOwnership() {
   }
   assert(existsSync("src/platform/browser/url-allowlist.ts"), "shared URL allowlist helper must exist");
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
-  assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("state.settingsActions"), "overlay dock settings panel must render registered settings actions");
+  assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("snapshot.settingsActions"), "overlay dock settings panel must render registered settings actions");
   assert(overlayDock.includes("grid-template-columns: 22px minmax(0, 1fr) 28px 28px"), "overlay dock settings rows must keep icons, labels, and both move controls on one line");
   assert(runtime.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
   assert(runtime.includes('document.createElement("details")') && runtime.includes('title.textContent = "Change app preset"'), "Apps & Features presets must stay collapsed behind an explicit disclosure");
@@ -139,9 +139,11 @@ async function verifyRuntimeOwnership() {
   assert(!rootVisuals.includes('recordFeatureTiming("rootVisuals", "orphanReply"') && !benchmark.includes('"rootVisuals.orphanReply"'), "Root Visual orphan-reply work must not keep diagnostics timers hot during ordinary browsing");
   assert(rootVisuals.includes("NATIVE_REPLY_CONNECTOR_SELECTOR") && rootVisuals.includes("setOrphanReplyState(tweet, false)"), "Root Visual orphan-reply marker must skip connector scans for non-reply tweets");
   assert(!overlayDock.includes("new ResizeObserver(() => updateRailScrollIndicators"), "rail ResizeObserver work must use the coalesced scheduler");
-  assert(overlayDock.includes("scheduleRailScrollIndicatorUpdate") && overlayDock.includes("if (railIndicatorFrame) return"), "rail indicator geometry reads must be coalesced to one animation frame");
+  assert(overlayDock.includes("#scheduleRailIndicators") && overlayDock.includes("if (this.#railIndicatorFrame) return"), "rail indicator geometry reads must be coalesced to one animation frame");
   assert(!/html\s*:\s*has\s*\(/.test(overlayDock), "dock layout must not attach a relational :has selector to the document root");
-  assert(/#\$\{ROOT_ID\}\[data-side=["']left["']\][^{]*\{[^}]*--milxdy-dock-top:\s*72px;[^}]*--milxdy-dock-bottom-clearance:\s*80px;/s.test(overlayDock), "left dock must statically clear X's top-left dialog controls without DOM-dependent selector invalidation");
+  assert(/#milxdy-overlay-dock-root\[data-side=["']left["']\][^{]*\{[^}]*--milxdy-dock-top:\s*72px;[^}]*--milxdy-dock-bottom-clearance:\s*80px;/s.test(overlayDock), "left dock must statically clear X's top-left dialog controls without DOM-dependent selector invalidation");
+  assert(overlayDock.includes("placeTerminalItemLast") && overlayDock.includes("milxdyAddOnsCatalog"), "Add-ons catalog must remain the terminal dock item");
+  assert(overlayDock.includes("isHostMediaViewerOpen") && overlayDock.includes('data-host-media-viewer-open="true"'), "dock must hide while the host media viewer is open");
   const remistats = await readFile("src/apps/remistats/content.js", "utf8");
   const remistatsStyles = await readFile("src/apps/remistats/remistats.css", "utf8");
   assert(!remistats.includes("for (const [cachedKey, cached] of scoreCache)"), "RemiStats score insertion must not sweep the entire cache for every result");
@@ -168,6 +170,11 @@ async function verifyRuntimeOwnership() {
   }
   const remistatsBackground = await readFile("src/apps/remistats/background.js", "utf8");
   assert(!remistatsBackground.includes("chrome.runtime.onInstalled.addListener"), "RemiStats install defaults must stay centralized in src/extension/background/index.ts");
+}
+
+async function readOverlayDockSources() {
+  const files = ["dock.ts", "dock-controller.ts", "dock-order-policy.ts", "dock-settings-view.ts", "dock.css", "dock-types.ts", "dock-view.ts"];
+  return (await Promise.all(files.map((file) => readFile(`src/platform/overlay/${file}`, "utf8")))).join("\n");
 }
 
 function verifyRegistryShape() {
