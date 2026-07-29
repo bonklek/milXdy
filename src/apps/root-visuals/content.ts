@@ -737,25 +737,18 @@ function injectTweetPngStyles(): void {
 }
 
 function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void {
-  const settledCheckTimers = new Set<number>();
-  const reconcileNotification = (notification: HTMLElement) => {
-    if (!context.signal.aborted) {
-      const unknownState = notification.dataset.milxdyNotificationUnread === "pending" ? "pending" : "false";
-      markNotificationUnread(notification, unknownState);
-    }
+  const pending = new Set<HTMLElement>();
+  let frameId = 0;
+  const flush = () => {
+    frameId = 0;
+    if (context.signal.aborted) return;
+    const notifications = Array.from(pending);
+    pending.clear();
+    for (const notification of notifications) markNotificationUnread(notification);
   };
-  const scheduleSettledChecks = (notification: HTMLElement) => {
-    for (const delay of [100, 350]) {
-      const timerId = window.setTimeout(() => {
-        settledCheckTimers.delete(timerId);
-        markNotificationUnread(notification, delay === 350 ? "false" : "pending");
-      }, delay);
-      settledCheckTimers.add(timerId);
-    }
-  };
-  const queueNotificationAndSettledChecks = (notification: HTMLElement) => {
-    markNotificationUnread(notification, "pending");
-    scheduleSettledChecks(notification);
+  const queueNotification = (notification: HTMLElement) => {
+    pending.add(notification);
+    if (!frameId) frameId = window.requestAnimationFrame(flush);
   };
 
   const notificationClickListener = (event: MouseEvent) => {
@@ -772,51 +765,47 @@ function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void 
   addRootVisualClickHandler(context, notificationClickListener);
 
   for (const notification of document.querySelectorAll<HTMLElement>('article[data-testid="notification"]')) {
-    queueNotificationAndSettledChecks(notification);
+    queueNotification(notification);
   }
 
   const mutationObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       const target = mutation.target instanceof Element ? mutation.target : null;
-      const notification = target?.closest<HTMLElement>('article[data-testid="notification"]');
-      if (notification) {
-        reconcileNotification(notification);
-        continue;
-      }
       if (mutation.type !== "childList") continue;
+      const notification = target?.closest<HTMLElement>('article[data-testid="notification"]');
+      if (notification) queueNotification(notification);
       for (const addedNode of mutation.addedNodes) {
         if (!(addedNode instanceof HTMLElement)) continue;
         const addedNotification = addedNode.matches('article[data-testid="notification"]')
           ? addedNode
           : addedNode.querySelector<HTMLElement>('article[data-testid="notification"]');
-        if (addedNotification) queueNotificationAndSettledChecks(addedNotification);
+        if (addedNotification) queueNotification(addedNotification);
       }
     }
   });
   mutationObserver.observe(document.documentElement, {
     subtree: true,
     childList: true,
-    attributes: true,
-    attributeFilter: ["class", "style", "aria-label"],
   });
 
-  queueNotificationSurface = queueNotificationAndSettledChecks;
+  queueNotificationSurface = queueNotification;
   context.addDisposable(() => {
     mutationObserver.disconnect();
-    for (const timerId of settledCheckTimers) window.clearTimeout(timerId);
-    settledCheckTimers.clear();
-    if (queueNotificationSurface === queueNotificationAndSettledChecks) queueNotificationSurface = null;
+    if (frameId) window.cancelAnimationFrame(frameId);
+    frameId = 0;
+    pending.clear();
+    if (queueNotificationSurface === queueNotification) queueNotificationSurface = null;
   });
 }
 
-function markNotificationUnread(notification: HTMLElement, unknownState: "false" | "pending" = "false"): void {
+function markNotificationUnread(notification: HTMLElement): void {
   if (!notification.isConnected) return;
   const cell = notification.closest<HTMLElement>('[data-testid="cellInnerDiv"]');
   const unreadSource = getUnreadNotificationSource(notification, cell);
   const unread = Boolean(unreadSource);
   if (unread) clickedNotificationKeys.delete(notification);
-  const state = unread ? "true" : unknownState;
-  const source = unreadSource || (state === "pending" ? "pending" : "none");
+  const state = unread ? "true" : "false";
+  const source = unreadSource || "none";
   notification.dataset.milxdyNotificationUnread = state;
   notification.dataset.milxdyNotificationUnreadSource = source;
   if (cell) cell.dataset.milxdyNotificationUnread = state;
@@ -845,7 +834,6 @@ function getNativeUnreadBackgroundSource(notification: HTMLElement, cell: HTMLEl
     cell?.firstElementChild,
     notification,
     notification.parentElement,
-    ...Array.from((cell || notification).querySelectorAll<HTMLElement>("div, article")).slice(0, 24),
   ].filter((element): element is Element => Boolean(element));
   for (const element of candidates) {
     if (element instanceof HTMLElement && isTwitterUnreadBackground(element.style.backgroundColor)) return "inline-style";
@@ -863,13 +851,17 @@ function withNotificationTintMarkersDisabled<T>(
 ): T {
   const notificationUnread = notification.getAttribute("data-milxdy-notification-unread");
   const cellUnread = cell?.getAttribute("data-milxdy-notification-unread") ?? null;
+  const root = document.documentElement;
+  const reskinProfile = root.getAttribute("data-milxdy-reskin-profile");
   notification.removeAttribute("data-milxdy-notification-unread");
   if (cell) cell.removeAttribute("data-milxdy-notification-unread");
+  root.removeAttribute("data-milxdy-reskin-profile");
   try {
     return callback();
   } finally {
     restoreAttribute(notification, "data-milxdy-notification-unread", notificationUnread);
     if (cell) restoreAttribute(cell, "data-milxdy-notification-unread", cellUnread);
+    restoreAttribute(root, "data-milxdy-reskin-profile", reskinProfile);
   }
 }
 
