@@ -10,7 +10,8 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
-import { authorizeBackgroundMessage } from "./background-message-policy";
+import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
+import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { splitExternalHandoffText } from "../app-sdk/external-handoff";
@@ -83,6 +84,7 @@ type RuntimeState = {
   apps: readonly MilxdyAppManifest[];
   enabledApps: Set<MilxdyAppId>;
   loaded: Map<MilxdyAppId, MilxdyContentAppModule>;
+  appLifecycles: Map<MilxdyAppId, ContentAppLifecycleOwner>;
   loading: Map<MilxdyAppId, Promise<MilxdyContentAppModule | null>>;
   unloadingApps: Set<MilxdyAppId>;
   appDisposables: Map<MilxdyAppId, DisposableStore>;
@@ -272,6 +274,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     apps,
     enabledApps: new Set(),
     loaded: new Map(),
+    appLifecycles: new Map(),
     loading: new Map(),
     unloadingApps: new Set(),
     appDisposables: new Map(),
@@ -479,7 +482,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const abortController = new AbortController();
       state.appDisposables.set(app.id, disposables);
       state.appAbortControllers.set(app.id, abortController);
-      await module.boot?.({
+      const lifecycle = new ContentAppLifecycleOwner(module, {
         manifest: app,
         signal: abortController.signal,
         requestSurfaceRescan: scheduleTwitterScan,
@@ -511,29 +514,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
         addDisposable: (disposable) => disposables.add(disposable),
-      });
-      if (!state.enabledApps.has(app.id) || state.disposed) {
+      }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id));
+      state.appLifecycles.set(app.id, lifecycle);
+      const activation = await lifecycle.activate();
+      if (activation === "inactive-after-boot") {
         recordImportAvoided(app, `disabledAfterBoot:${reason}`);
-        if (!state.unloadingApps.has(app.id)) {
-          state.unloadingApps.add(app.id);
-          abortAppWork(app.id);
-          try {
-            await Promise.resolve(module.disable?.());
-            await Promise.resolve(module.dispose?.());
-          } finally {
-            disposables.dispose();
-            state.appDisposables.delete(app.id);
-            state.appAbortControllers.delete(app.id);
-            state.loaded.delete(app.id);
-            state.unloadingApps.delete(app.id);
-            updateScannerConfiguration();
-            reconcileAppAfterUnload(app);
-            flushDiagnosticsSoon();
-          }
-        }
+        updateScannerConfiguration();
+        reconcileAppAfterUnload(app);
+        flushDiagnosticsSoon();
         return null;
       }
-      await module.enable?.();
       updateScannerConfiguration();
       const loadMs = Math.round((performance.now() - startedAt) * 10) / 10;
       updateAppDiagnostics(app, "loaded", { loadedAt: Date.now(), loadMs });
@@ -548,12 +538,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return await importPromise;
     } catch (error) {
       delete (window as unknown as Record<string, string | undefined>)[RUNTIME_IMPORT_FLAG];
-      state.appDisposables.get(app.id)?.dispose();
-      state.appDisposables.delete(app.id);
       abortAppWork(app.id);
-      state.appAbortControllers.delete(app.id);
-      state.loaded.delete(app.id);
-      state.unloadingApps.delete(app.id);
+      cleanupAppResources(app.id);
       state.pendingSurfaceImports.delete(app.id);
       updateAppDiagnostics(app, "failed", { error: errorMessage(error) });
       flushDiagnosticsSoon();
@@ -611,12 +597,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
     for (const appId of Array.from(state.appAbortControllers.keys())) abortAppWork(appId);
-    const teardownResults = await Promise.allSettled(Array.from(state.loaded.entries()).map(async ([appId, module]) => {
-      try {
-        await Promise.resolve(module.disable?.());
-      } finally {
-        await Promise.resolve(module.dispose?.());
-      }
+    const teardownResults = await Promise.allSettled(Array.from(state.appLifecycles.entries()).map(async ([appId, lifecycle]) => {
+      await lifecycle.dispose();
       return appId;
     }));
     for (const result of teardownResults) {
@@ -625,6 +607,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     for (const disposables of state.appDisposables.values()) disposables.dispose();
     state.appDisposables.clear();
     state.appAbortControllers.clear();
+    state.appLifecycles.clear();
     state.loaded.clear();
     state.unloadingApps.clear();
     state.pendingSurfaceImports.clear();
@@ -646,27 +629,30 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordImportAvoided(app, `message:${label}:disabled`);
       return Promise.resolve(null);
     }
-    const authorization = authorizeBackgroundMessage(message, app.background?.messageTypes);
-    if (!authorization.authorized) {
-      recordDeniedAppMessage(app, label, authorization.messageType);
-      return Promise.resolve(null);
-    }
-    return new Promise<T | null>((resolve, reject) => {
-      const task: NetworkTask = {
-        id: state.networkStats.queued + 1,
-        appId: app.id,
-        label: `${app.id}.${label}`,
-        queuedAt: performance.now(),
-        message,
-        resolve: resolve as (value: unknown | null) => void,
-        reject,
-        canceled: false,
-      };
-      state.networkQueue.push(task);
-      state.networkStats.queued += 1;
-      state.networkStats.maxDepth = Math.max(state.networkStats.maxDepth, state.networkQueue.length);
-      flushDiagnosticsSoon();
-      drainNetworkQueue();
+    return dispatchAuthorizedBackgroundMessage(message, app.background?.messageTypes, {
+      denied(authorization) {
+        recordDeniedAppMessage(app, label, authorization.messageType);
+        return Promise.resolve(null);
+      },
+      authorized() {
+        return new Promise<T | null>((resolve, reject) => {
+          const task: NetworkTask = {
+            id: state.networkStats.queued + 1,
+            appId: app.id,
+            label: `${app.id}.${label}`,
+            queuedAt: performance.now(),
+            message,
+            resolve: resolve as (value: unknown | null) => void,
+            reject,
+            canceled: false,
+          };
+          state.networkQueue.push(task);
+          state.networkStats.queued += 1;
+          state.networkStats.maxDepth = Math.max(state.networkStats.maxDepth, state.networkQueue.length);
+          flushDiagnosticsSoon();
+          drainNetworkQueue();
+        });
+      },
     });
   }
 
@@ -799,17 +785,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     clearSurfaceDeliveryQueueForApp(app.id);
     cancelNetworkQueueForApp(app.id);
     const module = state.loaded.get(app.id);
+    const lifecycle = state.appLifecycles.get(app.id);
     if (state.unloadingApps.has(app.id)) return;
-    if (!module) return;
+    if (!module || !lifecycle) return;
     state.unloadingApps.add(app.id);
     abortAppWork(app.id);
-    void Promise.resolve(module.disable?.())
-      .then(() => Promise.resolve(module.dispose?.()))
+    void lifecycle.deactivate()
       .finally(() => {
-        state.appDisposables.get(app.id)?.dispose();
-        state.appDisposables.delete(app.id);
-        state.appAbortControllers.delete(app.id);
-        state.loaded.delete(app.id);
         state.unloadingApps.delete(app.id);
         updateScannerConfiguration();
         reconcileAppAfterUnload(app);
@@ -830,6 +812,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const controller = state.appAbortControllers.get(appId);
     if (!controller || controller.signal.aborted) return;
     controller.abort();
+  }
+
+  function cleanupAppResources(appId: MilxdyAppId): void {
+    state.appDisposables.get(appId)?.dispose();
+    state.appDisposables.delete(appId);
+    state.appAbortControllers.delete(appId);
+    state.appLifecycles.delete(appId);
+    state.loaded.delete(appId);
+    state.unloadingApps.delete(appId);
   }
 
   function resetRuntimeCounters(): void {

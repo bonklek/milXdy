@@ -32,6 +32,7 @@ async function verifySdkShape() {
 
 async function verifyRuntimeOwnership() {
   const runtime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+  const contentLifecycle = await readFile("src/platform/runtime/content-app-lifecycle.ts", "utf8");
   const scanner = await readFile("src/platform/scanner/twitter-scanner.ts", "utf8");
   const buildScript = await readFile("scripts/build/build-extension.mjs", "utf8");
   const performanceMode = await readFile("src/platform/settings/performance-mode.ts", "utf8");
@@ -51,8 +52,8 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes("subscribeTwitterSurfaces(handleSurface)"), "runtime must own scanner subscription");
   assert(runtime.includes("patchHistory(notifyRoute)"), "runtime route service must patch history events");
   assert(!/setInterval\s*\(/.test(runtime), "content runtime must not use permanent polling intervals");
-  assert(runtime.includes("module.disable?.()"), "disable path must call app disable()");
-  assert(runtime.includes("module.dispose?.()"), "disable path must call app dispose()");
+  assert(runtime.includes("lifecycle.deactivate()") && contentLifecycle.includes("await this.#module.disable?.()"), "disable path must delegate to the lifecycle owner and call app disable()");
+  assert(runtime.includes("lifecycle.dispose()") && contentLifecycle.includes("await this.#module.dispose?.()"), "runtime shutdown must delegate to the lifecycle owner and call app dispose()");
   assert(runtime.includes("cancelNetworkQueueForApp(app.id)"), "disable path must cancel app network work");
   assert(runtime.includes("clearSurfaceDeliveryQueueForApp(app.id)"), "disable path must clear app surface delivery work");
   assert(runtime.includes("abortAppWork(app.id)"), "disable path must abort app work signal");
