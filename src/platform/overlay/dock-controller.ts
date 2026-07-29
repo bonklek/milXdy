@@ -142,7 +142,13 @@ export class OverlayDockController implements OverlayDockApi, DockViewActions {
     if (this.#disposed) return;
     const item = this.#items.get(id);
     if (!item) return;
-    if (item.active && item.onDeactivate) item.onDeactivate();
+    // App mounts can update their dock state asynchronously.  Flip the
+    // controller's snapshot before calling into the app so consecutive rail
+    // clicks never decide against the state from the preceding render.
+    const deactivate = item.active === true && Boolean(item.onDeactivate);
+    this.#items.set(id, { ...item, active: !deactivate });
+    this.#render();
+    if (deactivate) item.onDeactivate?.();
     else item.onActivate();
   }
 

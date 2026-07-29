@@ -126,6 +126,21 @@ describe("OverlayDockController", () => {
     expect(fixture.controller.getAppOrder()).toEqual([]);
   });
 
+  it("flips active state before an app callback so rapid rail clicks alternate reliably", async () => {
+    const fixture = createFixture({ immediate: true });
+    const activate = vi.fn();
+    const deactivate = vi.fn();
+    fixture.controller.register(item("a", { active: false, onActivate: activate, onDeactivate: deactivate }));
+    await tick();
+    const actions = fixture.latestActions();
+    actions.activate("a");
+    expect(activate).toHaveBeenCalledOnce();
+    expect(fixture.latestSnapshot().items.get("a")?.active).toBe(true);
+    actions.activate("a");
+    expect(deactivate).toHaveBeenCalledOnce();
+    expect(fixture.latestSnapshot().items.get("a")?.active).toBe(false);
+  });
+
   it("disposes owned state and view exactly once, including during an in-flight load", async () => {
     const fixture = createFixture();
     fixture.controller.register(item("a"));
@@ -173,15 +188,16 @@ function createFixture(options: { immediate?: boolean } = {}) {
     : new Promise<{ side: "left" | "right"; order: string[] }>((resolve, reject) => { resolveLoad = resolve; rejectLoad = reject; });
   const persistence: DockPersistencePort = { load: vi.fn(() => loadPromise), saveSide: vi.fn(), saveOrder: vi.fn() };
   let actions: DockViewActions | null = null;
+  let snapshot: DockSnapshot | null = null;
   const view: DockViewPort = {
     mount: vi.fn(),
-    render: vi.fn((_snapshot: DockSnapshot, nextActions: DockViewActions) => { actions = nextActions; }),
+    render: vi.fn((nextSnapshot: DockSnapshot, nextActions: DockViewActions) => { snapshot = nextSnapshot; actions = nextActions; }),
     createSettingsPanel: vi.fn(() => ({}) as HTMLElement),
     dispose: vi.fn(),
   };
   const stackOrders: string[][] = [];
   const controller = new OverlayDockController({ persistence, view, setStackOrder: (ids) => stackOrders.push([...ids]) });
-  return { controller, persistence, view, stackOrders, resolveLoad, rejectLoad, latestActions: () => actions! };
+  return { controller, persistence, view, stackOrders, resolveLoad, rejectLoad, latestActions: () => actions!, latestSnapshot: () => snapshot! };
 }
 
 function item(id: string, overrides: Partial<OverlayDockItem> = {}): OverlayDockItem {
