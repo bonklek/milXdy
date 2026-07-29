@@ -548,8 +548,12 @@ export const RESKIN_CSS = `
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"] {
+    align-items: center !important;
+    display: flex !important;
     flex: 1 1 0% !important;
+    flex-wrap: nowrap !important;
     max-width: none !important;
+    min-width: 0 !important;
     width: auto !important;
   }
 
@@ -563,8 +567,8 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
-    flex: 0 1 auto !important;
-    max-width: none !important;
+    flex: 1 1 52% !important;
+    max-width: 58% !important;
     min-width: 0 !important;
     overflow: hidden !important;
   }
@@ -582,13 +586,13 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 0% !important;
+    flex: 1 1 42% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
     min-height: 17px !important;
     min-width: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-metadata-row="true"] a,
@@ -617,8 +621,8 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
-    flex: 0 1 auto !important;
-    max-width: none !important;
+    flex: 1 1 52% !important;
+    max-width: 58% !important;
     overflow: hidden !important;
   }
 
@@ -635,13 +639,13 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 0% !important;
+    flex: 1 1 42% !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
     min-height: 17px !important;
     min-width: 0 !important;
-    overflow: visible !important;
+    overflow: hidden !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] a,
@@ -658,6 +662,26 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] .reminet-score-badge {
     flex: 0 0 auto !important;
     min-width: 0 !important;
+  }
+
+  /* The display name and metadata have to share one line.  Let both yield
+     space, while the interactive badges and status icons remain intact. */
+  html[data-milxdy-reskin-profile]:is([data-milxdy-reskin-profile="moderate"], [data-milxdy-reskin-profile="max"])
+    article [data-milxdy-metadata-row="true"] > :is(a, span, time) {
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  html[data-milxdy-reskin-profile]:is([data-milxdy-reskin-profile="moderate"], [data-milxdy-reskin-profile="max"])
+    article [data-milxdy-metadata-row="true"] > a:has(time) {
+    flex: 0 1 9.5rem !important;
+  }
+
+  html[data-milxdy-reskin-profile]:is([data-milxdy-reskin-profile="moderate"], [data-milxdy-reskin-profile="max"])
+    article [data-milxdy-metadata-row="true"] > :is(button, svg, .reminet-badge-slot, .reminet-score-badge) {
+    flex: 0 0 auto !important;
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-testid="User-Name"] time,
