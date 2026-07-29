@@ -2665,8 +2665,33 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       heading.append(hint);
     }
     section.append(heading);
-    for (const app of apps) section.append(appHubCard(app));
+    for (const app of apps) {
+      try {
+        section.append(appHubCard(app));
+      } catch {
+        // One malformed app must not prevent the remaining, independently
+        // valid Apps & Features cards from rendering.
+        recordRuntimeDiagnostic(`hub.card.${app.id}`, {
+          error: "card render failed",
+          updatedAt: Date.now(),
+        });
+        section.append(appHubCardFailure(app));
+      }
+    }
     list.append(section);
+  }
+
+  function appHubCardFailure(app: MilxdyAppManifest): HTMLElement {
+    const card = document.createElement("section");
+    card.className = "milxdy-app-hub-card milxdy-app-hub-card-error";
+    card.dataset.hubAppId = app.id;
+    card.dataset.tier = hubPackageKind(app);
+    const title = document.createElement("strong");
+    title.textContent = app.name;
+    const detail = document.createElement("p");
+    detail.textContent = "This app could not be rendered.";
+    card.append(title, detail);
+    return card;
   }
 
   function isHubRailApp(app: MilxdyAppManifest): boolean {
