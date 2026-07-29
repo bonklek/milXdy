@@ -81,6 +81,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "const shadow = panel.attachShadow({ mode: \"open\" });", "Composer actions must render package content in an isolated host-owned panel root");
   requireIncludes(contentRuntime, "composerActionBindingToken", "Composer actions must rebind host controls after an extension reload leaves prior DOM in place");
   requireIncludes(contentRuntime, ".milxdy-composer-action-panel[data-app-id]", "Composer action startup must clear orphaned panels from an earlier content-runtime instance");
+  requireIncludes(contentRuntime, "pendingComposerAction", "Composer action activation must serialize rapid toggle clicks across async module loads");
   requireIncludes(contentRuntime, "await installComposerActionPackageStyles(app, shadow);", "Composer actions must load declared package CSS before their callback renders");
   requireIncludes(contentRuntime, "for (const sheet of app.css || [])", "Composer action styling must be limited to declared package stylesheets");
   requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");

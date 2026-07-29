@@ -1729,6 +1729,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   let activeComposerAction: { appId: string; button: HTMLButtonElement; panel: HTMLElement; close: () => void } | null = null;
+  let pendingComposerAction: { appId: string; button: HTMLButtonElement; cancelled: boolean } | null = null;
 
   async function openComposerAction(app: MilxdyAppManifest, button: HTMLButtonElement): Promise<void> {
     // A repeated activation of the same action is a toggle, not a close/open
@@ -1742,8 +1743,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       // host must clean that stale record before treating this as a new open.
       activeComposerAction.close();
     }
+    // The module import always crosses an async boundary. Treat a second
+    // activation during that boundary as the matching toggle-off instead of
+    // allowing two opens to race and leave the toolbar out of sync.
+    if (pendingComposerAction?.appId === app.id && pendingComposerAction.button === button) {
+      pendingComposerAction.cancelled = true;
+      pendingComposerAction = null;
+      button.setAttribute("aria-expanded", "false");
+      return;
+    }
+    if (pendingComposerAction) pendingComposerAction.cancelled = true;
     activeComposerAction?.close();
+    const request = { appId: app.id, button, cancelled: false };
+    pendingComposerAction = request;
     const module = await loadApp(app, "composerAction");
+    if (request.cancelled || pendingComposerAction !== request) return;
+    pendingComposerAction = null;
     if (!module?.onComposerAction) {
       recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "Package declares composerAction but does not export onComposerAction" });
       return;
