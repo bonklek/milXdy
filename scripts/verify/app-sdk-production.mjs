@@ -12,10 +12,10 @@ const starterThemePrimitives = await readFile("sdk/templates/docked-app/styles/t
 const starterOverlayPrimitives = await readFile("sdk/templates/docked-app/styles/overlay.css", "utf8");
 const accessibilityGuide = await readFile("sdk/ACCESSIBILITY.md", "utf8");
 const assetGuide = await readFile("sdk/ASSETS_AND_LICENSING.md", "utf8");
-const readiness = await readFile("docs/APP_PLATFORM_PRODUCTION_READINESS.md", "utf8");
-const compatibility = await readFile("docs/APP_SDK_COMPATIBILITY.md", "utf8");
+const readiness = await readFile("docs/sdk/APP_PLATFORM_PRODUCTION_READINESS.md", "utf8");
+const compatibility = await readFile("docs/sdk/APP_SDK_COMPATIBILITY.md", "utf8");
 const docsIndex = await readFile("docs/INDEX.md", "utf8");
-const referenceDocs = await readFile("docs/POST_READING_SDK_REFERENCE.md", "utf8");
+const referenceDocs = await readFile("docs/sdk/POST_READING_SDK_REFERENCE.md", "utf8");
 const referenceCompatibility = JSON.parse(await readFile("sdk/references/post-reading.compatibility.json", "utf8"));
 const replacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const postReadingPolicy = replacementPolicy.replacements?.find((candidate) => candidate.id === "post-reading");

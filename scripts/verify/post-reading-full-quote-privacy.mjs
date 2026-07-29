@@ -9,9 +9,9 @@ const manifest = JSON.parse(await readFile("assets/extension/manifest.json", "ut
 const registry = await readFile("src/platform/app-sdk/first-party-apps.json", "utf8");
 const releaseBuilds = await readFile("scripts/release/release-builds.mjs", "utf8");
 const standaloneBuilder = await readFile("scripts/build/build-post-reading-distribution.mjs", "utf8");
-const privacyDocs = await readFile("docs/PRIVACY_AND_PERMISSIONS.md", "utf8");
-const userGuide = await readFile("docs/USER_GUIDE.md", "utf8");
-const postReadingGuide = await readFile("docs/user-guides/post-reading.md", "utf8");
+const privacyDocs = await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8");
+const userGuide = await readFile("docs/guides/README.md", "utf8");
+const postReadingGuide = await readFile("docs/guides/post-reading.md", "utf8");
 
 const failures = [];
 

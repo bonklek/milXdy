@@ -8,22 +8,22 @@ if (currentPackage.version !== "0.2.0") {
 
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const files = {
-  roadmap: await readFile("docs/ROADMAP.md", "utf8"),
-  releaseNotes: await readFile("docs/RELEASE_NOTES_0.2.0.md", "utf8"),
+  roadmap: await readFile("docs/roadmap/ROADMAP.md", "utf8"),
+  releaseNotes: await readFile("docs/releases/RELEASE_NOTES_0.2.0.md", "utf8"),
   qa: await readFile("docs/QA_0.2.0.md", "utf8"),
   qaLog: await readFile("docs/QA_LOG_0.2.0.md", "utf8"),
   chromeLiveQa: await readFile("docs/CHROME_LIVE_QA_0.2.0.md", "utf8"),
   screenshots: await readFile("docs/RELEASE_SCREENSHOTS_0.2.0.md", "utf8"),
-  releases: await readFile("docs/RELEASES.md", "utf8"),
+  releases: await readFile("docs/releases/RELEASES.md", "utf8"),
   readme: await readFile("README.md", "utf8"),
   packageJson: await readFile("package.json", "utf8"),
   manifest: await readFile("assets/extension/manifest.json", "utf8"),
   firstPartyApps: await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8"),
-  userGuide: await readFile("docs/USER_GUIDE.md", "utf8"),
-  installAndUpdate: await readFile("docs/INSTALL_AND_UPDATE.md", "utf8"),
-  appSdk: await readFile("docs/APP_SDK.md", "utf8"),
-  privacy: await readFile("docs/PRIVACY_AND_PERMISSIONS.md", "utf8"),
-  troubleshooting: await readFile("docs/TROUBLESHOOTING.md", "utf8"),
+  userGuide: await readFile("docs/guides/README.md", "utf8"),
+  installAndUpdate: await readFile("docs/getting-started/INSTALL_AND_UPDATE.md", "utf8"),
+  appSdk: await readFile("docs/sdk/APP_SDK.md", "utf8"),
+  privacy: await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8"),
+  troubleshooting: await readFile("docs/getting-started/TROUBLESHOOTING.md", "utf8"),
   changelog: await readFile("CHANGELOG.md", "utf8"),
   background: await readFile("src/extension/background/index.ts", "utf8"),
   contentRuntime: await readFile("src/platform/runtime/content-runtime.ts", "utf8"),
@@ -62,7 +62,7 @@ console.log("0.2.0 release verification passed.");
 function verifyRoadmapAndReleaseNotes() {
   assert(files.roadmap.includes("## Released: 0.2.0 - The Platform Update"), "roadmap must mark 0.2.0 as released");
   assert(files.roadmap.includes("## In Progress: 0.2.1 - The Polish Patch"), "roadmap must mark 0.2.1 as in progress");
-  assert(files.changelog.includes("docs/RELEASE_NOTES_0.2.0.md"), "changelog must link 0.2.0 release notes");
+  assert(files.changelog.includes("docs/releases/RELEASE_NOTES_0.2.0.md"), "changelog must link 0.2.0 release notes");
   assert(files.changelog.includes("verify:release:gates:020") && files.changelog.includes("Non-live release gates"), "changelog must summarize the current 0.2.0 non-live gate status");
   assert(files.changelog.includes("Live Chrome/X runtime proof is optional manual QA") && files.changelog.includes("not part of the release readiness gate"), "changelog must keep live browser QA optional for 0.2.0 readiness");
   assert(files.changelog.includes("Release screenshots are optional release-media evidence"), "changelog must keep 0.2.0 release screenshots optional for prerelease archives");
@@ -356,9 +356,9 @@ function verifyDocumentedNpmScripts() {
     "docs/CHROME_LIVE_QA_0.2.0.md": files.chromeLiveQa,
     "docs/QA_0.2.0.md": files.qa,
     "docs/QA_LOG_0.2.0.md": files.qaLog,
-    "docs/RELEASE_NOTES_0.2.0.md": files.releaseNotes,
+    "docs/releases/RELEASE_NOTES_0.2.0.md": files.releaseNotes,
     "docs/RELEASE_SCREENSHOTS_0.2.0.md": files.screenshots,
-    "docs/RELEASES.md": files.releases,
+    "docs/releases/RELEASES.md": files.releases,
   };
   for (const [name, text] of Object.entries(docs)) {
     for (const command of documentedNpmRunScripts(text)) {

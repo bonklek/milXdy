@@ -1,7 +1,7 @@
 # Local App Package Pilots
 
 These fixtures exercise the low-level first-party replacement and trust policy
-documented in `docs/APP_SDK.md`.
+documented in `docs/sdk/APP_SDK.md`.
 They intentionally shadow built-in app IDs so registry compatibility and
 replacement review gates stay covered.
 
@@ -96,6 +96,6 @@ build plans.
 The supported user workflow wraps this composer with canonical manual and
 catalog package folders, pinned catalog downloads, transactional promotion,
 durable status, and a stable unpacked-extension target. See
-[`docs/LOCAL_ADDONS.md`](../../../docs/LOCAL_ADDONS.md). Runtime ZIP injection,
+[`docs/sdk/LOCAL_ADDONS.md`](../../../docs/sdk/LOCAL_ADDONS.md). Runtime ZIP injection,
 automatic package updates, and remote marketplace installation remain outside
 the App SDK 0.2.3 distribution model.

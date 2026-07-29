@@ -71,7 +71,7 @@ Local add-ons use the existing App SDK package schema, archive limits, path chec
 An author does not need to manually copy a reviewed folder or ZIP into this
 repository to reach maintainer Chrome QA. The release steward runs the active QA
 host's documented `qa:build -- --local-app-package=...` route in
-[Developer QA reload](DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
+[Developer QA reload](../contributors/DEVELOPER_QA_RELOAD.md#reviewed-external-local-package-qa).
 It accepts one explicitly selected package, validates it with the same composer,
 and publishes it to the release's one persistent QA extension. The generated QA
 provenance records package identity and hashes, never the author's local path.
@@ -83,7 +83,7 @@ The current manager targets Chromium. It does not watch a download folder, updat
 
 ## Catalog selections
 
-A catalog exports one `.milxdy-selection.json` instead of asking the browser to download several ZIPs. The selection pins each package ID, HTTPS ZIP URL, filename, SHA-256, review identity/date, and schema version. Its format is defined by [the selection schema](milxdy-selection.schema.json).
+A catalog exports one `.milxdy-selection.json` instead of asking the browser to download several ZIPs. The selection pins each package ID, HTTPS ZIP URL, filename, SHA-256, review identity/date, and schema version. Its format is defined by [the selection schema](../schemas/milxdy-selection.schema.json).
 
 Prepare and review the exact package set:
 

@@ -17,7 +17,7 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 
 ## Firefox Beta Install
 
-Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterfox](FIREFOX_QA.md) for installation notes and browser-specific limitations.
+Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterfox](../contributors/FIREFOX_QA.md) for installation notes and browser-specific limitations.
 
 1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.

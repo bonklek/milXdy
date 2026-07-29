@@ -2,7 +2,7 @@
 
 ## 0.2.3
 
-See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
+See [milXdy 0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md).
 
 - Includes Firefox/Waterfox compatibility, browser-specific update downloads, fullscreen DM media, and Tweet PNG rendering improvements introduced after `0.2.2`.
 - Adds the opt-in Link Browser app: Alt-click a link on X/Twitter to open it in a docked, sandboxed reader panel while ordinary link behavior remains native.
@@ -11,7 +11,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 - Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.
 - Protects user-authored settings during reset, restores controls after failed saves, and keeps onboarding presets consistent with the selected performance mode.
 - Repairs stuck or stale states across Chat, Wiki, Music, Miladychan, Beetol, Maxxer, RemiStats, and Post-reading, including socket cleanup, history retention, cancelable work, bounded caches, retryable workers, and reversible disable/re-enable behavior.
-- Adds keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete user-facing inventory is in the [0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md#reliability-and-accessibility-fixes-in-plain-english).
+- Adds keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete user-facing inventory is in the [0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md#reliability-and-accessibility-fixes-in-plain-english).
 - Returns Beetol hunt results immediately after the action request and reconciles inventory/cooldowns separately, preventing successful hunts from appearing stuck behind sequential state refreshes.
 - Keeps fast RemiliaNET Hunt available for all three charges, immediately darkens Claim and exhausted Hunt controls, and refreshes the fast-result display from the current Beetle state.
 - Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.
@@ -27,7 +27,7 @@ See [milXdy 0.2.3 release notes](docs/RELEASE_NOTES_0.2.3.md).
 
 ## 0.2.2
 
-See [milXdy 0.2.2 release notes](docs/RELEASE_NOTES_0.2.2.md).
+See [milXdy 0.2.2 release notes](docs/releases/RELEASE_NOTES_0.2.2.md).
 
 - Aligned the package, extension, and App SDK version metadata.
 - Finalized Firefox data-collection manifest metadata for the documented browser-session, remote-service, and site-content flows.
@@ -63,7 +63,7 @@ Post-`0.2.1` hotfix highlights:
 
 Status: released.
 
-See [milXdy 0.2.1 release notes](docs/RELEASE_NOTES_0.2.1.md).
+See [milXdy 0.2.1 release notes](docs/releases/RELEASE_NOTES_0.2.1.md).
 
 Implemented highlights:
 
@@ -84,7 +84,7 @@ Implemented highlights:
 
 Status: released.
 
-See [milXdy 0.2.0 release notes](docs/RELEASE_NOTES_0.2.0.md).
+See [milXdy 0.2.0 release notes](docs/releases/RELEASE_NOTES_0.2.0.md).
 
 Highlights:
 
@@ -134,7 +134,7 @@ Still pending:
 
 ## 0.1.4
 
-See [milXdy 0.1.4 release notes](docs/RELEASE_NOTES_0.1.4.md).
+See [milXdy 0.1.4 release notes](docs/releases/RELEASE_NOTES_0.1.4.md).
 
 Highlights:
 
@@ -148,7 +148,7 @@ Highlights:
 
 ## 0.1.3
 
-See [milXdy 0.1.3 release notes](docs/RELEASE_NOTES_0.1.3.md).
+See [milXdy 0.1.3 release notes](docs/releases/RELEASE_NOTES_0.1.3.md).
 
 Highlights:
 
@@ -164,7 +164,7 @@ Highlights:
 
 ## 0.1.2
 
-See [milXdy 0.1.2 release notes](docs/RELEASE_NOTES_0.1.2.md).
+See [milXdy 0.1.2 release notes](docs/releases/RELEASE_NOTES_0.1.2.md).
 
 Highlights:
 

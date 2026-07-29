@@ -19,8 +19,8 @@ const postReadingFullQuote = await readFile("src/apps/post-reading/fullQuote.ts"
 const postReadingTtsEngines = await readFile("src/apps/post-reading/ttsEngines.ts", "utf8");
 const reminetChatBackground = await readFile("src/apps/reminet-chat/background.ts", "utf8");
 const beetolBackground = await readFile("src/apps/beetol/background.js", "utf8");
-const appSdkDocs = await readFile("docs/APP_SDK.md", "utf8");
-const privacyDocs = await readFile("docs/PRIVACY_AND_PERMISSIONS.md", "utf8");
+const appSdkDocs = await readFile("docs/sdk/APP_SDK.md", "utf8");
+const privacyDocs = await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8");
 const routedBackgroundTypes = await collectRoutedBackgroundTypes();
 
 const failures = [];

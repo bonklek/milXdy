@@ -9,7 +9,7 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 ## Most Recent Release
 
-`0.2.3` is the current release. See its [release notes](RELEASE_NOTES_0.2.3.md) and the descending [changelog](../CHANGELOG.md) for shipped details.
+`0.2.3` is the current release. See its [release notes](../releases/RELEASE_NOTES_0.2.3.md) and the descending [changelog](../../CHANGELOG.md) for shipped details.
 
 ## Released: 0.2.2 - Prepared App SDK Update
 

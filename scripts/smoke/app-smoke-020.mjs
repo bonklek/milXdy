@@ -7,7 +7,7 @@ const files = {
   miladychanSource: await readFile("src/apps/miladychan-portal/content.ts", "utf8"),
   musicSource: await readFile("src/apps/music/content.ts", "utf8"),
   background: await readFile("src/extension/background/index.ts", "utf8"),
-  docsReleaseNotes: await readFile("docs/RELEASE_NOTES_0.2.0.md", "utf8"),
+  docsReleaseNotes: await readFile("docs/releases/RELEASE_NOTES_0.2.0.md", "utf8"),
 };
 
 verifyRegistryContracts();

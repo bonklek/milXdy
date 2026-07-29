@@ -10,9 +10,9 @@ This process covers catalog consideration only. It does not create a public pack
 
 Build the add-on against the current package contract and review the SDK guidance first:
 
-- [App SDK](APP_SDK.md), including the local package shape and its security limits
-- [Local package manifest schema](local-app-package.schema.json)
-- [Local package examples](../examples/packages/local-dev/README.md)
+- [App SDK](../sdk/APP_SDK.md), including the local package shape and its security limits
+- [Local package manifest schema](../schemas/local-app-package.schema.json)
+- [Local package examples](../../examples/packages/local-dev/README.md)
 
 The current package path is a reviewed custom-build input, not a sandboxed runtime plugin or general public installer. Do not describe a submission as safe, signed, or automatically installable merely because it has been submitted for review.
 

@@ -13,7 +13,7 @@ const files = {
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
   beetolContent: await readFile("src/apps/beetol/content.js", "utf8"),
   miladyMaxxerBackground: await readFile("src/apps/milady-maxxer/background.ts", "utf8"),
-  appSdkDocs: await readFile("docs/APP_SDK.md", "utf8"),
+  appSdkDocs: await readFile("docs/sdk/APP_SDK.md", "utf8"),
 };
 
 const failures = [];

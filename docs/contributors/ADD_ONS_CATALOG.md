@@ -1,7 +1,7 @@
 # Add-ons Catalog
 
 The static source for the milXdy Add-ons Catalog lives in
-[`catalog/`](../catalog/). It provides a catalog index, a shared per-package
+[`catalog/`](../../catalog/). It provides a catalog index, a shared per-package
 detail route, official and approved-external sections, security and browser
 download disclosures, and the supported local custom-build workflow.
 
