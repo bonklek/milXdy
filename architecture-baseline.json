@@ -17,7 +17,6 @@
     "src/apps/link-browser/content.ts": 572,
     "src/apps/milady-maxxer/content.ts": 1958,
     "src/apps/milady-maxxer/effects.ts": 508,
-    "src/apps/milady-maxxer/popup.tsx": 1391,
     "src/apps/milady-maxxer/styles.ts": 1916,
     "src/apps/miladychan-portal/content.ts": 927,
     "src/apps/music/content.ts": 3299,
@@ -59,7 +58,6 @@
     "src/apps/milady-maxxer/content.ts:processTweet#1": 135,
     "src/apps/milady-maxxer/content.ts:processDirectMessage#1": 97,
     "src/apps/milady-maxxer/effects.ts:applyMode#1": 137,
-    "src/apps/milady-maxxer/popup.tsx:App#1": 566,
     "src/apps/milady-maxxer/styles.ts:injectStyles#1": 1915,
     "src/apps/music/content.ts:renderPlayer#1": 97,
     "src/apps/post-reading/content.ts:boot#1": 180,
@@ -107,8 +105,6 @@
     "src/apps/beetol/background.js",
     "src/apps/beetol/content.js",
     "src/apps/beetol/hunt-cooldown.js",
-    "src/apps/milady-maxxer/popup.tsx",
-    "src/apps/milady-maxxer/shared/node-image.ts",
     "src/apps/remistats/background.js",
     "src/apps/remistats/content.js",
     "src/apps/remistats/sounds.js"
@@ -172,17 +168,6 @@
         "npm run verify:architecture"
       ],
       "maximumLogicalLines": 1958
-    },
-    {
-      "id": "existing-emergency-src-apps-milady-maxxer-popup-tsx",
-      "path": "src/apps/milady-maxxer/popup.tsx",
-      "owner": "release-maintainer",
-      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
-      "removalMilestone": "post-0.2.4 architecture reduction",
-      "tests": [
-        "npm run verify:architecture"
-      ],
-      "maximumLogicalLines": 1391
     },
     {
       "id": "existing-emergency-src-apps-milady-maxxer-styles-ts",

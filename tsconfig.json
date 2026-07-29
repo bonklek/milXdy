@@ -14,9 +14,5 @@
     "jsxImportSource": "solid-js",
     "checkJs": false
   },
-  "include": ["src/**/*", "scripts/**/*"],
-  "exclude": [
-    "src/apps/milady-maxxer/popup.tsx",
-    "src/apps/milady-maxxer/shared/node-image.ts"
-  ]
+  "include": ["src/**/*", "scripts/**/*"]
 }
