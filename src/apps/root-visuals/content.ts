@@ -980,7 +980,7 @@ export function isTwitterUnreadBackground(value: string): boolean {
   if (alpha < 0.04) return false;
   if (red < 4 && green < 4 && blue < 4) return false;
   const lightBlueWash = blue >= green && green >= red && blue - red >= 8 && red > 210;
-  const darkBlueWash = blue >= green && green >= red && blue - red >= 5 && blue < 96;
+  const darkBlueWash = blue >= green && green >= red && blue - red >= 16 && blue - green >= 6 && blue < 96;
   const twitterBlueAlpha = blue > red + 24 && green > red + 16;
   return lightBlueWash || darkBlueWash || twitterBlueAlpha;
 }

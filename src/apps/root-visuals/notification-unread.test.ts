@@ -11,6 +11,7 @@ describe("notification unread background detection", () => {
   it("does not mistake neutral or milXdy palette surfaces for X unread state", () => {
     expect(isTwitterUnreadBackground("rgba(0, 0, 0, 0)")).toBe(false);
     expect(isTwitterUnreadBackground("rgb(255, 255, 255)")).toBe(false);
+    expect(isTwitterUnreadBackground("rgb(22, 24, 28)")).toBe(false);
     expect(isTwitterUnreadBackground("color(srgb 0.911843 0.94698 0.909647)")).toBe(false);
   });
 });
