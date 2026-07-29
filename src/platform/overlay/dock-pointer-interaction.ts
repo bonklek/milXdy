@@ -28,6 +28,7 @@ export class DockPointerInteraction {
   #session: PointerSession | null = null;
   #cancelTimer: (() => void) | null = null;
   #unlisten: (() => void) | null = null;
+  #startedReorder = false;
 
   constructor(host: DockPointerHost, actions: DockPointerActions) {
     this.#host = host;
@@ -36,6 +37,7 @@ export class DockPointerInteraction {
 
   start(pointer: DockPointer, id: string, target: DockPointerTarget): void {
     this.dispose();
+    this.#startedReorder = false;
     this.#session = { ...pointer, id, moved: false, target };
     target.setPointerCapture?.(pointer.pointerId);
     this.#unlisten = this.#host.listen({
@@ -45,7 +47,10 @@ export class DockPointerInteraction {
     });
     this.#cancelTimer = this.#host.scheduleLongPress(() => {
       this.#cancelTimer = null;
-      if (this.#session) this.#actions.setReorderMode(true);
+      if (this.#session && !this.#actions.getReorderMode()) {
+        this.#startedReorder = true;
+        this.#actions.setReorderMode(true);
+      }
     });
   }
 
@@ -80,9 +85,11 @@ export class DockPointerInteraction {
     const session = this.#session;
     this.#clearTimer();
     session?.target.releasePointerCapture?.(session.pointerId);
-    const reordered = commit && session?.moved && this.#actions.getReorderMode();
+    const reordered = commit && session?.moved && this.#startedReorder;
     if (reordered) this.#actions.suppressNextClick();
     if (reordered) this.#actions.commitOrder();
+    if (this.#startedReorder) this.#actions.setReorderMode(false);
+    this.#startedReorder = false;
     this.#session = null;
     this.#unlisten?.();
     this.#unlisten = null;

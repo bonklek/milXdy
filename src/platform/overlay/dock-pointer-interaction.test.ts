@@ -14,6 +14,7 @@ describe("DockPointerInteraction", () => {
     expect(fixture.target.releasePointerCapture).toHaveBeenCalledWith(7);
     expect(fixture.actions.commitOrder).toHaveBeenCalledOnce();
     expect(fixture.actions.suppressNextClick).toHaveBeenCalledOnce();
+    expect(fixture.actions.setReorderMode).toHaveBeenLastCalledWith(false);
     expect(fixture.unlisten).toHaveBeenCalledOnce();
   });
 
