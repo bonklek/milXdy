@@ -18,6 +18,7 @@ const SHOW_NEW_POST_SCAN_INTERVAL_MS = 5000;
 const SHOW_NEW_POST_SCAN_LIMIT = 120;
 const HOME_LOGO_REPLACEMENT_CLASS = "milady-logo-replacement";
 const HOME_LOGO_BACKGROUND_CLASS = "milxdy-home-logo-background";
+const PAGE_FAVICON_ID = "milxdy-page-favicon";
 const HOME_LOGO_LINK_SELECTOR = 'h1 a[href="/home"], h1 a[aria-label="X"][role="link"]';
 const HOME_LOGO_PAGE_CHROME_SELECTOR = 'header[role="banner"], h1';
 const REPLY_CONTEXT_RE = /\breplying to\b/i;
@@ -59,6 +60,39 @@ function dispatchRootVisualClick(event: MouseEvent): void {
   for (const handler of Array.from(rootVisualClickHandlers)) handler(event);
 }
 
+function setupPageFavicon(context: MilxdyContentAppContext): void {
+  let queued = false;
+  const ensureFavicon = () => {
+    queued = false;
+    if (context.signal.aborted || !document.head) return;
+    let favicon = document.head.querySelector<HTMLLinkElement>(`#${PAGE_FAVICON_ID}`);
+    if (!favicon) {
+      favicon = document.createElement("link");
+      favicon.id = PAGE_FAVICON_ID;
+      favicon.rel = "icon";
+      favicon.type = "image/png";
+      favicon.href = chrome.runtime.getURL("brand/milxdy-logo-square-bevel.png");
+      document.head.append(favicon);
+      return;
+    }
+    // X replaces its favicon link during some client-side navigations. Keep
+    // ours last so Chromium continues to use the square milXdy mark.
+    if (favicon !== document.head.lastElementChild) document.head.append(favicon);
+  };
+  const scheduleEnsure = () => {
+    if (queued) return;
+    queued = true;
+    queueMicrotask(ensureFavicon);
+  };
+  ensureFavicon();
+  const observer = new MutationObserver(scheduleEnsure);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
+  context.addDisposable(() => {
+    observer.disconnect();
+    document.getElementById(PAGE_FAVICON_ID)?.remove();
+  });
+}
+
 export async function boot(context: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
@@ -73,6 +107,7 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
   context.addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
   setupMaxPostSound(context);
   injectHomeLogoStyles();
+  setupPageFavicon(context);
   setupHomeLogoReplacement(context);
   setupShowNewPostsMarkers(context);
   setupTweetPngShareActions(context);
