@@ -396,9 +396,9 @@ function mountBeetolGame(context = {}) {
   }
 
   function playHuntSound() {
-    playTone(330, 0.045, 0.022);
-    setTimeout(() => playTone(494, 0.07, 0.018), 38);
-    setTimeout(() => playTone(392, 0.045, 0.012), 88);
+    playTone(330, 0.045, 0.038);
+    setTimeout(() => playTone(494, 0.07, 0.03), 38);
+    setTimeout(() => playTone(392, 0.045, 0.02), 88);
   }
 
   function playFinalHuntFanfare() {
