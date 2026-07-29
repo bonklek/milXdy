@@ -35,6 +35,15 @@ describe("DockPointerInteraction", () => {
     fixture.handlers.move(pointer(1, 17), "b");
     expect(fixture.actions.moveBefore).not.toHaveBeenCalled();
   });
+
+  it("does not suppress an ordinary rail click after a small scroll-like drag", () => {
+    const fixture = createFixture();
+    fixture.pointer.start(pointer(1, 10), "a", fixture.target);
+    fixture.handlers.move(pointer(1, 24), null);
+    fixture.handlers.end(pointer(1, 24));
+    expect(fixture.actions.suppressNextClick).not.toHaveBeenCalled();
+    expect(fixture.actions.commitOrder).not.toHaveBeenCalled();
+  });
 });
 
 function createFixture() {

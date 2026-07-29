@@ -80,8 +80,9 @@ export class DockPointerInteraction {
     const session = this.#session;
     this.#clearTimer();
     session?.target.releasePointerCapture?.(session.pointerId);
-    if (commit && session?.moved) this.#actions.suppressNextClick();
-    if (commit && session?.moved && this.#actions.getReorderMode()) this.#actions.commitOrder();
+    const reordered = commit && session?.moved && this.#actions.getReorderMode();
+    if (reordered) this.#actions.suppressNextClick();
+    if (reordered) this.#actions.commitOrder();
     this.#session = null;
     this.#unlisten?.();
     this.#unlisten = null;
