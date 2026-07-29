@@ -1241,16 +1241,7 @@ function mountBeetolGame(context = {}) {
       beetolMode: changes.beetolMode?.newValue,
       [SETTINGS_THEME_KEY]: changes[SETTINGS_THEME_KEY]?.newValue,
     });
-    if (changes['beetol.accessToken']) {
-      state.signedIn = Boolean(changes['beetol.accessToken'].newValue);
-      if (state.signedIn) refreshState(true);
-      else {
-        enterSignedOutState('No RemiliaNET browser session detected.');
-        render();
-      }
-    } else {
-      render();
-    }
+    render();
   };
   chrome.storage.onChanged.addListener(storageListener);
   addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
