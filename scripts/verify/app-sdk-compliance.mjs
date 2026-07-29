@@ -94,6 +94,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
   requireIncludes(contentRuntime, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
   requireIncludes(contentRuntime, 'type: "milxdy:externalHandoff"', "External handoffs must use a host-routed background request");
+  requireIncludes(contentRuntime, "playInterfaceLaunchSound();", "External handoffs must use the host-owned, user-preference-respecting loading cue");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
   requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
