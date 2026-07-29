@@ -10,6 +10,7 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
+import { authorizeBackgroundMessage } from "./background-message-policy";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { splitExternalHandoffText } from "../app-sdk/external-handoff";
@@ -645,9 +646,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordImportAvoided(app, `message:${label}:disabled`);
       return Promise.resolve(null);
     }
-    const messageType = extractBackgroundMessageType(message);
-    if (!messageType || !appCanSendBackgroundMessage(app, messageType)) {
-      recordDeniedAppMessage(app, label, messageType);
+    const authorization = authorizeBackgroundMessage(message, app.background?.messageTypes);
+    if (!authorization.authorized) {
+      recordDeniedAppMessage(app, label, authorization.messageType);
       return Promise.resolve(null);
     }
     return new Promise<T | null>((resolve, reject) => {
@@ -3487,22 +3488,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       control.dataset.writeError = "true";
       control.title = `Could not save ${setting.label}: ${errorMessage(error)}`;
     }
-  }
-
-  function extractBackgroundMessageType(message: unknown): string | null {
-    if (!message || typeof message !== "object" || Array.isArray(message)) return null;
-    const type = (message as Record<string, unknown>).type;
-    return typeof type === "string" && type.length > 0 ? type : null;
-  }
-
-  function appCanSendBackgroundMessage(app: MilxdyAppManifest, messageType: string): boolean {
-    return (app.background?.messageTypes || []).some((pattern) => backgroundMessagePatternMatches(pattern, messageType));
-  }
-
-  function backgroundMessagePatternMatches(pattern: string, messageType: string): boolean {
-    if (typeof pattern !== "string" || pattern.length === 0) return false;
-    if (pattern.endsWith(":*")) return messageType.startsWith(pattern.slice(0, -1));
-    return pattern === messageType;
   }
 
   function recordDeniedAppMessage(app: MilxdyAppManifest, label: string, messageType: string | null): void {
