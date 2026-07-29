@@ -13,6 +13,10 @@ const LEGACY_PREFIX = "bex" + "tol";
 const LEGACY_ACCESS_TOKEN_KEY = `${LEGACY_PREFIX}.accessToken`;
 const LEGACY_REFRESH_TOKEN_KEY = `${LEGACY_PREFIX}.refreshToken`;
 
+// Bearer credentials stay in the background context. When an MV3 worker
+// restarts, callers re-adopt the authenticated browser session instead of
+// persisting tokens where extension content can read them.
+let memoryAccessToken = "";
 let memoryRefreshToken = "";
 let authGeneration = 0;
 let disconnectRequested = false;
@@ -40,6 +44,7 @@ export const REMILIA_AUTH_COOKIE_NAME = AUTH_COOKIE_NAME;
 export const REMILIA_AUTH_COOKIE_TTL_SECONDS = AUTH_COOKIE_TTL_SECONDS;
 export const REMILIA_LEGACY_TOKEN_KEYS = [LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY] as const;
 export const REMILIA_TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY] as const;
+const REMILIA_ALL_TOKEN_KEYS = [...REMILIA_TOKEN_KEYS, ...REMILIA_LEGACY_TOKEN_KEYS] as const;
 
 async function getStored(keys: string[]): Promise<Record<string, unknown>> {
   return chrome.storage.local.get(keys);
@@ -56,15 +61,10 @@ async function removeStored(keys: readonly string[]): Promise<void> {
 export async function migrateRemiliaAuth(signal?: AbortSignal, generation = authGeneration): Promise<void> {
   throwIfAuthAborted(signal);
   const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  const next: Record<string, unknown> = {};
-  if (!stored[ACCESS_TOKEN_KEY] && stored[LEGACY_ACCESS_TOKEN_KEY]) next[ACCESS_TOKEN_KEY] = stored[LEGACY_ACCESS_TOKEN_KEY];
   await mutateRemiliaAuth(generation, signal, async () => {
     if (!memoryRefreshToken && typeof stored[REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[REFRESH_TOKEN_KEY];
     if (!memoryRefreshToken && typeof stored[LEGACY_REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[LEGACY_REFRESH_TOKEN_KEY];
-    if (Object.keys(next).length) await setStored(next);
-    if (stored[REFRESH_TOKEN_KEY] || stored[LEGACY_REFRESH_TOKEN_KEY]) {
-      await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-    }
+    await removeStored(REMILIA_ALL_TOKEN_KEYS);
   });
 }
 
@@ -72,6 +72,7 @@ export async function clearRemiliaAuth(): Promise<void> {
   authGeneration += 1;
   disconnectRequested = true;
   await queueAuthMutation(async () => {
+    memoryAccessToken = "";
     memoryRefreshToken = "";
     await clearRemiliaAuthCookieRaw();
     await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
@@ -82,6 +83,7 @@ export async function clearRemiliaAuth(): Promise<void> {
 export async function clearStoredRemiliaAuth(): Promise<void> {
   authGeneration += 1;
   await queueAuthMutation(async () => {
+    memoryAccessToken = "";
     memoryRefreshToken = "";
     await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
   });
@@ -169,8 +171,7 @@ export async function adoptRemiliaBrowserSession(
   const cookieToken = await getRemiliaAuthCookie();
   await mutateRemiliaAuth(generation, options.signal, async () => {
     if (cookieToken) {
-      await setStored({ [ACCESS_TOKEN_KEY]: cookieToken });
-      await removeStored([REFRESH_TOKEN_KEY]);
+      memoryAccessToken = cookieToken;
     }
     await allowRemiliaSessionAuthRaw(generation);
   });
@@ -187,12 +188,9 @@ export async function prepareRemiliaAuth(sessionPath: string, options: RemiliaAu
   const adopted = await adoptRemiliaBrowserSession(sessionPath, options);
   if (adopted.ok && adopted.token) return adopted;
 
-  const stored = await getStored([ACCESS_TOKEN_KEY]);
-  throwIfAuthAborted(options.signal);
-  const accessToken = typeof stored[ACCESS_TOKEN_KEY] === "string" ? stored[ACCESS_TOKEN_KEY] : "";
-  if (accessToken) {
-    await mutateRemiliaAuth(generation, options.signal, () => setRemiliaAuthCookieRaw(accessToken));
-    return { ok: true, token: accessToken, method: "stored" };
+  if (memoryAccessToken) {
+    await mutateRemiliaAuth(generation, options.signal, () => setRemiliaAuthCookieRaw(memoryAccessToken));
+    return { ok: true, token: memoryAccessToken, method: "stored" };
   }
 
   const renewed = await renewRemiliaAuth(sessionPath, options);
@@ -275,10 +273,10 @@ async function oidcToken(params: Record<string, string>, method: RemiliaAuthResu
   }
 
   await mutateRemiliaAuth(generation, signal, async () => {
+    memoryAccessToken = data.access_token;
     memoryRefreshToken = typeof data.refresh_token === "string" ? data.refresh_token : memoryRefreshToken;
     await setRemiliaAuthCookieRaw(data.access_token);
-    await setStored({ [ACCESS_TOKEN_KEY]: data.access_token });
-    await removeStored([REFRESH_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
+    await removeStored(REMILIA_ALL_TOKEN_KEYS);
     await allowRemiliaSessionAuthRaw(generation);
   });
   return { ok: true, token: data.access_token, method };
