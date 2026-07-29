@@ -100,6 +100,7 @@ const common = {
   target: "es2022",
   sourcemap: false,
   logLevel: "info",
+  loader: { ".css": "text" },
   define: {
     MILXDY_BUILD_PROFILE: JSON.stringify(buildProfile),
     MILXDY_BUILD_TARGET: JSON.stringify(target),
