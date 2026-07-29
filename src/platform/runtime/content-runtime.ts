@@ -1513,8 +1513,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         selectTemplate: (id) => {
           const template = templates.find((candidate) => candidate.id === id);
           if (!template) return;
+          const replyTweet = button.closest<HTMLElement>('article[data-testid="tweet"]');
           close();
-          triggerNativeReply(button, template.text, { sendAfterInsert: template.sendAfterInsert });
+          triggerNativeReply(button, template.text, {
+            sendAfterInsert: template.sendAfterInsert,
+            likeAfterInsert: template.id === "milady" && template.text.trim().toLowerCase() === "milady",
+            likeTweet: replyTweet,
+          });
           recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: id, updatedAt: Date.now() });
         },
       }));
@@ -1525,13 +1530,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function triggerNativeReply(button: HTMLElement, text = "", options: { sendAfterInsert?: boolean } = {}): void {
+  function triggerNativeReply(button: HTMLElement, text = "", options: { sendAfterInsert?: boolean; likeAfterInsert?: boolean; likeTweet?: HTMLElement | null } = {}): void {
     if (text) waitForReplyComposerText(text, options);
     button.dataset.milxdyNativeReply = "true";
     button.click();
   }
 
-  function waitForReplyComposerText(text: string, { sendAfterInsert = false }: { sendAfterInsert?: boolean } = {}): void {
+  function waitForReplyComposerText(text: string, { sendAfterInsert = false, likeAfterInsert = false, likeTweet = null }: { sendAfterInsert?: boolean; likeAfterInsert?: boolean; likeTweet?: HTMLElement | null } = {}): void {
     let inserted = false;
     let insertionAttempted = false;
     let verificationFrames = 0;
@@ -1552,6 +1557,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       submitted = true;
       submit.click();
+      if (likeAfterInsert && likeTweet) likeTweetIfNeeded(likeTweet);
     };
     const tryInsert = () => {
       if (inserted || insertionAttempted) return inserted;
@@ -1603,6 +1609,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     timeout = window.setTimeout(() => observer?.disconnect(), 1500);
     observer.observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  function likeTweetIfNeeded(tweet: HTMLElement): void {
+    const unlike = tweet.querySelector<HTMLElement>('[data-testid="unlike"]');
+    if (unlike) return;
+    const like = tweet.querySelector<HTMLElement>('[data-testid="like"]');
+    if (like && like.offsetParent !== null) like.click();
   }
 
   function refreshComposerActionButtons(): void {
