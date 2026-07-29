@@ -184,7 +184,11 @@ export class OverlayDockDomView implements DockViewPort {
   }
 
   #activate(event: MouseEvent, button: HTMLButtonElement): void {
-    if (this.#snapshot?.reorderMode || this.#suppressClick) {
+    // A long-press reorder can be interrupted by X replacing the page under
+    // the pointer.  Treat the next ordinary app click as a recovery action:
+    // leave reorder mode and still honour the requested app toggle.
+    if (this.#snapshot?.reorderMode) this.#actions?.setReorderMode(false);
+    if (this.#suppressClick) {
       event.preventDefault();
       this.#suppressClick = false;
       return;
