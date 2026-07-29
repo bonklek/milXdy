@@ -1622,6 +1622,20 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const actionRow = composerActionRowFor(composer);
       if (actionRow) actionRows.add(actionRow);
     }
+    // X can briefly replace the DraftJS editor while retaining its toolbar.
+    // Keep action controls attached to that visible toolbar instead of
+    // treating the editor-shaped DOM gap as a closed composer.
+    for (const toolbar of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="toolBar"]'))) {
+      if (toolbar.offsetParent === null || toolbar.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) continue;
+      const actionRow = toolbar.querySelector<HTMLElement>('[data-testid="ScrollSnap-List"]')
+        || toolbar.querySelector<HTMLElement>('[role="tablist"]')
+        || toolbar;
+      actionRows.add(actionRow);
+    }
+    // A zero-row pass is an X reconciliation transient. Existing slots are
+    // removed naturally with their discarded toolbar; do not proactively
+    // erase a live action before the replacement editor is discoverable.
+    if (actionRows.size === 0) return;
     for (const slot of Array.from(document.querySelectorAll<HTMLElement>("[data-milxdy-composer-actions]"))) {
       if (!Array.from(actionRows).some((row) => row.contains(slot))) slot.remove();
     }
