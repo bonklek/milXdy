@@ -1091,7 +1091,8 @@ function showTweetPngModal(
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <button type="button" data-action="reminet" disabled aria-disabled="true" title="A live RemiNet sharing client is required">Share</button>
+          <a class="milxdy-tweet-png-action-link" data-action="reconnect" href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer" title="Open RemiliaNET to restore the browser session">Reconnect</a>
+          <button type="button" data-action="refresh" title="Refresh X and retry the RemiNet connection">Refresh</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
@@ -1149,7 +1150,7 @@ function showTweetPngModal(
       return;
     }
     if (event.key !== "Tab") return;
-    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
       .filter((element) => element.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0];
@@ -1168,6 +1169,9 @@ function showTweetPngModal(
   modal.querySelector('[data-action="download"]')?.addEventListener("click", () => {
     downloadBlob(currentBlob, tweetPngFileName(currentData));
     setStatus("PNG downloaded.");
+  });
+  modal.querySelector('[data-action="refresh"]')?.addEventListener("click", () => {
+    window.location.reload();
   });
   settingsButton?.addEventListener("click", () => {
     if (!settings) return;
@@ -1320,17 +1324,23 @@ function injectTweetPngStyles(): void {
       font: 12px/1.35 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
     }
-    .milxdy-tweet-png-dialog button {
+    .milxdy-tweet-png-dialog button,
+    .milxdy-tweet-png-action-link {
+      align-items: center;
       border: 1px solid #b67cff;
       border-radius: 6px;
       background: #ead8ff;
       color: #281447;
       cursor: pointer;
+      display: inline-flex;
       font: 700 12px/1 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      justify-content: center;
       min-height: 30px;
       padding: 0 10px;
+      text-decoration: none;
     }
     .milxdy-tweet-png-dialog button:focus-visible,
+    .milxdy-tweet-png-action-link:focus-visible,
     .milxdy-tweet-png-dialog input:focus-visible {
       outline: 2px solid #7b2cff;
       outline-offset: 2px;
