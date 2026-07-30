@@ -103,6 +103,35 @@
         }
       }
     },
+    "contextualPostActions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "placement"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "placement": { "const": "shareMenu" },
+          "icon": {
+            "oneOf": [
+              { "$ref": "#/$defs/relativePath" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["light", "dark"],
+                "properties": {
+                  "light": { "$ref": "#/$defs/relativePath" },
+                  "dark": { "$ref": "#/$defs/relativePath" }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
     "hostComposerActions": {
       "type": "array",
       "items": { "enum": ["nativeDrafts"] },

@@ -40,6 +40,12 @@ export type AppComposerAction = {
   icon?: AppIconAsset;
   presentation: "anchoredPanel";
 };
+export type AppContextualPostAction = {
+  id: string;
+  label: string;
+  icon?: AppIconAsset;
+  placement: "shareMenu";
+};
 /** Narrow host-owned companion action; packages cannot inject arbitrary toolbar UI. */
 export type AppHostComposerAction = "nativeDrafts";
 export type AppReplyActionTemplate = {
@@ -185,6 +191,7 @@ export type MilxdyAppManifest = {
     defaultSide?: "left" | "right";
   };
   composerAction?: AppComposerAction;
+  contextualPostActions?: AppContextualPostAction[];
   hostComposerActions?: AppHostComposerAction[];
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
@@ -365,6 +372,20 @@ export type MilxdyReplyActionContext = {
   selectTemplate: (id: string) => void;
 };
 
+/**
+ * Host-owned post selection and storage services for a declared contextual
+ * action. Packages own their review UI; the host owns X menu discovery,
+ * duplicate suppression, lifecycle, and focus-safe invocation.
+ */
+export type MilxdyContextualPostActionContext = {
+  actionId: string;
+  post: HTMLElement;
+  statusUrl: string | null;
+  signal: AbortSignal;
+  storage: AppStorageFacade;
+  resolveAssetUrl: (path: string) => string;
+};
+
 export type MilxdyContentAppModule = {
   id?: string;
   boot?: (context: MilxdyContentAppContext) => Promise<void> | void;
@@ -374,6 +395,7 @@ export type MilxdyContentAppModule = {
   onSurface?: (surface: TwitterSurface) => Promise<void> | void;
   onComposerAction?: (context: MilxdyComposerActionContext) => Promise<void> | void;
   onReplyAction?: (context: MilxdyReplyActionContext) => Promise<void> | void;
+  onContextualPostAction?: (context: MilxdyContextualPostActionContext) => Promise<void> | void;
   open?: () => Promise<void> | void;
   close?: () => Promise<void> | void;
   dispose?: () => Promise<void> | void;

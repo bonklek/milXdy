@@ -6,6 +6,9 @@ const popupSource = await readFile("src/extension/popup/index.ts", "utf8");
 const popupHtml = await readFile("assets/extension/popup/popup.html", "utf8");
 const postReadingDefaults = await readFile("src/apps/post-reading/shared/defaults.ts", "utf8");
 const firstPartyAppsSource = await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8");
+const contextualSettingSources = new Map([
+  ["tweetPng", await readFile("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8")],
+]);
 
 const failures = [];
 const notes = [];
@@ -81,8 +84,19 @@ function verifyGeneratedFeatureMirror(app, setting) {
     return;
   }
 
+  if (setting.role === "enablement") {
+    requireSourceIncludes(firstPartyAppsSource, "genericEnablementAdapter", `${app.id}:${setting.id}: generic Apps & Features enablement adapter is missing`);
+    notes.push(`${setting.id}: enablement is owned by the generated Apps & Features control.`);
+    return;
+  }
+
   if (setting.storage?.key === "milxdy.settings.visualTheme" && setting.storage?.property) {
     const elementId = visualEditorProperties.get(setting.storage.property);
+    const contextualSource = contextualSettingSources.get(app.id) || "";
+    if (!elementId && contextualSource.includes(`data-setting="${setting.storage.property}"`)) {
+      notes.push(`${setting.id}: visual setting is mirrored by the package-owned contextual review dialog.`);
+      return;
+    }
     if (!elementId) {
       fail(`${app.id}:${setting.id}: visualTheme property ${setting.storage.property} has no popup visual-editor mirror`);
       return;

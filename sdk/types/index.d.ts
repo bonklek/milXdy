@@ -16,6 +16,13 @@ export interface AppComposerAction {
   presentation: "anchoredPanel";
 }
 
+export interface AppContextualPostAction {
+  id: string;
+  label: string;
+  icon?: string | { light: string; dark: string };
+  placement: "shareMenu";
+}
+
 export interface TwitterSurface {
   kind: TwitterSurfaceKind;
   element: HTMLElement;
@@ -68,6 +75,7 @@ export interface PublicAppManifest {
   surfaces: MilxdyAppSurface[];
   loadTriggers: Array<"startup" | "surface" | "dockOpen" | "idle" | "userAction">;
   composerAction?: AppComposerAction;
+  contextualPostActions?: AppContextualPostAction[];
 }
 
 export interface MilxdyContentAppContext {
@@ -90,6 +98,7 @@ export interface MilxdyContentAppModule {
   onRouteChange?(route: MilxdyRouteChange): Promise<void> | void;
   onSurface?(surface: TwitterSurface): Promise<void> | void;
   onComposerAction?(context: MilxdyComposerActionContext): Promise<void> | void;
+  onContextualPostAction?(context: MilxdyContextualPostActionContext): Promise<void> | void;
   open?(): Promise<void> | void;
   close?(): Promise<void> | void;
   dispose?(): Promise<void> | void;
@@ -100,4 +109,13 @@ export interface MilxdyComposerActionContext {
   readonly panel: HTMLElement;
   readonly signal: AbortSignal;
   close(): void;
+}
+
+export interface MilxdyContextualPostActionContext {
+  readonly actionId: string;
+  readonly post: HTMLElement;
+  readonly statusUrl: string | null;
+  readonly signal: AbortSignal;
+  readonly storage: AppStorageFacade;
+  resolveAssetUrl(path: string): string;
 }

@@ -76,7 +76,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | --- | --- |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Apps & Features and side rail](docs/guides/apps-hub-and-side-rail.md) | Enable apps/features, pin rail icons, choose Lite/Balanced/Full setup, and manage the dock. |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Root Visual Enhancements](docs/guides/root-visual-enhancements.md) | Appearance presets, visual polish, sounds, notifications, and performance-related visual behavior. |
-| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Tweet PNG](docs/guides/tweet-png.md) | Export reviewed local PNG images from X/Twitter post actions. |
+| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Share Kit — Tweet PNG](docs/guides/tweet-png.md) | Export reviewed local PNG images from declared X/Twitter post actions. |
 | <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Hyperlinks](docs/guides/remilia-wiki-hyperlinks.md) | Inline wiki links, hover previews, match limits, debug mode, and link styling. |
 | <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Sidebar](docs/guides/remilia-wiki-sidebar.md) | Docked wiki browsing, Link Later, wiki link routing, and Grok-assisted article prompts. |
 | <img src="assets/apps/post-reading/post-reading-logo.png" alt="" width="20"> [Post-reading](docs/guides/post-reading.md) | Read-aloud controls, voices, quote reading, OCR, link previews, and docked playback. |

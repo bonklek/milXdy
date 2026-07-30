@@ -14,6 +14,7 @@ export function featureBundleName(app) {
 
 export function featureBundlesForProfile(registry, profile) {
   return appsForProfile(registry, profile)
+    .filter((app) => typeof app.entryName === "string" && app.entryName.length > 0)
     .map(featureBundleName)
     .sort();
 }

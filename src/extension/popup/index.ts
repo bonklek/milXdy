@@ -1173,6 +1173,8 @@ function readVisualEditor(): VisualThemeSettings {
     pokePlacement: selectValue("visualPokePlacement"),
     appWindowStyle: selectValue("visualAppWindowStyle"),
     tweetPngBorderPalette: selectValue("visualTweetPngBorderPalette"),
+    tweetPngBackgroundColor: visualDraft.tweetPngBackgroundColor,
+    tweetPngFontColor: visualDraft.tweetPngFontColor,
     maxMediaHeight: numberInputValue("visualMaxMediaHeight"),
     backgroundFade: checkedValue("visualBackgroundFade"),
     squareMedia: checkedValue("visualSquareMedia"),

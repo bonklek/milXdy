@@ -35,7 +35,7 @@ The shared side rail appears on X/Twitter and opens Apps & Features. This menu s
 
 - Click **Apps** to open Apps & Features.
 - Full apps include docked or windowed surfaces such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, Wiki, and Maxxer.
-- Feature modules include smaller capabilities such as RemiStats, Tweet PNG, Composer Tools, wiki link highlighting, and page-level visual effects.
+- Feature modules include smaller capabilities such as RemiStats, Share Kit, Composer Tools, wiki link highlighting, and page-level visual effects.
 - Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right, reorder pinned app icons, or reset the dock order.
@@ -47,9 +47,9 @@ Enabled and pinned are different states: an app or feature can be enabled withou
 
 The Appearance presets set both visual treatment and ambient audio so each profile feels intentionally different.
 
-- **Max** is the full Remilia client profile. It enables the strongest X chrome reskin, Remilia fonts, shaped PFPs, square media, RemiStats backing boxes, gold incoming-poke alerts, RemiNet Chat overlay, raised/beveled Maxxer cards, shimmer, full Tweet PNG borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and the Post-reading completion ding.
-- **Medium** is the daily-driver profile. It keeps X recognizable, uses readable tweet text with Remilia UI chrome, shapes feed PFPs only, keeps media close to X defaults, uses native action-row pokes, enables RemiStats backing boxes and gold incoming-poke alerts, uses marked Maxxer rows without shimmer, keeps Tweet PNG exports complete with a neutral border, and keeps RemiStats/Milady Maxxer sounds without extra chrome click sounds.
-- **Minimal** is the quiet stock-X profile. It leaves fonts, PFPs, media, notifications, RemiStats backing boxes, gold poke styling, chat overlay, Maxxer shimmer, Tweet PNG borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and Post-reading completion dings off. It keeps functional controls such as action-row pokes and complete Tweet PNG content available.
+- **Max** is the full Remilia client profile. It enables the strongest X chrome reskin, Remilia fonts, shaped PFPs, square media, RemiStats backing boxes, gold incoming-poke alerts, RemiNet Chat overlay, raised/beveled Maxxer cards, shimmer, full Share Kit PNG borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and the Post-reading completion ding.
+- **Medium** is the daily-driver profile. It keeps X recognizable, uses readable tweet text with Remilia UI chrome, shapes feed PFPs only, keeps media close to X defaults, uses native action-row pokes, enables RemiStats backing boxes and gold incoming-poke alerts, uses marked Maxxer rows without shimmer, keeps Share Kit exports complete with a neutral border, and keeps RemiStats/Milady Maxxer sounds without extra chrome click sounds.
+- **Minimal** is the quiet stock-X profile. It leaves fonts, PFPs, media, notifications, RemiStats backing boxes, gold poke styling, chat overlay, Maxxer shimmer, Share Kit borders, visual interaction sounds, RemiStats sounds, Milady Maxxer sounds, and Post-reading completion dings off. It keeps functional controls such as action-row pokes and complete Share Kit content available.
 
 Read-aloud itself stays independent of presets because it is a utility/accessibility feature rather than part of the aesthetic intensity.
 
@@ -65,7 +65,7 @@ Some apps keep app-specific controls for their content area, such as Beetol colo
 
 Use **Export pack** to save Appearance plus the current Performance mode as a shareable profile pack. **Import pack** previews the sections that will change and lets you cancel before any settings are written. The older Appearance **Export**, **Import**, **Copy string**, and **Paste string** controls still handle visual themes only.
 
-Custom Appearance groups separate Root X controls from mirrors. Root X controls cover page fade, typography, PFP surfaces, media/card treatment, notifications, navigation, post buttons, and show-new-posts bars. App chrome, Tweet PNG, RemiStats/poke, and Maxxer controls are still preserved in the same visual theme object for compatibility, but remain labeled as app or feature mirrors.
+Custom Appearance groups separate Root X controls from mirrors. Root X controls cover page fade, typography, PFP surfaces, media/card treatment, notifications, navigation, post buttons, and show-new-posts bars. App chrome, Share Kit, RemiStats/poke, and Maxxer controls are still preserved in the same visual theme object for compatibility, but remain labeled as app or feature mirrors.
 
 After changing major toggles, reload affected X/Twitter tabs so old content scripts and CSS are replaced.
 

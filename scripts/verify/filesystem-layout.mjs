@@ -40,6 +40,7 @@ const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-app
 const manifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 
 for (const app of registry) {
+  if (!app.entryPoint && app.available === false) continue;
   assert(typeof app.entryPoint === "string" && app.entryPoint.startsWith("src/apps/"), `${app.id}: entryPoint must live under src/apps`);
   assert(app.entryPoint.endsWith("/entry.ts"), `${app.id}: entryPoint must be an app-local entry.ts`);
   assert(existsSync(app.entryPoint), `${app.id}: app-local entryPoint is missing: ${app.entryPoint}`);

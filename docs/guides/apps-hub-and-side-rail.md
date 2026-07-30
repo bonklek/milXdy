@@ -11,7 +11,7 @@ Apps & Features and the side rail manage first-party milXdy apps and feature mod
 ## Common Tasks
 
 - Browse **Apps** for windowed or docked surfaces such as Music, Post-reading, RemiNet Chat, Beetol, Miladychan, Wiki, and Maxxer.
-- Browse **Features** for smaller modules such as RemiStats, Tweet PNG, Composer Tools, wiki link highlighting, and page-level visual effects.
+- Browse **Features** for smaller modules such as RemiStats, Share Kit, Composer Tools, wiki link highlighting, and page-level visual effects.
 - Use **Enable** or **Disable** to control whether an app or feature can run.
 - Use **Pin** or **Unpin** to control whether an enabled dock app appears directly on the side rail.
 - Use the dock gear to move the rail left or right.

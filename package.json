@@ -54,6 +54,7 @@
     "verify:remistats-tooltip-escaping": "node scripts/verify/remistats-tooltip-escaping.mjs",
     "verify:app-settings-mirrors": "node scripts/verify/app-settings-mirrors.mjs",
     "verify:local-app-packages": "node scripts/packages/verify-local-app-packages.mjs",
+    "build:share-kit-package": "node scripts/packages/build-share-kit.mjs",
     "verify:local-app-package": "node scripts/packages/verify-local-app-package.mjs",
     "compose:local-apps": "node scripts/packages/compose-local-app-packages.mjs",
     "verify:local-app-composer": "node scripts/packages/compose-local-app-packages.mjs --check --packages-dir=examples/packages/first-party-replacements --allow-local-review --acknowledge-package-consent --acknowledge-first-party-replacement",

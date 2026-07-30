@@ -81,6 +81,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
   requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
   requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
+  requireIncludes(appPlatform, "contextualPostActions?: AppContextualPostAction[]", "App SDK manifest must expose contextual post actions");
+  requireIncludes(appPlatform, "onContextualPostAction?:", "App SDK module type must expose the contextual post-action callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
@@ -205,8 +207,12 @@ function verifyRegistry() {
     if (seenIds.has(app.id)) fail(`${app.id}: duplicate registry id`);
     seenIds.add(app.id);
     if (!validPackageKinds.has(app.packageKind)) fail(`${app.id}: invalid or missing packageKind`);
-    if (!existsSync(app.entryPoint)) fail(`${app.id}: entryPoint does not exist: ${app.entryPoint}`);
-    if (app.contentEntry !== `${app.entryName}.js`) fail(`${app.id}: contentEntry must match entryName`);
+    if (app.entryPoint) {
+      if (!existsSync(app.entryPoint)) fail(`${app.id}: entryPoint does not exist: ${app.entryPoint}`);
+      if (app.contentEntry !== `${app.entryName}.js`) fail(`${app.id}: contentEntry must match entryName`);
+    } else if (app.available !== false) {
+      fail(`${app.id}: available first-party app must declare an entryPoint`);
+    }
     if (typeof app.defaultEnabled !== "boolean") fail(`${app.id}: defaultEnabled must be boolean`);
     if (app.id === "reminetChat") verifyReminetChatDefaults(app);
     verifyHubMetadata(app);
@@ -438,6 +444,7 @@ function verifyCostPrivacyPermissionDisclosure(app) {
 
 async function verifyContentModules() {
   for (const app of registry) {
+    if (!app.entryPoint && app.available === false) continue;
     const sourcePath = await resolveEntrySource(app.entryPoint);
     if (!sourcePath || !existsSync(sourcePath)) {
       fail(`${app.id}: unable to resolve content module from ${app.entryPoint}`);
@@ -517,16 +524,6 @@ function reviewAppOwnedObservers(app, source) {
     && !/pageChromeObserver\.observe\([^;]*document\.(?:body|documentElement)/s.test(source)
   ) {
     bounded.push("home-logo page-chrome observer attaches only to discovered header/h1 roots");
-  }
-
-  if (
-    app.id === "rootVisuals"
-    && /menuObserver\s*=\s*new\s+MutationObserver/.test(source)
-    && /menuObserver\.observe\([^;]*\{\s*childList:\s*true,\s*subtree:\s*true\s*\}/s.test(source)
-    && /context\.scheduler\.timeout\(stopMenuObserver,\s*1200\)/.test(source)
-    && /context\.addDisposable\(stopMenuObserver\)/.test(source)
-  ) {
-    bounded.push("click-triggered Tweet PNG share-menu observer has 1200ms scheduler timeout and cleanup");
   }
 
   if (

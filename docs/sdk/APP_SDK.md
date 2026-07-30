@@ -200,7 +200,7 @@ The content runtime owns the lightweight Apps & Features rail item and stores ex
 The menu is organized by manifest `packageKind`:
 
 - `app`: full app surfaces with a rail entry, pop-out, or major app window, such as Music, Post-reading, RemiNet Chat, Beetol, Miladychan, Wiki, and Maxxer
-- `feature`: non-app modules that extend X/Twitter surfaces without their own app window, such as RemiStats, Tweet PNG, Composer Tools, injected controls, and page-level visual effects
+- `feature`: non-app modules that extend X/Twitter surfaces without their own app window, such as RemiStats, Share Kit, Composer Tools, injected controls, and page-level visual effects
 - `theme`: texture, visual, or profile packages that appear as installable packages without pretending to be launchable apps
 
 Full apps and features can share categories such as `reading`, `social`, `appearance`, `media`, or `game`, but category should not decide the IA section. Use `packageKind` for section placement and `hub.category` for filtering, chips, and search.
@@ -311,9 +311,9 @@ First-party platform examples:
 | Post-reading | Shared reader and OCR services | Uses shared scanner delivery, overlay player chrome, App SDK routed full-quote fetches, and the background fetch router. The packaged OCR frame accepts parent requests from allowed X/Twitter/wiki origins only when they carry a content-issued frame authentication token, and its background helper validates the packaged `ocr.html` sender. Voice selection declares dynamic Web Speech options, so saved voice URIs remain browser-profile dependent. |
 | RemiStats and Pokes | Shared surface and background services | Uses shared surface delivery, routed background work, generated settings metadata, and declared storage ownership. |
 | Milady Maxxer | Worker-heavy overlay app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work with explicit model, remote identity, and cache disclosures. |
-| Tweet PNG | Invoked-only | Declares `lifecycle.mode: "invoked"` and remains a local `userAction` package loaded by Root Visuals from the X share-menu action. If it becomes a runtime app, change the lifecycle mode, add real lifecycle exports, and keep PNG rendering local and user initiated. |
+| Share Kit | Invoked-only external replacement | Retains the compatibility ID `tweetPng`, declares a `contextualPostActions` share-menu action, and owns Tweet PNG rendering/review UI entirely inside the reviewed package. The base client supplies only the generic host contract. |
 | Composer Tools | Aligned lightweight feature | Runtime-loaded local-only feature with a metadata-backed Apps & Features enablement toggle. Its document input listeners are scoped to supported X/Twitter post composers and cleaned up through runtime disposables. |
-| Root Visuals | Core visual runtime feature | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, the home-logo observer attaches only to discovered header/h1 page-chrome roots, and the click-triggered Tweet PNG share-menu observer is scheduler-capped and cleaned up. |
+| Root Visuals | Core visual runtime feature | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, and the home-logo observer attaches only to discovered header/h1 page-chrome roots. |
 
 Platform boundaries:
 
@@ -374,6 +374,20 @@ Package-kind rules:
 - `app` packages may declare a dock entry, overlay app surface, app-owned settings surface, background services, and route/site scopes. They should use shared overlay chrome and rail metadata instead of registering app-local docks or window managers.
 - `feature` packages may declare scanner-delivered surfaces, generated Apps & Features controls, background routes, and user-action tools. They must not declare dock metadata or pretend to be rail apps.
 - `theme` packages are for visual, texture, icon, chrome, or preset resources. They should not declare content-script surfaces, host permissions, background services, or remote services unless a later platform pass adds explicit theme runtime support and review rules.
+
+### Contextual post actions
+
+A package may declare one to four `contextualPostActions` with a safe unique ID,
+label, optional package-owned icon, and `placement: "shareMenu"`. The package must
+use `loadTriggers: ["userAction"]` and export
+`onContextualPostAction(context)`. The host owns X share-menu discovery,
+duplicate suppression, keyboard activation, lifecycle, and the selected post
+context. The package owns its local review UI and may access only storage and
+assets it declared. An unavailable or disabled package receives no action.
+
+This contract does not grant upload, posting, or background-service behavior.
+Those remain separate client capabilities with their own declarations and
+review.
 
 ### Composer actions
 
@@ -601,7 +615,7 @@ apps must not import private helpers from `src/platform/overlay`.
 
 First-party replacement fixtures live under `examples/packages/first-party-replacements/`. They demonstrate built-in replacement and registry compatibility:
 
-- `examples/packages/first-party-replacements/tweetPng/` converts the first-party Tweet PNG metadata into a package root with `milxdy.app.json`, a placeholder prebuilt `dist/content.js`, and a declared icon asset. It proves the invoked/user-action `feature` shape: `lifecycle.mode: "invoked"`, `loadTriggers: ["userAction"]`, X site scope metadata, Apps & Features settings metadata, local-only privacy notes, and no dock or runtime delivery surfaces.
+- `examples/packages/first-party-replacements/tweetPng/` is the reviewed Share Kit replacement package. It keeps the stable technical ID, ships its prebuilt Tweet PNG implementation and declared icon, uses the generic contextual post-action contract, preserves legacy visual/profile keys, and declares no dock, network, or runtime delivery surface.
 - `examples/packages/first-party-replacements/wikiSidebar/` converts the first-party Wiki Sidebar metadata into a docked `app` package root with `milxdy.app.json`, placeholder prebuilt content/frame files, CSS, and a declared icon asset. It proves the overlay app shape: runtime lifecycle, `dock` and chrome metadata, embedded Wiki site scope, permission/privacy disclosure, background message metadata, and web-accessible assets.
 
 Run `pnpm.cmd run verify:local-app-packages` to validate the fixtures. The verifier checks manifest version, ID/folder alignment, SDK compatibility, package kind rules, safe package-relative paths, declared file existence, lifecycle exports, site scopes, settings storage metadata, permissions/privacy disclosure, package assets, and absence of first-party-only runtime/build fields such as `entryName`, `entryPoint`, `requiredOutputs`, `isEnabled`, and `setEnabled`.
