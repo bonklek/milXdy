@@ -106,6 +106,17 @@ async function expandTweetPngText(tweet) {
   showMore.click();
   await new Promise((resolve) => window.setTimeout(resolve, 250));
 }
+function tweetPngMediaRemovalKey(scope, src) {
+  return `${scope}:${src}`;
+}
+function withoutExcludedTweetPngMedia(data, excluded) {
+  const included = (scope, media) => !excluded.has(tweetPngMediaRemovalKey(scope, media.src));
+  return {
+    ...data,
+    images: data.images.filter((media) => included("post", media)),
+    quote: data.quote ? { ...data.quote, images: data.quote.images.filter((media) => included("quote", media)) } : null
+  };
+}
 var TWEET_PNG_FONT_FALLBACK = 'TwitterChirp, Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif';
 var TWEET_PNG_BODY_FONT_SIZE = 34;
 var TWEET_PNG_BODY_LINE_HEIGHT = 48;
@@ -808,17 +819,50 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
         <label><input type="checkbox" data-setting="tweetPngIncludeQuoteImages"${visualTheme.tweetPngIncludeQuoteImages ? " checked" : ""}> Include QRT image</label>
         <p>Changes update this preview and are saved as the Share Kit defaults.</p>
       </section>
-      <img src="${url}" alt="Rendered post PNG preview">
+      <section class="milxdy-tweet-png-media-review" aria-label="Included images" hidden>
+        <strong>Included images</strong>
+        <div class="milxdy-tweet-png-media-items"></div>
+      </section>
+      <img class="milxdy-tweet-png-preview" src="${url}" alt="Rendered post PNG preview">
       <p>Review before sharing. Nothing is sent automatically.</p>
       <p class="milxdy-tweet-png-status" role="status" aria-live="polite"></p>
     </div>
   `;
-  const preview = modal.querySelector("img");
+  const preview = modal.querySelector(".milxdy-tweet-png-preview");
+  const mediaReview = modal.querySelector(".milxdy-tweet-png-media-review");
+  const mediaItems = modal.querySelector(".milxdy-tweet-png-media-items");
   const settings = modal.querySelector("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector('[data-action="settings"]');
   const status = modal.querySelector(".milxdy-tweet-png-status");
   const setStatus = (message) => {
     if (status) status.textContent = message;
+  };
+  const excludedMedia = /* @__PURE__ */ new Set();
+  const renderMediaControls = (nextData) => {
+    if (!mediaReview || !mediaItems) return;
+    mediaItems.replaceChildren();
+    const items = [
+      ...nextData.images.map((media, index) => ({ scope: "post", media, index })),
+      ...(nextData.quote?.images || []).map((media, index) => ({ scope: "quote", media, index }))
+    ];
+    mediaReview.hidden = items.length === 0;
+    for (const item of items) {
+      const wrapper = document.createElement("div");
+      wrapper.className = "milxdy-tweet-png-media-item";
+      const image = document.createElement("img");
+      const label = item.scope === "quote" ? "QRT" : "post";
+      image.src = item.media.src;
+      image.alt = `Included ${label} ${item.media.isVideo ? "video thumbnail" : "image"} ${item.index + 1}`;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "milxdy-tweet-png-remove-media";
+      remove.dataset.removeMedia = tweetPngMediaRemovalKey(item.scope, item.media.src);
+      remove.setAttribute("aria-label", `Remove ${label} image ${item.index + 1}`);
+      remove.title = `Remove ${label} image ${item.index + 1}`;
+      remove.textContent = "\xD7";
+      wrapper.append(image, remove);
+      mediaItems.appendChild(wrapper);
+    }
   };
   let closed = false;
   const actionSignal = actionContext?.signal;
@@ -875,11 +919,11 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
     settingsButton.setAttribute("aria-expanded", String(opening));
     if (opening) settings.querySelector("button, input")?.focus();
   });
-  const updatePreview = async () => {
+  const updatePreview = async (successMessage = "Preview updated.") => {
     const version = ++renderVersion;
     setStatus("Updating preview...");
     await saveVisualTheme();
-    const nextData = extractTweetPngData(tweet, statusUrl);
+    const nextData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
     const nextBlob = await renderTweetPng(nextData);
     if (version !== renderVersion || !modal.isConnected) return;
     const nextUrl = URL.createObjectURL(nextBlob);
@@ -888,8 +932,16 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
     currentBlob = nextBlob;
     currentData = nextData;
     if (preview) preview.src = nextUrl;
-    setStatus("Preview updated.");
+    renderMediaControls(nextData);
+    setStatus(successMessage);
   };
+  mediaReview?.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target.closest("[data-remove-media]") : null;
+    const key = target?.dataset.removeMedia;
+    if (!key) return;
+    excludedMedia.add(key);
+    void updatePreview("Image removed from this PNG.").catch((error) => setStatus(errorMessage(error)));
+  });
   const schedulePreviewUpdate = () => {
     if (previewUpdateTimer !== null) window.clearTimeout(previewUpdateTimer);
     previewUpdateTimer = window.setTimeout(() => {
@@ -925,6 +977,7 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     });
   }
+  renderMediaControls(currentData);
   document.body.appendChild(modal);
   modal.querySelector('[data-action="copy"]')?.focus();
 }
@@ -999,6 +1052,47 @@ function injectTweetPngStyles() {
       flex-wrap: wrap;
       gap: 8px;
       justify-content: flex-end;
+    }
+    .milxdy-tweet-png-media-review {
+      display: grid;
+      gap: 8px;
+    }
+    .milxdy-tweet-png-media-review[hidden] {
+      display: none;
+    }
+    .milxdy-tweet-png-media-review > strong {
+      font: 700 13px/1.2 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .milxdy-tweet-png-media-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .milxdy-tweet-png-media-item {
+      height: 88px;
+      position: relative;
+      width: 112px;
+    }
+    .milxdy-tweet-png-dialog .milxdy-tweet-png-media-item img {
+      border: 1px solid #d7b8ff;
+      border-radius: 6px;
+      height: 100%;
+      object-fit: cover;
+      width: 100%;
+    }
+    .milxdy-tweet-png-dialog .milxdy-tweet-png-remove-media {
+      background: rgba(32, 18, 47, 0.86);
+      border-color: rgba(255, 255, 255, 0.9);
+      border-radius: 999px;
+      color: #ffffff;
+      font: 700 19px/1 Arial, sans-serif;
+      height: 26px;
+      min-height: 26px;
+      padding: 0;
+      position: absolute;
+      right: 4px;
+      top: 4px;
+      width: 26px;
     }
     .milxdy-tweet-png-dialog img {
       border: 1px solid #d7b8ff;
@@ -1098,5 +1192,6 @@ export {
   onContextualPostAction,
   onRouteChange,
   openTweetPngReviewFromTweet,
+  tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount
 };

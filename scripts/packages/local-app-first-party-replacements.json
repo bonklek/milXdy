@@ -5,7 +5,7 @@
       "id": "tweetPng",
       "sourceType": "folder",
       "root": "examples/packages/first-party-replacements/tweetPng",
-      "packageSha256": "2b61bdbca47bd14af259c818ff177a331d4e5597d02758e5a61d8b97c84cda41",
+      "packageSha256": "d843af84b803cbf190cd0b0cfd8130f52a5a6404f6579153b7ef78fb54a09bc3",
       "reason": "Reviewed Share Kit replacement preserving the stable tweetPng identity and settings."
     },
     {
