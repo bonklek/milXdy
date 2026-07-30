@@ -432,6 +432,19 @@
   z-index: 3;
 }
 
+.beetol-action[data-celebrating="true"]::after {
+  content: "✦";
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  z-index: 6;
+  color: #fff6a4;
+  font: 900 42px/1 Georgia, serif;
+  text-shadow: 0 0 5px #f2a5d4, 0 0 13px #ffe06b, 0 0 22px #ffffff;
+  pointer-events: none;
+  animation: beetol-cheese-flare 820ms cubic-bezier(.15,.75,.28,1) both;
+}
+
 .beetol-cheese-celebration {
   position: absolute;
   inset: 50% auto auto 50%;
@@ -443,11 +456,11 @@
 
 .beetol-cheese-celebration i {
   position: absolute;
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 1px;
   background: var(--beetol-burst-color);
-  box-shadow: 0 0 7px var(--beetol-burst-color);
+  box-shadow: 0 0 10px var(--beetol-burst-color);
   animation: beetol-cheese-burst 1.35s cubic-bezier(.14,.72,.25,1) var(--beetol-burst-delay) both;
 }
 
@@ -465,6 +478,12 @@
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.25) rotate(0deg); }
   14% { opacity: 1; }
   100% { opacity: 0; transform: translate(calc(-50% + var(--beetol-burst-x)), calc(-50% + var(--beetol-burst-y))) scale(.6) rotate(210deg); }
+}
+
+@keyframes beetol-cheese-flare {
+  0% { opacity: 0; transform: translate(-50%, -8px) scale(.15) rotate(-25deg); }
+  24% { opacity: 1; transform: translate(-50%, -8px) scale(1.18) rotate(12deg); }
+  100% { opacity: 0; transform: translate(-50%, -22px) scale(.78) rotate(45deg); }
 }
 
 .beetol-action:not(:disabled):hover {
