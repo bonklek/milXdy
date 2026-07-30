@@ -112,6 +112,8 @@ var TWEET_PNG_BODY_LINE_HEIGHT = 48;
 var TWEET_PNG_QUOTE_FONT_SIZE = 26;
 var TWEET_PNG_QUOTE_LINE_HEIGHT = 38;
 var TWEET_PNG_WRAP_SAFETY_PX = 16;
+var TWEET_PNG_MAX_ASPECT_RATIO = 2.25;
+var TWEET_PNG_CASHTAG_HEIGHT = 570;
 function extractTweetPngData(tweet, statusUrl) {
   const settings = visualTheme;
   const userName = Array.from(tweet.querySelectorAll('[data-testid="User-Name"]')).find((node) => !node.closest('[data-testid="quoteTweet"]')) || null;
@@ -121,6 +123,7 @@ function extractTweetPngData(tweet, statusUrl) {
   const text = Array.from(tweet.querySelectorAll('[data-testid="tweetText"]')).filter((node) => !node.closest('[data-testid="quoteTweet"]') && !quote?.element.contains(node)).map((node) => textWithImageAlts(node)).join("\n").trim();
   const avatar = tweet.querySelector('img[src*="profile_images"]');
   const images = settings.tweetPngIncludeImages ? extractTweetPngMedia(tweet, (element) => !element.closest('[data-testid="quoteTweet"]') && !quote?.element.contains(element)) : [];
+  const cashtag = settings.tweetPngIncludeImages ? extractTweetPngCashtag(tweet) : null;
   const stats = settings.tweetPngIncludeStats ? extractTweetPngStats(tweet) : null;
   return {
     author,
@@ -130,6 +133,7 @@ function extractTweetPngData(tweet, statusUrl) {
     date: settings.tweetPngIncludeDate ? extractTweetPngDate(tweet) : "",
     avatarUrl: avatar?.currentSrc || avatar?.src || "",
     images,
+    cashtag,
     quote: quote ? { author: quote.author, handle: quote.handle, text: quote.text, images: quote.images } : null,
     stats
   };
@@ -230,6 +234,30 @@ function extractTweetPngMedia(root, include = () => true) {
   }
   return Array.from(media.values()).slice(0, 4);
 }
+function extractTweetPngCashtag(root) {
+  const navigation = Array.from(root.querySelectorAll('nav[aria-label="Cashtag attachments"]')).find((element) => !element.closest('[data-testid="quoteTweet"]'));
+  const card = navigation?.querySelector('a[role="link"], a[href]');
+  if (!card) return null;
+  const values = Array.from(card.querySelectorAll("span")).filter((element) => !element.querySelector("span")).map((element) => normalizeTweetPngInlineText(element.textContent || "")).filter(Boolean);
+  const chart = Array.from(card.querySelectorAll("svg")).find((element) => {
+    const viewBox = element.getAttribute("viewBox") || "";
+    const [, , width, height] = viewBox.split(/\s+/).map(Number);
+    return Number.isFinite(width) && Number.isFinite(height) && width >= 200 && height >= 80;
+  });
+  if (values.length < 3 || !chart) return null;
+  const chartMarkup = chart.outerHTML.includes("xmlns=") ? chart.outerHTML : chart.outerHTML.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+  const icon = card.querySelector("img");
+  return {
+    name: values[0] || "Market",
+    market: values[1] || "",
+    price: values[2] || "",
+    change: values[3] || "",
+    timestamp: values[4] || "",
+    currentPrice: values[values.length - 1] || "",
+    iconUrl: icon?.currentSrc || icon?.src || "",
+    chartUrl: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(chartMarkup)}`
+  };
+}
 function normalizeTweetStatusHref(value) {
   const match = value.match(/\/([^/?#]+)\/status\/(\d+)/);
   return match ? `/${match[1]}/status/${match[2]}` : value;
@@ -238,7 +266,7 @@ async function renderTweetPng(data) {
   await waitForTweetPngFonts();
   const scale = 2;
   const width = 1200;
-  const maxHeight = Math.round(width * 2);
+  const maxHeight = Math.round(width * TWEET_PNG_MAX_ASPECT_RATIO);
   const padding = 56;
   const footerHeight = data.date ? 42 : 0;
   const avatarSize = 96;
@@ -249,20 +277,27 @@ async function renderTweetPng(data) {
   if (!context) throw new Error("Canvas unavailable");
   const palette = tweetPngPalette(visualTheme.tweetPngBorderPalette);
   context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const textLines = wrapCanvasText(context, data.text || data.date || data.handle, bodyWidth, 48);
+  const textLines = wrapCanvasText(
+    context,
+    data.text || data.date || data.handle,
+    bodyWidth,
+    Math.ceil(maxHeight / TWEET_PNG_BODY_LINE_HEIGHT)
+  );
   context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, 16) : [];
+  const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT)) : [];
   const mediaImages = await Promise.all(data.images.map(loadTweetPngMedia));
   const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadTweetPngMedia)) : [];
+  const cashtag = data.cashtag ? await loadTweetPngCashtag(data.cashtag) : null;
   const assets = await loadTweetPngRenderAssets();
   const avatarImage = data.avatarUrl ? await loadImageForCanvas(data.avatarUrl).catch(() => null) : null;
   const mediaHeight = measureTweetPngMediaHeight(mediaImages, bodyWidth, 520);
+  const cashtagHeight = cashtag?.chart ? TWEET_PNG_CASHTAG_HEIGHT : 0;
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
   const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
   const quoteHeight = data.quote ? 30 + (quoteTextLines.length ? quoteTextLines.length * TWEET_PNG_QUOTE_LINE_HEIGHT + 14 : 0) + (quoteMediaHeight ? quoteMediaHeight + 14 : 0) + 34 : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
-    86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0) + footerHeight + 36
+    86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0) + footerHeight + 36
   );
   const height = Math.min(maxHeight, Math.max(360, uncappedHeight));
   canvas.width = width * scale;
@@ -304,19 +339,28 @@ async function renderTweetPng(data) {
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
   const maxContentY = data.date ? footerY - footerHeight : height - padding;
-  const textAreaBottom = maxContentY - (mediaHeight || quoteHeight ? TWEET_PNG_BODY_LINE_HEIGHT : 0);
-  const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, Math.max(y, textAreaBottom), TWEET_PNG_BODY_LINE_HEIGHT);
+  const reservedAfterText = (mediaHeight ? mediaHeight + 38 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
+  const textAreaBottom = maxContentY - reservedAfterText;
+  const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT);
   for (const line of drawableTextLines) {
     context.fillText(line, bodyX, y);
     y += TWEET_PNG_BODY_LINE_HEIGHT;
   }
   if (mediaImages.some(Boolean)) {
     y += 10;
-    const reservedQuoteHeight = quoteHeight ? quoteHeight + 22 : 0;
-    const boundedMediaHeight = Math.min(mediaHeight, Math.max(0, maxContentY - y - reservedQuoteHeight - 28));
+    const reservedFollowingHeight = (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
+    const boundedMediaHeight = Math.min(mediaHeight, Math.max(0, maxContentY - y - reservedFollowingHeight - 28));
     if (boundedMediaHeight >= 80) {
       drawTweetPngMediaGrid(context, mediaImages, bodyX, y, bodyWidth, boundedMediaHeight, palette);
       y += boundedMediaHeight + 28;
+    }
+  }
+  if (cashtag?.chart && y + 120 < maxContentY) {
+    const reservedQuoteHeight = quoteHeight ? quoteHeight + 22 : 0;
+    const boundedCashtagHeight = Math.min(cashtagHeight, Math.max(0, maxContentY - y - reservedQuoteHeight - 28));
+    if (boundedCashtagHeight >= 280) {
+      drawTweetPngCashtag(context, cashtag, bodyX, y, bodyWidth, boundedCashtagHeight, palette);
+      y += boundedCashtagHeight + 28;
     }
   }
   if (data.quote) {
@@ -472,12 +516,65 @@ function canvasTextWidth(context, text) {
   return Math.max(metrics.width, bounds);
 }
 function visibleCanvasTextLines(context, lines, maxWidth, startY, maxY, lineHeight) {
-  const availableLines = Math.max(0, Math.floor((maxY - startY + 1) / lineHeight));
+  const availableLines = tweetPngVisibleLineCount(startY, maxY, lineHeight);
   if (lines.length <= availableLines) return [...lines];
   if (availableLines <= 0) return [];
   const visible = lines.slice(0, availableLines);
   visible[visible.length - 1] = ellipsizeCanvasText(context, visible[visible.length - 1], Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX));
   return visible;
+}
+function tweetPngVisibleLineCount(startY, maxY, lineHeight) {
+  if (maxY < startY || lineHeight <= 0) return 0;
+  return Math.floor((maxY - startY) / lineHeight) + 1;
+}
+function drawTweetPngCashtag(context, cashtag, x, y, width, height, palette) {
+  if (!cashtag.chart) return;
+  const chart = cashtag.chart;
+  const padding = 24;
+  roundRect(context, x, y, width, height, 24);
+  context.fillStyle = palette.quoteFill;
+  context.fill();
+  if (visualTheme.tweetPngBorder) {
+    context.strokeStyle = palette.quoteBorder;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+  const iconSize = 68;
+  if (cashtag.icon) {
+    context.save();
+    context.beginPath();
+    context.arc(x + padding + iconSize / 2, y + padding + iconSize / 2, iconSize / 2, 0, Math.PI * 2);
+    context.clip();
+    context.drawImage(cashtag.icon, x + padding, y + padding, iconSize, iconSize);
+    context.restore();
+  }
+  const headingX = x + padding + (cashtag.icon ? iconSize + 18 : 0);
+  context.fillStyle = visualTheme.tweetPngFontColor;
+  context.font = `700 30px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText(cashtag.name, headingX, y + 51);
+  context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
+  context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText(cashtag.market, headingX, y + 82);
+  context.fillStyle = visualTheme.tweetPngFontColor;
+  context.font = `700 40px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText(cashtag.price, x + padding, y + 142);
+  if (cashtag.change) {
+    context.fillStyle = cashtag.change.trim().startsWith("-") ? "#f4212e" : "#00ba7c";
+    context.font = `25px ${TWEET_PNG_FONT_FALLBACK}`;
+    context.fillText(`${cashtag.change.trim().startsWith("-") ? "\u2193" : "\u2191"} ${cashtag.change}`, x + padding, y + 179);
+  }
+  context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "a8");
+  context.font = `21px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText(cashtag.timestamp, x + padding, y + 210);
+  const chartY = y + 224;
+  const chartHeight = Math.max(64, height - 274);
+  context.drawImage(chart, x + padding, chartY, width - padding * 2, chartHeight);
+  context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "c8");
+  context.font = `20px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText("Now at", x + padding, y + height - 20);
+  context.fillStyle = visualTheme.tweetPngFontColor;
+  context.font = `700 20px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.fillText(cashtag.currentPrice, x + padding + 68, y + height - 20);
 }
 function canvasTextSegments(text) {
   const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl ? new Intl.Segmenter(void 0, { granularity: "grapheme" }) : null;
@@ -629,6 +726,13 @@ function loadImageForCanvas(src) {
 }
 async function loadTweetPngMedia(media) {
   return { ...media, image: await loadImageForCanvas(media.src) };
+}
+async function loadTweetPngCashtag(cashtag) {
+  const [icon, chart] = await Promise.all([
+    cashtag.iconUrl ? loadImageForCanvas(cashtag.iconUrl) : Promise.resolve(null),
+    loadImageForCanvas(cashtag.chartUrl)
+  ]);
+  return { ...cashtag, icon, chart };
 }
 function canvasToPngBlob(canvas) {
   return new Promise((resolve, reject) => {
@@ -962,10 +1066,12 @@ function injectTweetPngStyles() {
 export {
   copyTweetPngFromTweet,
   disable,
+  extractTweetPngCashtag,
   extractTweetPngMedia,
   id,
   normalizeVisualTheme,
   onContextualPostAction,
   onRouteChange,
-  openTweetPngReviewFromTweet
+  openTweetPngReviewFromTweet,
+  tweetPngVisibleLineCount
 };
