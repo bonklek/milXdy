@@ -121,6 +121,9 @@ export function onSurface(surface: { kind: string; element: HTMLElement }): void
 }
 
 export function onRouteChange(): void {
+  // A tweet preview belongs to the post the user invoked it from. Never leave
+  // an open preview behind as X replaces the underlying route.
+  document.querySelector("#milxdy-tweet-png-modal")?.remove();
   refreshHomeLogo?.();
 }
 
