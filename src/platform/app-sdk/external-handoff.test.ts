@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { externalHandoffUrl, splitExternalHandoffText } from "./external-handoff";
+import { externalHandoffUrl, splitExternalHandoffText, validateExternalHandoffCaptions } from "./external-handoff";
 
 describe("external maker handoff", () => {
   it("uses the sole newline as a caption boundary", () => {
@@ -17,5 +17,15 @@ describe("external maker handoff", () => {
   it("uses only reviewed Remilia Maker destinations", () => {
     expect(externalHandoffUrl("remilia-maker", "milady")?.href).toBe("https://maker.remilia.org/milady");
     expect(externalHandoffUrl("remilia-maker", "kagami")?.href).toBe("https://maker.remilia.org/kagami");
+  });
+
+  it("preserves explicit package captions exactly within the declared bound", () => {
+    expect(validateExternalHandoffCaptions({ topText: " top ", bottomText: "bottom\n" }, 12))
+      .toEqual({ topText: " top ", bottomText: "bottom\n" });
+  });
+
+  it("rejects malformed or oversized explicit package captions", () => {
+    expect(validateExternalHandoffCaptions({ topText: "too long", bottomText: "" }, 3)).toBeNull();
+    expect(validateExternalHandoffCaptions({ topText: "ok" }, 3)).toBeNull();
   });
 });

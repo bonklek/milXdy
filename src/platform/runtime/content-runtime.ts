@@ -14,7 +14,7 @@ import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispat
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
-import { splitExternalHandoffText } from "../app-sdk/external-handoff";
+import { splitExternalHandoffText, validateExternalHandoffCaptions } from "../app-sdk/external-handoff";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { MILXDY_ADDONS_CATALOG_URL } from "../app-sdk/addons-catalog";
@@ -1857,7 +1857,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const openNativeDrafts = () => openNativeDraftsFor(button, close);
-    const launchExternalHandoff = async (id: string, options?: { mode?: "captioned" | "randomMeme" }): Promise<{ ok: boolean; error?: string }> => {
+    const launchExternalHandoff = async (id: string, options?: {
+      mode?: "captioned" | "randomMeme";
+      captions?: { topText: string; bottomText: string };
+    }): Promise<{ ok: boolean; error?: string }> => {
       if (!navigator.userActivation?.isActive) {
         return { ok: false, error: "Open a maker directly from its control." };
       }
@@ -1870,10 +1873,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       // unavailable to unreviewed package code.
       playInterfaceLaunchSound();
       const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
-      const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
-        .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
-      const split = splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
-      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme") return { ok: false, error: "Write a draft before opening a maker." };
+      const usesPackageFields = handoff.captionSource === "packageFields";
+      const explicitCaptions = usesPackageFields
+        ? validateExternalHandoffCaptions(options?.captions, handoff.captionMaxLength)
+        : null;
+      if (usesPackageFields && !explicitCaptions) return { ok: false, error: "Enter the reviewed top and bottom captions before opening a maker." };
+      const editor = usesPackageFields
+        ? null
+        : Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
+          .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
+      const split = explicitCaptions || splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
+      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme") return { ok: false, error: usesPackageFields ? "Enter a top or bottom caption before opening a maker." : "Write a draft before opening a maker." };
       const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string }>({
         type: "milxdy:externalHandoff",
         appId: app.id,
