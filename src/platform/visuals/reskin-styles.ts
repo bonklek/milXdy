@@ -567,8 +567,10 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 52% !important;
-    max-width: 58% !important;
+    /* Keep short names content-sized. A percentage flex basis here reserves an
+       empty name column and makes otherwise available header space unusable. */
+    flex: 0 1 auto !important;
+    max-width: 68% !important;
     min-width: 0 !important;
     overflow: hidden !important;
   }
@@ -586,7 +588,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 42% !important;
+    flex: 1 1 auto !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
@@ -621,8 +623,9 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
-    flex: 1 1 52% !important;
-    max-width: 58% !important;
+    /* Match Moderate: reserve room only for the name that is actually shown. */
+    flex: 0 1 auto !important;
+    max-width: 68% !important;
     overflow: hidden !important;
   }
 
@@ -639,7 +642,7 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
     align-items: center !important;
     display: flex !important;
-    flex: 1 1 42% !important;
+    flex: 1 1 auto !important;
     flex-wrap: nowrap !important;
     gap: 4px !important;
     max-width: 100% !important;
