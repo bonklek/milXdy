@@ -712,7 +712,18 @@ function injectTweetPngShareMenuItem(
 }
 
 function setTweetPngMenuItemState(item: HTMLElement, label: string): void {
-  item.replaceChildren(tweetPngMenuIcon(), document.createTextNode(label));
+  // Keep X's cloned icon and label wrappers. Their nested text element owns the
+  // TwitterChirp classes; replacing the entire row makes this item fall back to
+  // the page's serif default.
+  const iconHost = item.children.item(0) as HTMLElement | null;
+  const labelHost = item.children.item(1) as HTMLElement | null;
+  if (!iconHost || !labelHost) {
+    item.replaceChildren(tweetPngMenuIcon(), document.createTextNode(label));
+    return;
+  }
+  iconHost.replaceChildren(tweetPngMenuIcon());
+  const labelText = labelHost.querySelector<HTMLElement>("span") || labelHost;
+  labelText.textContent = label;
 }
 
 function tweetPngMenuIcon(): SVGSVGElement {
@@ -741,9 +752,11 @@ function findStatusUrl(tweet: HTMLElement): string | null {
 }
 
 function injectTweetPngStyles(): void {
-  if (document.getElementById("milxdy-tweet-png-styles")) return;
+  if (document.getElementById("milxdy-tweet-png-menu-styles")) return;
   const style = document.createElement("style");
-  style.id = "milxdy-tweet-png-styles";
+  // The lazily loaded Tweet PNG app owns milxdy-tweet-png-styles, including
+  // the fixed fullscreen preview overlay. Do not claim its stylesheet ID.
+  style.id = "milxdy-tweet-png-menu-styles";
   style.textContent = `
     [data-milxdy-tweet-png-menu-item="true"] {
       align-items: center !important;
