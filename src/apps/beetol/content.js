@@ -149,8 +149,8 @@ function mountBeetolGame(context = {}) {
             <div class="beetol-title">Beetol Game</div>
             <div id="beetol-user" class="beetol-subtitle">Checking session...</div>
           </div>
-          <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
           <button id="beetol-refresh" class="beetol-icon-btn" type="button" title="Refresh">&#8635;</button>
+          <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
         </div>
         <div id="beetol-signed-out" class="beetol-signed-out-msg">
           <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
