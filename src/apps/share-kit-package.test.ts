@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   extractTweetPngCashtag,
   extractTweetPngMedia,
+  findTweetPngQuoteElement,
   normalizeVisualTheme,
   tweetPngVisibleLineCount,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
@@ -97,5 +98,39 @@ describe("Share Kit package compatibility", () => {
       iconUrl: "https://abs.twimg.com/ethereum.png",
     });
     expect(extractTweetPngCashtag(post)?.chartUrl).toContain(encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"'));
+  });
+
+  it("selects the enclosing QRT card instead of its nested photo link", () => {
+    let post: HTMLElement;
+    const quoteCard = {
+      querySelector: (selector: string) => selector === '[data-testid="User-Name"]' ? {} : null,
+    } as unknown as HTMLElement;
+    const mainText = {
+      closest: (selector: string) => selector === 'article[data-testid="tweet"]' ? post : null,
+    } as unknown as HTMLElement;
+    const quoteText = {
+      closest: (selector: string) => {
+        if (selector === 'article[data-testid="tweet"]') return post;
+        if (selector === 'div[role="link"], a[href*="/status/"]') return quoteCard;
+        return null;
+      },
+    } as unknown as HTMLElement;
+    const photoLink = {
+      href: "https://x.com/John_Hudson/status/2082852180977999924/photo/1",
+      closest: () => post,
+      querySelector: () => ({}),
+    } as unknown as HTMLElement;
+    post = {
+      matches: (selector: string) => selector === 'article[data-testid="tweet"]',
+      querySelector: () => null,
+      querySelectorAll(selector: string) {
+        if (selector === '[data-testid="tweetText"]') return [mainText, quoteText];
+        if (selector === 'div[role="link"]') return [quoteCard];
+        if (selector === 'a[href*="/status/"]') return [photoLink];
+        return [];
+      },
+    } as unknown as HTMLElement;
+
+    expect(findTweetPngQuoteElement(post, "https://x.com/dnlklr/status/2082893132304392245")).toBe(quoteCard);
   });
 });

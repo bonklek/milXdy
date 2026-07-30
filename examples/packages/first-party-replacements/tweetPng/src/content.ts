@@ -370,17 +370,35 @@ function normalizeTweetPngInlineText(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-function findTweetPngQuoteElement(tweet: HTMLElement, statusUrl: string | null): HTMLElement | null {
+export function findTweetPngQuoteElement(tweet: HTMLElement, statusUrl: string | null): HTMLElement | null {
   const explicit = tweet.querySelector<HTMLElement>('[data-testid="quoteTweet"]');
   if (explicit) return explicit;
+  const textNodes = Array.from(tweet.querySelectorAll<HTMLElement>('[data-testid="tweetText"]'));
+  const nestedQuoteText = textNodes.find((node, index) => index > 0 && tweetPngElementBelongsToPost(node, tweet));
+  const textCard = nestedQuoteText?.closest<HTMLElement>('div[role="link"], a[href*="/status/"]') || null;
+  if (textCard?.querySelector('[data-testid="User-Name"]')) return textCard;
+
+  const structuredCard = Array.from(tweet.querySelectorAll<HTMLElement>('div[role="link"]'))
+    .find((candidate) => {
+      if (!tweetPngElementBelongsToPost(candidate, tweet)) return false;
+      if (!candidate.querySelector('[data-testid="User-Name"]')) return false;
+      return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], video[poster]'));
+    });
+  if (structuredCard) return structuredCard;
+
   const normalizedStatus = normalizeTweetStatusHref(statusUrl || "");
-  const candidates = Array.from(tweet.querySelectorAll<HTMLElement>('a[href*="/status/"], div[role="link"]'));
+  const candidates = Array.from(tweet.querySelectorAll<HTMLElement>('a[href*="/status/"]'));
   return candidates.find((candidate) => {
     const href = candidate instanceof HTMLAnchorElement ? normalizeTweetStatusHref(candidate.href) : "";
     if (href && normalizedStatus && href === normalizedStatus) return false;
-    if (candidate.closest('article[data-testid="tweet"]') !== tweet) return false;
+    if (!tweetPngElementBelongsToPost(candidate, tweet)) return false;
     return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], video[poster]'));
   }) || null;
+}
+
+function tweetPngElementBelongsToPost(element: Element, tweet: HTMLElement): boolean {
+  const article = element.closest<HTMLElement>('article[data-testid="tweet"]');
+  return !tweet.matches('article[data-testid="tweet"]') || article === tweet;
 }
 
 export function extractTweetPngMedia(root: HTMLElement, include: (element: Element) => boolean = () => true): TweetPngMedia[] {
