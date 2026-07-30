@@ -72,6 +72,12 @@ const supportedExternalHandoffAdapters = new Map([
     targets: new Set(["milady", "remilio", "bonkler", "kagami"]),
   }],
 ]);
+const supportedRemoteQueryAdapters = new Map([
+  ["remibooru", {
+    host: "https://remibooru.com/*",
+    resources: new Set(["posts", "facets"]),
+  }],
+]);
 const sensitiveStorageNeedles = [
   "auth",
   "cache",
@@ -524,6 +530,7 @@ async function analyzePackage(source, manifest) {
   verifyComposerAction(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
+  verifyRemoteQueries(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -969,6 +976,47 @@ function verifyExternalHandoffs(id, manifest, errors) {
   }
 }
 
+function verifyRemoteQueries(id, manifest, errors) {
+  const queries = manifest.remoteQueries;
+  if (!queries) return;
+  if (!manifest.composerAction || !manifest.surfaces?.includes("composerAction") || !manifest.loadTriggers?.includes("userAction")) {
+    errors.push(`${id}: remoteQueries require the userAction composerAction surface`);
+  }
+  if (!Array.isArray(queries) || queries.length === 0 || queries.length > 4) {
+    errors.push(`${id}: remoteQueries require between one and four declarations`);
+    return;
+  }
+  const ids = new Set();
+  for (const query of queries) {
+    if (!query?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(query.id) || ids.has(query.id)) errors.push(`${id}: remoteQuery ids must be unique safe identifiers`);
+    ids.add(query?.id);
+    if (!query?.label || typeof query.label !== "string") errors.push(`${id}: remoteQuery labels are required`);
+    const adapter = supportedRemoteQueryAdapters.get(query?.adapter);
+    if (!adapter) {
+      errors.push(`${id}: remoteQuery adapter is not a reviewed host adapter`);
+      continue;
+    }
+    if (!Array.isArray(query.resources) || query.resources.length === 0 || query.resources.some((resource) => !adapter.resources.has(resource))) {
+      errors.push(`${id}: remoteQuery resources must be reviewed for ${query.adapter}`);
+    }
+    if (!Number.isInteger(query.maxPageSize) || query.maxPageSize < 1 || query.maxPageSize > 24) errors.push(`${id}: remoteQuery maxPageSize must be an integer from 1 through 24`);
+    if (!Number.isInteger(query.minIntervalMs) || query.minIntervalMs < 250 || query.minIntervalMs > 60_000) errors.push(`${id}: remoteQuery minIntervalMs must be an integer from 250 through 60000`);
+    const cache = query.cache;
+    if (!cache || typeof cache !== "object" || (cache.policy !== "none" && cache.policy !== "shortLived")) {
+      errors.push(`${id}: remoteQuery cache must declare none or shortLived policy`);
+    } else if (cache.policy === "shortLived" && (!Number.isInteger(cache.maxAgeSeconds) || cache.maxAgeSeconds < 1 || cache.maxAgeSeconds > 300)) {
+      errors.push(`${id}: shortLived remoteQuery cache must declare maxAgeSeconds from 1 through 300`);
+    } else if (cache.policy === "none" && cache.maxAgeSeconds !== undefined) {
+      errors.push(`${id}: no-cache remoteQuery must not declare maxAgeSeconds`);
+    }
+    if (!(manifest.permissions?.hosts || []).includes(adapter.host)) errors.push(`${id}: remoteQuery ${query.id} must declare host permission ${adapter.host}`);
+  }
+  const disclosures = [...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.remoteServices || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || [])].join(" ").toLowerCase();
+  if (!/remibooru/.test(disclosures) || !/(thumbnail|gallery|search)/.test(disclosures)) errors.push(`${id}: remoteQueries require Remibooru gallery/privacy disclosure`);
+  if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: remoteQueries require consent and remote-api privacy label`);
+  if ((manifest.background?.messageTypes || []).some((type) => type === "milxdy:remoteQuery")) errors.push(`${id}: remoteQueries must use the host callback, not declare the host query message type`);
+}
+
 function verifyPermissionsAndPrivacy(id, manifest, errors) {
   const hosts = manifest.permissions?.hosts || [];
   const optional = manifest.permissions?.optional || [];
@@ -976,6 +1024,10 @@ function verifyPermissionsAndPrivacy(id, manifest, errors) {
     const adapter = supportedExternalHandoffAdapters.get(handoff?.adapter);
     return adapter ? [adapter.host] : [];
   }));
+  for (const query of manifest.remoteQueries || []) {
+    const adapter = supportedRemoteQueryAdapters.get(query?.adapter);
+    if (adapter) adapterHosts.add(adapter.host);
+  }
   const permissionNotes = [
     ...(manifest.hub?.permissionNotes || []),
     ...(manifest.privacy?.permissionNotes || []),
