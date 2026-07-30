@@ -71,6 +71,9 @@ function findStatusUrl(tweet: HTMLElement): string | null {
 }
 
 export async function openTweetPngReviewFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
+  // This app is loaded only for the explicit Share action. Install the dialog
+  // stylesheet here instead of relying on Root Visuals' menu-only stylesheet.
+  injectTweetPngStyles();
   await loadVisualTheme();
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
