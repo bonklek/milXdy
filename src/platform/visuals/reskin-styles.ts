@@ -549,9 +549,11 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-tweet-header="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"] {
     align-items: center !important;
+    column-gap: 4px !important;
     display: flex !important;
     flex: 1 1 0% !important;
     flex-wrap: nowrap !important;
+    justify-content: flex-start !important;
     max-width: none !important;
     min-width: 0 !important;
     width: auto !important;
