@@ -25,7 +25,6 @@ export async function main(argv = process.argv.slice(2)) {
   const trustFlags = ["--allow-local-review", "--acknowledge-package-consent", "--acknowledge-first-party-replacement", "--allow-sensitive-package-apis"]
     .filter((flag) => argv.includes(flag));
   if (returnToBaseline && localAppPackages.length > 0) throw new Error("--return-to-baseline cannot be combined with --local-app-package.");
-  if (localAppPackages.length > 1) throw new Error("QA external composition accepts exactly one explicitly selected package.");
   if (localAppPackages.length > 0 && !once) throw new Error("QA external composition is one-shot only; use --once.");
   const replaceForeignOutput = argv.includes("--replace-foreign-output") || returnToBaseline;
   const outputDir = resolvePersistentQaOutput(readArg(argv, "--publish-dir") || process.env.MILXDY_QA_OUTPUT_DIR || DEFAULT_OUTPUT);
@@ -47,8 +46,8 @@ export async function main(argv = process.argv.slice(2)) {
     do {
       queued = false;
       try {
-        const composition = localAppPackages.length === 1
-          ? await prepareExternalLocalPackageComposition(localAppPackages[0], trustFlags)
+        const composition = localAppPackages.length > 0
+          ? await prepareExternalLocalPackageComposition(localAppPackages, trustFlags)
           : baselineComposition();
         const build = await buildQaOnce({ outputDir, builder, builderArgs: composition.builderArgs, composition: composition.provenance, port, replaceForeignOutput });
         state.build = build;
@@ -140,25 +139,27 @@ function baselineComposition() {
   };
 }
 
-async function prepareExternalLocalPackageComposition(packagePath, trustFlags) {
+async function prepareExternalLocalPackageComposition(packageInputs, trustFlags) {
   const compositionDir = "tmp/qa-local-app-composition";
   const planPath = `${compositionDir}/build-plan.json`;
   await rm(resolve(compositionDir), { recursive: true, force: true });
   await runNode([
     "scripts/packages/compose-local-app-packages.mjs",
-    `--package=${packagePath}`,
+    ...packageInputs.map((input) => `--package=${input}`),
     `--out-dir=${compositionDir}`,
     `--plan-out=${planPath}`,
     "--stage-external-packages",
     ...trustFlags,
   ]);
   const plan = JSON.parse(await readFile(resolve(planPath), "utf8"));
-  if (!Array.isArray(plan.selectedPackageIds) || plan.selectedPackageIds.length !== 1) {
-    throw new Error("QA external composition requires exactly one accepted package.");
+  if (!Array.isArray(plan.selectedPackageIds) || plan.selectedPackageIds.length !== packageInputs.length) {
+    throw new Error("QA external composition did not accept all explicitly selected packages.");
   }
-  const diagnostic = (plan.diagnostics || []).find((entry) => entry.packageId === plan.selectedPackageIds[0]);
-  if (!diagnostic?.manifestSha256 || !diagnostic?.contentSha256 || !diagnostic?.packageSha256) {
-    throw new Error("QA external composition plan is missing package hash provenance.");
+  const diagnostics = plan.selectedPackageIds.map((packageId) => (
+    (plan.diagnostics || []).find((entry) => entry.packageId === packageId)
+  ));
+  if (diagnostics.some((diagnostic) => !diagnostic?.manifestSha256 || !diagnostic?.contentSha256 || !diagnostic?.packageSha256)) {
+    throw new Error("QA external composition plan is missing package hash provenance for one or more packages.");
   }
   const serializedPlan = JSON.stringify(plan);
   if (pathContainsAbsoluteLocalPath(serializedPlan)) {
@@ -169,13 +170,13 @@ async function prepareExternalLocalPackageComposition(packagePath, trustFlags) {
     provenance: {
       state: "external-local-package",
       fingerprint: plan.compositionFingerprint,
-      packages: [{
+      packages: diagnostics.map((diagnostic) => ({
         id: diagnostic.packageId,
         version: diagnostic.version,
         manifestSha256: diagnostic.manifestSha256,
         contentSha256: diagnostic.contentSha256,
         packageSha256: diagnostic.packageSha256,
-      }],
+      })),
     },
   };
 }
