@@ -42,10 +42,12 @@ describe("Share Kit package compatibility", () => {
     ]);
   });
 
-  it("updates color previews from live input while retaining the legacy Share caption", () => {
+  it("updates color previews from live input and offers explicit offline recovery controls", () => {
     expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
-    expect(packageSource).toMatch(/data-action="reminet"[^>]*>Share<\/button>/u);
-    expect(packageSource).not.toContain(">Share to RemiNet</button>");
+    expect(packageSource).toMatch(/data-action="reconnect"[^>]*href="https:\/\/www\.remilia\.net\/"[^>]*>Reconnect<\/a>/u);
+    expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh<\/button>/u);
+    expect(packageSource).toContain("window.location.reload()");
+    expect(packageSource).not.toContain('data-action="reminet"');
   });
 
   it("keeps every text baseline that fits before the portrait cap", () => {
