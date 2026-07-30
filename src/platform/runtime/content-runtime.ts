@@ -40,6 +40,7 @@ import type {
   AppSiteScope,
   MilxdyAppId,
   MilxdyAppManifest,
+  MilxdyComposerActionContext,
   MilxdyContentAppModule,
   MilxdyRouteChange,
 } from "../app-sdk/app-platform";
@@ -1899,6 +1900,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
       return result;
     };
+    const queryRemoteService: MilxdyComposerActionContext["queryRemoteService"] = async (id, request) => {
+      if (!navigator.userActivation?.isActive) return { ok: false, error: "Open the gallery from its control." };
+      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
+      if (!query) return { ok: false, error: "This remote gallery is not declared by the package." };
+      if (!query.resources.includes(request.resource)) return { ok: false, error: "This remote gallery resource is not declared by the package." };
+      const response = await safeRuntimeMessage<Awaited<ReturnType<MilxdyComposerActionContext["queryRemoteService"]>>>({
+        type: "milxdy:remoteQuery", appId: app.id, queryId: query.id, request,
+      });
+      return response?.ok === true
+        ? { ok: true, page: response.page, facets: response.facets }
+        : { ok: false, error: response?.error || "The remote gallery is unavailable." };
+    };
     const attachExternalHandoffImage = async (composerScope: ParentNode, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
       if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,")) {
         return { ok: false, error: "The maker did not return a PNG." };
@@ -1938,6 +1951,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         openNativeDrafts,
         externalHandoffs: (app.externalHandoffs || []).map(({ id, label }) => ({ id, label })),
         launchExternalHandoff,
+        remoteQueries: (app.remoteQueries || []).map(({ id, label }) => ({ id, label })),
+        queryRemoteService,
       }));
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);

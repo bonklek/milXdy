@@ -471,6 +471,38 @@ The first reviewed adapter is `remilia-maker`, with targets `milady`, `remilio`,
 new adapter is host work with a deterministic allowlist, verified remote control
 mapping, consent disclosure, and focused tests—not a package-only change.
 
+#### Reviewed remote galleries
+
+`remoteQueries` is the read-only counterpart to a handoff. It is not a generic
+fetch, background-message, browser, media, or upload capability. A package
+declares a reviewed adapter, fixed `resources`, `maxPageSize`, minimum request
+interval, and either no cache or a short-lived host-only cache. It also declares
+the matching host permission, `remote-api` privacy label, consent, and visible
+remote-service/data disclosure. The package receives only its `{ id, label }`
+declaration and invokes `queryRemoteService(id, request)` from an explicit
+control.
+
+The first adapter is `remibooru`. It accepts only `posts` and `facets`:
+`posts` supports a bounded `limit`, an opaque cursor, and up to five selected
+facet values. The host returns only a bounded sanitized page: item ID, canonical
+post URL, same-origin thumbnail URL, safe media dimensions/type, facets,
+attribution, and next cursor. Original media URLs and raw response fields are
+never returned. A package may visibly attribute Remibooru and open only the
+canonical post URL after another explicit click; it cannot attach, download,
+cache source links, or post media.
+
+```json
+"remoteQueries": [{
+  "id": "remibooru-reactions",
+  "label": "Remibooru reactions",
+  "adapter": "remibooru",
+  "resources": ["posts", "facets"],
+  "maxPageSize": 12,
+  "minIntervalMs": 750,
+  "cache": { "policy": "none" }
+}]
+```
+
 ### Reply actions
 
 An app or feature can declare `replyAction` to open its own reviewed local

@@ -68,6 +68,16 @@ export type AppExternalHandoff = {
   /** Per-field bound for explicit package caption fields (1–10,000). */
   captionMaxLength?: number;
 };
+/** A reviewed, read-only remote gallery adapter; packages never receive raw fetch. */
+export type AppRemoteQuery = {
+  id: string;
+  label: string;
+  adapter: "remibooru";
+  resources: Array<"posts" | "facets">;
+  maxPageSize: number;
+  minIntervalMs: number;
+  cache: { policy: "none" } | { policy: "shortLived"; maxAgeSeconds: number };
+};
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
 export type MilxdyPackageAssetKind = "icon" | "image" | "style" | "font" | "audio" | "worker" | "wasm" | "html" | "other";
@@ -178,6 +188,7 @@ export type MilxdyAppManifest = {
   hostComposerActions?: AppHostComposerAction[];
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
+  remoteQueries?: AppRemoteQuery[];
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];
@@ -315,6 +326,29 @@ export type MilxdyComposerActionContext = {
     mode?: "captioned" | "randomMeme";
     captions?: { topText: string; bottomText: string };
   }) => Promise<{ ok: boolean; error?: string }>;
+  /** Host-filtered, sanitized gallery services; no package fetch or raw URLs. */
+  remoteQueries: ReadonlyArray<Pick<AppRemoteQuery, "id" | "label">>;
+  queryRemoteService: (id: string, request: {
+    resource: "posts" | "facets";
+    cursor?: string;
+    limit?: number;
+    facets?: string[];
+  }) => Promise<{
+    ok: boolean;
+    error?: string;
+    page?: {
+      items: Array<{
+        id: string;
+        postUrl: string;
+        thumbnailUrl: string;
+        media: { contentType: string; width: number; height: number; isGif: boolean };
+        facets: Array<{ kind: string; value: string; category: string }>;
+        attribution: { label: string; uploader: string | null };
+      }>;
+      nextCursor: string | null;
+    };
+    facets?: Array<{ kind: string; value: string; category: string; postCount: number }>;
+  }>;
 };
 
 /**

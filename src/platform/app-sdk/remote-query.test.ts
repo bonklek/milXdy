@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import { remibooruQueryUrl, sanitizeRemibooruPosts } from "./remote-query";
+
+describe("reviewed Remibooru query adapter", () => {
+  it("builds only the reviewed posts route and repeated facet parameters", () => {
+    expect(remibooruQueryUrl({ resource: "posts", limit: 2, facets: ["milady", "reaction"] }, 24)?.href)
+      .toBe("https://remibooru.com/api/v1/posts?limit=2&facet=milady&facet=reaction");
+  });
+
+  it("rejects oversized pages and arbitrary resources", () => {
+    expect(remibooruQueryUrl({ resource: "posts", limit: 25 }, 24)).toBeNull();
+    expect(remibooruQueryUrl({ resource: "other" as "posts" }, 24)).toBeNull();
+  });
+
+  it("drops original media URLs and keeps only reviewed canonical and thumbnail URLs", () => {
+    const page = sanitizeRemibooruPosts({ posts: [{
+      id: "post-1", postUrl: "https://remibooru.com/posts/post-1",
+      thumbnail: { url: "https://remibooru.com/media/thumbs/post-1/image.webp" },
+      media: { contentType: "image/webp", width: 100, height: 100, isGif: false, originalUrl: "https://elsewhere.invalid/raw" },
+      uploader: { handle: "author" }, facets: [{ kind: "text", value: "milady", category: "general" }],
+    }], nextCursor: "next" });
+    expect(page).toEqual({ items: [{
+      id: "post-1", postUrl: "https://remibooru.com/posts/post-1", thumbnailUrl: "https://remibooru.com/media/thumbs/post-1/image.webp",
+      media: { contentType: "image/webp", width: 100, height: 100, isGif: false },
+      facets: [{ kind: "text", value: "milady", category: "general" }], attribution: { label: "Remibooru", uploader: "author" },
+    }], nextCursor: "next" });
+  });
+
+  it("rejects a post page that attempts to return a third-party thumbnail", () => {
+    expect(sanitizeRemibooruPosts({ posts: [{
+      id: "post-1", postUrl: "https://remibooru.com/posts/post-1",
+      thumbnail: { url: "https://elsewhere.invalid/thumb.webp" },
+      media: { contentType: "image/webp", width: 100, height: 100, isGif: false }, facets: [],
+    }] })).toBeNull();
+  });
+});

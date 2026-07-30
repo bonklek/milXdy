@@ -74,6 +74,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "openNativeDrafts: () => void", "Composer actions must expose only the host-mediated native Drafts handoff");
   requireIncludes(appPlatform, "externalHandoffs?: AppExternalHandoff[]", "App SDK must expose declared external handoffs");
   requireIncludes(appPlatform, "launchExternalHandoff:", "Composer actions must expose the host-mediated external handoff callback");
+  requireIncludes(appPlatform, "remoteQueries?: AppRemoteQuery[]", "App SDK must expose declared reviewed remote queries");
+  requireIncludes(appPlatform, "queryRemoteService:", "Composer actions must expose only the host-mediated remote query callback");
   requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
   requireIncludes(appPlatform, "captions?: { topText: string; bottomText: string }", "Composer actions must support bounded explicit caption fields");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
@@ -101,6 +103,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
   requireIncludes(contentRuntime, "handoff.captionSource === \"packageFields\"", "Explicit package captions must not read the X composer");
   requireIncludes(contentRuntime, 'type: "milxdy:externalHandoff"', "External handoffs must use a host-routed background request");
+  requireIncludes(contentRuntime, 'type: "milxdy:remoteQuery"', "Remote galleries must use a host-routed background request");
   requireIncludes(contentRuntime, "playInterfaceLaunchSound();", "External handoffs must use the host-owned, user-preference-respecting loading cue");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
@@ -129,6 +132,8 @@ function verifyPlatformContract() {
   requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
   requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
   requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
+  requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
+  requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
   requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");

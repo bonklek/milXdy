@@ -53,6 +53,7 @@ import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-a
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
+import { remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest } from "../../platform/app-sdk/remote-query";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -99,10 +100,19 @@ type FetchImageDataUrlMessage = {
 
 type ExternalHandoffMessage = ExternalHandoffRequest & { type: "milxdy:externalHandoff" };
 
+type RemoteQueryMessage = {
+  type: "milxdy:remoteQuery";
+  appId: string;
+  queryId: string;
+  request: RemoteQueryRequest;
+};
+
 const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
 let addOnsCatalogTabId: number | null = null;
 let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
+const remoteQueryLastRequestAt = new Map<string, number>();
+const remoteQueryCache = new Map<string, { expiresAt: number; response: Record<string, unknown> }>();
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
@@ -220,6 +230,11 @@ setupBackgroundMessageRouter([
     type: "milxdy:externalHandoff",
     matches: isExternalHandoffMessage,
     handle: (message, sender) => launchExternalHandoff(message, sender),
+  },
+  {
+    type: "milxdy:remoteQuery",
+    matches: isRemoteQueryMessage,
+    handle: (message, sender) => queryRemoteService(message, sender),
   },
   {
     type: "miladychan:fetchJson",
@@ -393,6 +408,69 @@ function isExternalHandoffMessage(message: unknown): message is ExternalHandoffM
     && typeof record.topText === "string"
     && typeof record.bottomText === "string"
     && (record.mode === "captioned" || record.mode === "randomMeme");
+}
+
+function isRemoteQueryMessage(message: unknown): message is RemoteQueryMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  const request = record.request as Record<string, unknown> | undefined;
+  return record.type === "milxdy:remoteQuery"
+    && typeof record.appId === "string"
+    && typeof record.queryId === "string"
+    && Boolean(request && (request.resource === "posts" || request.resource === "facets"));
+}
+
+async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const app = (appRegistry as Array<{
+    id?: string;
+    remoteQueries?: Array<{
+      id?: string;
+      adapter?: string;
+      resources?: string[];
+      maxPageSize?: number;
+      minIntervalMs?: number;
+      cache?: { policy?: string; maxAgeSeconds?: number };
+    }>;
+  }>).find((candidate) => candidate.id === message.appId);
+  const declaration = app?.remoteQueries?.find((candidate) => candidate.id === message.queryId);
+  if (!declaration || declaration.adapter !== "remibooru") return { ok: false, error: "The requested remote query is not declared by this package." };
+  if (!declaration.resources?.includes(message.request.resource)) return { ok: false, error: "The requested remote resource is not declared by this package." };
+  const targetUrl = remibooruQueryUrl(message.request, declaration.maxPageSize ?? 0);
+  if (!targetUrl) return { ok: false, error: "The requested Remibooru query is outside the reviewed schema." };
+  const key = `${message.appId}:${message.queryId}`;
+  const now = Date.now();
+  const cached = remoteQueryCache.get(`${key}:${targetUrl.href}`);
+  if (cached && cached.expiresAt > now) return cached.response;
+  const minIntervalMs = declaration.minIntervalMs ?? 0;
+  const lastRequestAt = remoteQueryLastRequestAt.get(key) ?? 0;
+  if (!Number.isInteger(minIntervalMs) || minIntervalMs < 250 || minIntervalMs > 60_000) return { ok: false, error: "The remote query rate policy is invalid." };
+  if (now - lastRequestAt < minIntervalMs) return { ok: false, error: "Please wait before refreshing this gallery." };
+  remoteQueryLastRequestAt.set(key, now);
+  try {
+    const payload = await runNetworkTask(async (signal) => {
+      const response = await fetch(targetUrl, { signal, credentials: "omit" });
+      if (!response.ok) throw new Error(`Remibooru returned ${response.status}.`);
+      return response.json() as Promise<unknown>;
+    }, "remibooru-query");
+    const response = message.request.resource === "posts"
+      ? (() => {
+        const page = sanitizeRemibooruPosts(payload);
+        return page ? { ok: true, page } : { ok: false, error: "Remibooru returned an unsupported post page." };
+      })()
+      : (() => {
+        const facets = sanitizeRemibooruFacets(payload);
+        return facets ? { ok: true, facets } : { ok: false, error: "Remibooru returned an unsupported facet page." };
+      })();
+    const cache = declaration.cache;
+    const cacheMaxAgeSeconds = typeof cache?.maxAgeSeconds === "number" ? cache.maxAgeSeconds : 0;
+    if (response.ok === true && cache?.policy === "shortLived" && Number.isInteger(cacheMaxAgeSeconds) && cacheMaxAgeSeconds >= 1 && cacheMaxAgeSeconds <= 300) {
+      remoteQueryCache.set(`${key}:${targetUrl.href}`, { expiresAt: now + cacheMaxAgeSeconds * 1000, response });
+    }
+    return response;
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "The remote gallery is unavailable." };
+  }
 }
 
 async function launchExternalHandoff(message: ExternalHandoffMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
