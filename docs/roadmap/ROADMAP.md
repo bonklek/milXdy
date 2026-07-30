@@ -65,7 +65,7 @@ The long-term goal remains a reviewed composable app system where packages decla
 
 Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme-designer integrations, and AI-assisted metadata normalization.
 
-- Tweet PNG and RemiNet sharing.
+- Share Kit — Tweet PNG and RemiNet sharing.
   - add granular Tweet PNG metadata and styling settings so users can choose which identity, date, source, RemiStats, and border details appear before copy, download, browser share, or upload
   - support direct Tweet PNG upload to RemiNet only after endpoint/API and browser-session auth behavior are confirmed
   - require preview/review behavior before upload and never send or upload PNGs automatically
