@@ -1,8 +1,7 @@
 import { visibleItems } from "./dock-order-policy";
-import { DockPointerInteraction, type DockPointerHost } from "./dock-pointer-interaction";
 import { createDockSettingsPanel } from "./dock-settings-view";
 import { injectDockStyles } from "./dock-styles";
-import { dockItemIdAtPoint, updateDockIcon } from "./dock-dom-utils";
+import { updateDockIcon } from "./dock-dom-utils";
 import { DOCK_ROOT_ID } from "./dock-dom-contract";
 import type {
   DockSnapshot,
@@ -17,12 +16,10 @@ export class OverlayDockDomView implements DockViewPort {
   #rail: HTMLElement | null = null;
   #snapshot: DockSnapshot | null = null;
   #actions: DockViewActions | null = null;
-  #pointer: DockPointerInteraction | null = null;
   #resizeObserver: ResizeObserver | null = null;
   #mediaViewerObserver: MutationObserver | null = null;
   #mediaViewerCheckQueued = false;
   #railIndicatorFrame = 0;
-  #suppressClick = false;
 
   mount(): void {
     if (this.#root?.isConnected) return;
@@ -77,8 +74,6 @@ export class OverlayDockDomView implements DockViewPort {
   }
 
   dispose(): void {
-    this.#pointer?.dispose();
-    this.#pointer = null;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
     this.#mediaViewerObserver?.disconnect();
@@ -139,13 +134,6 @@ export class OverlayDockDomView implements DockViewPort {
       this.#resizeObserver = new ResizeObserver(this.#scheduleRailIndicators);
       this.#resizeObserver.observe(rail);
     }
-    this.#pointer = new DockPointerInteraction(this.#pointerEnvironment(), {
-      getReorderMode: () => this.#snapshot?.reorderMode === true,
-      setReorderMode: (active) => this.#actions?.setReorderMode(active),
-      moveBefore: (id, targetId) => this.#actions?.moveBefore(id, targetId),
-      commitOrder: () => this.#actions?.commitOrder(),
-      suppressNextClick: () => { this.#suppressClick = true; },
-    });
   }
 
   readonly #scheduleRailIndicators = (): void => {
@@ -178,21 +166,12 @@ export class OverlayDockDomView implements DockViewPort {
     button.type = "button";
     button.dataset.itemId = id;
     button.addEventListener("click", (event) => this.#activate(event, button));
-    button.addEventListener("pointerdown", (event) => this.#startPointer(event, button));
     attachDockHover(button);
     return button;
   }
 
   #activate(event: MouseEvent, button: HTMLButtonElement): void {
-    // A long-press reorder can be interrupted by X replacing the page under
-    // the pointer.  Treat the next ordinary app click as a recovery action:
-    // leave reorder mode and still honour the requested app toggle.
     if (this.#snapshot?.reorderMode) this.#actions?.setReorderMode(false);
-    if (this.#suppressClick) {
-      event.preventDefault();
-      this.#suppressClick = false;
-      return;
-    }
     const id = button.dataset.itemId;
     if (!id) return;
     if (id === "milxdyAddOnsCatalog") {
@@ -202,34 +181,6 @@ export class OverlayDockDomView implements DockViewPort {
     this.#actions?.activate(id);
   }
 
-  #startPointer(event: PointerEvent, button: HTMLButtonElement): void {
-    if (event.button !== 0) return;
-    const id = button.dataset.itemId;
-    if (!id || this.#snapshot?.items.get(id)?.stackable === false) return;
-    this.#pointer?.start(event, id, button);
-  }
-
-  #pointerEnvironment(): DockPointerHost {
-    return {
-      scheduleLongPress: (callback) => {
-        const timer = window.setTimeout(callback, 520);
-        return () => window.clearTimeout(timer);
-      },
-      listen: ({ move, end, cancel }) => {
-        const onMove = (event: PointerEvent) => {
-          move(event, dockItemIdAtPoint((x, y) => document.elementFromPoint(x, y) as HTMLElement | null, event));
-        };
-        window.addEventListener("pointermove", onMove);
-        window.addEventListener("pointerup", end);
-        window.addEventListener("pointercancel", cancel);
-        return () => {
-          window.removeEventListener("pointermove", onMove);
-          window.removeEventListener("pointerup", end);
-          window.removeEventListener("pointercancel", cancel);
-        };
-      },
-    };
-  }
 }
 
 function isHostMediaViewerOpen(): boolean {

@@ -20,10 +20,7 @@ export function createDockSettingsPanel(
   sideSection.append(sideGroup);
   const appSection = settingsSection("App order");
   const orderActions = element("div", "milxdy-overlay-dock-settings-actions");
-  orderActions.append(actionButton(snapshot.reorderMode ? "Done" : "Reorder", () => {
-    actions.setReorderMode(!snapshot.reorderMode);
-    onUpdate?.();
-  }), actionButton("Reset order", () => {
+  orderActions.append(actionButton("Reset order", () => {
     actions.resetOrder();
     onUpdate?.();
   }));
