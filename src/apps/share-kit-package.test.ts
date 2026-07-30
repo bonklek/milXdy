@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   extractTweetPngMedia,
@@ -5,6 +6,8 @@ import {
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
 
 describe("Share Kit package compatibility", () => {
+  const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
+
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({
       tweetPngIncludeImages: false,
@@ -34,5 +37,11 @@ describe("Share Kit package compatibility", () => {
       { src: "https://pbs.twimg.com/media/photo.jpg", isVideo: false },
       { src: "https://pbs.twimg.com/amplify_video_thumb/video.jpg", isVideo: true },
     ]);
+  });
+
+  it("updates color previews from live input while retaining the legacy Share caption", () => {
+    expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
+    expect(packageSource).toMatch(/data-action="reminet"[^>]*>Share<\/button>/u);
+    expect(packageSource).not.toContain(">Share to RemiNet</button>");
   });
 });

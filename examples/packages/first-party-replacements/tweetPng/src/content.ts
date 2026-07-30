@@ -914,6 +914,7 @@ function showTweetPngModal(
   let currentData = data;
   let url = URL.createObjectURL(blob);
   let renderVersion = 0;
+  let previewUpdateTimer: number | null = null;
   const modal = document.createElement("div");
   modal.id = "milxdy-tweet-png-modal";
   modal.innerHTML = `
@@ -923,7 +924,7 @@ function showTweetPngModal(
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <button type="button" data-action="reminet" disabled aria-disabled="true" title="A live RemiNet sharing client is required">Share to RemiNet</button>
+          <button type="button" data-action="reminet" disabled aria-disabled="true" title="A live RemiNet sharing client is required">Share</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
@@ -961,6 +962,7 @@ function showTweetPngModal(
     if (closed) return;
     closed = true;
     actionSignal?.removeEventListener("abort", abortClose);
+    if (previewUpdateTimer !== null) window.clearTimeout(previewUpdateTimer);
     URL.revokeObjectURL(url);
     modal.remove();
     if (closeTweetPngReview === close) closeTweetPngReview = null;
@@ -1022,12 +1024,20 @@ function showTweetPngModal(
     if (preview) preview.src = nextUrl;
     setStatus("Preview updated.");
   };
+  const schedulePreviewUpdate = () => {
+    if (previewUpdateTimer !== null) window.clearTimeout(previewUpdateTimer);
+    previewUpdateTimer = window.setTimeout(() => {
+      previewUpdateTimer = null;
+      void updatePreview().catch((error) => setStatus(errorMessage(error)));
+    }, 75);
+  };
   for (const input of Array.from(modal.querySelectorAll<HTMLInputElement>("[data-setting]"))) {
-    input.addEventListener("change", () => {
+    input.addEventListener(input.type === "color" ? "input" : "change", () => {
       const key = input.dataset.setting as keyof VisualThemeSettings;
       if (input.type === "checkbox") (visualTheme[key] as boolean) = input.checked;
       else if (input.type === "color") (visualTheme[key] as string) = normalizeColor(input.value, String(visualTheme[key]));
-      void updatePreview().catch((error) => setStatus(errorMessage(error)));
+      if (input.type === "color") schedulePreviewUpdate();
+      else void updatePreview().catch((error) => setStatus(errorMessage(error)));
     });
   }
   const presets: Record<string, { background: string; font: string }> = {

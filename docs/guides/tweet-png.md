@@ -8,7 +8,7 @@ Share Kit owns the reviewed local Tweet PNG workflow. The base milXdy client own
 2. Review the rendered PNG. Video posts use the available thumbnail with a play icon overlay; the export never embeds or starts a video.
 3. Use **Copy PNG** or **Download** from the top action row.
 
-**Share to RemiNet** is deliberately disabled until a compatible live RemiNet client is present. Share Kit does not substitute browser share, upload through an undeclared endpoint, or transmit anything automatically.
+**Share** is deliberately disabled until a compatible live RemiNet client is present. Share Kit does not substitute browser share, upload through an undeclared endpoint, or transmit anything automatically.
 
 ## Preview settings
 
