@@ -40,23 +40,39 @@ try {
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
   const entryPath = path.join(externalPackage, "dist", "content.js");
   await writeFile(entryPath, `${await readFile(entryPath, "utf8")}\nexport function onComposerAction({ panel }) { panel.textContent = "External composer fixture"; }\nexport function onReplyAction({ panel, openNativeReply, templates, selectTemplate }) { panel.replaceChildren(); const nativeReply = document.createElement("button"); nativeReply.textContent = "Send a reply"; nativeReply.addEventListener("click", openNativeReply); panel.append(nativeReply); for (const template of templates) { const row = document.createElement("button"); row.textContent = template.label; row.addEventListener("click", () => selectTemplate(template.id)); panel.append(row); } }\n`);
-  run([
+  const mixedPackageArgs = [
     "scripts/qa/qa-reload.mjs",
     "--once",
     `--publish-dir=${qaOutput}`,
     `--local-app-package=${externalPackage}`,
+    "--local-app-package=examples/packages/first-party-replacements/tweetPng",
     "--allow-local-review",
     "--acknowledge-package-consent",
-  ]);
+  ];
+  const watchModeComposition = runResult(mixedPackageArgs.filter((arg) => arg !== "--once"));
+  assert.notEqual(watchModeComposition.status, 0, "mixed external composition must remain one-shot only");
+  assert.match(`${watchModeComposition.stdout}\n${watchModeComposition.stderr}`, /one-shot only/u);
+  const incompatibleBaseline = runResult([...mixedPackageArgs, "--return-to-baseline"]);
+  assert.notEqual(incompatibleBaseline.status, 0, "mixed external composition must reject return-to-baseline");
+  assert.match(`${incompatibleBaseline.stdout}\n${incompatibleBaseline.stderr}`, /cannot be combined/u);
+  const missingReplacementAcknowledgement = runResult(mixedPackageArgs);
+  assert.notEqual(missingReplacementAcknowledgement.status, 0, "mixed QA composition must fail without first-party replacement acknowledgement");
+  assert.match(`${missingReplacementAcknowledgement.stdout}\n${missingReplacementAcknowledgement.stderr}`, /--acknowledge-first-party-replacement/u);
+  run([...mixedPackageArgs, "--acknowledge-first-party-replacement"]);
 
   const provenance = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
   assert.equal(provenance.composition.state, "external-local-package");
   assert.match(provenance.composition.fingerprint, /^[a-f0-9]{64}$/u);
-  assert.equal(provenance.composition.packages.length, 1);
-  const composed = provenance.composition.packages[0];
+  assert.equal(provenance.composition.packages.length, 2);
+  const composed = provenance.composition.packages.find((entry) => entry.id === "dev-note");
+  assert.ok(composed, "explicit external package must be present in QA provenance");
   assert.equal(composed.id, "dev-note");
   assert.equal(composed.version, "0.1.0");
   for (const key of ["manifestSha256", "contentSha256", "packageSha256"]) assert.match(composed[key], /^[a-f0-9]{64}$/u);
+  const shareKit = provenance.composition.packages.find((entry) => entry.id === "tweetPng");
+  assert.ok(shareKit, "reviewed Share Kit replacement must be present in QA provenance");
+  assert.equal(shareKit.version, "0.2.4");
+  for (const key of ["manifestSha256", "contentSha256", "packageSha256"]) assert.match(shareKit[key], /^[a-f0-9]{64}$/u);
   assert.equal(JSON.stringify(provenance).includes(externalPackage), false);
   assert.equal(provenance.output, "shared-qa-chromium", "QA provenance must use a stable shared-output identity instead of a local path");
   assert.equal(Object.hasOwn(provenance, "worktree"), false, "QA provenance must not retain a local worktree path");
@@ -77,9 +93,22 @@ try {
   assert.match(runtimeRegistry, /hostComposerActions:\s*\["nativeDrafts"\]/u, "staged external apps must preserve declared host companion actions");
   assert.match(runtimeRegistry, /storageListKey:\s*"milxdy\.local\.dev-note\.replyPhrases"/u, "staged external reply actions must preserve bounded storage-list templates");
   assert.match(runtimeRegistry, /composerAction:[\s\S]{0,240}?icon:\s*"local-apps\/dev-note\/dev-note-icon\.svg"/u, "staged external composer icons must be rebased to the package output prefix");
+  assert.match(
+    runtimeRegistry,
+    /id:\s*"tweetPng"[\s\S]{0,600}?name:\s*"Share Kit"[\s\S]{0,600}?available:\s*true/u,
+    "reviewed Share Kit replacement must be compiled into the runtime registry as available",
+  );
+  assert.doesNotMatch(
+    runtimeRegistry,
+    /id:\s*"tweetPng"[\s\S]{0,800}?unavailableReason:\s*"Share Kit is not included/u,
+    "composed Share Kit metadata must not retain the base-build unavailable reason",
+  );
+  assert.match(runtimeRegistry, /contextualPostActions:[\s\S]{0,260}?label:\s*"Review with Share Kit"/u, "Share Kit contextual action must reach the runtime registry");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");
+  assert.ok(webResources.includes("local-apps/tweetPng/assets/tweet-png-icon.svg"), "Share Kit contextual icon must be web-accessible");
+  assert.equal(await readFile(path.join(qaOutput, "local-apps", "tweetPng", "dist", "content.js"), "utf8").then((source) => source.length > 0), true, "Share Kit content package must be emitted");
 
   run(["scripts/qa/qa-reload.mjs", "--once", `--publish-dir=${qaOutput}`, "--return-to-baseline"]);
   const baseline = JSON.parse(await readFile(path.join(qaOutput, "qa-build.json"), "utf8"));
@@ -92,9 +121,13 @@ try {
 console.log("External local-package QA composition verification passed.");
 
 function run(args) {
-  const result = spawnSync(process.execPath, args, { encoding: "utf8" });
+  const result = runResult(args);
   if (result.status === 0) return;
   process.stderr.write(result.stdout || "");
   process.stderr.write(result.stderr || "");
   throw new Error(`Verification command failed: ${args.join(" ")}`);
+}
+
+function runResult(args) {
+  return spawnSync(process.execPath, args, { encoding: "utf8" });
 }
