@@ -1,14 +1,55 @@
-import {
-  DEFAULT_RESKIN_PROFILE,
-  DEFAULT_VISUAL_THEME,
-  RESKIN_PROFILE_KEY,
-  VISUAL_THEME_KEY,
-  normalizeReskinProfile,
-  normalizeVisualTheme,
-  type VisualThemeSettings,
-} from "../../platform/visuals/reskin-profile";
+import type { MilxdyContextualPostActionContext } from "../../../../../sdk/types/index";
+
+const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
+const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
+
+type VisualThemeSettings = {
+  tweetPngIncludeImages: boolean;
+  tweetPngIncludeQuoteText: boolean;
+  tweetPngIncludeQuoteImages: boolean;
+  tweetPngShrinkTallImages: boolean;
+  tweetPngIncludeDate: boolean;
+  tweetPngIncludeStats: boolean;
+  tweetPngBorder: boolean;
+  tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
+  tweetPngBackgroundColor: string;
+  tweetPngFontColor: string;
+};
+
+const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
+  tweetPngIncludeImages: true,
+  tweetPngIncludeQuoteText: true,
+  tweetPngIncludeQuoteImages: true,
+  tweetPngShrinkTallImages: true,
+  tweetPngIncludeDate: true,
+  tweetPngIncludeStats: true,
+  tweetPngBorder: true,
+  tweetPngBorderPalette: "purple",
+  tweetPngBackgroundColor: "#fffaff",
+  tweetPngFontColor: "#20122f",
+};
+
+let actionContext: MilxdyContextualPostActionContext | null = null;
+let closeTweetPngReview: (() => void) | null = null;
 
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
+
+export const id = "tweetPng";
+
+export async function onContextualPostAction(context: MilxdyContextualPostActionContext): Promise<void> {
+  if (context.actionId !== "reviewPng") return;
+  actionContext = context;
+  await openTweetPngReviewFromTweet(context.post, context.statusUrl);
+}
+
+export function onRouteChange(): void {
+  closeTweetPngReview?.();
+}
+
+export function disable(): void {
+  closeTweetPngReview?.();
+  actionContext = null;
+}
 
 export async function copyTweetPngFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
   await loadVisualTheme();
@@ -20,12 +61,42 @@ export async function copyTweetPngFromTweet(tweet: HTMLElement, statusUrl: strin
 }
 
 async function loadVisualTheme(): Promise<void> {
-  const stored = await chrome.storage.local.get({
-    [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
+  if (!actionContext) throw new Error("Share Kit must be opened from a declared contextual action.");
+  const stored = await actionContext.storage.local.get({
+    [RESKIN_PROFILE_KEY]: "max",
     [VISUAL_THEME_KEY]: DEFAULT_VISUAL_THEME,
-  }).catch(() => ({})) as Record<string, unknown>;
-  const profile = normalizeReskinProfile(stored[RESKIN_PROFILE_KEY]);
-  visualTheme = normalizeVisualTheme(stored[VISUAL_THEME_KEY], profile);
+  });
+  visualTheme = normalizeVisualTheme(stored[VISUAL_THEME_KEY]);
+}
+
+export function normalizeVisualTheme(value: unknown): VisualThemeSettings {
+  const record = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const bool = (key: keyof VisualThemeSettings): boolean => (
+    typeof record[key] === "boolean" ? record[key] as boolean : DEFAULT_VISUAL_THEME[key] as boolean
+  );
+  const palette = ["purple", "gray", "blue", "green"].includes(String(record.tweetPngBorderPalette))
+    ? record.tweetPngBorderPalette as VisualThemeSettings["tweetPngBorderPalette"]
+    : DEFAULT_VISUAL_THEME.tweetPngBorderPalette;
+  return {
+    tweetPngIncludeImages: bool("tweetPngIncludeImages"),
+    tweetPngIncludeQuoteText: bool("tweetPngIncludeQuoteText"),
+    tweetPngIncludeQuoteImages: bool("tweetPngIncludeQuoteImages"),
+    tweetPngShrinkTallImages: bool("tweetPngShrinkTallImages"),
+    tweetPngIncludeDate: bool("tweetPngIncludeDate"),
+    tweetPngIncludeStats: bool("tweetPngIncludeStats"),
+    tweetPngBorder: bool("tweetPngBorder"),
+    tweetPngBorderPalette: palette,
+    tweetPngBackgroundColor: normalizeColor(record.tweetPngBackgroundColor, DEFAULT_VISUAL_THEME.tweetPngBackgroundColor),
+    tweetPngFontColor: normalizeColor(record.tweetPngFontColor, DEFAULT_VISUAL_THEME.tweetPngFontColor),
+  };
+}
+
+function normalizeColor(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
+}
+
+function colorWithAlpha(color: string, alpha: string): string {
+  return `${normalizeColor(color, DEFAULT_VISUAL_THEME.tweetPngFontColor)}${alpha}`;
 }
 
 function findDisplayNameLink(userName: HTMLElement): HTMLElement | null {
@@ -79,7 +150,7 @@ export async function openTweetPngReviewFromTweet(tweet: HTMLElement, statusUrl:
   const data = extractTweetPngData(tweet, statusUrl);
   if (!data.text && !data.images.length && !data.quote) return;
   const blob = await renderTweetPng(data);
-  showTweetPngModal(blob, data);
+  showTweetPngModal(tweet, statusUrl, blob, data);
 }
 
 async function expandTweetPngText(tweet: HTMLElement): Promise<void> {
@@ -102,7 +173,7 @@ type TweetPngData = {
   statusUrl: string;
   date: string;
   avatarUrl: string;
-  images: string[];
+  images: TweetPngMedia[];
   quote: TweetPngQuoteData | null;
   stats: TweetPngStats | null;
 };
@@ -111,7 +182,16 @@ type TweetPngQuoteData = {
   author: string;
   handle: string;
   text: string;
-  images: string[];
+  images: TweetPngMedia[];
+};
+
+type TweetPngMedia = {
+  src: string;
+  isVideo: boolean;
+};
+
+type LoadedTweetPngMedia = TweetPngMedia & {
+  image: HTMLImageElement | null;
 };
 
 type ExtractedTweetPngQuoteData = TweetPngQuoteData & {
@@ -158,11 +238,7 @@ function extractTweetPngData(tweet: HTMLElement, statusUrl: string | null): Twee
     .trim();
   const avatar = tweet.querySelector<HTMLImageElement>('img[src*="profile_images"]');
   const images = settings.tweetPngIncludeImages
-    ? Array.from(tweet.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))
-      .filter((image) => !image.closest('[data-testid="quoteTweet"]') && !quote?.element.contains(image))
-      .map((image) => image.currentSrc || image.src)
-      .filter(Boolean)
-      .slice(0, 4)
+    ? extractTweetPngMedia(tweet, (element) => !element.closest('[data-testid="quoteTweet"]') && !quote?.element.contains(element))
     : [];
   const stats = settings.tweetPngIncludeStats ? extractTweetPngStats(tweet) : null;
   return {
@@ -212,12 +288,7 @@ function extractTweetPngQuoteData(tweet: HTMLElement, statusUrl: string | null):
   const text = settings.tweetPngIncludeQuoteText
     ? extractTweetPngTextFromQuoteElement(quote)
     : "";
-  const images = settings.tweetPngIncludeQuoteImages
-    ? Array.from(quote.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))
-      .map((image) => image.currentSrc || image.src)
-      .filter(Boolean)
-      .slice(0, 4)
-    : [];
+  const images = settings.tweetPngIncludeQuoteImages ? extractTweetPngMedia(quote) : [];
   if (!text && !images.length) return null;
   return { author, handle, text, images, element: quote };
 }
@@ -287,8 +358,28 @@ function findTweetPngQuoteElement(tweet: HTMLElement, statusUrl: string | null):
     const href = candidate instanceof HTMLAnchorElement ? normalizeTweetStatusHref(candidate.href) : "";
     if (href && normalizedStatus && href === normalizedStatus) return false;
     if (candidate.closest('article[data-testid="tweet"]') !== tweet) return false;
-    return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img'));
+    return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], video[poster]'));
   }) || null;
+}
+
+export function extractTweetPngMedia(root: HTMLElement, include: (element: Element) => boolean = () => true): TweetPngMedia[] {
+  const media = new Map<string, TweetPngMedia>();
+  for (const image of Array.from(root.querySelectorAll<HTMLImageElement>('[data-testid="tweetPhoto"] img'))) {
+    if (!include(image)) continue;
+    const src = image.currentSrc || image.src;
+    if (src) media.set(src, { src, isVideo: false });
+  }
+  for (const video of Array.from(root.querySelectorAll<HTMLVideoElement>('video[poster]'))) {
+    if (!include(video)) continue;
+    const src = video.poster;
+    if (src) media.set(src, { src, isVideo: true });
+  }
+  for (const image of Array.from(root.querySelectorAll<HTMLImageElement>('[data-testid="videoPlayer"] img'))) {
+    if (!include(image)) continue;
+    const src = image.currentSrc || image.src;
+    if (src) media.set(src, { src, isVideo: true });
+  }
+  return Array.from(media.values()).slice(0, 4);
 }
 
 function normalizeTweetStatusHref(value: string): string {
@@ -315,8 +406,8 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
   const textLines = wrapCanvasText(context, data.text || data.date || data.handle, bodyWidth, 48);
   context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, 16) : [];
-  const mediaImages = await Promise.all(data.images.map(loadImageForCanvas));
-  const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadImageForCanvas)) : [];
+  const mediaImages = await Promise.all(data.images.map(loadTweetPngMedia));
+  const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadTweetPngMedia)) : [];
   const assets = await loadTweetPngRenderAssets();
   const avatarImage = data.avatarUrl ? await loadImageForCanvas(data.avatarUrl).catch(() => null) : null;
   const mediaHeight = measureTweetPngMediaHeight(mediaImages, bodyWidth, 520);
@@ -338,7 +429,7 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
   context.fillRect(0, 0, width, height);
   drawDottedBackground(context, width, height);
   roundRect(context, 28, 28, width - 56, height - 56, 28);
-  context.fillStyle = "#fffaff";
+  context.fillStyle = visualTheme.tweetPngBackgroundColor;
   context.fill();
   if (visualTheme.tweetPngBorder) {
     context.strokeStyle = palette.border;
@@ -360,15 +451,15 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
     context.fill();
   }
 
-  context.fillStyle = "#261447";
+  context.fillStyle = visualTheme.tweetPngFontColor;
   context.font = `700 34px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(data.author, bodyX, padding + 36);
-  context.fillStyle = "#6d5a7f";
+  context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
   context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(data.handle || "x.com", bodyX, padding + 72);
   drawTweetPngHeaderStats(context, data.stats, assets, bodyX, padding + 34, bodyWidth);
 
-  context.fillStyle = "#1b1324";
+  context.fillStyle = visualTheme.tweetPngFontColor;
   context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
@@ -405,7 +496,7 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
   }
 
   if (data.date) {
-    context.fillStyle = "#7d5aaa";
+    context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "a8");
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(data.date, bodyX, footerY);
   }
@@ -414,9 +505,7 @@ async function renderTweetPng(data: TweetPngData): Promise<Blob> {
 }
 
 async function loadTweetPngRenderAssets(): Promise<TweetPngRenderAssets> {
-  const lotusUrl = typeof chrome !== "undefined" && chrome.runtime?.getURL
-    ? chrome.runtime.getURL("remistats/star.svg")
-    : "";
+  const lotusUrl = actionContext?.resolveAssetUrl("assets/remistats-star.svg") || "";
   return {
     lotus: lotusUrl ? await loadImageForCanvas(lotusUrl) : null,
   };
@@ -445,7 +534,7 @@ function drawTweetPngHeaderStats(
       context.font = `24px ${TWEET_PNG_FONT_FALLBACK}`;
       context.fillText(group.icon === "beetle" ? "\u{1FAB2}" : "\u2726", cursor, y - 1);
     }
-    context.fillStyle = "#261447";
+    context.fillStyle = visualTheme.tweetPngFontColor;
     context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(group.value, cursor + 34, y);
     cursor += group.width + gap;
@@ -594,7 +683,7 @@ function drawTweetPngQuote(
   context: CanvasRenderingContext2D,
   options: {
     quote: TweetPngQuoteData;
-    images: Array<HTMLImageElement | null>;
+    images: LoadedTweetPngMedia[];
     textLines: string[];
     x: number;
     y: number;
@@ -621,17 +710,17 @@ function drawTweetPngQuote(
   }
 
   let y = options.y + padding + 6;
-  context.fillStyle = "#261447";
+  context.fillStyle = visualTheme.tweetPngFontColor;
   context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(options.quote.author, options.x + padding, y);
   if (options.quote.handle) {
-    context.fillStyle = "#6d5a7f";
+    context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(options.quote.handle, options.x + padding + Math.min(360, context.measureText(options.quote.author).width + 14), y);
   }
 
   y += 38;
-  context.fillStyle = "#21182a";
+  context.fillStyle = visualTheme.tweetPngFontColor;
   context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
   for (const line of options.textLines) {
     if (y + lineHeight > options.y + cardHeight - padding) break;
@@ -639,7 +728,7 @@ function drawTweetPngQuote(
     y += lineHeight;
   }
 
-  if (options.images.some(Boolean) && y + 76 < options.y + cardHeight) {
+  if (options.images.some((media) => Boolean(media.image)) && y + 76 < options.y + cardHeight) {
     y += 8;
     drawTweetPngMediaGrid(
       context,
@@ -654,11 +743,11 @@ function drawTweetPngQuote(
   return options.y + cardHeight + 22;
 }
 
-function measureTweetPngMediaHeight(images: Array<HTMLImageElement | null>, width: number, maxHeight: number): number {
-  const visible = images.filter((image): image is HTMLImageElement => Boolean(image));
+function measureTweetPngMediaHeight(images: LoadedTweetPngMedia[], width: number, maxHeight: number): number {
+  const visible = images.filter((media): media is LoadedTweetPngMedia & { image: HTMLImageElement } => Boolean(media.image));
   if (!visible.length) return 0;
   if (visible.length > 1) return Math.min(maxHeight, 420);
-  const image = visible[0];
+  const image = visible[0].image;
   const ratio = image.naturalWidth > 0 && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 16 / 9;
   if (ratio >= 1) return Math.min(maxHeight, Math.max(260, width / ratio));
   return Math.min(maxHeight, Math.max(240, width * 0.62 / ratio));
@@ -666,14 +755,14 @@ function measureTweetPngMediaHeight(images: Array<HTMLImageElement | null>, widt
 
 function drawTweetPngMediaGrid(
   context: CanvasRenderingContext2D,
-  images: Array<HTMLImageElement | null>,
+  images: LoadedTweetPngMedia[],
   x: number,
   y: number,
   width: number,
   height: number,
   palette: TweetPngPalette,
 ): void {
-  const visible = images.filter((image): image is HTMLImageElement => Boolean(image));
+  const visible = images.filter((media): media is LoadedTweetPngMedia & { image: HTMLImageElement } => Boolean(media.image));
   const gap = 10;
   if (visible.length === 1) {
     drawTweetPngSingleMedia(context, visible[0], x, y, width, height, palette);
@@ -689,13 +778,14 @@ function drawTweetPngMediaGrid(
         { x, y: y + (height + gap) / 2, width: (width - gap) / 2, height: (height - gap) / 2 },
         { x: x + (width + gap) / 2, y: y + (height + gap) / 2, width: (width - gap) / 2, height: (height - gap) / 2 },
       ];
-  visible.slice(0, cells.length).forEach((image, index) => {
+  visible.slice(0, cells.length).forEach((media, index) => {
     const cell = cells[index];
     roundRect(context, cell.x, cell.y, cell.width, cell.height, 22);
     context.save();
     context.clip();
-    drawImageCover(context, image, cell.x, cell.y, cell.width, cell.height);
+    drawImageCover(context, media.image, cell.x, cell.y, cell.width, cell.height);
     context.restore();
+    if (media.isVideo) drawVideoPlayOverlay(context, cell.x, cell.y, cell.width, cell.height);
     if (visualTheme.tweetPngBorder) {
       context.strokeStyle = palette.mediaBorder;
       context.lineWidth = 2;
@@ -706,13 +796,14 @@ function drawTweetPngMediaGrid(
 
 function drawTweetPngSingleMedia(
   context: CanvasRenderingContext2D,
-  image: HTMLImageElement,
+  media: LoadedTweetPngMedia & { image: HTMLImageElement },
   x: number,
   y: number,
   width: number,
   height: number,
   palette: TweetPngPalette,
 ): void {
+  const image = media.image;
   const imageRatio = image.naturalWidth > 0 && image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 16 / 9;
   const tallImage = visualTheme.tweetPngShrinkTallImages && imageRatio < 0.85;
   const drawHeight = height;
@@ -725,11 +816,37 @@ function drawTweetPngSingleMedia(
   context.fillRect(drawX, y, drawWidth, drawHeight);
   drawImageContain(context, image, drawX, y, drawWidth, drawHeight);
   context.restore();
+  if (media.isVideo) drawVideoPlayOverlay(context, drawX, y, drawWidth, drawHeight);
   if (visualTheme.tweetPngBorder) {
     context.strokeStyle = palette.mediaBorder;
     context.lineWidth = 2;
     context.stroke();
   }
+}
+
+function drawVideoPlayOverlay(
+  context: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): void {
+  const radius = Math.max(24, Math.min(48, Math.min(width, height) * 0.12));
+  const centerX = x + width / 2;
+  const centerY = y + height / 2;
+  context.save();
+  context.fillStyle = "rgba(0, 0, 0, 0.68)";
+  context.beginPath();
+  context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = "#ffffff";
+  context.beginPath();
+  context.moveTo(centerX - radius * 0.22, centerY - radius * 0.42);
+  context.lineTo(centerX + radius * 0.48, centerY);
+  context.lineTo(centerX - radius * 0.22, centerY + radius * 0.42);
+  context.closePath();
+  context.fill();
+  context.restore();
 }
 
 function drawImageCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number): void {
@@ -756,6 +873,10 @@ function loadImageForCanvas(src: string): Promise<HTMLImageElement | null> {
   });
 }
 
+async function loadTweetPngMedia(media: TweetPngMedia): Promise<LoadedTweetPngMedia> {
+  return { ...media, image: await loadImageForCanvas(media.src) };
+}
+
 function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG render failed")), "image/png");
@@ -780,44 +901,169 @@ function roundRect(context: CanvasRenderingContext2D, x: number, y: number, widt
   context.closePath();
 }
 
-function showTweetPngModal(blob: Blob, data: TweetPngData): void {
+function showTweetPngModal(
+  tweet: HTMLElement,
+  statusUrl: string | null,
+  blob: Blob,
+  data: TweetPngData,
+): void {
+  closeTweetPngReview?.();
   document.querySelector("#milxdy-tweet-png-modal")?.remove();
-  const url = URL.createObjectURL(blob);
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  let currentBlob = blob;
+  let currentData = data;
+  let url = URL.createObjectURL(blob);
+  let renderVersion = 0;
   const modal = document.createElement("div");
   modal.id = "milxdy-tweet-png-modal";
   modal.innerHTML = `
-    <div class="milxdy-tweet-png-dialog" role="dialog" aria-modal="true" aria-label="Tweet PNG preview">
-      <header>
-        <strong>Tweet PNG</strong>
-        <button type="button" data-action="close" aria-label="Close">&times;</button>
+    <div class="milxdy-tweet-png-dialog" role="dialog" aria-modal="true" aria-labelledby="milxdy-share-kit-title">
+      <header class="milxdy-tweet-png-toolbar">
+        <strong id="milxdy-share-kit-title">Share Kit</strong>
+        <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
+          <button type="button" data-action="copy">Copy PNG</button>
+          <button type="button" data-action="download">Download</button>
+          <button type="button" data-action="reminet" disabled aria-disabled="true" title="A live RemiNet sharing client is required">Share to RemiNet</button>
+          <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
+          <button type="button" data-action="close" aria-label="Close">&times;</button>
+        </div>
       </header>
-      <img src="${url}" alt="Rendered tweet preview">
+      <section id="milxdy-tweet-png-settings" class="milxdy-tweet-png-settings" aria-label="Share Kit settings" hidden>
+        <div class="milxdy-tweet-png-presets" role="group" aria-label="Color presets">
+          <span>Colors</span>
+          <button type="button" data-preset="paper">Paper</button>
+          <button type="button" data-preset="lavender">Lavender</button>
+          <button type="button" data-preset="night">Night</button>
+          <button type="button" data-preset="contrast">Contrast</button>
+        </div>
+        <label>Background <input type="color" data-setting="tweetPngBackgroundColor" value="${visualTheme.tweetPngBackgroundColor}"></label>
+        <label>Font <input type="color" data-setting="tweetPngFontColor" value="${visualTheme.tweetPngFontColor}"></label>
+        <label><input type="checkbox" data-setting="tweetPngIncludeImages"${visualTheme.tweetPngIncludeImages ? " checked" : ""}> Include image</label>
+        <label><input type="checkbox" data-setting="tweetPngIncludeQuoteText"${visualTheme.tweetPngIncludeQuoteText ? " checked" : ""}> Include QRT</label>
+        <label><input type="checkbox" data-setting="tweetPngIncludeQuoteImages"${visualTheme.tweetPngIncludeQuoteImages ? " checked" : ""}> Include QRT image</label>
+        <p>Changes update this preview and are saved as the Share Kit defaults.</p>
+      </section>
+      <img src="${url}" alt="Rendered post PNG preview">
       <p>Review before sharing. Nothing is sent automatically.</p>
-      <footer>
-        <button type="button" data-action="copy">Copy PNG</button>
-        <button type="button" data-action="download">Download</button>
-        <button type="button" data-action="share">Share</button>
-      </footer>
+      <p class="milxdy-tweet-png-status" role="status" aria-live="polite"></p>
     </div>
   `;
+  const preview = modal.querySelector<HTMLImageElement>("img");
+  const settings = modal.querySelector<HTMLElement>("#milxdy-tweet-png-settings");
+  const settingsButton = modal.querySelector<HTMLButtonElement>('[data-action="settings"]');
+  const status = modal.querySelector<HTMLElement>(".milxdy-tweet-png-status");
+  const setStatus = (message: string) => {
+    if (status) status.textContent = message;
+  };
+  let closed = false;
+  const actionSignal = actionContext?.signal;
   const close = () => {
+    if (closed) return;
+    closed = true;
+    actionSignal?.removeEventListener("abort", abortClose);
     URL.revokeObjectURL(url);
     modal.remove();
+    if (closeTweetPngReview === close) closeTweetPngReview = null;
+    if (returnFocus?.isConnected) returnFocus.focus();
   };
+  const abortClose = () => close();
+  closeTweetPngReview = close;
+  actionSignal?.addEventListener("abort", abortClose, { once: true });
   modal.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
     if (target === modal || target?.closest('[data-action="close"]')) close();
   });
+  modal.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      close();
+      return;
+    }
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+      .filter((element) => element.offsetParent !== null);
+    if (!focusable.length) return;
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  });
   modal.querySelector('[data-action="copy"]')?.addEventListener("click", () => {
-    void copyTweetPng(blob);
+    void copyTweetPng(currentBlob).then(() => setStatus("PNG copied.")).catch((error) => setStatus(errorMessage(error)));
   });
   modal.querySelector('[data-action="download"]')?.addEventListener("click", () => {
-    downloadBlob(blob, tweetPngFileName(data));
+    downloadBlob(currentBlob, tweetPngFileName(currentData));
+    setStatus("PNG downloaded.");
   });
-  modal.querySelector('[data-action="share"]')?.addEventListener("click", () => {
-    void shareTweetPng(blob, data);
+  settingsButton?.addEventListener("click", () => {
+    if (!settings) return;
+    const opening = settings.hidden;
+    settings.hidden = !opening;
+    settingsButton.setAttribute("aria-expanded", String(opening));
+    if (opening) settings.querySelector<HTMLElement>("button, input")?.focus();
   });
+  const updatePreview = async () => {
+    const version = ++renderVersion;
+    setStatus("Updating preview...");
+    await saveVisualTheme();
+    const nextData = extractTweetPngData(tweet, statusUrl);
+    const nextBlob = await renderTweetPng(nextData);
+    if (version !== renderVersion || !modal.isConnected) return;
+    const nextUrl = URL.createObjectURL(nextBlob);
+    URL.revokeObjectURL(url);
+    url = nextUrl;
+    currentBlob = nextBlob;
+    currentData = nextData;
+    if (preview) preview.src = nextUrl;
+    setStatus("Preview updated.");
+  };
+  for (const input of Array.from(modal.querySelectorAll<HTMLInputElement>("[data-setting]"))) {
+    input.addEventListener("change", () => {
+      const key = input.dataset.setting as keyof VisualThemeSettings;
+      if (input.type === "checkbox") (visualTheme[key] as boolean) = input.checked;
+      else if (input.type === "color") (visualTheme[key] as string) = normalizeColor(input.value, String(visualTheme[key]));
+      void updatePreview().catch((error) => setStatus(errorMessage(error)));
+    });
+  }
+  const presets: Record<string, { background: string; font: string }> = {
+    paper: { background: "#fffaff", font: "#20122f" },
+    lavender: { background: "#f3e8ff", font: "#281447" },
+    night: { background: "#15202b", font: "#f7f9f9" },
+    contrast: { background: "#000000", font: "#ffffff" },
+  };
+  for (const button of Array.from(modal.querySelectorAll<HTMLButtonElement>("[data-preset]"))) {
+    button.addEventListener("click", () => {
+      const preset = presets[button.dataset.preset || ""];
+      if (!preset) return;
+      visualTheme.tweetPngBackgroundColor = preset.background;
+      visualTheme.tweetPngFontColor = preset.font;
+      const background = modal.querySelector<HTMLInputElement>('[data-setting="tweetPngBackgroundColor"]');
+      const font = modal.querySelector<HTMLInputElement>('[data-setting="tweetPngFontColor"]');
+      if (background) background.value = preset.background;
+      if (font) font.value = preset.font;
+      void updatePreview().catch((error) => setStatus(errorMessage(error)));
+    });
+  }
   document.body.appendChild(modal);
+  modal.querySelector<HTMLElement>('[data-action="copy"]')?.focus();
+}
+
+async function saveVisualTheme(): Promise<void> {
+  if (!actionContext) return;
+  const stored = await actionContext.storage.local.get({ [VISUAL_THEME_KEY]: {} });
+  const existing = stored[VISUAL_THEME_KEY] && typeof stored[VISUAL_THEME_KEY] === "object"
+    ? stored[VISUAL_THEME_KEY] as Record<string, unknown>
+    : {};
+  await actionContext.storage.local.set({ [VISUAL_THEME_KEY]: { ...existing, ...visualTheme } });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error || "Share Kit action failed.");
 }
 
 async function copyTweetPng(blob: Blob): Promise<void> {
@@ -825,15 +1071,6 @@ async function copyTweetPng(blob: Blob): Promise<void> {
     throw new Error("Image clipboard is unavailable in this browser. Use Download instead.");
   }
   await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-}
-
-async function shareTweetPng(blob: Blob, data: TweetPngData): Promise<void> {
-  const file = new File([blob], tweetPngFileName(data), { type: "image/png" });
-  if (navigator.canShare?.({ files: [file] })) {
-    await navigator.share({ files: [file], title: data.author, text: data.statusUrl });
-    return;
-  }
-  downloadBlob(blob, file.name);
 }
 
 function downloadBlob(blob: Blob, fileName: string): void {
@@ -855,28 +1092,6 @@ function injectTweetPngStyles(): void {
   const style = document.createElement("style");
   style.id = "milxdy-tweet-png-styles";
   style.textContent = `
-    [data-milxdy-tweet-png-menu-item="true"] {
-      align-items: center !important;
-      display: flex !important;
-      gap: 12px !important;
-      transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
-    }
-    [data-milxdy-tweet-png-menu-item="true"]:hover,
-    [data-milxdy-tweet-png-menu-item="true"]:focus-visible {
-      background: rgba(15, 20, 25, 0.1) !important;
-      color: inherit !important;
-    }
-    [data-milxdy-tweet-png-menu-item="true"]:active,
-    [data-milxdy-tweet-png-menu-item="true"][data-milxdy-tweet-png-busy="true"] {
-      background: rgba(15, 20, 25, 0.16) !important;
-      color: inherit !important;
-      transform: translateY(1px) !important;
-    }
-    .milxdy-tweet-png-menu-icon {
-      flex: 0 0 auto;
-      height: 20px;
-      width: 20px;
-    }
     #milxdy-tweet-png-modal {
       align-items: center;
       background: rgba(0, 0, 0, 0.54);
@@ -896,16 +1111,26 @@ function injectTweetPngStyles(): void {
       display: grid;
       gap: 12px;
       max-height: min(760px, calc(100vh - 48px));
-      max-width: min(620px, calc(100vw - 48px));
+      max-width: min(920px, calc(100vw - 48px));
+      width: min(920px, calc(100vw - 48px));
       overflow: auto;
       padding: 14px;
     }
-    .milxdy-tweet-png-dialog header,
-    .milxdy-tweet-png-dialog footer {
+    .milxdy-tweet-png-toolbar {
       align-items: center;
       display: flex;
       gap: 8px;
       justify-content: space-between;
+    }
+    .milxdy-tweet-png-toolbar strong {
+      font: 700 18px/1.2 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .milxdy-tweet-png-actions {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
     }
     .milxdy-tweet-png-dialog img {
       border: 1px solid #d7b8ff;
@@ -927,6 +1152,63 @@ function injectTweetPngStyles(): void {
       font: 700 12px/1 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       min-height: 30px;
       padding: 0 10px;
+    }
+    .milxdy-tweet-png-dialog button:focus-visible,
+    .milxdy-tweet-png-dialog input:focus-visible {
+      outline: 2px solid #7b2cff;
+      outline-offset: 2px;
+    }
+    .milxdy-tweet-png-dialog button:disabled {
+      background: #ece8ef;
+      border-color: #c8c1cf;
+      color: #8b8492;
+      cursor: not-allowed;
+      opacity: 0.72;
+    }
+    .milxdy-tweet-png-settings {
+      align-items: center;
+      background: #f6efff;
+      border: 1px solid #d7b8ff;
+      border-radius: 6px;
+      display: grid;
+      gap: 10px 16px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      padding: 12px;
+    }
+    .milxdy-tweet-png-settings[hidden] {
+      display: none;
+    }
+    .milxdy-tweet-png-settings label,
+    .milxdy-tweet-png-presets {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      font: 600 13px/1.3 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      gap: 8px;
+    }
+    .milxdy-tweet-png-presets,
+    .milxdy-tweet-png-settings p {
+      grid-column: 1 / -1;
+    }
+    .milxdy-tweet-png-settings input[type="color"] {
+      border: 0;
+      height: 30px;
+      padding: 0;
+      width: 42px;
+    }
+    .milxdy-tweet-png-status:empty {
+      display: none;
+    }
+    @media (max-width: 680px) {
+      #milxdy-tweet-png-modal { padding: 8px; }
+      .milxdy-tweet-png-dialog {
+        max-height: calc(100vh - 16px);
+        max-width: calc(100vw - 16px);
+        width: calc(100vw - 16px);
+      }
+      .milxdy-tweet-png-toolbar { align-items: flex-start; }
+      .milxdy-tweet-png-actions { justify-content: flex-start; }
+      .milxdy-tweet-png-settings { grid-template-columns: 1fr; }
     }
   `;
   document.documentElement.appendChild(style);

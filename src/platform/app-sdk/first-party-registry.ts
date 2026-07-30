@@ -30,7 +30,6 @@ const defaultEnabledById = new Map(registry.map((app) => [app.id, app.defaultEna
 
 const isEnabledById: Record<string, () => Promise<boolean>> = {
   rootVisuals: async () => defaultAppEnabled("rootVisuals"),
-  tweetPng: async () => defaultAppEnabled("tweetPng"),
   composerTools: async () => {
     const stored = await chrome.storage.local.get("milxdy.composerTools.enabled");
     return enabledFromStoredValue(stored["milxdy.composerTools.enabled"], defaultAppEnabled("composerTools"));
@@ -151,8 +150,8 @@ export const FIRST_PARTY_APPS: readonly MilxdyAppManifest[] = registry.map((app)
   const setEnabled = setEnabledById[app.id] ?? genericEnablement?.setEnabled;
   return {
     ...manifest,
-    available: true,
-    unavailableReason: undefined,
+    available: app.available !== false,
+    unavailableReason: app.unavailableReason,
     css: css?.map((sheet) => ({ id: sheet.id, path: sheet.path })),
     package: declaredPackage ?? {
       assets,

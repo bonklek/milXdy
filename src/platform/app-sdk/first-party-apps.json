@@ -3,7 +3,7 @@
     "id": "rootVisuals",
     "name": "Root Visual Enhancements",
     "version": "0.1.5",
-    "description": "Adds lightweight X visual markers, notification state, sounds, and Tweet PNG actions.",
+    "description": "Adds lightweight X visual markers, notification state, and sounds.",
     "packageKind": "feature",
     "entryName": "features/rootVisuals",
     "entryPoint": "src/apps/root-visuals/entry.ts",
@@ -335,7 +335,7 @@
     },
     "hub": {
       "category": "appearance",
-      "shortDescription": "Core X visual polish, notification state, sounds, and invoked Tweet PNG affordances.",
+      "shortDescription": "Core X visual polish, notification state, and sounds.",
       "rail": {
         "supported": false,
         "defaultPinned": false
@@ -358,21 +358,45 @@
   },
   {
     "id": "tweetPng",
-    "name": "Tweet PNG",
-    "version": "0.1.5",
-    "description": "Renders local PNG exports from X share actions when invoked by the user.",
+    "name": "Share Kit",
+    "version": "0.2.4",
+    "description": "Provides the compatibility identity and settings for the reviewed Share Kit package.",
     "packageKind": "feature",
-    "entryName": "features/tweetPng",
-    "entryPoint": "src/apps/tweet-png/entry.ts",
-    "contentEntry": "features/tweetPng.js",
+    "contentEntry": "local-apps/tweetPng/dist/content.js",
+    "available": false,
+    "unavailableReason": "Share Kit is not included in this build. Rebuild with the reviewed package or use a legacy build for the old exporter.",
     "defaultEnabled": true,
     "storageKeys": {
       "local": [
+        "milxdy.shareKit.enabled",
         "milxdy.settings.reskinProfile",
         "milxdy.settings.visualTheme"
       ]
     },
     "settings": [
+      {
+        "id": "shareKit.enabled",
+        "label": "Enable Share Kit",
+        "description": "Show Share Kit in the contextual X post share menu.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "role": "enablement",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.shareKit.enabled"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "firstRun",
+          "profilePack"
+        ]
+      },
       {
         "id": "tweetPng.includeImages",
         "label": "Include post images",
@@ -452,6 +476,29 @@
           "area": "local",
           "key": "milxdy.settings.visualTheme",
           "property": "tweetPngIncludeDate"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.shrinkTallImages",
+        "label": "Shrink tall images",
+        "description": "Keep portrait media within a compact export card.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngShrinkTallImages"
         },
         "defaultValue": true,
         "control": {
@@ -551,17 +598,72 @@
           "visual",
           "profilePack"
         ]
+      },
+      {
+        "id": "tweetPng.backgroundColor",
+        "label": "PNG background color",
+        "description": "Six-digit hexadecimal background color used by Share Kit.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngBackgroundColor"
+        },
+        "defaultValue": "#fffaff",
+        "control": {
+          "type": "text",
+          "placeholder": "#fffaff"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.fontColor",
+        "label": "PNG font color",
+        "description": "Six-digit hexadecimal font color used by Share Kit.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngFontColor"
+        },
+        "defaultValue": "#20122f",
+        "control": {
+          "type": "text",
+          "placeholder": "#20122f"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      }
+    ],
+    "contextualPostActions": [
+      {
+        "id": "reviewPng",
+        "label": "Review with Share Kit",
+        "placement": "shareMenu",
+        "icon": "assets/tweet-png-icon.svg"
       }
     ],
     "surfaces": [],
     "lifecycle": {
       "mode": "invoked",
       "invokedBy": "userAction",
-      "ownerAppId": "rootVisuals",
-      "reason": "userAction:tweetPngShare",
+      "reason": "userAction:contextualPost:reviewPng",
       "localOnly": true,
       "notes": [
-        "Loaded by Root Visuals only after a user chooses the X share-menu Tweet PNG action."
+        "The base build retains no Tweet PNG implementation; the reviewed package supplies the declared contextual action."
       ]
     },
     "siteScopes": [
@@ -577,7 +679,7 @@
         ],
         "presentation": "userAction",
         "notes": [
-          "Uses the selected X tweet element supplied by the user-initiated share menu; it is not scanner-delivered or preloaded."
+          "The reviewed package receives only the post selected through the host-owned contextual action."
         ]
       }
     ],
@@ -602,7 +704,7 @@
     },
     "hub": {
       "category": "media",
-      "shortDescription": "Export a reviewed local PNG from a post share action.",
+      "shortDescription": "Install Share Kit to review and export a local PNG from a post share action.",
       "rail": {
         "supported": false,
         "defaultPinned": false
@@ -615,7 +717,7 @@
         "Renders selected post content locally after user action."
       ],
       "localStorageNotes": [
-        "Uses appearance settings for export styling."
+        "Preserves existing Tweet PNG appearance/profile values and Share Kit enablement."
       ],
       "privacyLabels": [
         "local-only"

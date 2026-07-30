@@ -147,6 +147,7 @@ async function verifyPackage(packageDir, folderName) {
   verifyStorageAndSettings(label, manifest);
   await verifyLifecycleAndSites(label, packageDir, manifest);
   verifyKindRules(label, manifest);
+  verifyContextualPostActions(label, manifest);
   verifyHubAndPrivacy(label, manifest);
   verifyBackgroundCapabilities(label, manifest);
   verifyCost(label, manifest.cost);
@@ -182,6 +183,9 @@ function verifyPaths(label, packageDir, manifest) {
   }
   for (const iconPath of dockIconPaths(manifest.dock?.icon)) {
     verifyDeclaredFile(label, packageDir, iconPath, "dock icon");
+  }
+  for (const action of manifest.contextualPostActions || []) {
+    for (const iconPath of dockIconPaths(action.icon)) verifyDeclaredFile(label, packageDir, iconPath, `contextual post action ${action.id} icon`);
   }
 }
 
@@ -295,6 +299,7 @@ async function verifyLifecycleAndSites(label, packageDir, manifest) {
     if (!manifest.loadTriggers?.every((trigger) => trigger === "userAction")) fail(`${label}: invoked packages must use only userAction load triggers`);
     if ((manifest.surfaces || []).length > 0) fail(`${label}: invoked packages must not declare runtime delivery surfaces`);
     if (exports.has("boot")) fail(`${label}: invoked package placeholder must not export boot()`);
+    if (manifest.contextualPostActions?.length && !exports.has("onContextualPostAction")) fail(`${label}: contextualPostActions package must export onContextualPostAction()`);
   } else {
     if (!exports.has("boot")) fail(`${label}: runtime package content entry must export boot()`);
   }
@@ -334,6 +339,23 @@ async function verifyLifecycleAndSites(label, packageDir, manifest) {
     if (!scopes.some((scope) => scope.hosts?.includes(host))) {
       fail(`${label}: permission host ${host} must be represented by a matching site scope host`);
     }
+  }
+}
+
+function verifyContextualPostActions(label, manifest) {
+  const actions = manifest.contextualPostActions;
+  if (!actions) return;
+  if (!Array.isArray(actions) || actions.length < 1 || actions.length > 4) {
+    fail(`${label}: contextualPostActions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) fail(`${label}: contextualPostActions packages must declare userAction loading`);
+  const ids = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || ids.has(action.id)) fail(`${label}: contextualPostActions ids must be unique safe identifiers`);
+    ids.add(action?.id);
+    if (!action?.label) fail(`${label}: contextualPostActions require labels`);
+    if (action?.placement !== "shareMenu") fail(`${label}: contextualPostActions placement must be shareMenu`);
   }
 }
 
@@ -447,6 +469,15 @@ function lifecycleExports(source) {
   const names = new Set();
   const regex = /export\s+(?:async\s+)?function\s+([A-Za-z0-9_]+)/g;
   for (const match of source.matchAll(regex)) names.add(match[1]);
+  for (const match of source.matchAll(/export\s*\{([^}]+)\}/g)) {
+    for (const item of match[1].split(",")) {
+      const candidate = item.trim().replace(/\/\*[\s\S]*?\*\//g, "");
+      const alias = candidate.match(/(?:^|\s)as\s+([A-Za-z_$][\w$]*)$/);
+      const direct = candidate.match(/^([A-Za-z_$][\w$]*)$/);
+      if (alias?.[1]) names.add(alias[1]);
+      else if (direct?.[1]) names.add(direct[1]);
+    }
+  }
   return names;
 }
 

@@ -1,6 +1,6 @@
 # Root Visual Enhancements User Guide
 
-Root Visual Enhancements provides the baseline milXdy X/Twitter polish: visual profile choices, notification styling, sounds, and Tweet PNG entry points.
+Root Visual Enhancements provides the baseline milXdy X/Twitter polish: visual profile choices, notification styling, and sounds. Share Kit now owns Tweet PNG entry points through the generic contextual-action host.
 
 ## Where To Find It
 

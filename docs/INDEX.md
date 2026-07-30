@@ -15,7 +15,7 @@
 - [Link Browser](guides/link-browser.md)
 - [Milady Maxxer](guides/milady-maxxer.md)
 - [Miladychan Portal](guides/miladychan-portal.md)
-- [Tweet PNG](guides/tweet-png.md)
+- [Share Kit — Tweet PNG](guides/tweet-png.md)
 - [Post-reading](guides/post-reading.md)
 - [Remilia Wiki hyperlinks](guides/remilia-wiki-hyperlinks.md)
 - [Remilia Wiki sidebar](guides/remilia-wiki-sidebar.md)

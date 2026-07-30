@@ -5,8 +5,8 @@
       "id": "tweetPng",
       "sourceType": "folder",
       "root": "examples/packages/first-party-replacements/tweetPng",
-      "packageSha256": "28af8163308643905082a7a14ab5bda12f17aeef37f5f3cef1c7e4ffe50adbfa",
-      "reason": "Checked-in first-party App SDK pilot fixture for Tweet PNG."
+      "packageSha256": "e052fb22c3a0d64593ec2ffe586211ef155658ad662d0c263bdcb29fbed7551b",
+      "reason": "Reviewed Share Kit replacement preserving the stable tweetPng identity and settings."
     },
     {
       "id": "wikiSidebar",

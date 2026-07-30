@@ -123,7 +123,7 @@ async function verifyRuntimeOwnership() {
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions"') && runtime.includes("resetOverlayAppLayouts"), "content runtime must expose a dock settings action to reset overlay app positions");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions", null)'), "content runtime must unregister the reset app positions action on dispose");
-  assert(firstPartyAdapter.includes("available: true") && firstPartyAdapter.includes("isEnabled,") && firstPartyAdapter.includes("setEnabled,"), "first-party enablement adapters must expose every app in every build profile");
+  assert(firstPartyAdapter.includes("available: app.available !== false") && firstPartyAdapter.includes("isEnabled,") && firstPartyAdapter.includes("setEnabled,"), "first-party enablement adapters must expose every app while preserving package availability");
   assert(runtime.includes("loadedHeavyApps") && runtime.includes("loadedWorkerHeavyApps") && runtime.includes("loadedNetworkApps") && runtime.includes("loadedAppsByCost"), "runtime diagnostics must identify loaded heavy, worker-heavy, and network apps from registry cost metadata");
   assert(scanner.includes("activeObserverCount"), "scanner diagnostics must expose active shared observer count");
   assert(runtime.includes("maxQueueDepth") && runtime.includes("maxDrainMs") && runtime.includes("performanceObserverCount"), "runtime diagnostics must expose surface delivery depth/timing and performance observer count");
@@ -185,12 +185,18 @@ function verifyRegistryShape() {
     assert(/^[a-z][A-Za-z0-9-]*$/.test(app.id), `${app.id}: app id must be extension-safe`);
     assert(!ids.has(app.id), `duplicate registry app id ${app.id}`);
     ids.add(app.id);
-    assert(app.entryName && app.entryPoint && app.contentEntry, `${app.id}: missing package entry metadata`);
-    assert(app.contentEntry === `${app.entryName}.js`, `${app.id}: contentEntry must match entryName`);
-    assert(existsSync(app.entryPoint), `${app.id}: entryPoint does not exist: ${app.entryPoint}`);
-    assert(firstPartyAdapter.includes(`${app.id}: async`) || firstPartyAdapter.includes(`"${app.id}": async`), `${app.id}: missing isEnabled adapter`);
-    if (app.id !== "rootVisuals" && app.id !== "tweetPng") {
-      assert(firstPartyAdapter.includes(`${app.id}: async (enabled)`) || firstPartyAdapter.includes(`"${app.id}": async (enabled)`), `${app.id}: missing setEnabled adapter`);
+    assert(app.contentEntry, `${app.id}: missing package content entry metadata`);
+    if (app.entryPoint) {
+      assert(app.entryName, `${app.id}: source-backed package must declare entryName`);
+      assert(app.contentEntry === `${app.entryName}.js`, `${app.id}: contentEntry must match entryName`);
+      assert(existsSync(app.entryPoint), `${app.id}: entryPoint does not exist: ${app.entryPoint}`);
+    } else {
+      assert(app.available === false, `${app.id}: available first-party package must declare an entryPoint`);
+    }
+    const hasGenericEnablement = (app.settings || []).some((setting) => setting.role === "enablement" && setting.storage?.key);
+    assert(hasGenericEnablement || firstPartyAdapter.includes(`${app.id}: async`) || firstPartyAdapter.includes(`"${app.id}": async`), `${app.id}: missing isEnabled adapter`);
+    if (app.id !== "rootVisuals") {
+      assert(hasGenericEnablement || firstPartyAdapter.includes(`${app.id}: async (enabled)`) || firstPartyAdapter.includes(`"${app.id}": async (enabled)`), `${app.id}: missing setEnabled adapter`);
     }
     assert(typeof app.name === "string" && app.name.trim(), `${app.id}: missing app name`);
     assert(typeof app.version === "string" && app.version.trim(), `${app.id}: missing app version`);

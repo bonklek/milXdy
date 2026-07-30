@@ -46,6 +46,8 @@ export type VisualThemeSettings = {
   tweetPngIncludeStats: boolean;
   tweetPngBorder: boolean;
   tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
+  tweetPngBackgroundColor: string;
+  tweetPngFontColor: string;
 };
 
 export type VisualThemeControlOwner = "root-visuals" | "app-chrome" | "tweet-png" | "reminet" | "maxxer";
@@ -122,6 +124,8 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
       "tweetPngIncludeStats",
       "tweetPngBorder",
       "tweetPngBorderPalette",
+      "tweetPngBackgroundColor",
+      "tweetPngFontColor",
     ],
   },
   {
@@ -198,6 +202,8 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   tweetPngIncludeStats: true,
   tweetPngBorder: true,
   tweetPngBorderPalette: "purple",
+  tweetPngBackgroundColor: "#fffaff",
+  tweetPngFontColor: "#20122f",
 };
 
 export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
@@ -241,6 +247,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
     tweetPngBorderPalette: "purple",
+    tweetPngBackgroundColor: "#fffaff",
+    tweetPngFontColor: "#20122f",
   },
   moderate: {
     ...DEFAULT_VISUAL_THEME,
@@ -282,6 +290,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
     tweetPngBorderPalette: "purple",
+    tweetPngBackgroundColor: "#fffaff",
+    tweetPngFontColor: "#20122f",
   },
   min: {
     ...DEFAULT_VISUAL_THEME,
@@ -323,6 +333,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeStats: true,
     tweetPngBorder: false,
     tweetPngBorderPalette: "gray",
+    tweetPngBackgroundColor: "#fffaff",
+    tweetPngFontColor: "#20122f",
   },
 };
 
@@ -400,7 +412,13 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     tweetPngIncludeStats: booleanValue(record.tweetPngIncludeStats, fallback.tweetPngIncludeStats),
     tweetPngBorder: booleanValue(record.tweetPngBorder, fallback.tweetPngBorder),
     tweetPngBorderPalette: oneOf(record.tweetPngBorderPalette, ["purple", "gray", "blue", "green"], fallback.tweetPngBorderPalette),
+    tweetPngBackgroundColor: colorValue(record.tweetPngBackgroundColor, fallback.tweetPngBackgroundColor),
+    tweetPngFontColor: colorValue(record.tweetPngFontColor, fallback.tweetPngFontColor),
   };
+}
+
+function colorValue(value: unknown, fallback: string): string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value) ? value.toLowerCase() : fallback;
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {

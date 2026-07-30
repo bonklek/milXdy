@@ -10,6 +10,7 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
+import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
@@ -31,6 +32,7 @@ import {
 } from "../settings/performance-mode";
 import type {
   AppIconAsset,
+  AppContextualPostAction,
   AppDiagnostics,
   AppLoadState,
   AppPreset,
@@ -395,6 +397,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     registerHubDockMetadata();
     installComposerActionHost();
     installReplyActionHost();
+    installContextualPostActionHost();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -490,27 +493,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         scheduleScan: scheduleTwitterScan,
         loadAppById,
         scheduler,
-        storage: createAppStorageFacade(app.id, app.storageKeys, {
-          async get(area, defaults) {
-            return await safeStorageGet(area, defaults) || { ...defaults };
-          },
-          async set(area, values) {
-            if (area === "local") await safeLocalSet(values);
-            else await safeSyncSet(values);
-          },
-          async remove(area, keys) {
-            if (area === "local") await safeLocalRemove(keys);
-            else await safeSyncRemove(keys);
-          },
-          onChanged(listener) {
-            const chromeListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
-              if (area !== "local" && area !== "sync") return;
-              listener(area as AppStorageAreaName, changes as AppStorageChanges);
-            };
-            chrome.storage.onChanged.addListener(chromeListener);
-            return () => chrome.storage.onChanged.removeListener(chromeListener);
-          },
-        }),
+        storage: createRuntimeAppStorage(app),
         resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
@@ -623,6 +606,30 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const app = state.apps.find((candidate) => candidate.id === id);
     if (!app) return Promise.resolve(null);
     return loadApp(app, reason);
+  }
+
+  function createRuntimeAppStorage(app: MilxdyAppManifest) {
+    return createAppStorageFacade(app.id, app.storageKeys, {
+      async get(area, defaults) {
+        return await safeStorageGet(area, defaults) || { ...defaults };
+      },
+      async set(area, values) {
+        if (area === "local") await safeLocalSet(values);
+        else await safeSyncSet(values);
+      },
+      async remove(area, keys) {
+        if (area === "local") await safeLocalRemove(keys);
+        else await safeSyncRemove(keys);
+      },
+      onChanged(listener) {
+        const chromeListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+          if (area !== "local" && area !== "sync") return;
+          listener(area as AppStorageAreaName, changes as AppStorageChanges);
+        };
+        chrome.storage.onChanged.addListener(chromeListener);
+        return () => chrome.storage.onChanged.removeListener(chromeListener);
+      },
+    });
   }
 
   function sendAppMessage<T = unknown>(app: MilxdyAppManifest, message: unknown, label = "runtimeMessage"): Promise<T | null> {
@@ -1351,6 +1358,184 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return rows;
     });
     return candidates.find((row) => row !== displayRow && !row.contains(displayRow)) || (displayRow?.parentElement ?? null);
+  }
+
+  function installContextualPostActionHost(): void {
+    let pendingPost: { post: HTMLElement; statusUrl: string | null } | null = null;
+    let menuObserver: MutationObserver | null = null;
+    let cancelObserverTimer: (() => void) | null = null;
+    const cancelTimers = new Set<() => void>();
+    const schedule = (callback: () => void, delayMs: number) => {
+      let cancel: (() => void) | null = null;
+      cancel = scheduler.timeout(() => {
+        if (cancel) cancelTimers.delete(cancel);
+        if (!state.disposed) callback();
+      }, delayMs);
+      cancelTimers.add(cancel);
+    };
+    const stopObserver = () => {
+      menuObserver?.disconnect();
+      menuObserver = null;
+      cancelObserverTimer?.();
+      cancelObserverTimer = null;
+    };
+    const observeMenu = () => {
+      stopObserver();
+      menuObserver = new MutationObserver(() => {
+        if (injectContextualPostActions(pendingPost, schedule)) stopObserver();
+      });
+      menuObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
+      cancelObserverTimer = scheduler.timeout(stopObserver, 1200);
+    };
+    const onClick = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const share = target?.closest<HTMLElement>('[data-testid="share"], [aria-label*="Share"], [aria-label*="share"]');
+      if (!share || share.closest('[data-testid="quoteTweet"]')) return;
+      const post = share.closest<HTMLElement>('article[data-testid="tweet"]');
+      if (!post || contextualPostActionApps().length === 0) return;
+      pendingPost = { post, statusUrl: contextualPostStatusUrl(post) };
+      observeMenu();
+      schedule(() => {
+        if (injectContextualPostActions(pendingPost, schedule)) stopObserver();
+      }, 80);
+    };
+    document.addEventListener("click", onClick, true);
+    injectContextualPostActionStyles();
+    state.runtimeDisposables.add(() => document.removeEventListener("click", onClick, true));
+    state.runtimeDisposables.add(() => {
+      stopObserver();
+      for (const cancel of cancelTimers) cancel();
+      cancelTimers.clear();
+    });
+  }
+
+  function contextualPostActionApps(): Array<{ app: MilxdyAppManifest; action: AppContextualPostAction }> {
+    return eligibleContextualPostActions(state.apps, state.enabledApps);
+  }
+
+  function injectContextualPostActions(
+    postContext: { post: HTMLElement; statusUrl: string | null } | null,
+    schedule: (callback: () => void, delayMs: number) => void,
+  ): boolean {
+    if (state.disposed || !postContext?.post.isConnected) return false;
+    const actions = contextualPostActionApps();
+    if (!actions.length) return false;
+    const menu = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]'))
+      .find((candidate) => candidate.offsetParent !== null);
+    const reference = menu?.querySelector<HTMLElement>('[role="menuitem"]');
+    if (!menu || !reference?.parentElement) return false;
+    let injected = false;
+    for (const { app, action } of actions) {
+      const key = `${app.id}:${action.id}`;
+      if (menu.querySelector(`[data-milxdy-contextual-post-action="${key}"]`)) continue;
+      const item = reference.cloneNode(true) as HTMLElement;
+      item.dataset.milxdyContextualPostAction = key;
+      item.setAttribute("role", "menuitem");
+      item.setAttribute("tabindex", "0");
+      setContextualPostActionState(item, app, action, action.label);
+      const activate = async () => {
+        if (item.dataset.milxdyContextualPostActionBusy === "true") return;
+        item.dataset.milxdyContextualPostActionBusy = "true";
+        setContextualPostActionState(item, app, action, "Opening…");
+        try {
+          await invokeContextualPostAction(app, action, postContext);
+          setContextualPostActionState(item, app, action, "Preview opened");
+        } catch (error) {
+          setContextualPostActionState(item, app, action, error instanceof Error ? error.message : "Action unavailable");
+        } finally {
+          schedule(() => {
+            delete item.dataset.milxdyContextualPostActionBusy;
+            if (item.isConnected) setContextualPostActionState(item, app, action, action.label);
+          }, 1400);
+        }
+      };
+      item.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        void activate();
+      });
+      item.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        event.stopPropagation();
+        void activate();
+      });
+      reference.parentElement.insertBefore(item, reference);
+      injected = true;
+    }
+    return injected || actions.every(({ app, action }) => menu.querySelector(`[data-milxdy-contextual-post-action="${app.id}:${action.id}"]`));
+  }
+
+  function setContextualPostActionState(
+    item: HTMLElement,
+    app: MilxdyAppManifest,
+    action: AppContextualPostAction,
+    label: string,
+  ): void {
+    const iconHost = item.children.item(0) as HTMLElement | null;
+    const labelHost = item.children.item(1) as HTMLElement | null;
+    const icon = document.createElement("img");
+    icon.alt = "";
+    icon.setAttribute("aria-hidden", "true");
+    icon.className = "milxdy-contextual-post-action-icon";
+    icon.src = action.icon ? runtimeAssetUrl(resolveAppIconAsset(action.icon)) : dockIconForApp(app);
+    if (!iconHost || !labelHost) {
+      item.replaceChildren(icon, document.createTextNode(label));
+      return;
+    }
+    iconHost.replaceChildren(icon);
+    const labelText = labelHost.querySelector<HTMLElement>("span") || labelHost;
+    labelText.textContent = label;
+  }
+
+  async function invokeContextualPostAction(
+    app: MilxdyAppManifest,
+    action: AppContextualPostAction,
+    postContext: { post: HTMLElement; statusUrl: string | null },
+  ): Promise<void> {
+    const module = await loadApp(app, `userAction:contextualPost:${action.id}`);
+    if (!module?.onContextualPostAction) throw new Error(`${app.name} action is unavailable`);
+    const signal = state.appAbortControllers.get(app.id)?.signal;
+    if (!signal || signal.aborted) throw new Error(`${app.name} is not active`);
+    await module.onContextualPostAction({
+      actionId: action.id,
+      post: postContext.post,
+      statusUrl: postContext.statusUrl,
+      signal,
+      storage: createRuntimeAppStorage(app),
+      resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
+    });
+  }
+
+  function contextualPostStatusUrl(post: HTMLElement): string | null {
+    const link = Array.from(post.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
+      .find((anchor) => !anchor.closest('[data-testid="quoteTweet"]'));
+    return link?.href || null;
+  }
+
+  function injectContextualPostActionStyles(): void {
+    if (document.getElementById("milxdy-contextual-post-action-styles")) return;
+    const style = document.createElement("style");
+    style.id = "milxdy-contextual-post-action-styles";
+    style.textContent = `
+      [data-milxdy-contextual-post-action] {
+        transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
+      }
+      [data-milxdy-contextual-post-action]:hover,
+      [data-milxdy-contextual-post-action]:focus-visible {
+        background: rgba(15, 20, 25, 0.1) !important;
+        color: inherit !important;
+      }
+      [data-milxdy-contextual-post-action]:active,
+      [data-milxdy-contextual-post-action][data-milxdy-contextual-post-action-busy="true"] {
+        background: rgba(15, 20, 25, 0.16) !important;
+        color: inherit !important;
+        transform: translateY(1px) !important;
+      }
+      .milxdy-contextual-post-action-icon { flex: 0 0 auto; height: 20px; width: 20px; }
+    `;
+    document.documentElement.appendChild(style);
+    state.runtimeDisposables.add(() => style.remove());
   }
 
   function installComposerActionHost(): void {

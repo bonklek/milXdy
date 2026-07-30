@@ -33,7 +33,6 @@ const NATIVE_REPLY_CONNECTOR_SELECTOR = [
   'div[style*="background-color: rgb(66, 83, 100)"]',
 ].join(", ");
 let booted = false;
-let loadUserActionApp: MilxdyContentAppContext["loadAppById"] = async () => null;
 let queueNotificationSurface: ((notification: HTMLElement) => void) | null = null;
 let queueTweetSurface: ((tweet: HTMLElement) => void) | null = null;
 let refreshHomeLogo: (() => void) | null = null;
@@ -96,7 +95,6 @@ function setupPageFavicon(context: MilxdyContentAppContext): void {
 export async function boot(context: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
-  loadUserActionApp = context.loadAppById;
   await loadVisualTheme();
   if (context.signal.aborted) return;
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
@@ -110,7 +108,6 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
   setupPageFavicon(context);
   setupHomeLogoReplacement(context);
   setupShowNewPostsMarkers(context);
-  setupTweetPngShareActions(context);
   setupNotificationUnreadMarkers(context);
   setupOrphanReplyMarkers(context);
 }
@@ -121,21 +118,15 @@ export function onSurface(surface: { kind: string; element: HTMLElement }): void
 }
 
 export function onRouteChange(): void {
-  // A tweet preview belongs to the post the user invoked it from. Never leave
-  // an open preview behind as X replaces the underlying route.
-  document.querySelector("#milxdy-tweet-png-modal")?.remove();
   refreshHomeLogo?.();
 }
 
-export function disable(): void {
-  document.querySelector("#milxdy-tweet-png-modal")?.remove();
-}
+export function disable(): void {}
 
 export function dispose(): void {
   disable();
   postSoundContext?.close?.().catch(() => undefined);
   postSoundContext = null;
-  loadUserActionApp = async () => null;
   refreshHomeLogo = null;
   queueTweetSurface = null;
   rootVisualClickHandlers.clear();
@@ -618,170 +609,6 @@ function markShowNewPostsButton(button: HTMLElement): void {
   const isShowNewPosts = SHOW_NEW_POSTS_RE.test(button.textContent || "");
   if (isShowNewPosts) button.dataset.milxdyShowNewPosts = "true";
   else if (button.dataset.milxdyShowNewPosts === "true") delete button.dataset.milxdyShowNewPosts;
-}
-
-function setupTweetPngShareActions(context: MilxdyContentAppContext): void {
-  injectTweetPngStyles();
-  let pendingShareTweet: { tweet: HTMLElement; statusUrl: string | null } | null = null;
-  let menuObserver: MutationObserver | null = null;
-  let cancelMenuObserverTimer: (() => void) | null = null;
-  const cancelTimers = new Set<() => void>();
-
-  const cancelPendingTimers = () => {
-    for (const cancel of Array.from(cancelTimers)) cancel();
-    cancelTimers.clear();
-  };
-
-  const scheduleTimeout = (callback: () => void, delayMs: number): void => {
-    let cancel: (() => void) | null = null;
-    cancel = context.scheduler.timeout(() => {
-      if (cancel) cancelTimers.delete(cancel);
-      if (!context.signal.aborted) callback();
-    }, delayMs);
-    cancelTimers.add(cancel);
-  };
-
-  const stopMenuObserver = () => {
-    menuObserver?.disconnect();
-    menuObserver = null;
-    cancelMenuObserverTimer?.();
-    cancelMenuObserverTimer = null;
-  };
-
-  const observeShareMenuBriefly = () => {
-    stopMenuObserver();
-    menuObserver = new MutationObserver(() => {
-      if (pendingShareTweet && injectTweetPngShareMenuItem(pendingShareTweet, context, scheduleTimeout)) stopMenuObserver();
-    });
-    menuObserver.observe(document.body || document.documentElement, { childList: true, subtree: true });
-    cancelMenuObserverTimer = context.scheduler.timeout(stopMenuObserver, 1200);
-  };
-
-  const tweetPngClickListener = (event: MouseEvent) => {
-    const target = event.target instanceof Element ? event.target : null;
-    const share = target?.closest<HTMLElement>('[data-testid="share"], [aria-label*="Share"], [aria-label*="share"]');
-    if (!share || share.closest('[data-testid="quoteTweet"]')) return;
-    const tweet = share.closest<HTMLElement>('article[data-testid="tweet"]');
-    if (!tweet) return;
-    pendingShareTweet = { tweet, statusUrl: findStatusUrl(tweet) };
-    observeShareMenuBriefly();
-    scheduleTimeout(() => {
-      if (injectTweetPngShareMenuItem(pendingShareTweet, context, scheduleTimeout)) stopMenuObserver();
-    }, 80);
-  };
-  addRootVisualClickHandler(context, tweetPngClickListener);
-  context.addDisposable(cancelPendingTimers);
-  context.addDisposable(stopMenuObserver);
-}
-
-function injectTweetPngShareMenuItem(
-  shareContext: { tweet: HTMLElement; statusUrl: string | null } | null,
-  runtimeContext: MilxdyContentAppContext,
-  scheduleTimeout: (callback: () => void, delayMs: number) => void,
-): boolean {
-  if (runtimeContext.signal.aborted || !shareContext?.tweet.isConnected) return false;
-  const menu = Array.from(document.querySelectorAll<HTMLElement>('[role="menu"]'))
-    .find((candidate) => candidate.offsetParent !== null && !candidate.querySelector('[data-milxdy-tweet-png-menu-item="true"]'));
-  if (!menu) return false;
-  const reference = menu.querySelector<HTMLElement>('[role="menuitem"]');
-  if (!reference?.parentElement) return false;
-  const item = reference.cloneNode(true) as HTMLElement;
-  item.dataset.milxdyTweetPngMenuItem = "true";
-  item.setAttribute("role", "menuitem");
-  item.setAttribute("tabindex", "0");
-  setTweetPngMenuItemState(item, "Review tweet PNG");
-  item.addEventListener("click", async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    if (item.dataset.milxdyTweetPngBusy === "true") return;
-    item.dataset.milxdyTweetPngBusy = "true";
-    setTweetPngMenuItemState(item, "Copying...");
-    try {
-      await openTweetPngReviewFromTweet(shareContext.tweet, shareContext.statusUrl);
-      setTweetPngMenuItemState(item, "Preview opened");
-    } catch {
-      setTweetPngMenuItemState(item, "Copy failed");
-    } finally {
-      const reset = () => {
-        if (runtimeContext.signal.aborted) return;
-        delete item.dataset.milxdyTweetPngBusy;
-        if (item.isConnected) setTweetPngMenuItemState(item, "Review tweet PNG");
-      };
-      scheduleTimeout(reset, 1400);
-    }
-  });
-  reference.parentElement.insertBefore(item, reference);
-  return true;
-}
-
-function setTweetPngMenuItemState(item: HTMLElement, label: string): void {
-  // Keep X's cloned icon and label wrappers. Their nested text element owns the
-  // TwitterChirp classes; replacing the entire row makes this item fall back to
-  // the page's serif default.
-  const iconHost = item.children.item(0) as HTMLElement | null;
-  const labelHost = item.children.item(1) as HTMLElement | null;
-  if (!iconHost || !labelHost) {
-    item.replaceChildren(tweetPngMenuIcon(), document.createTextNode(label));
-    return;
-  }
-  iconHost.replaceChildren(tweetPngMenuIcon());
-  const labelText = labelHost.querySelector<HTMLElement>("span") || labelHost;
-  labelText.textContent = label;
-}
-
-function tweetPngMenuIcon(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("class", "milxdy-tweet-png-menu-icon");
-  svg.innerHTML = `
-    <path d="M5 3.75h14A1.25 1.25 0 0 1 20.25 5v14A1.25 1.25 0 0 1 19 20.25H5A1.25 1.25 0 0 1 3.75 19V5A1.25 1.25 0 0 1 5 3.75Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
-    <path d="M6.75 16.75 10.2 13.3a1 1 0 0 1 1.42 0l1.13 1.13 2.23-2.23a1 1 0 0 1 1.42 0l.85.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
-    <circle cx="8.4" cy="8.4" r="1.35" fill="currentColor"/>
-  `;
-  return svg;
-}
-
-async function openTweetPngReviewFromTweet(tweet: HTMLElement, statusUrl: string | null): Promise<void> {
-  const module = await loadUserActionApp("tweetPng", "userAction:tweetPngShare");
-  if (!module || !("openTweetPngReviewFromTweet" in module)) throw new Error("Tweet PNG preview is unavailable");
-  await (module as { openTweetPngReviewFromTweet: (tweet: HTMLElement, statusUrl: string | null) => Promise<void> }).openTweetPngReviewFromTweet(tweet, statusUrl);
-}
-
-function findStatusUrl(tweet: HTMLElement): string | null {
-  const link = Array.from(tweet.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
-    .find((anchor) => !anchor.closest('[data-testid="quoteTweet"]'));
-  return link?.href || null;
-}
-
-function injectTweetPngStyles(): void {
-  if (document.getElementById("milxdy-tweet-png-menu-styles")) return;
-  const style = document.createElement("style");
-  // The lazily loaded Tweet PNG app owns milxdy-tweet-png-styles, including
-  // the fixed fullscreen preview overlay. Do not claim its stylesheet ID.
-  style.id = "milxdy-tweet-png-menu-styles";
-  style.textContent = `
-    [data-milxdy-tweet-png-menu-item="true"] {
-      transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
-    }
-    [data-milxdy-tweet-png-menu-item="true"]:hover,
-    [data-milxdy-tweet-png-menu-item="true"]:focus-visible {
-      background: rgba(15, 20, 25, 0.1) !important;
-      color: inherit !important;
-    }
-    [data-milxdy-tweet-png-menu-item="true"]:active,
-    [data-milxdy-tweet-png-menu-item="true"][data-milxdy-tweet-png-busy="true"] {
-      background: rgba(15, 20, 25, 0.16) !important;
-      color: inherit !important;
-      transform: translateY(1px) !important;
-    }
-    .milxdy-tweet-png-menu-icon {
-      flex: 0 0 auto;
-      height: 20px;
-      width: 20px;
-    }
-  `;
-  document.documentElement.appendChild(style);
 }
 
 function setupNotificationUnreadMarkers(context: MilxdyContentAppContext): void {

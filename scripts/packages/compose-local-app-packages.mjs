@@ -526,8 +526,12 @@ async function analyzePackage(source, manifest) {
   for (const iconPath of dockIconPaths(manifest.composerAction?.icon)) {
     collectFile(source, iconPath, "composer action icon", files, errors);
   }
+  for (const action of manifest.contextualPostActions || []) {
+    for (const iconPath of dockIconPaths(action.icon)) collectFile(source, iconPath, `contextual post action ${action.id} icon`, files, errors);
+  }
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
+  verifyContextualPostActions(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
   verifyRemoteQueries(id, manifest, errors);
@@ -731,6 +735,9 @@ function toGeneratedRegistryApp(record) {
   }));
   manifest.dock = rewriteDockIcon(manifest.dock, record.id);
   manifest.composerAction = rewriteComposerActionIcon(manifest.composerAction, record.id);
+  manifest.contextualPostActions = rewriteContextualPostActionIcons(manifest.contextualPostActions, record.id);
+  manifest.available = true;
+  delete manifest.unavailableReason;
   manifest.package = {
     assets: record.files.map((file) => file.target),
     webAccessibleAssets: record.webAccessibleAssets.map((asset) => asset.target),
@@ -743,6 +750,7 @@ function toGeneratedRegistryApp(record) {
   return {
     ...firstParty,
     ...manifest,
+    unavailableReason: undefined,
     hostAssetAccess: firstParty
       ? [...(firstParty.assets || []), ...(firstParty.requiredOutputs || [])]
       : undefined,
@@ -780,6 +788,17 @@ function rewriteComposerActionIcon(action, packageId) {
       ? packageOutputPath(packageId, action.icon)
       : Object.fromEntries(Object.entries(action.icon).map(([key, value]) => [key, packageOutputPath(packageId, value)])),
   };
+}
+
+function rewriteContextualPostActionIcons(actions, packageId) {
+  return actions?.map((action) => ({
+    ...action,
+    icon: !action.icon
+      ? undefined
+      : typeof action.icon === "string"
+        ? packageOutputPath(packageId, action.icon)
+        : Object.fromEntries(Object.entries(action.icon).map(([key, value]) => [key, packageOutputPath(packageId, value)])),
+  }));
 }
 
 function detectPackageSetConflicts(records) {
@@ -889,6 +908,23 @@ function verifyComposerAction(id, manifest, errors) {
     || new Set(manifest.hostComposerActions).size !== manifest.hostComposerActions.length
     || manifest.hostComposerActions.some((actionId) => actionId !== "nativeDrafts"))) {
     errors.push(`${id}: hostComposerActions supports only the reviewed nativeDrafts companion`);
+  }
+}
+
+function verifyContextualPostActions(id, manifest, errors) {
+  const actions = manifest.contextualPostActions;
+  if (!actions) return;
+  if (!Array.isArray(actions) || actions.length === 0 || actions.length > 4) {
+    errors.push(`${id}: contextualPostActions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: contextualPostActions packages must declare the userAction load trigger`);
+  const ids = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || ids.has(action.id)) errors.push(`${id}: contextualPostActions ids must be unique safe identifiers`);
+    ids.add(action?.id);
+    if (!action?.label || typeof action.label !== "string") errors.push(`${id}: contextualPostActions require labels`);
+    if (action?.placement !== "shareMenu") errors.push(`${id}: contextualPostActions placement must be shareMenu`);
   }
 }
 

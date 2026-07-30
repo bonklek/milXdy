@@ -1,139 +1,196 @@
 {
   "manifestVersion": 1,
   "id": "tweetPng",
-  "name": "Tweet PNG",
-  "version": "0.1.5",
-  "description": "Renders local PNG exports from X share actions when invoked by the user.",
+  "name": "Share Kit",
+  "version": "0.2.4",
+  "description": "Reviews and exports local PNGs from declared X post share actions.",
   "packageKind": "feature",
   "sdk": {
     "minVersion": "0.2.3",
     "targetVersion": "0.2.3",
     "notes": [
-      "Pilot fixture for the prepared local App SDK package shape."
+      "Uses the generic contextual post-action contract; the package owns all Tweet PNG UI and rendering."
     ]
   },
   "contentEntry": "dist/content.js",
   "defaultEnabled": true,
   "storageKeys": {
     "local": [
+      "milxdy.shareKit.enabled",
       "milxdy.settings.reskinProfile",
       "milxdy.settings.visualTheme"
     ]
   },
   "settings": [
     {
-      "id": "tweetPng.includeImages",
-      "label": "Include post images",
-      "description": "Include post media in reviewed Tweet PNG exports.",
+      "id": "shareKit.enabled",
+      "label": "Enable Share Kit",
+      "description": "Show Share Kit in the contextual X post share menu.",
       "scope": "feature",
       "location": "appsAndFeatures",
-      "storage": {
-        "area": "local",
-        "key": "milxdy.settings.visualTheme",
-        "property": "tweetPngIncludeImages"
-      },
+      "role": "enablement",
+      "storage": { "area": "local", "key": "milxdy.shareKit.enabled" },
       "defaultValue": true,
-      "control": {
-        "type": "toggle"
-      },
-      "reset": {
-        "behavior": "restoreDefault"
-      },
-      "presets": [
-        "visual",
-        "profilePack"
-      ]
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["firstRun", "profilePack"]
+    },
+    {
+      "id": "tweetPng.includeImages",
+      "label": "Include post images",
+      "description": "Include post media and video thumbnails in reviewed PNG exports.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeImages" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.includeQuoteText",
+      "label": "Include QRT",
+      "description": "Include quoted-post text in reviewed PNG exports.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeQuoteText" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.includeQuoteImages",
+      "label": "Include QRT image",
+      "description": "Include quoted-post media and video thumbnails in reviewed PNG exports.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeQuoteImages" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.shrinkTallImages",
+      "label": "Shrink tall images",
+      "description": "Keep portrait media within a compact export card.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngShrinkTallImages" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
     },
     {
       "id": "tweetPng.includeDate",
       "label": "Include date",
-      "description": "Show the visible post date in Tweet PNG exports.",
+      "description": "Show the visible post date in reviewed PNG exports.",
       "scope": "feature",
       "location": "appsAndFeatures",
-      "storage": {
-        "area": "local",
-        "key": "milxdy.settings.visualTheme",
-        "property": "tweetPngIncludeDate"
-      },
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeDate" },
       "defaultValue": true,
-      "control": {
-        "type": "toggle"
-      },
-      "reset": {
-        "behavior": "restoreDefault"
-      },
-      "presets": [
-        "visual",
-        "profilePack"
-      ]
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.includeStats",
+      "label": "Include stats",
+      "description": "Show visible RemiStats values in reviewed PNG exports.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeStats" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.border",
+      "label": "Export border",
+      "description": "Draw the configured border around reviewed PNG exports.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngBorder" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
     },
     {
       "id": "tweetPng.borderPalette",
       "label": "Border palette",
-      "description": "Palette used for Tweet PNG export borders.",
+      "description": "Palette used for reviewed PNG export borders.",
       "scope": "feature",
       "location": "appsAndFeatures",
-      "storage": {
-        "area": "local",
-        "key": "milxdy.settings.visualTheme",
-        "property": "tweetPngBorderPalette"
-      },
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngBorderPalette" },
       "defaultValue": "purple",
       "control": {
         "type": "select",
         "options": [
-          {
-            "value": "purple",
-            "label": "Purple"
-          },
-          {
-            "value": "gray",
-            "label": "Gray"
-          },
-          {
-            "value": "blue",
-            "label": "Blue"
-          },
-          {
-            "value": "green",
-            "label": "Green"
-          }
+          { "value": "purple", "label": "Purple" },
+          { "value": "gray", "label": "Gray" },
+          { "value": "blue", "label": "Blue" },
+          { "value": "green", "label": "Green" }
         ]
       },
-      "reset": {
-        "behavior": "restoreDefault"
-      },
-      "presets": [
-        "visual",
-        "profilePack"
-      ]
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.backgroundColor",
+      "label": "PNG background color",
+      "description": "Six-digit hexadecimal background color used by Share Kit.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngBackgroundColor" },
+      "defaultValue": "#fffaff",
+      "control": { "type": "text", "placeholder": "#fffaff" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
+      "id": "tweetPng.fontColor",
+      "label": "PNG font color",
+      "description": "Six-digit hexadecimal font color used by Share Kit.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngFontColor" },
+      "defaultValue": "#20122f",
+      "control": { "type": "text", "placeholder": "#20122f" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    }
+  ],
+  "contextualPostActions": [
+    {
+      "id": "reviewPng",
+      "label": "Review with Share Kit",
+      "placement": "shareMenu",
+      "icon": "assets/tweet-png-icon.svg"
     }
   ],
   "surfaces": [],
   "lifecycle": {
     "mode": "invoked",
     "invokedBy": "userAction",
-    "ownerAppId": "rootVisuals",
-    "reason": "userAction:tweetPngShare",
+    "reason": "userAction:contextualPost:reviewPng",
     "localOnly": true,
     "notes": [
-      "Loaded only after a user chooses the X share-menu Tweet PNG action."
+      "Loaded only after the user chooses the declared X share-menu action."
     ]
   },
   "siteScopes": [
     {
       "site": "x",
-      "hosts": [
-        "https://x.com/*",
-        "https://twitter.com/*"
-      ],
+      "hosts": ["https://x.com/*", "https://twitter.com/*"],
       "integration": "contentScript",
-      "surfaces": [
-        "tweet"
-      ],
+      "surfaces": ["tweet"],
       "presentation": "userAction",
       "notes": [
-        "Uses the selected X post element supplied by the user-initiated share menu; it is not scanner-delivered or preloaded."
+        "Receives only the post selected through the host-owned contextual action."
       ]
     }
   ],
@@ -144,72 +201,42 @@
     "worker": "none",
     "domWrite": "large"
   },
-  "loadTriggers": [
-    "userAction"
-  ],
+  "loadTriggers": ["userAction"],
   "chrome": {
     "nativeStyle": "native",
-    "supportedStyles": [
-      "native"
-    ],
-    "notes": [
-      "Invoked export UI should use its authored preview/export chrome."
-    ]
+    "supportedStyles": ["native"],
+    "notes": ["Share Kit owns its local preview and settings dialog."]
   },
   "hub": {
     "category": "media",
-    "shortDescription": "Export a reviewed local PNG from a post share action.",
-    "rail": {
-      "supported": false,
-      "defaultPinned": false
-    },
-    "presets": [
-      "balanced",
-      "full"
-    ],
-    "dataNotes": [
-      "Renders selected post content locally after user action."
-    ],
-    "localStorageNotes": [
-      "Uses appearance settings for export styling."
-    ],
-    "privacyLabels": [
-      "local-only"
-    ]
+    "shortDescription": "Review and export a local PNG from a post share action.",
+    "rail": { "supported": false, "defaultPinned": false },
+    "presets": ["balanced", "full"],
+    "dataNotes": ["Renders selected post content locally after explicit user action."],
+    "localStorageNotes": ["Preserves existing Tweet PNG visual/profile settings and Share Kit enablement."],
+    "privacyLabels": ["local-only"]
   },
   "privacy": {
     "permissionNotes": [],
-    "dataNotes": [
-      "Renders selected post content locally after user action."
-    ],
-    "localStorageNotes": [
-      "Uses appearance settings for export styling."
-    ],
+    "dataNotes": ["Renders selected post content locally after explicit user action."],
+    "localStorageNotes": ["Preserves existing Tweet PNG visual/profile settings and Share Kit enablement."],
     "remoteServices": [],
-    "privacyLabels": [
-      "local-only"
-    ],
+    "privacyLabels": ["local-only"],
     "consentRequired": false
   },
   "package": {
     "assets": [
-      {
-        "id": "tweetPng.icon",
-        "path": "assets/tweet-png-icon.svg",
-        "kind": "icon",
-        "webAccessible": true
-      }
+      { "id": "shareKit.icon", "path": "assets/tweet-png-icon.svg", "kind": "icon", "webAccessible": true },
+      { "id": "shareKit.remistatsStar", "path": "assets/remistats-star.svg", "kind": "image", "webAccessible": true }
     ],
-    "webAccessibleAssets": [
-      "assets/tweet-png-icon.svg"
-    ]
+    "webAccessibleAssets": ["assets/tweet-png-icon.svg", "assets/remistats-star.svg"]
   },
   "review": {
     "status": "reviewed",
-    "reviewedBy": "milxdy-local-app-pilot",
-    "reviewedAt": "2026-07-03",
+    "reviewedBy": "milxdy-first-party-share-kit",
+    "reviewedAt": "2026-07-30",
     "notes": [
-      "First-party pilot fixture converted from src/platform/app-sdk/first-party-apps.json metadata."
+      "First-party replacement preserving the stable tweetPng package and setting IDs."
     ]
   }
 }
