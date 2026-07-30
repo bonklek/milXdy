@@ -762,9 +762,6 @@ function injectTweetPngStyles(): void {
   style.id = "milxdy-tweet-png-menu-styles";
   style.textContent = `
     [data-milxdy-tweet-png-menu-item="true"] {
-      align-items: center !important;
-      display: flex !important;
-      gap: 12px !important;
       transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
     }
     [data-milxdy-tweet-png-menu-item="true"]:hover,
