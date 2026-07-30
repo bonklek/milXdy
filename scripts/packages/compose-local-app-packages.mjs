@@ -939,6 +939,21 @@ function verifyExternalHandoffs(id, manifest, errors) {
     if (handoff.modes !== undefined && (!Array.isArray(handoff.modes) || handoff.modes.length === 0 || handoff.modes.some((mode) => mode !== "captioned" && mode !== "randomMeme"))) {
       errors.push(`${id}: externalHandoff modes must be reviewed captioned or randomMeme modes`);
     }
+    if (handoff.captionSource !== undefined && handoff.captionSource !== "composerDraft" && handoff.captionSource !== "packageFields") {
+      errors.push(`${id}: externalHandoff captionSource must be composerDraft or packageFields`);
+    }
+    if (handoff.captionMaxLength !== undefined && (!Number.isInteger(handoff.captionMaxLength) || handoff.captionMaxLength < 1 || handoff.captionMaxLength > 10_000)) {
+      errors.push(`${id}: externalHandoff captionMaxLength must be an integer from 1 through 10000`);
+    }
+    if (handoff.captionMaxLength !== undefined && handoff.captionSource !== "packageFields") {
+      errors.push(`${id}: externalHandoff captionMaxLength requires captionSource packageFields`);
+    }
+    if (handoff.captionSource === "packageFields") {
+      const disclosures = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || [])].join(" ").toLowerCase();
+      if (!/explicit/.test(disclosures) || !/(caption|top text|bottom text)/.test(disclosures)) {
+        errors.push(`${id}: package-field captions require an explicit caption-transfer privacy disclosure`);
+      }
+    }
     if (!(manifest.permissions?.hosts || []).includes(adapter.host)) {
       errors.push(`${id}: externalHandoff ${handoff.id} must declare host permission ${adapter.host}`);
     }

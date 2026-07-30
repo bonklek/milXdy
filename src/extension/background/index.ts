@@ -52,7 +52,7 @@ import {
 import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
-import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
+import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -397,24 +397,28 @@ function isExternalHandoffMessage(message: unknown): message is ExternalHandoffM
 
 async function launchExternalHandoff(message: ExternalHandoffMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
-  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string; modes?: string[] }> }>)
+  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string; modes?: string[]; captionMaxLength?: number }> }>)
     .find((candidate) => candidate.id === message.appId);
   const declaration = app?.externalHandoffs?.find((candidate) => candidate.id === message.handoffId);
   if (!declaration || declaration.adapter !== message.adapter || declaration.target !== message.target) {
     return { ok: false, error: "The requested handoff is not declared by this package." };
   }
   if (!(declaration.modes || ["captioned"]).includes(message.mode)) return { ok: false, error: "The requested handoff mode is not declared by this package." };
+  const captions = validateExternalHandoffCaptions(message, declaration.captionMaxLength);
+  if (!captions) return { ok: false, error: "The requested captions are invalid for this handoff." };
   const targetUrl = externalHandoffUrl(message.adapter, message.target);
   if (!targetUrl) return { ok: false, error: "Unsupported maker destination." };
+  let generatedMakerTabId: number | null = null;
   try {
     const tab = await chrome.tabs.create({ url: targetUrl.href, active: false });
     if (typeof tab.id !== "number") return { ok: false, error: "The maker tab could not be created." };
+    generatedMakerTabId = tab.id;
     await waitForExternalHandoffTab(tab.id, targetUrl.href);
     const results = await chrome.scripting.executeScript({
       target: { tabId: tab.id },
       world: "MAIN",
       func: renderRemiliaMakerImage,
-      args: [message.topText, message.bottomText, message.mode],
+      args: [captions.topText, captions.bottomText, message.mode],
     });
     const result = results[0]?.result as { ok?: boolean; error?: string; imageDataUrl?: string } | undefined;
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
@@ -422,6 +426,8 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     return { ok: true, imageDataUrl: result.imageDataUrl };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } finally {
+    if (generatedMakerTabId !== null) await chrome.tabs.remove(generatedMakerTabId).catch(() => undefined);
   }
 }
 

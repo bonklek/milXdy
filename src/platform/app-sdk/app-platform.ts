@@ -63,6 +63,10 @@ export type AppExternalHandoff = {
   target: string;
   /** Explicit reviewed behavior choices; packages cannot pass arbitrary adapter options. */
   modes?: Array<"captioned" | "randomMeme">;
+  /** The reviewed source of caption text; omitted declarations use the X draft. */
+  captionSource?: "composerDraft" | "packageFields";
+  /** Per-field bound for explicit package caption fields (1–10,000). */
+  captionMaxLength?: number;
 };
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
@@ -303,10 +307,14 @@ export type MilxdyComposerActionContext = {
   openNativeDrafts: () => void;
   /**
    * Host-filtered declarations. A package may start one only from an explicit
-   * click; the host reads, splits, and transfers the X draft itself.
+   * click. A declaration chooses either the host-owned active-composer split
+   * or bounded, explicit package caption fields; packages never receive X text.
    */
   externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
-  launchExternalHandoff: (id: string, options?: { mode?: "captioned" | "randomMeme" }) => Promise<{ ok: boolean; error?: string }>;
+  launchExternalHandoff: (id: string, options?: {
+    mode?: "captioned" | "randomMeme";
+    captions?: { topText: string; bottomText: string };
+  }) => Promise<{ ok: boolean; error?: string }>;
 };
 
 /**

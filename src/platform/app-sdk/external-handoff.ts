@@ -37,6 +37,19 @@ export function externalHandoffUrl(adapter: ExternalHandoffAdapter, target: Exte
   return new URL(`/${target}`, REMILIA_MAKER_HANDOFF_ORIGIN);
 }
 
+/** Accept literal user-entered fields without rewriting their text. */
+export function validateExternalHandoffCaptions(
+  captions: unknown,
+  maxLength = MAX_EXTERNAL_HANDOFF_TEXT_LENGTH,
+): SplitExternalHandoffText | null {
+  if (!captions || typeof captions !== "object") return null;
+  const { topText, bottomText } = captions as Record<string, unknown>;
+  if (typeof topText !== "string" || typeof bottomText !== "string") return null;
+  if (!Number.isInteger(maxLength) || maxLength < 1 || maxLength > MAX_EXTERNAL_HANDOFF_TEXT_LENGTH) return null;
+  if (topText.length > maxLength || bottomText.length > maxLength) return null;
+  return { topText, bottomText };
+}
+
 /**
  * Splits only on author-provided line boundaries. One newline is naturally the
  * split; with several, select the boundary nearest the text midpoint so meme

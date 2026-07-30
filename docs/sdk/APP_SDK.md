@@ -424,6 +424,16 @@ explicit click. The package never receives image bytes or X/maker DOM access;
 there is no raw upload API, no attachment to another composer, and no post is
 sent automatically.
 
+For a handoff that declares `captionSource: "packageFields"`, the package may
+instead call `launchExternalHandoff(id, { captions: { topText, bottomText } })`
+from its explicit control. Each literal field is bounded by the declared
+`captionMaxLength` (1–10,000) and is transferred exactly as entered to the
+named reviewed maker; the host does not read the X composer for that call. The
+package must disclose that explicit caption transfer in its privacy metadata.
+The host captures and validates the maker result, then closes only the inactive
+maker tab it generated—on success, failure, or timeout. Packages still receive
+no X text, remote DOM, tab identity, raw URL, or image bytes.
+
 #### Bounded local reply lists and composer companions
 
 Packages may declare a `textList` Apps & Features setting backed by a declared
@@ -439,13 +449,20 @@ panel or arbitrary toolbar insertion API.
 
 An external handoff can declare `modes: ["captioned", "randomMeme"]`. A
 package can request only one of its declared modes from an explicit click.
-`captioned` requires a non-empty X draft; `randomMeme` may produce an
-uncaptioned result. No mode grants package DOM, draft, image, tab, or posting
-access.
+`captioned` requires non-empty host-split draft text or a non-empty explicit
+package-field caption; `randomMeme` may produce an uncaptioned result. No mode
+grants package DOM, draft, image, tab, or posting access.
 
 ```json
 "externalHandoffs": [
-  { "id": "milady-maker", "label": "Milady Maker", "adapter": "remilia-maker", "target": "milady" }
+  {
+    "id": "milady-maker",
+    "label": "Milady Maker",
+    "adapter": "remilia-maker",
+    "target": "milady",
+    "captionSource": "packageFields",
+    "captionMaxLength": 280
+  }
 ]
 ```
 
