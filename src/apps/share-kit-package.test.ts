@@ -5,6 +5,7 @@ import {
   extractTweetPngMedia,
   findTweetPngQuoteElement,
   normalizeVisualTheme,
+  tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
 
@@ -134,5 +135,16 @@ describe("Share Kit package compatibility", () => {
     } as unknown as HTMLElement;
 
     expect(findTweetPngQuoteElement(post, "https://x.com/dnlklr/status/2082893132304392245")).toBe(quoteCard);
+  });
+
+  it("offers an accessible per-image removal control for post and QRT media", () => {
+    expect(tweetPngMediaRemovalKey("post", "https://pbs.twimg.com/media/image.jpg"))
+      .toBe("post:https://pbs.twimg.com/media/image.jpg");
+    expect(tweetPngMediaRemovalKey("quote", "https://pbs.twimg.com/media/image.jpg"))
+      .toBe("quote:https://pbs.twimg.com/media/image.jpg");
+    expect(packageSource).toContain('className = "milxdy-tweet-png-remove-media"');
+    expect(packageSource).toContain('remove.setAttribute("aria-label", `Remove ${label} image ${item.index + 1}`)');
+    expect(packageSource).toContain("excludedMedia.add(key)");
+    expect(packageSource).toContain('updatePreview("Image removed from this PNG.")');
   });
 });
