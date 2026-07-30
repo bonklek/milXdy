@@ -206,14 +206,28 @@ function normalizeTweetPngInlineText(value) {
 function findTweetPngQuoteElement(tweet, statusUrl) {
   const explicit = tweet.querySelector('[data-testid="quoteTweet"]');
   if (explicit) return explicit;
+  const textNodes = Array.from(tweet.querySelectorAll('[data-testid="tweetText"]'));
+  const nestedQuoteText = textNodes.find((node, index) => index > 0 && tweetPngElementBelongsToPost(node, tweet));
+  const textCard = nestedQuoteText?.closest('div[role="link"], a[href*="/status/"]') || null;
+  if (textCard?.querySelector('[data-testid="User-Name"]')) return textCard;
+  const structuredCard = Array.from(tweet.querySelectorAll('div[role="link"]')).find((candidate) => {
+    if (!tweetPngElementBelongsToPost(candidate, tweet)) return false;
+    if (!candidate.querySelector('[data-testid="User-Name"]')) return false;
+    return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], video[poster]'));
+  });
+  if (structuredCard) return structuredCard;
   const normalizedStatus = normalizeTweetStatusHref(statusUrl || "");
-  const candidates = Array.from(tweet.querySelectorAll('a[href*="/status/"], div[role="link"]'));
+  const candidates = Array.from(tweet.querySelectorAll('a[href*="/status/"]'));
   return candidates.find((candidate) => {
     const href = candidate instanceof HTMLAnchorElement ? normalizeTweetStatusHref(candidate.href) : "";
     if (href && normalizedStatus && href === normalizedStatus) return false;
-    if (candidate.closest('article[data-testid="tweet"]') !== tweet) return false;
+    if (!tweetPngElementBelongsToPost(candidate, tweet)) return false;
     return Boolean(candidate.querySelector('[data-testid="tweetText"], [data-testid="tweetPhoto"] img, [data-testid="videoPlayer"], video[poster]'));
   }) || null;
+}
+function tweetPngElementBelongsToPost(element, tweet) {
+  const article = element.closest('article[data-testid="tweet"]');
+  return !tweet.matches('article[data-testid="tweet"]') || article === tweet;
 }
 function extractTweetPngMedia(root, include = () => true) {
   const media = /* @__PURE__ */ new Map();
@@ -1068,6 +1082,7 @@ export {
   disable,
   extractTweetPngCashtag,
   extractTweetPngMedia,
+  findTweetPngQuoteElement,
   id,
   normalizeVisualTheme,
   onContextualPostAction,
