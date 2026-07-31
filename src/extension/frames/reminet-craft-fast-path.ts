@@ -54,31 +54,29 @@
 
   function dragToSlot(item: HTMLElement, destination: HTMLElement | null): void {
     if (!destination || !isEmptySlot(destination)) return;
-    // React DnD owns the actual selection and validation. These local DOM
-    // events drive its existing drag/drop path; they neither mutate inventory
-    // themselves nor contact the craft endpoint.
-    const dataTransfer = new DataTransfer();
-    // The site registers a single drop target that chooses the compatible
-    // crafting slot from React DnD's client offset.  A synthetic event defaults
-    // to (0, 0), which is outside every target and therefore correctly results
-    // in no assignment.  Use the centre of the exact native slot instead.
+    // Remilia uses React DnD's TouchBackend with mouse support, rather than
+    // the HTML5 backend. Drive that existing local gesture path so the site
+    // retains ownership of compatibility checks and slot state.
+    const sourceBounds = item.getBoundingClientRect();
     const bounds = destination.getBoundingClientRect();
+    const sourceX = sourceBounds.left + sourceBounds.width / 2;
+    const sourceY = sourceBounds.top + sourceBounds.height / 2;
     const clientX = bounds.left + bounds.width / 2;
     const clientY = bounds.top + bounds.height / 2;
-    const event = (type: string, target: HTMLElement) => target.dispatchEvent(new DragEvent(type, {
+    const event = (type: "mousedown" | "mousemove" | "mouseup", target: HTMLElement, x: number, y: number, buttons: number) => target.dispatchEvent(new MouseEvent(type, {
       bubbles: true,
       cancelable: true,
-      dataTransfer,
-      clientX,
-      clientY,
-      screenX: window.screenX + clientX,
-      screenY: window.screenY + clientY,
+      view: window,
+      button: 0,
+      buttons,
+      clientX: x,
+      clientY: y,
+      screenX: window.screenX + x,
+      screenY: window.screenY + y,
     }));
-    event("dragstart", item);
-    event("dragenter", destination);
-    event("dragover", destination);
-    event("drop", destination);
-    event("dragend", item);
+    event("mousedown", item, sourceX, sourceY, 1);
+    event("mousemove", destination, clientX, clientY, 1);
+    event("mouseup", destination, clientX, clientY, 0);
   }
 
   function placeCraftingItem(item: HTMLElement): void {
