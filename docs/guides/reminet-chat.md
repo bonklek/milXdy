@@ -21,4 +21,4 @@ RemiNet Chat provides a docked RemiliaNET chat client and an X Messages integrat
 
 RemiNet Chat uses the browser RemiliaNET session and connects to RemiliaNET APIs and WebSocket live updates. Media and avatar previews are limited to allowlisted HTTPS RemiliaNET media and pfp.remilia.net URLs.
 
-On RemiliaNET global chat, hover or keyboard-focus **Last read** to reveal its dismissal control. Dismissing it removes only that marker for the current page document; it does not hide messages, change read history, send a request, or persist across a page navigation/reload.
+On RemiliaNET global chat, hover or keyboard-focus **Last read** or **Jump to present** to reveal its dismissal control. Dismissing either removes only that marker kind for the current page document; it does not hide messages, change read history, send a request, or persist across a page navigation/reload.
