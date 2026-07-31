@@ -14,6 +14,7 @@ import {
 describe("Share Kit package compatibility", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
   const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
+  const packageIcon = readFileSync("examples/packages/first-party-replacements/tweetPng/assets/tweet-png-icon.svg", "utf8");
   const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
@@ -62,6 +63,13 @@ describe("Share Kit package compatibility", () => {
     expect(JSON.parse(packageManifest).contextualPostActions).toEqual([
       expect.objectContaining({ id: "reviewPng", label: "Share as PNG" }),
     ]);
+  });
+
+  it("uses the standard picture glyph from the legacy share action", () => {
+    expect(packageIcon).toContain('viewBox="0 0 24 24"');
+    expect(packageIcon).toContain("M6.75 16.75 10.2 13.3");
+    expect(packageIcon).toContain('<circle cx="8.4" cy="8.4"');
+    expect(packageIcon).not.toContain('<rect width="64"');
   });
 
   it("keeps every text baseline that fits before the portrait cap", () => {

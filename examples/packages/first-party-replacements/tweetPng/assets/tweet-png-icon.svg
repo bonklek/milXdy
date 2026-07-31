@@ -1,6 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Tweet PNG">
-  <rect width="64" height="64" rx="10" fill="#111827"/>
-  <path d="M16 18h32v22H16z" fill="#f9fafb"/>
-  <path d="M22 26h20M22 32h12" stroke="#111827" stroke-width="4" stroke-linecap="round"/>
-  <path d="M40 38l8 8H26l8-10 4 5z" fill="#8b5cf6"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" role="img" aria-label="Picture">
+  <style>
+    :root { color: #0f1419; }
+    @media (prefers-color-scheme: dark) { :root { color: #f2f2f2; } }
+  </style>
+  <path d="M5 3.75h14A1.25 1.25 0 0 1 20.25 5v14A1.25 1.25 0 0 1 19 20.25H5A1.25 1.25 0 0 1 3.75 19V5A1.25 1.25 0 0 1 5 3.75Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+  <path d="M6.75 16.75 10.2 13.3a1 1 0 0 1 1.42 0l1.13 1.13 2.23-2.23a1 1 0 0 1 1.42 0l.85.85" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/>
+  <circle cx="8.4" cy="8.4" r="1.35" fill="currentColor"/>
 </svg>
