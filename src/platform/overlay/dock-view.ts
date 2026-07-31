@@ -13,12 +13,19 @@ import type {
 
 const HOST_SHORTCUT_SELECTOR = '[data-testid="GrokDrawerHeader"], [data-testid="chat-drawer-main"]';
 const HOST_SHORTCUT_VISUAL_GAP = 12;
-const RAIL_DOWN_INDICATOR_FOOTPRINT = 18;
-const HOST_SHORTCUT_GAP = HOST_SHORTCUT_VISUAL_GAP + RAIL_DOWN_INDICATOR_FOOTPRINT;
+const STATIC_DOCK_ITEM_IDS = new Set(["milxdyHideAll", "milxdyHub"]);
+const REEL_ITEM_STEP = 52;
+const REEL_FIXED_HEIGHT = 120;
+const REEL_MOTION_MS = 260;
 
 export class OverlayDockDomView implements DockViewPort {
   #root: HTMLElement | null = null;
   #rail: HTMLElement | null = null;
+  #staticItems: HTMLElement | null = null;
+  #reelViewport: HTMLElement | null = null;
+  #reelTrack: HTMLElement | null = null;
+  #reelUp: HTMLButtonElement | null = null;
+  #reelDown: HTMLButtonElement | null = null;
   #sideControls: HTMLElement | null = null;
   #snapshot: DockSnapshot | null = null;
   #actions: DockViewActions | null = null;
@@ -26,6 +33,7 @@ export class OverlayDockDomView implements DockViewPort {
   #mediaViewerObserver: MutationObserver | null = null;
   #mediaViewerCheckQueued = false;
   #railIndicatorFrame = 0;
+  #reelMotionTimer = 0;
 
   mount(): void {
     if (this.#root?.isConnected) return;
@@ -53,21 +61,16 @@ export class OverlayDockDomView implements DockViewPort {
     root.dataset.settingsOpen = "false";
     this.#updateSideControls(snapshot.side);
     const items = visibleItems(snapshot.order, snapshot.items, snapshot.hiddenItems);
+    const staticItems = items.filter((item) => isStaticDockItem(item.id));
+    const reelItems = items.filter((item) => !isStaticDockItem(item.id));
     const renderedItemIds = new Set(items.map((item) => item.id));
     for (const button of this.#itemButtons()) {
       const itemId = button.dataset.itemId;
       if (!itemId || !renderedItemIds.has(itemId)) button.remove();
     }
-    let nextNode: ChildNode | null = rail.firstChild;
-    for (const item of items) {
-      const button = this.#findItemButton(item.id) || this.#createItemButton(item.id);
-      updateDockItemButton(button, item);
-      if (button !== nextNode) rail.insertBefore(button, nextNode);
-      nextNode = button.nextSibling;
-    }
-    for (const extra of Array.from(rail.querySelectorAll<HTMLElement>(":scope > :not(.milxdy-overlay-dock-item)"))) {
-      extra.remove();
-    }
+    this.#renderItems(this.#staticItems, staticItems);
+    this.#renderItems(this.#reelTrack, reelItems);
+    this.#updateReelLayout();
     this.#scheduleRailIndicators();
     this.#scheduleHostLayoutCheck();
   }
@@ -89,12 +92,20 @@ export class OverlayDockDomView implements DockViewPort {
     document.removeEventListener("fullscreenchange", this.#scheduleHostLayoutCheck);
     window.removeEventListener("resize", this.#scheduleHostLayoutCheck);
     window.removeEventListener("resize", this.#scheduleRailIndicators);
-    this.#rail?.removeEventListener("scroll", this.#scheduleRailIndicators);
+    this.#reelViewport?.removeEventListener("scroll", this.#scheduleRailIndicators);
+    this.#reelViewport?.removeEventListener("wheel", this.#handleReelWheel);
     if (this.#railIndicatorFrame) cancelAnimationFrame(this.#railIndicatorFrame);
+    if (this.#reelMotionTimer) window.clearTimeout(this.#reelMotionTimer);
     this.#railIndicatorFrame = 0;
+    this.#reelMotionTimer = 0;
     this.#root?.remove();
     this.#root = null;
     this.#rail = null;
+    this.#staticItems = null;
+    this.#reelViewport = null;
+    this.#reelTrack = null;
+    this.#reelUp = null;
+    this.#reelDown = null;
     this.#sideControls = null;
     this.#snapshot = null;
     this.#actions = null;
@@ -139,6 +150,7 @@ export class OverlayDockDomView implements DockViewPort {
     if (!root || !rail) return;
     if (root.dataset.side !== "right") {
       rail.style.removeProperty("--milxdy-dock-host-shortcut-max-height");
+      this.#updateReelLayout();
       return;
     }
     const railRect = rail.getBoundingClientRect();
@@ -149,10 +161,23 @@ export class OverlayDockDomView implements DockViewPort {
         return rect.right > railRect.left && rect.left < railRect.right;
       })
       .map((shortcut) => shortcut.getBoundingClientRect().top);
-    const maxHeight = calculateHostShortcutRailMaxHeight(railRect.top, shortcutTops, HOST_SHORTCUT_GAP);
+    const maxHeight = calculateHostShortcutRailMaxHeight(railRect.top, shortcutTops, HOST_SHORTCUT_VISUAL_GAP);
     if (maxHeight === null) rail.style.removeProperty("--milxdy-dock-host-shortcut-max-height");
     else rail.style.setProperty("--milxdy-dock-host-shortcut-max-height", `${maxHeight}px`);
+    this.#updateReelLayout();
     this.#scheduleRailIndicators();
+  }
+
+  #updateReelLayout(): void {
+    const rail = this.#rail;
+    const viewport = this.#reelViewport;
+    const track = this.#reelTrack;
+    if (!rail || !viewport || !track) return;
+    const maxRailHeight = Number.parseFloat(getComputedStyle(rail).maxHeight);
+    const viewportHeight = calculateReelViewportHeight(maxRailHeight, track.childElementCount);
+    viewport.style.height = `${viewportHeight}px`;
+    const maxScroll = Math.max(0, track.scrollHeight - viewportHeight);
+    if (viewport.scrollTop > maxScroll) viewport.scrollTop = Math.floor(maxScroll / REEL_ITEM_STEP) * REEL_ITEM_STEP;
   }
 
   #ensureRail(): void {
@@ -164,13 +189,48 @@ export class OverlayDockDomView implements DockViewPort {
       rail.className = "milxdy-overlay-dock-rail";
       root.prepend(rail);
     }
+    let staticItems = rail.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-static");
+    let reel = rail.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-reel");
+    if (!staticItems || !reel) {
+      staticItems = document.createElement("div");
+      staticItems.className = "milxdy-overlay-dock-static";
+      reel = document.createElement("div");
+      reel.className = "milxdy-overlay-dock-reel";
+      rail.replaceChildren(staticItems, reel);
+    }
+    let reelUp = reel.querySelector<HTMLButtonElement>(":scope > .milxdy-overlay-dock-reel-control[data-direction=\"up\"]");
+    let viewport = reel.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-reel-viewport");
+    let reelDown = reel.querySelector<HTMLButtonElement>(":scope > .milxdy-overlay-dock-reel-control[data-direction=\"down\"]");
+    if (!reelUp || !viewport || !reelDown) {
+      reelUp = createReelControl("up", () => this.#moveReel(-1));
+      viewport = document.createElement("div");
+      viewport.className = "milxdy-overlay-dock-reel-viewport";
+      viewport.setAttribute("aria-label", "milXdy apps");
+      reelDown = createReelControl("down", () => this.#moveReel(1));
+      reel.replaceChildren(reelUp, viewport, reelDown);
+    }
+    let track = viewport.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-reel-track");
+    if (!track) {
+      track = document.createElement("div");
+      track.className = "milxdy-overlay-dock-reel-track";
+      viewport.replaceChildren(track);
+    }
     this.#ensureSideControls();
     if (this.#rail === rail) return;
     this.#rail = rail;
-    rail.addEventListener("scroll", this.#scheduleRailIndicators, { passive: true });
+    this.#staticItems = staticItems;
+    this.#reelViewport = viewport;
+    this.#reelTrack = track;
+    this.#reelUp = reelUp;
+    this.#reelDown = reelDown;
+    viewport.addEventListener("scroll", this.#scheduleRailIndicators, { passive: true });
+    viewport.addEventListener("wheel", this.#handleReelWheel, { passive: false });
     window.addEventListener("resize", this.#scheduleRailIndicators, { passive: true });
     if (typeof ResizeObserver === "function") {
-      this.#resizeObserver = new ResizeObserver(this.#scheduleRailIndicators);
+      this.#resizeObserver = new ResizeObserver(() => {
+        this.#updateReelLayout();
+        this.#scheduleRailIndicators();
+      });
       this.#resizeObserver.observe(rail);
     }
   }
@@ -211,18 +271,70 @@ export class OverlayDockDomView implements DockViewPort {
     this.#railIndicatorFrame = requestAnimationFrame(() => {
       this.#railIndicatorFrame = 0;
       const root = this.#root;
-      const rail = this.#rail;
-      if (!root || !rail) return;
+      const viewport = this.#reelViewport;
+      if (!root || !viewport) return;
       const tolerance = 2;
-      const canScroll = rail.scrollHeight > rail.clientHeight + tolerance;
-      root.dataset.canScrollUp = String(canScroll && rail.scrollTop > tolerance);
-      root.dataset.canScrollDown = String(canScroll && rail.scrollTop + rail.clientHeight < rail.scrollHeight - tolerance);
+      const canScroll = viewport.scrollHeight > viewport.clientHeight + tolerance;
+      const canScrollUp = canScroll && viewport.scrollTop > tolerance;
+      const canScrollDown = canScroll && viewport.scrollTop + viewport.clientHeight < viewport.scrollHeight - tolerance;
+      root.dataset.canScrollUp = String(canScrollUp);
+      root.dataset.canScrollDown = String(canScrollDown);
+      if (this.#reelUp) this.#reelUp.disabled = !canScrollUp;
+      if (this.#reelDown) this.#reelDown.disabled = !canScrollDown;
     });
   };
 
+  readonly #handleReelWheel = (event: WheelEvent): void => {
+    if (Math.abs(event.deltaY) < 1) return;
+    if (this.#reelMotionTimer) {
+      event.preventDefault();
+      return;
+    }
+    const direction = event.deltaY > 0 ? 1 : -1;
+    if (this.#moveReel(direction)) event.preventDefault();
+  };
+
+  #moveReel(direction: -1 | 1): boolean {
+    const viewport = this.#reelViewport;
+    const track = this.#reelTrack;
+    if (!viewport || !track || this.#reelMotionTimer) return false;
+    const currentStep = Math.round(viewport.scrollTop / REEL_ITEM_STEP);
+    const maxStep = Math.max(0, Math.round((track.scrollHeight - viewport.clientHeight) / REEL_ITEM_STEP));
+    const nextStep = Math.max(0, Math.min(maxStep, currentStep + direction));
+    if (nextStep === currentStep) return false;
+    const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+    track.dataset.motion = direction > 0 ? "down" : "up";
+    viewport.scrollTo({ top: nextStep * REEL_ITEM_STEP, behavior: reducedMotion ? "auto" : "smooth" });
+    this.#scheduleRailIndicators();
+    if (reducedMotion) {
+      delete track.dataset.motion;
+      return true;
+    }
+    this.#reelMotionTimer = window.setTimeout(() => {
+      this.#reelMotionTimer = 0;
+      viewport.scrollTop = nextStep * REEL_ITEM_STEP;
+      delete track.dataset.motion;
+      this.#scheduleRailIndicators();
+    }, REEL_MOTION_MS);
+    return true;
+  }
+
+  #renderItems(container: HTMLElement | null, items: OverlayDockItem[]): void {
+    if (!container) return;
+    let nextNode: ChildNode | null = container.firstChild;
+    for (const [index, item] of items.entries()) {
+      const button = this.#findItemButton(item.id) || this.#createItemButton(item.id);
+      updateDockItemButton(button, item);
+      if (container === this.#reelTrack) button.style.setProperty("--milxdy-reel-delay", `${Math.min(index, 7) * 9}ms`);
+      else button.style.removeProperty("--milxdy-reel-delay");
+      if (button !== nextNode) container.insertBefore(button, nextNode);
+      nextNode = button.nextSibling;
+    }
+  }
+
   #itemButtons(): HTMLButtonElement[] {
     return this.#rail
-      ? Array.from(this.#rail.querySelectorAll<HTMLButtonElement>(":scope > .milxdy-overlay-dock-item[data-item-id]"))
+      ? Array.from(this.#rail.querySelectorAll<HTMLButtonElement>(".milxdy-overlay-dock-item[data-item-id]"))
       : [];
   }
 
@@ -253,14 +365,34 @@ export class OverlayDockDomView implements DockViewPort {
 
 }
 
+function createReelControl(direction: "up" | "down", onActivate: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "milxdy-overlay-dock-reel-control";
+  button.dataset.direction = direction;
+  button.setAttribute("aria-label", direction === "up" ? "Previous apps" : "More apps");
+  button.addEventListener("click", onActivate);
+  return button;
+}
+
 export function calculateHostShortcutRailMaxHeight(
   railTop: number,
   shortcutTops: number[],
-  gap = HOST_SHORTCUT_GAP,
+  gap = HOST_SHORTCUT_VISUAL_GAP,
 ): number | null {
   const visibleTops = shortcutTops.filter(Number.isFinite);
   if (!visibleTops.length || !Number.isFinite(railTop)) return null;
   return Math.max(0, Math.floor(Math.min(...visibleTops) - gap - railTop));
+}
+
+export function calculateReelViewportHeight(maxRailHeight: number, itemCount: number): number {
+  if (!Number.isFinite(maxRailHeight) || itemCount <= 0) return 0;
+  const slotCount = Math.max(0, Math.min(itemCount, Math.floor((maxRailHeight - REEL_FIXED_HEIGHT) / REEL_ITEM_STEP)));
+  return slotCount > 0 ? slotCount * REEL_ITEM_STEP - 4 : 0;
+}
+
+export function isStaticDockItem(id: string): boolean {
+  return STATIC_DOCK_ITEM_IDS.has(id);
 }
 
 function isHostMediaViewerOpen(): boolean {
