@@ -5,6 +5,7 @@ const OIDC_CLIENT_ID = "profile";
 const OIDC_REDIRECT_URI = `${BASE_URL}/`;
 const OIDC_SCOPE = "openid profile email offline_access";
 const AUTH_COOKIE_NAME = "authToken";
+const SESSION_REFRESH_MARKER = "milxdy_session_refresh";
 const AUTH_COOKIE_TTL_SECONDS = 900;
 const ACCESS_TOKEN_KEY = "beetol.accessToken";
 const REFRESH_TOKEN_KEY = "beetol.refreshToken";
@@ -144,7 +145,9 @@ export async function refreshRemiliaBrowserSessionTab(
   const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1000, Number(options.timeoutMs)) : 12000;
   let tabId = 0;
   try {
-    const tab = await chrome.tabs.create({ url: BASE_URL, active: false });
+    const refreshUrl = new URL(BASE_URL);
+    refreshUrl.searchParams.set(SESSION_REFRESH_MARKER, "1");
+    const tab = await chrome.tabs.create({ url: refreshUrl.toString(), active: false });
     tabId = typeof tab.id === "number" ? tab.id : 0;
     if (!tabId) return { ok: false, error: "TAB_CREATE_FAILED" };
     await waitForTabLoad(tabId, timeoutMs);
@@ -153,6 +156,16 @@ export async function refreshRemiliaBrowserSessionTab(
   }
 
   return adoptRemiliaBrowserSession(sessionPath);
+}
+
+export function isRemiliaSessionRefreshUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.origin === BASE_URL && url.searchParams.get(SESSION_REFRESH_MARKER) === "1";
+  } catch {
+    return false;
+  }
 }
 
 export async function adoptRemiliaBrowserSession(

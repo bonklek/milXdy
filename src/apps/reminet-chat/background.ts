@@ -6,6 +6,7 @@ import {
   renewRemiliaAuth,
   adoptRemiliaBrowserSession,
   isRemiliaDisconnected,
+  isRemiliaSessionRefreshUrl,
 } from "../../platform/auth/remilia-auth";
 import { resolveSocketAuthCredential } from "./socket-auth-policy";
 
@@ -103,7 +104,8 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 function registerSiteSocketBridge(port: chrome.runtime.Port): void {
-  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"])) {
+  const sourceUrl = port.sender?.url || port.sender?.tab?.url;
+  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"]) || isRemiliaSessionRefreshUrl(sourceUrl)) {
     port.disconnect();
     return;
   }
