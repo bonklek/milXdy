@@ -143,6 +143,20 @@ def validate_manifest(
         raise BundleValidationError(f"{template_id}: all four expansionZones are required.")
     for zone, rect in zones.items():
         validate_rect(rect, f"{template_id}.expansionZones.{zone}")
+    alpha_registration = geometry.get("alphaRegistration")
+    if alpha_registration is not None:
+        if not isinstance(alpha_registration, dict) or set(alpha_registration) != {
+            "centroid",
+            "baseline",
+        }:
+            raise BundleValidationError(
+                f"{template_id}: alphaRegistration must contain centroid and baseline."
+            )
+        validate_point(alpha_registration["centroid"], f"{template_id}.alphaRegistration.centroid")
+        validate_unit_number(
+            alpha_registration["baseline"],
+            f"{template_id}.alphaRegistration.baseline",
+        )
     thresholds = manifest.get("thresholds")
     required_thresholds = {
         "minimumVisibleAlphaPixels",
@@ -188,6 +202,26 @@ def validate_motion_profile(profile: dict[str, Any]) -> None:
             raise BundleValidationError(f"motion profile row {index} has an invalid loop order.")
         if not isinstance(row.get("landmarkPolicy"), dict):
             raise BundleValidationError(f"motion profile row {index} lacks landmark policy.")
+        qa_policy = row.get("qaPolicy")
+        if not isinstance(qa_policy, dict):
+            raise BundleValidationError(f"motion profile row {index} lacks QA policy.")
+        if qa_policy.get("baselineMode") not in {"locked", "may-rise"}:
+            raise BundleValidationError(f"motion profile row {index} has an invalid baseline QA mode.")
+        if qa_policy.get("centroidMode") not in {"registered", "continuity-only"}:
+            raise BundleValidationError(f"motion profile row {index} has an invalid centroid QA mode.")
+        if qa_policy.get("scaleMode") not in {"row-median", "dynamic"}:
+            raise BundleValidationError(f"motion profile row {index} has an invalid scale QA mode.")
+        required_regions = qa_policy.get("requiredRegions")
+        if not isinstance(required_regions, list) or not set(required_regions) <= {
+            "head-core",
+            "torso-core",
+            "lower-body-core",
+            "foot-contact",
+        }:
+            raise BundleValidationError(f"motion profile row {index} has invalid required regions.")
+    reserved = atlas.get("reservedCells")
+    if reserved != [{"row": 0, "column": 6, "purpose": "neutral-look-fallback"}]:
+        raise BundleValidationError("motion profile must declare the Codex v2 neutral-look fallback cell.")
     cardinals = profile.get("cardinalLookAnchors")
     if [item.get("direction") for item in cardinals or []] != ["000", "090", "180", "270"]:
         raise BundleValidationError("motion profile must declare the four fixed cardinal anchors.")

@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "status": "approved",
+  "reviewedAt": "2026-07-30T00:00:00Z",
+  "reviewer": "Codex implementation task #190",
+  "reviewMethod": "Separate visual inspection of the full 11-row contact sheet and labeled 16-direction sheet after deterministic QA.",
+  "source": {
+    "repository": "maintainer-local read-only remilia-pets snapshot",
+    "license": "Viral Public License",
+    "licenseSha256": "0ed736f8bdf8ecb09df95efd2077841a7db9f8363257b028b8fbe633ece7ef4c",
+    "petManifest": "pets/mildred/pet.json",
+    "petManifestSha256": "5596a4a346722e89ff8ee64803b35b6602c7180c4978107e711b0d3b99aa348b",
+    "atlas": "pets/mildred/spritesheet.webp",
+    "atlasSha256": "c8e9ba02dc357faeff458e0eebb4b5867b26f908cab86e838b98fa2295566b6f",
+    "contactSheet": "previews/mildred-contact-sheet.png",
+    "contactSheetSha256": "c6a4198b2be0a94e179493d8845f958845c85c1d2846b52aedae6bf91a224516",
+    "directionSheet": "previews/mildred-look-directions.png",
+    "directionSheetSha256": "ba3f3412fd428e1aa66df4e74babcfc96924438b8b5e7ea882c6115afac17454"
+  },
+  "checks": {
+    "identity": {
+      "status": "passed",
+      "evidence": "Green hair, oversized blue bow, pointed ears, rosy vampire face, dark cape outfit, and gold-trimmed footwear remain recognizable across all rows."
+    },
+    "expression": {
+      "status": "passed",
+      "evidence": "Idle blink, greeting, jump, disappointment, waiting, working, and review expressions are distinct and character-consistent."
+    },
+    "traitFidelity": {
+      "status": "passed",
+      "evidence": "Large hair/bow and costume silhouettes remain attached, consistently colored, and unclipped through motion and look turns."
+    },
+    "correctGaitAndLookDirections": {
+      "status": "passed",
+      "evidence": "Running rows face opposite screen directions with alternating phases; labeled 000/090/180/270 anchors and intermediate 22.5-degree turns progress clockwise."
+    },
+    "motionQuality": {
+      "status": "passed",
+      "evidence": "The contact sheet shows readable anticipation, action, recovery, and loop-return poses without detached effects or identity-breaking jumps."
+    }
+  },
+  "publicationActionAuthorized": false,
+  "notes": "This approval is evidence for the private integration run only. It does not publish, install, upload, or broaden rights."
+}

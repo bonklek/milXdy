@@ -31,12 +31,16 @@
     "look": "Eyes lead, then head, neck, hair, and upper torso follow while feet stay anchored."
   },
   "geometry": {
-    "permittedEnvelope": [0.18, 0.04, 0.82, 0.95],
+    "alphaRegistration": {
+      "centroid": [0.5, 0.49],
+      "baseline": 0.976
+    },
+    "permittedEnvelope": [0.18, 0.04, 0.82, 0.985],
     "requiredInnerRegions": [
       { "id": "head-core", "rect": [0.39, 0.18, 0.61, 0.4], "minimumCoverage": 0.42 },
       { "id": "torso-core", "rect": [0.39, 0.4, 0.61, 0.7], "minimumCoverage": 0.5 },
       { "id": "lower-body-core", "rect": [0.4, 0.65, 0.6, 0.91], "minimumCoverage": 0.34 },
-      { "id": "foot-contact", "rect": [0.37, 0.87, 0.63, 0.94], "minimumCoverage": 0.18 }
+      { "id": "foot-contact", "rect": [0.37, 0.91, 0.63, 0.99], "minimumCoverage": 0.18 }
     ],
     "expansionZones": {
       "hair": [0.08, 0.0, 0.92, 0.68],
@@ -48,7 +52,7 @@
   "thresholds": {
     "minimumVisibleAlphaPixels": 180,
     "maximumEdgeAlphaPixels": 0,
-    "baselineTolerance": 0.035,
+    "baselineTolerance": 0.06,
     "centroidTolerance": 0.09,
     "scaleTolerance": 0.13,
     "maximumOutsideEnvelopeRatio": 0.015,

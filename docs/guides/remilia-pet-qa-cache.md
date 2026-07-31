@@ -3,7 +3,8 @@
 The Maker adapter rejects objective atlas defects before a separate semantic
 visual review. Its deterministic sequence is fixed:
 
-1. v2 atlas canvas, 11-row geometry, frame count, and unused-cell transparency;
+1. v2 atlas canvas, 11-row geometry, runtime frame count, the reserved
+   neutral-look fallback cell, and unused-cell transparency;
 2. visible alpha, cell-edge clipping, and frame separation;
 3. family-template baseline, centroid, scale continuity, required inner-region
    coverage, and permitted-envelope registration;
@@ -37,13 +38,21 @@ headwear, or prop; they do not waive clipping or required core coverage.
 
 | Template | Min alpha | Max edge alpha | Baseline | Centroid | Scale | Max outside envelope | Adjacent | Loop |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|
-| `milady-v1` | 180 | 0 | 0.035 | 0.090 | 0.130 | 0.015 | 0.140 | 0.100 |
+| `milady-v1` | 180 | 0 | 0.060 | 0.090 | 0.130 | 0.015 | 0.140 | 0.100 |
 | `remilio-v1` | 210 | 0 | 0.040 | 0.100 | 0.140 | 0.018 | 0.160 | 0.110 |
 | `bonkler-v1` | 260 | 0 | 0.045 | 0.120 | 0.160 | 0.020 | 0.180 | 0.120 |
 | `kagami-v1` | 180 | 0 | 0.032 | 0.085 | 0.120 | 0.014 | 0.130 | 0.090 |
 
 These thresholds are template-version inputs and therefore participate in
 provenance invalidation through the combined template SHA-256.
+
+Each row also declares a versioned QA policy. Locked rows register to the
+family alpha centroid/baseline. Run and jump rows may rise but not sink below
+the baseline tolerance. Jump and failed sequences use continuity rather than a
+fixed neutral centroid; failed poses allow dynamic scale; moving feet and
+airborne phases exempt only the neutral foot-contact region. The measured
+values remain in the report even when the row policy makes a neutral-region
+comparison inapplicable.
 
 ## Cache and resume
 

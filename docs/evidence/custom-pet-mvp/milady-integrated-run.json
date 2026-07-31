@@ -1,0 +1,85 @@
+{
+  "schemaVersion": 1,
+  "issue": 190,
+  "status": "passed",
+  "source": {
+    "repository": "maintainer-local read-only remilia-pets snapshot",
+    "license": "Viral Public License",
+    "licenseSha256": "0ed736f8bdf8ecb09df95efd2077841a7db9f8363257b028b8fbe633ece7ef4c",
+    "petManifest": "pets/mildred/pet.json",
+    "petManifestSha256": "5596a4a346722e89ff8ee64803b35b6602c7180c4978107e711b0d3b99aa348b",
+    "atlas": "pets/mildred/spritesheet.webp",
+    "atlasSha256": "c8e9ba02dc357faeff458e0eebb4b5867b26f908cab86e838b98fa2295566b6f",
+    "contactSheet": "previews/mildred-contact-sheet.png",
+    "contactSheetSha256": "c6a4198b2be0a94e179493d8845f958845c85c1d2846b52aedae6bf91a224516",
+    "directionSheet": "previews/mildred-look-directions.png",
+    "directionSheetSha256": "ba3f3412fd428e1aa66df4e74babcfc96924438b8b5e7ea882c6115afac17454",
+    "sourceMutated": false
+  },
+  "exportBundle": {
+    "fileCount": 2,
+    "schemaVersion": 1,
+    "templateFamily": "milady",
+    "rightsScope": "private-review",
+    "bodyCompletionCatalogVersion": 1,
+    "bundleSha256": "55cfcf0942ea6eb3bc071d92f6c8d35d574480b84233d850e230c942c23cfdf3",
+    "requestSha256": "ff9c46dfd226d353c5dcbb42b06b8b95ca5d4d0754a2504b440ea8c75d9730b6",
+    "avatarSha256": "c467182ca5bf5f624fc93cdeea68a7a63836f53cf0552c56e0ac27d6ab1f37d1",
+    "avatarPreparation": "nearest-neighbor-4x-on-transparent-1024-canvas"
+  },
+  "adapter": {
+    "templateId": "milady-v1",
+    "templateSha256": "068af814629059533869e09e880f1e17a56e3ce31f503a1e73e9f5e74f1bf0fb",
+    "inputFingerprint": "a0f7d3e9a506107855f4ef0a1bce4016aad3b8b06e090e4db090e5943eb54f42",
+    "delegateSkill": "hatch-pet"
+  },
+  "hatchPet": {
+    "ok": true,
+    "spriteVersionNumber": 2,
+    "dimensions": [
+      1536,
+      2288
+    ],
+    "transparentRgbResiduePixels": 0
+  },
+  "deterministicQa": {
+    "status": "passed",
+    "failures": 0,
+    "measuredFrames": 74,
+    "runtimeFrames": 73,
+    "reservedFrames": 1,
+    "sequenceChecks": 73,
+    "activeExpansionZones": [
+      "costume",
+      "hair"
+    ],
+    "annotatedAtlasProduced": true
+  },
+  "semanticReview": {
+    "status": "approved",
+    "evidenceSha256": "db3553200aea2cf79d88294455458725de63c835fdcf5293abb70d58bf2f3b93",
+    "checks": {
+      "identity": "passed",
+      "expression": "passed",
+      "traitFidelity": "passed",
+      "correctGaitAndLookDirections": "passed",
+      "motionQuality": "passed"
+    },
+    "separateFromDeterministicQa": true
+  },
+  "cacheResume": {
+    "exactRerunAction": "reuse-validated-atlas",
+    "rawBundleCached": false,
+    "requestSidecarCached": false,
+    "canonicalInputImageCached": false,
+    "finalValidatedAtlasCached": true
+  },
+  "safety": {
+    "userImageUsed": false,
+    "uploaded": false,
+    "published": false,
+    "installed": false,
+    "autoPosted": false,
+    "rightsInferred": false
+  }
+}

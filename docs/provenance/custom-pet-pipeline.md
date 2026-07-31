@@ -41,3 +41,21 @@ pipeline. They reuse the VPL-compatible source validator's documented
 transparent-cell, alpha-bounds, safe-envelope, and actionable-error
 conventions listed above. They do not copy its implementation, template
 rasters, character sprites, private inputs, or semantic-review results.
+
+## Integrated Milady-family proof
+
+The #190 real-path run reads the existing Mildred v2 package and previews from
+the same VPL-compatible source snapshot without modifying or copying them into
+milXdy.
+
+| Read-only source file | SHA-256 | Use |
+|---|---|---|
+| `LICENSE` | `0ed736f8bdf8ecb09df95efd2077841a7db9f8363257b028b8fbe633ece7ef4c` | Verified source license compatibility before the run. |
+| `pets/mildred/pet.json` | `5596a4a346722e89ff8ee64803b35b6602c7180c4978107e711b0d3b99aa348b` | Verified v2 package identity and metadata. |
+| `pets/mildred/spritesheet.webp` | `c8e9ba02dc357faeff458e0eebb4b5867b26f908cab86e838b98fa2295566b6f` | Read as an existing, first-class v2 hatch-pet result for local integration validation. |
+| `previews/mildred-contact-sheet.png` | `c6a4198b2be0a94e179493d8845f958845c85c1d2846b52aedae6bf91a224516` | Separate semantic review of identity, expressions, rows, phases, and motion readability. |
+| `previews/mildred-look-directions.png` | `ba3f3412fd428e1aa66df4e74babcfc96924438b8b5e7ea882c6115afac17454` | Separate semantic review of clockwise look progression and cardinal anchors. |
+
+The temporary private-review avatar and request bundle are deterministically
+derived only for the local verifier and deleted afterward. No source raster,
+generated bundle, user image, cache entry, or private run artifact is committed.

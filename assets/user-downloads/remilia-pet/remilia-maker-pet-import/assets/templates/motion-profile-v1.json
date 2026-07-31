@@ -10,7 +10,14 @@
     "rows": 11,
     "width": 1536,
     "height": 2288,
-    "spriteVersionNumber": 2
+    "spriteVersionNumber": 2,
+    "reservedCells": [
+      {
+        "row": 0,
+        "column": 6,
+        "purpose": "neutral-look-fallback"
+      }
+    ]
   },
   "landmarkContract": {
     "coordinateSpace": "normalized-cell",
@@ -44,6 +51,12 @@
         "headCenter": "micro-vertical-only",
         "hands": "identity-neutral-rest",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -60,6 +73,12 @@
         "headCenter": "follows-body-with-limited-lag",
         "hands": "opposed-to-feet",
         "feet": "alternate-contact"
+      },
+      "qaPolicy": {
+        "baselineMode": "may-rise",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core"]
       }
     },
     {
@@ -76,6 +95,12 @@
         "headCenter": "follows-body-with-limited-lag",
         "hands": "opposed-to-feet",
         "feet": "alternate-contact"
+      },
+      "qaPolicy": {
+        "baselineMode": "may-rise",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core"]
       }
     },
     {
@@ -92,6 +117,12 @@
         "headCenter": "small-greeting-follow",
         "hands": "one-wave-one-stabilize",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -108,6 +139,19 @@
         "headCenter": "follows-vertical-arc",
         "hands": "family-jump-follow",
         "feet": "compress-lift-land"
+      },
+      "qaPolicy": {
+        "baselineMode": "may-rise",
+        "centroidMode": "continuity-only",
+        "scaleMode": "row-median",
+        "scaleToleranceMultiplier": 1.25,
+        "adjacentCentroidMultiplier": 1.75,
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"],
+        "phaseRegionExemptions": {
+          "takeoff": ["foot-contact"],
+          "apex": ["foot-contact"],
+          "landing": ["foot-contact"]
+        }
       }
     },
     {
@@ -124,6 +168,13 @@
         "headCenter": "leads-slump",
         "hands": "attached-reaction",
         "feet": "locked-or-small-shuffle"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "continuity-only",
+        "scaleMode": "dynamic",
+        "adjacentCentroidMultiplier": 3,
+        "requiredRegions": ["lower-body-core"]
       }
     },
     {
@@ -140,6 +191,12 @@
         "headCenter": "expectant-follow",
         "hands": "attached-asking-pose",
         "feet": "one-contact-may-shift"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -156,6 +213,12 @@
         "headCenter": "small-work-follow",
         "hands": "purposeful-attached-cycle",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -172,6 +235,12 @@
         "headCenter": "inspection-and-nod",
         "hands": "identity-neutral-review",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -188,6 +257,13 @@
         "headCenter": "continuous-clockwise-arc",
         "hands": "attached-and-continuous",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "scaleToleranceMultiplier": 1.25,
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     },
     {
@@ -204,6 +280,13 @@
         "headCenter": "continuous-clockwise-arc",
         "hands": "attached-and-continuous",
         "feet": "locked"
+      },
+      "qaPolicy": {
+        "baselineMode": "locked",
+        "centroidMode": "registered",
+        "scaleMode": "row-median",
+        "scaleToleranceMultiplier": 1.25,
+        "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"]
       }
     }
   ],
