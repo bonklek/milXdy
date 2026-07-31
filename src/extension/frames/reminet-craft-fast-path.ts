@@ -20,7 +20,7 @@
       .milxdy-last-read-marker { position: relative; }
       .milxdy-last-read-dismiss {
         display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem;
-        position: absolute; top: 50%; right: -.25rem; transform: translate(100%, -50%);
+        position: absolute; top: .2rem; right: .2rem;
         border: 1px solid currentColor; border-radius: 999px;
         padding: 0; background: Canvas; color: CanvasText; cursor: pointer; font: 700 1rem/1 sans-serif;
         opacity: 0; pointer-events: none;

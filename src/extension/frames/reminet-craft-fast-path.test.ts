@@ -11,6 +11,8 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).toContain("clientX");
     expect(source).toContain("clientY");
     expect(source).toContain("crafting-module__input-slot--5");
+    expect(source).toContain("top: .2rem; right: .2rem");
+    expect(source).not.toContain("transform: translate(100%, -50%)");
     expect(source).toContain("document.addEventListener(\"click\"");
     expect(source).toContain("new DragEvent");
     expect(source).not.toContain("/api/beetle/action/craft");
