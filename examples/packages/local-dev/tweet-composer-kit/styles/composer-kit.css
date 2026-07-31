@@ -211,8 +211,6 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit {
 .tweet-composer-kit__pet-trait { display: grid; grid-template-columns: 62px minmax(0, 1fr); gap: 3px; align-items: center; }
 .tweet-composer-kit__pet-trait .tweet-composer-kit__pet-input:last-child { grid-column: 2; }
 .tweet-composer-kit__pet-help { margin: 0; color: var(--tck-muted); font-size: 9px; line-height: 1.3; }
-.tweet-composer-kit__pet-rights { display: flex !important; align-items: flex-start; gap: 5px; margin: 0 !important; color: var(--tck-ink); font-size: 9px !important; line-height: 1.35; }
-.tweet-composer-kit__pet-check { flex: 0 0 14px; inline-size: 14px !important; block-size: 14px !important; min-block-size: 14px !important; margin: 0; padding: 0 !important; accent-color: var(--tck-accent); }
 .tweet-composer-kit__pet-actions { display: grid; grid-template-columns: 1fr; gap: 4px; }
 .tweet-composer-kit__pet-preview { inline-size: min(100%, 256px); block-size: auto; justify-self: center; border: 1px solid var(--tck-border); background: repeating-conic-gradient(#d8d5dd 0 25%, #fff 0 50%) 50% / 16px 16px; image-rendering: auto; }
 .tweet-composer-kit__pet-preview[hidden],

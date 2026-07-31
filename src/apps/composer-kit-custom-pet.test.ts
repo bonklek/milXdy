@@ -4,6 +4,7 @@ import {
   BODY_COMPLETION_CATALOG,
   PET_REQUEST_FAMILIES,
   createStoredZip,
+  legColorForRace,
   listStoredZip,
   makePetRequest,
   sha256Hex,
@@ -67,6 +68,14 @@ async function validRequest(templateFamily = "milady") {
 }
 
 describe("Composer Kit Custom Pet request contract", () => {
+  it("derives leg color from family-specific race mappings", () => {
+    expect(legColorForRace("milady", { assetId: "milady-alien-skin-v1", label: "Alien" })).toBe("fantasy-green");
+    expect(legColorForRace("remilio", { assetId: "remilio-zombie-race-v1", label: "Zombie" })).toBe("cool-pale");
+    expect(legColorForRace("bonkler", { assetId: "bonkler-bronze-race-v1", label: "Bronze" })).toBe("brown");
+    expect(legColorForRace("kagami", { assetId: "kagami-porcelain-race-v1", label: "Porcelain" })).toBe("cool-pale");
+    expect(legColorForRace("milady", { assetId: "milady-unmapped-v1", label: "Unmapped" })).toBeNull();
+  });
+
   it.each(PET_REQUEST_FAMILIES)("accepts an explicit %s family request", async (templateFamily) => {
     const { avatar, request } = await validRequest(templateFamily);
     await expect(validatePetRequest(request, avatar)).resolves.toEqual({ ok: true, errors: [] });
@@ -128,5 +137,9 @@ describe("Composer Kit Custom Pet request contract", () => {
     expect(manifest.id).toBe("tweet-composer-kit");
     expect(manifest.surfaces).toEqual(["composerAction", "replyAction"]);
     expect(manifest.privacy.dataNotes.join(" ")).toContain("not uploaded");
+    expect(source).not.toContain("Rights scope");
+    expect(source).not.toContain("rightsConfirmed");
+    expect(source).not.toContain('blankSelect("Leg color"');
+    expect(source).toContain("legColorForRace(templateFamily, traits.race)");
   });
 });

@@ -11,6 +11,44 @@ export const PET_REQUEST_TRAIT_POLICY = Object.freeze({
   shirtText: "convert-to-unreadable-motif",
 });
 
+export const RACE_LEG_COLOR_CATALOG = Object.freeze({
+  version: 1,
+  families: Object.freeze({
+    milady: Object.freeze([
+      Object.freeze({ color: "fantasy-green", aliases: Object.freeze(["alien", "green"]) }),
+      Object.freeze({ color: "fantasy-blue", aliases: Object.freeze(["blue"]) }),
+      Object.freeze({ color: "deep", aliases: Object.freeze(["black", "dark", "deep"]) }),
+      Object.freeze({ color: "brown", aliases: Object.freeze(["brown"]) }),
+      Object.freeze({ color: "warm-medium", aliases: Object.freeze(["tan", "medium"]) }),
+      Object.freeze({ color: "warm-light", aliases: Object.freeze(["white", "light", "standard"]) }),
+      Object.freeze({ color: "cool-pale", aliases: Object.freeze(["pale", "porcelain", "ghost"]) }),
+    ]),
+    remilio: Object.freeze([
+      Object.freeze({ color: "fantasy-green", aliases: Object.freeze(["alien", "reptilian", "green"]) }),
+      Object.freeze({ color: "fantasy-blue", aliases: Object.freeze(["blue"]) }),
+      Object.freeze({ color: "deep", aliases: Object.freeze(["black", "dark", "deep"]) }),
+      Object.freeze({ color: "warm-medium", aliases: Object.freeze(["tan", "brown", "medium"]) }),
+      Object.freeze({ color: "warm-light", aliases: Object.freeze(["white", "pink", "light"]) }),
+      Object.freeze({ color: "cool-pale", aliases: Object.freeze(["zombie", "ghost", "pale"]) }),
+    ]),
+    bonkler: Object.freeze([
+      Object.freeze({ color: "fantasy-green", aliases: Object.freeze(["green", "olive", "reptilian"]) }),
+      Object.freeze({ color: "fantasy-blue", aliases: Object.freeze(["blue", "cyan"]) }),
+      Object.freeze({ color: "deep", aliases: Object.freeze(["black", "dark", "deep"]) }),
+      Object.freeze({ color: "brown", aliases: Object.freeze(["brown", "bronze", "rust"]) }),
+      Object.freeze({ color: "cool-pale", aliases: Object.freeze(["white", "silver", "pale"]) }),
+    ]),
+    kagami: Object.freeze([
+      Object.freeze({ color: "fantasy-blue", aliases: Object.freeze(["blue", "cyan"]) }),
+      Object.freeze({ color: "fantasy-green", aliases: Object.freeze(["green"]) }),
+      Object.freeze({ color: "deep", aliases: Object.freeze(["black", "dark", "deep"]) }),
+      Object.freeze({ color: "warm-medium", aliases: Object.freeze(["tan", "brown", "medium"]) }),
+      Object.freeze({ color: "warm-light", aliases: Object.freeze(["pink", "light"]) }),
+      Object.freeze({ color: "cool-pale", aliases: Object.freeze(["white", "pale", "porcelain", "ghost"]) }),
+    ]),
+  }),
+});
+
 export const BODY_COMPLETION_CATALOG = Object.freeze({
   version: 1,
   legCoverage: Object.freeze([
@@ -102,6 +140,16 @@ export function colorForId(colorId) {
 export function compatibleBottoms(legCoverage) {
   if (!LEG_COVERAGE.has(legCoverage)) return [];
   return BODY_COMPLETION_CATALOG.bottoms.filter((item) => item.compatibleLegCoverage.includes(legCoverage));
+}
+
+export function legColorForRace(templateFamily, race) {
+  const rules = RACE_LEG_COLOR_CATALOG.families[templateFamily];
+  if (!rules || !race || typeof race !== "object") return null;
+  const tokens = new Set(`${race.assetId ?? ""} ${race.label ?? ""}`
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean));
+  return rules.find((rule) => rule.aliases.some((alias) => tokens.has(alias)))?.color ?? null;
 }
 
 export function makePetRequest({
