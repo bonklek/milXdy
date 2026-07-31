@@ -69,9 +69,6 @@ jobs:
       - name: Verify Pages add-ons catalog
         run: npm run verify:pages-catalog
 
-      - name: Verify maintainer add-on packages
-        run: npm run verify:maintainer-addons
-
       - name: Verify local catalog selections
         run: npm run verify:local-addon-selection
 

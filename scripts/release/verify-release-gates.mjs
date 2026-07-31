@@ -15,7 +15,6 @@ const gates = [
   ["RemiStats tooltip escaping", ["scripts/verify/remistats-tooltip-escaping.mjs"]],
   ["Local app package metadata", ["scripts/packages/verify-local-app-packages.mjs"]],
   ["Local app trust gates", ["scripts/packages/verify-local-app-trust-gates.mjs"]],
-  ["Maintainer add-on packages", ["scripts/verify/maintainer-addons.mjs"]],
   ["Add-ons catalog", ["scripts/verify/pages-catalog.mjs"]],
   ["Local catalog selection", ["scripts/verify/local-addon-selection.mjs"]],
   ["Local catalog Prepare/Apply", ["scripts/verify/local-addon-selection-workflow.mjs"]],

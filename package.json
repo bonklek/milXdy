@@ -55,8 +55,6 @@
     "verify:app-settings-mirrors": "node scripts/verify/app-settings-mirrors.mjs",
     "verify:local-app-packages": "node scripts/packages/verify-local-app-packages.mjs",
     "build:share-kit-package": "node scripts/packages/build-share-kit.mjs",
-    "build:maintainer-addons": "node scripts/packages/build-maintainer-addons.mjs",
-    "verify:maintainer-addons": "node scripts/verify/maintainer-addons.mjs",
     "build:composer-kit-package": "node scripts/packages/build-composer-kit.mjs",
     "build:pets-maker-package": "node scripts/packages/build-pets-maker.mjs",
     "build:remilia-pet-skill": "node scripts/build/build-remilia-pet-skill.mjs",

@@ -2,7 +2,8 @@
   "schemaVersion": 2,
   "catalogPath": "catalog/data/catalog.json",
   "allowedArtifactRoots": [
-    "packages/maintainer"
+    "packages/maintainer",
+    "examples/packages/first-party-replacements"
   ],
   "allowedBuildTargets": [
     "chromium"

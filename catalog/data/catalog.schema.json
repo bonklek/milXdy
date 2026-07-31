@@ -179,7 +179,7 @@
               "required": ["kind", "path", "packageSha256", "recipeId"],
               "properties": {
                 "kind": { "const": "maintainer-source" },
-                "path": { "type": "string", "pattern": "^packages/maintainer/[A-Za-z0-9._/-]+$" },
+                "path": { "type": "string", "pattern": "^(?:packages/maintainer|examples/packages/first-party-replacements)/[A-Za-z0-9._/-]+$" },
                 "packageSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
                 "recipeId": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" }
               }
