@@ -1,0 +1,21 @@
+@media (forced-colors: active) {
+  .mx-window,
+  .mx-panel,
+  .mx-tool,
+  .mx-tabs button {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+
+  .mx-tool:focus-visible,
+  .mx-tabs button:focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+
+  [aria-pressed="true"],
+  [aria-current="page"] {
+    color: HighlightText;
+    background: Highlight;
+  }
+}

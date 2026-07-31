@@ -1,0 +1,5 @@
+.fixture-frame {
+  border: 1px solid #171f82;
+  background: #f7f9f9;
+  box-shadow: inset 1px 1px 0 #ffffff, 3px 4px 0 #9aabae;
+}

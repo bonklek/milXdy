@@ -1,0 +1,55 @@
+html {
+  background: var(--mx-color-surface-sunken);
+  color: var(--mx-color-text);
+  font: 14px/1.45 var(--mx-font-ui);
+}
+
+main {
+  display: grid;
+  gap: var(--mx-space-3);
+  max-inline-size: 360px;
+  margin: var(--mx-space-4) auto;
+  padding: var(--mx-space-4);
+  border: 1px solid var(--mx-color-border);
+  background: var(--mx-color-surface);
+  box-shadow: var(--mx-shadow);
+}
+
+h1,
+p {
+  margin: 0;
+}
+
+label {
+  display: flex;
+  gap: var(--mx-space-2);
+  align-items: center;
+  justify-content: space-between;
+  min-block-size: var(--mx-target-min);
+}
+
+button {
+  min-block-size: var(--mx-target-min);
+  border: 1px solid var(--mx-color-border);
+  border-radius: var(--mx-control-radius);
+  color: var(--mx-color-text);
+  background: var(--mx-color-surface-raised);
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid var(--mx-color-focus);
+  outline-offset: 2px;
+}
+
+#sound-status {
+  color: var(--mx-color-muted);
+}
+
+@media (forced-colors: active) {
+  main,
+  button {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+}

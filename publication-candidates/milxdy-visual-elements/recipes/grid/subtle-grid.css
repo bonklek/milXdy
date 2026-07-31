@@ -1,0 +1,25 @@
+.mx-subtle-grid {
+  /*
+   * Original CSS-only texture. No image or external URL is embedded.
+   * Keep contrast low enough that text remains the visual priority.
+   */
+  background-color: var(--mx-color-surface, #fff);
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--mx-color-border, #536471) 8%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--mx-color-border, #536471) 8%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 12px 12px;
+}
+
+@media (forced-colors: active) {
+  .mx-subtle-grid {
+    background-image: none;
+  }
+}

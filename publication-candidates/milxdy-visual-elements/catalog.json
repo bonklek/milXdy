@@ -1,0 +1,17 @@
+{
+  "$schema": "./schemas/catalog.schema.json",
+  "schemaVersion": 2,
+  "catalogVersion": "0.1.0-candidate.0",
+  "status": "publication-candidate",
+  "repositoryLicense": {
+    "id": "VPL",
+    "textPath": "LICENSES/VPL.txt",
+    "sha256": "145f5a008fee1ff432a007b832b5c20ba5f1f1e39079b0d94c258aee20aaaa10"
+  },
+  "policies": {
+    "contribution": "docs/ASSET_AND_CONTRIBUTION_POLICY.md",
+    "upstreamReview": "CONTRIBUTING.md#lane-b-defaultupstream-inclusion",
+    "removal": "docs/ASSET_AND_CONTRIBUTION_POLICY.md#deprecation-replacement-and-removal"
+  },
+  "entries": []
+}

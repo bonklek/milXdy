@@ -1,0 +1,111 @@
+{
+  "$schema": "../../../schemas/asset.schema.json",
+  "schemaVersion": 2,
+  "id": "fixture.reference-source",
+  "version": "1.0.0",
+  "displayName": "Fixture reference source",
+  "description": "Abstract vector used only to test a complete reference-source manifest.",
+  "distributionScope": "local-custom",
+  "kind": "illustration",
+  "entryRole": "source-asset",
+  "intendedSdkSurfaces": [
+    "catalog-preview"
+  ],
+  "sourcePath": "fixtures/valid/reference-source/source/reference.svg",
+  "exports": [
+    {
+      "path": "fixtures/valid/reference-source/exports/preview.svg",
+      "role": "catalog-preview",
+      "format": "svg",
+      "byteSize": 609,
+      "width": 64,
+      "height": 64,
+      "sha256": "07353d02d4e2e7bf18c4de8e429ae1e3088784fd6f15e80c5ac1eb9affe84eca",
+      "backgroundAssumptions": [
+        "opaque light fixture background"
+      ]
+    }
+  ],
+  "media": {
+    "mime": "image/svg+xml",
+    "format": "svg",
+    "byteSize": 601,
+    "width": 64,
+    "height": 64,
+    "colorSpace": "sRGB",
+    "background": "opaque",
+    "backgroundAssumptions": [
+      "opaque light fixture background"
+    ]
+  },
+  "sha256": "8de6065b721d47280f505e606eb5c710af4438e056931add408622224b9e9d93",
+  "sourceUrl": null,
+  "sourceRetrievedAt": null,
+  "acquisitionMethod": "user-local",
+  "creator": {
+    "name": null,
+    "sourceContext": "Unknown is valid for a user-local asset that is not submitted upstream."
+  },
+  "rightsholder": {
+    "name": null,
+    "sourceContext": "No upstream rights claim is made for this local fixture."
+  },
+  "license": {
+    "status": "unknown",
+    "id": null,
+    "textPath": null,
+    "textSha256": null,
+    "proofUrl": null,
+    "proofPath": null,
+    "proofRetrievedAt": null,
+    "proofSha256": null,
+    "scopeNote": "User-local fixture with no upstream/default inclusion request.",
+    "additionalRestrictions": []
+  },
+  "attribution": {
+    "requiredText": null,
+    "displayGuidance": "Keep local unless its provenance and upstream eligibility are established.",
+    "noticePaths": []
+  },
+  "parents": [],
+  "transformations": [],
+  "generation": {
+    "aiModified": false,
+    "tool": "text editor",
+    "model": null,
+    "author": "Synthetic fixture author",
+    "createdAt": "2026-07-30T12:00:00Z",
+    "editNotes": [
+      "Abstract geometric SVG created only for validation."
+    ]
+  },
+  "embeddedMarks": [],
+  "dependencies": [],
+  "accessibility": {
+    "alt": "Abstract geometric head and shoulders",
+    "decorative": false,
+    "embeddedText": false,
+    "contrastAndSmallSizeNotes": "Fixture inspected only for deterministic validation behavior.",
+    "themeCoverage": [
+      "light"
+    ]
+  },
+  "tags": [
+    "fixture",
+    "abstract"
+  ],
+  "review": {
+    "technical": "not-required",
+    "visual": "not-required",
+    "accessibility": "not-required",
+    "license": "not-required",
+    "release": "not-required",
+    "decisionId": null
+  },
+  "lifecycle": {
+    "status": "local-ready",
+    "deprecatedAt": null,
+    "replacedBy": null,
+    "removalAdvisory": null
+  }
+}

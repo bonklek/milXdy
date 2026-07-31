@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:milxdy:visual-elements:schema:catalog:2",
+  "title": "milXdy visual-elements catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "catalogVersion", "status", "repositoryLicense", "policies", "entries"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "catalogVersion": { "$ref": "#/$defs/semverCandidate" },
+    "status": { "enum": ["publication-candidate", "published", "deprecated"] },
+    "repositoryLicense": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "textPath", "sha256"],
+      "properties": {
+        "id": { "const": "VPL" },
+        "textPath": { "$ref": "#/$defs/relativePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contribution", "upstreamReview", "removal"],
+      "properties": {
+        "contribution": { "$ref": "#/$defs/relativePathWithFragment" },
+        "upstreamReview": { "$ref": "#/$defs/relativePathWithFragment" },
+        "removal": { "$ref": "#/$defs/relativePathWithFragment" }
+      }
+    },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version", "distributionScope", "manifestPath", "manifestSha256", "sourceSha256", "decisionPath"],
+        "properties": {
+          "id": { "$ref": "#/$defs/catalogId" },
+          "version": { "$ref": "#/$defs/semver" },
+          "distributionScope": { "enum": ["local-custom", "upstream-default"] },
+          "manifestPath": { "$ref": "#/$defs/relativePath" },
+          "manifestSha256": { "$ref": "#/$defs/sha256" },
+          "sourceSha256": { "$ref": "#/$defs/sha256" },
+          "decisionPath": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }] }
+        },
+        "allOf": [{
+          "if": { "properties": { "distributionScope": { "const": "upstream-default" } }, "required": ["distributionScope"] },
+          "then": { "properties": { "decisionPath": { "$ref": "#/$defs/relativePath" } } }
+        }]
+      }
+    }
+  },
+  "$defs": {
+    "catalogId": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$" },
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "semverCandidate": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "relativePath": {
+      "type": "string", "minLength": 1,
+      "not": { "anyOf": [{ "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://" }, { "pattern": "^/" }, { "pattern": "^[A-Za-z]:" }, { "pattern": "(^|[/\\\\])\\.\\.($|[/\\\\])" }] }
+    },
+    "relativePathWithFragment": {
+      "type": "string", "minLength": 1,
+      "not": { "anyOf": [{ "pattern": "^[A-Za-z][A-Za-z0-9+.-]*://" }, { "pattern": "^/" }, { "pattern": "^[A-Za-z]:" }, { "pattern": "(^|[/\\\\])\\.\\.($|[/\\\\])" }] }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en" data-milxdy-theme="light" data-milxdy-chrome="reminet">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>milXdy compact utility example</title>
+    <link rel="stylesheet" href="../../tokens/milxdy.css">
+    <link rel="stylesheet" href="../../recipes/bevel/reminet.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <aside class="demo-controls" aria-labelledby="demo-controls-title">
+      <h1 id="demo-controls-title">Preview controls</h1>
+      <label>
+        Theme
+        <select id="theme-select">
+          <option value="light">Light</option>
+          <option value="dim">Dim</option>
+          <option value="dark">Dark</option>
+          <option value="system">System</option>
+        </select>
+      </label>
+      <label>
+        Chrome
+        <select id="chrome-select">
+          <option value="reminet">RemiNet</option>
+          <option value="classic">Classic</option>
+          <option value="native">Native</option>
+        </select>
+      </label>
+      <button id="simulate-load" type="button">Simulate refresh</button>
+    </aside>
+
+    <section class="mx-window mx-reminet-frame" aria-labelledby="library-title">
+      <header class="mx-titlebar">
+        <div class="mx-title-copy">
+          <h2 id="library-title" tabindex="-1">Library</h2>
+          <p id="library-status" class="mx-status" role="status" aria-live="polite">Ready</p>
+        </div>
+        <button class="mx-tool" type="button" aria-label="Close Library">
+          <span aria-hidden="true">×</span>
+        </button>
+      </header>
+
+      <nav class="mx-tabs" aria-label="Library sections">
+        <button type="button" aria-pressed="true">Tracks</button>
+        <button type="button" aria-pressed="false">Playlists</button>
+      </nav>
+
+      <main id="library-body" class="mx-body" tabindex="-1">
+        <ul class="mx-list" aria-label="Recent tracks">
+          <li>
+            <div>
+              <strong>Example track</strong>
+              <span>Local file · 03:21</span>
+            </div>
+            <button class="mx-tool" type="button" aria-label="Play Example track">
+              <span aria-hidden="true">▶</span>
+            </button>
+          </li>
+          <li>
+            <div>
+              <strong>Another example</strong>
+              <span>Local file · 02:48</span>
+            </div>
+            <button class="mx-tool" type="button" aria-label="Play Another example">
+              <span aria-hidden="true">▶</span>
+            </button>
+          </li>
+        </ul>
+      </main>
+
+      <footer class="mx-footer">
+        <span>2 local tracks</span>
+        <button id="retry-button" type="button" hidden>Retry</button>
+      </footer>
+    </section>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

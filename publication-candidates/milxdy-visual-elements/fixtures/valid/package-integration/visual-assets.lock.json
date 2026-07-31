@@ -1,0 +1,27 @@
+{
+  "$schema": "../../../schemas/package-visual-assets-lock.schema.json",
+  "schemaVersion": 2,
+  "source": {
+    "kind": "catalog-release",
+    "name": "milxdy-visual-elements",
+    "version": "1.0.0",
+    "location": "https://github.com/fixture/milxdy-visual-elements/releases/tag/v1.0.0"
+  },
+  "packageManifest": "milxdy.app.json",
+  "assets": [
+    {
+      "packageAssetId": "visual-lock-fixture.frame",
+      "assetId": "fixture.ui-frame",
+      "assetVersion": "1.0.0",
+      "distributionScope": "upstream-default",
+      "licenseStatus": "declared",
+      "licenseId": "VPL",
+      "sourceSha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a",
+      "manifestSha256": "3790a10e29eead7d1e79eb12376290717af7ae6a75e389d95a5127176ee58b36",
+      "decisionId": "decision-2026-07-30-fixture.ui-frame",
+      "exportPath": "fixtures/valid/ui-primitive/exports/frame.css",
+      "vendoredPath": "assets/frame.css",
+      "sha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a"
+    }
+  ]
+}
