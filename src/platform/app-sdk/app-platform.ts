@@ -100,6 +100,12 @@ export type AppRemoteQuery = {
   maxPageSize: number;
   minIntervalMs: number;
   cache: { policy: "none" } | { policy: "shortLived"; maxAgeSeconds: number };
+  /** Optional host-derived suggestions; packages never receive the draft text. */
+  composerSuggestions?: {
+    source: "visibleDraftKeywords";
+    maxItems: number;
+    maxLength: number;
+  };
 };
 export type MilxdyLocalPackageManifestVersion = 1;
 export type MilxdyLocalPackageReviewStatus = "local" | "reviewed" | "blocked";
@@ -374,6 +380,12 @@ export type MilxdyComposerActionContext = {
       nextCursor: string | null;
     };
     facets?: Array<{ kind: string; value: string; category: string; postCount: number }>;
+  }>;
+  /** Derives bounded facet candidates from the initiating visible composer. */
+  suggestRemoteQueryFacets: (id: string) => Promise<{
+    ok: boolean;
+    error?: string;
+    suggestions: string[];
   }>;
 };
 

@@ -13,6 +13,7 @@ import { createComposerActionRefreshScheduler } from "./composer-action-refresh"
 import { createComposerActionBindingRegistry } from "./composer-action-binding";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { eligibleContextMediaActions } from "./context-media-actions";
+import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
@@ -2326,6 +2327,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         ? { ok: true, page: response.page, facets: response.facets }
         : { ok: false, error: response?.error || "The remote gallery is unavailable." };
     };
+    const suggestRemoteQueryFacets: MilxdyComposerActionContext["suggestRemoteQueryFacets"] = async (id) => {
+      if (!navigator.userActivation?.isActive) return { ok: false, error: "Request suggestions from the Tags control.", suggestions: [] };
+      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
+      const declaration = query?.composerSuggestions;
+      if (!query || !declaration || !query.resources.includes("facets")) {
+        return { ok: false, error: "Composer suggestions are not declared for this gallery.", suggestions: [] };
+      }
+      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
+        .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
+      const suggestions = deriveComposerKeywordSuggestions(editor?.innerText || editor?.textContent || "", declaration);
+      return { ok: true, suggestions };
+    };
     const attachExternalHandoffImage = async (composerScope: ParentNode, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
       if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,")) {
         return { ok: false, error: "The maker did not return a PNG." };
@@ -2367,6 +2381,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         launchExternalHandoff,
         remoteQueries: (app.remoteQueries || []).map(({ id, label }) => ({ id, label })),
         queryRemoteService,
+        suggestRemoteQueryFacets,
       }));
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
