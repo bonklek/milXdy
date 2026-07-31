@@ -11,7 +11,7 @@ describe("dock DOM and style compatibility", () => {
     expect(DOCK_STYLE_ID).toBe("milxdy-overlay-dock-style");
     const runtimeStyles = `${styles.replace(/\r\n/g, "\n").replace(/\n$/, "")}\n  `;
     expect(createHash("sha256").update(runtimeStyles).digest("hex"))
-      .toBe("6cf7c0bedb65072144f07e5b6d988d47f2bdac0796f3cf19e58801db98dbb729");
+      .toBe("5ab52a012f1adae7cad56915e37ddf62d1c7351c64611b8a7ba2ae5d052fe95e");
   });
 
   it("joins and centers the rail side controls", () => {
@@ -19,6 +19,11 @@ describe("dock DOM and style compatibility", () => {
     expect(styles).toContain("place-items: center");
     expect(styles).toContain('.milxdy-overlay-dock-side-control[data-side="left"]::before');
     expect(styles).toContain('.milxdy-overlay-dock-side-control[data-side="right"]::before');
+  });
+
+  it("lets the right rail crop above X's floating shortcut controls", () => {
+    expect(styles).toContain("--milxdy-dock-host-shortcut-max-height");
+    expect(styles).toContain("overflow-y: auto");
   });
 
   it.each([
