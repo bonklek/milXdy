@@ -54,7 +54,7 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest } from "../../platform/app-sdk/remote-query";
-import { OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "../../platform/app-sdk/media-contribution";
+import { OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -138,6 +138,7 @@ const remoteQueryLastRequestAt = new Map<string, number>();
 const remoteQueryCache = new Map<string, { expiresAt: number; response: Record<string, unknown> }>();
 const contextMediaHandles = new OpaqueMediaHandleStore();
 const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
+const CONTEXT_MEDIA_SESSION_PREFIX = "milxdy.contextMediaHandle.";
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
@@ -552,6 +553,42 @@ function contributionDeclaration(appId: string, actionId: string, contributionId
   return { action, contribution };
 }
 
+type StoredContextMedia = Omit<OpaqueMediaHandleRecord, "bytes"> & { bytesBase64: string };
+
+function contextMediaSessionKey(handle: string): string {
+  return `${CONTEXT_MEDIA_SESSION_PREFIX}${handle}`;
+}
+
+async function persistContextMedia(handle: string, media: Omit<OpaqueMediaHandleRecord, "expiresAt">, now = Date.now()): Promise<void> {
+  const { bytes, ...metadata } = media;
+  await chrome.storage.session.set({
+    [contextMediaSessionKey(handle)]: {
+      ...metadata,
+      bytesBase64: base64Encode(bytes),
+      expiresAt: now + OPAQUE_MEDIA_HANDLE_TTL_MS,
+    } satisfies StoredContextMedia,
+  });
+}
+
+async function restoreContextMedia(handle: string): Promise<OpaqueMediaHandleRecord | null> {
+  const key = contextMediaSessionKey(handle);
+  const stored = (await chrome.storage.session.get(key))[key] as StoredContextMedia | undefined;
+  if (!stored || typeof stored.bytesBase64 !== "string" || typeof stored.expiresAt !== "number") return null;
+  try {
+    const binary = atob(stored.bytesBase64);
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+    const record: OpaqueMediaHandleRecord = { ...stored, bytes };
+    return contextMediaHandles.restore(handle, record) ? record : null;
+  } catch {
+    await chrome.storage.session.remove(key);
+    return null;
+  }
+}
+
+async function discardPersistedContextMedia(handle: string): Promise<void> {
+  await chrome.storage.session.remove(contextMediaSessionKey(handle));
+}
+
 async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender) || !contributionDeclaration(message.appId, message.actionId)) return unsupportedSender();
   const parsed = parseAllowedUrl(message.sourceUrl, X_CONTEXT_MEDIA_RULES);
@@ -571,7 +608,9 @@ async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: 
       height = bitmap.height;
       bitmap.close();
     }
-    const mediaHandle = contextMediaHandles.create({ appId: message.appId, actionId: message.actionId, mimeType, bytes, width, height, altAvailable: message.altAvailable });
+    const mediaRecord = { appId: message.appId, actionId: message.actionId, mimeType, bytes, width, height, altAvailable: message.altAvailable };
+    const mediaHandle = contextMediaHandles.create(mediaRecord);
+    await persistContextMedia(mediaHandle, mediaRecord);
     return { ok: true, mediaHandle, media: { mimeType, width, height, altAvailable: message.altAvailable } };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
@@ -586,7 +625,11 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
   const maxTagLength = declaration.contribution.maxTagLength ?? 0;
   const tags = validateMediaContributionTags(message.tags, maxTags, maxTagLength);
   if (!tags) return { ok: false, error: "The supplied tags are outside the reviewed contribution bounds." };
-  const media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
+  let media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
+  if (!media) {
+    await restoreContextMedia(message.mediaHandle);
+    media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
+  }
   if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again." };
   const form = new FormData();
   const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType.slice("image/".length);
@@ -610,6 +653,7 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
       return { ok: false, error: "Remibooru returned an unsupported contribution result." };
     }
     contextMediaHandles.consume(message.mediaHandle);
+    await discardPersistedContextMedia(message.mediaHandle);
     return { ok: true, canonicalUrl: `https://remibooru.com/posts/${encodeURIComponent(post.id)}` };
   } catch (error) {
     contextMediaHandles.release(message.mediaHandle);
