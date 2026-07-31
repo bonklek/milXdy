@@ -27,7 +27,6 @@ distribution.
 
 ## Included examples
 
-The synthetic source, Music-headphones derivative, CSS frame, and package files
-under `fixtures/` exist to make the contributor workflow executable. They are
-not claims about an external artwork or a requirement that local authors use a
-catalog.
+The synthetic source, CSS frame, and package files under `fixtures/` exist to
+make the contributor workflow executable. They are not claims about an
+external artwork or a requirement that local authors use a catalog.

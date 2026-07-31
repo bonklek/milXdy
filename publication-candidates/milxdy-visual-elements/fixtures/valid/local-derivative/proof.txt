@@ -1,1 +1,0 @@
-Synthetic derivative proof. This file exists only to test required evidence hashes.

@@ -26,9 +26,6 @@
 - [ ] Package-owned motion has a reduced-motion substitution.
 - [ ] Sound requires activation, mute/volume, a visible equivalent, and
       rate-limiting.
-- [ ] The Music walkthrough runs as a local customization without catalog or
-      VPL approval.
-- [ ] The Music upstream-promotion section separately enforces VPL.
 
 ## Release
 

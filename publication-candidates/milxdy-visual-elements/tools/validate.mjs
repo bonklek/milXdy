@@ -25,7 +25,6 @@ const schemaPaths = {
 const validManifestPaths = [
   "fixtures/valid/reference-source/manifest.json",
   "fixtures/valid/ui-primitive/manifest.json",
-  "fixtures/valid/local-derivative/manifest.json",
 ];
 
 function pushRequired(errors, object, fields, prefix) {

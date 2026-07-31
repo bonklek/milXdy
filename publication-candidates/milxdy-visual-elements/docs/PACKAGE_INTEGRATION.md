@@ -12,15 +12,15 @@ App SDK 0.2.4 packages declare every shipping file in `package.assets`:
   "package": {
     "assets": [
       {
-        "id": "music.achievement",
-        "path": "assets/music-achievement.svg",
+        "id": "custom.panel-frame",
+        "path": "assets/panel-frame.svg",
         "kind": "image",
         "webAccessible": true,
         "sha256": "64-lowercase-hex-characters"
       }
     ],
     "webAccessibleAssets": [
-      "assets/music-achievement.svg"
+      "assets/panel-frame.svg"
     ]
   }
 }
@@ -39,7 +39,7 @@ source/export history. A local lock can use `distributionScope:
 ```json
 {
   "$schema": "schemas/milxdy-visual-assets-lock.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "source": {
     "kind": "local-directory",
     "name": "my-visual-assets",
@@ -49,15 +49,17 @@ source/export history. A local lock can use `distributionScope:
   "packageManifest": "milxdy.app.json",
   "assets": [
     {
-      "packageAssetId": "music.achievement",
-      "assetId": "local.music-headphones",
+      "packageAssetId": "custom.panel-frame",
+      "assetId": "local.panel-frame",
       "assetVersion": "1.0.0",
       "distributionScope": "local-custom",
       "licenseStatus": "unknown",
       "licenseId": null,
       "sourceSha256": "64-lowercase-hex-characters",
-      "exportPath": "exports/music-achievement.svg",
-      "vendoredPath": "assets/music-achievement.svg",
+      "manifestSha256": null,
+      "decisionId": null,
+      "exportPath": "exports/panel-frame.svg",
+      "vendoredPath": "assets/panel-frame.svg",
       "sha256": "64-lowercase-hex-characters"
     }
   ]
@@ -90,5 +92,6 @@ meet them remains valid for its local package.
 6. Confirm the extension archive contains neither source masters nor unrelated
    visual-library files.
 
-The complete fixture under `fixtures/valid/package-integration/` demonstrates a
-local custom package with a declared asset and optional local lock.
+The complete fixture under `fixtures/valid/package-integration/` demonstrates
+package asset declarations and the stricter upstream/default lock shape. The
+JSON example above demonstrates the license-neutral local lock shape.
