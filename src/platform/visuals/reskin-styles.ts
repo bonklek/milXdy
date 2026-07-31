@@ -578,6 +578,7 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"],
+  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] div,
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] span {
     flex: 0 0 auto !important;
     max-width: none !important;
@@ -633,6 +634,7 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] div,
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] span {
     flex: 0 0 auto !important;
     min-width: 0 !important;
