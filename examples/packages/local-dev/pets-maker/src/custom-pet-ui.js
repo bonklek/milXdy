@@ -36,15 +36,8 @@ export function buildCustomPetExport({ signal }) {
       textContent: "Local download only. Nothing is uploaded.",
     }),
   );
-  const disclosure = element("button", {
-    className: "tweet-composer-kit__pet-disclosure",
-    type: "button",
-    ariaExpanded: "false",
-    textContent: "Prepare Maker pet bundle",
-  });
   const form = element("form", {
     className: "tweet-composer-kit__pet-form",
-    hidden: true,
     noValidate: true,
   });
   const family = blankSelect("Maker template family", PET_REQUEST_FAMILIES.map((id) => ({ id, label: FAMILY_LABELS[id] })));
@@ -188,16 +181,9 @@ export function buildCustomPetExport({ signal }) {
     instruction,
     copyInstruction,
   );
-  section.append(summary, disclosure, form);
+  section.append(summary, form);
 
   const state = { avatarBytes: null, image: null, previewBytes: null };
-  disclosure.addEventListener("click", () => {
-    const open = form.hidden;
-    form.hidden = !open;
-    disclosure.setAttribute("aria-expanded", String(open));
-    disclosure.textContent = open ? "Close Custom Pet export" : "Prepare Maker pet bundle";
-    if (open) family.select.focus();
-  }, { signal });
   avatar.addEventListener("change", async () => {
     state.avatarBytes = null;
     state.image?.close?.();
@@ -369,7 +355,6 @@ function collectSelection(controls) {
         colorVariant: footwearColorVariant,
       },
     },
-    rightsScope: "private-review",
     petName: controls.petName.querySelector("input").value,
     personality: controls.personality.querySelector("input").value,
   };

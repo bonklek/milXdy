@@ -19,8 +19,8 @@
   },
   "generator": {
     "deterministicCompositeVersion": 1,
-    "id": "tweet-composer-kit",
-    "version": "0.2.0-pilot"
+    "id": "pets-maker",
+    "version": "0.1.0-pilot"
   },
   "image": {
     "file": "avatar.png",
@@ -33,7 +33,6 @@
     "name": "Sanitized Kagami",
     "personality": "A sanitized local contract fixture with no user or reference image."
   },
-  "rightsScope": "private-review",
   "schemaVersion": 1,
   "sourceNftNumber": 1,
   "templateFamily": "kagami",

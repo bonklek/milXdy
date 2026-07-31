@@ -1,6 +1,6 @@
 # Remilia Maker Pet Import
 
-`remilia-maker-pet-import` is the companion Codex adapter for Composer Kit’s
+`remilia-maker-pet-import` is the companion Codex adapter for Pets Maker's
 `remilia-pet-request.zip`. It validates the two-file bundle, selects the
 declared Milady, Remilio, Bonkler, or Kagami v1 motion template, prepares an
 authoritative full-body identity brief, and delegates final visual generation
@@ -22,15 +22,15 @@ The resulting
 `assets/user-downloads/remilia-pet/remilia-maker-pet-import.zip` is a
 non-web-accessible user download included in extension builds. Extract the
 skill directory into the local Codex skills folder, refresh skills, then attach
-a Composer Kit export and say:
+a Pets Maker export and say:
 
 ```text
 Use $remilia-maker-pet-import with the attached Maker export bundle.
 ```
 
 The adapter stores input only in the user-selected run directory. It does not
-publish, post, install a pet, infer missing body choices, or broaden the
-sidecar’s rights scope.
+publish, post, install a pet, infer missing body choices, or infer publication
+permission. Pets Maker exports contain no rights declaration.
 
 ## Sanitized contract fixtures
 

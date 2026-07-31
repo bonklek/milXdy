@@ -10,7 +10,7 @@ import {
   sha256Hex,
   stableJson,
   validatePetRequest,
-} from "../../examples/packages/local-dev/tweet-composer-kit/src/custom-pet-contract.js";
+} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
 
 const python = process.env.PYTHON || "python";
 const sourceRootArg = valueFor("--source-root") || process.env.REMILIA_PETS_ROOT;
@@ -106,7 +106,6 @@ try {
         colorVariant: "brown",
       },
     },
-    rightsScope: "private-review",
     petName: "Mildred",
     personality:
       "A calm, mischievous green-haired neochibi vampire with a large blue bow.",
@@ -243,7 +242,6 @@ try {
       fileCount: 2,
       schemaVersion: request.schemaVersion,
       templateFamily: request.templateFamily,
-      rightsScope: request.rightsScope,
       bodyCompletionCatalogVersion: request.bodyCompletion.catalogVersion,
       bundleSha256: digest(bundleBytes),
       requestSha256: digest(requestBytes),

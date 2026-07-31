@@ -8,7 +8,7 @@ import {
   makePetRequest,
   stableJson,
   validatePetRequest,
-} from "../../examples/packages/local-dev/tweet-composer-kit/src/custom-pet-contract.js";
+} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
 
 const supportedFamilies = ["milady", "remilio", "bonkler", "kagami"];
 const sourceNftNumbers = { milady: 0, remilio: 1, bonkler: 1, kagami: 1 };
@@ -30,7 +30,6 @@ for (const family of families) {
     imageSha256: createHash("sha256").update(avatar).digest("hex"),
     traits,
     bodyCompletion: makeBodyCompletion(family, traits.race),
-    rightsScope: "private-review",
     petName: `Sanitized ${family[0].toUpperCase()}${family.slice(1)}`,
     personality: "A sanitized local contract fixture with no user or reference image.",
   });

@@ -1,6 +1,6 @@
 ---
 name: remilia-maker-pet-import
-description: Validate and import versioned remilia-pet-request.zip bundles exported by milXdy Composer Kit, select the declared Milady, Remilio, Bonkler, or Kagami motion-template family, prepare a traceable full-body identity and provenance handoff, and delegate final v2 pet generation and packaging to hatch-pet. Use when a user attaches a Maker Custom Pet export, asks to resume that import, or needs a Maker-family bundle checked without uploading, publishing, or inventing missing lower-body choices.
+description: Validate and import versioned remilia-pet-request.zip bundles exported by milXdy Pets Maker, select the declared Milady, Remilio, Bonkler, or Kagami motion-template family, prepare a traceable full-body identity and provenance handoff, and delegate final v2 pet generation and packaging to hatch-pet. Use when a user attaches a Maker Custom Pet export, asks to resume that import, or needs a Maker-family bundle checked without uploading, publishing, or inventing missing lower-body choices.
 ---
 
 # Remilia Maker Pet Import
@@ -13,8 +13,8 @@ gate without replacing hatch-pet's package validation.
 
 ## Import workflow
 
-1. Treat the attached ZIP and its image as private unless the sidecar explicitly
-   says otherwise. Never infer publication permission.
+1. Treat the attached ZIP and its image as private input. A Pets Maker sidecar
+   does not declare rights, and the adapter never infers publication permission.
 2. Run `scripts/validate_bundle.py` before extracting or reading the image into
    another workflow:
 
@@ -22,8 +22,8 @@ gate without replacing hatch-pet's package validation.
    python scripts/validate_bundle.py <bundle.zip> --json-out <run>/bundle-validation.json
    ```
 
-3. Stop on any archive, schema, PNG, SHA-256, trait, policy, body-completion, or
-   rights error. A legacy upper-body bundle without explicit legs, bottom,
+3. Stop on any archive, schema, PNG, SHA-256, trait, policy, or body-completion
+   error. A legacy upper-body bundle without explicit legs, bottom,
    footwear, asset versions, and colors is incomplete; do not fill it in.
 4. Prepare a local run:
 

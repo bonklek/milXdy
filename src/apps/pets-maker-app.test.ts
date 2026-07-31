@@ -12,7 +12,7 @@ import {
   stableJson,
   validatePetRequest,
   validatePetRequestShape,
-} from "../../examples/packages/local-dev/tweet-composer-kit/src/custom-pet-contract.js";
+} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
 
 function pngHeader(width = 1024, height = 1024): Uint8Array {
   const bytes = new Uint8Array(33);
@@ -62,14 +62,13 @@ async function validRequest(templateFamily = "milady") {
       imageSha256: await sha256Hex(avatar),
       traits: completeTraits(),
       bodyCompletion: completeBody(),
-      rightsScope: "private-review",
       petName: "Sanitized Sample",
       personality: "Calm and observant.",
     }),
   };
 }
 
-describe("Composer Kit Custom Pet request contract", () => {
+describe("Pets Maker request contract", () => {
   it("derives leg color from family-specific race mappings", () => {
     expect(legColorForRace("milady", { assetId: "milady-alien-skin-v1", label: "Alien" })).toBe("fantasy-green");
     expect(legColorForRace("remilio", { assetId: "remilio-zombie-race-v1", label: "Zombie" })).toBe("cool-pale");
@@ -80,6 +79,12 @@ describe("Composer Kit Custom Pet request contract", () => {
 
   it.each(PET_REQUEST_FAMILIES)("accepts an explicit %s family request", async (templateFamily) => {
     const { avatar, request } = await validRequest(templateFamily);
+    expect(request).not.toHaveProperty("rightsScope");
+    expect(request.generator).toEqual({
+      id: "pets-maker",
+      version: "0.1.0-pilot",
+      deterministicCompositeVersion: 1,
+    });
     await expect(validatePetRequest(request, avatar)).resolves.toEqual({ ok: true, errors: [] });
   });
 
@@ -144,19 +149,31 @@ describe("Composer Kit Custom Pet request contract", () => {
     expect(BODY_COMPLETION_CATALOG.footwear.every((item) => item.assetVersion === 1 && item.assetId.endsWith("-v1"))).toBe(true);
   });
 
-  it("ships the accessible export and handoff controls in the existing Composer Kit package", () => {
-    const source = readFileSync("examples/packages/local-dev/tweet-composer-kit/src/custom-pet-ui.js", "utf8");
-    const bundled = readFileSync("examples/packages/local-dev/tweet-composer-kit/dist/content.js", "utf8");
-    const manifest = JSON.parse(readFileSync("examples/packages/local-dev/tweet-composer-kit/milxdy.app.json", "utf8"));
+  it("ships as a disabled, lazy side-rail app and leaves Composer Kit pet-free", () => {
+    const source = readFileSync("examples/packages/local-dev/pets-maker/src/custom-pet-ui.js", "utf8");
+    const appSource = readFileSync("examples/packages/local-dev/pets-maker/src/content.js", "utf8");
+    const bundled = readFileSync("examples/packages/local-dev/pets-maker/dist/content.js", "utf8");
+    const manifest = JSON.parse(readFileSync("examples/packages/local-dev/pets-maker/milxdy.app.json", "utf8"));
+    const composerSource = readFileSync("examples/packages/local-dev/tweet-composer-kit/src/content.js", "utf8");
     expect(source).toContain('ariaLabel: "Custom Pet export"');
     expect(source).toContain('textContent: "Download remilia-pet-request.zip"');
     expect(source).toContain('ariaLive: "polite"');
     expect(bundled).toContain("Use $remilia-maker-pet-import with the attached Maker export bundle.");
-    expect(manifest.id).toBe("tweet-composer-kit");
-    expect(manifest.surfaces).toEqual(["composerAction", "replyAction"]);
-    expect(manifest.privacy.dataNotes.join(" ")).toContain("not uploaded");
+    expect(manifest.id).toBe("pets-maker");
+    expect(manifest.packageKind).toBe("app");
+    expect(manifest.defaultEnabled).toBe(false);
+    expect(manifest.surfaces).toEqual(["overlayApp"]);
+    expect(manifest.loadTriggers).toEqual(["dockOpen"]);
+    expect(manifest.hub.rail).toEqual({ supported: true, defaultPinned: true });
+    expect(manifest.dock.icon).toBe("assets/remy.png");
+    expect(manifest.privacy.dataNotes.join(" ")).toContain("Nothing is uploaded");
+    expect(appSource).toContain('panel.className = "pets-maker-app"');
+    expect(appSource).toContain('resolveAssetUrl("assets/remy.png")');
+    expect(composerSource).not.toContain("buildCustomPetExport");
+    expect(composerSource).not.toContain("custom-pet-ui");
     expect(source).not.toContain("Rights scope");
     expect(source).not.toContain("rightsConfirmed");
+    expect(source).not.toContain("rightsScope");
     expect(source).not.toContain('blankSelect("Leg color"');
     expect(source).toContain("legColorForRace(templateFamily, traits.race)");
     expect(source).toContain("NFT number (optional)");

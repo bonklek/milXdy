@@ -88,3 +88,11 @@ The imported pilot baseline and its package hashes are recorded in
 `docs/provenance/custom-pet-pipeline.md`. New source is bundled with
 `npm.cmd run build:composer-kit-package`, and the sanitized fixture is generated
 without a user or reference image.
+
+## Migration to the optional Pets Maker app
+
+The Custom Pet form, request contract, canvas/ZIP work, and pet-specific styles
+were moved to `../pets-maker/`. Composer Kit no longer imports, renders, or
+describes pet functionality. The historical continuation above records the
+earlier pilot location; current ownership is the disabled-by-default Pets Maker
+rail package requested during issue #191 follow-up QA.

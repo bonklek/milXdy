@@ -20,10 +20,9 @@
     "fileCount": 2,
     "schemaVersion": 1,
     "templateFamily": "milady",
-    "rightsScope": "private-review",
     "bodyCompletionCatalogVersion": 1,
-    "bundleSha256": "55cfcf0942ea6eb3bc071d92f6c8d35d574480b84233d850e230c942c23cfdf3",
-    "requestSha256": "ff9c46dfd226d353c5dcbb42b06b8b95ca5d4d0754a2504b440ea8c75d9730b6",
+    "bundleSha256": "4032946a7812e4d49fca6beaa4d4104c19b653083fd96fd9c592563c90070ca9",
+    "requestSha256": "87dc05ecb040b208dafdc5b4bc5f814d3d32ab02ca800139dfea39a92f7ab007",
     "avatarSha256": "c467182ca5bf5f624fc93cdeea68a7a63836f53cf0552c56e0ac27d6ab1f37d1",
     "avatarPreparation": "nearest-neighbor-4x-on-transparent-1024-canvas"
   },
