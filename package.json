@@ -57,6 +57,8 @@
     "build:share-kit-package": "node scripts/packages/build-share-kit.mjs",
     "build:maintainer-addons": "node scripts/packages/build-maintainer-addons.mjs",
     "verify:maintainer-addons": "node scripts/verify/maintainer-addons.mjs",
+    "build:composer-kit-package": "node scripts/packages/build-composer-kit.mjs",
+    "generate:pet-request-fixtures": "node scripts/fixtures/generate-remilia-pet-request-fixtures.mjs",
     "verify:local-app-package": "node scripts/packages/verify-local-app-package.mjs",
     "compose:local-apps": "node scripts/packages/compose-local-app-packages.mjs",
     "verify:local-app-composer": "node scripts/packages/compose-local-app-packages.mjs --check --packages-dir=examples/packages/first-party-replacements --allow-local-review --acknowledge-package-consent --acknowledge-first-party-replacement",

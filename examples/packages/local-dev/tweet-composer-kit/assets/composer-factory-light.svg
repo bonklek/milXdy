@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="3.5 4.5 16.5 16.5" role="img" aria-label="Composer Kit">
+  <g fill="none" stroke="#8198aa" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8">
+    <path d="M3.5 20.2V12.8h5.2l3.2-2.1v2.1l3.4-2.1v2.1l4.1-2.5v10Z"/>
+    <path d="M6.3 12.8V5.1h2.5v6.1M11.4 12.8V6.9h2.4v4.4"/>
+    <path d="M6.5 16.1h.1M11.3 16.1h.1M16.1 16.1h.1" stroke-width="2.2"/>
+  </g>
+</svg>
