@@ -14,6 +14,7 @@ import type {
 export class OverlayDockDomView implements DockViewPort {
   #root: HTMLElement | null = null;
   #rail: HTMLElement | null = null;
+  #sideControls: HTMLElement | null = null;
   #snapshot: DockSnapshot | null = null;
   #actions: DockViewActions | null = null;
   #resizeObserver: ResizeObserver | null = null;
@@ -45,6 +46,7 @@ export class OverlayDockDomView implements DockViewPort {
     root.dataset.side = snapshot.side;
     root.dataset.reorder = String(snapshot.reorderMode);
     root.dataset.settingsOpen = "false";
+    this.#updateSideControls(snapshot.side);
     const items = visibleItems(snapshot.order, snapshot.items, snapshot.hiddenItems);
     const renderedItemIds = new Set(items.map((item) => item.id));
     for (const button of this.#itemButtons()) {
@@ -86,6 +88,7 @@ export class OverlayDockDomView implements DockViewPort {
     this.#root?.remove();
     this.#root = null;
     this.#rail = null;
+    this.#sideControls = null;
     this.#snapshot = null;
     this.#actions = null;
   }
@@ -126,6 +129,7 @@ export class OverlayDockDomView implements DockViewPort {
       rail.className = "milxdy-overlay-dock-rail";
       root.prepend(rail);
     }
+    this.#ensureSideControls();
     if (this.#rail === rail) return;
     this.#rail = rail;
     rail.addEventListener("scroll", this.#scheduleRailIndicators, { passive: true });
@@ -134,6 +138,37 @@ export class OverlayDockDomView implements DockViewPort {
       this.#resizeObserver = new ResizeObserver(this.#scheduleRailIndicators);
       this.#resizeObserver.observe(rail);
     }
+  }
+
+  #ensureSideControls(): void {
+    const root = this.#root;
+    if (!root) return;
+    let controls = root.querySelector<HTMLElement>(":scope > .milxdy-overlay-dock-side-controls");
+    if (!controls) {
+      controls = document.createElement("div");
+      controls.className = "milxdy-overlay-dock-side-controls";
+      controls.setAttribute("aria-label", "Move app rail");
+      for (const side of ["left", "right"] as const) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "milxdy-overlay-dock-side-control";
+        button.dataset.side = side;
+        button.textContent = side === "left" ? "◀" : "▶";
+        button.setAttribute("aria-label", `Move app rail to the ${side}`);
+        button.addEventListener("click", () => this.#actions?.setSide(side));
+        controls.append(button);
+      }
+      root.prepend(controls);
+    }
+    this.#sideControls = controls;
+  }
+
+  #updateSideControls(side: "left" | "right"): void {
+    this.#sideControls?.querySelectorAll<HTMLButtonElement>(".milxdy-overlay-dock-side-control").forEach((button) => {
+      const active = button.dataset.side === side;
+      button.disabled = active;
+      button.dataset.active = String(active);
+    });
   }
 
   readonly #scheduleRailIndicators = (): void => {

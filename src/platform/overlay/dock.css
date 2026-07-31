@@ -74,6 +74,47 @@
       left: 8px;
     }
     #milxdy-overlay-dock-root[data-side="right"] { right: 8px; }
+    .milxdy-overlay-dock-side-controls {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 2px;
+      width: 56px;
+      margin: 0 0 3px;
+      padding: 3px 4px 0;
+      border: 2px solid var(--milxdy-dock-border);
+      border-bottom: 0;
+      background: var(--milxdy-dock-bg);
+      box-shadow:
+        inset 2px 2px 0 var(--milxdy-dock-highlight),
+        inset -2px 0 0 var(--milxdy-dock-shadow),
+        5px 5px 0 rgba(0, 0, 0, 0.26);
+    }
+    .milxdy-overlay-dock-side-control {
+      width: 22px;
+      height: 16px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--milxdy-dock-icon-border);
+      border-radius: 0;
+      background: var(--milxdy-dock-panel);
+      color: var(--milxdy-dock-active);
+      cursor: pointer;
+      font: 900 10px/1 system-ui, sans-serif;
+      box-shadow:
+        inset 1px 1px 0 var(--milxdy-dock-highlight),
+        inset -1px -1px 0 var(--milxdy-dock-shadow);
+    }
+    .milxdy-overlay-dock-side-control:active:not(:disabled) {
+      transform: translate(1px, 1px);
+      box-shadow:
+        inset 1px 1px 0 var(--milxdy-dock-shadow),
+        inset -1px -1px 0 var(--milxdy-dock-highlight);
+    }
+    .milxdy-overlay-dock-side-control:disabled {
+      color: color-mix(in srgb, var(--milxdy-dock-active) 35%, var(--milxdy-dock-shadow));
+      cursor: default;
+      opacity: 0.6;
+    }
     #milxdy-overlay-dock-root::before,
     #milxdy-overlay-dock-root::after {
       pointer-events: none;
