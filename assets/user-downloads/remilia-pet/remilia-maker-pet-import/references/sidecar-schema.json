@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://milxdy.local/schemas/remilia-pet-request.schema.json",
+  "title": "Remilia Maker pet request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "adapterSkill",
+    "templateFamily",
+    "templateFamilyOptions",
+    "templateVersion",
+    "imageSha256",
+    "image",
+    "traits",
+    "traitPolicy",
+    "bodyCompletion",
+    "rightsScope",
+    "generator"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "adapterSkill": { "const": "remilia-maker-pet-import" },
+    "templateFamily": {
+      "enum": ["milady", "remilio", "bonkler", "kagami"]
+    },
+    "templateFamilyOptions": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "milady" },
+        { "const": "remilio" },
+        { "const": "bonkler" },
+        { "const": "kagami" }
+      ],
+      "minItems": 4,
+      "maxItems": 4
+    },
+    "templateVersion": { "const": 1 },
+    "imageSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "mediaType", "width", "height"],
+      "properties": {
+        "file": { "const": "avatar.png" },
+        "mediaType": { "const": "image/png" },
+        "width": { "const": 1024 },
+        "height": { "const": 1024 }
+      }
+    },
+    "traits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["race", "hair", "eyes", "glasses", "shirt", "earrings"],
+      "properties": {
+        "race": { "$ref": "#/$defs/trait" },
+        "hair": { "$ref": "#/$defs/trait" },
+        "eyes": { "$ref": "#/$defs/trait" },
+        "glasses": { "$ref": "#/$defs/trait" },
+        "shirt": { "$ref": "#/$defs/trait" },
+        "earrings": { "$ref": "#/$defs/trait" }
+      }
+    },
+    "traitPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["background", "friend", "overlay", "shirtText"],
+      "properties": {
+        "background": { "const": "omit" },
+        "friend": { "const": "omit" },
+        "overlay": { "const": "omit" },
+        "shirtText": { "const": "convert-to-unreadable-motif" }
+      }
+    },
+    "bodyCompletion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["catalogVersion", "legCoverage", "legColorVariant", "bottom", "footwear"],
+      "properties": {
+        "catalogVersion": { "const": 1 },
+        "legCoverage": {
+          "enum": ["exposed", "partial", "covered"]
+        },
+        "legColorVariant": {
+          "enum": ["cool-pale", "warm-light", "warm-medium", "brown", "deep", "fantasy-green", "fantasy-blue"]
+        },
+        "bottom": { "$ref": "#/$defs/bodyAsset" },
+        "footwear": { "$ref": "#/$defs/bodyAsset" }
+      }
+    },
+    "rightsScope": {
+      "enum": ["private-review", "publication-cleared"]
+    },
+    "pet": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "personality": { "type": "string", "minLength": 1, "maxLength": 280 }
+      }
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "deterministicCompositeVersion"],
+      "properties": {
+        "id": { "const": "tweet-composer-kit" },
+        "version": { "const": "0.2.0-pilot" },
+        "deterministicCompositeVersion": { "const": 1 }
+      }
+    }
+  },
+  "$defs": {
+    "trait": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["assetId"],
+      "properties": {
+        "assetId": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9._:-]{0,79}$"
+        },
+        "label": {
+          "type": "string",
+          "maxLength": 120
+        }
+      }
+    },
+    "bodyAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["category", "assetId", "assetVersion", "colorVariant"],
+      "properties": {
+        "category": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,39}$"
+        },
+        "assetId": {
+          "type": "string",
+          "pattern": "^maker-(bottom|footwear)-[a-z0-9-]+-v1$"
+        },
+        "assetVersion": { "const": 1 },
+        "colorVariant": {
+          "enum": ["black", "white", "navy", "denim-blue", "khaki", "olive", "pink", "brown"]
+        }
+      }
+    }
+  }
+}

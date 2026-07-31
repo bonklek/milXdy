@@ -47,4 +47,5 @@ export const allowedMarkdownArchiveFiles = [
   "wiki-helper/remilia-wiki-article-writer/SKILL.md",
   "wiki-helper/remilia-wiki-article-writer/references/article-patterns.md",
   "wiki-helper/remilia-wiki-article-writer/references/interview-guide.md",
+  "remilia-pet/remilia-maker-pet-import/SKILL.md",
 ];

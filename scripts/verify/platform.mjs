@@ -311,6 +311,7 @@ async function verifyBuildOutputs() {
       assertEqualList([...(block.matches || [])].sort(), [...webAccessibleMatches].sort(), `${build.dir}: web accessible resource matches mismatch`);
       for (const resource of block.resources || []) {
         assert(!String(resource).startsWith("wiki-helper/"), `${build.dir}: wiki helper artifacts must not be web-accessible`);
+        assert(!String(resource).startsWith("remilia-pet/"), `${build.dir}: Remilia pet skill artifacts must not be web-accessible`);
       }
     }
     const expectedHosts = new Set(hostPermissionsForProfile(registry, build.profile));

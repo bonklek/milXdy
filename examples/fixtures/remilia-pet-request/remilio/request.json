@@ -1,0 +1,78 @@
+{
+  "adapterSkill": "remilia-maker-pet-import",
+  "bodyCompletion": {
+    "bottom": {
+      "assetId": "maker-bottom-cargo-shorts-v1",
+      "assetVersion": 1,
+      "category": "cargo-shorts",
+      "colorVariant": "olive"
+    },
+    "catalogVersion": 1,
+    "footwear": {
+      "assetId": "maker-footwear-boots-v1",
+      "assetVersion": 1,
+      "category": "boots",
+      "colorVariant": "brown"
+    },
+    "legColorVariant": "warm-medium",
+    "legCoverage": "exposed"
+  },
+  "generator": {
+    "deterministicCompositeVersion": 1,
+    "id": "tweet-composer-kit",
+    "version": "0.2.0-pilot"
+  },
+  "image": {
+    "file": "avatar.png",
+    "height": 1024,
+    "mediaType": "image/png",
+    "width": 1024
+  },
+  "imageSha256": "ece7cc2d4f538c16a9f520d37978715e7cae737c9f9ef3df8d2c14b4c47e0f64",
+  "pet": {
+    "name": "Sanitized Remilio",
+    "personality": "A sanitized local contract fixture with no user or reference image."
+  },
+  "rightsScope": "private-review",
+  "schemaVersion": 1,
+  "templateFamily": "remilio",
+  "templateFamilyOptions": [
+    "milady",
+    "remilio",
+    "bonkler",
+    "kagami"
+  ],
+  "templateVersion": 1,
+  "traitPolicy": {
+    "background": "omit",
+    "friend": "omit",
+    "overlay": "omit",
+    "shirtText": "convert-to-unreadable-motif"
+  },
+  "traits": {
+    "earrings": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "eyes": {
+      "assetId": "remilio-sample-eyes-v1",
+      "label": "Sanitized sample eyes"
+    },
+    "glasses": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "hair": {
+      "assetId": "remilio-sample-hair-v1",
+      "label": "Sanitized sample hair"
+    },
+    "race": {
+      "assetId": "remilio-sample-race-v1",
+      "label": "Sanitized sample race"
+    },
+    "shirt": {
+      "assetId": "remilio-sample-shirt-v1",
+      "label": "Sanitized sample shirt"
+    }
+  }
+}

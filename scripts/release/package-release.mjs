@@ -250,6 +250,9 @@ function assertManifestResources(zip, archive, manifest) {
       if (String(resource).startsWith("wiki-helper/")) {
         throw new Error(`${archive}: wiki-helper artifacts must not be web-accessible`);
       }
+      if (String(resource).startsWith("remilia-pet/")) {
+        throw new Error(`${archive}: Remilia pet skill artifacts must not be web-accessible`);
+      }
       if (String(resource).startsWith("user-downloads/")) {
         throw new Error(`${archive}: user-download artifacts must not be web-accessible`);
       }

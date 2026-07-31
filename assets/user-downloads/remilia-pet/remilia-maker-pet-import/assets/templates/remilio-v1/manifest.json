@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "templateId": "remilio-v1",
+  "family": "remilio",
+  "templateVersion": 1,
+  "status": "versioned-specification",
+  "motionProfile": "../motion-profile-v1.json",
+  "bodyClass": "compact-humanoid-neochibi",
+  "description": "Compact Remilio proportions with springy readable limbs, broad facial motion, and tightly registered feet.",
+  "neutralFullBody": {
+    "coordinateSpace": "normalized-cell",
+    "bodyCenter": [0.5, 0.61],
+    "baseline": 0.92,
+    "headCenter": [0.5, 0.31],
+    "leftHand": [0.33, 0.59],
+    "rightHand": [0.67, 0.59],
+    "leftFoot": [0.42, 0.92],
+    "rightFoot": [0.58, 0.92],
+    "headToBodyRatio": 0.43,
+    "stanceWidth": 0.2
+  },
+  "motionGrammar": {
+    "idle": "Readable breath and blink with a tiny compact-body squash.",
+    "directionalRun": "Springy alternating gait with clear contact and flight phases.",
+    "wave": "Friendly shoulder-and-hand wave with stable feet.",
+    "jump": "Compact anticipation and buoyant apex.",
+    "failed": "Comic whole-posture slump without detached effects.",
+    "waiting": "Patient foot tap or expectant lean.",
+    "working": "Busy hands and concentrated face, never a running gait.",
+    "review": "Forward inspect and compact approving nod.",
+    "look": "Large eyes lead, followed by head and upper torso; preserve facial proportions."
+  },
+  "geometry": {
+    "permittedEnvelope": [0.14, 0.06, 0.86, 0.95],
+    "requiredInnerRegions": [
+      { "id": "head-core", "rect": [0.36, 0.18, 0.64, 0.44], "minimumCoverage": 0.45 },
+      { "id": "torso-core", "rect": [0.36, 0.43, 0.64, 0.72], "minimumCoverage": 0.52 },
+      { "id": "lower-body-core", "rect": [0.37, 0.67, 0.63, 0.91], "minimumCoverage": 0.36 },
+      { "id": "foot-contact", "rect": [0.34, 0.87, 0.66, 0.94], "minimumCoverage": 0.2 }
+    ],
+    "expansionZones": {
+      "hair": [0.06, 0.0, 0.94, 0.7],
+      "headwear": [0.08, 0.0, 0.92, 0.38],
+      "costume": [0.04, 0.28, 0.96, 0.96],
+      "prop": [0.0, 0.18, 1.0, 0.92]
+    }
+  },
+  "thresholds": {
+    "minimumVisibleAlphaPixels": 210,
+    "maximumEdgeAlphaPixels": 0,
+    "baselineTolerance": 0.04,
+    "centroidTolerance": 0.1,
+    "scaleTolerance": 0.14,
+    "maximumOutsideEnvelopeRatio": 0.018,
+    "maximumAdjacentCentroidStep": 0.16,
+    "maximumLoopClosureCentroidStep": 0.11
+  }
+}
