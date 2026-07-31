@@ -1,4 +1,5 @@
 import { visibleItems } from "./dock-order-policy";
+import { DockReelSoundPlayer } from "./dock-reel-sound";
 import { createDockSettingsPanel } from "./dock-settings-view";
 import { injectDockStyles } from "./dock-styles";
 import { updateDockIcon } from "./dock-dom-utils";
@@ -34,6 +35,7 @@ export class OverlayDockDomView implements DockViewPort {
   #mediaViewerCheckQueued = false;
   #railIndicatorFrame = 0;
   #reelMotionTimer = 0;
+  readonly #reelSound = new DockReelSoundPlayer();
 
   mount(): void {
     if (this.#root?.isConnected) return;
@@ -47,6 +49,7 @@ export class OverlayDockDomView implements DockViewPort {
     }
     this.#root = root;
     this.#ensureRail();
+    this.#reelSound.start();
     this.#observeHostMediaViewer();
   }
 
@@ -96,6 +99,7 @@ export class OverlayDockDomView implements DockViewPort {
     this.#reelViewport?.removeEventListener("wheel", this.#handleReelWheel);
     if (this.#railIndicatorFrame) cancelAnimationFrame(this.#railIndicatorFrame);
     if (this.#reelMotionTimer) window.clearTimeout(this.#reelMotionTimer);
+    this.#reelSound.dispose();
     this.#railIndicatorFrame = 0;
     this.#reelMotionTimer = 0;
     this.#root?.remove();
@@ -302,6 +306,7 @@ export class OverlayDockDomView implements DockViewPort {
     const maxStep = Math.max(0, Math.round((track.scrollHeight - viewport.clientHeight) / REEL_ITEM_STEP));
     const nextStep = Math.max(0, Math.min(maxStep, currentStep + direction));
     if (nextStep === currentStep) return false;
+    this.#reelSound.play(direction);
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
     track.dataset.motion = direction > 0 ? "down" : "up";
     viewport.scrollTo({ top: nextStep * REEL_ITEM_STEP, behavior: reducedMotion ? "auto" : "smooth" });
