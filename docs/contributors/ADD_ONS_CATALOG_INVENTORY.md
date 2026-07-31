@@ -8,7 +8,7 @@ actions remain explicit.
 
 ## Composer Kit — package ID `tweet-composer-kit`
 
-- Current package: the `Tweet Composer Kit 0.1.0-pilot` package exercised in
+- Current package: the `Tweet Composer Kit 0.2.0-pilot` package exercised in
   cumulative QA by issue #188.
 - Current catalog status: `under-review`. The package is maintainer-authored and
   present in QA, but its source root and exact package hash are not yet checked
@@ -17,8 +17,9 @@ actions remain explicit.
 - Kind/lifecycle: runtime `app`, disabled by default, opened only from declared
   composer and reply actions.
 - Capabilities: host-owned native Drafts, local quick-reply phrases, Remibooru
-  browse/search, reviewed Milady/Remilio/Bonkler/Kagami maker handoffs, and an
-  explicit CHEESEWORLD link.
+  browse/search, reviewed Milady/Remilio/Bonkler/Kagami maker handoffs, local
+  Custom Pet request ZIP export, an explicit static-instruction clipboard
+  action, and an explicit CHEESEWORLD link.
 - Settings/storage: `milxdy.local.tweet-composer-kit.enabled` and up to 20
   phrases in `milxdy.local.tweet-composer-kit.customPhrases`.
 - Site scope: X/Twitter composer and reply action surfaces. The package has no
@@ -28,6 +29,11 @@ actions remain explicit.
   `https://maker.remilia.org/*` and `https://remibooru.com/*` only after
   explicit package actions. Maker handoff sends reviewed caption fields only;
   Remibooru queries send bounded public facets, cursor, and page size only.
+- Local file boundary: Custom Pet export reads only the PNG selected in its
+  visible file control, combines explicit trait and rights choices locally,
+  validates and downloads a two-file request ZIP, and never uploads, caches,
+  posts, publishes, or infers missing rights or body choices. The optional
+  clipboard control copies only its visible static handoff sentence.
 - BOORU boundary: Remibooru metadata browsing and canonical-source links are a
   Composer Kit capability owned by #17/#188. It does not attach, download,
   cache, upload, or post media.
