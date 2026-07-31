@@ -93,6 +93,8 @@ type OpenAddonsSettingsMessage = {
 
 type OpenAddonsCatalogMessage = { type: "milxdy:openAddonsCatalog" };
 
+type OpenRemiNetSessionMessage = { type: "milxdy:openRemiNetSession" };
+
 type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
   url: string;
@@ -217,6 +219,11 @@ setupBackgroundMessageRouter([
     handle: openAddonsCatalogWindow,
   },
   {
+    type: "milxdy:openRemiNetSession",
+    matches: isOpenRemiNetSessionMessage,
+    handle: (_message, sender) => openRemiNetSession(sender),
+  },
+  {
     type: "milxdy:checkUpdate",
     matches: isUpdateMessage,
     handle: runUpdateCheck,
@@ -322,6 +329,16 @@ function isLocalAddonStatusMessage(message: unknown): message is LocalAddonStatu
 
 function isOpenAddonsCatalogMessage(message: unknown): message is OpenAddonsCatalogMessage {
   return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:openAddonsCatalog");
+}
+
+function isOpenRemiNetSessionMessage(message: unknown): message is OpenRemiNetSessionMessage {
+  return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:openRemiNetSession");
+}
+
+async function openRemiNetSession(sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  await chrome.tabs.create({ url: "https://www.remilia.net/", active: false });
+  return { ok: true };
 }
 
 async function openAddonsCatalogWindow(): Promise<Record<string, unknown>> {

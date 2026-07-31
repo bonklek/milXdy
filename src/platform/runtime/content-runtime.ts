@@ -1513,6 +1513,38 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
         return { connected: Boolean(record?.signedIn) };
       },
+      openRemiNetSession: async () => {
+        const response = await chrome.runtime.sendMessage({ type: "milxdy:openRemiNetSession" }).catch(() => null);
+        const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
+        return {
+          ok: record?.ok === true,
+          error: typeof record?.error === "string" ? record.error : undefined,
+        };
+      },
+      stageRemiNetChatPng: async ({ blob, fileName }) => {
+        if (blob.type && blob.type !== "image/png") return { ok: false, error: "Only PNG images can be staged." };
+        if (blob.size > 10 * 1024 * 1024) return { ok: false, error: "Images must be 10 MB or smaller." };
+        const chat = state.apps.find((candidate) => candidate.id === "reminetChat");
+        if (!chat || chat.available === false) return { ok: false, error: "RemiNet Chat is unavailable in this build." };
+        if (!state.enabledApps.has(chat.id)) {
+          if (!chat.setEnabled) return { ok: false, error: "Enable RemiNet Chat in Apps & Features first." };
+          await chat.setEnabled(true);
+          if (!await chat.isEnabled()) return { ok: false, error: "RemiNet Chat could not be enabled." };
+          state.enabledApps.add(chat.id);
+          ensureDefaultRailPin(chat);
+          updateDockRegistration(chat);
+          updateScannerConfiguration();
+        }
+        const chatModule = await loadApp(chat, "userAction:stageRemiNetChatPng");
+        if (!chatModule?.stageLocalAttachment) return { ok: false, error: "RemiNet Chat attachment staging is unavailable." };
+        const result = await chatModule.stageLocalAttachment(new File(
+          [blob],
+          fileName || "milxdy-share.png",
+          { type: "image/png" },
+        ));
+        if (result.ok) await chatModule.open?.();
+        return result;
+      },
     });
   }
 

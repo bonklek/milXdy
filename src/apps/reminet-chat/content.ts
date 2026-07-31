@@ -312,6 +312,24 @@ export function open(): void {
   void refreshAuthAndHistory();
 }
 
+export async function stageLocalAttachment(file: File): Promise<{ ok: boolean; error?: string }> {
+  if (!lifecycleActive()) return { ok: false, error: "RemiNet Chat is unavailable." };
+  const error = validateAttachment(file);
+  if (error) return { ok: false, error };
+  if (state.pendingAttachments.length >= 4) return { ok: false, error: "Maximum 4 attachments." };
+  state.composerError = "";
+  state.pendingAttachments.push({
+    id: crypto.randomUUID(),
+    name: file.name,
+    mimeType: file.type,
+    dataUrl: await fileToDataUrl(file),
+    status: "ready",
+  });
+  open();
+  render();
+  return { ok: true };
+}
+
 export function close(): void {
   closeChatPanel();
 }

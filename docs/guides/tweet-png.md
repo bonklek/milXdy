@@ -4,11 +4,16 @@ Share Kit owns the reviewed local Tweet PNG workflow. The base milXdy client own
 
 ## Export a post
 
-1. Open an X/Twitter post share menu and choose **Review with Share Kit**.
+1. Open an X/Twitter post share menu and choose **Share as PNG**.
 2. Review the rendered PNG. Video posts use the available thumbnail with a play icon overlay; the export never embeds or starts a video.
 3. Use **Copy PNG** or **Download** from the top action row.
 
-**Share** is deliberately disabled until a compatible live RemiNet client is present. Share Kit does not substitute browser share, upload through an undeclared endpoint, or transmit anything automatically.
+When the RemiNet browser session is offline, **Reconnect** opens the fixed
+RemiliaNET session page in an inactive tab and **Refresh** only retests that
+session. Once connected, those controls are replaced by **Share to RemiNet**.
+That action stages the reviewed PNG as a pending local attachment and opens the
+existing RemiNet Chat rail app. The image is not uploaded until the user
+explicitly presses Send in Chat.
 
 ## Preview settings
 
