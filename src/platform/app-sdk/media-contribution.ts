@@ -45,6 +45,11 @@ export class OpaqueMediaHandleStore {
     this.#records.delete(handle);
   }
 
+  clear(): void {
+    this.#claimed.clear();
+    this.#records.clear();
+  }
+
   prune(now = Date.now()): void {
     for (const [handle, record] of this.#records) if (record.expiresAt < now) this.consume(handle);
   }

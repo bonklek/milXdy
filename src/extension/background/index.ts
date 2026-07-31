@@ -589,6 +589,13 @@ async function discardPersistedContextMedia(handle: string): Promise<void> {
   await chrome.storage.session.remove(contextMediaSessionKey(handle));
 }
 
+async function clearPersistedContextMedia(): Promise<void> {
+  contextMediaHandles.clear();
+  const stored = await chrome.storage.session.get(null);
+  const keys = Object.keys(stored).filter((key) => key.startsWith(CONTEXT_MEDIA_SESSION_PREFIX));
+  if (keys.length) await chrome.storage.session.remove(keys);
+}
+
 async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender) || !contributionDeclaration(message.appId, message.actionId)) return unsupportedSender();
   const parsed = parseAllowedUrl(message.sourceUrl, X_CONTEXT_MEDIA_RULES);
@@ -608,6 +615,7 @@ async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: 
       height = bitmap.height;
       bitmap.close();
     }
+    await clearPersistedContextMedia();
     const mediaRecord = { appId: message.appId, actionId: message.actionId, mimeType, bytes, width, height, altAvailable: message.altAvailable };
     const mediaHandle = contextMediaHandles.create(mediaRecord);
     await persistContextMedia(mediaHandle, mediaRecord);
