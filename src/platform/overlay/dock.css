@@ -150,6 +150,7 @@
       opacity: 0;
       box-shadow: 2px 2px 0 var(--milxdy-dock-shadow);
       transition: opacity 120ms ease;
+      display: none !important;
     }
     #milxdy-overlay-dock-root::before {
       content: "▲";
@@ -173,8 +174,7 @@
         var(--milxdy-dock-host-shortcut-max-height, 100vh)
       );
       padding: 6px 4px;
-      overflow-x: hidden;
-      overflow-y: auto;
+      overflow: hidden;
       border: 2px solid var(--milxdy-dock-border);
       border-radius: 0;
       background: var(--milxdy-dock-bg);
@@ -182,19 +182,72 @@
         inset 2px 2px 0 var(--milxdy-dock-highlight),
         inset -2px -2px 0 var(--milxdy-dock-shadow),
         5px 5px 0 rgba(0, 0, 0, 0.26);
-      scrollbar-width: thin;
-      scrollbar-color: var(--milxdy-dock-scrollbar) transparent;
-      scroll-snap-type: y proximity;
     }
-    .milxdy-overlay-dock-rail::-webkit-scrollbar {
-      width: 5px;
+    .milxdy-overlay-dock-static,
+    .milxdy-overlay-dock-reel,
+    .milxdy-overlay-dock-reel-track {
+      display: grid;
+      justify-items: center;
+      width: 48px;
     }
-    .milxdy-overlay-dock-rail::-webkit-scrollbar-track {
-      background: transparent;
+    .milxdy-overlay-dock-static,
+    .milxdy-overlay-dock-reel-track { gap: 4px; }
+    .milxdy-overlay-dock-reel { gap: 2px; }
+    .milxdy-overlay-dock-reel-viewport {
+      width: 48px;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: none;
+      scroll-behavior: smooth;
+      scroll-snap-type: y mandatory;
     }
-    .milxdy-overlay-dock-rail::-webkit-scrollbar-thumb {
+    .milxdy-overlay-dock-reel-viewport::-webkit-scrollbar {
+      display: none;
+      width: 0;
+      height: 0;
+    }
+    .milxdy-overlay-dock-reel-control {
+      position: relative;
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 16px;
+      margin: 0;
+      padding: 0;
+      border: 1px solid var(--milxdy-dock-icon-border);
       border-radius: 0;
-      background: var(--milxdy-dock-scrollbar);
+      background: var(--milxdy-dock-panel);
+      color: var(--milxdy-dock-active);
+      cursor: pointer;
+      box-shadow:
+        inset 1px 1px 0 var(--milxdy-dock-highlight),
+        inset -1px -1px 0 var(--milxdy-dock-shadow);
+    }
+    .milxdy-overlay-dock-reel-control::before {
+      content: "";
+      width: 0;
+      height: 0;
+      border-inline: 6px solid transparent;
+    }
+    .milxdy-overlay-dock-reel-control[data-direction="up"]::before {
+      border-bottom: 7px solid currentColor;
+      transform: translateY(-1px);
+    }
+    .milxdy-overlay-dock-reel-control[data-direction="down"]::before {
+      border-top: 7px solid currentColor;
+      transform: translateY(1px);
+    }
+    .milxdy-overlay-dock-reel-control:active:not(:disabled) {
+      transform: translate(1px, 1px);
+      box-shadow:
+        inset 1px 1px 0 var(--milxdy-dock-shadow),
+        inset -1px -1px 0 var(--milxdy-dock-highlight);
+    }
+    .milxdy-overlay-dock-reel-control:disabled {
+      color: color-mix(in srgb, var(--milxdy-dock-active) 28%, var(--milxdy-dock-shadow));
+      cursor: default;
+      opacity: 0.55;
     }
     .milxdy-overlay-dock-item {
       position: relative;
@@ -210,11 +263,23 @@
       color: #fff4cf;
       cursor: pointer;
       font: 900 18px/1 inherit;
-      scroll-snap-align: center;
+      scroll-snap-align: start;
       box-shadow:
         inset 2px 2px 0 var(--milxdy-dock-highlight),
         inset -2px -2px 0 var(--milxdy-dock-shadow);
       transition: none;
+    }
+    .milxdy-overlay-dock-reel-track[data-motion] .milxdy-overlay-dock-item {
+      animation: milxdy-dock-reel-tile 240ms cubic-bezier(.2,.75,.2,1) both;
+      animation-delay: var(--milxdy-reel-delay, 0ms);
+      transform-origin: center;
+    }
+    .milxdy-overlay-dock-reel-track[data-motion="up"] .milxdy-overlay-dock-item {
+      animation-direction: reverse;
+    }
+    @keyframes milxdy-dock-reel-tile {
+      0%, 100% { filter: none; transform: perspective(140px) rotateX(0deg) scale(1); }
+      48% { filter: brightness(.88); transform: perspective(140px) rotateX(-9deg) scale(.97); }
     }
     .milxdy-overlay-dock-item[data-hovered="true"],
     .milxdy-overlay-dock-item[data-active="true"] {
@@ -303,6 +368,8 @@
       50% { transform: scale(1.24) rotate(90deg); }
     }
     @media (prefers-reduced-motion: reduce) {
+      .milxdy-overlay-dock-reel-viewport { scroll-behavior: auto; }
+      .milxdy-overlay-dock-reel-track[data-motion] .milxdy-overlay-dock-item { animation: none; }
       .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"][data-launching="true"] .milxdy-overlay-dock-icon { animation: none; opacity: .55; }
     }
     .milxdy-overlay-dock-item[data-item-id="milxdyAddOnsCatalog"]:active {

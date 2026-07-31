@@ -11,7 +11,7 @@ describe("dock DOM and style compatibility", () => {
     expect(DOCK_STYLE_ID).toBe("milxdy-overlay-dock-style");
     const runtimeStyles = `${styles.replace(/\r\n/g, "\n").replace(/\n$/, "")}\n  `;
     expect(createHash("sha256").update(runtimeStyles).digest("hex"))
-      .toBe("5ab52a012f1adae7cad56915e37ddf62d1c7351c64611b8a7ba2ae5d052fe95e");
+      .toBe("8902245cd22be70e207523e9ec59283888ac7293ce5aee6ef5af78a3c0b06e79");
   });
 
   it("joins and centers the rail side controls", () => {
@@ -26,8 +26,19 @@ describe("dock DOM and style compatibility", () => {
     expect(styles).toContain("overflow-y: auto");
   });
 
+  it("uses a whole-item reel with buttons instead of a visible scrollbar", () => {
+    expect(styles).toContain(".milxdy-overlay-dock-static");
+    expect(styles).toContain(".milxdy-overlay-dock-reel-control");
+    expect(styles).toContain("scroll-snap-type: y mandatory");
+    expect(styles).toContain("scrollbar-width: none");
+    expect(styles).toContain("milxdy-dock-reel-tile");
+  });
+
   it.each([
     ".milxdy-overlay-dock-rail",
+    ".milxdy-overlay-dock-static",
+    ".milxdy-overlay-dock-reel-viewport",
+    ".milxdy-overlay-dock-reel-control",
     ".milxdy-overlay-dock-side-controls",
     ".milxdy-overlay-dock-item",
     ".milxdy-overlay-dock-icon",
