@@ -1,0 +1,107 @@
+{
+  "$schema": "https://milxdy.local/schemas/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "pets-maker",
+  "name": "Pets Maker",
+  "version": "0.1.0-pilot",
+  "description": "An optional local-only side-rail app for preparing validated Remilia Maker pet-request bundles.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
+    "notes": ["Uses only the public overlay app lifecycle, local assets, diagnostics, and cancellation contract."]
+  },
+  "contentEntry": "dist/content.js",
+  "css": [
+    { "id": "pets-maker.theme", "path": "styles/theme.css" },
+    { "id": "pets-maker.overlay", "path": "styles/overlay.css" },
+    { "id": "pets-maker.form", "path": "styles/maker.css" }
+  ],
+  "dock": {
+    "label": "Pets",
+    "icon": "assets/remy.png",
+    "defaultSide": "right"
+  },
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": ["milxdy.local.pets-maker.enabled"]
+  },
+  "settings": [
+    {
+      "id": "pets-maker.enabled",
+      "label": "Pets Maker",
+      "description": "Enable the optional Remilia pet bundle maker and its side-rail launcher.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": { "area": "local", "key": "milxdy.local.pets-maker.enabled" },
+      "defaultValue": false,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["firstRun"]
+    }
+  ],
+  "surfaces": ["overlayApp"],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": ["Loads on dockOpen and removes all app-owned DOM and listeners on close, disable, abort, or dispose."]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": ["https://x.com/*", "https://twitter.com/*"],
+      "integration": "overlayApp",
+      "surfaces": ["overlayApp"],
+      "presentation": "sideRailOverlay",
+      "notes": ["Uses the shared X/Twitter App SDK runtime and requests no additional host permission."]
+    }
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "moderate",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "moderate"
+  },
+  "loadTriggers": ["dockOpen"],
+  "chrome": {
+    "nativeStyle": "native",
+    "supportedStyles": ["native", "classic", "reminet"],
+    "notes": ["Uses copied public SDK semantic tokens and compact overlay primitives."]
+  },
+  "hub": {
+    "category": "media",
+    "shortDescription": "Build a local Maker avatar bundle for the Remilia pet pipeline.",
+    "longDescription": "Choose a Maker family and NFT number, provide the local transparent avatar and exact traits, complete the lower body, preview the deterministic composite, and download a validated bundle.",
+    "rail": { "supported": true, "defaultPinned": true },
+    "presets": ["full"],
+    "permissionNotes": [],
+    "dataNotes": ["Reads only the PNG selected in the visible app form and processes it in memory for preview and download."],
+    "remoteServices": [],
+    "localStorageNotes": ["Stores only the generated app enablement toggle."],
+    "privacyLabels": ["local-only", "local-files"]
+  },
+  "privacy": {
+    "permissionNotes": [],
+    "dataNotes": ["The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP. Nothing is uploaded, posted, published, or cached."],
+    "localStorageNotes": ["Stores only app enablement; maker form state and selected files are not persisted."],
+    "remoteServices": [],
+    "privacyLabels": ["local-only", "local-files"],
+    "consentRequired": true
+  },
+  "package": {
+    "assets": [
+      { "id": "pets-maker.remy", "path": "assets/remy.png", "kind": "icon", "webAccessible": true, "sha256": "90e54050cd9eb16c79c14428a56e47ccfa2a6717c8c8a26ed8cf862064eb20fb" },
+      { "id": "pets-maker.theme", "path": "styles/theme.css", "kind": "style", "webAccessible": false },
+      { "id": "pets-maker.overlay", "path": "styles/overlay.css", "kind": "style", "webAccessible": false },
+      { "id": "pets-maker.form", "path": "styles/maker.css", "kind": "style", "webAccessible": false }
+    ],
+    "webAccessibleAssets": ["assets/remy.png"]
+  },
+  "review": {
+    "status": "local",
+    "sourceUrl": "https://github.com/bonklek/milXdy/issues/191",
+    "notes": ["Novel optional App SDK package; local composition requires explicit review acknowledgement.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, remote services, background handlers, or page observers."]
+  }
+}

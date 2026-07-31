@@ -1,5 +1,4 @@
 /** Authored against the public milXdy App SDK and bundled for local review. */
-import { buildCustomPetExport } from "./custom-pet-ui.js";
 
 let context = null;
 
@@ -78,7 +77,6 @@ function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteSer
     el("div", { className: "tweet-composer-kit__caption-fields" }, topInput, bottomInput),
     buildMemeControls(random),
     buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }),
-    buildCustomPetExport({ signal }),
     buildMediaPicker({ queryRemoteService, signal }),
     buildContributionHandoff({ signal }),
   );

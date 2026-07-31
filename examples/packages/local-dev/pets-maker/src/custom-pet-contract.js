@@ -128,7 +128,6 @@ export const BODY_COMPLETION_CATALOG = Object.freeze({
 
 const ASSET_ID_PATTERN = /^[a-z0-9][a-z0-9._:-]{0,79}$/u;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/u;
-const RIGHTS_SCOPES = new Set(["private-review", "publication-cleared"]);
 const LEG_COVERAGE = new Set(BODY_COMPLETION_CATALOG.legCoverage.map((item) => item.id));
 
 export function bottomForAssetId(assetId) {
@@ -168,7 +167,6 @@ export function makePetRequest({
   imageSha256,
   traits,
   bodyCompletion,
-  rightsScope,
   petName = "",
   personality = "",
 }) {
@@ -194,10 +192,9 @@ export function makePetRequest({
       bottom: { ...bodyCompletion.bottom },
       footwear: { ...bodyCompletion.footwear },
     },
-    rightsScope,
     generator: {
-      id: "tweet-composer-kit",
-      version: "0.2.0-pilot",
+      id: "pets-maker",
+      version: "0.1.0-pilot",
       deterministicCompositeVersion: 1,
     },
   };
@@ -263,7 +260,12 @@ export function validatePetRequestShape(request) {
     errors.push("traitPolicy must explicitly omit background, friend, and overlay, and adapt shirt text.");
   }
   validateBodyCompletion(request.bodyCompletion, errors);
-  if (!RIGHTS_SCOPES.has(request.rightsScope)) errors.push("rightsScope must be private-review or publication-cleared.");
+  if (request.rightsScope != null) errors.push("rightsScope is not accepted; Pets Maker does not collect or infer rights declarations.");
+  if (request.generator?.id !== "pets-maker"
+    || request.generator?.version !== "0.1.0-pilot"
+    || request.generator?.deterministicCompositeVersion !== 1) {
+    errors.push("generator must identify Pets Maker 0.1.0-pilot composite version 1.");
+  }
   if (request.pet?.name && String(request.pet.name).length > 80) errors.push("pet.name exceeds 80 characters.");
   if (request.pet?.personality && String(request.pet.personality).length > 280) errors.push("pet.personality exceeds 280 characters.");
   return errors;

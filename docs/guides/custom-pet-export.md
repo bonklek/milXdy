@@ -1,26 +1,30 @@
-# Custom Pet export
+# Pets Maker export
 
-Composer Kit can turn one explicitly selected, transparent Maker PNG into a local handoff bundle for Codex. It does not upload the image, invoke Codex, generate animation rows, publish a pet, or post to X.
+Pets Maker is an optional, disabled-by-default App SDK package. It opens from
+the side rail as a dedicated popout and turns one explicitly selected,
+transparent Maker PNG into a local handoff bundle for Codex. It does not upload
+the image, invoke Codex, generate animation rows, publish a pet, or post to X.
 
 ## Export
 
-1. Open **Composer Kit** from the existing X composer action.
-2. Expand **Custom Pet export**.
-3. Select Milady, Remilio, Bonkler, or Kagami and choose the transparent PNG downloaded from that Maker.
-4. Enter every stable Maker trait ID. Use the explicit ID `none` for an absent trait; no missing trait is invented.
-5. Choose leg coverage, leg color, a compatible bottom garment and color, and footwear and color.
-6. Review the completed 1024×1024 avatar preview.
-7. Confirm the visible rights scope and download `remilia-pet-request.zip`.
+1. Enable **Pets Maker** in **Apps & Features**, then open **Pets** from the rail.
+2. Select Milady, Remilio, Bonkler, or Kagami.
+3. Optionally enter the source NFT number. The app applies the family-specific
+   range: Milady 0-9999, Remilio 1-10000, Bonkler 1-150, Kagami 1-3000.
+4. Choose the transparent PNG downloaded from that Maker.
+5. Enter every stable Maker trait ID. Use `none` for an absent trait; no missing
+   trait is invented.
+6. Choose leg coverage, a compatible bottom and color, and footwear and color.
+   Leg color is derived from the selected family's race trait and is not a
+   separate input.
+7. Review the completed 1024x1024 avatar and download
+   `remilia-pet-request.zip`.
 
-The ZIP contains exactly:
-
-```text
-remilia-pet-request.zip
-├── avatar.png
-└── request.json
-```
-
-The package checks the PNG signature and dimensions, recomputes its SHA-256, validates the sidecar, writes a deterministic stored ZIP, reopens that ZIP locally, and validates the hash again before download.
+The ZIP contains exactly `avatar.png` and `request.json`. The package checks the
+PNG signature and dimensions, recomputes SHA-256, validates the sidecar, writes
+a deterministic stored ZIP, reopens it locally, and validates the hash again.
+The sidecar contains no rights checkbox or rights declaration; downstream use
+remains private unless the user establishes permission elsewhere.
 
 After a successful export, attach the ZIP to Codex and use:
 
@@ -28,23 +32,17 @@ After a successful export, attach the ZIP to Codex and use:
 Use $remilia-maker-pet-import with the attached Maker export bundle.
 ```
 
-## Contract
+## Contract and recovery
 
-`request.json` follows [the version 1 schema](../schemas/remilia-pet-request.schema.json). Its compatibility boundary includes:
+`request.json` follows [the version 1 schema](../schemas/remilia-pet-request.schema.json).
+It records the family and optional NFT number, exact PNG SHA-256, canonical
+dimensions, stable trait IDs, omission/adaptation policy, versioned body assets,
+derived leg color, and Pets Maker generator version.
 
-- one of the four template families and template version 1;
-- the exact PNG SHA-256 and canonical 1024×1024 dimensions;
-- stable IDs for race, hair, eyes, glasses, shirt, and earrings;
-- explicit omission/adaptation policy for background, friend, overlay, and shirt text;
-- versioned leg, bottom, footwear, and palette choices;
-- a visible rights scope, conservatively initialized to `private-review`.
-
-Only combinations declared by the versioned completion catalog can be exported. Changing leg coverage can invalidate a prior bottom choice, but the UI never replaces it with a guessed selection.
-
-## Recovery
-
-- **Opaque PNG:** return to the Maker and export a transparent avatar. Background material is outside the pet identity contract.
-- **Missing trait:** enter its exact asset ID or the explicit ID `none`.
-- **Unavailable bottom:** choose a garment compatible with the current leg coverage.
-- **Hash or ZIP failure:** the bundle is not downloaded; the panel keeps the current selections so the user can retry.
-- **Legacy upper-body avatar:** complete the visible lower-body fields. Neither Composer Kit nor the adapter infers a lower half.
+- If the PNG is opaque, return to the Maker and export a transparent avatar.
+- If a trait is absent, enter the explicit ID `none`.
+- If race cannot be mapped to a family-specific leg color, correct the exact
+  race asset ID; the app does not guess.
+- If a bottom is unavailable, choose one compatible with leg coverage.
+- On hash or ZIP failure, no bundle is downloaded and the visible form remains
+  available to retry.

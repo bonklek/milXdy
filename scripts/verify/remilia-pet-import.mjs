@@ -7,7 +7,7 @@ import {
   createStoredZip,
   listStoredZip,
   stableJson,
-} from "../../examples/packages/local-dev/tweet-composer-kit/src/custom-pet-contract.js";
+} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
 
 const python = process.env.PYTHON || "python";
 const skillRoot = "assets/user-downloads/remilia-pet/remilia-maker-pet-import";

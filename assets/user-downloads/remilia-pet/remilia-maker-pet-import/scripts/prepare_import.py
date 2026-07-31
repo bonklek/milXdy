@@ -61,7 +61,6 @@ def prepare_import(bundle_path: Path, output_dir: Path) -> dict[str, Any]:
         "ok": True,
         "stage": "prepared",
         "templateId": selected["templateId"],
-        "rightsScope": bundle.request["rightsScope"],
         "inputFingerprint": provenance["inputFingerprint"],
         "outputs": {
             "avatar": "input/avatar.png",
@@ -97,7 +96,6 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
         "sourceNftNumber": request.get("sourceNftNumber"),
         "petName": pet.get("name"),
         "personality": pet.get("personality"),
-        "rightsScope": request["rightsScope"],
         "canonicalImage": "input/avatar.png",
         "traits": traits,
         "bodyCompletion": request["bodyCompletion"],
@@ -107,7 +105,7 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
         },
         "fullBodyInstruction": (
             "Use the composited 1024x1024 Maker PNG and bodyCompletion object as authoritative full-body identity. "
-            "Do not invent legs, bottoms, footwear, colors, absent traits, or rights."
+            "Do not invent legs, bottoms, footwear, colors, or absent traits."
         ),
         "motionInstruction": (
             f"Follow {selected['templateId']} proportions, landmarks, permitted envelopes, expansion zones, "
@@ -167,7 +165,8 @@ def build_provenance(
             "requestSidecarCached": False,
             "canonicalInputImageCached": False,
             "finalValidatedAtlasCache": "user-selected-local-directory-only",
-            "publishAllowed": bundle.request["rightsScope"] == "publication-cleared",
+            "publishAllowed": False,
+            "publishPolicy": "The adapter never infers publication permission from a Pets Maker bundle.",
         },
     }
 
@@ -190,7 +189,6 @@ def build_hatch_handoff(
         "petName": identity.get("petName"),
         "description": identity.get("personality") or f"A {request['templateFamily']} Maker custom pet.",
         "styleSettings": STYLE_SETTINGS,
-        "rightsScope": request["rightsScope"],
         "runtimeRows": [
             {
                 "index": row["index"],
@@ -230,7 +228,6 @@ def build_run_state(
         "schemaVersion": 1,
         "stage": "prepared",
         "templateId": selected["templateId"],
-        "rightsScope": request["rightsScope"],
         "inputFingerprint": provenance["inputFingerprint"],
         "rows": [
             {
@@ -257,7 +254,6 @@ def identity_markdown(identity: dict[str, Any]) -> str:
         f"# {identity.get('petName') or identity['templateId']} identity brief",
         "",
         f"- Template: `{identity['templateId']}`",
-        f"- Rights scope: `{identity['rightsScope']}`",
         f"- Canonical image: `{identity['canonicalImage']}`",
     ]
     if identity.get("personality"):

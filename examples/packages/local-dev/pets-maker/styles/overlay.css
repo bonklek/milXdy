@@ -1,0 +1,46 @@
+.pets-maker-app {
+  --tck-surface-raised: var(--milxdy-sdk-color-surface-raised);
+  --tck-border: var(--milxdy-sdk-color-border);
+  --tck-border-subtle: color-mix(in srgb, var(--milxdy-sdk-color-border) 72%, transparent);
+  --tck-ink: var(--milxdy-sdk-color-text);
+  --tck-muted: var(--milxdy-sdk-color-muted);
+  --tck-accent: var(--milxdy-sdk-color-accent);
+  --tck-accent-hover: color-mix(in srgb, var(--milxdy-sdk-color-accent) 82%, #000);
+  --tck-accent-ink: #fff;
+  position: fixed;
+  z-index: 2147483000;
+  inset-block-start: 64px;
+  inset-inline-end: 16px;
+  box-sizing: border-box;
+  inline-size: min(460px, calc(100vw - 32px));
+  max-block-size: calc(100vh - 80px);
+  overflow: hidden;
+  border: 1px solid var(--milxdy-sdk-color-border);
+  border-radius: 10px;
+  background: var(--milxdy-sdk-color-surface);
+  color: var(--milxdy-sdk-color-text);
+  box-shadow: var(--milxdy-sdk-shadow-panel);
+  font: 14px/1.4 var(--milxdy-sdk-font-ui);
+  isolation: isolate;
+}
+
+.pets-maker-app,
+.pets-maker-app * { box-sizing: border-box; }
+.pets-maker-app__header { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-block-end: 1px solid var(--milxdy-sdk-color-border); background: var(--milxdy-sdk-color-surface-raised); }
+.pets-maker-app__icon { inline-size: 40px; block-size: 40px; object-fit: contain; }
+.pets-maker-app__title { flex: 1; margin: 0; font-size: 16px; line-height: 1.2; }
+.pets-maker-app__close { inline-size: 44px; block-size: 44px; border: 1px solid var(--milxdy-sdk-color-border); border-radius: 6px; background: transparent; color: inherit; font: 700 22px/1 inherit; cursor: pointer; }
+.pets-maker-app__close:hover { background: color-mix(in srgb, var(--milxdy-sdk-color-accent) 14%, transparent); }
+.pets-maker-app__body { max-block-size: calc(100vh - 145px); overflow: auto; padding: 10px; }
+.pets-maker-app :focus-visible { outline: 3px solid var(--milxdy-sdk-color-focus); outline-offset: 2px; }
+
+@media (max-width: 520px) {
+  .pets-maker-app { inset: 8px; inline-size: auto; max-block-size: calc(100vh - 16px); }
+  .pets-maker-app__body { max-block-size: calc(100vh - 82px); }
+}
+
+@media (forced-colors: active) {
+  .pets-maker-app,
+  .pets-maker-app__header,
+  .pets-maker-app__close { border-color: CanvasText; }
+}

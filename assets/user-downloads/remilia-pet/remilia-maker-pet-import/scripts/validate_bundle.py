@@ -112,7 +112,6 @@ def load_bundle(bundle_path: Path) -> ValidatedBundle:
         "templateFamily": request["templateFamily"],
         "templateVersion": request["templateVersion"],
         "templateId": f"{request['templateFamily']}-v{request['templateVersion']}",
-        "rightsScope": request["rightsScope"],
         "traitCount": len(request["traits"]),
         "bodyCompletionCatalogVersion": request["bodyCompletion"]["catalogVersion"],
     }
@@ -196,7 +195,6 @@ def validate_request(request: dict[str, Any]) -> None:
         "traits",
         "traitPolicy",
         "bodyCompletion",
-        "rightsScope",
         "generator",
         "pet",
     }
@@ -235,8 +233,6 @@ def validate_request(request: dict[str, Any]) -> None:
             "traitPolicy must omit background, friend, and overlay, and convert shirt text."
         )
     validate_body_completion(request["bodyCompletion"])
-    if request["rightsScope"] not in {"private-review", "publication-cleared"}:
-        raise BundleValidationError("rightsScope must be private-review or publication-cleared.")
     validate_pet(request.get("pet"))
     validate_generator(request["generator"])
 
@@ -340,8 +336,8 @@ def validate_pet(pet: Any) -> None:
 
 def validate_generator(generator: Any) -> None:
     expected = {
-        "id": "tweet-composer-kit",
-        "version": "0.2.0-pilot",
+        "id": "pets-maker",
+        "version": "0.1.0-pilot",
         "deterministicCompositeVersion": 1,
     }
     if generator != expected:

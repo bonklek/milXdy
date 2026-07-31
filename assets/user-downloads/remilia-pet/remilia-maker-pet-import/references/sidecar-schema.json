@@ -15,7 +15,6 @@
     "traits",
     "traitPolicy",
     "bodyCompletion",
-    "rightsScope",
     "generator"
   ],
   "properties": {
@@ -97,9 +96,6 @@
         "footwear": { "$ref": "#/$defs/bodyAsset" }
       }
     },
-    "rightsScope": {
-      "enum": ["private-review", "publication-cleared"]
-    },
     "pet": {
       "type": "object",
       "additionalProperties": false,
@@ -113,8 +109,8 @@
       "additionalProperties": false,
       "required": ["id", "version", "deterministicCompositeVersion"],
       "properties": {
-        "id": { "const": "tweet-composer-kit" },
-        "version": { "const": "0.2.0-pilot" },
+        "id": { "const": "pets-maker" },
+        "version": { "const": "0.1.0-pilot" },
         "deterministicCompositeVersion": { "const": 1 }
       }
     }

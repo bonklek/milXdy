@@ -58,6 +58,7 @@
     "build:maintainer-addons": "node scripts/packages/build-maintainer-addons.mjs",
     "verify:maintainer-addons": "node scripts/verify/maintainer-addons.mjs",
     "build:composer-kit-package": "node scripts/packages/build-composer-kit.mjs",
+    "build:pets-maker-package": "node scripts/packages/build-pets-maker.mjs",
     "build:remilia-pet-skill": "node scripts/build/build-remilia-pet-skill.mjs",
     "generate:pet-request-fixtures": "node scripts/fixtures/generate-remilia-pet-request-fixtures.mjs",
     "verify:local-app-package": "node scripts/packages/verify-local-app-package.mjs",

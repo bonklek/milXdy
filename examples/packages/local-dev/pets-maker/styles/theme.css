@@ -1,0 +1,21 @@
+:root {
+  --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #fff);
+  --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #f7f9f9);
+  --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #cfd9de);
+  --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #0f1419);
+  --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #536471);
+  --milxdy-sdk-color-accent: var(--milxdy-overlay-app-accent, #d84f87);
+  --milxdy-sdk-color-focus: #1d9bf0;
+  --milxdy-sdk-font-ui: var(--milxdy-font-ui, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --milxdy-sdk-shadow-panel: 0 8px 32px rgb(0 0 0 / 24%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #000);
+    --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #16181c);
+    --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #2f3336);
+    --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #e7e9ea);
+    --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #8b98a5);
+  }
+}
