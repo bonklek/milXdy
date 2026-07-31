@@ -8,6 +8,7 @@ export type OpaqueMediaHandleRecord = {
   altAvailable: boolean;
   expiresAt: number;
 };
+export const OPAQUE_MEDIA_HANDLE_TTL_MS = 5 * 60_000;
 
 /** In-memory, one-use host storage. Package code never sees image bytes or URLs. */
 export class OpaqueMediaHandleStore {
@@ -18,15 +19,14 @@ export class OpaqueMediaHandleStore {
   create(record: Omit<OpaqueMediaHandleRecord, "expiresAt">, now = Date.now()): string {
     this.prune(now);
     const handle = `media.${++this.#sequence}.${crypto.randomUUID()}`;
-    this.#records.set(handle, { ...record, expiresAt: now + 5 * 60_000 });
+    this.#records.set(handle, { ...record, expiresAt: now + OPAQUE_MEDIA_HANDLE_TTL_MS });
     return handle;
   }
 
-  take(handle: string, appId: string, actionId: string, now = Date.now()): OpaqueMediaHandleRecord | null {
-    const record = this.#records.get(handle);
-    this.#records.delete(handle);
-    if (!record || record.expiresAt < now || record.appId !== appId || record.actionId !== actionId) return null;
-    return record;
+  restore(handle: string, record: OpaqueMediaHandleRecord, now = Date.now()): boolean {
+    if (!/^media\.\d+\.[0-9a-f-]+$/iu.test(handle) || record.expiresAt < now) return false;
+    this.#records.set(handle, record);
+    return true;
   }
 
   claim(handle: string, appId: string, actionId: string, now = Date.now()): OpaqueMediaHandleRecord | null {
