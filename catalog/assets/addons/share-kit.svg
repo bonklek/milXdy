@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-labelledby="title">
+  <title id="title">Share Kit export card</title>
+  <rect x="6" y="8" width="36" height="30" rx="3" fill="#fffaff" stroke="#652c90" stroke-width="3"/>
+  <circle cx="16" cy="18" r="4" fill="#ff9ed2"/>
+  <path d="M11 33l9-9 6 6 5-5 6 8H11z" fill="#b490df"/>
+  <path d="M24 4v13m-5-5 5 5 5-5" fill="none" stroke="#2c1760" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

@@ -10,18 +10,16 @@ await rm(root, { recursive: true, force: true });
 await mkdir(root, { recursive: true });
 
 const catalog = JSON.parse(await readFile("catalog/data/catalog.json", "utf8"));
-const composerTools = catalog.sections[0].packages.find((pkg) => pkg.id === "composerTools");
-composerTools.availability = "published";
-composerTools.blockers = [];
+const shareKit = catalog.sections[0].packages.find((pkg) => pkg.id === "tweetPng");
 await writeFile(catalogPath, JSON.stringify(catalog));
 const selection = {
   schemaVersion: 2,
   catalog: { id: catalog.catalogId, revision: catalog.revision },
   build: { target: "chromium", recipeId: "maintainer-local-v1" },
   packages: [{
-    id: composerTools.id,
-    version: composerTools.version,
-    packageSha256: composerTools.artifact.packageSha256,
+    id: shareKit.id,
+    version: shareKit.version,
+    packageSha256: shareKit.artifact.packageSha256,
   }],
 };
 await writeFile(selectionPath, JSON.stringify(selection, null, 2));
@@ -50,10 +48,10 @@ run(["prepare", `--selection=${selectionPath}`]);
 const lock = JSON.parse(await readFile(`${addOnsRoot}/.state/selection-lock.json`, "utf8"));
 assert.equal(lock.schemaVersion, 2);
 assert.equal(lock.packages.length, 1);
-assert.equal(lock.packages[0].id, "composerTools");
+assert.equal(lock.packages[0].id, "tweetPng");
 assert.equal(lock.packages[0].reviewTrusted, true);
-assert.equal(lock.packages[0].artifact.path, "packages/maintainer/composerTools");
-assert.equal(JSON.parse(await readFile(`${addOnsRoot}/catalog/composerTools/milxdy.app.json`, "utf8")).id, "composerTools");
+assert.equal(lock.packages[0].artifact.path, "examples/packages/first-party-replacements/tweetPng");
+assert.equal(JSON.parse(await readFile(`${addOnsRoot}/catalog/tweetPng/milxdy.app.json`, "utf8")).id, "tweetPng");
 
 const denied = spawn(["apply"]);
 assert.notEqual(denied.status, 0);
@@ -64,7 +62,7 @@ run(["apply", "--acknowledge-package-consent", "--acknowledge-first-party-replac
 const status = JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8"));
 assert.equal(status.state, "built");
 assert.equal(status.workflowStage, "reload");
-assert.equal(status.packages.some((entry) => entry.id === "composerTools"), true);
+assert.equal(status.packages.some((entry) => entry.id === "tweetPng"), true);
 assert.match(status.buildInstanceId, /^[a-f0-9]{24}$/u);
 assert.match(status.compositionFingerprint, /^[a-f0-9]{64}$/u);
 assert.equal(status.outputDirectory, `${addOnsRoot}/stable`);

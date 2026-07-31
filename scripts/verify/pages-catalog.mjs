@@ -12,9 +12,8 @@ const requiredFiles = [
   "catalog/assets/catalog.js",
   "catalog/assets/selection.js",
   "catalog/assets/styles.css",
-  "catalog/assets/addons/booru.svg",
   "catalog/assets/addons/tweet-composer.svg",
-  "catalog/assets/addons/meme-maker.svg",
+  "catalog/assets/addons/share-kit.svg",
   "catalog/data/catalog.json",
   "catalog/data/catalog.schema.json",
   "docs/schemas/milxdy-selection.schema.json",
@@ -125,12 +124,13 @@ function verifyCatalog(value, policy, reviews) {
 
   const packages = (value.sections || []).flatMap((section) => section.packages || []);
   const packageById = new Map(packages.map((pkg) => [pkg.id, pkg]));
-  for (const id of ["booru", "composerTools", "memeMaker"]) {
+  for (const id of ["tweet-composer-kit", "tweetPng"]) {
     if (!packageById.has(id)) failures.push(`initial maintainer catalog is missing ${id}`);
   }
-  if (packageById.get("booru")?.availability !== "unavailable") failures.push("BOORU must fail closed until #17/#188 package review completes");
-  if (packageById.get("memeMaker")?.availability !== "unavailable") failures.push("Meme Maker must fail closed until #79/#188 package review completes");
-  if (packageById.get("composerTools")?.availability !== "under-review") failures.push("Tweet Composer must remain under review until maintainer QA approval");
+  if (packages.length !== 2) failures.push("current maintainer catalog must contain exactly Composer Kit and Share Kit");
+  if (packageById.get("tweet-composer-kit")?.availability !== "under-review") failures.push("Composer Kit must fail closed until its source and trusted review are checked in");
+  if (packageById.get("tweetPng")?.availability !== "published") failures.push("reviewed checked-in Share Kit must be selectable");
+  if (packages.some((pkg) => ["booru", "memeMaker", "composerTools"].includes(pkg.id))) failures.push("feature concepts and the built-in typing helper must not appear as standalone add-ons");
 
   const ids = new Set();
   const allowedRoots = policy?.allowedArtifactRoots || [];
@@ -184,8 +184,7 @@ async function verifySelectionModule(catalog) {
   if (JSON.stringify(empty).includes("url") || JSON.stringify(empty).includes("filename")) failures.push("selection artifact must not contain package download data");
 
   const basePackage = {
-    ...catalog.sections[0].packages.find((pkg) => pkg.id === "composerTools"),
-    availability: "published",
+    ...catalog.sections[0].packages.find((pkg) => pkg.id === "tweetPng"),
   };
   const dependency = { ...basePackage, id: "dependency", name: "Dependency", version: "1.0.0", replacement: null, dependencies: [], conflicts: [], artifact: { ...basePackage.artifact, path: "packages/maintainer/dependency" } };
   const dependent = { ...basePackage, id: "dependent", name: "Dependent", version: "1.0.0", replacement: null, dependencies: [{ id: "dependency", version: "1.0.0", reason: "fixture" }], conflicts: [], artifact: { ...basePackage.artifact, path: "packages/maintainer/dependent" } };
@@ -195,7 +194,8 @@ async function verifySelectionModule(catalog) {
   if (resolveSelection(fixture, ["dependency", "conflicting"]).ok) failures.push("selection resolver must reject conflicts");
   const valid = resolveSelection(fixture, ["dependent", "dependency"]);
   if (!valid.ok || valid.selected.map((pkg) => pkg.id).join(",") !== "dependency,dependent") failures.push("selection resolver must sort and accept a valid explicit dependency set");
-  if (resolveSelection(catalog, ["booru"]).ok) failures.push("selection resolver must reject unavailable packages");
+  if (resolveSelection(catalog, ["tweet-composer-kit"]).ok) failures.push("selection resolver must reject under-review packages");
+  if (!resolveSelection(catalog, ["tweetPng"]).ok) failures.push("selection resolver must accept published Share Kit");
 }
 
 function reviewKey(entry) {
