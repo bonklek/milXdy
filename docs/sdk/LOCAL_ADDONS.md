@@ -1,6 +1,10 @@
 # Local Add-ons
 
-milXdy builds trusted App SDK ZIP packages into a stable local Chromium extension. Packages are validated and composed at build time; downloaded JavaScript is never injected into a running extension.
+milXdy builds trusted App SDK packages into a stable local Chromium extension.
+Advanced users may supply reviewed ZIPs manually; the maintainer catalog
+references only package roots already checked into the same source checkout.
+Packages are validated and composed at build time. JavaScript is never injected
+into a running extension.
 
 ## First setup
 
@@ -19,10 +23,10 @@ The output folder is stable. Do not load the temporary build under `tmp/`.
 this workflow:
 
 1. **Get more add-ons** opens the configured GitHub catalog URL in a new tab.
-   The 0.2.4 repository contains a maintainer-reviewed catalog preview; publishing it
-   is a separate maintainer action, so obtain trusted ZIPs directly until that
-   catalog is available.
-2. After Chrome downloads package ZIPs, **Load downloaded add-ons** opens a
+   The first maintainer inventory lists BOORU, Tweet Composer, and Meme Maker
+   with fail-closed availability and review states. The page exports only a
+   small selection recipe; it never downloads package code.
+2. For separately obtained manual ZIPs, **Load downloaded add-ons** opens a
    user-initiated multi-file picker. milXdy does not scan Downloads or request
    broad Downloads permission.
 3. The queued list performs a browser preflight for archive safety and readable
@@ -79,11 +83,18 @@ provenance records package identity and hashes, never the author's local path.
 This is a build-time review path only: it does not download packages, update
 them automatically, add marketplace behavior, or load package code dynamically.
 
-The current manager targets Chromium. It does not watch a download folder, update packages automatically, remove packages from inside Chrome, or execute package code dynamically. Catalog downloads happen only when the user supplies a selection and runs Prepare. See the [App SDK guide](APP_SDK.md) for package authoring and trust requirements.
+The current manager targets Chromium. It does not watch a download folder,
+update packages automatically, remove packages from inside Chrome, fetch
+catalog package code, or execute package code dynamically. See the
+[App SDK guide](APP_SDK.md) for package authoring and trust requirements.
 
 ## Catalog selections
 
-A catalog exports one `.milxdy-selection.json` instead of asking the browser to download several ZIPs. The selection pins each package ID, HTTPS ZIP URL, filename, SHA-256, review identity/date, and schema version. Its format is defined by [the selection schema](../schemas/milxdy-selection.schema.json).
+A catalog exports one deterministic `.milxdy-selection.json`. Schema version 2
+pins the catalog ID/revision, Chromium target, local recipe ID, and sorted
+package IDs, versions, and package SHA-256 values. It contains no package URL,
+filename, script, or package bytes. Its format is defined by
+[the selection schema](../schemas/milxdy-selection.schema.json).
 
 Prepare and review the exact package set:
 
@@ -91,7 +102,12 @@ Prepare and review the exact package set:
 npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
 ```
 
-Prepare downloads only from checked-in allowed GitHub hosts, resumes from the content-addressed cache, verifies every pinned hash, validates the packages with the existing composer, places the exact catalog set transactionally, and prints one consolidated host/permission/storage/remote-service summary. It does not build.
+Prepare re-resolves the exact catalog revision, accepts only the
+`maintainer-local-v1` Chromium recipe, resolves artifacts only below checked-in
+allowlisted `packages/maintainer/` roots, rejects symbolic links, copies the
+exact set transactionally, and validates it with the existing composer. It
+prints one consolidated host/permission/storage/remote-service summary and does
+not build.
 
 Then apply the prepared selection using the acknowledgement flags printed by Prepare:
 
@@ -99,6 +115,22 @@ Then apply the prepared selection using the acknowledgement flags printed by Pre
 npm run addons:apply -- --acknowledge-package-consent
 ```
 
-The four stages have one owner each: the catalog creates **Select**; the local manager performs **Place ZIPs** and **Rebuild**; Apps & Features confirms **Reload**. Catalog review metadata is trusted only when the package ID, archive hash, reviewer, and review date match the checked-in review registry. Otherwise Apply additionally requires `--allow-local-review`.
+The four stages have one owner each: the catalog creates **Select**; the local
+manager performs **Materialize** and **Rebuild**; Apps & Features confirms
+**Reload**. Catalog review metadata is trusted only when package ID, version,
+package hash, reviewer, and review date match the checked-in registry.
+Otherwise Apply additionally requires `--allow-local-review`.
+
+Selecting none is explicit and valid: Prepare transactionally empties only
+`local-addons/catalog/`, leaving manual packages alone, and the next Apply
+returns catalog-managed replacements to their built-in baseline. Missing
+dependencies, declared conflicts, stale catalog revisions, unavailable
+packages, missing roots, changed package hashes, and denied acknowledgements
+all fail before stable output is replaced.
+
+The manager writes recovery journals for the catalog package set and stable
+build. On restart it restores an interrupted backup automatically. A failed
+Prepare or Apply preserves the last-known-good `dist/chromium-local-apps/`;
+reload that same unpacked-extension card rather than loading a second extension.
 
 `buildInstanceId` changes for every successful rebuild so Apps & Features can detect a pending Chrome reload. `compositionFingerprint` is deterministic for the SDK version and exact sorted package IDs, versions, and package hashes, so two equivalent package selections can be compared independently of rebuild time.

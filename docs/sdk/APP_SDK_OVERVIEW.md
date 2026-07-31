@@ -10,10 +10,10 @@ build tooling, and trust checks.
 
 ### Use Add-ons
 
-Follow [Local Add-ons](LOCAL_ADDONS.md) to place trusted ZIPs, inspect their
-declared capabilities, build the stable custom extension, and reload it in
-Chrome. A catalog selection uses the same workflow with pinned download URLs
-and SHA-256 hashes.
+Follow [Local Add-ons](LOCAL_ADDONS.md) to place trusted manual ZIPs or prepare
+a local maintainer-catalog selection, inspect declared capabilities, build the
+stable custom extension, and reload it in Chrome. A catalog selection pins only
+checked-in package IDs, versions, hashes, and the Chromium build recipe.
 
 ### Build An Add-on
 
@@ -42,16 +42,17 @@ static scanning support review, but do not turn package code into a sandboxed
 capability environment.
 
 The catalog is a selection surface. It produces a small
-`.milxdy-selection.json`; the checked-in local manager owns downloads, hash
-verification, filesystem placement, composition, and build promotion.
-The 0.2.4 repository includes the catalog implementation with no published
-package inventory. Catalog publication is a separate maintainer action and is
-not required for the manual trusted-ZIP workflow.
+`.milxdy-selection.json`; the checked-in local manager owns catalog-revision
+resolution, package-hash verification, filesystem placement, composition, and
+build promotion. It never downloads catalog package code. The first inventory
+contains BOORU, Tweet Composer, and Meme Maker with honest review/availability
+states; catalog publication remains a separate maintainer action and is not
+required for the manual trusted-ZIP workflow.
 
 ## Current Support
 
 - Chromium custom builds from reviewed folder or ZIP packages
-- Manual packages and pinned catalog selections
+- Manual packages and pinned local maintainer-catalog selections
 - Apps, features, themes, and generated Apps & Features metadata
 - Shared X/Twitter routes, surfaces, scheduling, cancellation, and diagnostics
 - Declared storage, assets, host access, privacy, and host-provided services
