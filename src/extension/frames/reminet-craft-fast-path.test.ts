@@ -6,7 +6,6 @@ describe("RemiNet crafting and Last read helpers", () => {
     const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
 
     expect(source).toContain("crafting-module__smash-input-slots");
-    expect(source).toContain("isEmptySlot(destination)");
     expect(source).toContain("destination.getBoundingClientRect()");
     expect(source).toContain("item.getBoundingClientRect()");
     expect(source).toContain("clientX");
@@ -16,6 +15,10 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).toContain('event("mousemove", destination, clientX, clientY, 1)');
     expect(source).toContain('event("mouseup", destination, clientX, clientY, 0)');
     expect(source).toContain("crafting-module__input-slot--5");
+    expect(source).toContain("nextCraftingReplacementSlot");
+    expect(source).toContain("function nextAssemblySlot");
+    expect(source).toContain("slots.find(isEmptySlot)");
+    expect(source).toContain("(next + 1) % slots.length");
     expect(source).toContain("top: .2rem; right: .2rem");
     expect(source).not.toContain("transform: translate(100%, -50%)");
     expect(source).toContain("document.addEventListener(\"click\"");
