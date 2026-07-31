@@ -465,6 +465,6 @@
       }
       #milxdy-overlay-dock-root[data-side="left"] {
         --milxdy-dock-top: 72px;
-        --milxdy-dock-bottom-clearance: 80px;
+        --milxdy-dock-bottom-clearance: 32px;
       }
     }

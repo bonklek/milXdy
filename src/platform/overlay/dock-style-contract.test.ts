@@ -11,7 +11,7 @@ describe("dock DOM and style compatibility", () => {
     expect(DOCK_STYLE_ID).toBe("milxdy-overlay-dock-style");
     const runtimeStyles = `${styles.replace(/\r\n/g, "\n").replace(/\n$/, "")}\n  `;
     expect(createHash("sha256").update(runtimeStyles).digest("hex"))
-      .toBe("c633862a889b4c0512ba649b0fda9e9af062c9ebd1dffcf2d83ad8f7d9335792");
+      .toBe("b250a354a31ebad2771956cb26e4bfd3a3cb7b49de3761ef693f56cac725ef5b");
   });
 
   it.each([
