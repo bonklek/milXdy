@@ -11,11 +11,12 @@ describe("dock DOM and style compatibility", () => {
     expect(DOCK_STYLE_ID).toBe("milxdy-overlay-dock-style");
     const runtimeStyles = `${styles.replace(/\r\n/g, "\n").replace(/\n$/, "")}\n  `;
     expect(createHash("sha256").update(runtimeStyles).digest("hex"))
-      .toBe("58029b756625f68d8168e3135350ab7610a32590bee5cd5a955fc2fde2956085");
+      .toBe("c633862a889b4c0512ba649b0fda9e9af062c9ebd1dffcf2d83ad8f7d9335792");
   });
 
   it.each([
     ".milxdy-overlay-dock-rail",
+    ".milxdy-overlay-dock-side-controls",
     ".milxdy-overlay-dock-item",
     ".milxdy-overlay-dock-icon",
     ".milxdy-overlay-dock-badge",
