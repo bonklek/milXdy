@@ -1,0 +1,4 @@
+interface:
+  display_name: "Remilia Maker Pet Import"
+  short_description: "Validate Maker bundles and prepare Codex pets"
+  default_prompt: "Use $remilia-maker-pet-import to validate this Maker export bundle and prepare a hatch-pet handoff."

@@ -1,0 +1,78 @@
+{
+  "adapterSkill": "remilia-maker-pet-import",
+  "bodyCompletion": {
+    "bottom": {
+      "assetId": "maker-bottom-dress-pants-v1",
+      "assetVersion": 1,
+      "category": "dress-pants",
+      "colorVariant": "navy"
+    },
+    "catalogVersion": 1,
+    "footwear": {
+      "assetId": "maker-footwear-sandals-v1",
+      "assetVersion": 1,
+      "category": "sandals",
+      "colorVariant": "pink"
+    },
+    "legColorVariant": "cool-pale",
+    "legCoverage": "covered"
+  },
+  "generator": {
+    "deterministicCompositeVersion": 1,
+    "id": "tweet-composer-kit",
+    "version": "0.2.0-pilot"
+  },
+  "image": {
+    "file": "avatar.png",
+    "height": 1024,
+    "mediaType": "image/png",
+    "width": 1024
+  },
+  "imageSha256": "a69c21eaf24ed424b02f3117bab126075459434e4ae4e5df7a363fb0bbfae1b9",
+  "pet": {
+    "name": "Sanitized Kagami",
+    "personality": "A sanitized local contract fixture with no user or reference image."
+  },
+  "rightsScope": "private-review",
+  "schemaVersion": 1,
+  "templateFamily": "kagami",
+  "templateFamilyOptions": [
+    "milady",
+    "remilio",
+    "bonkler",
+    "kagami"
+  ],
+  "templateVersion": 1,
+  "traitPolicy": {
+    "background": "omit",
+    "friend": "omit",
+    "overlay": "omit",
+    "shirtText": "convert-to-unreadable-motif"
+  },
+  "traits": {
+    "earrings": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "eyes": {
+      "assetId": "kagami-sample-eyes-v1",
+      "label": "Sanitized sample eyes"
+    },
+    "glasses": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "hair": {
+      "assetId": "kagami-sample-hair-v1",
+      "label": "Sanitized sample hair"
+    },
+    "race": {
+      "assetId": "kagami-sample-race-v1",
+      "label": "Sanitized sample race"
+    },
+    "shirt": {
+      "assetId": "kagami-sample-shirt-v1",
+      "label": "Sanitized sample shirt"
+    }
+  }
+}

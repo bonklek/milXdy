@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": 1,
+  "requiredTraitKeys": [
+    "race",
+    "hair",
+    "eyes",
+    "glasses",
+    "shirt",
+    "earrings"
+  ],
+  "identityActions": {
+    "race": "preserve",
+    "hair": "preserve-with-expansion-zone",
+    "eyes": "preserve",
+    "glasses": "preserve-or-explicit-none",
+    "shirt": "preserve-with-text-adaptation",
+    "earrings": "preserve-or-explicit-none",
+    "bodyCompletion": "preserve-authoritative"
+  },
+  "nonPetTraits": {
+    "background": "omit",
+    "friend": "omit",
+    "overlay": "omit",
+    "shirtText": "convert-to-unreadable-motif"
+  },
+  "rights": {
+    "private-review": {
+      "publicationAllowed": false,
+      "description": "Local/private review only. Do not present as publication permission."
+    },
+    "publication-cleared": {
+      "publicationAllowed": true,
+      "description": "The user explicitly declared clearance; final publication still requires a separate user action."
+    }
+  }
+}

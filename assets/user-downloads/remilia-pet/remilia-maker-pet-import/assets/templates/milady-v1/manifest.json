@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "templateId": "milady-v1",
+  "family": "milady",
+  "templateVersion": 1,
+  "status": "versioned-specification",
+  "motionProfile": "../motion-profile-v1.json",
+  "bodyClass": "slender-neochibi-humanoid",
+  "description": "Elegant long-line Milady proportions with restrained secondary motion and a stable fashion silhouette.",
+  "neutralFullBody": {
+    "coordinateSpace": "normalized-cell",
+    "bodyCenter": [0.5, 0.59],
+    "baseline": 0.92,
+    "headCenter": [0.5, 0.29],
+    "leftHand": [0.35, 0.58],
+    "rightHand": [0.65, 0.58],
+    "leftFoot": [0.44, 0.92],
+    "rightFoot": [0.56, 0.92],
+    "headToBodyRatio": 0.36,
+    "stanceWidth": 0.17
+  },
+  "motionGrammar": {
+    "idle": "Subtle breath, blink, and small hair follow-through.",
+    "directionalRun": "Light alternating fashion-run cadence; long hair or sleeves lag without crossing cell edges.",
+    "wave": "Compact poised wrist-led wave.",
+    "jump": "Controlled vertical hop with a narrow landing.",
+    "failed": "Persona-preserving slump led by shoulders and eyelids.",
+    "waiting": "Small hip shift or toe tap, visibly distinct from idle.",
+    "working": "Focused hands and eyes with no locomotion.",
+    "review": "Restrained lean and confident nod.",
+    "look": "Eyes lead, then head, neck, hair, and upper torso follow while feet stay anchored."
+  },
+  "geometry": {
+    "permittedEnvelope": [0.18, 0.04, 0.82, 0.95],
+    "requiredInnerRegions": [
+      { "id": "head-core", "rect": [0.39, 0.18, 0.61, 0.4], "minimumCoverage": 0.42 },
+      { "id": "torso-core", "rect": [0.39, 0.4, 0.61, 0.7], "minimumCoverage": 0.5 },
+      { "id": "lower-body-core", "rect": [0.4, 0.65, 0.6, 0.91], "minimumCoverage": 0.34 },
+      { "id": "foot-contact", "rect": [0.37, 0.87, 0.63, 0.94], "minimumCoverage": 0.18 }
+    ],
+    "expansionZones": {
+      "hair": [0.08, 0.0, 0.92, 0.68],
+      "headwear": [0.1, 0.0, 0.9, 0.34],
+      "costume": [0.08, 0.28, 0.92, 0.96],
+      "prop": [0.0, 0.2, 1.0, 0.92]
+    }
+  },
+  "thresholds": {
+    "minimumVisibleAlphaPixels": 180,
+    "maximumEdgeAlphaPixels": 0,
+    "baselineTolerance": 0.035,
+    "centroidTolerance": 0.09,
+    "scaleTolerance": 0.13,
+    "maximumOutsideEnvelopeRatio": 0.015,
+    "maximumAdjacentCentroidStep": 0.14,
+    "maximumLoopClosureCentroidStep": 0.1
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "templateId": "kagami-v1",
+  "family": "kagami",
+  "templateVersion": 1,
+  "status": "versioned-specification",
+  "motionProfile": "../motion-profile-v1.json",
+  "bodyClass": "poised-academy-humanoid",
+  "description": "Poised Kagami proportions with centered posture, readable uniform silhouette, and precise gaze transitions.",
+  "neutralFullBody": {
+    "coordinateSpace": "normalized-cell",
+    "bodyCenter": [0.5, 0.6],
+    "baseline": 0.92,
+    "headCenter": [0.5, 0.28],
+    "leftHand": [0.36, 0.58],
+    "rightHand": [0.64, 0.58],
+    "leftFoot": [0.44, 0.92],
+    "rightFoot": [0.56, 0.92],
+    "headToBodyRatio": 0.34,
+    "stanceWidth": 0.16
+  },
+  "motionGrammar": {
+    "idle": "Poised breath and blink with controlled hair or garment follow-through.",
+    "directionalRun": "Precise alternating travel with an upright center and clear facing.",
+    "wave": "Small formal greeting led by hand and wrist.",
+    "jump": "Centered athletic hop with controlled landing.",
+    "failed": "Contained disappointment through face, head, and shoulders.",
+    "waiting": "Expectant lean or measured foot shift.",
+    "working": "Focused study-like hand and eye movement with no added object.",
+    "review": "Careful inspection followed by a decisive nod.",
+    "look": "Eyes and eyelids lead, then head, neck, hair, and upper body follow in an even clockwise loop."
+  },
+  "geometry": {
+    "permittedEnvelope": [0.2, 0.03, 0.8, 0.95],
+    "requiredInnerRegions": [
+      { "id": "head-core", "rect": [0.4, 0.17, 0.6, 0.38], "minimumCoverage": 0.41 },
+      { "id": "torso-core", "rect": [0.4, 0.39, 0.6, 0.7], "minimumCoverage": 0.5 },
+      { "id": "lower-body-core", "rect": [0.41, 0.65, 0.59, 0.91], "minimumCoverage": 0.34 },
+      { "id": "foot-contact", "rect": [0.38, 0.87, 0.62, 0.94], "minimumCoverage": 0.18 }
+    ],
+    "expansionZones": {
+      "hair": [0.09, 0.0, 0.91, 0.72],
+      "headwear": [0.12, 0.0, 0.88, 0.32],
+      "costume": [0.09, 0.25, 0.91, 0.96],
+      "prop": [0.0, 0.18, 1.0, 0.92]
+    }
+  },
+  "thresholds": {
+    "minimumVisibleAlphaPixels": 180,
+    "maximumEdgeAlphaPixels": 0,
+    "baselineTolerance": 0.032,
+    "centroidTolerance": 0.085,
+    "scaleTolerance": 0.12,
+    "maximumOutsideEnvelopeRatio": 0.014,
+    "maximumAdjacentCentroidStep": 0.13,
+    "maximumLoopClosureCentroidStep": 0.09
+  }
+}

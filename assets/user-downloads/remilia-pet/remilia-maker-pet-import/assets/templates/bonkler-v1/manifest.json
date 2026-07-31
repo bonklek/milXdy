@@ -1,0 +1,58 @@
+{
+  "schemaVersion": 1,
+  "templateId": "bonkler-v1",
+  "family": "bonkler",
+  "templateVersion": 1,
+  "status": "versioned-specification",
+  "motionProfile": "../motion-profile-v1.json",
+  "bodyClass": "wide-squat-character",
+  "description": "Broad Bonkler proportions with low center of mass, short planted travel, and strong silhouette changes.",
+  "neutralFullBody": {
+    "coordinateSpace": "normalized-cell",
+    "bodyCenter": [0.5, 0.64],
+    "baseline": 0.92,
+    "headCenter": [0.5, 0.38],
+    "leftHand": [0.28, 0.62],
+    "rightHand": [0.72, 0.62],
+    "leftFoot": [0.38, 0.92],
+    "rightFoot": [0.62, 0.92],
+    "headToBodyRatio": 0.39,
+    "stanceWidth": 0.29
+  },
+  "motionGrammar": {
+    "idle": "Low breathing compression and eye change with a planted base.",
+    "directionalRun": "Short powerful alternating steps; broad body remains inside the wide envelope.",
+    "wave": "Attached arm or equivalent broad appendage wave.",
+    "jump": "Heavy anticipation, short airborne phase, and stable landing.",
+    "failed": "Low-center collapse and recovery without impact marks.",
+    "waiting": "Visible side-to-side patience shift.",
+    "working": "Compact mechanical or hand-focused effort in place.",
+    "review": "Body-locked inspection with a clear approving tilt.",
+    "look": "Natural aiming feature and head/body yaw carry direction without rotating the complete sprite."
+  },
+  "geometry": {
+    "permittedEnvelope": [0.06, 0.1, 0.94, 0.95],
+    "requiredInnerRegions": [
+      { "id": "head-core", "rect": [0.34, 0.25, 0.66, 0.5], "minimumCoverage": 0.43 },
+      { "id": "torso-core", "rect": [0.29, 0.48, 0.71, 0.76], "minimumCoverage": 0.55 },
+      { "id": "lower-body-core", "rect": [0.3, 0.7, 0.7, 0.91], "minimumCoverage": 0.4 },
+      { "id": "foot-contact", "rect": [0.25, 0.86, 0.75, 0.94], "minimumCoverage": 0.22 }
+    ],
+    "expansionZones": {
+      "hair": [0.02, 0.02, 0.98, 0.68],
+      "headwear": [0.04, 0.0, 0.96, 0.42],
+      "costume": [0.0, 0.3, 1.0, 0.97],
+      "prop": [0.0, 0.15, 1.0, 0.94]
+    }
+  },
+  "thresholds": {
+    "minimumVisibleAlphaPixels": 260,
+    "maximumEdgeAlphaPixels": 0,
+    "baselineTolerance": 0.045,
+    "centroidTolerance": 0.12,
+    "scaleTolerance": 0.16,
+    "maximumOutsideEnvelopeRatio": 0.02,
+    "maximumAdjacentCentroidStep": 0.18,
+    "maximumLoopClosureCentroidStep": 0.12
+  }
+}

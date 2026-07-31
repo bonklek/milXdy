@@ -13,6 +13,7 @@ const requiredDirs = [
   "assets/apps",
   "assets/models",
   "assets/user-downloads/wiki-helper",
+  "assets/user-downloads/remilia-pet",
   "examples/packages/first-party-replacements",
   "examples/packages/local-dev",
   "scripts/build",
@@ -49,6 +50,7 @@ for (const app of registry) {
     assert(existsSync(sheet.source), `${app.id}: CSS source is missing: ${sheet.source}`);
   }
   assert(!(app.assets || []).includes("wiki-helper"), `${app.id}: wiki-helper must not be modeled as an app runtime asset`);
+  assert(!(app.assets || []).includes("remilia-pet"), `${app.id}: remilia-pet must not be modeled as an app runtime asset`);
 }
 
 const distributionSources = sourceFiles("src/distributions");
@@ -72,10 +74,12 @@ assert(topLevelScripts.length === 0, `scripts root must contain workflow folders
 const manifestResources = (manifest.web_accessible_resources || []).flatMap((entry) => entry.resources || []);
 for (const resource of manifestResources) {
   assert(!String(resource).startsWith("wiki-helper/"), `wiki-helper must not be web-accessible: ${resource}`);
+  assert(!String(resource).startsWith("remilia-pet/"), `remilia-pet must not be web-accessible: ${resource}`);
   assert(!String(resource).startsWith("user-downloads/"), `user downloads must not be web-accessible: ${resource}`);
 }
 
 assert(existsSync("assets/user-downloads/wiki-helper/remilia-wiki-article-writer.zip"), "Wiki Helper ZIP must live under assets/user-downloads/wiki-helper");
+assert(existsSync("assets/user-downloads/remilia-pet/remilia-maker-pet-import.zip"), "Remilia Maker Pet Import ZIP must live under assets/user-downloads/remilia-pet");
 
 if (failures.length > 0) {
   console.error("Filesystem layout verification failed.");

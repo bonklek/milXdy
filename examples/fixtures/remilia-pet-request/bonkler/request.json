@@ -1,0 +1,78 @@
+{
+  "adapterSkill": "remilia-maker-pet-import",
+  "bodyCompletion": {
+    "bottom": {
+      "assetId": "maker-bottom-chinos-v1",
+      "assetVersion": 1,
+      "category": "chinos",
+      "colorVariant": "khaki"
+    },
+    "catalogVersion": 1,
+    "footwear": {
+      "assetId": "maker-footwear-loafers-v1",
+      "assetVersion": 1,
+      "category": "loafers",
+      "colorVariant": "black"
+    },
+    "legColorVariant": "fantasy-green",
+    "legCoverage": "partial"
+  },
+  "generator": {
+    "deterministicCompositeVersion": 1,
+    "id": "tweet-composer-kit",
+    "version": "0.2.0-pilot"
+  },
+  "image": {
+    "file": "avatar.png",
+    "height": 1024,
+    "mediaType": "image/png",
+    "width": 1024
+  },
+  "imageSha256": "0125955ac7ca0a84050861bbc7f32dd44ffa86dab24ec51dad5e48803dba6c4e",
+  "pet": {
+    "name": "Sanitized Bonkler",
+    "personality": "A sanitized local contract fixture with no user or reference image."
+  },
+  "rightsScope": "private-review",
+  "schemaVersion": 1,
+  "templateFamily": "bonkler",
+  "templateFamilyOptions": [
+    "milady",
+    "remilio",
+    "bonkler",
+    "kagami"
+  ],
+  "templateVersion": 1,
+  "traitPolicy": {
+    "background": "omit",
+    "friend": "omit",
+    "overlay": "omit",
+    "shirtText": "convert-to-unreadable-motif"
+  },
+  "traits": {
+    "earrings": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "eyes": {
+      "assetId": "bonkler-sample-eyes-v1",
+      "label": "Sanitized sample eyes"
+    },
+    "glasses": {
+      "assetId": "none",
+      "label": "None"
+    },
+    "hair": {
+      "assetId": "bonkler-sample-hair-v1",
+      "label": "Sanitized sample hair"
+    },
+    "race": {
+      "assetId": "bonkler-sample-race-v1",
+      "label": "Sanitized sample race"
+    },
+    "shirt": {
+      "assetId": "bonkler-sample-shirt-v1",
+      "label": "Sanitized sample shirt"
+    }
+  }
+}

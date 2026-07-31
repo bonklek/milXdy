@@ -1,0 +1,236 @@
+{
+  "schemaVersion": 1,
+  "profileId": "remilia-maker-standard-motion-v1",
+  "cell": {
+    "width": 192,
+    "height": 208
+  },
+  "atlas": {
+    "columns": 8,
+    "rows": 11,
+    "width": 1536,
+    "height": 2288,
+    "spriteVersionNumber": 2
+  },
+  "landmarkContract": {
+    "coordinateSpace": "normalized-cell",
+    "required": [
+      "bodyCenter",
+      "baseline",
+      "headCenter",
+      "leftHand",
+      "rightHand",
+      "leftFoot",
+      "rightFoot",
+      "facing",
+      "phase"
+    ],
+    "screenCoordinates": true,
+    "baselinePolicy": "Feet remain on the family baseline except during the declared jumping airborne phases.",
+    "loopPolicy": "Frame order is fixed and the final-to-first transition must close without a registration jump."
+  },
+  "runtimeRows": [
+    {
+      "index": 0,
+      "state": "idle",
+      "frameCount": 6,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4, 5],
+      "phases": ["settle", "inhale", "blink", "exhale", "open-eyes", "settle"],
+      "poseGuide": "Quiet centered breathing and blink. Feet stay planted; head and body centers move only within the family micro-motion budget.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "micro-vertical-only",
+        "headCenter": "micro-vertical-only",
+        "hands": "identity-neutral-rest",
+        "feet": "locked"
+      }
+    },
+    {
+      "index": 1,
+      "state": "running-right",
+      "frameCount": 8,
+      "facing": "screen-right",
+      "loopOrder": [0, 1, 2, 3, 4, 5, 6, 7],
+      "phases": ["right-contact", "right-compress", "right-pass", "right-flight", "left-contact", "left-compress", "left-pass", "left-flight"],
+      "poseGuide": "Alternating gait facing and traveling screen-right. Foot order, limb opposition, and phase order must remain readable.",
+      "landmarkPolicy": {
+        "baseline": "contact-locked-flight-bounded",
+        "bodyCenter": "travel-right-with-cyclic-bob",
+        "headCenter": "follows-body-with-limited-lag",
+        "hands": "opposed-to-feet",
+        "feet": "alternate-contact"
+      }
+    },
+    {
+      "index": 2,
+      "state": "running-left",
+      "frameCount": 8,
+      "facing": "screen-left",
+      "loopOrder": [0, 1, 2, 3, 4, 5, 6, 7],
+      "phases": ["left-contact", "left-compress", "left-pass", "left-flight", "right-contact", "right-compress", "right-pass", "right-flight"],
+      "poseGuide": "Alternating gait facing and traveling screen-left. Preserve temporal order when a symmetric family permits a deterministic mirror.",
+      "landmarkPolicy": {
+        "baseline": "contact-locked-flight-bounded",
+        "bodyCenter": "travel-left-with-cyclic-bob",
+        "headCenter": "follows-body-with-limited-lag",
+        "hands": "opposed-to-feet",
+        "feet": "alternate-contact"
+      }
+    },
+    {
+      "index": 3,
+      "state": "waving",
+      "frameCount": 4,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3],
+      "phases": ["raise", "wave-out", "wave-in", "lower"],
+      "poseGuide": "One attached hand or equivalent appendage performs a compact greeting; no motion marks or detached effects.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "centered",
+        "headCenter": "small-greeting-follow",
+        "hands": "one-wave-one-stabilize",
+        "feet": "locked"
+      }
+    },
+    {
+      "index": 4,
+      "state": "jumping",
+      "frameCount": 5,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4],
+      "phases": ["anticipation", "takeoff", "apex", "landing", "recover"],
+      "poseGuide": "Centered vertical jump using body position only. No shadow, landing mark, dust, or impact effect.",
+      "landmarkPolicy": {
+        "baseline": "locked-airborne-locked",
+        "bodyCenter": "vertical-arc",
+        "headCenter": "follows-vertical-arc",
+        "hands": "family-jump-follow",
+        "feet": "compress-lift-land"
+      }
+    },
+    {
+      "index": 5,
+      "state": "failed",
+      "frameCount": 8,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4, 5, 6, 7],
+      "phases": ["notice", "tense", "collapse", "slump", "hold", "recover-start", "recover", "neutral"],
+      "poseGuide": "Readable disappointment through attached posture and expression only. Core registration remains within the family failure envelope.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "bounded-downward-slump",
+        "headCenter": "leads-slump",
+        "hands": "attached-reaction",
+        "feet": "locked-or-small-shuffle"
+      }
+    },
+    {
+      "index": 6,
+      "state": "waiting",
+      "frameCount": 6,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4, 5],
+      "phases": ["neutral", "weight-shift", "expect", "hold", "return", "neutral"],
+      "poseGuide": "Expectant asking or patient weight shift, distinct from idle, with no new prop.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "bounded-lateral-shift",
+        "headCenter": "expectant-follow",
+        "hands": "attached-asking-pose",
+        "feet": "one-contact-may-shift"
+      }
+    },
+    {
+      "index": 7,
+      "state": "running",
+      "frameCount": 6,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4, 5],
+      "phases": ["focus", "work-a", "work-b", "work-c", "resolve", "focus"],
+      "poseGuide": "Active task work through focused face and hands. This row is not locomotion and must not use a running gait.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "centered-focus-bob",
+        "headCenter": "small-work-follow",
+        "hands": "purposeful-attached-cycle",
+        "feet": "locked"
+      }
+    },
+    {
+      "index": 8,
+      "state": "review",
+      "frameCount": 6,
+      "facing": "neutral",
+      "loopOrder": [0, 1, 2, 3, 4, 5],
+      "phases": ["inspect", "lean", "decision", "nod", "return", "inspect"],
+      "poseGuide": "Focused inspection and restrained approval. Do not add papers, code, UI, or a magnifying glass.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "bounded-forward-lean",
+        "headCenter": "inspection-and-nod",
+        "hands": "identity-neutral-review",
+        "feet": "locked"
+      }
+    },
+    {
+      "index": 9,
+      "state": "look-000-through-157.5",
+      "frameCount": 8,
+      "facing": "clockwise-look-a",
+      "loopOrder": [0, 1, 2, 3, 4, 5, 6, 7],
+      "directions": ["000", "022.5", "045", "067.5", "090", "112.5", "135", "157.5"],
+      "poseGuide": "One coherent family from up through screen-right toward down. Use approved cardinals and even 22.5-degree steps.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "family-look-anchor",
+        "headCenter": "continuous-clockwise-arc",
+        "hands": "attached-and-continuous",
+        "feet": "locked"
+      }
+    },
+    {
+      "index": 10,
+      "state": "look-180-through-337.5",
+      "frameCount": 8,
+      "facing": "clockwise-look-b",
+      "loopOrder": [0, 1, 2, 3, 4, 5, 6, 7],
+      "directions": ["180", "202.5", "225", "247.5", "270", "292.5", "315", "337.5"],
+      "poseGuide": "One coherent family from down through screen-left toward up, continuous with row 9 at both boundaries.",
+      "landmarkPolicy": {
+        "baseline": "locked",
+        "bodyCenter": "family-look-anchor",
+        "headCenter": "continuous-clockwise-arc",
+        "hands": "attached-and-continuous",
+        "feet": "locked"
+      }
+    }
+  ],
+  "cardinalLookAnchors": [
+    {
+      "direction": "000",
+      "expected": "up",
+      "screenAxis": "vertical-negative",
+      "requiredEvidence": ["eyes-or-natural-aim-above-head-center", "identity-preserving-upward-follow-through"]
+    },
+    {
+      "direction": "090",
+      "expected": "screen-right",
+      "screenAxis": "horizontal-positive",
+      "requiredEvidence": ["eyes-nose-or-natural-aim-right-of-head-center", "rightward-head-or-body-follow-through"]
+    },
+    {
+      "direction": "180",
+      "expected": "down",
+      "screenAxis": "vertical-positive",
+      "requiredEvidence": ["eyes-or-natural-aim-below-head-center", "identity-preserving-downward-follow-through"]
+    },
+    {
+      "direction": "270",
+      "expected": "screen-left",
+      "screenAxis": "horizontal-negative",
+      "requiredEvidence": ["eyes-nose-or-natural-aim-left-of-head-center", "leftward-head-or-body-follow-through"]
+    }
+  ]
+}

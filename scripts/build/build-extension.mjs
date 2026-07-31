@@ -20,7 +20,7 @@ if (localAppPlan && target !== "chromium") {
   throw new Error("Local app composition builds currently target Chromium only.");
 }
 if (localAppPlan) validateLocalAppPlan(localAppPlan);
-const userDownloadAssetDirs = ["wiki-helper"];
+const userDownloadAssetDirs = ["wiki-helper", "remilia-pet"];
 const nonWebAccessibleAssetDirs = new Set(userDownloadAssetDirs);
 const outDir = explicitOutputDir
   ? assertSafeGeneratedOutputDir(explicitOutputDir, "Build output directory")
