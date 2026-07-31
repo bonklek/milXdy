@@ -134,6 +134,8 @@ function verifyPlatformContract() {
   requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
   requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
   requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
+  requireIncludes(background, "#randomMemeButton", "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
+  requireIncludes(background, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
   requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
   requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
   requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
