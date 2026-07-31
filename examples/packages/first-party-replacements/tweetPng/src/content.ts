@@ -102,15 +102,6 @@ function colorWithAlpha(color: string, alpha: string): string {
   return `${normalizeColor(color, DEFAULT_VISUAL_THEME.tweetPngFontColor)}${alpha}`;
 }
 
-export function tweetPngContrastTextColor(background: string): string {
-  const normalized = normalizeColor(background, "#ffffff").slice(1);
-  const red = Number.parseInt(normalized.slice(0, 2), 16);
-  const green = Number.parseInt(normalized.slice(2, 4), 16);
-  const blue = Number.parseInt(normalized.slice(4, 6), 16);
-  const luminance = (red * 299 + green * 587 + blue * 114) / 1000;
-  return luminance >= 150 ? "#20122f" : "#ffffff";
-}
-
 function findDisplayNameLink(userName: HTMLElement): HTMLElement | null {
   const links = Array.from(userName.querySelectorAll<HTMLElement>('a[role="link"], a[href^="/"]'));
   return links.find((link) => {
@@ -517,7 +508,10 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas unavailable");
-  const palette = tweetPngPalette(visualTheme.tweetPngBorderPalette);
+  const palette = tweetPngPalette(
+    visualTheme.tweetPngBorderPalette,
+    visualTheme.tweetPngBackgroundColor,
+  );
   const mediaRegions: TweetPngMediaRegion[] = [];
 
   context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
@@ -686,18 +680,31 @@ function drawTweetPngHeaderStats(
   }
 }
 
-function tweetPngPalette(value: VisualThemeSettings["tweetPngBorderPalette"]): TweetPngPalette {
+export function tweetPngPalette(
+  value: VisualThemeSettings["tweetPngBorderPalette"],
+  background = DEFAULT_VISUAL_THEME.tweetPngBackgroundColor,
+): TweetPngPalette {
+  const cardFill = normalizeColor(background, DEFAULT_VISUAL_THEME.tweetPngBackgroundColor);
   switch (value) {
     case "gray":
-      return { border: "#cfd6df", mediaBorder: "#d8dee7", quoteBorder: "#d8dee7", quoteFill: "#fbfcfd", mediaFill: "#f4f6f8" };
+      return { border: "#cfd6df", mediaBorder: "#d8dee7", quoteBorder: "#d8dee7", quoteFill: cardFill, mediaFill: cardFill };
     case "blue":
-      return { border: "#78aee8", mediaBorder: "#a8cef5", quoteBorder: "#a8cef5", quoteFill: "#f5faff", mediaFill: "#edf6ff" };
+      return { border: "#78aee8", mediaBorder: "#a8cef5", quoteBorder: "#a8cef5", quoteFill: cardFill, mediaFill: cardFill };
     case "green":
-      return { border: "#82b98a", mediaBorder: "#add8b1", quoteBorder: "#add8b1", quoteFill: "#f6fff7", mediaFill: "#eff9f0" };
+      return { border: "#82b98a", mediaBorder: "#add8b1", quoteBorder: "#add8b1", quoteFill: cardFill, mediaFill: cardFill };
     case "purple":
     default:
-      return { border: "#b67cff", mediaBorder: "#c9a5ff", quoteBorder: "#d5b7ff", quoteFill: "#fbf6ff", mediaFill: "#f4eaff" };
+      return { border: "#b67cff", mediaBorder: "#c9a5ff", quoteBorder: "#d5b7ff", quoteFill: cardFill, mediaFill: cardFill };
   }
+}
+
+export function setTweetPngSettingsOpen(
+  settings: { hidden: boolean },
+  button: { setAttribute(name: string, value: string): void },
+  open: boolean,
+): void {
+  settings.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
 }
 
 async function waitForTweetPngFonts(): Promise<void> {
@@ -922,7 +929,7 @@ function drawTweetPngQuote(
   }
 
   let y = options.y + padding + 6;
-  const quoteTextColor = tweetPngContrastTextColor(options.palette.quoteFill);
+  const quoteTextColor = visualTheme.tweetPngFontColor;
   context.fillStyle = quoteTextColor;
   context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(options.quote.author, options.x + padding, y);
@@ -1260,11 +1267,24 @@ function showTweetPngModal(
   actionSignal?.addEventListener("abort", abortClose, { once: true });
   modal.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-action="settings"]') && settings && settingsButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const opening = settings.hidden;
+      setTweetPngSettingsOpen(settings, settingsButton, opening);
+      if (opening) settings.querySelector<HTMLElement>("button, input")?.focus();
+      return;
+    }
     if (target === modal || target?.closest('[data-action="close"]')) close();
-  });
+  }, true);
   modal.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      if (settings && settingsButton && !settings.hidden) {
+        setTweetPngSettingsOpen(settings, settingsButton, false);
+        settingsButton.focus();
+        return;
+      }
       close();
       return;
     }
@@ -1352,13 +1372,6 @@ function showTweetPngModal(
         setStatus(errorMessage(error));
         if (shareToRemiNetButton.isConnected) shareToRemiNetButton.disabled = false;
       });
-  });
-  settingsButton?.addEventListener("click", () => {
-    if (!settings) return;
-    const opening = settings.hidden;
-    settings.hidden = !opening;
-    settingsButton.setAttribute("aria-expanded", String(opening));
-    if (opening) settings.querySelector<HTMLElement>("button, input")?.focus();
   });
   const updatePreview = async (successMessage = "Preview updated.") => {
     const version = ++renderVersion;
