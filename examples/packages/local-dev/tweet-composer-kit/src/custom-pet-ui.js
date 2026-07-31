@@ -8,6 +8,7 @@ import {
   compatibleBottoms,
   createStoredZip,
   footwearForAssetId,
+  legColorForRace,
   listStoredZip,
   makePetRequest,
   sha256Hex,
@@ -80,7 +81,6 @@ export function buildCustomPetExport({ signal }) {
     return [trait, { assetId, label }];
   }));
   const coverage = blankSelect("Leg coverage", BODY_COMPLETION_CATALOG.legCoverage);
-  const legColor = blankSelect("Leg color", BODY_COMPLETION_CATALOG.legColors);
   const bottom = blankSelect("Bottom garment", BODY_COMPLETION_CATALOG.bottoms.map((item) => ({
     id: item.assetId,
     label: item.label,
@@ -93,15 +93,6 @@ export function buildCustomPetExport({ signal }) {
   const footwearColor = blankSelect("Footwear color", BODY_COMPLETION_CATALOG.colors);
   const petName = labeledInput("Pet name (optional)", 80);
   const personality = labeledInput("Personality (optional)", 280);
-  const rightsScope = labeledSelect("Rights scope", [
-    { id: "private-review", label: "Private review only" },
-    { id: "publication-cleared", label: "Publication cleared" },
-  ], "private-review");
-  const rightsConfirmed = element("input", {
-    id: "tweet-composer-kit-pet-rights",
-    type: "checkbox",
-    className: "tweet-composer-kit__pet-check",
-  });
   const preview = element("canvas", {
     className: "tweet-composer-kit__pet-preview",
     width: 1024,
@@ -160,26 +151,18 @@ export function buildCustomPetExport({ signal }) {
     ]),
     fieldset("Avatar completion", [
       coverage.root,
-      legColor.root,
       bottom.root,
       bottomColor.root,
       footwear.root,
       footwearColor.root,
       element("p", {
         className: "tweet-composer-kit__pet-help",
-        textContent: "Only compatible bottoms can be selected. No lower-body or footwear choice is inferred.",
+        textContent: "Leg color follows the selected Maker family's race trait. Only compatible bottoms can be selected; garments and footwear are never inferred.",
       }),
     ]),
     fieldset("Pet handoff", [
       petName,
       personality,
-      rightsScope,
-      element("label", {
-        className: "tweet-composer-kit__pet-rights",
-        htmlFor: rightsConfirmed.id,
-      }, rightsConfirmed, element("span", {
-        textContent: "I confirm this rights scope. It does not grant any broader rights to Maker traits or the exported image.",
-      })),
     ]),
     element("div", { className: "tweet-composer-kit__pet-actions" }, previewButton, exportButton),
     preview,
@@ -235,13 +218,10 @@ export function buildCustomPetExport({ signal }) {
         family,
         traitInputs,
         coverage,
-        legColor,
         bottom,
         bottomColor,
         footwear,
         footwearColor,
-        rightsScope,
-        rightsConfirmed,
         petName,
         personality,
         state,
@@ -263,13 +243,10 @@ export function buildCustomPetExport({ signal }) {
         family,
         traitInputs,
         coverage,
-        legColor,
         bottom,
         bottomColor,
         footwear,
         footwearColor,
-        rightsScope,
-        rightsConfirmed,
         petName,
         personality,
         state,
@@ -323,7 +300,11 @@ function collectSelection(controls) {
     return [trait, { assetId, ...(input.label.value.trim() ? { label: input.label.value.trim() } : {}) }];
   }));
   const legCoverage = requiredValue(controls.coverage.select, "Choose leg coverage.");
-  const legColorVariant = requiredValue(controls.legColor.select, "Choose a leg color.");
+  const legColorVariant = legColorForRace(templateFamily, traits.race);
+  if (!legColorVariant) {
+    controls.traitInputs.race.assetId.focus();
+    throw new Error(`The ${FAMILY_LABELS[templateFamily]} race is not mapped to a leg color yet. Enter its exact race asset ID or label.`);
+  }
   const bottomAssetId = requiredValue(controls.bottom.select, "Choose a compatible bottom garment.");
   const bottomItem = bottomForAssetId(bottomAssetId);
   if (!bottomItem || !bottomItem.compatibleLegCoverage.includes(legCoverage)) {
@@ -334,7 +315,6 @@ function collectSelection(controls) {
   const footwearItem = footwearForAssetId(footwearAssetId);
   if (!footwearItem) throw new Error("Choose footwear from the maintained catalog.");
   const footwearColorVariant = requiredValue(controls.footwearColor.select, "Choose a footwear color.");
-  if (!controls.rightsConfirmed.checked) throw new Error("Confirm the visible rights scope before export.");
   return {
     templateFamily,
     traits,
@@ -354,7 +334,7 @@ function collectSelection(controls) {
         colorVariant: footwearColorVariant,
       },
     },
-    rightsScope: controls.rightsScope.querySelector("select").value,
+    rightsScope: "private-review",
     petName: controls.petName.querySelector("input").value,
     personality: controls.personality.querySelector("input").value,
   };
@@ -504,16 +484,6 @@ function labeledInput(label, maxLength) {
     maxLength,
     autocomplete: "off",
   }));
-}
-
-function labeledSelect(label, options, selected) {
-  const select = element("select", { className: "tweet-composer-kit__pet-select", ariaLabel: label });
-  for (const option of options) select.append(element("option", {
-    value: option.id,
-    textContent: option.label,
-    selected: option.id === selected,
-  }));
-  return labeledControl(label, select);
 }
 
 function labeledControl(label, control) {

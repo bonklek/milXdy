@@ -4,6 +4,7 @@ import path from "node:path";
 import { deflateSync } from "node:zlib";
 import {
   createStoredZip,
+  legColorForRace,
   makePetRequest,
   stableJson,
   validatePetRequest,
@@ -21,11 +22,12 @@ const outputRoot = "examples/fixtures/remilia-pet-request";
 for (const family of families) {
   const outputDir = path.join(outputRoot, family);
   const avatar = makeSanitizedAvatar(family);
+  const traits = makeTraits(family);
   const request = makePetRequest({
     templateFamily: family,
     imageSha256: createHash("sha256").update(avatar).digest("hex"),
-    traits: makeTraits(family),
-    bodyCompletion: makeBodyCompletion(family),
+    traits,
+    bodyCompletion: makeBodyCompletion(family, traits.race),
     rightsScope: "private-review",
     petName: `Sanitized ${family[0].toUpperCase()}${family.slice(1)}`,
     personality: "A sanitized local contract fixture with no user or reference image.",
@@ -55,8 +57,14 @@ for (const family of families) {
 }
 
 function makeTraits(family) {
+  const raceByFamily = {
+    milady: { assetId: "milady-white-skin-v1", label: "White" },
+    remilio: { assetId: "remilio-tan-race-v1", label: "Tan" },
+    bonkler: { assetId: "bonkler-green-race-v1", label: "Green" },
+    kagami: { assetId: "kagami-porcelain-race-v1", label: "Porcelain" },
+  };
   return {
-    race: { assetId: `${family}-sample-race-v1`, label: "Sanitized sample race" },
+    race: raceByFamily[family],
     hair: { assetId: `${family}-sample-hair-v1`, label: "Sanitized sample hair" },
     eyes: { assetId: `${family}-sample-eyes-v1`, label: "Sanitized sample eyes" },
     glasses: { assetId: "none", label: "None" },
@@ -65,34 +73,30 @@ function makeTraits(family) {
   };
 }
 
-function makeBodyCompletion(family) {
+function makeBodyCompletion(family, race) {
   const byFamily = {
     milady: {
       legCoverage: "covered",
-      legColorVariant: "warm-light",
       bottom: { category: "jeans", assetId: "maker-bottom-jeans-v1", assetVersion: 1, colorVariant: "denim-blue" },
       footwear: { category: "sneakers", assetId: "maker-footwear-sneakers-v1", assetVersion: 1, colorVariant: "white" },
     },
     remilio: {
       legCoverage: "exposed",
-      legColorVariant: "warm-medium",
       bottom: { category: "cargo-shorts", assetId: "maker-bottom-cargo-shorts-v1", assetVersion: 1, colorVariant: "olive" },
       footwear: { category: "boots", assetId: "maker-footwear-boots-v1", assetVersion: 1, colorVariant: "brown" },
     },
     bonkler: {
       legCoverage: "partial",
-      legColorVariant: "fantasy-green",
       bottom: { category: "chinos", assetId: "maker-bottom-chinos-v1", assetVersion: 1, colorVariant: "khaki" },
       footwear: { category: "loafers", assetId: "maker-footwear-loafers-v1", assetVersion: 1, colorVariant: "black" },
     },
     kagami: {
       legCoverage: "covered",
-      legColorVariant: "cool-pale",
       bottom: { category: "dress-pants", assetId: "maker-bottom-dress-pants-v1", assetVersion: 1, colorVariant: "navy" },
       footwear: { category: "sandals", assetId: "maker-footwear-sandals-v1", assetVersion: 1, colorVariant: "pink" },
     },
   };
-  return byFamily[family];
+  return { ...byFamily[family], legColorVariant: legColorForRace(family, race) };
 }
 
 function makeSanitizedAvatar(family) {
