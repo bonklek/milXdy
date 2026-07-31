@@ -69,6 +69,15 @@ jobs:
       - name: Verify Pages add-ons catalog
         run: npm run verify:pages-catalog
 
+      - name: Verify maintainer add-on packages
+        run: npm run verify:maintainer-addons
+
+      - name: Verify local catalog selections
+        run: npm run verify:local-addon-selection
+
+      - name: Verify local catalog Prepare and Apply
+        run: npm run verify:local-addon-selection-workflow
+
       - name: Verify external Post-reading App SDK reference
         env:
           POST_READING_REPO: ${{ github.workspace }}/post-reading-sdk
