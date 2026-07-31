@@ -1318,8 +1318,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const displayNameLink = findDisplayNameLink(userName);
       if (!displayNameLink) continue;
       const displayRow = displayNameLink.parentElement;
+      const displayCluster = displayRow?.parentElement;
       const metadataRow = findMetadataRow(userName, displayRow);
       userName.dataset.milxdyTweetHeader = "true";
+      if (displayCluster && displayCluster.parentElement === userName) {
+        displayCluster.setAttribute("data-milxdy-display-name-cluster", "true");
+      }
       displayRow?.setAttribute("data-milxdy-display-name-row", "true");
       displayNameLink.setAttribute("data-milxdy-display-name", "true");
       metadataRow?.setAttribute("data-milxdy-metadata-row", "true");
