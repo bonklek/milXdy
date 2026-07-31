@@ -570,9 +570,13 @@ async function renderRemiliaMakerImage(topText: string, bottomText: string, mode
   };
   const top = document.querySelector<HTMLInputElement>("#topText");
   const bottom = document.querySelector<HTMLInputElement>("#bottomText");
-  const random = document.querySelector<HTMLElement>("#randomButton");
-  if (!top || !bottom || !random) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
-  random.click();
+  const randomToken = document.querySelector<HTMLElement>("#randomButton");
+  const randomMeme = document.querySelector<HTMLElement>("#randomMemeButton");
+  if (!top || !bottom || !randomToken || !randomMeme) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
+  // The token button selects the maker base; the separate Meme Maker control
+  // supplies its reviewed random caption/preset. They are deliberately not
+  // interchangeable, even though both are labelled "Random" in the maker UI.
+  randomToken.click();
   await waitForRender();
   const setInput = (input: HTMLInputElement, value: string) => {
     Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
@@ -582,6 +586,8 @@ async function renderRemiliaMakerImage(topText: string, bottomText: string, mode
   if (mode === "captioned") {
     setInput(top, topText);
     setInput(bottom, bottomText);
+  } else {
+    randomMeme.click();
   }
   // The reviewed maker exposes its complete renderer only from its own main
   // world. Rendering there preserves its selected layers, text treatment, and
