@@ -87,3 +87,46 @@ describe("Remilia auth token custody", () => {
     expect(remove).toHaveBeenCalledWith(expect.arrayContaining([auth.REMILIA_ACCESS_TOKEN_KEY, auth.REMILIA_REFRESH_TOKEN_KEY]));
   });
 });
+
+describe("Remilia session refresh tab boundary", () => {
+  it("marks only the temporary Remilia session-refresh URL", async () => {
+    const auth = await import("./remilia-auth");
+
+    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/?milxdy_session_refresh=1")).toBe(true);
+    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/anything?milxdy_session_refresh=1")).toBe(true);
+    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/")).toBe(false);
+    expect(auth.isRemiliaSessionRefreshUrl("https://x.com/?milxdy_session_refresh=1")).toBe(false);
+    expect(auth.isRemiliaSessionRefreshUrl(undefined)).toBe(false);
+  });
+
+  it("opens the hidden auth refresh tab with the marker and still removes it", async () => {
+    const create = vi.fn(async () => ({ id: 42 }));
+    const remove = vi.fn(async () => undefined);
+    vi.stubGlobal("chrome", {
+      tabs: {
+        create,
+        get: vi.fn(async () => ({ id: 42, status: "complete" })),
+        remove,
+        onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+      },
+      storage: {
+        local: {
+          get: vi.fn(async () => ({})),
+          set: vi.fn(async () => undefined),
+          remove: vi.fn(async () => undefined),
+        },
+      },
+      cookies: { get: vi.fn(async () => null) },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "session-user" }) })));
+
+    const auth = await import("./remilia-auth");
+    await auth.refreshRemiliaBrowserSessionTab("/api/profile/whoami", { timeoutMs: 1_000 });
+
+    expect(create).toHaveBeenCalledWith({
+      url: "https://www.remilia.net/?milxdy_session_refresh=1",
+      active: false,
+    });
+    expect(remove).toHaveBeenCalledWith(42);
+  });
+});
