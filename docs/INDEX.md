@@ -39,6 +39,7 @@
 
 - [Contributing](contributors/CONTRIBUTING.md)
 - [Add-ons catalog and submissions](contributors/ADD_ONS_CATALOG.md)
+- [Initial maintainer add-ons inventory](contributors/ADD_ONS_CATALOG_INVENTORY.md)
 - [Contributor UI style guide](contributors/CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Developer QA reload](contributors/DEVELOPER_QA_RELOAD.md)
 - [Documentation maintenance](contributors/DOCS_MAINTENANCE.md)

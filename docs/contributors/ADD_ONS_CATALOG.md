@@ -1,125 +1,166 @@
 # Add-ons Catalog
 
 The static source for the milXdy Add-ons Catalog lives in
-[`catalog/`](../../catalog/). It provides a catalog index, a shared per-package
-detail route, official and approved-external sections, security and browser
-download disclosures, and the supported local custom-build workflow.
+[`catalog/`](../../catalog/). The canonical hosted location is
+`https://bonklek.github.io/milXdy/addons/`; the checked-in page remains useful
+offline and is the source of truth for its metadata. It provides the initial
+BOORU, Tweet Composer, and Meme Maker records, per-package disclosures, explicit
+selection controls, a combined review, and the supported Chromium custom-build
+workflow.
 
-The page follows the checked-in [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md):
-compact utility panels, crisp bordered controls, stable geometry, readable
-light/dark states, and no landing-page hero treatment. Its visual source of
-truth is the X-facing treatment in `src/platform/visuals/reskin-styles.ts` and
-`src/platform/overlay/app-chrome.ts`: the Moderate profile's page background,
-surface, secondary surface, border, Remilia blue, text, and dark-mode values,
-plus the shared overlay's shallow highlight and bevel geometry. Images and
-visual cues use square or near-square frames with slightly rounded corners.
-The header uses the existing square beveled mark from `assets/brand/`.
+The page follows the checked-in
+[Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md): compact utility
+panels, crisp bordered controls, stable geometry, readable light/dark states,
+and no landing-page hero treatment.
 
-The catalog is currently a preview with no published package inventory. It
-does not claim runtime ZIP installation, and it does not allow a package into a
-selection file until its record has a verified HTTPS ZIP URL, SHA-256 value,
-approved review, and matching checked-in trusted-review entry.
+The catalog is a preview. Tweet Composer has a reviewed, checked-in package
+candidate but remains **Under review** until cumulative QA and explicit
+maintainer publication approval. BOORU and Meme Maker are **Unavailable**
+because their feature and Composer Kit gates in #17, #79, and #188 are not
+complete. An unavailable record is documentation, not an artifact or implied
+installation.
 
-## User Workflow
+## Security and distribution boundary
 
-The catalog documents the current Chromium workflow:
+The first catalog has no remote package artifacts:
 
-1. Select one or more packages explicitly marked **Published** and download the
-   generated `.milxdy-selection.json` file. The file pins package IDs, exact
-   HTTPS ZIP URLs, filenames, SHA-256 values, and review identities/dates.
-2. In a milXdy source checkout, install repository dependencies and prepare the
-   selection:
+- the page never downloads a package ZIP, script, module, or executable payload;
+- the page never sends package bytes or build commands to the extension;
+- the selection file contains only catalog identity/revision, build target,
+  recipe ID, and sorted package IDs, versions, and package SHA-256 values;
+- `addons:prepare` resolves those identities only against allowlisted
+  `packages/maintainer/` paths in the same reviewed source checkout;
+- the local composer remains authoritative for package identity, SDK
+  compatibility, file hashes, permissions, conflicts, lifecycle, and trust
+  acknowledgements;
+- package code becomes privileged extension code only after a local custom
+  build. It is not sandboxed, hot-loaded, or installed into a running extension.
+
+Manual user-supplied packages under `local-addons/manual/` remain a separate
+advanced-user input. A maintainer catalog selection never names or fetches
+those files.
+
+## User workflow
+
+1. Review the records and explicitly select any compatible package subset.
+   Selecting none is a valid baseline selection and removes all
+   catalog-managed packages on the next Prepare.
+2. Read the combined capability, host, optional-permission, privileged-surface,
+   site-scope, remote-service, storage, privacy, and acknowledgement summary.
+   Missing dependencies and conflicts disable selection-file creation with a
+   concrete error; dependencies are never silently added.
+3. Download `.milxdy-selection.json`. For an identical catalog revision and
+   package subset, its bytes are deterministic.
+4. In the matching milXdy source checkout, run:
 
    ```powershell
    npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
    ```
 
-3. Read the consolidated capability, host, permission, storage, remote-service,
-   review, and trust-acknowledgement summary. Prepare downloads the pinned ZIPs,
-   verifies their hashes, and transactionally places the exact catalog set in
-   `local-addons/catalog/`; it does not build or execute them.
-4. Run `npm run addons:apply` with the acknowledgement flags printed by
-   Prepare. The stable build output is `dist/chromium-local-apps/`.
-5. Load that output folder from `chrome://extensions` the first time. On later
-   builds, keep the same folder, click **Reload** on the existing extension
-   card, and refresh X/Twitter tabs.
+5. Prepare re-resolves the exact catalog revision, checks the Chromium recipe,
+   verifies package identities/versions/hashes and the trusted-review registry,
+   copies only the selected checked-in package roots to a transactional staging
+   directory, and runs the existing composer in review mode. It does not build
+   or execute the packages.
+6. Review `tmp/local-addon-manager/composition/composition-report.json` and the
+   acknowledgement list printed by Prepare. Then run:
 
-This is not a runtime package manager. The site cannot fetch or move ZIPs,
-run the composer, modify the loaded extension, or reload Chrome. It only emits
-the small selection file; the checked-in local manager owns downloads, pinned
-hash verification, filesystem placement, composition, and the stable build.
-Local packages
-run as privileged extension code after composition, so review, declarations,
-and explicit consent remain part of the security boundary.
+   ```powershell
+   npm run addons:apply -- --acknowledge-package-consent --acknowledge-first-party-replacement
+   ```
 
-When the compatible extension is installed, the catalog's Rebuild icon may open
-the extension's Add-ons settings through the exact-origin catalog bridge. The
-bridge accepts only the public `https://bonklek.github.io/milXdy/` path and the
-`folder` or `rebuild` settings targets; it never accepts package bytes or build
-commands from the page.
+   Use only the flags Prepare actually requests.
+7. Apply rebuilds `dist/chromium-local-apps/` and promotes it only after
+   validation and compilation pass. Load that folder once from
+   `chrome://extensions`; for later updates, keep the same extension card and
+   click **Reload**.
 
-When a compatible milXdy build is installed, the catalog's Add-ons settings
-button can open `popup.html#addons` through the exact-origin catalog bridge.
-The bridge accepts only the public `https://bonklek.github.io/milXdy/` path,
-validates the requested settings target, and does not accept package bytes or
-build commands from the page.
+This flow is Chromium-only. Firefox release builds and ordinary release builds
+are unchanged when no catalog selection is applied.
 
-## Maintaining Inventory
+## Dependency and conflict policy
 
-`catalog/data/catalog.json` is the single source of truth for both the index
-and detail pages. Keep official packages under `official` and reviewed
-third-party packages under `approved-external`; never represent an external
-publisher as official.
+`catalog/data/catalog.json` declares exact package dependencies and explicit
+package conflicts. Both the page and the local manager enforce them:
 
-For contributor submissions and the maintainer review decision, use the
-[Add-on catalog submission process](ADD_ON_CATALOG_SUBMISSIONS.md). This guide
-does not turn a catalog record into an automated publication, signing, or trust
-guarantee.
+- every dependency must be selected explicitly at the catalog-pinned version;
+- unknown, unavailable, stale, or hash-mismatched packages fail closed;
+- either side of a declared conflict makes the combination invalid;
+- the package composer still performs its deeper duplicate-ID, background
+  route/service, storage ownership, site-route, built-in identity, SDK,
+  permission, and artifact conflict checks;
+- a browser-side green summary never overrides a local composer rejection.
 
-Every package record must include its availability, publisher, review status,
-capabilities, permissions, privacy notes, and download state. A Published
-record additionally requires:
+## Rollback and recovery
 
-- a verified HTTPS ZIP URL
-- its exact `.zip` filename
-- a lowercase SHA-256 value calculated from that published ZIP
-- an HTTPS source URL
-- `review.status` set to `approved`, with the real reviewer and ISO review date
+The stable custom build and selected catalog package set each use a write-ahead
+promotion journal:
 
-Do not add placeholder versions, hashes, screenshots, download URLs, review
-dates, or feature claims. Use `planned` or `under-review` with `download: null`
-until the real artifact and its review evidence exist.
+- `local-addons/.state/catalog-promotion.json` protects
+  `local-addons/catalog/`;
+- `local-addons/.state/build-promotion.json` protects
+  `dist/chromium-local-apps/`;
+- backups are restored automatically when the manager starts after an
+  interrupted promotion;
+- failed validation or compilation leaves the previous stable custom build
+  untouched;
+- the selection lock at `local-addons/.state/selection-lock.json` records
+  catalog revision, build recipe, selection hash, package identities, package
+  hashes, artifact paths, and trusted-review results.
 
-The metadata shape is documented by
-`catalog/data/catalog.schema.json`. Run the focused validator after changes:
+To remove catalog-managed packages, prepare and apply an explicit empty
+selection. To abandon a failed candidate before Apply, keep using the previous
+stable output; do not delete or replace its folder manually. If Chrome is
+running a newer failed experiment, reload the preserved stable folder on the
+same unpacked-extension card.
+
+## Maintaining inventory
+
+`catalog/data/catalog.json` is the single source of truth for both the index and
+detail pages. Every package record includes:
+
+- stable package ID, name, icon, description, kind, version, and SDK range;
+- repository/path provenance and owning issues;
+- review and availability state;
+- local artifact path, exact package SHA-256, and recipe when a candidate exists;
+- capabilities, permissions, privileged surfaces, site scope, remote services,
+  storage, privacy, dependencies, conflicts, replacement policy, and blockers.
+
+A record may be `published` only when it has an approved review, a real version,
+a checked-in `maintainer-source` artifact under an allowlisted root, an exact
+package hash, a trusted-review registry match, and successful cumulative QA.
+Never add placeholder hashes, review dates, permissions, or feature claims.
+
+The package-boundary evidence for the initial records is in
+[Initial maintainer inventory](ADD_ONS_CATALOG_INVENTORY.md). Contributor
+submissions continue to use
+[Add-on catalog submissions](ADD_ON_CATALOG_SUBMISSIONS.md); that process does
+not turn external work into a first-party local artifact.
+
+Run the focused checks after catalog changes:
 
 ```powershell
+npm.cmd run build:maintainer-addons
 npm.cmd run verify:pages-catalog
+npm.cmd run verify:local-addon-selection
+npm.cmd run verify:local-addon-selection-workflow
 ```
 
-The detail route is `catalog/add-ons/?id=<package-id>`. The index generates
-these links from metadata, so package prose does not need to be duplicated in
-HTML.
-
-For a local preview, build the self-contained static directory and serve it:
+For a local page preview:
 
 ```powershell
 npm.cmd run build:pages-catalog
 python -m http.server 8765 --bind 127.0.0.1 --directory tmp/pages-catalog-site
 ```
 
-Then open `http://127.0.0.1:8765/`. The build copies only the two checked-in
-brand images used by the site alongside the catalog source; generated preview
-output stays under the gitignored `tmp/` directory.
+Then open `http://127.0.0.1:8765/`.
 
-## Publishing Later
+## Publishing later
 
 `.github/workflows/pages-catalog.yml` is intentionally manual-only. It has no
-push, pull-request, release, or schedule trigger. A maintainer must first
-configure the repository's Pages source for GitHub Actions, then explicitly
-dispatch **Deploy Add-ons Catalog to Pages** when publication is approved.
+push, pull-request, release, or schedule trigger. A maintainer must explicitly
+approve the inventory state and dispatch **Deploy Add-ons Catalog to Pages**.
 
-Do not dispatch that workflow merely to validate a change; use
-`verify:pages-catalog` or normal CI instead. Publishing, changing GitHub Pages
-settings, and confirming the final public URL remain separate maintainer
+Do not dispatch that workflow merely to validate a change. Publishing, changing
+GitHub Pages settings, and confirming the public URL remain separate maintainer
 actions.

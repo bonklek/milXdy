@@ -19,12 +19,13 @@ reviewable composition report, and generates a deterministic unpacked Chromium
 build. Apps & Features provides package enablement, disclosure, reset, rail,
 and diagnostics behavior in the generated extension.
 
-The workflow is **Select → Place ZIPs → Rebuild → Reload**. The catalog owns
-selection, the checked-in local manager owns verified downloads, filesystem
-placement and composition, and the generated extension owns loaded-build
-identity and reload confirmation. [Local Add-ons](LOCAL_ADDONS.md) is the
-canonical procedure. Low-level composer commands remain available for package
-authors and repository verification.
+The workflow is **Select → Materialize → Rebuild → Reload**. The catalog owns
+explicit selection and combined disclosure. The checked-in local manager owns
+catalog-revision resolution, allowlisted checked-in artifact materialization,
+filesystem placement, and composition. The generated extension owns
+loaded-build identity and reload confirmation. [Local Add-ons](LOCAL_ADDONS.md)
+is the canonical procedure. Low-level composer commands remain available for
+manual package authors and repository verification.
 
 This is a custom-build SDK. Packages become part of the generated extension;
 they are not downloaded into an already-installed browser extension. Package
@@ -48,9 +49,10 @@ The App SDK provides:
 - **Deterministic composition:** folder and ZIP inputs, normalized package
   paths, generated registries, copied assets, merged permissions, package
   hashes, and reproducible build metadata.
-- **Pinned acquisition:** versioned selection files, exact HTTPS package URLs,
-  allowed download hosts, manually validated redirects, streaming archive size
-  limits, SHA-256 verification, and a content-addressed download cache.
+- **Pinned local selection:** versioned selection files, exact catalog
+  revisions, Chromium recipe IDs, package IDs/versions/hashes, allowlisted
+  `packages/maintainer/` roots, symbolic-link rejection, and deterministic
+  package-set materialization. Catalog selection never acquires remote code.
 - **Transactional local builds:** exact catalog package-set replacement,
   recoverable promotion journals, a stable unpacked-extension target, and
   preservation of the last known-good output on failure.
@@ -82,19 +84,19 @@ addition to explicit reviewer acknowledgement. Novel packages start disabled
 when they request privileged capabilities or consent.
 
 Package-authored and selection-authored review claims are not trust roots. A
-catalog package is accepted as reviewed only when its ID, archive hash,
-reviewer, and review date match the checked-in trusted-review registry.
+catalog package is accepted as reviewed only when its ID, version, package
+hash, reviewer, and review date match the checked-in trusted-review registry.
 Otherwise the user must explicitly pass `--allow-local-review`. Prepare never
-executes package code, and the extension never imports a downloaded ZIP at
-runtime.
+executes package code, and the extension never imports package code at runtime.
 
 ## Supported Capabilities
 
 | Capability | Support |
 | --- | --- |
 | Reviewed folder or ZIP package | Supported |
-| Catalog `.milxdy-selection.json` export | Supported; published entries require pinned artifacts and trusted review metadata |
-| Managed download, hash verification, and cache | Supported for checked-in GitHub hosts |
+| Catalog `.milxdy-selection.json` export | Supported; local-only schema pins catalog revision, recipe, package IDs, versions, and hashes |
+| Remote catalog package download | Not supported |
+| Checked-in maintainer artifact resolution | Supported below allowlisted package roots |
 | Manual ZIP folder and validation-only status | Supported in `local-addons/manual/` |
 | Deterministic Chromium custom build | Supported |
 | Transactional stable output and recovery | Supported in `dist/chromium-local-apps/` |
@@ -132,8 +134,9 @@ The production verification suite covers:
 - package fixtures and novel-package integration;
 - folder and ZIP trust gates;
 - catalog selection schema, deterministic serialization, and publication gates;
-- managed prepare/apply, pinned downloads, cache resume, transaction recovery,
-  stable-output preservation, and reload identity;
+- managed prepare/apply, pinned local artifact resolution, explicit empty
+  selection, transaction recovery, stable-output preservation, and reload
+  identity;
 - static catalog build and route validation;
 - Post-reading cross-repository integration;
 - Chromium and Firefox extension builds;

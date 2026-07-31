@@ -11,7 +11,7 @@ Apps & Features integration, side-rail registration, and overlay UI patterns.
 The deterministic composer accepts app folders and ZIP archives, enforces the
 package trust contract, and produces a reviewable unpacked extension build.
 The local Add-on Manager adds the supported user workflow around that composer:
-catalog selection files or manually supplied ZIPs, pinned download verification,
+local-only maintainer catalog selections or manually supplied ZIPs,
 transactional package placement, a stable build folder, and durable status for
 Apps & Features.
 
@@ -30,10 +30,12 @@ builds.
 
 There are three distinct entry points:
 
-- **Catalog selection:** the catalog exports one `.milxdy-selection.json` that
-  pins package IDs, HTTPS ZIP URLs, filenames, SHA-256 hashes, and review
-  identities. `addons:prepare` downloads and validates that exact set;
-  `addons:apply` builds it after the required trust acknowledgements.
+- **Catalog selection:** the catalog exports one deterministic
+  `.milxdy-selection.json` that pins catalog revision, Chromium recipe, package
+  IDs, versions, and package hashes. `addons:prepare` resolves and validates
+  that exact set only from checked-in `packages/maintainer/` roots;
+  `addons:apply` builds it after the required trust acknowledgements. Catalog
+  selections contain no package download URL or package bytes.
 - **Manual local packages:** users place trusted ZIPs in
   `local-addons/manual/`, inspect them with `addons:status`, and build with
   `addons:rebuild`.
@@ -709,8 +711,8 @@ sounds control in the extension Audio settings.
 
 The catalog selection document is defined by
 [`milxdy-selection.schema.json`](../schemas/milxdy-selection.schema.json). Catalog review
-claims become trusted only when their package ID, archive hash, reviewer, and
-review date match the checked-in trusted-review registry.
+claims become trusted only when their package ID, version, package hash,
+reviewer, and review date match the checked-in trusted-review registry.
 
 ### Low-Level Composer And Builder
 
