@@ -216,6 +216,7 @@ function verifyCentralRoutedBridgePolicies() {
   for (const [type, wrapper] of [
     ["milxdy:fetchImageDataUrl", "fetchImageDataUrlForSender"],
     ["miladychan:fetchJson", "fetchMiladychanJsonForSender"],
+    ["miladychan:postText", "postMiladychanTextForSender"],
     ["music:fetchJson", "fetchMusicJsonForSender"],
     ["music:postForm", "postMusicFormForSender"],
     ["music:fetchImageDataUrl", "fetchMusicImageDataUrlForSender"],
@@ -230,6 +231,7 @@ function verifyCentralRoutedBridgePolicies() {
   for (const wrapper of [
     "fetchImageDataUrlForSender",
     "fetchMiladychanJsonForSender",
+    "postMiladychanTextForSender",
     "fetchMusicJsonForSender",
     "postMusicFormForSender",
     "fetchMusicImageDataUrlForSender",
@@ -247,6 +249,14 @@ function verifyCentralRoutedBridgePolicies() {
   const xPolicy = functionBody(files.background, "isXContentScriptSender");
   assertIncludes(xPolicy, "isSameExtensionTopFrameHttpsSender(sender, [\"x.com\", \"twitter.com\"])", "central X sender policy must restrict to X/Twitter hosts");
   verifySameExtensionTopFrameHttpsPolicy(functionBody(files.background, "isSameExtensionTopFrameHttpsSender"), "Central X route sender policy");
+  const miladychanPost = functionBody(files.background, "postMiladychanText");
+  assertIncludes(miladychanPost, "MILADYCHAN_POST_RULES", "Miladychan posting must use a fixed endpoint allowlist");
+  assertIncludes(miladychanPost, 'credentials: "omit"', "Miladychan posting must not reuse browser cookies or sessions");
+  assertIncludes(miladychanPost, "new FormData()", "Miladychan posting must match the native multipart request shape");
+  assertIncludes(miladychanPost, 'form.set("body", body)', "Miladychan posting must send only the user-entered text body");
+  assertIncludes(miladychanPost, 'form.set("name", name)', "Miladychan posting must use only the explicitly selected poster pseudonym");
+  assertIncludes(miladychanPost, '"milXdy"', "Miladychan posting must default to the disclosed milXdy pseudonym");
+  assertNotIncludes(miladychanPost, 'form.set("image"', "Miladychan posting must not upload media");
   assertIncludes(files.background, "UNSUPPORTED_SENDER", "central routed bridges must fail closed for unsupported senders");
   verifyCentralImageBridgeCaps();
 }

@@ -16,7 +16,7 @@ This project is intended for GitHub beta distribution and local browser testing.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
 - **Beetol Game**: Beetol hunter panel and RemiliaNET login shared with RemiNet actions.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
-- **Miladychan Portal**: docked Miladychan board, thread, post, and media browsing that keeps the native site as the primary posting surface.
+- **Miladychan Portal**: docked Miladychan board, thread, post, and media browsing with local watched threads, explicit `milXdy`-pseudonymous text-only posting, and native-site fallback.
 - **Music**: docked local music library, playlists, ISRC enrichment, QR import/export, and metadata-based local radio sessions.
 - **Health**: beta diagnostics and bug-report actions for GitHub or X.
 
@@ -84,7 +84,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | <img src="assets/apps/milady-maxxer/milady-logo.png" alt="" width="20"> [Milady Maxxer](docs/guides/milady-maxxer.md) | Maxxer effects, local detection, card themes, XP behavior, whitelist handles, and manual handles. |
 | <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/guides/beetol.md) | Beetol panel setup, RemiliaNET login, hunt panel styling, and shared RemiNet auth. |
 | <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/guides/reminet-chat.md) | Docked RemiliaNET chat, X Messages integration, reactions, attachments, live updates, and login checks. |
-| <img src="assets/apps/miladychan-portal/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/guides/miladychan-portal.md) | Board browsing, thread reading, media previews, and native Miladychan links. |
+| <img src="assets/apps/miladychan-portal/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/guides/miladychan-portal.md) | Board browsing, thread reading, local watched threads, explicit `milXdy`-pseudonymous text-only posting, media previews, and native Miladychan links. |
 | <img src="assets/apps/music/milxdy-music-logo.png" alt="" width="20"> [Music](docs/guides/music.md) | Local library indexing, playback queue, playlists, QR metadata sharing, ISRC enrichment, and radio sessions. |
 
 ## Development
