@@ -271,9 +271,9 @@ random reward motion. Substitute status text, a determinate progress element,
 or a static completed state. Global host suppression does not remove the
 package's responsibility.
 
-## 9. Sound and music boundaries
+## 9. Sound and audio boundaries
 
-Sound is optional semantic feedback, never ambient permission. Music/audio
+Sound is optional semantic feedback, never ambient permission. Recorded audio
 products may play user-selected media; ordinary apps should use a small event
 map:
 
@@ -320,7 +320,7 @@ decision become mandatory.
 
 Meaningful image alt text describes its function in context:
 
-> Character wearing headphones, Music achievement icon.
+> Decorative frame surrounding the package status panel.
 
 A neighboring visible label may make an image decorative, in which case use
 `alt=""`. Never stuff provenance or visual speculation into alt text. Keep

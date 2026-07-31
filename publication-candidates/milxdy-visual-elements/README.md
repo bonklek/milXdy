@@ -22,7 +22,6 @@ requirement without turning it into a restriction on local customization. See
 - [Asset and contribution policy](docs/ASSET_AND_CONTRIBUTION_POLICY.md)
 - [Public/private publication boundary](docs/PUBLICATION_BOUNDARY.md)
 - [Package integration](docs/PACKAGE_INTEGRATION.md)
-- [Music headphones walkthrough](docs/MUSIC_HEADPHONES_WALKTHROUGH.md)
 - [Contribution lanes](CONTRIBUTING.md)
 - [Validation and QA](docs/VALIDATION_AND_QA.md)
 - [Publication checklist](docs/PUBLICATION_CHECKLIST.md)

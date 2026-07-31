@@ -13,7 +13,7 @@ test("full validation suite covers all declared fixture classes", async () => {
   const summary = await runValidation();
   assert.equal(summary.schemas, 4);
   assert.equal(summary.productionEntries, 0);
-  assert.equal(summary.validManifests, 3);
+  assert.equal(summary.validManifests, 2);
   assert.ok(summary.invalidCases >= 40);
   assert.equal(summary.packageLocks, 1);
   assert.equal(summary.reviewDecisions, 1);
