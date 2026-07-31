@@ -454,6 +454,16 @@
   z-index: 5;
 }
 
+/* The action child rule otherwise wins and puts the burst beneath its icon. */
+.beetol-action > .beetol-cheese-celebration {
+  z-index: 7;
+}
+
+/* Use a CSS escape so the flare survives source encoding unchanged. */
+.beetol-action[data-celebrating="true"]::after {
+  content: "\2726";
+}
+
 .beetol-cheese-celebration i {
   position: absolute;
   width: 9px;
