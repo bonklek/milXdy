@@ -83,6 +83,9 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
   requireIncludes(appPlatform, "contextualPostActions?: AppContextualPostAction[]", "App SDK manifest must expose contextual post actions");
   requireIncludes(appPlatform, "onContextualPostAction?:", "App SDK module type must expose the contextual post-action callback");
+  requireIncludes(appPlatform, "contextMediaActions?: AppContextMediaAction[]", "App SDK manifest must expose reviewed contextual media actions");
+  requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
+  requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
