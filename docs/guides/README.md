@@ -228,8 +228,9 @@ Enable and pin **Miladychan** from Apps & Features to browse live Miladychan boa
 - The portal shows active board summaries for the configured Miladychan boards.
 - Open a board to browse its thread list, sorted by sticky status, activity, connected users, posts, and update time.
 - Open a thread to read posts and media previews.
-- Thread headers and media links open the native Miladychan site, which remains the primary posting and full-board surface.
-- The portal stores panel layout and theme locally.
+- Thread headers and media links open the native Miladychan site, which remains the full-board, CAPTCHA, session, and media fallback.
+- On a visible board or thread destination, the portal can explicitly submit a text-only post with the visible `milXdy` pseudonym by default, without using a Miladychan, RemiNet, X/Twitter, wallet, or extension session. A final dialog confirms the destination; failures retain the post locally for recovery.
+- The portal stores panel layout, theme, and recoverable failed-post text locally.
 
 The portal is a reader/browser surface. Deeper board deck, board-inspired radio, and advanced Miladychan expansion are tracked as future roadmap work.
 
@@ -283,7 +284,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Remilia Wiki previews and the Wiki sidebar call `https://wiki.remilia.org` and `https://remilia.wiki`.
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
-- Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`.
+- Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`; an explicit confirmed text-only post uses fixed create-thread or create-reply endpoints without cookies or account credentials.
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.

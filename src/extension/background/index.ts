@@ -121,6 +121,17 @@ type MiladychanFetchJsonMessage = {
   url: string;
 };
 
+type MiladychanPostTextMessage = {
+  type: "miladychan:postText";
+  destination: {
+    board: string;
+    threadId: number | null;
+  };
+  name?: string;
+  subject?: string;
+  body: string;
+};
+
 type MusicFetchJsonMessage = {
   type: "music:fetchJson";
   url: string;
@@ -178,6 +189,12 @@ const ACOUSTID_FORM_RULES: readonly UrlAllowRule[] = [
 const MILADYCHAN_JSON_RULES: readonly UrlAllowRule[] = [
   { origin: "https://boards.miladychan.org", pathPrefix: "/json/" },
 ];
+const MILADYCHAN_API_ROOT = "https://boards.miladychan.org";
+const MILADYCHAN_POST_RULES: readonly UrlAllowRule[] = [
+  { origin: "https://boards.miladychan.org", pathPattern: /^\/api\/create-thread$/ },
+  { origin: "https://boards.miladychan.org", pathPattern: /^\/api\/create-reply$/ },
+];
+const MILADYCHAN_POST_BOARDS = new Set(["milady", "remilio", "a", "ai", "kpop", "pol", "v"]);
 const MUSIC_IMAGE_RULES: readonly UrlAllowRule[] = [
   { origin: "https://pbs.twimg.com" },
   { origin: "https://boards.miladychan.org" },
@@ -247,6 +264,11 @@ setupBackgroundMessageRouter([
     type: "miladychan:fetchJson",
     matches: isMiladychanFetchJsonMessage,
     handle: (message, sender) => fetchMiladychanJsonForSender(message.url, sender),
+  },
+  {
+    type: "miladychan:postText",
+    matches: isMiladychanPostTextMessage,
+    handle: (message, sender) => postMiladychanTextForSender(message, sender),
   },
   {
     type: "music:fetchJson",
@@ -604,6 +626,19 @@ function isMiladychanFetchJsonMessage(message: unknown): message is MiladychanFe
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
   return record.type === "miladychan:fetchJson" && typeof record.url === "string";
+}
+
+function isMiladychanPostTextMessage(message: unknown): message is MiladychanPostTextMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  const destination = record.destination;
+  if (record.type !== "miladychan:postText" || !destination || typeof destination !== "object") return false;
+  const destinationRecord = destination as Record<string, unknown>;
+  return typeof destinationRecord.board === "string"
+    && (typeof destinationRecord.threadId === "number" || destinationRecord.threadId === null)
+    && typeof record.body === "string"
+    && (record.name === undefined || typeof record.name === "string")
+    && (record.subject === undefined || typeof record.subject === "string");
 }
 
 function isMusicFetchJsonMessage(message: unknown): message is MusicFetchJsonMessage {
@@ -1226,6 +1261,49 @@ async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>
 async function fetchMiladychanJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
   return fetchMiladychanJson(url);
+}
+
+async function postMiladychanTextForSender(message: MiladychanPostTextMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  return postMiladychanText(message);
+}
+
+async function postMiladychanText(message: MiladychanPostTextMessage): Promise<Record<string, unknown>> {
+  const board = message.destination.board.trim();
+  const threadId = message.destination.threadId;
+  const body = message.body.trim();
+  const name = typeof message.name === "string" ? message.name.trim() : "milXdy";
+  const subject = message.subject?.trim() || "";
+  const isReply = threadId !== null;
+  if (!MILADYCHAN_POST_BOARDS.has(board)) return { ok: false, status: 0, error: "Choose a supported board before posting." };
+  if (isReply && (!Number.isSafeInteger(threadId) || threadId <= 0)) return { ok: false, status: 0, error: "Choose a valid thread before replying." };
+  if (!body || body.length > 20_000) return { ok: false, status: 0, error: "Post text must be between 1 and 20,000 characters." };
+  if (name.length > 100) return { ok: false, status: 0, error: "Poster name must be at most 100 characters." };
+  if (!isReply && (!subject || subject.length > 200)) return { ok: false, status: 0, error: "A new thread needs a subject of 1 to 200 characters." };
+  const target = `${MILADYCHAN_API_ROOT}${isReply ? "/api/create-reply" : "/api/create-thread"}`;
+  const parsed = parseAllowedUrl(target, MILADYCHAN_POST_RULES);
+  if (!parsed) return { ok: false, status: 0, error: "Unsupported Miladychan posting URL." };
+
+  const form = new FormData();
+  form.set("body", body);
+  if (name) form.set("name", name);
+  if (isReply) {
+    form.set("board", board);
+    form.set("op", String(threadId));
+  } else {
+    form.set("subject", subject);
+  }
+  try {
+    const response = await budgetedFetch(parsed.href, {
+      method: "POST",
+      credentials: "omit",
+      body: form,
+    }, "miladychan:postText");
+    if (!response.ok) return { ok: false, status: response.status, error: `Miladychan rejected the post (HTTP ${response.status}). Open the native site for CAPTCHA, session, or board-specific requirements.` };
+    return { ok: true, status: response.status };
+  } catch (error) {
+    return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function fetchImageDataUrl(url: string): Promise<Record<string, unknown>> {

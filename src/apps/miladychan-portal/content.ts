@@ -14,6 +14,12 @@ import {
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
 import type { OverlayDockSide } from "../../platform/overlay/dock";
+import {
+  DEFAULT_MEDIA_DISCOVERY_BOARDS,
+  IDENTITY_PROVENANCE_POLICY,
+  MEDIA_POST_MARKER,
+  parseTaggedMediaPost,
+} from "./media-post-schema";
 
 const ROOT_ID = "milxdy-miladychan-root";
 const API_ROOT = "https://boards.miladychan.org";
@@ -23,6 +29,7 @@ const WIDTH_KEY = "milxdy.miladychan.width";
 const HEIGHT_KEY = "milxdy.miladychan.height";
 const TOP_KEY = "milxdy.miladychan.top";
 const DRAFT_KEY = "milxdy.miladychan.postDraft";
+const WATCHED_THREADS_KEY = "milxdy.miladychan.watchedThreads";
 const DEFAULT_BOARDS = ["milady", "remilio", "a", "ai", "kpop", "pol", "v", "all"];
 const BOARD_THEME_BY_BOARD: Record<string, BoardTheme> = {
   milady: "tea",
@@ -38,6 +45,12 @@ const FILE_TYPES = [
   "jpg", "png", "gif", "webm", "pdf", "svg", "mp4", "mp3", "ogg", "zip",
   "7z", "tar.gz", "tar.xz", "flac", "noFile", "txt", "webp", "rar", "cbz", "cbr",
 ] as const;
+const MEDIA_POST_GROUNDWORK = Object.freeze({
+  marker: MEDIA_POST_MARKER,
+  defaultBoards: DEFAULT_MEDIA_DISCOVERY_BOARDS,
+  identityPolicy: IDENTITY_PROVENANCE_POLICY,
+  parse: parseTaggedMediaPost,
+});
 
 type BoardInfo = {
   id: string;
@@ -109,8 +122,19 @@ type BoardTheme = "tea" | "yotsuba" | "yots_b" | "console" | "moon";
 type PostDraft = {
   board: string;
   threadId: number | null;
+  name: string;
+  subject: string;
   body: string;
   updatedAt: number;
+};
+
+type WatchedThread = {
+  board: string;
+  threadId: number;
+  title: string;
+  watchedAt: number;
+  seenPostCount: number | null;
+  latestPostCount: number | null;
 };
 
 type SpotlightState = {
@@ -135,6 +159,7 @@ type SpotlightState = {
   lastLoadedAt: number;
   layoutReady: boolean;
   drafts: PostDraft[];
+  watchedThreads: WatchedThread[];
   draftNotice: string;
 };
 
@@ -160,6 +185,7 @@ const state: SpotlightState = {
   lastLoadedAt: 0,
   layoutReady: false,
   drafts: [],
+  watchedThreads: [],
   draftNotice: "",
 };
 let booted = false;
@@ -169,6 +195,8 @@ let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
 let boardsGeneration = 0;
 let boardGeneration = 0;
 let threadGeneration = 0;
+let highlightedPost: HTMLElement | null = null;
+let postHighlightTimer: number | null = null;
 
 export function boot(context?: MilxdyContentAppContext): void {
   if (booted) return;
@@ -181,6 +209,7 @@ export function boot(context?: MilxdyContentAppContext): void {
   void loadLayoutSettings();
   void loadTheme();
   void loadDraft();
+  void loadWatchedThreads();
   observeSettings(addRuntimeDisposable);
 }
 
@@ -283,6 +312,13 @@ async function loadDraft(): Promise<void> {
   render();
 }
 
+async function loadWatchedThreads(): Promise<void> {
+  const stored: Record<string, unknown> = await chrome.storage.local.get(WATCHED_THREADS_KEY).catch(() => ({}));
+  if (!lifecycleActive()) return;
+  state.watchedThreads = normalizeWatchedThreads(stored[WATCHED_THREADS_KEY]);
+  render();
+}
+
 function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]): void {
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local") return;
@@ -319,6 +355,10 @@ function ensureRoot(): void {
   root.className = "milxdy-overlay-app-shell";
   prepareOverlayAppRoot(root);
   root.setAttribute("aria-label", "Miladychan spotlight");
+  root.dataset.mediaPostSchema = MEDIA_POST_GROUNDWORK.marker;
+  root.dataset.mediaDiscoveryBoards = String(MEDIA_POST_GROUNDWORK.defaultBoards.length);
+  root.dataset.mediaIdentityProvenance = MEDIA_POST_GROUNDWORK.identityPolicy.publicPost;
+  root.dataset.mediaPostParser = String(typeof MEDIA_POST_GROUNDWORK.parse === "function");
   root.innerHTML = `
     <div class="milxdy-chan-card milxdy-overlay-app-card">
       <header class="milxdy-chan-header milxdy-overlay-app-header">
@@ -328,6 +368,9 @@ function ensureRoot(): void {
         </div>
         <div class="milxdy-chan-header-actions">
           <button type="button" data-role="back" title="Back">‹</button>
+          <button type="button" data-role="open-native" title="Open in new tab" aria-label="Open Miladychan in new tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M14 4h6v6M10 14 20 4M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"/></svg>
+          </button>
           <button type="button" data-role="refresh" title="Refresh">↻</button>
           <button type="button" data-role="minimize" title="Minimize">_</button>
         </div>
@@ -347,6 +390,9 @@ function ensureRoot(): void {
     if (state.view === "thread" && state.selectedThread) void openThread(state.selectedThread.board, state.selectedThread.id, true);
     else if (state.view === "threads") void openBoard(state.selectedBoard, true);
     else void loadBoards(true);
+  });
+  root.querySelector<HTMLButtonElement>('[data-role="open-native"]')?.addEventListener("click", () => {
+    window.open(currentNativePageUrl(), "_blank", "noopener,noreferrer");
   });
   root.querySelector<HTMLButtonElement>('[data-role="back"]')?.addEventListener("click", () => {
     if (state.view === "thread") {
@@ -402,6 +448,7 @@ async function loadBoards(force = false): Promise<void> {
       if (b.id === "all") return -1;
       return b.activeScore - a.activeScore || DEFAULT_BOARDS.indexOf(a.id) - DEFAULT_BOARDS.indexOf(b.id);
     });
+    if (reconcileWatchedThreads(summaries.flatMap((board) => board.threads))) void saveWatchedThreads();
     state.lastLoadedAt = Date.now();
   } catch (error) {
     if (lifecycleActive() && generation === boardsGeneration) state.error = errorMessage(error);
@@ -436,6 +483,7 @@ async function openBoard(boardId: string, force = false): Promise<void> {
       error: "",
       threads,
     }));
+    if (reconcileWatchedThreads(threads)) void saveWatchedThreads();
   } catch (error) {
     if (lifecycleActive() && generation === boardGeneration) state.error = errorMessage(error);
   } finally {
@@ -463,6 +511,7 @@ async function openThread(boardId: string, threadId: number, force = false): Pro
     const thread = await fetchJson<ChanThread>(`${API_ROOT}/json/boards/${boardId}/${threadId}`);
     if (!lifecycleActive() || generation !== threadGeneration || state.selectedThread?.id !== threadId) return;
     state.selectedThread = thread;
+    if (markWatchedThreadRead(boardId, threadId, thread.post_count)) void saveWatchedThreads();
   } catch (error) {
     if (lifecycleActive() && generation === threadGeneration) state.error = errorMessage(error);
   } finally {
@@ -488,6 +537,11 @@ function render(): void {
   const minimize = root.querySelector<HTMLButtonElement>('[data-role="minimize"]');
   if (!body || !status || !back || !error || !minimize) return;
   minimize.textContent = state.minimized ? "□" : "_";
+  const backBoard = state.view === "thread" && state.selectedThread ? state.selectedThread.board : null;
+  back.textContent = backBoard ? `← /${backBoard}/` : "‹";
+  back.title = backBoard ? `Back to /${backBoard}/` : "Back";
+  back.setAttribute("aria-label", back.title);
+  back.classList.toggle("milxdy-chan-board-back", Boolean(backBoard));
   back.disabled = state.view === "boards" || state.minimized;
   status.textContent = statusText();
   error.hidden = !state.error;
@@ -509,10 +563,48 @@ function closePanel(): void {
 }
 
 function updateDockState(): void {
-  state.appFrame?.updateDock();
+  const freshPosts = freshWatchedPostCount();
+  state.appFrame?.updateDock({
+    badgeText: freshPosts ? String(freshPosts) : "",
+    title: freshPosts === 1 ? "Miladychan: 1 fresh watched post" : freshPosts ? `Miladychan: ${freshPosts} fresh watched posts` : "Miladychan",
+  });
+}
+
+function currentNativePageUrl(): string {
+  if (state.view === "thread" && state.selectedThread) return nativeDestinationUrl(state.selectedThread.board, state.selectedThread.id);
+  if (state.view === "threads") return nativeDestinationUrl(state.selectedBoard, null);
+  return API_ROOT;
 }
 
 function renderBoards(body: HTMLElement): void {
+  if (state.watchedThreads.length) {
+    const watched = document.createElement("section");
+    watched.className = "milxdy-chan-watched";
+    const heading = document.createElement("strong");
+    heading.textContent = "Watched threads";
+    const list = document.createElement("div");
+    list.className = "milxdy-chan-watched-list";
+    for (const thread of state.watchedThreads) {
+      const item = document.createElement("div");
+      item.className = "milxdy-chan-watched-item";
+      const open = document.createElement("button");
+      open.type = "button";
+      open.className = "milxdy-chan-watched-open";
+      open.textContent = `/${thread.board}/ ${thread.title || `No. ${thread.threadId}`}`;
+      open.title = `Open /${thread.board}/ No. ${thread.threadId}`;
+      open.addEventListener("click", () => void openThread(thread.board, thread.threadId));
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "milxdy-chan-watched-remove";
+      remove.textContent = "Unwatch";
+      remove.setAttribute("aria-label", `Unwatch /${thread.board}/ No. ${thread.threadId}`);
+      remove.addEventListener("click", () => void unwatchThread(thread.board, thread.threadId));
+      item.append(open, remove);
+      list.append(item);
+    }
+    watched.append(heading, list);
+    body.append(watched);
+  }
   const list = document.createElement("div");
   list.className = "milxdy-chan-board-list";
   if (state.loadingBoards) list.append(loadingState("Loading boards"));
@@ -601,12 +693,44 @@ function renderThread(body: HTMLElement): void {
   header.dataset.boardTheme = boardTheme(thread.board);
   const title = document.createElement("strong");
   title.textContent = thread.subject || `No. ${thread.id}`;
+  const titleRow = document.createElement("div");
+  titleRow.className = "milxdy-chan-thread-title-row";
   const link = document.createElement("a");
   link.href = `${API_ROOT}/${thread.board}/${thread.id}`;
   link.target = "_blank";
   link.rel = "noreferrer";
   link.textContent = `/${thread.board}/${thread.id}`;
-  header.append(title, link);
+  const jumpToBottom = document.createElement("button");
+  jumpToBottom.type = "button";
+  jumpToBottom.className = "milxdy-chan-jump-bottom";
+  jumpToBottom.title = "Jump to bottom";
+  jumpToBottom.setAttribute("aria-label", "Jump to bottom");
+  const jumpArrow = document.createElement("span");
+  jumpArrow.textContent = "↓";
+  jumpArrow.setAttribute("aria-hidden", "true");
+  const jumpLabel = document.createElement("span");
+  jumpLabel.textContent = "JUMP";
+  jumpToBottom.append(jumpArrow, jumpLabel);
+  jumpToBottom.addEventListener("click", () => body.scrollTo({ top: body.scrollHeight, behavior: "smooth" }));
+  const controls = document.createElement("div");
+  controls.className = "milxdy-chan-thread-controls";
+  const watch = document.createElement("button");
+  watch.type = "button";
+  watch.className = "milxdy-chan-watch-thread";
+  const isWatched = watchedThread(thread.board, thread.id) !== null;
+  watch.textContent = isWatched ? "Watching" : "Watch this thread";
+  watch.setAttribute("aria-pressed", String(isWatched));
+  watch.addEventListener("click", () => void toggleWatchedThread(thread));
+  const boardBack = document.createElement("button");
+  boardBack.type = "button";
+  boardBack.className = "milxdy-chan-thread-board-back";
+  boardBack.textContent = "↖";
+  boardBack.title = `Back to /${thread.board}/`;
+  boardBack.setAttribute("aria-label", boardBack.title);
+  boardBack.addEventListener("click", () => void openBoard(thread.board));
+  controls.append(watch, boardBack, jumpToBottom);
+  titleRow.append(title, controls);
+  header.append(titleRow, link);
   body.append(header);
   body.append(createPostHandoff(thread.board, thread.id));
   if (state.loadingThread) body.append(loadingState("Loading posts"));
@@ -615,100 +739,236 @@ function renderThread(body: HTMLElement): void {
   list.className = "milxdy-chan-post-list";
   for (const post of posts) list.append(createPost(post, thread.board));
   body.append(list);
+  body.append(createPostHandoff(thread.board, thread.id, "bottom"));
+  const jumpToTop = document.createElement("button");
+  jumpToTop.type = "button";
+  jumpToTop.className = "milxdy-chan-jump-top";
+  jumpToTop.title = "Jump to top";
+  jumpToTop.setAttribute("aria-label", "Jump to top");
+  const topArrow = document.createElement("span");
+  topArrow.textContent = "↑";
+  topArrow.setAttribute("aria-hidden", "true");
+  const topLabel = document.createElement("span");
+  topLabel.textContent = "JUMP";
+  jumpToTop.append(topArrow, topLabel);
+  jumpToTop.addEventListener("click", () => body.scrollTo({ top: 0, behavior: "smooth" }));
+  body.append(jumpToTop);
 }
 
-function createPostHandoff(board: string, threadId: number | null): HTMLElement {
+function createPostHandoff(board: string, threadId: number | null, position: "top" | "bottom" = "top"): HTMLElement {
   const form = document.createElement("section");
   form.className = "milxdy-chan-compose";
   form.dataset.boardTheme = boardTheme(board);
+  form.dataset.threadId = threadId === null ? "" : String(threadId);
+  form.dataset.composePosition = position;
   const destination = threadId === null ? `New thread in /${board}/` : `Reply in /${board}/ No. ${threadId}`;
   const heading = document.createElement("strong");
-  heading.textContent = "Post via native Miladychan";
+  heading.textContent = "Post to Miladychan";
   const target = document.createElement("span");
   target.className = "milxdy-chan-compose-target";
   target.textContent = `Destination: ${destination}`;
   const note = document.createElement("p");
-  note.textContent = "MilXdy keeps this draft locally. Native Miladychan handles your session, CAPTCHA, media, and final submission.";
+  note.textContent = "Submit text anonymously without using a Miladychan, RemiNet, wallet, or extension session. Media, CAPTCHA, and unsupported board requirements stay on native Miladychan.";
+  const name = document.createElement("input");
+  name.type = "text";
+  name.className = "milxdy-chan-compose-subject";
+  name.placeholder = "Poster name";
+  name.value = draftForDestination(board, threadId)?.name || "milXdy";
+  name.maxLength = 100;
+  name.setAttribute("aria-label", `Poster name for ${destination}`);
+  const subject = document.createElement("input");
+  subject.type = "text";
+  subject.className = "milxdy-chan-compose-subject";
+  subject.placeholder = "Thread subject";
+  subject.value = draftForDestination(board, threadId)?.subject || "";
+  subject.maxLength = 200;
+  subject.hidden = threadId !== null;
+  subject.setAttribute("aria-label", `Subject for ${destination}`);
   const textarea = document.createElement("textarea");
-  textarea.placeholder = "Write a draft to copy into Miladychan…";
+  textarea.placeholder = "Write a post…";
   textarea.value = draftForDestination(board, threadId)?.body || "";
-  textarea.rows = 4;
-  textarea.setAttribute("aria-label", `Draft for ${destination}`);
-  const confirm = document.createElement("label");
-  confirm.className = "milxdy-chan-compose-confirm";
-  const checkbox = document.createElement("input");
-  checkbox.type = "checkbox";
-  checkbox.checked = false;
-  confirm.append(checkbox, document.createTextNode(` I confirm this destination: ${destination}.`));
+  textarea.rows = 1;
+  textarea.setAttribute("aria-label", `Post for ${destination}`);
   const actions = document.createElement("div");
   actions.className = "milxdy-chan-compose-actions";
-  const copy = document.createElement("button");
-  copy.type = "button";
-  copy.textContent = "Copy draft";
-  const open = document.createElement("a");
-  open.href = nativeDestinationUrl(board, threadId);
-  open.target = "_blank";
-  open.rel = "noreferrer";
-  open.textContent = "Open native composer";
-  open.setAttribute("aria-disabled", "true");
-  const discard = document.createElement("button");
-  discard.type = "button";
-  discard.className = "milxdy-chan-compose-discard";
-  discard.textContent = "Discard saved draft";
-  discard.hidden = !draftForDestination(board, threadId)?.body;
+  const submit = document.createElement("button");
+  submit.type = "button";
+  submit.className = "milxdy-chan-compose-submit";
+  submit.textContent = "Post";
   const notice = document.createElement("span");
   notice.className = "milxdy-chan-compose-notice";
   notice.textContent = state.draftNotice;
   const updateActions = () => {
-    const enabled = checkbox.checked;
-    copy.disabled = !enabled || !textarea.value.trim();
-    open.tabIndex = enabled ? 0 : -1;
-    open.setAttribute("aria-disabled", String(!enabled));
+    submit.disabled = !textarea.value.trim() || (threadId === null && !subject.value.trim());
   };
   textarea.addEventListener("input", () => {
-    void saveDraft({ board, threadId, body: textarea.value, updatedAt: Date.now() });
-    discard.hidden = !textarea.value.trim();
+    resizePostTextarea(textarea);
     updateActions();
   });
-  checkbox.addEventListener("change", updateActions);
-  copy.addEventListener("click", () => void copyDraft(textarea.value, notice));
-  open.addEventListener("click", (event) => {
-    if (!checkbox.checked) event.preventDefault();
+  name.addEventListener("input", updateActions);
+  subject.addEventListener("input", updateActions);
+  submit.addEventListener("click", () => {
+    const poster = name.value.trim() || "anonymous";
+    if (!window.confirm(`Post as ${poster} to ${destination}?`)) return;
+    void submitDraft({ board, threadId, name: name.value, subject: subject.value, body: textarea.value }, submit, notice);
   });
-  discard.addEventListener("click", () => void clearDraft(board, threadId));
-  actions.append(copy, open, discard);
-  form.append(heading, target, note, textarea, confirm, actions, notice);
+  actions.append(submit);
+  form.append(heading, target, note, name, subject, textarea, actions, notice);
   updateActions();
+  requestAnimationFrame(() => resizePostTextarea(textarea));
   return form;
+}
+
+function resizePostTextarea(textarea: HTMLTextAreaElement): void {
+  textarea.style.height = "auto";
+  const styles = getComputedStyle(textarea);
+  const lineHeight = Number.parseFloat(styles.lineHeight) || 18;
+  const verticalChrome = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom)
+    + Number.parseFloat(styles.borderTopWidth) + Number.parseFloat(styles.borderBottomWidth);
+  const tenLineHeight = Math.ceil((lineHeight * 10) + verticalChrome);
+  const panelHeight = textarea.closest<HTMLElement>(".milxdy-chan-body")?.clientHeight || tenLineHeight;
+  const maxHeight = Math.max(38, Math.min(tenLineHeight, Math.floor(panelHeight * 0.45)));
+  const desiredHeight = Math.max(38, textarea.scrollHeight);
+  textarea.style.height = `${Math.min(desiredHeight, maxHeight)}px`;
+  textarea.style.overflowY = desiredHeight > maxHeight ? "auto" : "hidden";
+}
+
+async function submitDraft(draft: Omit<PostDraft, "updatedAt">, submit: HTMLButtonElement, notice: HTMLElement): Promise<void> {
+  if (!appSdkSendMessage) {
+    await saveFailedDraft(draft);
+    notice.textContent = "Extension posting is unavailable. Your local post was kept.";
+    return;
+  }
+  submit.disabled = true;
+  notice.textContent = "Posting to the confirmed destination…";
+  const response = await appSdkSendMessage<{ ok?: boolean; status?: number; error?: string }>({
+    type: "miladychan:postText",
+    destination: { board: draft.board, threadId: draft.threadId },
+    name: draft.name,
+    subject: draft.threadId === null ? draft.subject : undefined,
+    body: draft.body,
+  }, "miladychan:postText").catch(() => undefined);
+  if (response?.ok) {
+    state.draftNotice = "Posted. Refresh the board or thread to see the result.";
+    await clearFailedDraft(draft.board, draft.threadId);
+    render();
+    return;
+  }
+  await saveFailedDraft(draft);
+  state.draftNotice = response?.error || "Submission failed. Your local draft was kept.";
+  notice.textContent = state.draftNotice;
+  submit.disabled = false;
 }
 
 function draftForDestination(board: string, threadId: number | null): PostDraft | null {
   return state.drafts.find((draft) => draft.board === board && draft.threadId === threadId) || null;
 }
 
-async function saveDraft(draft: PostDraft): Promise<void> {
-  state.drafts = [...state.drafts.filter((current) => current.board !== draft.board || current.threadId !== draft.threadId), draft];
-  state.draftNotice = "Draft saved locally.";
+async function saveFailedDraft(draft: Omit<PostDraft, "updatedAt">): Promise<void> {
+  state.drafts = [...state.drafts.filter((current) => current.board !== draft.board || current.threadId !== draft.threadId), { ...draft, updatedAt: Date.now() }];
   await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
 }
 
-async function clearDraft(board: string, threadId: number | null): Promise<void> {
+async function clearFailedDraft(board: string, threadId: number | null): Promise<void> {
   if (!draftForDestination(board, threadId)) return;
   state.drafts = state.drafts.filter((draft) => draft.board !== board || draft.threadId !== threadId);
-  state.draftNotice = "Saved draft discarded.";
   if (state.drafts.length) await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
   else await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
+}
+
+function watchedThread(board: string, threadId: number): WatchedThread | null {
+  return state.watchedThreads.find((thread) => thread.board === board && thread.threadId === threadId) || null;
+}
+
+async function toggleWatchedThread(thread: ChanThread): Promise<void> {
+  if (watchedThread(thread.board, thread.id)) {
+    await unwatchThread(thread.board, thread.id);
+    return;
+  }
+  state.watchedThreads = [{
+    board: thread.board,
+    threadId: thread.id,
+    title: thread.subject || `No. ${thread.id}`,
+    watchedAt: Date.now(),
+    seenPostCount: thread.post_count,
+    latestPostCount: thread.post_count,
+  }, ...state.watchedThreads];
+  await saveWatchedThreads();
   render();
 }
 
-async function copyDraft(body: string, notice: HTMLElement): Promise<void> {
-  try {
-    await navigator.clipboard.writeText(body);
-    state.draftNotice = "Draft copied. Paste it on native Miladychan, then review and submit there.";
-  } catch {
-    state.draftNotice = "Could not copy automatically. Select the saved draft and copy it manually.";
+async function unwatchThread(board: string, threadId: number): Promise<void> {
+  state.watchedThreads = state.watchedThreads.filter((thread) => thread.board !== board || thread.threadId !== threadId);
+  await saveWatchedThreads();
+  render();
+}
+
+async function saveWatchedThreads(): Promise<void> {
+  if (state.watchedThreads.length) {
+    await chrome.storage.local.set({ [WATCHED_THREADS_KEY]: { version: 1, threads: state.watchedThreads } }).catch(() => undefined);
+  } else {
+    await chrome.storage.local.remove(WATCHED_THREADS_KEY).catch(() => undefined);
   }
-  notice.textContent = state.draftNotice;
+}
+
+function normalizeWatchedThreads(value: unknown): WatchedThread[] {
+  const candidates = value && typeof value === "object" && Array.isArray((value as { threads?: unknown }).threads)
+    ? (value as { threads: unknown[] }).threads
+    : [];
+  const seen = new Set<string>();
+  return candidates.flatMap((candidate) => {
+    if (!candidate || typeof candidate !== "object") return [];
+    const raw = candidate as Partial<WatchedThread>;
+    const threadId = raw.threadId;
+    if (typeof raw.board !== "string" || !DEFAULT_BOARDS.includes(raw.board) || !Number.isInteger(threadId) || threadId === undefined || threadId <= 0) return [];
+    const key = `${raw.board}/${threadId}`;
+    if (seen.has(key)) return [];
+    seen.add(key);
+    return [{
+      board: raw.board,
+      threadId,
+      title: typeof raw.title === "string" ? raw.title.slice(0, 200) : `No. ${threadId}`,
+      watchedAt: Number.isFinite(raw.watchedAt) ? Number(raw.watchedAt) : 0,
+      seenPostCount: nonNegativeInteger(raw.seenPostCount),
+      latestPostCount: nonNegativeInteger(raw.latestPostCount),
+    }];
+  }).sort((left, right) => right.watchedAt - left.watchedAt);
+}
+
+function nonNegativeInteger(value: unknown): number | null {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
+}
+
+function reconcileWatchedThreads(threads: ChanThread[]): boolean {
+  let changed = false;
+  const counts = new Map(threads.map((thread) => [`${thread.board}/${thread.id}`, thread.post_count]));
+  state.watchedThreads = state.watchedThreads.map((watched) => {
+    const postCount = counts.get(`${watched.board}/${watched.threadId}`);
+    if (postCount === undefined) return watched;
+    if (watched.latestPostCount === null || watched.seenPostCount === null) {
+      changed = true;
+      return { ...watched, seenPostCount: postCount, latestPostCount: postCount };
+    }
+    if (watched.latestPostCount === postCount) return watched;
+    changed = true;
+    return { ...watched, latestPostCount: postCount };
+  });
+  return changed;
+}
+
+function markWatchedThreadRead(board: string, threadId: number, postCount: number): boolean {
+  let changed = false;
+  state.watchedThreads = state.watchedThreads.map((watched) => {
+    if (watched.board !== board || watched.threadId !== threadId) return watched;
+    if (watched.seenPostCount === postCount && watched.latestPostCount === postCount) return watched;
+    changed = true;
+    return { ...watched, seenPostCount: postCount, latestPostCount: postCount };
+  });
+  return changed;
+}
+
+function freshWatchedPostCount(): number {
+  return state.watchedThreads.reduce((total, watched) => total + Math.max(0, (watched.latestPostCount ?? 0) - (watched.seenPostCount ?? 0)), 0);
 }
 
 function nativeDestinationUrl(board: string, threadId: number | null): string {
@@ -737,6 +997,8 @@ function normalizeDraft(value: unknown): PostDraft | null {
   return {
     board: raw.board,
     threadId,
+    name: typeof raw.name === "string" ? raw.name.slice(0, 100) : "milXdy",
+    subject: typeof raw.subject === "string" ? raw.subject.slice(0, 200) : "",
     body: raw.body,
     updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : 0,
   };
@@ -746,21 +1008,78 @@ function createPost(post: ChanPost, fallbackBoard: string): HTMLElement {
   const article = document.createElement("div");
   article.className = "milxdy-chan-post";
   article.dataset.boardTheme = boardTheme(post.board || fallbackBoard);
+  article.dataset.postId = String(post.id);
   const meta = document.createElement("header");
   const author = document.createElement("strong");
   author.textContent = post.user?.displayname || post.name || "milady";
-  const id = document.createElement("span");
+  const id = document.createElement("button");
+  id.type = "button";
+  id.className = "milxdy-chan-post-reply";
   id.textContent = `No. ${post.id} · ${relativeTime(post.time)}`;
+  id.setAttribute("aria-label", `Reply to post ${post.id}`);
+  id.addEventListener("click", () => focusReplyComposer(post.id));
   meta.append(author, id);
   article.append(meta);
   const media = createMedia(post.image, post.board || fallbackBoard, post.id);
   if (media) article.append(media);
   if (post.body) {
-    const text = document.createElement("p");
-    text.textContent = post.body;
-    article.append(text);
+    article.append(createPostBody(post.body));
   }
   return article;
+}
+
+function createPostBody(body: string): HTMLElement {
+  const text = document.createElement("p");
+  const referencePattern = /(?<!>)>>(\d+)/gu;
+  let cursor = 0;
+  for (const match of body.matchAll(referencePattern)) {
+    const index = match.index ?? cursor;
+    if (index > cursor) text.append(document.createTextNode(body.slice(cursor, index)));
+    const postId = Number(match[1]);
+    const reference = document.createElement("button");
+    reference.type = "button";
+    reference.className = "milxdy-chan-post-reference";
+    reference.textContent = match[0];
+    reference.title = `Jump to No. ${postId}`;
+    reference.setAttribute("aria-label", `Jump to post ${postId}`);
+    reference.addEventListener("click", () => jumpToPost(postId));
+    text.append(reference);
+    cursor = index + match[0].length;
+  }
+  if (cursor < body.length) text.append(document.createTextNode(body.slice(cursor)));
+  return text;
+}
+
+function jumpToPost(postId: number): void {
+  if (!Number.isSafeInteger(postId) || postId <= 0) return;
+  const post = state.root?.querySelector<HTMLElement>(`.milxdy-chan-post[data-post-id="${postId}"]`);
+  if (!post) return;
+  post.scrollIntoView({ block: "center", behavior: "smooth" });
+  if (postHighlightTimer !== null) window.clearTimeout(postHighlightTimer);
+  highlightedPost?.classList.remove("milxdy-chan-post-highlight");
+  highlightedPost = post;
+  post.classList.remove("milxdy-chan-post-highlight");
+  void post.offsetWidth;
+  post.classList.add("milxdy-chan-post-highlight");
+  postHighlightTimer = window.setTimeout(() => {
+    post.classList.remove("milxdy-chan-post-highlight");
+    if (highlightedPost === post) highlightedPost = null;
+    postHighlightTimer = null;
+  }, 1_600);
+}
+
+function focusReplyComposer(postId: number): void {
+  const compose = state.root?.querySelector<HTMLElement>(".milxdy-chan-compose[data-compose-position='bottom']")
+    || state.root?.querySelector<HTMLElement>(".milxdy-chan-compose[data-thread-id]");
+  const textarea = compose?.querySelector<HTMLTextAreaElement>("textarea");
+  if (!compose || !textarea) return;
+  const quote = `>>${postId}`;
+  if (!textarea.value.split(/\r?\n/u).includes(quote)) {
+    textarea.value = textarea.value.trim() ? `${textarea.value}\n${quote}\n` : `${quote}\n`;
+    textarea.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+  compose.scrollIntoView({ block: "center", behavior: "smooth" });
+  textarea.focus();
 }
 
 function createMedia(image: ChanImage | null | undefined, board: string, postId: number): HTMLElement | null {
@@ -925,6 +1244,7 @@ function applyLayout(): void {
   root.style.setProperty("--mc-height", `${state.height}px`);
   root.style.setProperty("--mc-top", `${state.topOffset}px`);
   markOverlayAppLayoutReady(root, state.layoutReady);
+  requestAnimationFrame(() => root.querySelectorAll<HTMLTextAreaElement>(".milxdy-chan-compose textarea").forEach(resizePostTextarea));
 }
 
 function startDrag(event: PointerEvent): void {
