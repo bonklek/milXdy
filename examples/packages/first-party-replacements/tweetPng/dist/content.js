@@ -70,14 +70,6 @@ function normalizeColor(value, fallback) {
 function colorWithAlpha(color, alpha) {
   return `${normalizeColor(color, DEFAULT_VISUAL_THEME.tweetPngFontColor)}${alpha}`;
 }
-function tweetPngContrastTextColor(background) {
-  const normalized = normalizeColor(background, "#ffffff").slice(1);
-  const red = Number.parseInt(normalized.slice(0, 2), 16);
-  const green = Number.parseInt(normalized.slice(2, 4), 16);
-  const blue = Number.parseInt(normalized.slice(4, 6), 16);
-  const luminance = (red * 299 + green * 587 + blue * 114) / 1e3;
-  return luminance >= 150 ? "#20122f" : "#ffffff";
-}
 function findDisplayNameLink(userName) {
   const links = Array.from(userName.querySelectorAll('a[role="link"], a[href^="/"]'));
   return links.find((link) => {
@@ -310,7 +302,10 @@ async function renderTweetPng(data) {
   const canvas = document.createElement("canvas");
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas unavailable");
-  const palette = tweetPngPalette(visualTheme.tweetPngBorderPalette);
+  const palette = tweetPngPalette(
+    visualTheme.tweetPngBorderPalette,
+    visualTheme.tweetPngBackgroundColor
+  );
   const mediaRegions = [];
   context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   const textLines = wrapCanvasText(
@@ -454,18 +449,23 @@ function drawTweetPngHeaderStats(context, stats, assets, x, y, width) {
     cursor += group.width + gap;
   }
 }
-function tweetPngPalette(value) {
+function tweetPngPalette(value, background = DEFAULT_VISUAL_THEME.tweetPngBackgroundColor) {
+  const cardFill = normalizeColor(background, DEFAULT_VISUAL_THEME.tweetPngBackgroundColor);
   switch (value) {
     case "gray":
-      return { border: "#cfd6df", mediaBorder: "#d8dee7", quoteBorder: "#d8dee7", quoteFill: "#fbfcfd", mediaFill: "#f4f6f8" };
+      return { border: "#cfd6df", mediaBorder: "#d8dee7", quoteBorder: "#d8dee7", quoteFill: cardFill, mediaFill: cardFill };
     case "blue":
-      return { border: "#78aee8", mediaBorder: "#a8cef5", quoteBorder: "#a8cef5", quoteFill: "#f5faff", mediaFill: "#edf6ff" };
+      return { border: "#78aee8", mediaBorder: "#a8cef5", quoteBorder: "#a8cef5", quoteFill: cardFill, mediaFill: cardFill };
     case "green":
-      return { border: "#82b98a", mediaBorder: "#add8b1", quoteBorder: "#add8b1", quoteFill: "#f6fff7", mediaFill: "#eff9f0" };
+      return { border: "#82b98a", mediaBorder: "#add8b1", quoteBorder: "#add8b1", quoteFill: cardFill, mediaFill: cardFill };
     case "purple":
     default:
-      return { border: "#b67cff", mediaBorder: "#c9a5ff", quoteBorder: "#d5b7ff", quoteFill: "#fbf6ff", mediaFill: "#f4eaff" };
+      return { border: "#b67cff", mediaBorder: "#c9a5ff", quoteBorder: "#d5b7ff", quoteFill: cardFill, mediaFill: cardFill };
   }
+}
+function setTweetPngSettingsOpen(settings, button, open) {
+  settings.hidden = !open;
+  button.setAttribute("aria-expanded", String(open));
 }
 async function waitForTweetPngFonts() {
   const fonts = document.fonts;
@@ -640,7 +640,7 @@ function drawTweetPngQuote(context, options) {
     context.stroke();
   }
   let y = options.y + padding + 6;
-  const quoteTextColor = tweetPngContrastTextColor(options.palette.quoteFill);
+  const quoteTextColor = visualTheme.tweetPngFontColor;
   context.fillStyle = quoteTextColor;
   context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(options.quote.author, options.x + padding, y);
@@ -926,11 +926,24 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   actionSignal?.addEventListener("abort", abortClose, { once: true });
   modal.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest('[data-action="settings"]') && settings && settingsButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      const opening = settings.hidden;
+      setTweetPngSettingsOpen(settings, settingsButton, opening);
+      if (opening) settings.querySelector("button, input")?.focus();
+      return;
+    }
     if (target === modal || target?.closest('[data-action="close"]')) close();
-  });
+  }, true);
   modal.addEventListener("keydown", (event) => {
     if (event.key === "Escape") {
       event.preventDefault();
+      if (settings && settingsButton && !settings.hidden) {
+        setTweetPngSettingsOpen(settings, settingsButton, false);
+        settingsButton.focus();
+        return;
+      }
       close();
       return;
     }
@@ -1007,13 +1020,6 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
       setStatus(errorMessage(error));
       if (shareToRemiNetButton.isConnected) shareToRemiNetButton.disabled = false;
     });
-  });
-  settingsButton?.addEventListener("click", () => {
-    if (!settings) return;
-    const opening = settings.hidden;
-    settings.hidden = !opening;
-    settingsButton.setAttribute("aria-expanded", String(opening));
-    if (opening) settings.querySelector("button, input")?.focus();
   });
   const updatePreview = async (successMessage = "Preview updated.") => {
     const version = ++renderVersion;
@@ -1280,7 +1286,8 @@ export {
   onContextualPostAction,
   onRouteChange,
   openTweetPngReviewFromTweet,
-  tweetPngContrastTextColor,
+  setTweetPngSettingsOpen,
   tweetPngMediaRemovalKey,
+  tweetPngPalette,
   tweetPngVisibleLineCount
 };

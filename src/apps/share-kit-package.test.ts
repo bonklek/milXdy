@@ -6,7 +6,8 @@ import {
   findTweetPngQuoteElement,
   measureTweetPngQuoteHeight,
   normalizeVisualTheme,
-  tweetPngContrastTextColor,
+  setTweetPngSettingsOpen,
+  tweetPngPalette,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
@@ -42,6 +43,34 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain("> Include milXdy watermark</label>");
     expect(packageSource).toContain('context.fillText("milXdy", width - 38, height - 8)');
     expect(packageSource).toContain("if (visualTheme.tweetPngIncludeWatermark) drawTweetPngWatermark");
+  });
+
+  it("themes nested QRT/media cards from the selected export background", () => {
+    expect(tweetPngPalette("purple", "#000000")).toMatchObject({
+      quoteFill: "#000000",
+      mediaFill: "#000000",
+      quoteBorder: "#d5b7ff",
+    });
+    expect(packageSource).toContain("const quoteTextColor = visualTheme.tweetPngFontColor");
+    expect(tweetPngPalette("blue", "#15202b")).toMatchObject({
+      quoteFill: "#15202b",
+      mediaFill: "#15202b",
+      quoteBorder: "#a8cef5",
+    });
+  });
+
+  it("opens and closes settings with synchronized accessible state", () => {
+    const settings = { hidden: true };
+    const attributes = new Map<string, string>();
+    const button = { setAttribute: (name: string, value: string) => attributes.set(name, value) };
+    setTweetPngSettingsOpen(settings, button, true);
+    expect(settings.hidden).toBe(false);
+    expect(attributes.get("aria-expanded")).toBe("true");
+    setTweetPngSettingsOpen(settings, button, false);
+    expect(settings.hidden).toBe(true);
+    expect(attributes.get("aria-expanded")).toBe("false");
+    expect(packageSource).toContain('target?.closest(\'[data-action="settings"]\')');
+    expect(packageSource).toContain('}, true);');
   });
 
   it("marks video posters for a play overlay while preserving ordinary images", () => {
@@ -204,10 +233,8 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain('updatePreview("Image removed from this PNG.")');
   });
 
-  it("allocates QRT text space and keeps it legible on a light quote card", () => {
+  it("allocates QRT text space", () => {
     expect(measureTweetPngQuoteHeight(1, 0)).toBe(130);
     expect(measureTweetPngQuoteHeight(2, 300)).toBe(482);
-    expect(tweetPngContrastTextColor("#fbf6ff")).toBe("#20122f");
-    expect(tweetPngContrastTextColor("#15202b")).toBe("#ffffff");
   });
 });
