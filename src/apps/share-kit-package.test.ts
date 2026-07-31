@@ -22,14 +22,24 @@ describe("Share Kit package compatibility", () => {
       tweetPngIncludeImages: false,
       tweetPngIncludeQuoteText: false,
       tweetPngIncludeQuoteImages: true,
+      tweetPngIncludeWatermark: false,
       tweetPngBackgroundColor: "#ABCDEF",
       tweetPngFontColor: "invalid",
     });
     expect(settings.tweetPngIncludeImages).toBe(false);
     expect(settings.tweetPngIncludeQuoteText).toBe(false);
     expect(settings.tweetPngIncludeQuoteImages).toBe(true);
+    expect(settings.tweetPngIncludeWatermark).toBe(false);
     expect(settings.tweetPngBackgroundColor).toBe("#abcdef");
     expect(settings.tweetPngFontColor).toBe("#20122f");
+  });
+
+  it("defaults the watermark on and exposes a live popout toggle", () => {
+    expect(normalizeVisualTheme({}).tweetPngIncludeWatermark).toBe(true);
+    expect(packageSource).toContain('data-setting="tweetPngIncludeWatermark"');
+    expect(packageSource).toContain("> Include milXdy watermark</label>");
+    expect(packageSource).toContain('context.fillText("milXdy", width - 38, height - 8)');
+    expect(packageSource).toContain("if (visualTheme.tweetPngIncludeWatermark) drawTweetPngWatermark");
   });
 
   it("marks video posters for a play overlay while preserving ordinary images", () => {

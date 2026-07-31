@@ -490,6 +490,29 @@
         ]
       },
       {
+        "id": "tweetPng.includeWatermark",
+        "label": "Include milXdy watermark",
+        "description": "Show a small milXdy mark in the lower-right pink export margin.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeWatermark"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
         "id": "tweetPng.shrinkTallImages",
         "label": "Shrink tall images",
         "description": "Keep portrait media within a compact export card.",

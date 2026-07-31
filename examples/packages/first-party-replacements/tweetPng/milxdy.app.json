@@ -96,6 +96,18 @@
       "presets": ["visual", "profilePack"]
     },
     {
+      "id": "tweetPng.includeWatermark",
+      "label": "Include milXdy watermark",
+      "description": "Show a small milXdy mark in the lower-right pink export margin.",
+      "scope": "feature",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.settings.visualTheme", "property": "tweetPngIncludeWatermark" },
+      "defaultValue": true,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["visual", "profilePack"]
+    },
+    {
       "id": "tweetPng.includeStats",
       "label": "Include stats",
       "description": "Show visible RemiStats values in reviewed PNG exports.",
