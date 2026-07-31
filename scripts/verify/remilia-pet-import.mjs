@@ -101,7 +101,13 @@ try {
   ]);
   const qa = JSON.parse(await readFile(path.join(qaDir, "deterministic-qa.json"), "utf8"));
   const semantic = JSON.parse(await readFile(path.join(qaDir, "semantic-review.json"), "utf8"));
-  assert(qa.status === "passed" && qa.counts.measuredFrames === 73, "valid synthetic v2 atlas failed QA");
+  assert(
+    qa.status === "passed" &&
+      qa.counts.runtimeFrames === 73 &&
+      qa.counts.reservedFrames === 1 &&
+      qa.counts.measuredFrames === 74,
+    "valid synthetic v2 atlas failed QA",
+  );
   assert(
     qa.template.activeExpansionZones.includes("hair"),
     "authoritative hair trait did not activate its expansion zone",
@@ -300,6 +306,7 @@ function makeQaAtlas({ includeHairExpansion = false, clipped = false } = {}) {
       }
     }
   }
+  fillRect(png, 6 * 192 + 78, 38, 36, 157, [40, 90, 180, 255]);
   if (clipped) {
     fillRect(png, 0, 80, 4, 24, [255, 20, 20, 255]);
   }

@@ -312,10 +312,15 @@ def run_qa(
     measurements: list[FrameMeasurement] = []
     failures: list[dict[str, Any]] = []
     sequence_checks: list[dict[str, Any]] = []
+    reserved_cells = {
+        (item["row"], item["column"]): item
+        for item in motion["atlas"].get("reservedCells", [])
+    }
 
     for row_spec in motion["runtimeRows"]:
         row = row_spec["index"]
         frame_count = row_spec["frameCount"]
+        qa_policy = row_spec.get("qaPolicy", {})
         if row_spec.get("loopOrder") != list(range(frame_count)):
             raise QaInputError(f"{row_spec['state']}: loopOrder must enumerate its frames in fixed order")
         phases = row_spec.get("phases") or row_spec.get("directions")
@@ -323,7 +328,8 @@ def run_qa(
             raise QaInputError(f"{row_spec['state']}: phase/direction order must match frameCount")
         for column in range(8):
             frame = atlas.crop((column * width, row * height, (column + 1) * width, (row + 1) * height))
-            if column >= frame_count:
+            reserved = reserved_cells.get((row, column))
+            if column >= frame_count and reserved is None:
                 unused_alpha = alpha_count(frame.getchannel("A"))
                 if unused_alpha:
                     synthetic = FrameMeasurement(
@@ -335,7 +341,14 @@ def run_qa(
                         finding(synthetic, "frame-separation-unused-cell-alpha", unused_alpha, 0, template_id, diag)
                     )
                 continue
-            measured = measure_frame(frame, row, column, row_spec, manifest, allowed_envelope)
+            measurement_spec = row_spec
+            if reserved is not None:
+                measurement_spec = {
+                    **row_spec,
+                    "state": reserved["purpose"],
+                    "phases": [reserved["purpose"]] * 8,
+                }
+            measured = measure_frame(frame, row, column, measurement_spec, manifest, allowed_envelope)
             measurements.append(measured)
             diag = f"diagnostics/row-{row:02d}-frame-{column:02d}.png"
             local_failures: list[dict[str, Any]] = []
@@ -374,13 +387,17 @@ def run_qa(
                         diag,
                     )
                 )
-            expected_baseline = manifest["neutralFullBody"]["baseline"]
+            alpha_registration = manifest["geometry"].get("alphaRegistration", {})
+            expected_baseline = alpha_registration.get(
+                "baseline",
+                manifest["neutralFullBody"]["baseline"],
+            )
             if measured.baseline is not None:
                 baseline_delta = abs(measured.baseline - expected_baseline)
-                jumping_airborne = measured.state == "jumping" and measured.phase in {"takeoff", "apex"}
+                baseline_mode = qa_policy.get("baselineMode", "locked")
                 baseline_failed = (
                     measured.baseline > expected_baseline + thresholds["baselineTolerance"]
-                    if jumping_airborne
+                    if baseline_mode == "may-rise"
                     else baseline_delta > thresholds["baselineTolerance"]
                 )
                 if baseline_failed:
@@ -392,14 +409,19 @@ def run_qa(
                             {
                                 "expected": expected_baseline,
                                 "tolerance": thresholds["baselineTolerance"],
-                                "airborneMayMoveUp": jumping_airborne,
+                                "mode": baseline_mode,
                             },
                             template_id,
                             diag,
                         )
                     )
-            if measured.centroid is not None:
-                expected_center = tuple(manifest["neutralFullBody"]["bodyCenter"])
+            if measured.centroid is not None and qa_policy.get("centroidMode", "registered") == "registered":
+                expected_center = tuple(
+                    alpha_registration.get(
+                        "centroid",
+                        manifest["neutralFullBody"]["bodyCenter"],
+                    )
+                )
                 centroid_delta = distance(measured.centroid, expected_center)
                 if centroid_delta is not None and centroid_delta > thresholds["centroidTolerance"]:
                     local_failures.append(
@@ -415,7 +437,18 @@ def run_qa(
                             diag,
                         )
                     )
+            required_region_ids = set(
+                qa_policy.get(
+                    "requiredRegions",
+                    [region["id"] for region in manifest["geometry"]["requiredInnerRegions"]],
+                )
+            )
+            required_region_ids.difference_update(
+                qa_policy.get("phaseRegionExemptions", {}).get(measured.phase, [])
+            )
             for region in manifest["geometry"]["requiredInnerRegions"]:
+                if region["id"] not in required_region_ids:
+                    continue
                 actual = measured.inner_region_coverage[region["id"]]
                 if actual < region["minimumCoverage"]:
                     local_failures.append(
@@ -433,18 +466,28 @@ def run_qa(
                 failures.extend(local_failures)
 
     by_row: dict[int, list[FrameMeasurement]] = {}
+    runtime_frame_counts = {
+        row_spec["index"]: row_spec["frameCount"]
+        for row_spec in motion["runtimeRows"]
+    }
     for measured in measurements:
-        by_row.setdefault(measured.row, []).append(measured)
+        if measured.column < runtime_frame_counts[measured.row]:
+            by_row.setdefault(measured.row, []).append(measured)
     for row_spec in motion["runtimeRows"]:
         row_frames = by_row.get(row_spec["index"], [])
+        qa_policy = row_spec.get("qaPolicy", {})
         scales = [frame.scale for frame in row_frames if frame.scale is not None]
         median_scale = sorted(scales)[len(scales) // 2] if scales else None
-        if median_scale is not None:
+        scale_threshold = (
+            thresholds["scaleTolerance"]
+            * qa_policy.get("scaleToleranceMultiplier", 1.0)
+        )
+        if median_scale is not None and qa_policy.get("scaleMode", "row-median") == "row-median":
             for measured in row_frames:
                 if measured.scale is None:
                     continue
                 scale_delta = abs(measured.scale - median_scale) / median_scale if median_scale else 0.0
-                if scale_delta > thresholds["scaleTolerance"]:
+                if scale_delta > scale_threshold:
                     diag = f"diagnostics/row-{measured.row:02d}-frame-{measured.column:02d}.png"
                     frame = atlas.crop(
                         (
@@ -460,14 +503,18 @@ def run_qa(
                             measured,
                             "scale-continuity",
                             {"value": measured.scale, "relativeDelta": scale_delta},
-                            {"rowMedian": median_scale, "maximumRelativeDelta": thresholds["scaleTolerance"]},
+                            {"rowMedian": median_scale, "maximumRelativeDelta": scale_threshold},
                             template_id,
                             diag,
                         )
                     )
         for previous, current in zip(row_frames, row_frames[1:]):
             step = distance(previous.centroid, current.centroid)
-            passed = step is not None and step <= thresholds["maximumAdjacentCentroidStep"]
+            adjacent_threshold = (
+                thresholds["maximumAdjacentCentroidStep"]
+                * qa_policy.get("adjacentCentroidMultiplier", 1.0)
+            )
+            passed = step is not None and step <= adjacent_threshold
             sequence_checks.append(
                 {
                     "check": "adjacent-centroid-continuity",
@@ -475,7 +522,7 @@ def run_qa(
                     "from": previous.column,
                     "to": current.column,
                     "actual": step,
-                    "threshold": thresholds["maximumAdjacentCentroidStep"],
+                    "threshold": adjacent_threshold,
                     "passed": passed,
                 }
             )
@@ -495,7 +542,7 @@ def run_qa(
                         current,
                         "adjacent-centroid-continuity",
                         step,
-                        {"maximum": thresholds["maximumAdjacentCentroidStep"], "previousFrame": previous.column},
+                        {"maximum": adjacent_threshold, "previousFrame": previous.column},
                         template_id,
                         diag,
                     )
@@ -577,11 +624,17 @@ def run_qa(
             "templateVersion": manifest["templateVersion"],
             "combinedTemplateSha256": selected.get("provenance", {}).get("combinedTemplateSha256"),
             "thresholds": thresholds,
+            "rowQaPolicies": {
+                row["state"]: row.get("qaPolicy", {})
+                for row in motion["runtimeRows"]
+            },
             "activeExpansionZones": active_zones,
             "effectivePermittedEnvelope": allowed_envelope,
         },
         "counts": {
             "measuredFrames": len(measurements),
+            "runtimeFrames": sum(row["frameCount"] for row in motion["runtimeRows"]),
+            "reservedFrames": len(reserved_cells),
             "failures": len(failures),
             "sequenceChecks": len(sequence_checks),
         },
