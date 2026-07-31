@@ -11,6 +11,9 @@ import type {
   OverlayDockSettingsOptions,
 } from "./dock-types";
 
+const HOST_SHORTCUT_SELECTOR = '[data-testid="GrokDrawerHeader"], [data-testid="chat-drawer-main"]';
+const HOST_SHORTCUT_GAP = 12;
+
 export class OverlayDockDomView implements DockViewPort {
   #root: HTMLElement | null = null;
   #rail: HTMLElement | null = null;
@@ -64,6 +67,7 @@ export class OverlayDockDomView implements DockViewPort {
       extra.remove();
     }
     this.#scheduleRailIndicators();
+    this.#scheduleHostLayoutCheck();
   }
 
   createSettingsPanel(
@@ -80,7 +84,8 @@ export class OverlayDockDomView implements DockViewPort {
     this.#resizeObserver = null;
     this.#mediaViewerObserver?.disconnect();
     this.#mediaViewerObserver = null;
-    document.removeEventListener("fullscreenchange", this.#scheduleHostMediaViewerCheck);
+    document.removeEventListener("fullscreenchange", this.#scheduleHostLayoutCheck);
+    window.removeEventListener("resize", this.#scheduleHostLayoutCheck);
     window.removeEventListener("resize", this.#scheduleRailIndicators);
     this.#rail?.removeEventListener("scroll", this.#scheduleRailIndicators);
     if (this.#railIndicatorFrame) cancelAnimationFrame(this.#railIndicatorFrame);
@@ -95,29 +100,57 @@ export class OverlayDockDomView implements DockViewPort {
 
   #observeHostMediaViewer(): void {
     if (!this.#mediaViewerObserver) {
-      this.#mediaViewerObserver = new MutationObserver(this.#scheduleHostMediaViewerCheck);
+      this.#mediaViewerObserver = new MutationObserver(this.#scheduleHostLayoutCheck);
       this.#mediaViewerObserver.observe(document.documentElement, {
         attributes: true,
         attributeFilter: ["aria-label", "aria-modal", "data-testid", "role"],
         childList: true,
         subtree: true,
       });
-      document.addEventListener("fullscreenchange", this.#scheduleHostMediaViewerCheck);
+      document.addEventListener("fullscreenchange", this.#scheduleHostLayoutCheck);
+      window.addEventListener("resize", this.#scheduleHostLayoutCheck, { passive: true });
     }
-    this.#updateHostMediaViewerState();
+    this.#updateHostLayoutState();
   }
 
-  readonly #scheduleHostMediaViewerCheck = (): void => {
+  readonly #scheduleHostLayoutCheck = (): void => {
     if (this.#mediaViewerCheckQueued) return;
     this.#mediaViewerCheckQueued = true;
     queueMicrotask(() => {
       this.#mediaViewerCheckQueued = false;
-      this.#updateHostMediaViewerState();
+      this.#updateHostLayoutState();
     });
   };
 
+  #updateHostLayoutState(): void {
+    this.#updateHostMediaViewerState();
+    this.#updateHostShortcutClearance();
+  }
+
   #updateHostMediaViewerState(): void {
     if (this.#root) this.#root.dataset.hostMediaViewerOpen = String(isHostMediaViewerOpen());
+  }
+
+  #updateHostShortcutClearance(): void {
+    const root = this.#root;
+    const rail = this.#rail;
+    if (!root || !rail) return;
+    if (root.dataset.side !== "right") {
+      rail.style.removeProperty("--milxdy-dock-host-shortcut-max-height");
+      return;
+    }
+    const railRect = rail.getBoundingClientRect();
+    const shortcutTops = Array.from(document.querySelectorAll<HTMLElement>(HOST_SHORTCUT_SELECTOR))
+      .filter((shortcut) => {
+        if (!isVisibleElement(shortcut)) return false;
+        const rect = shortcut.getBoundingClientRect();
+        return rect.right > railRect.left && rect.left < railRect.right;
+      })
+      .map((shortcut) => shortcut.getBoundingClientRect().top);
+    const maxHeight = calculateHostShortcutRailMaxHeight(railRect.top, shortcutTops, HOST_SHORTCUT_GAP);
+    if (maxHeight === null) rail.style.removeProperty("--milxdy-dock-host-shortcut-max-height");
+    else rail.style.setProperty("--milxdy-dock-host-shortcut-max-height", `${maxHeight}px`);
+    this.#scheduleRailIndicators();
   }
 
   #ensureRail(): void {
@@ -216,6 +249,16 @@ export class OverlayDockDomView implements DockViewPort {
     this.#actions?.activate(id);
   }
 
+}
+
+export function calculateHostShortcutRailMaxHeight(
+  railTop: number,
+  shortcutTops: number[],
+  gap = HOST_SHORTCUT_GAP,
+): number | null {
+  const visibleTops = shortcutTops.filter(Number.isFinite);
+  if (!visibleTops.length || !Number.isFinite(railTop)) return null;
+  return Math.max(0, Math.floor(Math.min(...visibleTops) - gap - railTop));
 }
 
 function isHostMediaViewerOpen(): boolean {

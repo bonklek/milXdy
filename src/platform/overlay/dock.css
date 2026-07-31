@@ -168,7 +168,10 @@
       justify-items: center;
       gap: 4px;
       width: 56px;
-      max-height: calc(100vh - var(--milxdy-dock-top) - var(--milxdy-dock-bottom-clearance));
+      max-height: min(
+        calc(100vh - var(--milxdy-dock-top) - var(--milxdy-dock-bottom-clearance)),
+        var(--milxdy-dock-host-shortcut-max-height, 100vh)
+      );
       padding: 6px 4px;
       overflow-x: hidden;
       overflow-y: auto;
