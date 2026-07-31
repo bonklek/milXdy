@@ -86,6 +86,11 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "contextMediaActions?: AppContextMediaAction[]", "App SDK manifest must expose reviewed contextual media actions");
   requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
   requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
+  requireIncludes(contentRuntime, 'type: "milxdy:contextMediaPrepare"', "Context media selections must be prepared by the host background");
+  requireIncludes(contentRuntime, 'window.confirm("Confirm that you have the right', "Media contributions must require explicit host-owned rights and publish confirmation");
+  requireIncludes(background, "OpaqueMediaHandleStore", "Selected media must remain behind opaque host-owned handles");
+  requireIncludes(background, "validateMediaContributionTags", "Media contribution tags must be bounded by the host");
+  requireIncludes(background, 'credentials: "include"', "Reviewed contributions must use the visible member session without exposing it to packages");
   requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
   requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
   requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");

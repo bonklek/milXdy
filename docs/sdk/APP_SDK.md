@@ -517,6 +517,48 @@ cache source links, or post media.
 }]
 ```
 
+#### Reviewed contextual media contributions
+
+`contextMediaActions` is the narrow write-side counterpart for one explicitly
+selected X image. The first slice permits exactly one X/image/`hostPanel`
+action bound to exactly one reviewed `remibooru` contribution. The host owns
+the Chrome image context-menu item, selected-image preview, capped image fetch,
+short-lived one-use media handle, rights/final-publish confirmation, authenticated
+request, error handling, and canonical result validation.
+
+The package exports `onContextMediaAction(context)` and receives only a host
+panel, an opaque `mediaHandle`, bounded MIME/dimension/alt-presence metadata,
+and two callbacks. It never receives the image URL or bytes, X DOM, cookies,
+account/session state, CAPTCHA controls, or a generic upload/fetch primitive.
+`submitMediaContribution({ id, mediaHandle, tags })` accepts only the declared
+ID, the matching one-use handle, and unique bounded tags. A failed request
+releases the claim so the same visible panel can report the failure and retry;
+a successful request consumes the handle and returns only the canonical post
+URL. Nothing is posted to X.
+
+`openVisibleAssistantPrompt("remibooru-tags")` may show a host-owned visible
+prompt helper after another explicit click. It does not return generated text
+to the package automatically; the user remains responsible for copying any
+suggestions into the package's tag controls.
+
+```json
+"contextMediaActions": [{
+  "id": "remibooru-contribute",
+  "label": "Upload to Remibooru",
+  "site": "x",
+  "eligibleMedia": ["image"],
+  "presentation": "hostPanel"
+}],
+"mediaContributions": [{
+  "id": "remibooru-contribute",
+  "label": "Contribute to Remibooru",
+  "adapter": "remibooru",
+  "contextMediaActionId": "remibooru-contribute",
+  "maxTags": 12,
+  "maxTagLength": 64
+}]
+```
+
 ### Reply actions
 
 An app or feature can declare `replyAction` to open its own reviewed local

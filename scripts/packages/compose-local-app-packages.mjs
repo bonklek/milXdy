@@ -934,12 +934,12 @@ function verifyContextMediaActions(id, manifest, errors) {
   const actions = manifest.contextMediaActions;
   const contributions = manifest.mediaContributions;
   if (!actions && !contributions) return;
-  if (!Array.isArray(actions) || actions.length < 1 || actions.length > 4) {
-    errors.push(`${id}: contextMediaActions requires between one and four declarations`);
+  if (!Array.isArray(actions) || actions.length !== 1) {
+    errors.push(`${id}: the first contextMediaActions slice requires exactly one declaration`);
     return;
   }
-  if (!Array.isArray(contributions) || contributions.length < 1 || contributions.length > 4) {
-    errors.push(`${id}: mediaContributions requires between one and four declarations`);
+  if (!Array.isArray(contributions) || contributions.length !== 1) {
+    errors.push(`${id}: the first mediaContributions slice requires exactly one declaration`);
     return;
   }
   if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: contextMediaActions packages must declare the userAction load trigger`);
@@ -958,6 +958,7 @@ function verifyContextMediaActions(id, manifest, errors) {
     if (!Number.isInteger(contribution.maxTags) || contribution.maxTags < 1 || contribution.maxTags > 12) errors.push(`${id}: mediaContributions maxTags must be an integer from 1 through 12`);
     if (!Number.isInteger(contribution.maxTagLength) || contribution.maxTagLength < 1 || contribution.maxTagLength > 64) errors.push(`${id}: mediaContributions maxTagLength must be an integer from 1 through 64`);
   }
+  if (!(manifest.permissions?.hosts || []).includes("https://remibooru.com/*")) errors.push(`${id}: mediaContributions require host permission https://remibooru.com/*`);
   const disclosure = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.privacy?.remoteServices || [])].join(" ").toLowerCase();
   if (!/remibooru/.test(disclosure) || !/(rights|confirm|publish)/.test(disclosure)) errors.push(`${id}: mediaContributions require Remibooru rights/final-publish disclosure`);
   if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: mediaContributions require remote-api consent`);
@@ -1099,6 +1100,7 @@ function verifyPermissionsAndPrivacy(id, manifest, errors) {
     const adapter = supportedRemoteQueryAdapters.get(query?.adapter);
     if (adapter) adapterHosts.add(adapter.host);
   }
+  if ((manifest.mediaContributions || []).some((contribution) => contribution?.adapter === "remibooru")) adapterHosts.add("https://remibooru.com/*");
   const permissionNotes = [
     ...(manifest.hub?.permissionNotes || []),
     ...(manifest.privacy?.permissionNotes || []),

@@ -12,6 +12,7 @@ import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
 import { createComposerActionBindingRegistry } from "./composer-action-binding";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
+import { eligibleContextMediaActions } from "./context-media-actions";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
@@ -401,6 +402,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     installComposerActionHost();
     installReplyActionHost();
     installContextualPostActionHost();
+    installContextMediaActionHost();
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
@@ -417,6 +419,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       else updateAppDiagnostics(app, "disabled");
     }
+    syncContextMediaMenuState();
     registerAddOnsCatalogDockItem();
     refreshComposerActionButtons();
     syncHiddenRailItems();
@@ -1551,6 +1554,160 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
   }
 
+  function installContextMediaActionHost(): void {
+    let lastSelection: { sourceUrl: string; width: number | null; height: number | null; altAvailable: boolean; x: number; y: number } | null = null;
+    let activeClose: (() => void) | null = null;
+    let requestSequence = 0;
+    const remember = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target.closest<HTMLImageElement>("img") : null;
+      if (!target) {
+        lastSelection = null;
+        return;
+      }
+      lastSelection = {
+        sourceUrl: target.currentSrc || target.src,
+        width: target.naturalWidth || null,
+        height: target.naturalHeight || null,
+        altAvailable: Boolean(target.alt.trim()),
+        x: event.clientX,
+        y: event.clientY,
+      };
+    };
+    const onMessage = (message: unknown) => {
+      const record = message && typeof message === "object" ? message as Record<string, unknown> : null;
+      if (record?.type !== "milxdy:contextMediaSelected" || typeof record.sourceUrl !== "string") return;
+      const selected = lastSelection;
+      if (!selected || selected.sourceUrl !== record.sourceUrl) return;
+      const eligible = eligibleContextMediaActions(state.apps, state.enabledApps);
+      if (eligible.length !== 1) return;
+      const requestId = ++requestSequence;
+      void openContextMediaActionPanel(eligible[0].app, eligible[0].action.id, eligible[0].contribution.id, selected, () => requestId === requestSequence, () => activeClose, (close) => { activeClose = close; });
+    };
+    document.addEventListener("contextmenu", remember, true);
+    chrome.runtime.onMessage.addListener(onMessage);
+    state.runtimeDisposables.add(() => {
+      document.removeEventListener("contextmenu", remember, true);
+      chrome.runtime.onMessage.removeListener(onMessage);
+      activeClose?.();
+    });
+  }
+
+  function syncContextMediaMenuState(): void {
+    void safeRuntimeMessage({
+      type: "milxdy:contextMediaMenuState",
+      available: eligibleContextMediaActions(state.apps, state.enabledApps).length === 1,
+    });
+  }
+
+  async function openContextMediaActionPanel(
+    app: MilxdyAppManifest,
+    actionId: string,
+    contributionId: string,
+    selected: { sourceUrl: string; width: number | null; height: number | null; altAvailable: boolean; x: number; y: number },
+    isCurrent: () => boolean,
+    currentClose: () => (() => void) | null,
+    setClose: (close: (() => void) | null) => void,
+  ): Promise<void> {
+    currentClose()?.();
+    const module = await loadApp(app, `userAction:contextMedia:${actionId}`);
+    if (!isCurrent() || !module?.onContextMediaAction) return;
+    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
+      type: "milxdy:contextMediaPrepare",
+      appId: app.id,
+      actionId,
+      sourceUrl: selected.sourceUrl,
+      width: selected.width,
+      height: selected.height,
+      altAvailable: selected.altAvailable,
+    });
+    if (!isCurrent()) return;
+    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
+      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: prepared?.error || "The selected image could not be prepared." });
+      return;
+    }
+    const controller = new AbortController();
+    const panel = document.createElement("section");
+    panel.className = "milxdy-context-media-panel";
+    panel.dataset.appId = app.id;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", `${app.name} media contribution`);
+    panel.style.cssText = `color-scheme:light dark;position:fixed;z-index:2147483646;left:${Math.max(8, Math.min(selected.x, window.innerWidth - 380))}px;top:${Math.max(8, Math.min(selected.y, window.innerHeight - 440))}px;max-width:360px;max-height:calc(100vh - 16px);overflow:auto;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px`;
+    const shadow = panel.attachShadow({ mode: "open" });
+    const hostStyle = document.createElement("style");
+    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
+    const preview = document.createElement("img");
+    preview.className = "preview";
+    preview.alt = "Selected X image preview";
+    preview.src = selected.sourceUrl;
+    const surface = document.createElement("div");
+    surface.className = "surface";
+    shadow.append(hostStyle, preview, surface);
+    let assistantPanel: HTMLElement | null = null;
+    const close = () => {
+      controller.abort();
+      panel.remove();
+      assistantPanel?.remove();
+      if (currentClose() === close) setClose(null);
+      document.removeEventListener("pointerdown", dismiss, true);
+      window.removeEventListener("keydown", escape, true);
+    };
+    const dismiss = (event: PointerEvent) => {
+      if (event.composedPath().includes(panel)) return;
+      close();
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+    };
+    const openVisibleAssistantPrompt = async () => {
+      assistantPanel?.remove();
+      const assistant = document.createElement("section");
+      assistantPanel = assistant;
+      assistant.className = "milxdy-context-media-assistant";
+      assistant.setAttribute("role", "dialog");
+      assistant.setAttribute("aria-label", "Grok tag helper");
+      assistant.style.cssText = "color-scheme:light dark;position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)";
+      const prompt = document.createElement("textarea");
+      prompt.readOnly = true;
+      prompt.value = "Suggest concise Remibooru tags for the image I selected. Return tags only; do not upload or post anything.";
+      prompt.style.cssText = "box-sizing:border-box;width:100%;min-height:96px";
+      const copy = document.createElement("button");
+      copy.textContent = "Copy prompt";
+      copy.addEventListener("click", () => void navigator.clipboard.writeText(prompt.value));
+      const open = document.createElement("button");
+      open.textContent = "Open Grok";
+      open.addEventListener("click", () => window.open(`https://x.com/i/grok?text=${encodeURIComponent(prompt.value)}`, "_blank", "noopener,noreferrer"));
+      assistant.append(prompt, copy, open);
+      document.body.append(assistant);
+      return { ok: true };
+    };
+    document.body.append(panel);
+    setClose(close);
+    document.addEventListener("pointerdown", dismiss, true);
+    window.addEventListener("keydown", escape, true);
+    try {
+      await installComposerActionPackageStyles(app, shadow);
+      await Promise.resolve(module.onContextMediaAction({
+        actionId,
+        panel: surface,
+        signal: controller.signal,
+        close,
+        mediaHandle: prepared.mediaHandle,
+        media: prepared.media,
+        openVisibleAssistantPrompt: async (promptId) => promptId === "remibooru-tags" ? openVisibleAssistantPrompt() : { ok: false, error: "Unsupported assistant prompt." },
+        submitMediaContribution: async ({ id, mediaHandle, tags }) => {
+          if (id !== contributionId || mediaHandle !== prepared.mediaHandle) return { ok: false, error: "The contribution does not match this selected image." };
+          if (!window.confirm("Confirm that you have the right to contribute this image to Remibooru and publish it with these tags.")) return { ok: false, error: "Contribution cancelled." };
+          return await safeRuntimeMessage<{ ok: boolean; canonicalUrl?: string; error?: string }>({ type: "milxdy:mediaContributionSubmit", appId: app.id, actionId, contributionId, mediaHandle, tags }) || { ok: false, error: "The contribution service is unavailable." };
+        },
+      }));
+    } catch (error) {
+      close();
+      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: errorMessage(error) });
+    }
+  }
+
   function contextualPostStatusUrl(post: HTMLElement): string | null {
     const link = Array.from(post.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
       .find((anchor) => !anchor.closest('[data-testid="quoteTweet"]'));
@@ -2454,6 +2611,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           void disableApp(app);
         }
         syncHiddenRailItems();
+        syncContextMediaMenuState();
         renderHubPanel();
         recordRuntimeDiagnostic(`hub.enablement.${app.id}`, {
           enabled: isEnabled,

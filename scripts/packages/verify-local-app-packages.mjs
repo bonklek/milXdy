@@ -301,6 +301,7 @@ async function verifyLifecycleAndSites(label, packageDir, manifest) {
     if ((manifest.surfaces || []).length > 0) fail(`${label}: invoked packages must not declare runtime delivery surfaces`);
     if (exports.has("boot")) fail(`${label}: invoked package placeholder must not export boot()`);
     if (manifest.contextualPostActions?.length && !exports.has("onContextualPostAction")) fail(`${label}: contextualPostActions package must export onContextualPostAction()`);
+    if (manifest.contextMediaActions?.length && !exports.has("onContextMediaAction")) fail(`${label}: contextMediaActions package must export onContextMediaAction()`);
   } else {
     if (!exports.has("boot")) fail(`${label}: runtime package content entry must export boot()`);
   }
@@ -364,7 +365,7 @@ function verifyContextMediaActions(label, manifest) {
   const actions = manifest.contextMediaActions;
   const contributions = manifest.mediaContributions;
   if (!actions && !contributions) return;
-  if (!Array.isArray(actions) || !Array.isArray(contributions)) {
+  if (!Array.isArray(actions) || actions.length !== 1 || !Array.isArray(contributions) || contributions.length !== 1) {
     fail(`${label}: contextMediaActions and mediaContributions must be declared together`);
     return;
   }
