@@ -1945,6 +1945,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             // the explicit user gesture that opens native Drafts.
             drafts.addEventListener("click", () => openNativeDraftsFor(drafts!));
           }
+          syncNativeDraftsVisual(drafts, actionRow);
         }
       }
     }
@@ -1990,6 +1991,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     pen.setAttribute("d", "m8 17 1-3 6.5-6.5 2 2L11 16l-3 1Z");
     svg.append(paper, pen);
     return svg;
+  }
+
+  function syncNativeDraftsVisual(button: HTMLButtonElement, actionRow: HTMLElement): void {
+    const nativeIcon = actionRow.querySelector<SVGElement>(
+      'button:not(.milxdy-composer-action) svg',
+    );
+    const color = nativeIcon ? getComputedStyle(nativeIcon).color : "";
+    if (color) button.style.color = color;
+    else button.style.removeProperty("color");
   }
 
   let activeComposerAction: { appId: string; button: HTMLButtonElement; panel: HTMLElement; close: () => void } | null = null;
@@ -2248,7 +2258,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: rgb(83, 100, 113); font: 700 15px/1 system-ui; line-height: 0; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible, .milxdy-composer-action[aria-expanded="true"] { background: rgba(15, 20, 25, .10); outline: none; }
       .milxdy-composer-action img { display: block; width: 18px; height: 18px; margin: 0; object-fit: contain; }
-      .milxdy-composer-drafts-icon { display: block; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+      .milxdy-composer-drafts-icon { display: block; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform: translateY(2px); }
       html[data-milxdy-x-theme="dark"] .milxdy-composer-action,
       html[data-milxdy-x-theme="dim"] .milxdy-composer-action { color: rgb(139, 152, 165); }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
