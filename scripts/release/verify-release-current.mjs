@@ -1,8 +1,14 @@
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const manifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
+const releaseBranch = await resolveReleaseBranch();
+const branchVersion = releaseVersionFromBranch(releaseBranch);
 const releases = await readFile("docs/releases/RELEASES.md", "utf8");
 const changelog = await readFile("CHANGELOG.md", "utf8");
 const contributing = await readFile("CONTRIBUTING.md", "utf8");
@@ -19,6 +25,11 @@ assertSemver(packageJson.appSdkVersion, "package.json appSdkVersion");
 assertExtensionVersion(extensionVersion, "package.json extensionVersion");
 assert(manifest.version === extensionVersion, "extension manifest template version must match package.json extensionVersion");
 assert(packageJson.version === packageJson.appSdkVersion, "SDK-bearing release package version must match package.json appSdkVersion");
+if (branchVersion) {
+  assert(packageJson.version === branchVersion, `release branch ${releaseBranch} requires package.json version ${branchVersion}`);
+  assert(extensionVersion === branchVersion, `release branch ${releaseBranch} requires extensionVersion ${branchVersion}`);
+  assert(packageJson.appSdkVersion === branchVersion, `release branch ${releaseBranch} requires appSdkVersion ${branchVersion}`);
+}
 assert(typeof packageJson.scripts?.["verify:release"] === "string", "package scripts must include verify:release");
 assert(typeof packageJson.scripts?.["verify:release:gates"] === "string", "package scripts must include verify:release:gates");
 assert(typeof packageJson.scripts?.["verify:app-smoke"] === "string", "package scripts must include verify:app-smoke");
@@ -61,6 +72,25 @@ assert(releaseNotes.includes(`# milXdy ${packageJson.version}`), "current releas
 assert(changelog.includes(`## ${packageJson.version}`), "changelog must include the package version heading");
 
 console.log(`Current release contract verification passed for extension ${extensionVersion} (package ${packageJson.version}, App SDK ${packageJson.appSdkVersion}).`);
+
+async function resolveReleaseBranch() {
+  const override = String(process.env.MILXDY_RELEASE_BRANCH || "").trim();
+  if (override) return override;
+  for (const candidate of [process.env.GITHUB_HEAD_REF, process.env.GITHUB_REF_NAME]) {
+    if (String(candidate || "").trim()) return String(candidate).trim();
+  }
+  try {
+    const { stdout } = await execFileAsync("git", ["branch", "--show-current"], { windowsHide: true });
+    return stdout.trim();
+  } catch {
+    return "";
+  }
+}
+
+function releaseVersionFromBranch(branch) {
+  const match = String(branch || "").match(/(?:^|\/)(?:release-|release\/)(\d+\.\d+\.\d+)$/i);
+  return match?.[1] || null;
+}
 
 function assertSemver(value, label) {
   assert(typeof value === "string" && /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(value), `${label} must be semver-like`);
