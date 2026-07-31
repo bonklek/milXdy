@@ -10,6 +10,7 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
+import { createComposerActionBindingRegistry } from "./composer-action-binding";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
@@ -273,6 +274,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   // script's event listeners disappear with its runtime. A per-runtime token
   // lets the next runtime replace those inert host controls exactly once.
   const composerActionBindingToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
+  const composerActionBindings = createComposerActionBindingRegistry();
   const state: RuntimeState = {
     apps,
     enabledApps: new Set(),
@@ -1888,7 +1890,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if (!action) continue;
         let button = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))
           .find((candidate) => candidate.dataset.appId === app.id) || null;
-        if (button?.dataset.milxdyComposerActionBinding !== composerActionBindingToken) {
+        if (composerActionBindings.needsBinding(button, composerActionBindingToken)) {
           const replacement = button ? button.cloneNode(false) as HTMLButtonElement : document.createElement("button");
           if (button) button.replaceWith(replacement);
           else slot.append(replacement);
@@ -1896,6 +1898,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           button.type = "button";
           button.dataset.appId = app.id;
           button.dataset.milxdyComposerActionBinding = composerActionBindingToken;
+          composerActionBindings.remember(button);
           button.className = "milxdy-composer-action";
           // This is an extension-owned control mounted in X's delegated
           // toolbar. Keep its user gesture out of X's toolbar handlers so a
@@ -1906,6 +1909,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             void openComposerAction(app, button!);
           });
         }
+        if (!button) continue;
         button.title = action.label;
         button.setAttribute("aria-label", action.label);
         button.setAttribute("aria-haspopup", "dialog");
@@ -1922,7 +1926,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if ((app.hostComposerActions || []).includes("nativeDrafts")) {
           let drafts = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id][data-host-action='nativeDrafts']"))
             .find((candidate) => candidate.dataset.appId === app.id) || null;
-          if (drafts?.dataset.milxdyComposerActionBinding !== composerActionBindingToken) {
+          if (composerActionBindings.needsBinding(drafts, composerActionBindingToken)) {
             const replacement = drafts ? drafts.cloneNode(false) as HTMLButtonElement : document.createElement("button");
             if (drafts) drafts.replaceWith(replacement);
             else slot.append(replacement);
@@ -1931,6 +1935,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             drafts.dataset.appId = app.id;
             drafts.dataset.hostAction = "nativeDrafts";
             drafts.dataset.milxdyComposerActionBinding = composerActionBindingToken;
+            composerActionBindings.remember(drafts);
             drafts.className = "milxdy-composer-action milxdy-composer-host-action";
             drafts.replaceChildren(createNativeDraftsIcon());
             drafts.title = "Drafts";
