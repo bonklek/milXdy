@@ -34,6 +34,7 @@ function mountBeetolGame(context = {}) {
     chrome.runtime.getURL(`beetol/icons/${icon}`),
   ]));
   const CRUNCH_LOOP_URL = chrome.runtime.getURL('beetol/sounds/ticket-crunch-cell.wav');
+  const CRUNCH_CELL_GAIN = 0.624;
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
@@ -349,7 +350,7 @@ function mountBeetolGame(context = {}) {
       const source = context.createBufferSource();
       const gain = context.createGain();
       source.buffer = cell;
-      gain.gain.value = 0.78;
+      gain.gain.value = CRUNCH_CELL_GAIN;
       source.connect(gain);
       gain.connect(context.destination);
       source.start();
