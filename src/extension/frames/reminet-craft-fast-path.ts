@@ -8,6 +8,10 @@
   // into account-scoped state or a server read-history mutation.
   const dismissedChatPositionMarkers = new Set<"last-read" | "present">();
   const autoFilledCraftRoots = new WeakSet<Element>();
+  // Slot replacement is presentation-local just like the native crafting
+  // selection. A remount starts from the first slot again; nothing is stored
+  // per account or sent to Remilia.
+  const nextCraftingReplacementSlot = new WeakMap<Element, number>();
   const nativeInspectionClick = new WeakSet<Element>();
   let pendingInspection: { item: Element; timer: number } | null = null;
   const nativeSetTimeout = window.setTimeout.bind(window);
@@ -53,7 +57,7 @@
   }
 
   function dragToSlot(item: HTMLElement, destination: HTMLElement | null): void {
-    if (!destination || !isEmptySlot(destination)) return;
+    if (!destination) return;
     // Remilia uses React DnD's TouchBackend with mouse support, rather than
     // the HTML5 backend. Drive that existing local gesture path so the site
     // retains ownership of compatibility checks and slot state.
@@ -84,8 +88,20 @@
     if (!craft) return;
     const destination = itemIsHammer(item)
       ? craft.querySelector<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")
-      : craft.querySelector(".crafting-module__input-slot:not(.crafting-module__input-slot--5):not(.crafting-module__input-slot--filled)");
+      : nextAssemblySlot(craft);
     dragToSlot(item, destination as HTMLElement | null);
+  }
+
+  function nextAssemblySlot(craft: Element): HTMLElement | null {
+    const slots = Array.from(craft.querySelectorAll<HTMLElement>(
+      ".crafting-module__input-slot:not(.crafting-module__input-slot--5)",
+    ));
+    const empty = slots.find(isEmptySlot);
+    if (empty) return empty;
+    if (slots.length === 0) return null;
+    const next = nextCraftingReplacementSlot.get(craft) || 0;
+    nextCraftingReplacementSlot.set(craft, (next + 1) % slots.length);
+    return slots[next] || null;
   }
 
   function autoFillGreenSacrifice(craft: Element): void {
