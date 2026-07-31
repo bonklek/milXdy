@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Meme Maker framed image</title>
+  <rect width="64" height="64" rx="8" fill="#fff4dc"/>
+  <rect x="9" y="9" width="46" height="46" rx="5" fill="#fff" stroke="#20122f" stroke-width="2"/>
+  <circle cx="23" cy="24" r="5" fill="#f0b429"/>
+  <path d="m14 48 13-14 8 8 6-7 9 13z" fill="#5b35b5"/>
+</svg>

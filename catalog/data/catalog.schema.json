@@ -1,14 +1,35 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://bonklek.github.io/milXdy/data/catalog.schema.json",
-  "title": "milXdy add-ons catalog",
+  "title": "milXdy maintainer add-ons catalog",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "catalogStatus", "sections"],
+  "required": [
+    "schemaVersion",
+    "catalogId",
+    "revision",
+    "catalogStatus",
+    "supportedBuildTargets",
+    "buildRecipes",
+    "sections"
+  ],
   "properties": {
     "$schema": { "type": "string" },
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
+    "catalogId": { "type": "string", "minLength": 1, "maxLength": 100 },
+    "revision": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$" },
     "catalogStatus": { "enum": ["preview", "live"] },
+    "supportedBuildTargets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "const": "chromium" }
+    },
+    "buildRecipes": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/buildRecipe" }
+    },
     "sections": {
       "type": "array",
       "minItems": 2,
@@ -16,6 +37,27 @@
     }
   },
   "$defs": {
+    "semver": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][A-Za-z0-9.-]+)?$"
+    },
+    "stringArray": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "buildRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "target", "prepareCommand", "applyCommand", "outputDirectory"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+        "target": { "const": "chromium" },
+        "prepareCommand": { "type": "string", "minLength": 1 },
+        "applyCommand": { "type": "string", "minLength": 1 },
+        "outputDirectory": { "type": "string", "minLength": 1 }
+      }
+    },
     "section": {
       "type": "object",
       "additionalProperties": false,
@@ -33,64 +75,256 @@
     "package": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "name", "summary", "availability", "publisher", "review", "capabilities", "privacy", "permissions", "download"],
+      "required": [
+        "id",
+        "name",
+        "icon",
+        "summary",
+        "packageKind",
+        "version",
+        "sdk",
+        "availability",
+        "publisher",
+        "source",
+        "artifact",
+        "review",
+        "capabilities",
+        "permissions",
+        "siteScopes",
+        "remoteServices",
+        "storage",
+        "privacyNotes",
+        "dependencies",
+        "conflicts",
+        "replacement",
+        "blockers"
+      ],
       "properties": {
-        "id": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" },
+        "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
         "name": { "type": "string", "minLength": 1 },
-        "summary": { "type": "string", "minLength": 1 },
-        "availability": { "enum": ["planned", "under-review", "published"] },
-        "publisher": { "type": "string", "minLength": 1 },
-        "sourceUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
-        "documentationUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
-        "review": {
+        "icon": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status"],
+          "required": ["src", "alt"],
           "properties": {
-            "status": { "enum": ["not-started", "in-progress", "approved"] },
-            "reviewedBy": { "type": "string", "minLength": 1 },
-            "reviewedAt": { "type": "string", "format": "date" },
-            "notes": { "type": "string", "minLength": 1 }
+            "src": { "type": "string", "pattern": "^assets/addons/[A-Za-z0-9._-]+\\.svg$" },
+            "alt": { "type": "string", "minLength": 1, "maxLength": 120 }
           }
         },
-        "capabilities": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "privacy": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "permissions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "download": {
+        "summary": { "type": "string", "minLength": 1 },
+        "packageKind": { "enum": ["app", "feature", "theme"] },
+        "version": {
+          "oneOf": [
+            { "$ref": "#/$defs/semver" },
+            { "type": "null" }
+          ]
+        },
+        "sdk": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["minVersion", "targetVersion"],
+          "properties": {
+            "minVersion": {
+              "oneOf": [
+                { "$ref": "#/$defs/semver" },
+                { "type": "null" }
+              ]
+            },
+            "targetVersion": {
+              "oneOf": [
+                { "$ref": "#/$defs/semver" },
+                { "type": "null" }
+              ]
+            }
+          }
+        },
+        "availability": {
+          "enum": [
+            "planned",
+            "experimental",
+            "under-review",
+            "published",
+            "incompatible",
+            "unavailable",
+            "deprecated",
+            "blocked"
+          ]
+        },
+        "publisher": { "type": "string", "minLength": 1 },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["repositoryUrl", "path", "issues"],
+          "properties": {
+            "repositoryUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+            "path": {
+              "oneOf": [
+                { "type": "string", "pattern": "^[A-Za-z0-9._/-]+$" },
+                { "type": "null" }
+              ]
+            },
+            "issues": {
+              "type": "array",
+              "uniqueItems": true,
+              "items": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/" }
+            }
+          }
+        },
+        "artifact": {
           "oneOf": [
             { "type": "null" },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["url", "filename", "sha256"],
+              "required": ["kind", "path", "packageSha256", "recipeId"],
               "properties": {
-                "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-                "filename": { "type": "string", "pattern": "^[A-Za-z0-9._-]+\\.zip$" },
-                "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+                "kind": { "const": "maintainer-source" },
+                "path": { "type": "string", "pattern": "^packages/maintainer/[A-Za-z0-9._/-]+$" },
+                "packageSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+                "recipeId": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" }
               }
             }
           ]
+        },
+        "review": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "notes"],
+          "properties": {
+            "status": { "enum": ["not-started", "in-progress", "approved", "blocked"] },
+            "reviewedBy": { "type": "string", "minLength": 1 },
+            "reviewedAt": { "type": "string", "format": "date" },
+            "notes": { "$ref": "#/$defs/stringArray" }
+          }
+        },
+        "capabilities": { "$ref": "#/$defs/stringArray" },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["hosts", "optional", "privilegedSurfaces", "notes"],
+          "properties": {
+            "hosts": { "$ref": "#/$defs/stringArray" },
+            "optional": { "$ref": "#/$defs/stringArray" },
+            "privilegedSurfaces": { "$ref": "#/$defs/stringArray" },
+            "notes": { "$ref": "#/$defs/stringArray" }
+          }
+        },
+        "siteScopes": { "$ref": "#/$defs/stringArray" },
+        "remoteServices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "origin", "purpose", "dataSent"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "origin": { "type": "string", "format": "uri", "pattern": "^https://" },
+              "purpose": { "type": "string", "minLength": 1 },
+              "dataSent": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "storage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["local", "sync", "session", "notes"],
+          "properties": {
+            "local": { "$ref": "#/$defs/stringArray" },
+            "sync": { "$ref": "#/$defs/stringArray" },
+            "session": { "$ref": "#/$defs/stringArray" },
+            "notes": { "$ref": "#/$defs/stringArray" }
+          }
+        },
+        "privacyNotes": { "$ref": "#/$defs/stringArray" },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "version", "reason"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+              "version": { "$ref": "#/$defs/semver" },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["id", "reason"],
+            "properties": {
+              "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "replacement": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["firstPartyId", "policy", "acknowledgement"],
+              "properties": {
+                "firstPartyId": { "type": "string", "minLength": 1 },
+                "policy": { "const": "replace-reviewed-first-party-id" },
+                "acknowledgement": { "const": "--acknowledge-first-party-replacement" }
+              }
+            }
+          ]
+        },
+        "blockers": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issue", "reason"],
+            "properties": {
+              "issue": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/" },
+              "reason": { "type": "string", "minLength": 1 }
+            }
+          }
         }
       },
       "allOf": [
         {
           "if": {
-            "properties": { "review": { "properties": { "status": { "const": "approved" } } } }
+            "properties": {
+              "review": {
+                "properties": {
+                  "status": { "const": "approved" }
+                }
+              }
+            }
           },
           "then": {
-            "properties": { "review": { "required": ["status", "reviewedBy", "reviewedAt"] } }
+            "properties": {
+              "review": {
+                "required": ["status", "reviewedBy", "reviewedAt", "notes"]
+              }
+            }
           }
         },
         {
-          "if": { "properties": { "availability": { "const": "published" } } },
-          "then": {
-            "required": ["sourceUrl"],
+          "if": {
             "properties": {
-              "review": { "properties": { "status": { "const": "approved" } } },
-              "download": { "type": "object" }
+              "availability": { "const": "published" }
             }
           },
-          "else": { "properties": { "download": { "type": "null" } } }
+          "then": {
+            "properties": {
+              "version": { "$ref": "#/$defs/semver" },
+              "artifact": { "type": "object" },
+              "review": {
+                "properties": {
+                  "status": { "const": "approved" }
+                }
+              }
+            }
+          }
         }
       ]
     }

@@ -1,19 +1,28 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/bonklek/milXdy/blob/main/docs/schemas/milxdy-selection.schema.json",
-  "title": "milXdy catalog selection",
+  "title": "milXdy local maintainer-catalog selection",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "packages"],
+  "required": ["schemaVersion", "catalog", "build", "packages"],
   "properties": {
-    "schemaVersion": { "const": 1 },
+    "schemaVersion": { "const": 2 },
     "catalog": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id"],
+      "required": ["id", "revision"],
       "properties": {
         "id": { "type": "string", "minLength": 1, "maxLength": 100 },
-        "generatedAt": { "type": "string", "format": "date-time" }
+        "revision": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$" }
+      }
+    },
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "recipeId"],
+      "properties": {
+        "target": { "const": "chromium" },
+        "recipeId": { "type": "string", "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)*$" }
       }
     },
     "packages": {
@@ -22,21 +31,14 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "url", "filename", "sha256", "review"],
+        "required": ["id", "version", "packageSha256"],
         "properties": {
           "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$" },
-          "url": { "type": "string", "format": "uri", "pattern": "^https://" },
-          "filename": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\.zip$" },
-          "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
-          "review": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": ["identity", "date"],
-            "properties": {
-              "identity": { "type": "string", "minLength": 1, "maxLength": 120 },
-              "date": { "type": "string", "format": "date" }
-            }
-          }
+          "version": {
+            "type": "string",
+            "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][A-Za-z0-9.-]+)?$"
+          },
+          "packageSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
         }
       }
     }

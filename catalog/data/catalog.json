@@ -1,18 +1,287 @@
 {
   "$schema": "./catalog.schema.json",
-  "schemaVersion": 1,
+  "schemaVersion": 2,
+  "catalogId": "milxdy-maintainer-catalog",
+  "revision": "2026-07-30.1",
   "catalogStatus": "preview",
+  "supportedBuildTargets": [
+    "chromium"
+  ],
+  "buildRecipes": [
+    {
+      "id": "maintainer-local-v1",
+      "target": "chromium",
+      "prepareCommand": "npm run addons:prepare -- --selection=<file>",
+      "applyCommand": "npm run addons:apply -- <acknowledgements>",
+      "outputDirectory": "dist/chromium-local-apps/"
+    }
+  ],
   "sections": [
     {
       "id": "official",
       "name": "Official milXdy add-ons",
-      "description": "Packages published and maintained by the milXdy project.",
-      "packages": []
+      "description": "Maintainer-defined packages and candidates composed from this source checkout. The catalog never downloads or hot-loads package code.",
+      "packages": [
+        {
+          "id": "booru",
+          "name": "BOORU",
+          "icon": {
+            "src": "assets/addons/booru.svg",
+            "alt": "BOORU gallery tiles"
+          },
+          "summary": "A reviewed reaction-media discovery and picker capability planned for the Composer Kit package.",
+          "packageKind": "feature",
+          "version": null,
+          "sdk": {
+            "minVersion": "0.2.3",
+            "targetVersion": "0.2.3"
+          },
+          "availability": "unavailable",
+          "publisher": "milXdy maintainers",
+          "source": {
+            "repositoryUrl": "https://github.com/bonklek/milXdy",
+            "path": null,
+            "issues": [
+              "https://github.com/bonklek/milXdy/issues/17",
+              "https://github.com/bonklek/milXdy/issues/188"
+            ]
+          },
+          "artifact": null,
+          "review": {
+            "status": "in-progress",
+            "notes": [
+              "Remibooru is the approved initial service candidate, but the Composer Kit package artifact and integrated QA gate are not complete.",
+              "No package hash or availability claim will be created by issue #181."
+            ]
+          },
+          "capabilities": [
+            "Browse or search reviewed reaction-media metadata.",
+            "Open the canonical source page after an explicit user action.",
+            "Keep copy, save, attach, and composer handoff behind separate user review."
+          ],
+          "permissions": {
+            "hosts": [
+              "https://remibooru.com/*"
+            ],
+            "optional": [],
+            "privilegedSurfaces": [
+              "X/Twitter composer-adjacent UI"
+            ],
+            "notes": [
+              "These are proposed declarations only; no unavailable package expands extension permissions."
+            ]
+          },
+          "siteScopes": [
+            "X/Twitter post and reply composer surfaces only"
+          ],
+          "remoteServices": [
+            {
+              "name": "Remibooru",
+              "origin": "https://remibooru.com",
+              "purpose": "Public reaction-media metadata and thumbnail discovery.",
+              "dataSent": "Explicit public search facets and pagination cursor only; no X account, draft, cookie, or authentication data."
+            }
+          ],
+          "storage": {
+            "local": [],
+            "sync": [],
+            "session": [],
+            "notes": [
+              "The proposed link-first cache contract remains owned by issue #17 and is not granted here."
+            ]
+          },
+          "privacyNotes": [
+            "Thumbnails and metadata would be remote network requests only after the feature is explicitly enabled.",
+            "The proposed package must never transmit X account, composer, authentication, or browsing data.",
+            "Selecting media never posts, uploads, copies, saves, or attaches it automatically."
+          ],
+          "dependencies": [],
+          "conflicts": [],
+          "replacement": null,
+          "blockers": [
+            {
+              "issue": "https://github.com/bonklek/milXdy/issues/17",
+              "reason": "Remote picker, attribution, caching, unavailable-source behavior, and explicit handoff remain under feature review."
+            },
+            {
+              "issue": "https://github.com/bonklek/milXdy/issues/188",
+              "reason": "Current release policy places BOORU inside the single Composer Kit package and requires integrated shared QA."
+            }
+          ]
+        },
+        {
+          "id": "composerTools",
+          "name": "Tweet Composer",
+          "icon": {
+            "src": "assets/addons/tweet-composer.svg",
+            "alt": "Tweet Composer em dash"
+          },
+          "summary": "A local-only typing helper that converts double dashes to em dashes in supported X/Twitter post composers.",
+          "packageKind": "feature",
+          "version": "0.1.0",
+          "sdk": {
+            "minVersion": "0.2.3",
+            "targetVersion": "0.2.3"
+          },
+          "availability": "under-review",
+          "publisher": "milXdy maintainers",
+          "source": {
+            "repositoryUrl": "https://github.com/bonklek/milXdy",
+            "path": "packages/maintainer/composerTools",
+            "issues": [
+              "https://github.com/bonklek/milXdy/issues/181"
+            ]
+          },
+          "artifact": {
+            "kind": "maintainer-source",
+            "path": "packages/maintainer/composerTools",
+            "packageSha256": "27a1f8116b085e486fdc7eb5bf34a1c6d9efab73ce9dde712c988959d4790033",
+            "recipeId": "maintainer-local-v1"
+          },
+          "review": {
+            "status": "approved",
+            "reviewedBy": "milxdy-first-party-composer-tools",
+            "reviewedAt": "2026-07-30",
+            "notes": [
+              "The package candidate preserves the built-in composerTools identity, storage key, enablement, lifecycle, X composer scope, and cleanup behavior.",
+              "Publication remains gated on cumulative QA and maintainer approval."
+            ]
+          },
+          "capabilities": [
+            "Convert a typed double dash to an em dash.",
+            "Enable, disable, and reset the feature through Apps & Features.",
+            "Dispose its document listeners when disabled."
+          ],
+          "permissions": {
+            "hosts": [],
+            "optional": [],
+            "privilegedSurfaces": [
+              "Built-in composerTools identity replacement",
+              "X/Twitter post composer input events"
+            ],
+            "notes": [
+              "Uses only the host permissions already present in the base extension.",
+              "Requires the explicit --acknowledge-first-party-replacement build flag."
+            ]
+          },
+          "siteScopes": [
+            "Active X/Twitter post and reply composer textboxes",
+            "Excludes DMs, search boxes, native inputs, and textareas"
+          ],
+          "remoteServices": [],
+          "storage": {
+            "local": [
+              "milxdy.composerTools.enabled"
+            ],
+            "sync": [],
+            "session": [],
+            "notes": [
+              "Preserves the built-in enablement key so disabling, updating, and rollback keep the user's setting."
+            ]
+          },
+          "privacyNotes": [
+            "Reads only text immediately around the caret for the active dash replacement.",
+            "Does not post, upload, open a remote service, or transmit composer text.",
+            "No automatic posting path is declared."
+          ],
+          "dependencies": [],
+          "conflicts": [],
+          "replacement": {
+            "firstPartyId": "composerTools",
+            "policy": "replace-reviewed-first-party-id",
+            "acknowledgement": "--acknowledge-first-party-replacement"
+          },
+          "blockers": [
+            {
+              "issue": "https://github.com/bonklek/milXdy/issues/181",
+              "reason": "Cumulative QA and explicit maintainer publication approval remain pending."
+            }
+          ]
+        },
+        {
+          "id": "memeMaker",
+          "name": "Meme Maker",
+          "icon": {
+            "src": "assets/addons/meme-maker.svg",
+            "alt": "Meme Maker framed image"
+          },
+          "summary": "Reviewed maker and generator entry points planned for the Composer Kit package.",
+          "packageKind": "feature",
+          "version": null,
+          "sdk": {
+            "minVersion": "0.2.3",
+            "targetVersion": "0.2.3"
+          },
+          "availability": "unavailable",
+          "publisher": "milXdy maintainers",
+          "source": {
+            "repositoryUrl": "https://github.com/bonklek/milXdy",
+            "path": null,
+            "issues": [
+              "https://github.com/bonklek/milXdy/issues/79",
+              "https://github.com/bonklek/milXdy/issues/188"
+            ]
+          },
+          "artifact": null,
+          "review": {
+            "status": "in-progress",
+            "notes": [
+              "External-open and caption handoff infrastructure exists, but the Composer Kit package artifact and maker-specific review are not complete.",
+              "No package hash or availability claim will be created by issue #181."
+            ]
+          },
+          "capabilities": [
+            "Open a reviewed maker after explicit user action.",
+            "Prepare bounded caption text only through a declared host-mediated handoff.",
+            "Keep generated-media review and any later copy, save, attach, or post action separate."
+          ],
+          "permissions": {
+            "hosts": [],
+            "optional": [],
+            "privilegedSurfaces": [
+              "Explicit external maker handoff"
+            ],
+            "notes": [
+              "No maker origins or host permissions are approved by this unavailable record."
+            ]
+          },
+          "siteScopes": [
+            "X/Twitter composer-adjacent controls only after explicit activation"
+          ],
+          "remoteServices": [],
+          "storage": {
+            "local": [],
+            "sync": [],
+            "session": [],
+            "notes": [
+              "No maker captions, generated media, or source-page data are granted storage by this record."
+            ]
+          },
+          "privacyNotes": [
+            "No maker destination is approved by this unavailable record.",
+            "A future package must disclose each external origin and exactly what explicit caption data leaves the extension.",
+            "Selecting a maker never posts, uploads, attaches, or mutates an account."
+          ],
+          "dependencies": [],
+          "conflicts": [],
+          "replacement": null,
+          "blockers": [
+            {
+              "issue": "https://github.com/bonklek/milXdy/issues/79",
+              "reason": "Maker destinations, package UX, disclosures, and explicit media review remain under feature review."
+            },
+            {
+              "issue": "https://github.com/bonklek/milXdy/issues/188",
+              "reason": "Current release policy places Meme Maker inside the single Composer Kit package and requires integrated shared QA."
+            }
+          ]
+        }
+      ]
     },
     {
       "id": "approved-external",
       "name": "Approved external add-ons",
-      "description": "Third-party packages that have completed the project review recorded in their catalog metadata. Approval does not make an external package an official milXdy package.",
+      "description": "Third-party packages that completed project review. No external package is approved or selectable in this first maintainer catalog.",
       "packages": []
     }
   ]

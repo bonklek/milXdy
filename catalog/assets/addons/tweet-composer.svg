@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Tweet Composer em dash</title>
+  <rect width="64" height="64" rx="8" fill="#eef7ff"/>
+  <rect x="10" y="14" width="44" height="36" rx="6" fill="#fff" stroke="#20122f" stroke-width="2"/>
+  <path d="M19 32h26" stroke="#1d9bf0" stroke-width="6" stroke-linecap="round"/>
+</svg>

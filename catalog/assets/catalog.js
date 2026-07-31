@@ -1,6 +1,7 @@
-import { selectionJson } from "./selection.js";
+import { isSelectable, resolveSelection, selectionJson } from "./selection.js";
 
 const dataUrl = new URL("../data/catalog.json", import.meta.url);
+const catalogRootUrl = new URL("../", dataUrl);
 const folderDatabase = "milxdy-catalog";
 const folderStore = "directory-handles";
 const packagesFolderKey = "local-app-packages";
@@ -15,19 +16,14 @@ const escapeHtml = (value) => String(value)
 
 const displayStatus = (status) => ({
   planned: "Not published",
+  experimental: "Experimental",
   "under-review": "Under review",
   published: "Published",
+  incompatible: "Incompatible",
+  unavailable: "Unavailable",
+  deprecated: "Deprecated",
+  blocked: "Blocked",
 })[status] || "Unknown";
-
-const isPublishedDownload = (pkg) => {
-  if (pkg.availability !== "published" || !pkg.download) return false;
-  try {
-    const url = new URL(pkg.download.url);
-    return url.protocol === "https:" && /^[a-f0-9]{64}$/.test(pkg.download.sha256);
-  } catch {
-    return false;
-  }
-};
 
 function openFolderDatabase() {
   return new Promise((resolve, reject) => {
@@ -156,8 +152,8 @@ function bindAddonsSettingsLauncher() {
   });
 }
 
-function downloadSelection(packages) {
-  const blob = new Blob([selectionJson(packages)], { type: "application/json" });
+function downloadSelection(catalog, packages) {
+  const blob = new Blob([selectionJson(catalog, packages)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -180,7 +176,7 @@ function renderList(items, emptyText) {
 }
 
 function packageCard(pkg, section) {
-  const selectable = isPublishedDownload(pkg);
+  const selectable = isSelectable(pkg);
   return `
     <article class="package-card">
       <div class="package-card-heading">
@@ -188,6 +184,7 @@ function packageCard(pkg, section) {
           <input type="checkbox" data-package-id="${escapeHtml(pkg.id)}" ${selectable ? "" : "disabled"}>
           <span class="sr-only">Add ${escapeHtml(pkg.name)} to the selection file</span>
         </label>
+        <img src="${escapeHtml(new URL(pkg.icon.src, catalogRootUrl).href)}" alt="${escapeHtml(pkg.icon.alt)}" width="42" height="42">
         <div>
           <span class="status status-${escapeHtml(pkg.availability)}">${displayStatus(pkg.availability)}</span>
           <h3><a href="add-ons/?id=${encodeURIComponent(pkg.id)}">${escapeHtml(pkg.name)}</a></h3>
@@ -196,10 +193,12 @@ function packageCard(pkg, section) {
       <p>${escapeHtml(pkg.summary)}</p>
       <dl>
         <div><dt>Publisher</dt><dd>${escapeHtml(pkg.publisher)}</dd></div>
+        <div><dt>Package</dt><dd><code>${escapeHtml(pkg.id)}@${escapeHtml(pkg.version || "not available")}</code></dd></div>
+        <div><dt>SDK target</dt><dd>${escapeHtml(pkg.sdk.targetVersion || "not assigned")}</dd></div>
         <div><dt>Catalog</dt><dd>${escapeHtml(section.name)}</dd></div>
         <div><dt>Review</dt><dd>${escapeHtml(pkg.review.status)}</dd></div>
       </dl>
-      ${selectable ? "" : '<p class="unavailable">No verified package download is attached to this record.</p>'}
+      ${selectable ? "" : `<p class="unavailable">${escapeHtml(pkg.blockers?.[0]?.reason || "No reviewed local package artifact is selectable.")}</p>`}
     </article>`;
 }
 
@@ -207,6 +206,9 @@ function renderIndex(catalog) {
   const mount = document.querySelector("#catalog-sections");
   const packages = catalog.sections.flatMap((section) => section.packages);
   const packageMap = new Map(packages.map((pkg) => [pkg.id, pkg]));
+  const published = packages.filter((pkg) => isSelectable(pkg));
+  const summary = document.querySelector("#catalog-summary");
+  if (summary) summary.textContent = `${packages.length} maintainer records · ${published.length} selectable · Chromium local builds only`;
 
   mount.innerHTML = catalog.sections.map((section) => `
     <section class="catalog-section" aria-labelledby="section-${escapeHtml(section.id)}">
@@ -224,25 +226,52 @@ function renderIndex(catalog) {
 
   const button = document.querySelector("#download-selected");
   const status = document.querySelector("#selection-status");
+  const errors = document.querySelector("#selection-errors");
+  const review = document.querySelector("#selection-summary");
   const checkboxes = [...document.querySelectorAll("input[data-package-id]:not(:disabled)")];
 
   const updateSelection = () => {
-    const count = checkboxes.filter((input) => input.checked).length;
-    button.disabled = count === 0;
+    const ids = checkboxes.filter((input) => input.checked).map((input) => input.dataset.packageId);
+    const resolved = resolveSelection(catalog, ids);
+    const count = resolved.selected.length;
+    button.disabled = !resolved.ok;
+    button.textContent = count ? "Download selection file" : "Download baseline selection";
     status.textContent = count === 0
-      ? (checkboxes.length ? "Select one or more published packages." : "No add-ons are published yet, so there is nothing to select.")
-      : `${count} package${count === 1 ? "" : "s"} selected. Download one pinned selection file for the local manager.`;
+      ? "Explicit empty selection: build the baseline with no catalog add-ons."
+      : `${count} package${count === 1 ? "" : "s"} explicitly selected. Review the combined declarations before downloading.`;
+    errors.hidden = resolved.errors.length === 0;
+    errors.textContent = resolved.errors.join(" ");
+    renderSelectionSummary(review, resolved.summary);
   };
 
   checkboxes.forEach((input) => input.addEventListener("change", updateSelection));
   button.addEventListener("click", () => {
     const selected = checkboxes.filter((input) => input.checked);
-    const packages = selected.map((input) => packageMap.get(input.dataset.packageId)).filter(isPublishedDownload);
-    if (!packages.length) return updateSelection();
-    downloadSelection(packages);
-    status.textContent = `Selection file created for ${packages.length} package${packages.length === 1 ? "" : "s"}. Run the local Prepare command next.`;
+    const packages = selected.map((input) => packageMap.get(input.dataset.packageId)).filter(Boolean);
+    const resolved = resolveSelection(catalog, packages.map((pkg) => pkg.id));
+    if (!resolved.ok) return updateSelection();
+    downloadSelection(catalog, resolved.selected);
+    status.textContent = `Selection file created for ${packages.length || "no"} catalog package${packages.length === 1 ? "" : "s"}. Run the local Prepare command next.`;
   });
   updateSelection();
+}
+
+function renderSelectionSummary(mount, summary) {
+  const rows = [
+    ["Packages", summary.packages],
+    ["Capabilities", summary.capabilities],
+    ["Hosts", summary.hosts],
+    ["Optional permissions", summary.optionalPermissions],
+    ["Privileged surfaces", summary.privilegedSurfaces],
+    ["Site scope", summary.siteScopes],
+    ["Remote services", summary.remoteServices],
+    ["Storage", summary.storage],
+    ["Privacy", summary.privacyNotes],
+    ["Acknowledgements", summary.acknowledgements],
+  ];
+  mount.innerHTML = rows.map(([label, values]) => `
+    <div><dt>${escapeHtml(label)}</dt><dd>${values.length ? values.map(escapeHtml).join("<br>") : "none"}</dd></div>
+  `).join("");
 }
 
 function detailSection(title, items, emptyText) {
@@ -266,7 +295,7 @@ function renderDetail(catalog) {
   }
 
   const { pkg, section } = located;
-  const downloadable = isPublishedDownload(pkg);
+  const downloadable = isSelectable(pkg);
   document.title = `${pkg.name} · milXdy Add-ons`;
   mount.innerHTML = `
     <p class="eyebrow">${escapeHtml(section.name)}</p>
@@ -275,6 +304,9 @@ function renderDetail(catalog) {
     <p class="lede">${escapeHtml(pkg.summary)}</p>
     <dl class="detail-meta">
       <div><dt>Package ID</dt><dd><code>${escapeHtml(pkg.id)}</code></dd></div>
+      <div><dt>Package kind</dt><dd>${escapeHtml(pkg.packageKind)}</dd></div>
+      <div><dt>Version</dt><dd>${escapeHtml(pkg.version || "not available")}</dd></div>
+      <div><dt>SDK</dt><dd>${escapeHtml(pkg.sdk.minVersion || "unassigned")} minimum · ${escapeHtml(pkg.sdk.targetVersion || "unassigned")} target</dd></div>
       <div><dt>Publisher</dt><dd>${escapeHtml(pkg.publisher)}</dd></div>
       <div><dt>Review status</dt><dd>${escapeHtml(pkg.review.status)}</dd></div>
       ${pkg.review.reviewedBy ? `<div><dt>Reviewed by</dt><dd>${escapeHtml(pkg.review.reviewedBy)}</dd></div>` : ""}
@@ -282,18 +314,30 @@ function renderDetail(catalog) {
     </dl>
     <div class="status-banner ${downloadable ? "" : "status-unavailable"}">
       ${downloadable
-        ? `<strong>Published package.</strong> The generated selection pins this ZIP SHA-256: <code>${escapeHtml(pkg.download.sha256)}</code>`
-        : "<strong>No download is published.</strong> This detail record cannot install, download, or imply availability without a verified HTTPS ZIP and SHA-256 value."}
+        ? `<strong>Published local package.</strong> The generated selection pins this checked-in package SHA-256: <code>${escapeHtml(pkg.artifact.packageSha256)}</code>`
+        : "<strong>No selectable artifact is published.</strong> This detail record cannot install, download, or imply availability without a reviewed checked-in maintainer package and exact package hash."}
     </div>
     ${detailSection("Capabilities", pkg.capabilities, "No capabilities have been claimed in the catalog record.")}
-    ${detailSection("Permissions and privileged surfaces", pkg.permissions, "No permissions have been listed in the catalog record.")}
-    ${detailSection("Privacy and data use", pkg.privacy, "No privacy claims have been listed in the catalog record.")}
+    ${detailSection("Host permissions", pkg.permissions.hosts, "No host-permission expansion.")}
+    ${detailSection("Privileged surfaces", pkg.permissions.privilegedSurfaces, "No privileged surfaces declared.")}
+    ${detailSection("Site scope", pkg.siteScopes, "No site scope has been assigned.")}
+    ${detailSection("Remote services", pkg.remoteServices.map((service) => `${service.name} · ${service.origin} · ${service.dataSent}`), "No remote services.")}
+    ${detailSection("Storage", [
+      ...pkg.storage.local.map((key) => `local:${key}`),
+      ...pkg.storage.sync.map((key) => `sync:${key}`),
+      ...pkg.storage.session.map((key) => `session:${key}`),
+      ...pkg.storage.notes,
+    ], "No package storage.")}
+    ${detailSection("Privacy and data use", pkg.privacyNotes, "No privacy claims have been listed in the catalog record.")}
+    ${detailSection("Dependencies", pkg.dependencies.map((entry) => `${entry.id}@${entry.version} · ${entry.reason}`), "No package dependencies.")}
+    ${detailSection("Conflicts", pkg.conflicts.map((entry) => `${entry.id} · ${entry.reason}`), "No declared package conflicts.")}
+    ${detailSection("Availability blockers", pkg.blockers.map((entry) => `${entry.reason} (${entry.issue})`), "No availability blockers.")}
     <section>
       <h2>Installation model</h2>
-      <p>This package is a privileged custom-build input. Select it in the catalog, download the generated <code>.milxdy-selection.json</code>, run <code>npm run addons:prepare -- --selection=&lt;file&gt;</code>, review the consolidated report, then run <code>npm run addons:apply</code> with the listed acknowledgements. Reload the existing unpacked build from <code>dist/chromium-local-apps/</code>. It is not installed at runtime.</p>
+      <p>This package is a privileged custom-build input already present in a reviewed milXdy source checkout. Select it in the catalog, download the generated <code>.milxdy-selection.json</code>, run <code>npm run addons:prepare -- --selection=&lt;file&gt;</code>, review the consolidated report, then run <code>npm run addons:apply</code> with the listed acknowledgements. Reload the existing unpacked build from <code>dist/chromium-local-apps/</code>. The page does not download package code, and nothing is installed at runtime.</p>
     </section>
     ${downloadable ? '<p><button id="download-package-selection" class="download-link" type="button">Download selection file</button></p>' : ""}`;
-  document.querySelector("#download-package-selection")?.addEventListener("click", () => downloadSelection([pkg]));
+  document.querySelector("#download-package-selection")?.addEventListener("click", () => downloadSelection(catalog, [pkg]));
 }
 
 bindExtensionBridge();

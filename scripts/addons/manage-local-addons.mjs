@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { assertSafeGeneratedOutputDir } from "../build/generated-output-dir-safety.mjs";
-import { loadSelection, stageSelectionPackages, verifyMaterializedSelection } from "./selection.mjs";
+import { loadSelection, materializeSelectionPackages, verifyMaterializedSelection } from "./selection.mjs";
 
 const command = process.argv[2] ?? "status";
 if (!new Set(["prepare", "apply", "status", "rebuild"]).has(command)) {
@@ -18,7 +18,6 @@ const addOnsDirectory = testRoot || "local-addons";
 const manualPackagesDirectory = `${addOnsDirectory}/manual`;
 const catalogPackagesDirectory = `${addOnsDirectory}/catalog`;
 const managerStateDirectory = `${addOnsDirectory}/.state`;
-const cacheDirectory = `${addOnsDirectory}/.cache`;
 const selectionLockPath = `${managerStateDirectory}/selection-lock.json`;
 const stableOutputDirectory = assertSafeGeneratedOutputDir(testRoot ? `${testRoot}/stable` : "dist/chromium-local-apps", "Stable local app output");
 const workDirectory = assertSafeGeneratedOutputDir(testRoot ? `${testRoot}/work` : "tmp/local-addon-manager", "Local Add-on Manager work directory");
@@ -32,6 +31,7 @@ const catalogPromotionJournal = `${managerStateDirectory}/catalog-promotion.json
 const catalogBackupDirectory = `${addOnsDirectory}/.catalog-backup`;
 const buildBackupDirectory = testRoot ? `${testRoot}/.stable-backup` : "dist/.chromium-local-apps-backup";
 const packageJson = await readJson("package.json", {});
+const catalogPath = process.env.MILXDY_ADDON_MANAGER_CATALOG_PATH || "catalog/data/catalog.json";
 
 const supportedTrustFlags = new Set([
   "--allow-local-review",
@@ -134,6 +134,7 @@ async function prepareSelection(selectionPath) {
   try {
     loaded = await loadSelection(
       selectionPath,
+      catalogPath,
       "scripts/addons/catalog-policy.json",
       "scripts/addons/trusted-catalog-reviews.json",
     );
@@ -143,15 +144,14 @@ async function prepareSelection(selectionPath) {
   }
   console.log(`Stage 1/4 — Select: ${loaded.packages.length} package(s) from ${selectionPath}`);
   try {
-    await stageSelectionPackages(loaded, {
-      cacheDirectory,
+    await materializeSelectionPackages(loaded, {
       stagingDirectory: catalogStagingDirectory,
     });
   } catch (error) {
-    await recordFailure("validation-failed", error.code || "download", null, await activeBuildIdentity());
-    fail(error.code || "download", error.message);
+    await recordFailure("validation-failed", error.code || "materialize", null, await activeBuildIdentity());
+    fail(error.code || "materialize", error.message);
   }
-  console.log(`Stage 2/4 — Place ZIPs: pinned archives verified in ${catalogStagingDirectory}`);
+  console.log(`Stage 2/4 — Materialize: reviewed checked-in packages copied to ${catalogStagingDirectory}`);
 
   await rm(compositionDirectory, { recursive: true, force: true });
   const result = compose([manualPackagesDirectory, catalogStagingDirectory], true);
@@ -174,16 +174,21 @@ async function prepareSelection(selectionPath) {
     throw error;
   }
   const lock = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     selectionSchemaVersion: loaded.selection.schemaVersion,
     selectionSha256: loaded.selectionSha256,
-    catalog: loaded.selection.catalog || null,
+    catalog: loaded.selection.catalog,
+    build: loaded.selection.build,
     preparedAt: new Date().toISOString(),
     packages: loaded.packages.map((entry) => ({
       id: entry.id,
-      filename: entry.filename,
-      sha256: entry.sha256,
-      url: entry.url,
+      version: entry.version,
+      packageSha256: entry.packageSha256,
+      artifact: {
+        kind: entry.artifact.kind,
+        path: entry.artifact.path,
+        recipeId: entry.artifact.recipeId,
+      },
       review: entry.review,
       reviewTrusted: entry.reviewTrusted,
     })),
@@ -213,15 +218,16 @@ function compose(packageDirectories, preview) {
 
 function verifySelectionAgainstReport(packages, report, stagingPath) {
   const selectedIds = new Set(packages.map((entry) => entry.id));
-  const stagedAccepted = (report.acceptedPackages || []).filter((entry) => String(entry.source?.archivePath || "").replaceAll("\\", "/").startsWith(`${stagingPath}/`));
+  const normalizedStaging = stagingPath.replaceAll("\\", "/").replace(/\/+$/u, "");
+  const stagedAccepted = (report.acceptedPackages || []).filter((entry) => String(entry.source?.root || "").replaceAll("\\", "/").startsWith(`${normalizedStaging}/`));
   const acceptedIds = new Set(stagedAccepted.map((entry) => entry.id));
   if (selectedIds.size !== acceptedIds.size || Array.from(selectedIds).some((id) => !acceptedIds.has(id))) {
-    fail("selection-package-id", "Downloaded package manifest IDs do not exactly match the selection.");
+    fail("selection-package-id", "Materialized package manifest IDs do not exactly match the selection.");
   }
   for (const entry of packages) {
     const accepted = stagedAccepted.find((candidate) => candidate.id === entry.id);
-    if (accepted?.source?.archiveSha256 !== entry.sha256 || path.basename(accepted.source.archivePath) !== entry.filename) {
-      fail("selection-package-mismatch", `Composer provenance does not match the selected archive for ${entry.id}.`);
+    if (accepted?.packageSha256 !== entry.packageSha256 || accepted?.version !== entry.version || path.basename(accepted.source.root) !== entry.id) {
+      fail("selection-package-mismatch", `Composer provenance does not match the selected maintainer package for ${entry.id}.`);
     }
   }
 }
@@ -279,7 +285,7 @@ function managerStatus(state, compositionReport, identity, selectionLock) {
 async function recordFailure(state, failureClass, report, identity) {
   const status = managerStatus(state, report, identity, await readJson(selectionLockPath, null));
   status.failureClass = failureClass;
-  status.workflowStage = /download|materialized|placement/u.test(failureClass)
+  status.workflowStage = /materialize|materialized|placement/u.test(failureClass)
     ? "place"
     : /composition|build|promotion/u.test(failureClass)
       ? "rebuild"
