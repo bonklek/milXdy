@@ -1670,7 +1670,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       assistant.style.cssText = "color-scheme:light dark;position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)";
       const prompt = document.createElement("textarea");
       prompt.readOnly = true;
-      prompt.value = "Suggest concise Remibooru tags for the image I selected. Return tags only; do not upload or post anything.";
+      prompt.value = `Suggest concise Remibooru tags for this X image: ${selected.sourceUrl}\nReturn tags only; do not upload or post anything.`;
       prompt.style.cssText = "box-sizing:border-box;width:100%;min-height:96px";
       const copy = document.createElement("button");
       copy.textContent = "Copy prompt";
