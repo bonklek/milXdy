@@ -537,8 +537,10 @@ a successful request consumes the handle and returns only the canonical post
 URL. Nothing is posted to X.
 
 `openVisibleAssistantPrompt("remibooru-tags")` may show a host-owned visible
-prompt helper after another explicit click. It does not return generated text
-to the package automatically; the user remains responsible for copying any
+prompt helper after another explicit click. The helper visibly includes the
+selected X image URL so X's own Grok surface can inspect that image; packages
+must disclose this explicit helper transfer. It does not return generated text
+to the package automatically, and the user remains responsible for copying any
 suggestions into the package's tag controls.
 
 ```json
