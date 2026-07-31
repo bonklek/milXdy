@@ -75,38 +75,95 @@ function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteSer
     el("div", { className: "tweet-composer-kit__caption-fields" }, topInput, bottomInput),
     buildMemeControls(random),
     buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }),
-    buildMediaPicker({ queryRemoteService, signal }),
-    buildContributionHandoff({ signal })
+    buildMediaPicker({ queryRemoteService, signal })
   );
   return root;
 }
-function buildContributionHandoff({ signal }) {
+function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, openVisibleAssistantPrompt, submitMediaContribution }) {
+  if (!context || signal.aborted) return;
+  if (actionId !== "remibooru-contribute") {
+    panel.replaceChildren(el("p", { className: "tweet-composer-kit__contribution-status", role: "status", textContent: "This media action is unavailable." }));
+    return;
+  }
+  const tags = [];
   const root = el("section", { className: "tweet-composer-kit__contribution", ariaLabel: "Contribute to Remibooru" });
-  const rights = el("input", { id: "tweet-composer-kit-remibooru-rights", className: "tweet-composer-kit__contribution-check", type: "checkbox" });
+  const title = el("strong", { className: "tweet-composer-kit__contribution-title", textContent: "Contribute to Remibooru" });
+  const dimensions = Number.isFinite(media.width) && Number.isFinite(media.height) ? ` \xB7 ${media.width} \xD7 ${media.height}` : "";
+  const details = el("p", { className: "tweet-composer-kit__contribution-copy", textContent: `Selected image \xB7 ${media.mimeType || "image"}${dimensions}` });
+  const input = el("input", { className: "tweet-composer-kit__contribution-input", type: "text", maxLength: 64, placeholder: "Add a tag", ariaLabel: "Add a Remibooru tag", autocomplete: "off" });
+  const add = el("button", { className: "tweet-composer-kit__contribution-button", type: "button", textContent: "Add" });
+  const tagList = el("div", { className: "tweet-composer-kit__contribution-tags", role: "list", ariaLabel: "Contribution tags" });
+  const assistant = el("button", { className: "tweet-composer-kit__contribution-button", type: "button", textContent: "Get tag ideas in Grok" });
+  const contribute = el("button", { className: "tweet-composer-kit__contribution-button tweet-composer-kit__contribution-button--primary", type: "button", textContent: "Contribute" });
   const status = el("p", { className: "tweet-composer-kit__contribution-status", role: "status", ariaLive: "polite" });
-  const open = el("a", {
-    className: "tweet-composer-kit__contribution-open",
-    href: "https://remibooru.com/upload",
-    target: "_blank",
-    rel: "noopener noreferrer",
-    textContent: "Open native upload"
-  });
-  open.addEventListener("click", (event) => {
-    if (rights.checked) return;
-    event.preventDefault();
-    status.textContent = "Confirm that you have the right to contribute before opening the public uploader.";
-  }, { signal });
-  rights.addEventListener("change", () => {
+  const renderTags = () => {
+    tagList.replaceChildren(...tags.map((tag) => {
+      const remove = el("button", { className: "tweet-composer-kit__contribution-tag", type: "button", textContent: `\xD7 ${tag}`, ariaLabel: `Remove tag ${tag}` });
+      remove.addEventListener("click", () => {
+        tags.splice(tags.indexOf(tag), 1);
+        renderTags();
+      }, { signal });
+      return remove;
+    }));
+    contribute.disabled = tags.length === 0;
+  };
+  const addTag = () => {
+    const tag = input.value.trim().replace(/\s+/gu, " ");
+    if (!tag) return;
+    if (tags.includes(tag)) {
+      status.textContent = "That tag is already listed.";
+      return;
+    }
+    if (tags.length >= 12) {
+      status.textContent = "You can contribute up to 12 tags.";
+      return;
+    }
+    tags.push(tag);
+    input.value = "";
     status.textContent = "";
+    renderTags();
+  };
+  add.addEventListener("click", addTag, { signal });
+  input.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    addTag();
   }, { signal });
-  root.append(
-    el("strong", { className: "tweet-composer-kit__contribution-title", textContent: "Contribute to Remibooru" }),
-    el("p", { className: "tweet-composer-kit__contribution-copy", textContent: "Public upload. Composer Kit transfers no image, tag, account, or draft data; select media, tags, and final publish in Remibooru." }),
-    el("label", { className: "tweet-composer-kit__contribution-rights", htmlFor: rights.id }, rights, el("span", { textContent: "I have the right to contribute this media publicly." })),
-    open,
-    status
-  );
-  return root;
+  assistant.addEventListener("click", async () => {
+    if (signal.aborted || typeof openVisibleAssistantPrompt !== "function") return;
+    assistant.disabled = true;
+    status.textContent = "Opening the visible tag helper\u2026";
+    try {
+      const result = await openVisibleAssistantPrompt("remibooru-tags");
+      status.textContent = result?.ok ? "Copy any suggested tags here when ready." : result?.error || "The tag helper is unavailable.";
+    } catch {
+      status.textContent = "The tag helper is unavailable.";
+    } finally {
+      if (!signal.aborted) assistant.disabled = false;
+    }
+  }, { signal });
+  contribute.addEventListener("click", async () => {
+    if (signal.aborted || typeof submitMediaContribution !== "function") return;
+    contribute.disabled = true;
+    status.textContent = "Preparing the reviewed contribution\u2026";
+    try {
+      const result = await submitMediaContribution({ id: "remibooru-contribute", mediaHandle, tags: [...tags] });
+      if (!result?.ok) {
+        status.textContent = result?.error || "The contribution could not be completed.";
+        return;
+      }
+      status.replaceChildren("Contribution published.");
+      if (result.canonicalUrl) status.append(" ", el("a", { className: "tweet-composer-kit__contribution-link", href: result.canonicalUrl, target: "_blank", rel: "noopener noreferrer", textContent: "View on Remibooru" }));
+    } catch {
+      status.textContent = "The contribution could not be completed.";
+    } finally {
+      if (!signal.aborted) contribute.disabled = tags.length === 0;
+    }
+  }, { signal });
+  root.append(title, details, el("div", { className: "tweet-composer-kit__contribution-entry" }, input, add), tagList, el("div", { className: "tweet-composer-kit__contribution-actions" }, assistant, contribute), status);
+  renderTags();
+  panel.replaceChildren(root);
+  signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
 function buildMediaPicker({ queryRemoteService, signal }) {
   const root = el("section", { className: "tweet-composer-kit__media-picker", ariaLabel: "Remibooru reaction media" });
@@ -308,5 +365,6 @@ function el(tag, props = {}, ...children) {
 export {
   boot,
   onComposerAction,
+  onContextMediaAction,
   onReplyAction
 };
