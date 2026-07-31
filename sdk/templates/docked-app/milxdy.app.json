@@ -7,8 +7,8 @@
   "description": "Minimal rail-capable overlay app using only public App SDK capabilities.",
   "packageKind": "app",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": ["Uses only the public content-app context documented in sdk/types."]
   },
   "contentEntry": "content.js",

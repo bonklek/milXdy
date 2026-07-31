@@ -1,4 +1,4 @@
-/* milXdy App SDK 0.2.3 semantic UI tokens. Copy this file into app packages. */
+/* milXdy App SDK 0.2.4 semantic UI tokens. Copy this file into app packages. */
 :root {
   --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #ffffff);
   --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #f7f9f9);

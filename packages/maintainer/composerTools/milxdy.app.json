@@ -6,8 +6,8 @@
   "description": "Converts typed double dashes to em dashes inside supported X/Twitter post composers.",
   "packageKind": "feature",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": [
       "Maintainer package candidate adapted without behavior changes from the built-in Composer Tools feature."
     ]

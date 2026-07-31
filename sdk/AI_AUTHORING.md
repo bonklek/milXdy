@@ -1,9 +1,9 @@
 # AI-Assisted App Authoring
 
-Use this prompt when asking an AI assistant to draft a milXdy App SDK 0.2.3
+Use this prompt when asking an AI assistant to draft a milXdy App SDK 0.2.4
 package:
 
-> Draft a contributor-owned milXdy App SDK 0.2.3 package for maintainer review.
+> Draft a contributor-owned milXdy App SDK 0.2.4 package for maintainer review.
 > Start from the closest template under `sdk/templates/`, validate the manifest
 > against `docs/schemas/local-app-package.schema.json`, and use only the public contracts
 > in `sdk/types/`, `sdk/ui/`, and the documented App SDK context.

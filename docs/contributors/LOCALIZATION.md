@@ -1,6 +1,6 @@
 # Localization
 
-milXdy `0.2.3` localizes browser-provided extension metadata. Chromium and Firefox select a catalog from the browser locale and fall back to English through `manifest.default_locale`.
+milXdy `0.2.4` localizes browser-provided extension metadata. Chromium and Firefox select a catalog from the browser locale and fall back to English through `manifest.default_locale`.
 
 ## Current Scope
 

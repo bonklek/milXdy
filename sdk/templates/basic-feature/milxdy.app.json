@@ -7,8 +7,8 @@
   "description": "Minimal third-party feature template for the reviewed custom-build App SDK.",
   "packageKind": "feature",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": [
       "Uses only the public content-app context documented in sdk/types."
     ]

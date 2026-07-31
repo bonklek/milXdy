@@ -1,6 +1,6 @@
 # Post-reading App SDK Reference
 
-Post-reading is the production external reference app for App SDK 0.2.3.
+Post-reading is the production external reference app for App SDK 0.2.4.
 Its feature source, settings, standalone adapter, package manifest, and
 compatibility declaration live in `bonklek/post-reading`. milXdy owns the public
 SDK runtime, shared services, trust policy, pinned source commit and package hash, and the mirror

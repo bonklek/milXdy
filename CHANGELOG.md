@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.4
+
+Status: release candidate.
+
+See [milXdy 0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
+
+- Adds reviewed Composer Kit, Share Kit, Miladychan posting, and Custom Pet package workflows.
+- Advances the App SDK and maintainer catalog with external-package composition, explicit host-mediated actions, sanitized provenance, and cumulative QA support.
+- Includes the 0.2.4 reliability, security, RemiNet, Beetol, side-rail, accessibility, and documentation improvements described in the release notes.
+
 ## 0.2.3
 
 See [milXdy 0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md).

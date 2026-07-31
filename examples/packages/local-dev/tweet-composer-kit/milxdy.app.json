@@ -7,8 +7,8 @@
   "description": "A local-only composer companion pilot with local reply phrases, host-owned Drafts, reviewed Maker handoffs, and Remibooru tools.",
   "packageKind": "app",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": [
       "Built only against the published App SDK declarations and authoring guides.",
       "Uses the reviewed composer and reply callback contracts only; it does not access X's DOM, caret, clipboard, media, or post controls."

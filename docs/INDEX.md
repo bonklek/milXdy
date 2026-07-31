@@ -49,6 +49,7 @@
 
 - [Roadmap](roadmap/ROADMAP.md)
 - [Releases](releases/RELEASES.md)
+- [0.2.4 release-candidate notes](releases/RELEASE_NOTES_0.2.4.md)
 - [Latest release notes (0.2.3)](releases/RELEASE_NOTES_0.2.3.md)
 - [0.2.2 release notes](releases/RELEASE_NOTES_0.2.2.md)
 - [0.2.1 release notes](releases/RELEASE_NOTES_0.2.1.md)
