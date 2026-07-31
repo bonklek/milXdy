@@ -1,0 +1,20 @@
+{
+  "name": "@milxdy/visual-elements-publication-candidate",
+  "version": "0.1.0-candidate.0",
+  "private": true,
+  "type": "module",
+  "description": "Local publication candidate for milXdy visual-elements contributor guidance and upstream defaults.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node --test tests/validator.test.mjs",
+    "validate": "node tools/validate.mjs",
+    "check:links": "node tools/check-links.mjs",
+    "check:policy": "node tools/check-policy.mjs",
+    "check:paths": "node tools/check-path-leaks.mjs",
+    "check:release-exclusion": "node tools/check-release-exclusion.mjs",
+    "verify": "node tools/run-all.mjs"
+  },
+  "license": "SEE LICENSE IN LICENSE"
+}

@@ -1,0 +1,111 @@
+{
+  "$schema": "../../../schemas/asset.schema.json",
+  "schemaVersion": 2,
+  "id": "fixture.ui-frame",
+  "version": "1.0.0",
+  "displayName": "Fixture UI frame",
+  "description": "CSS frame used only to test a complete ui-primitive manifest.",
+  "distributionScope": "upstream-default",
+  "kind": "ui-primitive",
+  "entryRole": "ui-primitive",
+  "intendedSdkSurfaces": [
+    "panel-frame"
+  ],
+  "sourcePath": "fixtures/valid/ui-primitive/source/frame.css",
+  "exports": [
+    {
+      "path": "fixtures/valid/ui-primitive/exports/frame.css",
+      "role": "panel-frame",
+      "format": "css",
+      "byteSize": 129,
+      "notApplicableReason": "CSS has no intrinsic dimensions or duration.",
+      "sha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a",
+      "backgroundAssumptions": [
+        "uses declared CSS colors"
+      ]
+    }
+  ],
+  "media": {
+    "mime": "text/css",
+    "format": "css",
+    "byteSize": 129,
+    "notApplicableReason": "CSS has no intrinsic dimensions or duration.",
+    "colorSpace": null,
+    "background": "not-applicable",
+    "backgroundAssumptions": [
+      "uses declared CSS colors"
+    ]
+  },
+  "sha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a",
+  "sourceUrl": "https://example.invalid/milxdy-fixtures/frame.css",
+  "sourceRetrievedAt": "2026-07-30",
+  "acquisitionMethod": "author-submission",
+  "creator": {
+    "name": "Synthetic fixture author",
+    "sourceContext": "Repository validator fixture; not a catalog claim."
+  },
+  "rightsholder": {
+    "name": "Synthetic fixture author",
+    "sourceContext": "Repository validator fixture; not a catalog claim."
+  },
+  "license": {
+    "status": "declared",
+    "id": "VPL",
+    "textPath": "LICENSES/VPL.txt",
+    "textSha256": "145f5a008fee1ff432a007b832b5c20ba5f1f1e39079b0d94c258aee20aaaa10",
+    "proofUrl": "https://example.invalid/milxdy-fixtures/proof/frame",
+    "proofPath": "fixtures/valid/ui-primitive/proof.txt",
+    "proofRetrievedAt": "2026-07-30",
+    "proofSha256": "f6140e867889268d68ccac1aa4da5d8bbf4ac87cde7805890b7a091f48f45d3b",
+    "scopeNote": "Synthetic proof exists only to exercise required manifest fields.",
+    "additionalRestrictions": []
+  },
+  "attribution": {
+    "requiredText": null,
+    "displayGuidance": "Label this item as a validator fixture and never as a published asset.",
+    "noticePaths": [
+      "LICENSES/VPL.txt"
+    ]
+  },
+  "parents": [],
+  "transformations": [],
+  "generation": {
+    "aiModified": false,
+    "tool": "text editor",
+    "model": null,
+    "author": "Synthetic fixture author",
+    "createdAt": "2026-07-30T12:00:00Z",
+    "editNotes": [
+      "Original CSS fixture created only for validation."
+    ]
+  },
+  "embeddedMarks": [],
+  "dependencies": [],
+  "accessibility": {
+    "alt": "",
+    "decorative": true,
+    "embeddedText": false,
+    "contrastAndSmallSizeNotes": "CSS frame does not convey information by itself.",
+    "themeCoverage": [
+      "light"
+    ]
+  },
+  "tags": [
+    "fixture",
+    "frame"
+  ],
+  "review": {
+    "technical": "approved",
+    "visual": "approved",
+    "accessibility": "approved",
+    "license": "approved",
+    "release": "approved",
+    "decisionId": "decision-2026-07-30-fixture.ui-frame"
+  },
+  "lifecycle": {
+    "status": "upstream-approved",
+    "deprecatedAt": null,
+    "replacedBy": null,
+    "removalAdvisory": null
+  }
+}

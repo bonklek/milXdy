@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:milxdy:visual-elements:schema:review-decision:2",
+  "title": "milXdy upstream visual-element review decision",
+  "type": "object", "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "id", "asset", "outcome", "reasonCodes", "reviewers", "decidedAt", "notes"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "schemaVersion": { "const": 2 },
+    "id": { "type": "string", "pattern": "^decision-[0-9]{4}-[0-9]{2}-[0-9]{2}-[a-z0-9._-]+$" },
+    "asset": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "version", "manifestSha256", "sourceSha256"],
+      "properties": { "id": { "$ref": "#/$defs/catalogId" }, "version": { "$ref": "#/$defs/semver" }, "manifestSha256": { "$ref": "#/$defs/sha256" }, "sourceSha256": { "$ref": "#/$defs/sha256" } }
+    },
+    "outcome": { "enum": ["LOCAL_READY", "UPSTREAM_APPROVED", "CHANGES_REQUIRED", "NOT_ELIGIBLE_FOR_UPSTREAM", "REMOVED"] },
+    "reasonCodes": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "reviewers": {
+      "type": "object", "additionalProperties": false,
+      "required": ["technical", "visualCultural", "accessibility", "license", "release"],
+      "properties": {
+        "technical": { "$ref": "#/$defs/reviewer" }, "visualCultural": { "$ref": "#/$defs/reviewer" },
+        "accessibility": { "$ref": "#/$defs/reviewer" }, "license": { "$ref": "#/$defs/reviewer" }, "release": { "$ref": "#/$defs/reviewer" }
+      }
+    },
+    "decidedAt": { "type": "string", "format": "date-time" },
+    "supersedes": { "type": ["string", "null"] },
+    "notes": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "catalogId": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$" },
+    "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "reviewer": {
+      "type": "object", "additionalProperties": false, "required": ["name", "decision", "notes"],
+      "properties": { "name": { "type": "string", "minLength": 1 }, "decision": { "enum": ["approved", "changes-required", "not-reviewed"] }, "notes": { "type": "array", "items": { "type": "string" } } }
+    }
+  }
+}

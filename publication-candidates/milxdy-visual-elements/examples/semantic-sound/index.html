@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>milXdy semantic sound example</title>
+    <link rel="stylesheet" href="../../tokens/milxdy.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <main aria-labelledby="sound-title">
+      <h1 id="sound-title">Semantic sound</h1>
+      <p>Sound starts only from the button and always has visible feedback.</p>
+      <label><input id="muted" type="checkbox"> Mute this app</label>
+      <label><input id="reduced-sensory" type="checkbox"> Reduce sensory effects</label>
+      <label>
+        Volume
+        <input id="volume" type="range" min="0" max="1" step="0.05" value="0.25">
+      </label>
+      <button id="confirm" type="button">Confirm action</button>
+      <p id="sound-status" role="status" aria-live="polite">Ready</p>
+    </main>
+    <script type="module" src="./semantic-sound.js"></script>
+  </body>
+</html>

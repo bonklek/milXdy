@@ -1,0 +1,87 @@
+{
+  "manifestVersion": 1,
+  "id": "visual-lock-fixture",
+  "name": "Visual lock fixture",
+  "version": "0.1.0",
+  "description": "Non-production fixture for catalog pin and vendored hash alignment.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4"
+  },
+  "contentEntry": "content.js",
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": []
+  },
+  "surfaces": [
+    "overlayApp"
+  ],
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "none",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": [
+    "userAction"
+  ],
+  "hub": {
+    "category": "developer",
+    "shortDescription": "Validator-only catalog integration fixture.",
+    "rail": {
+      "supported": false,
+      "defaultPinned": false
+    },
+    "presets": [
+      "full"
+    ],
+    "permissionNotes": [],
+    "dataNotes": [
+      "No runtime behavior."
+    ],
+    "remoteServices": [],
+    "localStorageNotes": [],
+    "privacyLabels": [
+      "local-only"
+    ]
+  },
+  "privacy": {
+    "permissionNotes": [],
+    "dataNotes": [
+      "No runtime behavior."
+    ],
+    "localStorageNotes": [],
+    "remoteServices": [],
+    "privacyLabels": [
+      "local-only"
+    ],
+    "consentRequired": false
+  },
+  "package": {
+    "assets": [
+      {
+        "id": "visual-lock-fixture.frame",
+        "path": "assets/frame.css",
+        "kind": "style",
+        "webAccessible": false,
+        "sha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a"
+      },
+      {
+        "id": "visual-lock-fixture.vpl",
+        "path": "LICENSES/VPL.txt",
+        "kind": "other",
+        "webAccessible": false,
+        "sha256": "145f5a008fee1ff432a007b832b5c20ba5f1f1e39079b0d94c258aee20aaaa10"
+      }
+    ],
+    "webAccessibleAssets": []
+  },
+  "review": {
+    "status": "local",
+    "notes": [
+      "Schema fixture only; not a published or installable package."
+    ]
+  }
+}

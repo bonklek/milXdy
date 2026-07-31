@@ -1,0 +1,23 @@
+{
+  "$schema": "../../schemas/review-decision.schema.json",
+  "schemaVersion": 2,
+  "id": "decision-2026-07-30-fixture.ui-frame",
+  "asset": {
+    "id": "fixture.ui-frame",
+    "version": "1.0.0",
+    "manifestSha256": "3790a10e29eead7d1e79eb12376290717af7ae6a75e389d95a5127176ee58b36",
+    "sourceSha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a"
+  },
+  "outcome": "UPSTREAM_APPROVED",
+  "reasonCodes": ["FIXTURE_ONLY"],
+  "reviewers": {
+    "technical": { "name": "Fixture technical reviewer", "decision": "approved", "notes": ["Schema fixture only."] },
+    "visualCultural": { "name": "Fixture visual reviewer", "decision": "approved", "notes": ["Schema fixture only."] },
+    "accessibility": { "name": "Fixture accessibility reviewer", "decision": "approved", "notes": ["Schema fixture only."] },
+    "license": { "name": "Fixture license reviewer", "decision": "approved", "notes": ["Synthetic VPL proof only."] },
+    "release": { "name": "Fixture release reviewer", "decision": "approved", "notes": ["Not a publication decision."] }
+  },
+  "decidedAt": "2026-07-30T12:00:00Z",
+  "supersedes": null,
+  "notes": ["Exercises the stricter upstream/default review lane; it does not admit a production asset."]
+}

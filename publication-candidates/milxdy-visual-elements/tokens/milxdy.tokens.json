@@ -1,0 +1,38 @@
+{
+  "$schema": "https://design-tokens.github.io/community-group/format/",
+  "name": "milXdy visual elements candidate tokens",
+  "version": "1.0.0-candidate.0",
+  "color": {
+    "surface": { "$value": "#ffffff", "$type": "color" },
+    "surfaceRaised": { "$value": "#f7f9f9", "$type": "color" },
+    "surfaceSunken": { "$value": "#e8eeee", "$type": "color" },
+    "border": { "$value": "#536471", "$type": "color" },
+    "bevelShadow": { "$value": "#9aabae", "$type": "color" },
+    "highlight": { "$value": "#ffffff", "$type": "color" },
+    "accent": { "$value": "#626bb2", "$type": "color" },
+    "title": { "$value": "#171f82", "$type": "color" },
+    "text": { "$value": "#0f1419", "$type": "color" },
+    "muted": { "$value": "#536471", "$type": "color" },
+    "focus": { "$value": "#1d4ed8", "$type": "color" },
+    "success": { "$value": "#18753c", "$type": "color" },
+    "warning": { "$value": "#7a4f00", "$type": "color" },
+    "danger": { "$value": "#b42318", "$type": "color" },
+    "offline": { "$value": "#5d6470", "$type": "color" }
+  },
+  "space": {
+    "1": { "$value": "4px", "$type": "dimension" },
+    "2": { "$value": "8px", "$type": "dimension" },
+    "3": { "$value": "12px", "$type": "dimension" },
+    "4": { "$value": "16px", "$type": "dimension" }
+  },
+  "geometry": {
+    "windowRadius": { "$value": "6px", "$type": "dimension" },
+    "controlRadius": { "$value": "3px", "$type": "dimension" },
+    "borderWidth": { "$value": "1px", "$type": "dimension" },
+    "targetMin": { "$value": "44px", "$type": "dimension" }
+  },
+  "motion": {
+    "fast": { "$value": "120ms", "$type": "duration" },
+    "medium": { "$value": "160ms", "$type": "duration" }
+  }
+}

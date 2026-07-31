@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>milXdy visual-elements examples</title>
+    <link rel="stylesheet" href="../tokens/milxdy.css">
+    <link rel="stylesheet" href="./styles.css">
+  </head>
+  <body>
+    <header>
+      <p class="eyebrow">milXdy App SDK</p>
+      <h1>Visual-elements examples</h1>
+      <p id="catalog-status" role="status" aria-live="polite">Loading index…</p>
+    </header>
+    <main>
+      <section aria-labelledby="catalog-title">
+        <h2 id="catalog-title">Versioned entries</h2>
+        <div id="catalog-entries"></div>
+      </section>
+      <aside aria-labelledby="policy-title">
+        <h2 id="policy-title">Two contribution lanes</h2>
+        <p>
+          Local custom assets do not need VPL or project approval. Assets
+          proposed for default/upstream inclusion must be VPL and reviewed.
+        </p>
+        <ul>
+          <li><a href="../docs/ASSET_AND_CONTRIBUTION_POLICY.md">Asset policy</a></li>
+          <li><a href="../docs/CURRENT_ASSET_STATUS.md">Current asset status</a></li>
+          <li><a href="../CONTRIBUTING.md">Contribution lanes</a></li>
+        </ul>
+      </aside>
+    </main>
+    <script type="module" src="./catalog.js"></script>
+  </body>
+</html>

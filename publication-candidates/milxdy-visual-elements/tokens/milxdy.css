@@ -1,0 +1,143 @@
+/*
+ * milXdy semantic visual tokens.
+ * Host variables are public inputs; fallbacks keep standalone examples usable.
+ */
+:root {
+  color-scheme: light dark;
+
+  --mx-color-surface: var(--milxdy-overlay-app-surface, #ffffff);
+  --mx-color-surface-raised: var(--milxdy-overlay-app-surface-2, #f7f9f9);
+  --mx-color-surface-sunken: var(--milxdy-overlay-app-surface-3, #e8eeee);
+  --mx-color-border: var(--milxdy-overlay-app-border, #536471);
+  --mx-color-bevel-shadow: var(--milxdy-overlay-app-bevel-shadow, #9aabae);
+  --mx-color-highlight: var(--milxdy-overlay-app-highlight, #ffffff);
+  --mx-color-accent: var(--milxdy-overlay-app-accent, #626bb2);
+  --mx-color-title: var(--milxdy-overlay-app-title, #171f82);
+  --mx-color-text: var(--milxdy-overlay-app-text, #0f1419);
+  --mx-color-muted: var(--milxdy-overlay-app-muted, #536471);
+  --mx-color-focus: #1d4ed8;
+  --mx-color-success: #18753c;
+  --mx-color-warning: #7a4f00;
+  --mx-color-danger: #b42318;
+  --mx-color-offline: #5d6470;
+
+  --mx-font-ui: var(--milxdy-font-ui, system-ui, -apple-system, "Segoe UI", sans-serif);
+  --mx-font-reading: var(--milxdy-font-tweet, Georgia, serif);
+  --mx-font-mono: var(--milxdy-font-mono, ui-monospace, "SFMono-Regular", Consolas, monospace);
+  --mx-font-emoji: "Apple Color Emoji", "Segoe UI Emoji", sans-serif;
+
+  --mx-space-1: 4px;
+  --mx-space-2: 8px;
+  --mx-space-3: 12px;
+  --mx-space-4: 16px;
+  --mx-window-radius: 6px;
+  --mx-control-radius: 3px;
+  --mx-border-width: 1px;
+  --mx-target-min: 44px;
+  --mx-motion-fast: 120ms;
+  --mx-motion-medium: 160ms;
+  --mx-shadow:
+    inset 1px 1px 0 var(--mx-color-highlight),
+    3px 4px 0 var(--mx-color-bevel-shadow);
+}
+
+:root[data-milxdy-theme="dim"] {
+  color-scheme: dark;
+  --mx-color-surface: #15202b;
+  --mx-color-surface-raised: #1e2c39;
+  --mx-color-surface-sunken: #101923;
+  --mx-color-border: #536471;
+  --mx-color-bevel-shadow: #0a1118;
+  --mx-color-highlight: #3b4d5e;
+  --mx-color-accent: #9ba4e3;
+  --mx-color-title: #d7dcff;
+  --mx-color-text: #f0f3f4;
+  --mx-color-muted: #aab8c2;
+  --mx-color-focus: #8ec5ff;
+  --mx-color-success: #75d69b;
+  --mx-color-warning: #ffd166;
+  --mx-color-danger: #ff8a80;
+  --mx-color-offline: #aab8c2;
+}
+
+:root[data-milxdy-theme="dark"] {
+  color-scheme: dark;
+  --mx-color-surface: #000000;
+  --mx-color-surface-raised: #16181c;
+  --mx-color-surface-sunken: #08090a;
+  --mx-color-border: #536471;
+  --mx-color-bevel-shadow: #000000;
+  --mx-color-highlight: #2f3336;
+  --mx-color-accent: #aab2f0;
+  --mx-color-title: #d9ddff;
+  --mx-color-text: #e7e9ea;
+  --mx-color-muted: #8b98a5;
+  --mx-color-focus: #8ec5ff;
+  --mx-color-success: #75d69b;
+  --mx-color-warning: #ffd166;
+  --mx-color-danger: #ff8a80;
+  --mx-color-offline: #9ca3af;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-milxdy-theme="light"]):not([data-milxdy-theme="dim"]) {
+    color-scheme: dark;
+    --mx-color-surface: #000000;
+    --mx-color-surface-raised: #16181c;
+    --mx-color-surface-sunken: #08090a;
+    --mx-color-border: #536471;
+    --mx-color-bevel-shadow: #000000;
+    --mx-color-highlight: #2f3336;
+    --mx-color-accent: #aab2f0;
+    --mx-color-title: #d9ddff;
+    --mx-color-text: #e7e9ea;
+    --mx-color-muted: #8b98a5;
+    --mx-color-focus: #8ec5ff;
+  }
+}
+
+:root[data-milxdy-chrome="classic"] {
+  --mx-color-surface: #c0c0c0;
+  --mx-color-surface-raised: #d4d0c8;
+  --mx-color-surface-sunken: #a8a8a8;
+  --mx-color-border: #202020;
+  --mx-color-bevel-shadow: #404040;
+  --mx-color-highlight: #ffffff;
+  --mx-color-title: #000080;
+  --mx-color-text: #000000;
+  --mx-color-muted: #444444;
+  --mx-window-radius: 0;
+  --mx-control-radius: 0;
+  --mx-shadow:
+    inset 1px 1px 0 #ffffff,
+    inset -1px -1px 0 #404040,
+    2px 2px 0 #000000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mx-motion-fast: 0.001ms;
+    --mx-motion-medium: 0.001ms;
+  }
+}
+
+@media (forced-colors: active) {
+  :root {
+    --mx-color-surface: Canvas;
+    --mx-color-surface-raised: Canvas;
+    --mx-color-surface-sunken: Canvas;
+    --mx-color-border: CanvasText;
+    --mx-color-bevel-shadow: CanvasText;
+    --mx-color-highlight: Canvas;
+    --mx-color-accent: Highlight;
+    --mx-color-title: CanvasText;
+    --mx-color-text: CanvasText;
+    --mx-color-muted: GrayText;
+    --mx-color-focus: Highlight;
+    --mx-color-success: CanvasText;
+    --mx-color-warning: CanvasText;
+    --mx-color-danger: CanvasText;
+    --mx-color-offline: GrayText;
+    --mx-shadow: none;
+  }
+}

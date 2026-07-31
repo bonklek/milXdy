@@ -1,0 +1,23 @@
+.mx-reminet-frame {
+  border: var(--mx-border-width, 1px) solid var(--mx-color-border, #536471);
+  border-radius: var(--mx-window-radius, 6px);
+  background: var(--mx-color-surface, #fff);
+  box-shadow:
+    inset 1px 1px 0 var(--mx-color-highlight, #fff),
+    3px 4px 0 var(--mx-color-bevel-shadow, #9aabae);
+}
+
+.mx-reminet-frame[data-depth="sunken"] {
+  background: var(--mx-color-surface-sunken, #e8eeee);
+  box-shadow:
+    inset 1px 1px 0 var(--mx-color-bevel-shadow, #9aabae),
+    inset -1px -1px 0 var(--mx-color-highlight, #fff);
+}
+
+@media (forced-colors: active) {
+  .mx-reminet-frame,
+  .mx-reminet-frame[data-depth="sunken"] {
+    border-color: CanvasText;
+    box-shadow: none;
+  }
+}
