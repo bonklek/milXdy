@@ -3,6 +3,7 @@
   const REQUEST_KEY = "milxdy.qa.reloadRequest";
   const RESULT_KEY = "milxdy.qa.lastReloadResult";
   const RELOAD_GUARD_KEY = "milxdy.qa.reloadGuard";
+  const REFRESH_TAB_PATTERNS = ["https://x.com/*", "https://twitter.com/*", "https://www.remilia.net/*"];
   const POLL_BASE = `http://127.0.0.1:${BUILD.coordinatorPort}/milxdy-qa`;
   const RETRY_MS = 2_000;
 
@@ -25,7 +26,7 @@
     if (!request || request.desiredBuildId !== BUILD.buildId) return;
 
     await chrome.storage.local.remove([REQUEST_KEY, RELOAD_GUARD_KEY]).catch(() => undefined);
-    const tabs = await chrome.tabs.query({ url: ["https://x.com/*", "https://twitter.com/*"] }).catch(() => []);
+    const tabs = await chrome.tabs.query({ url: REFRESH_TAB_PATTERNS }).catch(() => []);
     const outcomes = await Promise.allSettled(tabs.flatMap((tab) => typeof tab.id === "number" ? [chrome.tabs.reload(tab.id)] : []));
     const refreshedTabs = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
     const failedTabs = outcomes.length - refreshedTabs;
@@ -37,7 +38,7 @@
       failedTabs,
     };
     await chrome.storage.local.set({ [RESULT_KEY]: result }).catch(() => undefined);
-    console.info(`[milXdy QA] loaded ${BUILD.buildId}; refreshed ${refreshedTabs} X/Twitter tab(s)`, result);
+    console.info(`[milXdy QA] loaded ${BUILD.buildId}; refreshed ${refreshedTabs} X/Twitter + RemiNet tab(s)`, result);
   }
 
   async function pollForBuilds() {

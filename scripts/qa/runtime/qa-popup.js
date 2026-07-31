@@ -26,14 +26,14 @@
     disk.textContent = diskBuild ? `On disk: ${diskBuild.buildId}` : "On disk: unreadable";
     const buildIsCurrent = Boolean(runningBuild && diskBuild?.buildId === runningBuild.buildId);
     root.dataset.current = buildIsCurrent ? "true" : "false";
-    reload.textContent = buildIsCurrent ? "Reload QA build + refresh X tabs" : "Load latest QA build + refresh X tabs";
+    reload.textContent = buildIsCurrent ? "Reload QA build + refresh X + RemiNet tabs" : "Load latest QA build + refresh X + RemiNet tabs";
 
     const stored = await chrome.storage.local.get(RESULT_KEY).catch(() => ({}));
     const last = stored[RESULT_KEY];
     if (last?.completedAt) {
       const renderLastReload = () => {
         const matchesRunningBuild = runningBuild?.buildId === last.buildId;
-        status.textContent = `Last reload: ${formatElapsed(last.completedAt)} ago · refreshed ${last.refreshedTabs} X/Twitter tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}${matchesRunningBuild ? "" : " · different build than currently running."}`;
+        status.textContent = `Last reload: ${formatElapsed(last.completedAt)} ago · refreshed ${last.refreshedTabs} X/Twitter + RemiNet tab(s)${last.failedTabs ? `; ${last.failedTabs} failed` : ""}${matchesRunningBuild ? "" : " · different build than currently running."}`;
       };
       renderLastReload();
       if (elapsedTimer !== null) window.clearInterval(elapsedTimer);
@@ -46,7 +46,7 @@
 
     reload.addEventListener("click", async () => {
       reload.disabled = true;
-      status.textContent = "Reload requested; this popup will close and matching X/Twitter tabs will refresh.";
+      status.textContent = "Reload requested; this popup will close and matching X/Twitter + RemiNet tabs will refresh.";
       diskBuild = await readDiskBuild() || diskBuild;
       await chrome.storage.local.remove(RELOAD_GUARD_KEY).catch(() => undefined);
       await chrome.storage.local.set({
