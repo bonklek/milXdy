@@ -505,6 +505,16 @@ never returned. A package may visibly attribute Remibooru and open only the
 canonical post URL after another explicit click; it cannot attach, download,
 cache source links, or post media.
 
+A reviewed query may additionally declare bounded composer-derived facet
+suggestions. `composerSuggestions` supports only `visibleDraftKeywords`, at
+most five items, and a per-item maximum of 64 characters. After an explicit
+package Tags click, `suggestRemoteQueryFacets(id)` reads only the initiating
+visible composer inside the host, removes URLs, mentions, common words, and
+duplicates, and returns the bounded keyword strings. It never returns the raw
+draft, DOM, selection, cursor, or composer identity, and it performs no remote
+request. Packages must disclose the derivation. When no suggestions exist,
+packages should retain their ordinary reviewed facets fallback.
+
 ```json
 "remoteQueries": [{
   "id": "remibooru-reactions",
@@ -513,7 +523,12 @@ cache source links, or post media.
   "resources": ["posts", "facets"],
   "maxPageSize": 12,
   "minIntervalMs": 750,
-  "cache": { "policy": "none" }
+  "cache": { "policy": "none" },
+  "composerSuggestions": {
+    "source": "visibleDraftKeywords",
+    "maxItems": 5,
+    "maxLength": 64
+  }
 }]
 ```
 

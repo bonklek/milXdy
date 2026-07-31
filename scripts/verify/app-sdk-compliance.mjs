@@ -76,6 +76,9 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "launchExternalHandoff:", "Composer actions must expose the host-mediated external handoff callback");
   requireIncludes(appPlatform, "remoteQueries?: AppRemoteQuery[]", "App SDK must expose declared reviewed remote queries");
   requireIncludes(appPlatform, "queryRemoteService:", "Composer actions must expose only the host-mediated remote query callback");
+  requireIncludes(appPlatform, "suggestRemoteQueryFacets:", "Composer actions must expose bounded host-derived remote facet suggestions");
+  requireIncludes(appPlatform, 'source: "visibleDraftKeywords"', "Remote query suggestions must declare their bounded visible-draft source");
+  requireIncludes(contentRuntime, "deriveComposerKeywordSuggestions", "Composer suggestions must remain host-derived and sanitized");
   requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
   requireIncludes(appPlatform, "captions?: { topText: string; bottomText: string }", "Composer actions must support bounded explicit caption fields");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");

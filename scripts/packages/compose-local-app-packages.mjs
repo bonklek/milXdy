@@ -1082,10 +1082,26 @@ function verifyRemoteQueries(id, manifest, errors) {
     } else if (cache.policy === "none" && cache.maxAgeSeconds !== undefined) {
       errors.push(`${id}: no-cache remoteQuery must not declare maxAgeSeconds`);
     }
+    const suggestions = query.composerSuggestions;
+    if (suggestions !== undefined) {
+      if (!suggestions || typeof suggestions !== "object" || suggestions.source !== "visibleDraftKeywords") {
+        errors.push(`${id}: remoteQuery composerSuggestions must declare visibleDraftKeywords source`);
+      }
+      if (!query.resources?.includes("facets")) errors.push(`${id}: remoteQuery composerSuggestions require the facets resource`);
+      if (!Number.isInteger(suggestions?.maxItems) || suggestions.maxItems < 1 || suggestions.maxItems > 5) {
+        errors.push(`${id}: remoteQuery composerSuggestions maxItems must be an integer from 1 through 5`);
+      }
+      if (!Number.isInteger(suggestions?.maxLength) || suggestions.maxLength < 1 || suggestions.maxLength > 64) {
+        errors.push(`${id}: remoteQuery composerSuggestions maxLength must be an integer from 1 through 64`);
+      }
+    }
     if (!(manifest.permissions?.hosts || []).includes(adapter.host)) errors.push(`${id}: remoteQuery ${query.id} must declare host permission ${adapter.host}`);
   }
   const disclosures = [...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.remoteServices || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || [])].join(" ").toLowerCase();
   if (!/remibooru/.test(disclosures) || !/(thumbnail|gallery|search)/.test(disclosures)) errors.push(`${id}: remoteQueries require Remibooru gallery/privacy disclosure`);
+  if (queries.some((query) => query?.composerSuggestions) && !/(draft|composer).*(keyword|suggest)|(?:keyword|suggest).*(draft|composer)/.test(disclosures)) {
+    errors.push(`${id}: composerSuggestions require disclosure of host-derived draft keyword suggestions`);
+  }
   if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: remoteQueries require consent and remote-api privacy label`);
   if ((manifest.background?.messageTypes || []).some((type) => type === "milxdy:remoteQuery")) errors.push(`${id}: remoteQueries must use the host callback, not declare the host query message type`);
 }
