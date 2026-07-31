@@ -12,7 +12,9 @@ import type {
 } from "./dock-types";
 
 const HOST_SHORTCUT_SELECTOR = '[data-testid="GrokDrawerHeader"], [data-testid="chat-drawer-main"]';
-const HOST_SHORTCUT_GAP = 12;
+const HOST_SHORTCUT_VISUAL_GAP = 12;
+const RAIL_DOWN_INDICATOR_FOOTPRINT = 18;
+const HOST_SHORTCUT_GAP = HOST_SHORTCUT_VISUAL_GAP + RAIL_DOWN_INDICATOR_FOOTPRINT;
 
 export class OverlayDockDomView implements DockViewPort {
   #root: HTMLElement | null = null;
