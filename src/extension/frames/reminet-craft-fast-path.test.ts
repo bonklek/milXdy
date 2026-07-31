@@ -2,18 +2,23 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("RemiNet crafting and Last read helpers", () => {
-  it("drives the registered local mouse placement path at the target slot centre", async () => {
+  it("drives Remilia's registered React DnD manager at the target slot centre", async () => {
     const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
 
     expect(source).toContain("crafting-module__smash-input-slots");
     expect(source).toContain("destination.getBoundingClientRect()");
     expect(source).toContain("item.getBoundingClientRect()");
-    expect(source).toContain("clientX");
-    expect(source).toContain("clientY");
-    expect(source).toContain("new MouseEvent");
-    expect(source).toContain('event("mousedown", item, sourceX, sourceY, 1)');
-    expect(source).toContain('event("mousemove", destination, clientX, clientY, 1)');
-    expect(source).toContain('event("mouseup", destination, clientX, clientY, 0)');
+    expect(source).toContain("function handlerIdFor");
+    expect(source).toContain("function dndManagerFor");
+    expect(source).toContain('handlerIdFor(item, "S")');
+    expect(source).toContain('handlerIdFor(destination, "T")');
+    expect(source).toContain("actions.beginDrag([sourceId]");
+    expect(source).toContain("actions.hover([targetId]");
+    expect(source).toContain("actions.drop()");
+    expect(source).toContain("actions.endDrag()");
+    expect(source).toContain("data-milxdy-reminet-craft-placement");
+    expect(source).toContain('status("dropped")');
+    expect(source).toContain("if (!placeCraftingItem(item)) click(item)");
     expect(source).toContain("crafting-module__input-slot--5");
     expect(source).toContain("nextCraftingReplacementSlot");
     expect(source).toContain("function nextAssemblySlot");
@@ -23,6 +28,7 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).not.toContain("transform: translate(100%, -50%)");
     expect(source).toContain("document.addEventListener(\"click\"");
     expect(source).not.toContain("new DragEvent");
+    expect(source).not.toContain("new MouseEvent");
     expect(source).not.toContain("/api/beetle/action/craft");
   });
 

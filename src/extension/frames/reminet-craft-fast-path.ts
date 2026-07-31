@@ -1,5 +1,6 @@
 (() => {
   const SETTING_ATTRIBUTE = "data-milxdy-reminet-beetle-reduced-motion-setting";
+  const PLACEMENT_STATUS_ATTRIBUTE = "data-milxdy-reminet-craft-placement";
   const FAST_TIMEOUTS = new Set([1_000, 4_500, 8_000]);
   let enabled = document.documentElement.getAttribute(SETTING_ATTRIBUTE) === "true";
   let fastCraftSubmissionUntil = 0;
@@ -56,40 +57,144 @@
     return /hammer/i.test(`${item.getAttribute("data-item-type") || ""} ${item.getAttribute("aria-label") || ""} ${item.textContent || ""} ${item.innerHTML}`);
   }
 
-  function dragToSlot(item: HTMLElement, destination: HTMLElement | null): void {
-    if (!destination) return;
-    // Remilia uses React DnD's TouchBackend with mouse support, rather than
-    // the HTML5 backend. Drive that existing local gesture path so the site
-    // retains ownership of compatibility checks and slot state.
-    const sourceBounds = item.getBoundingClientRect();
-    const bounds = destination.getBoundingClientRect();
-    const sourceX = sourceBounds.left + sourceBounds.width / 2;
-    const sourceY = sourceBounds.top + sourceBounds.height / 2;
-    const clientX = bounds.left + bounds.width / 2;
-    const clientY = bounds.top + bounds.height / 2;
-    const event = (type: "mousedown" | "mousemove" | "mouseup", target: HTMLElement, x: number, y: number, buttons: number) => target.dispatchEvent(new MouseEvent(type, {
-      bubbles: true,
-      cancelable: true,
-      view: window,
-      button: 0,
-      buttons,
-      clientX: x,
-      clientY: y,
-      screenX: window.screenX + x,
-      screenY: window.screenY + y,
-    }));
-    event("mousedown", item, sourceX, sourceY, 1);
-    event("mousemove", destination, clientX, clientY, 1);
-    event("mouseup", destination, clientX, clientY, 0);
+  type ReactFiber = {
+    return?: ReactFiber | null;
+    memoizedState?: unknown;
+    dependencies?: unknown;
+  };
+
+  type DndActions = {
+    beginDrag: (sourceIds: string[], options: Record<string, unknown>) => void;
+    hover: (targetIds: string[], options: Record<string, unknown>) => void;
+    drop: () => void;
+    endDrag: () => void;
+  };
+
+  type DndManager = {
+    getActions: () => DndActions;
+    getMonitor: () => { isDragging: () => boolean };
+    getRegistry: () => unknown;
+  };
+
+  function reactFiber(element: Element): ReactFiber | null {
+    const key = Object.getOwnPropertyNames(element).find(name => name.startsWith("__reactFiber$") || name.startsWith("__reactInternalInstance$"));
+    return key ? (element as unknown as Record<string, ReactFiber>)[key] || null : null;
   }
 
-  function placeCraftingItem(item: HTMLElement): void {
+  function findDeep<T>(value: unknown, predicate: (candidate: unknown) => candidate is T, maxDepth = 5): T | null {
+    const seen = new Set<unknown>();
+    let visited = 0;
+    const visit = (candidate: unknown, depth: number): T | null => {
+      if (predicate(candidate)) return candidate;
+      if (!candidate || typeof candidate !== "object" || depth <= 0 || seen.has(candidate) || visited++ > 250) return null;
+      seen.add(candidate);
+      for (const key of Object.keys(candidate as Record<string, unknown>)) {
+        if (key === "child" || key === "sibling" || key === "return" || key === "stateNode") continue;
+        const found = visit((candidate as Record<string, unknown>)[key], depth - 1);
+        if (found) return found;
+      }
+      return null;
+    };
+    return visit(value, maxDepth);
+  }
+
+  function isDndManager(candidate: unknown): candidate is DndManager {
+    if (!candidate || typeof candidate !== "object") return false;
+    const record = candidate as Record<string, unknown>;
+    return typeof record.getActions === "function"
+      && typeof record.getMonitor === "function"
+      && typeof record.getRegistry === "function";
+  }
+
+  function handlerIdFor(element: Element, prefix: "S" | "T"): string | null {
+    let fiber = reactFiber(element);
+    for (let depth = 0; fiber && depth < 18; depth++, fiber = fiber.return || null) {
+      let hook = fiber.memoizedState as { memoizedState?: unknown; baseState?: unknown; next?: unknown } | null;
+      for (let hookCount = 0; hook && typeof hook === "object" && hookCount < 50; hookCount++) {
+        const found = findDeep(
+          [hook.memoizedState, hook.baseState],
+          (candidate): candidate is string => typeof candidate === "string" && new RegExp(`^${prefix}\\d+$`, "u").test(candidate),
+          4,
+        );
+        if (found) return found;
+        hook = hook.next as typeof hook;
+      }
+    }
+    return null;
+  }
+
+  function dndManagerFor(...elements: Element[]): DndManager | null {
+    for (const element of elements) {
+      let fiber = reactFiber(element);
+      for (let depth = 0; fiber && depth < 24; depth++, fiber = fiber.return || null) {
+        const manager = findDeep(fiber.dependencies, isDndManager, 6);
+        if (manager) return manager;
+      }
+    }
+    return null;
+  }
+
+  function dragToSlot(item: HTMLElement, destination: HTMLElement | null): boolean {
+    const status = (value: string) => document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, value);
+    if (!destination) {
+      status("missing-destination");
+      return false;
+    }
+    const sourceId = handlerIdFor(item, "S");
+    const targetId = handlerIdFor(destination, "T");
+    const manager = dndManagerFor(item, destination);
+    if (!sourceId) {
+      status("missing-source");
+      return false;
+    }
+    if (!targetId) {
+      status("missing-target");
+      return false;
+    }
+    if (!manager) {
+      status("missing-manager");
+      return false;
+    }
+    const sourceBounds = item.getBoundingClientRect();
+    const bounds = destination.getBoundingClientRect();
+    const sourceOffset = { x: sourceBounds.left, y: sourceBounds.top };
+    const targetOffset = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
+    const actions = manager.getActions();
+    let began = false;
+    try {
+      actions.beginDrag([sourceId], {
+        publishSource: true,
+        clientOffset: sourceOffset,
+        getSourceClientOffset: () => sourceOffset,
+      });
+      began = manager.getMonitor().isDragging();
+      if (!began) {
+        status("begin-rejected");
+        return false;
+      }
+      actions.hover([targetId], { clientOffset: targetOffset });
+      actions.drop();
+      status("dropped");
+      return true;
+    } catch {
+      status("error");
+      return false;
+    } finally {
+      try {
+        if (began && manager.getMonitor().isDragging()) actions.endDrag();
+      } catch {
+        status("error");
+      }
+    }
+  }
+
+  function placeCraftingItem(item: HTMLElement): boolean {
     const craft = item.closest(".crafting-module");
-    if (!craft) return;
+    if (!craft) return false;
     const destination = itemIsHammer(item)
       ? craft.querySelector<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")
       : nextAssemblySlot(craft);
-    dragToSlot(item, destination as HTMLElement | null);
+    return dragToSlot(item, destination as HTMLElement | null);
   }
 
   function nextAssemblySlot(craft: Element): HTMLElement | null {
@@ -178,7 +283,7 @@
     if (pendingInspection?.item === item) {
       clearTimeout(pendingInspection.timer);
       pendingInspection = null;
-      placeCraftingItem(item);
+      if (!placeCraftingItem(item)) click(item);
       return;
     }
     const timer = nativeSetTimeout(() => {
