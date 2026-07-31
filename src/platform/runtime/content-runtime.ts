@@ -1945,7 +1945,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             // the explicit user gesture that opens native Drafts.
             drafts.addEventListener("click", () => openNativeDraftsFor(drafts!));
           }
-          syncNativeDraftsVisual(drafts, actionRow);
+          if (drafts) syncNativeDraftsVisual(drafts, actionRow);
         }
       }
     }
