@@ -23,6 +23,17 @@
       "sourceCommit": "372861b955624a65a5ec6e23fab837f2a21d5924",
       "packageSha256": "76eb4e1bf37d7d3c8cc67bbab150389ecdccff95b404eb3e8172b223c2b3059f",
       "reason": "Pinned external Post-reading App SDK reference package, staged by the cross-repository verifier."
+    },
+    {
+      "id": "composerTools",
+      "sourceType": "folder",
+      "root": "packages/maintainer/composerTools",
+      "allowedStagedRootSuffixes": [
+        "catalog/composerTools",
+        "catalog-staging/composerTools"
+      ],
+      "packageSha256": "27a1f8116b085e486fdc7eb5bf34a1c6d9efab73ce9dde712c988959d4790033",
+      "reason": "Reviewed maintainer Tweet Composer candidate preserving the stable composerTools identity, storage key, lifecycle, and X composer scope."
     }
   ]
 }

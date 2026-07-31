@@ -231,7 +231,12 @@ function validateLocalAppPlan(plan) {
     if (policy.sourceType && diagnostic.sourceType !== policy.sourceType) {
       throw new Error(`Local app plan package ${packageId} first-party replacement source type does not match policy.`);
     }
-    if (actualRoot !== assertSafePlanRelativePath(policy.root, `first-party replacement policy ${packageId} root`)) {
+    const expectedRoot = assertSafePlanRelativePath(policy.root, `first-party replacement policy ${packageId} root`);
+    const stagedRootSuffixes = (policy.allowedStagedRootSuffixes || [])
+      .map((value) => assertSafePlanRelativePath(value, `first-party replacement policy ${packageId} staged root suffix`));
+    const rootMatches = actualRoot === expectedRoot
+      || stagedRootSuffixes.some((suffix) => actualRoot === suffix || actualRoot.endsWith(`/${suffix}`));
+    if (!rootMatches) {
       throw new Error(`Local app plan package ${packageId} first-party replacement root does not match policy.`);
     }
     if (diagnostic.packageSha256 !== policy.packageSha256) {

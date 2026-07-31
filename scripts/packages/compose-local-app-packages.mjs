@@ -557,7 +557,8 @@ async function analyzePackage(source, manifest) {
   const trust = evaluatePackageTrust(id, source, manifest, packageFiles, webAccessibleAssets, payloadScan, packageSha256);
   verifySensitivePresetParticipation(id, manifest, errors);
   verifyStorageDeclarations(id, manifest, errors, {
-    allowBuiltInStorageKeys: trust.trustDecision.firstPartyReplacementPolicy.allowed && acknowledgeFirstPartyReplacement,
+    allowBuiltInStorageKeys: trust.trustDecision.firstPartyReplacementPolicy.allowed
+      && (acknowledgeFirstPartyReplacement || previewTrustRequirements),
   });
   errors.push(...trust.errors);
   warnings.push(...trust.warnings);
@@ -1420,6 +1421,7 @@ function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
   }
   const expectedRoot = normalizeInputPath(policy.root);
   const actualRoot = normalizeInputPath(source.root);
+  const stagedRootSuffixes = (policy.allowedStagedRootSuffixes || []).map((value) => normalizeInputPath(value));
   if (policy.sourceType && policy.sourceType !== source.type) {
     return {
       allowed: false,
@@ -1428,12 +1430,14 @@ function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
       reason: `source type ${source.type} does not match policy sourceType ${policy.sourceType}`,
     };
   }
-  if (expectedRoot !== actualRoot) {
+  const rootMatches = expectedRoot === actualRoot
+    || stagedRootSuffixes.some((suffix) => actualRoot === suffix || actualRoot.endsWith(`/${suffix}`));
+  if (!rootMatches) {
     return {
       allowed: false,
       root: expectedRoot,
       packageSha256: policy.packageSha256,
-      reason: `source root ${actualRoot} does not match policy root ${expectedRoot}`,
+      reason: `source root ${actualRoot} does not match policy root ${expectedRoot} or an allowed staged-root suffix`,
     };
   }
   if (policy.sourceUrl && manifest.review?.sourceUrl !== policy.sourceUrl) {

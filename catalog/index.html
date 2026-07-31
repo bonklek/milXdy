@@ -29,10 +29,10 @@
         <div class="panel-heading">
           <p class="eyebrow">Local custom-build catalog</p>
           <h1 id="catalog-title">Choose reviewed packages</h1>
-          <p class="lede">Published ZIPs become part of a new local milXdy build—not a running extension.</p>
+          <p class="lede">A selection file references reviewed packages already checked into the milXdy source—it never downloads or hot-loads package code.</p>
         </div>
         <div class="status-banner" role="status">
-          <span class="status-dot" aria-hidden="true"></span><strong>Preview inventory</strong><span>0 published packages · downloads disabled</span>
+          <span class="status-dot" aria-hidden="true"></span><strong>Preview inventory</strong><span id="catalog-summary">Loading reviewed local inventory…</span>
         </div>
       </section>
 
@@ -41,14 +41,14 @@
           <p class="eyebrow">Steps</p>
           <h2 id="workflow-title">From catalog to Chrome</h2>
         </div>
-        <ol class="workflow-steps" aria-label="ZIP to Chrome reload workflow">
+        <ol class="workflow-steps" aria-label="Selection to Chrome reload workflow">
           <li>
             <span class="journey-icon journey-package" aria-hidden="true"><img src="assets/brand/milxdy-logo-square.png" alt=""></span>
-            <span class="journey-number">01</span><strong>Select</strong><small>Published packages</small>
+            <span class="journey-number">01</span><strong>Select</strong><small>Explicit local recipe</small>
           </li>
           <li>
             <span class="journey-icon journey-folder" aria-hidden="true"></span>
-            <span class="journey-number">02</span><strong>Place ZIPs</strong><code>npm run addons:prepare</code>
+            <span class="journey-number">02</span><strong>Prepare</strong><code>npm run addons:prepare</code>
           </li>
           <li>
             <button id="open-addon-settings" class="journey-icon journey-terminal settings-launch-button" type="button" aria-label="Open milXdy Add-ons settings" aria-describedby="rebuild-step-status">&gt;_</button>
@@ -59,7 +59,7 @@
             <span class="journey-number">04</span><strong>Reload</strong><code>chrome://extensions</code>
           </li>
         </ol>
-        <p class="workflow-note"><strong>No runtime ZIP install.</strong> Review the generated plan and any extra trust acknowledgement. Keep the same loaded output folder to preserve local extension state.</p>
+        <p class="workflow-note"><strong>No marketplace package download or runtime install.</strong> Prepare resolves only checked-in maintainer package identities and hashes. Review the generated plan and every trust acknowledgement. Keep the same loaded output folder to preserve local extension state.</p>
       </section>
 
       <section class="catalog-window" aria-labelledby="packages-title">
@@ -70,7 +70,16 @@
           </div>
           <button id="download-selected" type="button" disabled>Download selection file</button>
         </div>
-        <p id="selection-status" class="selection-status" aria-live="polite">No published packages are available to select.</p>
+        <p id="selection-status" class="selection-status" aria-live="polite">Loading selectable packages…</p>
+        <section id="selection-review" class="selection-review" aria-labelledby="selection-review-title">
+          <div>
+            <p class="eyebrow">Combined review</p>
+            <h3 id="selection-review-title">Chromium custom-build recipe</h3>
+          </div>
+          <p id="selection-errors" class="selection-errors" role="alert" hidden></p>
+          <dl id="selection-summary" class="selection-summary"></dl>
+          <p class="selection-disclosure">The selection file contains only catalog identity, revision, build target, recipe, package IDs, versions, and package hashes. The local manager re-resolves and validates everything before emitting a build.</p>
+        </section>
         <div id="catalog-sections" class="catalog-sections" aria-live="polite">
           <p>Loading catalog metadata…</p>
         </div>

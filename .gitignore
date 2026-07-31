@@ -1,5 +1,7 @@
 node_modules/
 dist/
+!packages/maintainer/**/dist/
+!packages/maintainer/**/dist/**
 /release/
 _sources/
 .agents/

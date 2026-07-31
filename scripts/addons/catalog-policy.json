@@ -1,11 +1,13 @@
 {
-  "schemaVersion": 1,
-  "allowedDownloadHosts": [
-    "github.com",
-    "objects.githubusercontent.com",
-    "release-assets.githubusercontent.com"
+  "schemaVersion": 2,
+  "catalogPath": "catalog/data/catalog.json",
+  "allowedArtifactRoots": [
+    "packages/maintainer"
   ],
-  "maxArchiveBytes": 104857600,
-  "maxRedirects": 5,
-  "downloadTimeoutMs": 60000
+  "allowedBuildTargets": [
+    "chromium"
+  ],
+  "allowedRecipeIds": [
+    "maintainer-local-v1"
+  ]
 }
