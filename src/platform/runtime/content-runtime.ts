@@ -12,6 +12,7 @@ import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
 import { createComposerActionBindingRegistry } from "./composer-action-binding";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
+import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
@@ -1860,6 +1861,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     // treating the editor-shaped DOM gap as a closed composer.
     for (const toolbar of Array.from(document.querySelectorAll<HTMLElement>('[data-testid="toolBar"]'))) {
       if (toolbar.offsetParent === null || toolbar.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) continue;
+      syncLongPostStandardBoundaryCounters(toolbar);
       const actionRow = toolbar.querySelector<HTMLElement>('[data-testid="ScrollSnap-List"]')
         || toolbar.querySelector<HTMLElement>('[role="tablist"]')
         || toolbar;
@@ -2259,8 +2261,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible, .milxdy-composer-action[aria-expanded="true"] { background: rgba(15, 20, 25, .10); outline: none; }
       .milxdy-composer-action img { display: block; width: 18px; height: 18px; margin: 0; object-fit: contain; }
       .milxdy-composer-drafts-icon { display: block; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform: translateY(2px); }
+      .milxdy-standard-counter-zero-fallback { color: rgb(83, 100, 113); font: 400 13px/10.4px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
       html[data-milxdy-x-theme="dark"] .milxdy-composer-action,
       html[data-milxdy-x-theme="dim"] .milxdy-composer-action { color: rgb(139, 152, 165); }
+      html[data-milxdy-x-theme="dark"] .milxdy-standard-counter-zero-fallback,
+      html[data-milxdy-x-theme="dim"] .milxdy-standard-counter-zero-fallback,
+      html[data-milxdy-settings-theme="dark"] .milxdy-standard-counter-zero-fallback { color: rgb(139, 152, 165); }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
       .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
