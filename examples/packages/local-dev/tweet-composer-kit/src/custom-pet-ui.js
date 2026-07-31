@@ -11,6 +11,7 @@ import {
   legColorForRace,
   listStoredZip,
   makePetRequest,
+  nftNumberRangeForFamily,
   sha256Hex,
   stableJson,
   validatePetRequest,
@@ -48,6 +49,21 @@ export function buildCustomPetExport({ signal }) {
   });
   const family = blankSelect("Maker template family", PET_REQUEST_FAMILIES.map((id) => ({ id, label: FAMILY_LABELS[id] })));
   family.select.name = "templateFamily";
+  const nftNumberInput = element("input", {
+    className: "tweet-composer-kit__pet-input",
+    type: "number",
+    step: "1",
+    inputMode: "numeric",
+    autocomplete: "off",
+    ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help",
+  });
+  const nftNumber = labeledControl("NFT number (optional)", nftNumberInput);
+  nftNumber.hidden = true;
+  const nftNumberHelp = element("p", {
+    id: "tweet-composer-kit-pet-nft-number-help",
+    className: "tweet-composer-kit__pet-help",
+    hidden: true,
+  });
   const avatar = element("input", {
     className: "tweet-composer-kit__pet-file",
     type: "file",
@@ -134,6 +150,8 @@ export function buildCustomPetExport({ signal }) {
   form.append(
     fieldset("Maker source", [
       family.root,
+      nftNumber,
+      nftNumberHelp,
       labeledControl("Transparent Maker PNG", avatar),
       avatarHelp,
     ]),
@@ -207,6 +225,19 @@ export function buildCustomPetExport({ signal }) {
     updateBottomCompatibility(bottom.select, coverage.select.value, status);
     state.previewBytes = null;
   }, { signal });
+  family.select.addEventListener("change", () => {
+    const range = nftNumberRangeForFamily(family.select.value);
+    nftNumber.hidden = !range;
+    nftNumberHelp.hidden = !range;
+    if (!range) {
+      nftNumberInput.value = "";
+      return;
+    }
+    nftNumberInput.min = String(range.min);
+    nftNumberInput.max = String(range.max);
+    nftNumberInput.placeholder = `${range.min}–${range.max}`;
+    nftNumberHelp.textContent = `${FAMILY_LABELS[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
+  }, { signal });
   for (const control of form.querySelectorAll("select, input, textarea")) {
     if (control === avatar || control === coverage.select || control === instruction) continue;
     control.addEventListener("change", () => { state.previewBytes = null; }, { signal });
@@ -216,6 +247,7 @@ export function buildCustomPetExport({ signal }) {
     try {
       const selection = collectSelection({
         family,
+        nftNumberInput,
         traitInputs,
         coverage,
         bottom,
@@ -241,6 +273,7 @@ export function buildCustomPetExport({ signal }) {
     try {
       const selection = collectSelection({
         family,
+        nftNumberInput,
         traitInputs,
         coverage,
         bottom,
@@ -295,6 +328,7 @@ export function buildCustomPetExport({ signal }) {
 function collectSelection(controls) {
   if (!controls.state.image || !controls.state.avatarBytes) throw new Error("Choose a transparent Maker PNG.");
   const templateFamily = requiredValue(controls.family.select, "Choose a Maker template family.");
+  const sourceNftNumber = optionalNftNumber(controls.nftNumberInput, templateFamily);
   const traits = Object.fromEntries(Object.entries(controls.traitInputs).map(([trait, input]) => {
     const assetId = requiredValue(input.assetId, `Enter the ${friendlyTrait(trait)} asset ID, or "none".`);
     return [trait, { assetId, ...(input.label.value.trim() ? { label: input.label.value.trim() } : {}) }];
@@ -317,6 +351,7 @@ function collectSelection(controls) {
   const footwearColorVariant = requiredValue(controls.footwearColor.select, "Choose a footwear color.");
   return {
     templateFamily,
+    ...(sourceNftNumber == null ? {} : { sourceNftNumber }),
     traits,
     bodyCompletion: {
       legCoverage,
@@ -338,6 +373,18 @@ function collectSelection(controls) {
     petName: controls.petName.querySelector("input").value,
     personality: controls.personality.querySelector("input").value,
   };
+}
+
+function optionalNftNumber(control, templateFamily) {
+  const raw = control.value.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  const range = nftNumberRangeForFamily(templateFamily);
+  if (!Number.isInteger(value) || !range || value < range.min || value > range.max) {
+    control.focus();
+    throw new Error(`Enter a whole ${FAMILY_LABELS[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
+  }
+  return value;
 }
 
 async function renderCompletedAvatar(image, selection, canvas) {

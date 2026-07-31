@@ -2,6 +2,12 @@ export const PET_REQUEST_SCHEMA_VERSION = 1;
 export const PET_REQUEST_ADAPTER_SKILL = "remilia-maker-pet-import";
 export const PET_REQUEST_EXPORT_RESOLUTION = Object.freeze({ width: 1024, height: 1024 });
 export const PET_REQUEST_FAMILIES = Object.freeze(["milady", "remilio", "bonkler", "kagami"]);
+export const PET_REQUEST_NFT_RANGES = Object.freeze({
+  milady: Object.freeze({ min: 0, max: 9999 }),
+  remilio: Object.freeze({ min: 1, max: 10000 }),
+  bonkler: Object.freeze({ min: 1, max: 150 }),
+  kagami: Object.freeze({ min: 1, max: 3000 }),
+});
 export const PET_REQUEST_TRAITS = Object.freeze(["race", "hair", "eyes", "glasses", "shirt", "earrings"]);
 export const PET_REQUEST_INSTRUCTION = "Use $remilia-maker-pet-import with the attached Maker export bundle.";
 export const PET_REQUEST_TRAIT_POLICY = Object.freeze({
@@ -152,8 +158,13 @@ export function legColorForRace(templateFamily, race) {
   return rules.find((rule) => rule.aliases.some((alias) => tokens.has(alias)))?.color ?? null;
 }
 
+export function nftNumberRangeForFamily(templateFamily) {
+  return PET_REQUEST_NFT_RANGES[templateFamily] ?? null;
+}
+
 export function makePetRequest({
   templateFamily,
+  sourceNftNumber = null,
   imageSha256,
   traits,
   bodyCompletion,
@@ -190,6 +201,7 @@ export function makePetRequest({
       deterministicCompositeVersion: 1,
     },
   };
+  if (sourceNftNumber != null) request.sourceNftNumber = sourceNftNumber;
   if (petName.trim() || personality.trim()) {
     request.pet = {};
     if (petName.trim()) request.pet.name = petName.trim().slice(0, 80);
@@ -226,6 +238,15 @@ export function validatePetRequestShape(request) {
   if (request.schemaVersion !== PET_REQUEST_SCHEMA_VERSION) errors.push(`schemaVersion must be ${PET_REQUEST_SCHEMA_VERSION}.`);
   if (request.adapterSkill !== PET_REQUEST_ADAPTER_SKILL) errors.push(`adapterSkill must be ${PET_REQUEST_ADAPTER_SKILL}.`);
   if (!PET_REQUEST_FAMILIES.includes(request.templateFamily)) errors.push("templateFamily is unsupported.");
+  if (request.sourceNftNumber != null) {
+    const range = nftNumberRangeForFamily(request.templateFamily);
+    if (!Number.isInteger(request.sourceNftNumber) || !range
+      || request.sourceNftNumber < range.min || request.sourceNftNumber > range.max) {
+      errors.push(range
+        ? `sourceNftNumber must be an integer from ${range.min} to ${range.max} for ${request.templateFamily}.`
+        : "sourceNftNumber requires a supported templateFamily.");
+    }
+  }
   if (request.templateVersion !== 1) errors.push("templateVersion must be 1.");
   if (JSON.stringify(request.templateFamilyOptions) !== JSON.stringify(PET_REQUEST_FAMILIES)) {
     errors.push("templateFamilyOptions must declare Milady, Remilio, Bonkler, and Kagami in contract order.");

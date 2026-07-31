@@ -35,6 +35,7 @@
   },
   "rightsScope": "private-review",
   "schemaVersion": 1,
+  "sourceNftNumber": 1,
   "templateFamily": "remilio",
   "templateFamilyOptions": [
     "milady",
