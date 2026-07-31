@@ -15,6 +15,8 @@ type ReelSoundVoice = {
   level: number;
 };
 
+export const REEL_SOUND_MASTER_LEVEL = 0.55;
+
 export function reelSoundVoices(direction: ReelDirection): ReelSoundVoice[] {
   const directionLift = direction < 0 ? 1.08 : 1;
   return [
@@ -59,7 +61,16 @@ export class DockReelSoundPlayer {
       if (!AudioContextCtor) return;
       const context = this.#context ?? new AudioContextCtor();
       this.#context = context;
-      void context.resume();
+      void this.#playWhenReady(context, direction);
+    } catch {
+      // Audio restrictions must never block reel navigation.
+    }
+  }
+
+  async #playWhenReady(context: AudioContext, direction: ReelDirection): Promise<void> {
+    try {
+      if (context.state !== "running") await context.resume();
+      if (context.state !== "running" || this.#context !== context || !this.#enabled || this.#volume <= 0) return;
       const now = context.currentTime;
       const master = context.createGain();
       const lowPass = context.createBiquadFilter();
@@ -67,7 +78,7 @@ export class DockReelSoundPlayer {
       lowPass.frequency.setValueAtTime(520, now);
       lowPass.Q.setValueAtTime(0.8, now);
       master.gain.setValueAtTime(0.0001, now);
-      master.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.#volume * 0.24), now + 0.008);
+      master.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.#volume * REEL_SOUND_MASTER_LEVEL), now + 0.008);
       master.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
       master.connect(lowPass).connect(context.destination);
       for (const voice of reelSoundVoices(direction)) {

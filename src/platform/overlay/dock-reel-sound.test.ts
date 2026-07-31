@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reelSoundVoices } from "./dock-reel-sound";
+import { REEL_SOUND_MASTER_LEVEL, reelSoundVoices } from "./dock-reel-sound";
 
 describe("dock reel sound", () => {
   it("uses three short low-pitched mechanical layers", () => {
@@ -15,5 +15,11 @@ describe("dock reel sound", () => {
     const up = reelSoundVoices(-1);
     expect(up[0].startHz).toBeGreaterThan(down[0].startHz);
     expect(up.every((voice) => voice.startHz < 220)).toBe(true);
+  });
+
+  it("mixes the cue at an audible level without allowing the layers to clip", () => {
+    const combinedVoiceLevel = reelSoundVoices(1).reduce((sum, voice) => sum + voice.level, 0);
+    expect(REEL_SOUND_MASTER_LEVEL).toBeGreaterThanOrEqual(0.5);
+    expect(REEL_SOUND_MASTER_LEVEL * combinedVoiceLevel).toBeLessThan(0.5);
   });
 });
