@@ -58,10 +58,21 @@
     // events drive its existing drag/drop path; they neither mutate inventory
     // themselves nor contact the craft endpoint.
     const dataTransfer = new DataTransfer();
+    // The site registers a single drop target that chooses the compatible
+    // crafting slot from React DnD's client offset.  A synthetic event defaults
+    // to (0, 0), which is outside every target and therefore correctly results
+    // in no assignment.  Use the centre of the exact native slot instead.
+    const bounds = destination.getBoundingClientRect();
+    const clientX = bounds.left + bounds.width / 2;
+    const clientY = bounds.top + bounds.height / 2;
     const event = (type: string, target: HTMLElement) => target.dispatchEvent(new DragEvent(type, {
       bubbles: true,
       cancelable: true,
       dataTransfer,
+      clientX,
+      clientY,
+      screenX: window.screenX + clientX,
+      screenY: window.screenY + clientY,
     }));
     event("dragstart", item);
     event("dragenter", destination);
@@ -75,7 +86,7 @@
     if (!craft) return;
     const destination = itemIsHammer(item)
       ? craft.querySelector<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")
-      : craft.querySelector(".crafting-module__input-slot:not(.crafting-module__input-slot--filled), .crafting-module__smash-input-slot:not(.crafting-module__smash-input-slot--filled)");
+      : craft.querySelector(".crafting-module__input-slot:not(.crafting-module__input-slot--5):not(.crafting-module__input-slot--filled)");
     dragToSlot(item, destination as HTMLElement | null);
   }
 
