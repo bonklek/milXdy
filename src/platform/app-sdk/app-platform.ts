@@ -384,6 +384,8 @@ export type MilxdyContextualPostActionContext = {
   signal: AbortSignal;
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
+  /** Retests the host-owned RemiNet browser session without reloading the page. */
+  probeRemiNetConnection: () => Promise<{ connected: boolean }>;
 };
 
 export type MilxdyContentAppModule = {

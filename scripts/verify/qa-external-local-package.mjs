@@ -103,7 +103,7 @@ try {
     /id:\s*"tweetPng"[\s\S]{0,800}?unavailableReason:\s*"Share Kit is not included/u,
     "composed Share Kit metadata must not retain the base-build unavailable reason",
   );
-  assert.match(runtimeRegistry, /contextualPostActions:[\s\S]{0,260}?label:\s*"Review with Share Kit"/u, "Share Kit contextual action must reach the runtime registry");
+  assert.match(runtimeRegistry, /contextualPostActions:[\s\S]{0,260}?label:\s*"Share as PNG"/u, "Share Kit contextual action must reach the runtime registry");
   const builtManifest = JSON.parse(await readFile(path.join(qaOutput, "manifest.json"), "utf8"));
   const webResources = builtManifest.web_accessible_resources.flatMap((entry) => entry.resources || []);
   assert.ok(webResources.includes("local-apps/dev-note/dev-note.css"), "declared composer CSS must be web-accessible so the host-owned shadow panel can load it");

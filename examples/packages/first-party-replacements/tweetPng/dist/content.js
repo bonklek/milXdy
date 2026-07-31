@@ -34,8 +34,8 @@ async function copyTweetPngFromTweet(tweet, statusUrl) {
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
   if (!data.text && !data.images.length && !data.quote) return;
-  const blob = await renderTweetPng(data);
-  await copyTweetPng(blob);
+  const result = await renderTweetPng(data);
+  await copyTweetPng(result.blob);
 }
 async function loadVisualTheme() {
   if (!actionContext) throw new Error("Share Kit must be opened from a declared contextual action.");
@@ -68,6 +68,14 @@ function normalizeColor(value, fallback) {
 function colorWithAlpha(color, alpha) {
   return `${normalizeColor(color, DEFAULT_VISUAL_THEME.tweetPngFontColor)}${alpha}`;
 }
+function tweetPngContrastTextColor(background) {
+  const normalized = normalizeColor(background, "#ffffff").slice(1);
+  const red = Number.parseInt(normalized.slice(0, 2), 16);
+  const green = Number.parseInt(normalized.slice(2, 4), 16);
+  const blue = Number.parseInt(normalized.slice(4, 6), 16);
+  const luminance = (red * 299 + green * 587 + blue * 114) / 1e3;
+  return luminance >= 150 ? "#20122f" : "#ffffff";
+}
 function findDisplayNameLink(userName) {
   const links = Array.from(userName.querySelectorAll('a[role="link"], a[href^="/"]'));
   return links.find((link) => {
@@ -91,8 +99,8 @@ async function openTweetPngReviewFromTweet(tweet, statusUrl) {
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
   if (!data.text && !data.images.length && !data.quote) return;
-  const blob = await renderTweetPng(data);
-  showTweetPngModal(tweet, statusUrl, blob, data);
+  const result = await renderTweetPng(data);
+  showTweetPngModal(tweet, statusUrl, result, data);
 }
 async function expandTweetPngText(tweet) {
   const buttons = Array.from(tweet.querySelectorAll('button, [role="button"]'));
@@ -301,6 +309,7 @@ async function renderTweetPng(data) {
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas unavailable");
   const palette = tweetPngPalette(visualTheme.tweetPngBorderPalette);
+  const mediaRegions = [];
   context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   const textLines = wrapCanvasText(
     context,
@@ -319,7 +328,7 @@ async function renderTweetPng(data) {
   const cashtagHeight = cashtag?.chart ? TWEET_PNG_CASHTAG_HEIGHT : 0;
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
   const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
-  const quoteHeight = data.quote ? 30 + (quoteTextLines.length ? quoteTextLines.length * TWEET_PNG_QUOTE_LINE_HEIGHT + 14 : 0) + (quoteMediaHeight ? quoteMediaHeight + 14 : 0) + 34 : 0;
+  const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLines.length, quoteMediaHeight) : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
     86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0) + footerHeight + 36
@@ -376,7 +385,7 @@ async function renderTweetPng(data) {
     const reservedFollowingHeight = (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
     const boundedMediaHeight = Math.min(mediaHeight, Math.max(0, maxContentY - y - reservedFollowingHeight - 28));
     if (boundedMediaHeight >= 80) {
-      drawTweetPngMediaGrid(context, mediaImages, bodyX, y, bodyWidth, boundedMediaHeight, palette);
+      drawTweetPngMediaGrid(context, mediaImages, bodyX, y, bodyWidth, boundedMediaHeight, palette, "post", mediaRegions);
       y += boundedMediaHeight + 28;
     }
   }
@@ -398,7 +407,8 @@ async function renderTweetPng(data) {
       width: bodyWidth,
       mediaHeight: quoteMediaHeight,
       maxY: maxContentY,
-      palette
+      palette,
+      mediaRegions
     });
   }
   if (data.date) {
@@ -406,7 +416,12 @@ async function renderTweetPng(data) {
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(data.date, bodyX, footerY);
   }
-  return await canvasToPngBlob(canvas);
+  return {
+    blob: await canvasToPngBlob(canvas),
+    width,
+    height,
+    mediaRegions
+  };
 }
 async function loadTweetPngRenderAssets() {
   const lotusUrl = actionContext?.resolveAssetUrl("assets/remistats-star.svg") || "";
@@ -607,10 +622,10 @@ function canvasTextSegments(text) {
 }
 function drawTweetPngQuote(context, options) {
   const padding = 24;
-  const lineHeight = 34;
+  const lineHeight = TWEET_PNG_QUOTE_LINE_HEIGHT;
   const cardHeight = Math.min(
     options.maxY - options.y,
-    30 + (options.textLines.length ? options.textLines.length * lineHeight + 14 : 0) + (options.mediaHeight ? options.mediaHeight + 14 : 0) + 34
+    measureTweetPngQuoteHeight(options.textLines.length, options.mediaHeight)
   );
   if (cardHeight < 88) return options.y;
   roundRect(context, options.x, options.y, options.width, cardHeight, 22);
@@ -622,16 +637,17 @@ function drawTweetPngQuote(context, options) {
     context.stroke();
   }
   let y = options.y + padding + 6;
-  context.fillStyle = visualTheme.tweetPngFontColor;
+  const quoteTextColor = tweetPngContrastTextColor(options.palette.quoteFill);
+  context.fillStyle = quoteTextColor;
   context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
   context.fillText(options.quote.author, options.x + padding, y);
   if (options.quote.handle) {
-    context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
+    context.fillStyle = colorWithAlpha(quoteTextColor, "b8");
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(options.quote.handle, options.x + padding + Math.min(360, context.measureText(options.quote.author).width + 14), y);
   }
   y += 38;
-  context.fillStyle = visualTheme.tweetPngFontColor;
+  context.fillStyle = quoteTextColor;
   context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
   for (const line of options.textLines) {
     if (y + lineHeight > options.y + cardHeight - padding) break;
@@ -647,10 +663,17 @@ function drawTweetPngQuote(context, options) {
       y,
       options.width - padding * 2,
       Math.min(options.mediaHeight, options.y + cardHeight - y - padding),
-      options.palette
+      options.palette,
+      "quote",
+      options.mediaRegions
     );
   }
   return options.y + cardHeight + 22;
+}
+function measureTweetPngQuoteHeight(textLineCount, mediaHeight) {
+  const padding = 24;
+  const headerHeight = 30;
+  return padding * 2 + headerHeight + (textLineCount ? 14 + textLineCount * TWEET_PNG_QUOTE_LINE_HEIGHT : 0) + (mediaHeight ? 14 + mediaHeight : 0);
 }
 function measureTweetPngMediaHeight(images, width, maxHeight) {
   const visible = images.filter((media) => Boolean(media.image));
@@ -661,11 +684,12 @@ function measureTweetPngMediaHeight(images, width, maxHeight) {
   if (ratio >= 1) return Math.min(maxHeight, Math.max(260, width / ratio));
   return Math.min(maxHeight, Math.max(240, width * 0.62 / ratio));
 }
-function drawTweetPngMediaGrid(context, images, x, y, width, height, palette) {
+function drawTweetPngMediaGrid(context, images, x, y, width, height, palette, scope, regions) {
   const visible = images.filter((media) => Boolean(media.image));
   const gap = 10;
   if (visible.length === 1) {
-    drawTweetPngSingleMedia(context, visible[0], x, y, width, height, palette);
+    const region = drawTweetPngSingleMedia(context, visible[0], x, y, width, height, palette);
+    regions.push({ key: tweetPngMediaRemovalKey(scope, visible[0].src), ...region });
     return;
   }
   const cells = visible.length === 1 ? [{ x, y, width, height }] : visible.length === 2 ? [{ x, y, width: (width - gap) / 2, height }, { x: x + (width + gap) / 2, y, width: (width - gap) / 2, height }] : [
@@ -687,6 +711,7 @@ function drawTweetPngMediaGrid(context, images, x, y, width, height, palette) {
       context.lineWidth = 2;
       context.stroke();
     }
+    regions.push({ key: tweetPngMediaRemovalKey(scope, media.src), ...cell });
   });
 }
 function drawTweetPngSingleMedia(context, media, x, y, width, height, palette) {
@@ -709,6 +734,7 @@ function drawTweetPngSingleMedia(context, media, x, y, width, height, palette) {
     context.lineWidth = 2;
     context.stroke();
   }
+  return { x: drawX, y, width: drawWidth, height: drawHeight };
 }
 function drawVideoPlayOverlay(context, x, y, width, height) {
   const radius = Math.max(24, Math.min(48, Math.min(width, height) * 0.12));
@@ -780,13 +806,14 @@ function roundRect(context, x, y, width, height, radius) {
   context.arcTo(x, y, x + width, y, next);
   context.closePath();
 }
-function showTweetPngModal(tweet, statusUrl, blob, data) {
+function showTweetPngModal(tweet, statusUrl, result, data) {
   closeTweetPngReview?.();
   document.querySelector("#milxdy-tweet-png-modal")?.remove();
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-  let currentBlob = blob;
+  let currentBlob = result.blob;
   let currentData = data;
-  let url = URL.createObjectURL(blob);
+  let currentResult = result;
+  let url = URL.createObjectURL(result.blob);
   let renderVersion = 0;
   let previewUpdateTimer = null;
   const modal = document.createElement("div");
@@ -799,7 +826,7 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
           <a class="milxdy-tweet-png-action-link" data-action="reconnect" href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer" title="Open RemiliaNET to restore the browser session">Reconnect</a>
-          <button type="button" data-action="refresh" title="Refresh X and retry the RemiNet connection">Refresh</button>
+          <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
@@ -819,18 +846,16 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
         <label><input type="checkbox" data-setting="tweetPngIncludeQuoteImages"${visualTheme.tweetPngIncludeQuoteImages ? " checked" : ""}> Include QRT image</label>
         <p>Changes update this preview and are saved as the Share Kit defaults.</p>
       </section>
-      <section class="milxdy-tweet-png-media-review" aria-label="Included images" hidden>
-        <strong>Included images</strong>
-        <div class="milxdy-tweet-png-media-items"></div>
-      </section>
-      <img class="milxdy-tweet-png-preview" src="${url}" alt="Rendered post PNG preview">
+      <div class="milxdy-tweet-png-preview-stage">
+        <img class="milxdy-tweet-png-preview" src="${url}" alt="Rendered post PNG preview">
+        <div class="milxdy-tweet-png-media-controls" aria-label="Included image controls"></div>
+      </div>
       <p>Review before sharing. Nothing is sent automatically.</p>
       <p class="milxdy-tweet-png-status" role="status" aria-live="polite"></p>
     </div>
   `;
   const preview = modal.querySelector(".milxdy-tweet-png-preview");
-  const mediaReview = modal.querySelector(".milxdy-tweet-png-media-review");
-  const mediaItems = modal.querySelector(".milxdy-tweet-png-media-items");
+  const mediaControls = modal.querySelector(".milxdy-tweet-png-media-controls");
   const settings = modal.querySelector("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector('[data-action="settings"]');
   const status = modal.querySelector(".milxdy-tweet-png-status");
@@ -838,30 +863,32 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
     if (status) status.textContent = message;
   };
   const excludedMedia = /* @__PURE__ */ new Set();
-  const renderMediaControls = (nextData) => {
-    if (!mediaReview || !mediaItems) return;
-    mediaItems.replaceChildren();
-    const items = [
-      ...nextData.images.map((media, index) => ({ scope: "post", media, index })),
-      ...(nextData.quote?.images || []).map((media, index) => ({ scope: "quote", media, index }))
-    ];
-    mediaReview.hidden = items.length === 0;
-    for (const item of items) {
-      const wrapper = document.createElement("div");
-      wrapper.className = "milxdy-tweet-png-media-item";
-      const image = document.createElement("img");
-      const label = item.scope === "quote" ? "QRT" : "post";
-      image.src = item.media.src;
-      image.alt = `Included ${label} ${item.media.isVideo ? "video thumbnail" : "image"} ${item.index + 1}`;
+  const renderMediaControls = (nextData, nextResult) => {
+    if (!mediaControls) return;
+    mediaControls.replaceChildren();
+    const labels = new Map([
+      ...nextData.images.map((media, index) => [
+        tweetPngMediaRemovalKey("post", media.src),
+        `Remove post image ${index + 1}`
+      ]),
+      ...(nextData.quote?.images || []).map((media, index) => [
+        tweetPngMediaRemovalKey("quote", media.src),
+        `Remove QRT image ${index + 1}`
+      ])
+    ]);
+    for (const region of nextResult.mediaRegions) {
+      const label = labels.get(region.key);
+      if (!label) continue;
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "milxdy-tweet-png-remove-media";
-      remove.dataset.removeMedia = tweetPngMediaRemovalKey(item.scope, item.media.src);
-      remove.setAttribute("aria-label", `Remove ${label} image ${item.index + 1}`);
-      remove.title = `Remove ${label} image ${item.index + 1}`;
+      remove.dataset.removeMedia = region.key;
+      remove.setAttribute("aria-label", label);
+      remove.title = label;
       remove.textContent = "\xD7";
-      wrapper.append(image, remove);
-      mediaItems.appendChild(wrapper);
+      remove.style.left = `${(region.x + region.width) / nextResult.width * 100}%`;
+      remove.style.top = `${region.y / nextResult.height * 100}%`;
+      mediaControls.appendChild(remove);
     }
   };
   let closed = false;
@@ -909,8 +936,19 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
     downloadBlob(currentBlob, tweetPngFileName(currentData));
     setStatus("PNG downloaded.");
   });
-  modal.querySelector('[data-action="refresh"]')?.addEventListener("click", () => {
-    window.location.reload();
+  modal.querySelector('[data-action="refresh"]')?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    setStatus("Checking RemiNet connection...");
+    const context = actionContext;
+    if (!context) {
+      setStatus("RemiNet connection check is unavailable.");
+      button.disabled = false;
+      return;
+    }
+    void context.probeRemiNetConnection().then(({ connected }) => setStatus(connected ? "RemiNet connection is live." : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again.")).catch((error) => setStatus(errorMessage(error))).finally(() => {
+      if (button.isConnected) button.disabled = false;
+    });
   });
   settingsButton?.addEventListener("click", () => {
     if (!settings) return;
@@ -924,18 +962,19 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
     setStatus("Updating preview...");
     await saveVisualTheme();
     const nextData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
-    const nextBlob = await renderTweetPng(nextData);
+    const nextResult = await renderTweetPng(nextData);
     if (version !== renderVersion || !modal.isConnected) return;
-    const nextUrl = URL.createObjectURL(nextBlob);
+    const nextUrl = URL.createObjectURL(nextResult.blob);
     URL.revokeObjectURL(url);
     url = nextUrl;
-    currentBlob = nextBlob;
+    currentBlob = nextResult.blob;
     currentData = nextData;
+    currentResult = nextResult;
     if (preview) preview.src = nextUrl;
-    renderMediaControls(nextData);
+    renderMediaControls(nextData, nextResult);
     setStatus(successMessage);
   };
-  mediaReview?.addEventListener("click", (event) => {
+  mediaControls?.addEventListener("click", (event) => {
     const target = event.target instanceof Element ? event.target.closest("[data-remove-media]") : null;
     const key = target?.dataset.removeMedia;
     if (!key) return;
@@ -977,7 +1016,7 @@ function showTweetPngModal(tweet, statusUrl, blob, data) {
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     });
   }
-  renderMediaControls(currentData);
+  renderMediaControls(currentData, currentResult);
   document.body.appendChild(modal);
   modal.querySelector('[data-action="copy"]')?.focus();
 }
@@ -1053,32 +1092,14 @@ function injectTweetPngStyles() {
       gap: 8px;
       justify-content: flex-end;
     }
-    .milxdy-tweet-png-media-review {
-      display: grid;
-      gap: 8px;
-    }
-    .milxdy-tweet-png-media-review[hidden] {
-      display: none;
-    }
-    .milxdy-tweet-png-media-review > strong {
-      font: 700 13px/1.2 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    .milxdy-tweet-png-media-items {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-    .milxdy-tweet-png-media-item {
-      height: 88px;
+    .milxdy-tweet-png-preview-stage {
+      line-height: 0;
       position: relative;
-      width: 112px;
     }
-    .milxdy-tweet-png-dialog .milxdy-tweet-png-media-item img {
-      border: 1px solid #d7b8ff;
-      border-radius: 6px;
-      height: 100%;
-      object-fit: cover;
-      width: 100%;
+    .milxdy-tweet-png-media-controls {
+      inset: 0;
+      pointer-events: none;
+      position: absolute;
     }
     .milxdy-tweet-png-dialog .milxdy-tweet-png-remove-media {
       background: rgba(32, 18, 47, 0.86);
@@ -1089,10 +1110,11 @@ function injectTweetPngStyles() {
       height: 26px;
       min-height: 26px;
       padding: 0;
+      pointer-events: auto;
       position: absolute;
-      right: 4px;
-      top: 4px;
+      transform: translate(calc(-100% - 6px), 6px);
       width: 26px;
+      z-index: 1;
     }
     .milxdy-tweet-png-dialog img {
       border: 1px solid #d7b8ff;
@@ -1188,10 +1210,12 @@ export {
   extractTweetPngMedia,
   findTweetPngQuoteElement,
   id,
+  measureTweetPngQuoteHeight,
   normalizeVisualTheme,
   onContextualPostAction,
   onRouteChange,
   openTweetPngReviewFromTweet,
+  tweetPngContrastTextColor,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount
 };

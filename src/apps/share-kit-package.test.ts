@@ -4,13 +4,17 @@ import {
   extractTweetPngCashtag,
   extractTweetPngMedia,
   findTweetPngQuoteElement,
+  measureTweetPngQuoteHeight,
   normalizeVisualTheme,
+  tweetPngContrastTextColor,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
 
 describe("Share Kit package compatibility", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
+  const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
+  const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({
@@ -47,8 +51,17 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
     expect(packageSource).toMatch(/data-action="reconnect"[^>]*href="https:\/\/www\.remilia\.net\/"[^>]*>Reconnect<\/a>/u);
     expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh<\/button>/u);
-    expect(packageSource).toContain("window.location.reload()");
+    expect(packageSource).toContain("probeRemiNetConnection()");
+    expect(runtimeSource).toContain("probeRemiNetConnection: async");
+    expect(runtimeSource).toContain('type: "reminetChat:authStatus"');
+    expect(packageSource).not.toContain("window.location.reload()");
     expect(packageSource).not.toContain('data-action="reminet"');
+  });
+
+  it("labels the contextual action Share as PNG", () => {
+    expect(JSON.parse(packageManifest).contextualPostActions).toEqual([
+      expect.objectContaining({ id: "reviewPng", label: "Share as PNG" }),
+    ]);
   });
 
   it("keeps every text baseline that fits before the portrait cap", () => {
@@ -143,8 +156,17 @@ describe("Share Kit package compatibility", () => {
     expect(tweetPngMediaRemovalKey("quote", "https://pbs.twimg.com/media/image.jpg"))
       .toBe("quote:https://pbs.twimg.com/media/image.jpg");
     expect(packageSource).toContain('className = "milxdy-tweet-png-remove-media"');
-    expect(packageSource).toContain('remove.setAttribute("aria-label", `Remove ${label} image ${item.index + 1}`)');
+    expect(packageSource).toContain('remove.style.left = `${((region.x + region.width) / nextResult.width) * 100}%`');
+    expect(packageSource).toContain('remove.setAttribute("aria-label", label)');
+    expect(packageSource).not.toContain("milxdy-tweet-png-media-review");
     expect(packageSource).toContain("excludedMedia.add(key)");
     expect(packageSource).toContain('updatePreview("Image removed from this PNG.")');
+  });
+
+  it("allocates QRT text space and keeps it legible on a light quote card", () => {
+    expect(measureTweetPngQuoteHeight(1, 0)).toBe(130);
+    expect(measureTweetPngQuoteHeight(2, 300)).toBe(482);
+    expect(tweetPngContrastTextColor("#fbf6ff")).toBe("#20122f");
+    expect(tweetPngContrastTextColor("#15202b")).toBe("#ffffff");
   });
 });

@@ -1504,6 +1504,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       signal,
       storage: createRuntimeAppStorage(app),
       resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
+      probeRemiNetConnection: async () => {
+        const response = await chrome.runtime.sendMessage({ type: "reminetChat:authStatus" }).catch(() => null);
+        const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
+        return { connected: Boolean(record?.signedIn) };
+      },
     });
   }
 
