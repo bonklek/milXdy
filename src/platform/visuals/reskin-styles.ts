@@ -568,11 +568,19 @@ export const RESKIN_CSS = `
     row-gap: 1px !important;
   }
 
-  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
-    /* Keep short names content-sized. A percentage flex basis here reserves an
-       empty name column and makes otherwise available header space unusable. */
+  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-cluster="true"] {
+    /* Cap the outer cluster so clipped name content cannot keep reserving an
+       invisible natural-width column before the handle. */
     flex: 0 1 auto !important;
     max-width: 68% !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    width: fit-content !important;
+  }
+
+  html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name-row="true"] {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     overflow: hidden !important;
   }
@@ -621,15 +629,23 @@ export const RESKIN_CSS = `
   }
 
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-tweet-header="true"],
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-cluster="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-metadata-row="true"] {
     min-width: 0 !important;
   }
 
-  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-cluster="true"] {
     /* Match Moderate: reserve room only for the name that is actually shown. */
     flex: 0 1 auto !important;
     max-width: 68% !important;
+    overflow: hidden !important;
+    width: fit-content !important;
+  }
+
+  html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name-row="true"] {
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
     overflow: hidden !important;
   }
 
