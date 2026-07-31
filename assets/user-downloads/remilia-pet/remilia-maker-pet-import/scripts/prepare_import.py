@@ -156,9 +156,16 @@ def build_provenance(
         "identityBriefSha256": canonical_hash(identity),
         "styleSettings": STYLE_SETTINGS,
         "inputFingerprint": canonical_hash(relevant),
+        "cacheKeyContract": (
+            "sha256(canonical-json(imageSha256, traits, traitPolicy, bodyCompletion, "
+            "templateFamily, templateVersion, adapterVersion, promptVersion, policyVersion, styleSettings))"
+        ),
         "localDataPolicy": {
             "scope": "user-selected-run-directory",
             "rawBundleCached": False,
+            "requestSidecarCached": False,
+            "canonicalInputImageCached": False,
+            "finalValidatedAtlasCache": "user-selected-local-directory-only",
             "publishAllowed": bundle.request["rightsScope"] == "publication-cleared",
         },
     }
@@ -236,6 +243,10 @@ def build_run_state(
         "semanticReview": {
             "status": "pending",
             "artifact": None,
+        },
+        "deterministicQa": {
+            "status": "pending",
+            "artifact": "qa/deterministic-qa.json",
         },
     }
 

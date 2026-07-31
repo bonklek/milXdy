@@ -32,3 +32,12 @@ changes, so hashes—not an assumed clean commit—identify the exact inputs.
 
 No raster, pet package, source reference, prompt, or private run artifact was
 copied from `remilia-pets`.
+
+## Deterministic QA and cache/resume
+
+The #193 atlas measurement, failure diagnostics, trait-diff classification, and
+provenance-aware cache/resume scripts are independently implemented for this
+pipeline. They reuse the VPL-compatible source validator's documented
+transparent-cell, alpha-bounds, safe-envelope, and actionable-error
+conventions listed above. They do not copy its implementation, template
+rasters, character sprites, private inputs, or semantic-review results.

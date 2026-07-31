@@ -7,8 +7,9 @@ description: Validate and import versioned remilia-pet-request.zip bundles expor
 
 Keep this skill thin. Own the Maker bundle, family/template selection, identity
 translation, provenance, and template-aware preflight. Let `$hatch-pet` own
-visual generation, atlas assembly, deterministic v2 validation, semantic visual
-QA, and final packaging.
+visual generation, atlas assembly, v2 validation, semantic visual QA, and final
+packaging. This adapter adds Maker-template measurements before that semantic
+gate without replacing hatch-pet's package validation.
 
 ## Import workflow
 
@@ -41,6 +42,41 @@ QA, and final packaging.
    the identity brief as the character contract, and the selected template as
    motion guidance. Do not copy hatch-pet scripts or reimplement its package
    stage here.
+7. Before generating or resuming rows, inspect the provenance-aware local cache:
+
+   ```powershell
+   python scripts/cache_resume.py plan --run-dir <run> --cache-dir <user-selected-cache> --json-out <run>/resume-plan.json
+   ```
+
+   Reuse only an exact entry whose atlas hash, template/prompt/style provenance,
+   deterministic QA, and separate semantic approval all validate. For an
+   interrupted local run, resume at the first unfinished row recorded in
+   `run-state.json`.
+8. After hatch-pet assembles the v2 atlas, run Maker-template QA with the bundled
+   workspace Python runtime (Pillow is required):
+
+   ```powershell
+   python scripts/compare_pose_envelope.py --atlas <atlas> --selected-template <run>/selected-template.json --identity-brief <run>/identity-brief.json --output-dir <run>/qa
+   ```
+
+   Fix objective failures before visual review. The command measures canvas and
+   frame geometry, alpha, transparent unused cells, clipping, registration,
+   baseline, scale, centroid, required-region coverage, permitted envelope,
+   adjacency, declared phase order, and loop closure. It writes frame-specific
+   diagnostics and initializes `semantic-review.json` as `pending`.
+9. Review identity, expression, trait fidelity, gait/look direction, and motion
+   quality separately. Mark `semantic-review.json` approved only after that
+   review. Cache the final atlas only after both gates pass:
+
+   ```powershell
+   python scripts/cache_resume.py store --run-dir <run> --atlas <atlas> --cache-dir <user-selected-cache>
+   ```
+
+10. When a prior request exists, classify changes before reuse:
+
+   ```powershell
+   python scripts/plan_trait_diff.py --previous <old-request.json> --current <run>/input/request.json --json-out <run>/trait-diff-plan.json
+   ```
 
 ## Template rules
 
@@ -55,6 +91,9 @@ QA, and final packaging.
 - Preserve the standard nine row meanings and the fixed 16-direction clockwise
   look contract. Geometry guidance is not character artwork and never replaces
   semantic review.
+- Apply the selected manifest's versioned thresholds. A declared hair, costume,
+  headwear, or prop expansion zone may enlarge the outer envelope; it never
+  waives clipping, continuity, or required core registration.
 
 ## Trust boundaries
 
@@ -63,6 +102,8 @@ QA, and final packaging.
 - Do not regenerate omitted background, friend, or overlay material.
 - Do not silently choose a family, trait, leg, bottom, footwear, or color.
 - Do not cache raw private bundle data outside the user-selected local run.
+- A cache entry may contain the final validated atlas and provenance hashes, but
+  never the raw bundle, request sidecar, or canonical input image.
 - Do not accept a model output solely because it resembles a silhouette.
 - Keep the copied bundle, request hash, template hash, adapter version, policy
   version, and style settings in provenance.
