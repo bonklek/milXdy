@@ -16,12 +16,13 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).not.toContain("/api/beetle/action/craft");
   });
 
-  it("keeps Last read dismissal local to the current document", async () => {
+  it("keeps Last read and Jump to present dismissal local to the current document", async () => {
     const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
 
-    expect(source).toContain("lastReadDismissedForDocument");
-    expect(source).toContain("Dismiss Last read marker");
+    expect(source).toContain("dismissedChatPositionMarkers");
+    expect(source).toContain("Dismiss chat position marker");
     expect(source).toContain("message-list__jump-to-last-read");
+    expect(source).toContain("message-list__jump-to-present");
     expect(source).toContain("marker.remove()");
     expect(source).not.toContain("chrome.storage");
     expect(source).not.toContain("fetch(");

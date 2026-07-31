@@ -6,7 +6,7 @@
   // This is deliberately document-scoped: the Remilia chat owns the marker and
   // recreates it on a chat remount.  We must not turn a presentational dismissal
   // into account-scoped state or a server read-history mutation.
-  let lastReadDismissedForDocument = false;
+  const dismissedChatPositionMarkers = new Set<"last-read" | "present">();
   const autoFilledCraftRoots = new WeakSet<Element>();
   const nativeInspectionClick = new WeakSet<Element>();
   let pendingInspection: { item: Element; timer: number } | null = null;
@@ -99,8 +99,13 @@
     if (green) dragToSlot(green, sacrifice);
   }
 
+  function chatPositionMarkerKind(marker: HTMLElement): "last-read" | "present" {
+    return marker.classList.contains("message-list__jump-to-present") ? "present" : "last-read";
+  }
+
   function installLastReadDismissal(marker: HTMLElement): void {
-    if (lastReadDismissedForDocument) {
+    const kind = chatPositionMarkerKind(marker);
+    if (dismissedChatPositionMarkers.has(kind)) {
       marker.remove();
       return;
     }
@@ -111,12 +116,12 @@
     dismiss.type = "button";
     dismiss.className = "milxdy-last-read-dismiss";
     dismiss.textContent = "×";
-    dismiss.setAttribute("aria-label", "Dismiss Last read marker");
-    dismiss.title = "Dismiss Last read marker";
+    dismiss.setAttribute("aria-label", "Dismiss chat position marker");
+    dismiss.title = "Dismiss chat position marker";
     dismiss.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      lastReadDismissedForDocument = true;
+      dismissedChatPositionMarkers.add(kind);
       marker.remove();
     });
     marker.append(dismiss);
@@ -129,7 +134,7 @@
     // Remilia's marker has no stable class name, but its visible label is a
     // stable, accessible UI contract. Restrict the match to compact elements
     // so a message merely mentioning "last read" is never altered.
-    document.querySelectorAll<HTMLElement>(".message-list__jump-to-last-read").forEach(installLastReadDismissal);
+    document.querySelectorAll<HTMLElement>(".message-list__jump-to-last-read, .message-list__jump-to-present").forEach(installLastReadDismissal);
   }
 
   function craftFastSubmissionIsActive(): boolean {
