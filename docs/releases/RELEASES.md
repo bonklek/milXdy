@@ -2,6 +2,12 @@
 
 This document covers the reproducible public build and release mechanics available to contributors.
 
+## Start a release branch
+
+The first commit on a new release-integration branch must align `package.json` (`version`, `extensionVersion`, and `appSdkVersion`), `package-lock.json`, the extension manifest template, current App SDK declarations/templates, and candidate release notes to the branch version. Run `npm run verify:release` before creating the release QA baseline; it rejects a `release-<version>` branch whose declared versions disagree.
+
+Before feature work begins, run `npm run build:all`, `npm run package:release`, `npm run verify:release:checksums`, and `npm run verify:release:reproducible`. Record the fresh Chromium/Firefox archive names and checksums with the initial QA-host identity. Never carry the prior release's ZIPs, checksum manifest, or QA provenance forward as the new release baseline.
+
 ## Maintainer Setup
 
 Before a public beta release, confirm the GitHub repository endpoint in:
