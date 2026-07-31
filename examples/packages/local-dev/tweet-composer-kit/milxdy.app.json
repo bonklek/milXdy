@@ -1,0 +1,144 @@
+{
+  "$schema": "https://milxdy.local/schemas/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "tweet-composer-kit",
+  "name": "Tweet Composer Kit",
+  "version": "0.2.0-pilot",
+  "description": "A local-only composer companion pilot with local reply phrases, host-owned Drafts, reviewed Maker handoffs, and an explicit Custom Pet export.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.3",
+    "targetVersion": "0.2.3",
+    "notes": [
+      "Built only against the published App SDK declarations and authoring guides.",
+      "Uses the reviewed composer and reply callback contracts only; it does not access X's DOM, caret, clipboard, media, or post controls."
+    ]
+  },
+  "contentEntry": "dist/content.js",
+  "css": [
+    { "id": "tweet-composer-kit.styles", "path": "styles/composer-kit.css" }
+  ],
+  "composerAction": {
+    "label": "Composer Kit",
+    "presentation": "anchoredPanel",
+    "icon": {
+      "light": "assets/composer-factory-light.svg",
+      "dark": "assets/composer-factory-dark.svg"
+    }
+  },
+  "hostComposerActions": ["nativeDrafts"],
+  "externalHandoffs": [
+    { "id": "milady-maker", "label": "Milady Maker", "adapter": "remilia-maker", "target": "milady", "modes": ["captioned", "randomMeme"], "captionSource": "packageFields", "captionMaxLength": 280 },
+    { "id": "remilio-maker", "label": "Redacted Remilio Babies Maker", "adapter": "remilia-maker", "target": "remilio", "modes": ["captioned", "randomMeme"], "captionSource": "packageFields", "captionMaxLength": 280 },
+    { "id": "bonkler-maker", "label": "Bonkler Factory", "adapter": "remilia-maker", "target": "bonkler", "modes": ["captioned", "randomMeme"], "captionSource": "packageFields", "captionMaxLength": 280 },
+    { "id": "kagami-maker", "label": "Kagami Academy Maker", "adapter": "remilia-maker", "target": "kagami", "modes": ["captioned", "randomMeme"], "captionSource": "packageFields", "captionMaxLength": 280 }
+  ],
+  "remoteQueries": [{
+    "id": "remibooru-reactions",
+    "label": "Remibooru reactions",
+    "adapter": "remibooru",
+    "resources": ["posts", "facets"],
+    "maxPageSize": 12,
+    "minIntervalMs": 750,
+    "cache": { "policy": "none" }
+  }],
+  "replyAction": {
+    "templates": [
+      { "id": "milady", "label": "milady", "text": "milady", "sendAfterInsert": true },
+      { "id": "remilio", "label": "remilio", "text": "remilio", "sendAfterInsert": true },
+      { "id": "custom", "label": "Custom", "storageListKey": "milxdy.local.tweet-composer-kit.customPhrases", "sendAfterInsert": true }
+    ]
+  },
+  "defaultEnabled": false,
+  "storageKeys": {
+    "local": [
+      "milxdy.local.tweet-composer-kit.enabled",
+      "milxdy.local.tweet-composer-kit.customPhrases"
+    ]
+  },
+  "settings": [
+    {
+      "id": "tweet-composer-kit.enabled",
+      "label": "Tweet Composer Kit",
+      "description": "Enable the local Composer Kit pilot.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": { "area": "local", "key": "milxdy.local.tweet-composer-kit.enabled" },
+      "defaultValue": false,
+      "control": { "type": "toggle" },
+      "reset": { "behavior": "restoreDefault" },
+      "presets": ["firstRun"]
+    },
+    {
+      "id": "tweet-composer-kit.customPhrases",
+      "label": "Custom reply phrases",
+      "description": "Manage up to 20 local quick-reply phrases. An explicit reply-menu click selects one for the host to type and submit to X.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "storage": { "area": "local", "key": "milxdy.local.tweet-composer-kit.customPhrases" },
+      "defaultValue": [],
+      "control": { "type": "textList", "maxItems": 20, "maxLength": 280, "placeholder": "Add a local reply phrase" },
+      "reset": { "behavior": "restoreDefault" }
+    }
+  ],
+  "surfaces": ["composerAction", "replyAction"],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": ["Uses only the documented composer-adjacent callback, host-owned native-Drafts action, declared maker modes, and declared local storage."]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": ["https://x.com/*", "https://twitter.com/*"],
+      "integration": "contentScript",
+      "surfaces": ["composerAction", "replyAction"],
+      "presentation": "userAction",
+      "notes": ["No direct composer injection, DOM selectors, or background service is used."]
+    }
+  ],
+  "permissions": {
+    "hosts": ["https://maker.remilia.org/*", "https://remibooru.com/*"]
+  },
+  "cost": { "startup": "cheap", "perSurface": "cheap", "network": "batched", "worker": "none", "domWrite": "small" },
+  "loadTriggers": ["userAction"],
+  "hub": {
+    "category": "social",
+    "shortDescription": "Local reply list, Drafts, reviewed Maker handoffs, and local Custom Pet export.",
+    "rail": { "supported": false, "defaultPinned": false },
+    "presets": ["full"],
+    "permissionNotes": ["The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.", "The https://remibooru.com/* host permission is used only by the host-owned reviewed Remibooru gallery query service; this package has no raw fetch or browser-message access."],
+    "dataNotes": ["Stores only enablement and up to 20 custom reply phrases in browser-local storage.", "Custom Pet export reads only the PNG chosen in its visible file control, keeps it in the current panel, composites explicit family/body/footwear choices locally, validates its SHA-256, and downloads a two-file ZIP. It does not upload, cache, publish, post, or infer rights or missing body choices.", "The optional Copy Codex instruction control writes only the visible static handoff sentence to the clipboard after an explicit click.", "The host-owned D action opens native X Drafts; this package cannot inspect X drafts.", "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. After an explicit reply-menu click, the host types and immediately submits the selected local literal to X.", "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.", "After an explicit Milady, Remilio, Bonkler, or Kagami icon click, the user-entered Top text and Bottom text captions are transferred only to that named reviewed maker. randomMeme permits both caption fields to be empty and requests uncaptioned maker output; this package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.", "An explicit Recent, Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. Results visibly link only to canonical Remibooru posts; the package does not attach, download, cache, or post media.", "After an explicit rights confirmation, Open native upload opens Remibooru's public uploader. Composer Kit transfers no image, tags, account, or draft data and never uploads or publishes on the user's behalf; final review, authentication, moderation, and publish remain on Remibooru.", "CHEESEWORLD opens only as an explicit external link and receives no composer text."],
+    "remoteServices": ["The reviewed Remilia-maker adapter opens only after an explicit package icon click. The host validates the declared captioned or randomMeme mode before transferring the active draft to the selected named maker.", "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click.", "CHEESEWORLD is opened as a user-initiated external link; no API, upload, or text transfer occurs."],
+    "localStorageNotes": ["Stores enablement and up to 20 custom reply phrases."],
+    "privacyLabels": ["local-only", "remote-api"]
+  },
+  "privacy": {
+    "permissionNotes": ["The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.", "The https://remibooru.com/* host permission is used only by the host-owned reviewed Remibooru gallery query service; this package has no raw fetch or browser-message access."],
+    "dataNotes": ["Custom reply phrases remain in declared browser-local storage, bounded to 20 entries of at most 280 characters.", "Custom Pet export reads only the user-selected local PNG, combines it with explicit family, trait, leg, bottom, footwear, palette, and rights selections in the current panel, validates a versioned two-file ZIP, and downloads it locally. The image and sidecar are not uploaded, cached, posted, or published.", "The optional clipboard action copies only the visible static Codex handoff sentence after an explicit click.", "The host-owned D action opens native X Drafts; this package cannot inspect X drafts.", "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. After an explicit reply-menu click, the host types and immediately submits the selected local literal to X.", "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.", "After an explicit Milady, Remilio, Bonkler, or Kagami icon click, the user-entered Top text and Bottom text captions are transferred only to that named reviewed maker. randomMeme permits both caption fields to be empty and requests uncaptioned maker output; this package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.", "An explicit Recent, Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. Results visibly link only to canonical Remibooru posts; the package does not attach, download, cache, or post media.", "After an explicit rights confirmation, Open native upload opens Remibooru's public uploader. Composer Kit transfers no image, tags, account, or draft data and never uploads or publishes on the user's behalf; final review, authentication, moderation, and publish remain on Remibooru.", "CHEESEWORLD is an ordinary explicit link and receives no composer or draft content."],
+    "localStorageNotes": ["Stores enablement and up to 20 custom reply phrases."],
+    "remoteServices": ["The reviewed Remilia-maker adapter opens only after an explicit user action and validates the declared captioned or randomMeme mode before transferring to the selected named maker.", "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click.", "CHEESEWORLD link opens only after an explicit user action; this package makes no remote API request."],
+    "privacyLabels": ["local-only", "remote-api"],
+    "consentRequired": true
+  },
+  "package": {
+    "assets": [
+      { "id": "tweet-composer-kit.styles", "path": "styles/composer-kit.css", "kind": "style", "webAccessible": false },
+      { "id": "tweet-composer-kit.reply-arrow", "path": "assets/reply-arrow.svg", "kind": "icon", "webAccessible": true, "sha256": "b776d89ea7c6ae7cafa658adba808350a97e075a66130d17b66665ed6ae75b94" },
+      { "id": "tweet-composer-kit.reply-lightning", "path": "assets/reply-lightning.svg", "kind": "icon", "webAccessible": true, "sha256": "311afb3a95ce5661c82f062e139e569f259140cc593790f8885b5a7b39c9d5cd" },
+      { "id": "tweet-composer-kit.composer-factory-light", "path": "assets/composer-factory-light.svg", "kind": "icon", "webAccessible": true, "sha256": "767d773f1b3938665602f7536d69c8b83dd7eb24ecdd907e17a536fc55c77c8b" },
+      { "id": "tweet-composer-kit.composer-factory-dark", "path": "assets/composer-factory-dark.svg", "kind": "icon", "webAccessible": true, "sha256": "445cc7a1bde2e9f900b069560bb908372e8b29dd4cf0a7a0c2cfa6db0ed283a6" },
+      { "id": "tweet-composer-kit.maker-cheeseworld", "path": "assets/makers/cheeseworld.png", "kind": "image", "webAccessible": true, "sha256": "8d6a8be68bc6944bdc7b5a363f67d50b217ba98e22edb138ccb833aa721f5aa3" },
+      { "id": "tweet-composer-kit.maker-milady", "path": "assets/makers/milady.png", "kind": "image", "webAccessible": true, "sha256": "f9f15d9b15acf715c2562be8886d3462b64be0e0de03a7906fc0ef61274c0d59" },
+      { "id": "tweet-composer-kit.maker-remilio", "path": "assets/makers/remilio.png", "kind": "image", "webAccessible": true, "sha256": "b3ef1bb408a9ded4c4f4b9218b9f9aadd0589449304085d858f76f7cb73c74f4" },
+      { "id": "tweet-composer-kit.maker-bonkler", "path": "assets/makers/bonkler.png", "kind": "image", "webAccessible": true, "sha256": "f3f82c367fd9b8a695c8574a4672978be6e60b1f5aa12ffd65cc76526406dbef" },
+      { "id": "tweet-composer-kit.maker-kagami", "path": "assets/makers/kagami.png", "kind": "image", "webAccessible": true, "sha256": "886ee8e0025b34ee8cc5919e161478ac4c2ece666725dc93ec7b90ecf3b98c1b" }
+    ],
+    "webAccessibleAssets": ["assets/reply-arrow.svg", "assets/reply-lightning.svg", "assets/composer-factory-light.svg", "assets/composer-factory-dark.svg", "assets/makers/cheeseworld.png", "assets/makers/milady.png", "assets/makers/remilio.png", "assets/makers/bonkler.png", "assets/makers/kagami.png"]
+  },
+  "review": {
+    "status": "local",
+    "notes": ["External-author SDK capability pilot; local composition requires explicit review acknowledgement.", "Custom Pet export remains a user-initiated local file/download workflow and never invokes Codex or uploads the selected PNG.", "Maker images are package-local with source and derivative records in AUTHORING_LOG.md. Their source origin does not assert VPL, copyright, redistribution, or other licence approval."]
+  }
+}
