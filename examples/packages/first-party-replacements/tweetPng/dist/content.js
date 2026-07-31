@@ -837,8 +837,11 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <a class="milxdy-tweet-png-action-link" data-action="reconnect" href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer" title="Open RemiliaNET to restore the browser session">Reconnect</a>
-          <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
+          <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
+            <button type="button" data-action="reconnect" title="Open RemiliaNET in a background tab">Reconnect</button>
+            <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
+          </span>
+          <button type="button" data-action="reminet" title="Stage this PNG in RemiNet Chat" hidden>Share to RemiNet</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
@@ -871,6 +874,8 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   const mediaControls = modal.querySelector(".milxdy-tweet-png-media-controls");
   const settings = modal.querySelector("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector('[data-action="settings"]');
+  const disconnectedControls = modal.querySelector("[data-reminet-disconnected]");
+  const shareToRemiNetButton = modal.querySelector('[data-action="reminet"]');
   const status = modal.querySelector(".milxdy-tweet-png-status");
   const setStatus = (message) => {
     if (status) status.textContent = message;
@@ -949,18 +954,58 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     downloadBlob(currentBlob, tweetPngFileName(currentData));
     setStatus("PNG downloaded.");
   });
+  const setRemiNetConnected = (connected) => {
+    if (disconnectedControls) disconnectedControls.hidden = connected;
+    if (shareToRemiNetButton) shareToRemiNetButton.hidden = !connected;
+  };
+  const probeRemiNetConnection = async () => {
+    const context = actionContext;
+    if (!context) throw new Error("RemiNet connection check is unavailable.");
+    const { connected } = await context.probeRemiNetConnection();
+    setRemiNetConnected(connected);
+    return connected;
+  };
+  modal.querySelector('[data-action="reconnect"]')?.addEventListener("click", (event) => {
+    const button = event.currentTarget;
+    const context = actionContext;
+    if (!context) {
+      setStatus("RemiNet reconnect is unavailable.");
+      return;
+    }
+    button.disabled = true;
+    setStatus("Opening RemiliaNET in a background tab...");
+    void context.openRemiNetSession().then((result2) => {
+      if (!result2.ok) throw new Error(result2.error || "RemiliaNET could not be opened.");
+      setStatus("RemiliaNET opened in a background tab. Sign in there, then select Refresh.");
+    }).catch((error) => setStatus(errorMessage(error))).finally(() => {
+      if (button.isConnected) button.disabled = false;
+    });
+  });
   modal.querySelector('[data-action="refresh"]')?.addEventListener("click", (event) => {
     const button = event.currentTarget;
     button.disabled = true;
     setStatus("Checking RemiNet connection...");
+    void probeRemiNetConnection().then((connected) => setStatus(connected ? "RemiNet connection is live." : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again.")).catch((error) => setStatus(errorMessage(error))).finally(() => {
+      if (button.isConnected) button.disabled = false;
+    });
+  });
+  shareToRemiNetButton?.addEventListener("click", () => {
     const context = actionContext;
     if (!context) {
-      setStatus("RemiNet connection check is unavailable.");
-      button.disabled = false;
+      setStatus("RemiNet Chat staging is unavailable.");
       return;
     }
-    void context.probeRemiNetConnection().then(({ connected }) => setStatus(connected ? "RemiNet connection is live." : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again.")).catch((error) => setStatus(errorMessage(error))).finally(() => {
-      if (button.isConnected) button.disabled = false;
+    shareToRemiNetButton.disabled = true;
+    setStatus("Staging PNG in RemiNet Chat...");
+    void context.stageRemiNetChatPng({
+      blob: currentBlob,
+      fileName: tweetPngFileName(currentData)
+    }).then((result2) => {
+      if (!result2.ok) throw new Error(result2.error || "PNG could not be staged.");
+      close();
+    }).catch((error) => {
+      setStatus(errorMessage(error));
+      if (shareToRemiNetButton.isConnected) shareToRemiNetButton.disabled = false;
     });
   });
   settingsButton?.addEventListener("click", () => {
@@ -1031,6 +1076,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   }
   renderMediaControls(currentData, currentResult);
   document.body.appendChild(modal);
+  void probeRemiNetConnection().catch(() => setRemiNetConnected(false));
   modal.querySelector('[data-action="copy"]')?.focus();
 }
 async function saveVisualTheme() {
@@ -1104,6 +1150,12 @@ function injectTweetPngStyles() {
       flex-wrap: wrap;
       gap: 8px;
       justify-content: flex-end;
+    }
+    .milxdy-tweet-png-reminet-disconnected {
+      display: contents;
+    }
+    .milxdy-tweet-png-actions [hidden] {
+      display: none !important;
     }
     .milxdy-tweet-png-preview-stage {
       line-height: 0;

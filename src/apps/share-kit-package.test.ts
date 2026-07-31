@@ -16,6 +16,8 @@ describe("Share Kit package compatibility", () => {
   const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
   const packageIcon = readFileSync("examples/packages/first-party-replacements/tweetPng/assets/tweet-png-icon.svg", "utf8");
   const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
+  const chatSource = readFileSync("src/apps/reminet-chat/content.ts", "utf8");
+  const backgroundSource = readFileSync("src/extension/background/index.ts", "utf8");
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({
@@ -58,15 +60,36 @@ describe("Share Kit package compatibility", () => {
     ]);
   });
 
-  it("updates color previews from live input and offers explicit offline recovery controls", () => {
+  it("updates color previews and swaps explicit RemiNet recovery for local chat staging", () => {
     expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
-    expect(packageSource).toMatch(/data-action="reconnect"[^>]*href="https:\/\/www\.remilia\.net\/"[^>]*>Reconnect<\/a>/u);
+    expect(packageSource).toMatch(/data-action="reconnect"[^>]*>Reconnect<\/button>/u);
     expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh<\/button>/u);
+    expect(packageSource).toMatch(/data-action="reminet"[^>]*hidden>Share to RemiNet<\/button>/u);
     expect(packageSource).toContain("probeRemiNetConnection()");
+    expect(packageSource).toContain("openRemiNetSession()");
+    expect(packageSource).toContain("stageRemiNetChatPng({");
+    expect(packageSource).toContain("setRemiNetConnected(connected)");
     expect(runtimeSource).toContain("probeRemiNetConnection: async");
     expect(runtimeSource).toContain('type: "reminetChat:authStatus"');
+    expect(runtimeSource).toContain("stageRemiNetChatPng: async");
+    expect(runtimeSource).toContain('loadApp(chat, "userAction:stageRemiNetChatPng")');
     expect(packageSource).not.toContain("window.location.reload()");
-    expect(packageSource).not.toContain('data-action="reminet"');
+    expect(packageSource).not.toContain('href="https://www.remilia.net/"');
+  });
+
+  it("keeps RemiNet staging local and constrains reconnect to a fixed inactive tab", () => {
+    const stageStart = chatSource.indexOf("export async function stageLocalAttachment");
+    const stageEnd = chatSource.indexOf("\nexport function close", stageStart);
+    const stageSource = chatSource.slice(stageStart, stageEnd);
+    expect(stageStart).toBeGreaterThan(-1);
+    expect(stageSource).toContain('status: "ready"');
+    expect(stageSource).toContain("fileToDataUrl(file)");
+    expect(stageSource).not.toContain("uploadPendingAttachments");
+    expect(stageSource).not.toContain("runtimeSendMessage");
+    expect(backgroundSource).toContain("if (!isXContentScriptSender(sender)) return unsupportedSender()");
+    expect(backgroundSource).toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
+    expect(runtimeSource).toContain('blob.type !== "image/png"');
+    expect(runtimeSource).toContain("blob.size > 10 * 1024 * 1024");
   });
 
   it("labels the contextual action Share as PNG", () => {

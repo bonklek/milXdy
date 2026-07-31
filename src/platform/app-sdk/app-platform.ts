@@ -386,6 +386,13 @@ export type MilxdyContextualPostActionContext = {
   resolveAssetUrl: (path: string) => string;
   /** Retests the host-owned RemiNet browser session without reloading the page. */
   probeRemiNetConnection: () => Promise<{ connected: boolean }>;
+  /** Opens the fixed RemiliaNET session page in an inactive tab. */
+  openRemiNetSession: () => Promise<{ ok: boolean; error?: string }>;
+  /** Stages a reviewed PNG locally in RemiNet Chat. Upload still requires Send. */
+  stageRemiNetChatPng: (input: {
+    blob: Blob;
+    fileName: string;
+  }) => Promise<{ ok: boolean; error?: string }>;
 };
 
 export type MilxdyContentAppModule = {
@@ -398,6 +405,8 @@ export type MilxdyContentAppModule = {
   onComposerAction?: (context: MilxdyComposerActionContext) => Promise<void> | void;
   onReplyAction?: (context: MilxdyReplyActionContext) => Promise<void> | void;
   onContextualPostAction?: (context: MilxdyContextualPostActionContext) => Promise<void> | void;
+  /** Host-only local attachment handoff used by reviewed app integrations. */
+  stageLocalAttachment?: (file: File) => Promise<{ ok: boolean; error?: string }>;
   open?: () => Promise<void> | void;
   close?: () => Promise<void> | void;
   dispose?: () => Promise<void> | void;
