@@ -363,6 +363,7 @@ function mountBeetolGame(context = {}) {
       const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
       if (!AudioContext) return;
       audioContext ||= new AudioContext();
+      if (audioContext.state === 'suspended') void audioContext.resume().catch(() => undefined);
       const oscillator = audioContext.createOscillator();
       const volume = audioContext.createGain();
       oscillator.type = type;
@@ -413,9 +414,9 @@ function mountBeetolGame(context = {}) {
   }
 
   function playCheeseClaimSound() {
-    playTone(466.16, 0.08, 0.05, 'sawtooth');
-    setTimeout(() => playTone(349.23, 0.15, 0.044, 'sawtooth'), 92);
-    setTimeout(() => playTone(698.46, 0.12, 0.028, 'triangle'), 220);
+    playTone(466.16, 0.1, 0.075, 'sawtooth');
+    setTimeout(() => playTone(349.23, 0.18, 0.065, 'sawtooth'), 96);
+    setTimeout(() => playTone(698.46, 0.15, 0.045, 'triangle'), 232);
   }
 
   function playJunkClaimSound() {
