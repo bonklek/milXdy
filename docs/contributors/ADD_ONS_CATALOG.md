@@ -3,22 +3,23 @@
 The static source for the milXdy Add-ons Catalog lives in
 [`catalog/`](../../catalog/). The canonical hosted location is
 `https://bonklek.github.io/milXdy/addons/`; the checked-in page remains useful
-offline and is the source of truth for its metadata. It provides the initial
-BOORU, Tweet Composer, and Meme Maker records, per-package disclosures, explicit
-selection controls, a combined review, and the supported Chromium custom-build
-workflow.
+offline and is the source of truth for its metadata. It provides the two current
+package records — Composer Kit and Share Kit — with per-package disclosures,
+explicit selection controls, a combined review, and the supported Chromium
+custom-build workflow. BOORU and Meme Maker are Composer Kit capabilities, not
+standalone catalog entries.
 
 The page follows the checked-in
 [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md): compact utility
 panels, crisp bordered controls, stable geometry, readable light/dark states,
 and no landing-page hero treatment.
 
-The catalog is a preview. Tweet Composer has a reviewed, checked-in package
-candidate but remains **Under review** until cumulative QA and explicit
-maintainer publication approval. BOORU and Meme Maker are **Unavailable**
-because their feature and Composer Kit gates in #17, #79, and #188 are not
-complete. An unavailable record is documentation, not an artifact or implied
-installation.
+The catalog is a preview. Share Kit is the first selectable package because its
+reviewed source, version, exact hash, stable replacement policy, and trusted
+review are checked in. Composer Kit remains **Under review**: it is active in
+cumulative QA, but its source and trusted catalog hash are not yet committed to
+an allowlisted catalog artifact path. An under-review record is documentation,
+not an artifact or implied installation.
 
 ## Security and distribution boundary
 
@@ -28,8 +29,9 @@ The first catalog has no remote package artifacts:
 - the page never sends package bytes or build commands to the extension;
 - the selection file contains only catalog identity/revision, build target,
   recipe ID, and sorted package IDs, versions, and package SHA-256 values;
-- `addons:prepare` resolves those identities only against allowlisted
-  `packages/maintainer/` paths in the same reviewed source checkout;
+- `addons:prepare` resolves those identities only against allowlisted checked-in
+  maintainer or reviewed first-party replacement paths in the same source
+  checkout;
 - the local composer remains authoritative for package identity, SDK
   compatibility, file hashes, permissions, conflicts, lifecycle, and trust
   acknowledgements;
@@ -140,7 +142,7 @@ not turn external work into a first-party local artifact.
 Run the focused checks after catalog changes:
 
 ```powershell
-npm.cmd run build:maintainer-addons
+npm.cmd run build:share-kit-package
 npm.cmd run verify:pages-catalog
 npm.cmd run verify:local-addon-selection
 npm.cmd run verify:local-addon-selection-workflow

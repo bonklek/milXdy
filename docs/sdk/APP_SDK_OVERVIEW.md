@@ -45,8 +45,9 @@ The catalog is a selection surface. It produces a small
 `.milxdy-selection.json`; the checked-in local manager owns catalog-revision
 resolution, package-hash verification, filesystem placement, composition, and
 build promotion. It never downloads catalog package code. The first inventory
-contains BOORU, Tweet Composer, and Meme Maker with honest review/availability
-states; catalog publication remains a separate maintainer action and is not
+contains the two current packages, Composer Kit and Share Kit. BOORU and Meme
+Maker are disclosed as Composer Kit capabilities rather than separate add-ons;
+catalog publication remains a separate maintainer action and is not
 required for the manual trusted-ZIP workflow.
 
 ## Current Support

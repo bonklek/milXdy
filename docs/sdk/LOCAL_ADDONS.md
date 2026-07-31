@@ -23,8 +23,9 @@ The output folder is stable. Do not load the temporary build under `tmp/`.
 this workflow:
 
 1. **Get more add-ons** opens the configured GitHub catalog URL in a new tab.
-   The first maintainer inventory lists BOORU, Tweet Composer, and Meme Maker
-   with fail-closed availability and review states. The page exports only a
+   The first maintainer inventory lists Composer Kit and Share Kit with
+   fail-closed availability and review states. BOORU and Meme Maker are
+   Composer Kit capabilities, not separate add-ons. The page exports only a
    small selection recipe; it never downloads package code.
 2. For separately obtained manual ZIPs, **Load downloaded add-ons** opens a
    user-initiated multi-file picker. milXdy does not scan Downloads or request
@@ -104,7 +105,8 @@ npm run addons:prepare -- --selection=path\to\.milxdy-selection.json
 
 Prepare re-resolves the exact catalog revision, accepts only the
 `maintainer-local-v1` Chromium recipe, resolves artifacts only below checked-in
-allowlisted `packages/maintainer/` roots, rejects symbolic links, copies the
+allowlisted maintainer or reviewed first-party replacement roots, rejects
+symbolic links, copies the
 exact set transactionally, and validates it with the existing composer. It
 prints one consolidated host/permission/storage/remote-service summary and does
 not build.

@@ -33,7 +33,8 @@ There are three distinct entry points:
 - **Catalog selection:** the catalog exports one deterministic
   `.milxdy-selection.json` that pins catalog revision, Chromium recipe, package
   IDs, versions, and package hashes. `addons:prepare` resolves and validates
-  that exact set only from checked-in `packages/maintainer/` roots;
+  that exact set only from checked-in allowlisted maintainer or reviewed
+  first-party replacement roots;
   `addons:apply` builds it after the required trust acknowledgements. Catalog
   selections contain no package download URL or package bytes.
 - **Manual local packages:** users place trusted ZIPs in
