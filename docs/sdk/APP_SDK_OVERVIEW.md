@@ -1,6 +1,6 @@
 # milXdy App SDK
 
-milXdy App SDK 0.2.3 builds reviewed app packages into custom Chromium editions
+milXdy App SDK 0.2.4 builds reviewed app packages into custom Chromium editions
 of milXdy. Packages declare their features, lifecycle, settings, storage,
 assets, permissions, privacy effects, and performance cost through a versioned
 manifest. milXdy supplies the shared runtime, Apps & Features integration,
@@ -44,7 +44,7 @@ capability environment.
 The catalog is a selection surface. It produces a small
 `.milxdy-selection.json`; the checked-in local manager owns downloads, hash
 verification, filesystem placement, composition, and build promotion.
-The 0.2.3 repository includes the catalog implementation with no published
+The 0.2.4 repository includes the catalog implementation with no published
 package inventory. Catalog publication is a separate maintainer action and is
 not required for the manual trusted-ZIP workflow.
 
@@ -60,7 +60,7 @@ not required for the manual trusted-ZIP workflow.
 
 Runtime package installation, automatic marketplace updates, arbitrary-site
 content execution, and package-owned background modules are outside the App SDK
-0.2.3 contract.
+0.2.4 contract.
 
 ## Additional Resources
 

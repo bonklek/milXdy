@@ -6,8 +6,8 @@
   "sourceBranch": "codex/milxdy-sdk-integration",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3"
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4"
   },
   "manifestVersion": 1,
   "status": "reference-preview",

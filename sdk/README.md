@@ -1,6 +1,6 @@
 # milXdy App SDK Starter Kit
 
-This directory is the standalone author kit for milXdy App SDK 0.2.3.
+This directory is the standalone author kit for milXdy App SDK 0.2.4.
 
 The supported distribution path uses the local Add-on Manager to validate and
 compose reviewed packages into a stable custom Chromium build. Package
@@ -10,7 +10,7 @@ declared App SDK contract.
 ## Contents
 
 - `types/index.d.ts`: the supported content-app lifecycle and context facade for
-  App SDK `0.2.3`.
+  App SDK `0.2.4`.
 - `templates/basic-feature/`: a minimal novel feature package with generated
   Apps & Features enablement, cancellation-safe lifecycle hooks, and local-only
   diagnostics.

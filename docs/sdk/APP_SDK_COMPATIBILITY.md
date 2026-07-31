@@ -6,7 +6,7 @@ one canonical home: the
 
 This file remains as a stable link for existing documentation and integrations.
 
-Current App SDK 0.2.3 boundaries:
+Current App SDK 0.2.4 boundaries:
 
 - Catalog selections and trusted manual ZIPs are composed into managed Chromium
   builds.

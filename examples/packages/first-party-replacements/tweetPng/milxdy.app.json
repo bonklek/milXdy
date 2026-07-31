@@ -6,8 +6,8 @@
   "description": "Reviews and exports local PNGs from declared X post share actions.",
   "packageKind": "feature",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": [
       "Uses the generic contextual post-action contract; the package owns all Tweet PNG UI and rendering."
     ]

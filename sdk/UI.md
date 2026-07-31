@@ -1,6 +1,6 @@
 # App SDK UI Kit
 
-`ui/theme.css` and `ui/overlay.css` are the supported App SDK 0.2.3 UI
+`ui/theme.css` and `ui/overlay.css` are the supported App SDK 0.2.4 UI
 baseline. Copy both into a package, declare them in manifest `css`, and use the
 `milxdy-sdk-overlay*` classes. The docked-app template is the canonical example.
 

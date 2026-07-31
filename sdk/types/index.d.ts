@@ -1,4 +1,4 @@
-/** Public content-app declarations for milXdy App SDK 0.2.3. */
+/** Public content-app declarations for milXdy App SDK 0.2.4. */
 
 export type TwitterSurfaceKind =
   | "tweet"

@@ -19,7 +19,7 @@ The output folder is stable. Do not load the temporary build under `tmp/`.
 this workflow:
 
 1. **Get more add-ons** opens the configured GitHub catalog URL in a new tab.
-   The 0.2.3 repository contains a zero-package catalog preview; publishing it
+   The 0.2.4 repository contains a maintainer-reviewed catalog preview; publishing it
    is a separate maintainer action, so obtain trusted ZIPs directly until that
    catalog is available.
 2. After Chrome downloads package ZIPs, **Load downloaded add-ons** opens a

@@ -1,6 +1,6 @@
 # milXdy App SDK Reference
 
-milXdy App SDK 0.2.3 is a production platform for building reviewed apps into
+milXdy App SDK 0.2.4 is a production platform for building reviewed apps into
 custom Chromium distributions of milXdy. Apps declare their lifecycle,
 surfaces, settings, storage, assets, permissions, privacy effects, performance
 cost, background messages, and dock behavior through a versioned manifest.
@@ -757,7 +757,7 @@ Security and trust safeguards:
 
 ## Distribution Boundary
 
-App SDK 0.2.3 packages are incorporated into reviewed custom builds. The SDK
+App SDK 0.2.4 packages are incorporated into reviewed custom builds. The SDK
 does not inject new JavaScript into an already-installed extension, and its
 static review scanner is not described as a JavaScript sandbox. Package-owned
 background modules use host-provided typed services and declared message

@@ -7,8 +7,8 @@
   "description": "An optional local-only side-rail app for preparing validated Remilia Maker pet-request bundles.",
   "packageKind": "app",
   "sdk": {
-    "minVersion": "0.2.3",
-    "targetVersion": "0.2.3",
+    "minVersion": "0.2.4",
+    "targetVersion": "0.2.4",
     "notes": ["Uses only the public overlay app lifecycle, local assets, diagnostics, and cancellation contract."]
   },
   "contentEntry": "dist/content.js",
