@@ -1,16 +1,19 @@
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
 
-const TWEET_COMPOSER_SELECTOR = [
+const DM_COMPOSER_SELECTOR = [
+  '[data-testid="dm-composer-textarea"]',
+  '[data-testid="dm-composer-input"]',
+  '[data-testid="dm-composer-editor"]',
+].join(",");
+const COMPOSER_SELECTOR = [
   '[data-testid="tweetTextarea_0"]',
   '[data-testid^="tweetTextarea_"]',
   '[role="textbox"][aria-label*="Post" i]',
   '[role="textbox"][aria-label*="Tweet" i]',
+  DM_COMPOSER_SELECTOR,
 ].join(",");
 const EDITABLE_TEXTBOX_SELECTOR = '[contenteditable="true"], [role="textbox"]';
-const NON_TWEET_COMPOSER_SELECTOR = [
-  '[data-testid="dm-composer-textarea"]',
-  '[data-testid="dm-composer-input"]',
-  '[data-testid="dm-composer-editor"]',
+const EXCLUDED_COMPOSER_TARGET_SELECTOR = [
   '[data-testid="SearchBox_Search_Input"]',
   "input",
   "textarea",
@@ -53,13 +56,25 @@ export function dispose(): void {
 
 function findTweetComposer(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
-  if (target.closest(NON_TWEET_COMPOSER_SELECTOR)) return null;
-  const marker = target.closest<HTMLElement>(TWEET_COMPOSER_SELECTOR);
+  const marker = target.closest<HTMLElement>(COMPOSER_SELECTOR);
   if (!marker) return null;
+  const isDmComposer = marker.matches(DM_COMPOSER_SELECTOR);
+  if (!shouldUseComposerSurface({
+    hasSupportedMarker: true,
+    isDmComposer,
+    targetIsExcluded: Boolean(target.closest(EXCLUDED_COMPOSER_TARGET_SELECTOR)),
+  })) return null;
   const composer = editableComposerForTarget(target, marker);
   if (!composer) return null;
-  if (composer.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) return null;
   return composer;
+}
+
+export function shouldUseComposerSurface(input: {
+  hasSupportedMarker: boolean;
+  isDmComposer: boolean;
+  targetIsExcluded: boolean;
+}): boolean {
+  return input.hasSupportedMarker && (!input.targetIsExcluded || input.isDmComposer);
 }
 
 function editableComposerForTarget(target: Element, marker: HTMLElement): HTMLElement | null {
