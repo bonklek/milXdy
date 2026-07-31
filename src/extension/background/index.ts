@@ -54,6 +54,7 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest } from "../../platform/app-sdk/remote-query";
+import { OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -109,12 +110,34 @@ type RemoteQueryMessage = {
   request: RemoteQueryRequest;
 };
 
+type ContextMediaPrepareMessage = {
+  type: "milxdy:contextMediaPrepare";
+  appId: string;
+  actionId: string;
+  sourceUrl: string;
+  width: number | null;
+  height: number | null;
+  altAvailable: boolean;
+};
+
+type MediaContributionSubmitMessage = {
+  type: "milxdy:mediaContributionSubmit";
+  appId: string;
+  actionId: string;
+  contributionId: string;
+  mediaHandle: string;
+  tags: string[];
+};
+type ContextMediaMenuStateMessage = { type: "milxdy:contextMediaMenuState"; available: boolean };
+
 const LEGACY_REMINET_CHAT_PROFILE_CACHE_KEY = "milxdy.reminetChat.profileCache.v3";
 let sharedIdentityCacheWriteQueue: Promise<void> = Promise.resolve();
 let addOnsCatalogTabId: number | null = null;
 let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
 const remoteQueryLastRequestAt = new Map<string, number>();
 const remoteQueryCache = new Map<string, { expiresAt: number; response: Record<string, unknown> }>();
+const contextMediaHandles = new OpaqueMediaHandleStore();
+const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
@@ -218,6 +241,11 @@ const WIKI_SIDEBAR_NAVIGATION_RULES: readonly UrlAllowRule[] = [
   { origin: "https://remilia.wiki" },
 ];
 const EXTERNAL_HANDOFF_TAB_TIMEOUT_MS = 15_000;
+const X_CONTEXT_MEDIA_RULES: readonly UrlAllowRule[] = [
+  { origin: "https://pbs.twimg.com" },
+  { origin: "https://abs.twimg.com" },
+];
+const REMIBOORU_MEMBER_POSTS_URL = "https://remibooru.com/api/member/posts";
 
 setupBackgroundMessageRouter([
   {
@@ -259,6 +287,21 @@ setupBackgroundMessageRouter([
     type: "milxdy:remoteQuery",
     matches: isRemoteQueryMessage,
     handle: (message, sender) => queryRemoteService(message, sender),
+  },
+  {
+    type: "milxdy:contextMediaPrepare",
+    matches: isContextMediaPrepareMessage,
+    handle: (message, sender) => prepareContextMedia(message, sender),
+  },
+  {
+    type: "milxdy:mediaContributionSubmit",
+    matches: isMediaContributionSubmitMessage,
+    handle: (message, sender) => submitMediaContribution(message, sender),
+  },
+  {
+    type: "milxdy:contextMediaMenuState",
+    matches: isContextMediaMenuStateMessage,
+    handle: (message, sender) => setContextMediaMenuState(message.available, sender),
   },
   {
     type: "miladychan:fetchJson",
@@ -457,6 +500,121 @@ function isRemoteQueryMessage(message: unknown): message is RemoteQueryMessage {
     && typeof record.appId === "string"
     && typeof record.queryId === "string"
     && Boolean(request && (request.resource === "posts" || request.resource === "facets"));
+}
+
+function isContextMediaPrepareMessage(message: unknown): message is ContextMediaPrepareMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:contextMediaPrepare"
+    && typeof record.appId === "string"
+    && typeof record.actionId === "string"
+    && typeof record.sourceUrl === "string"
+    && (record.width === null || (Number.isInteger(record.width) && Number(record.width) > 0))
+    && (record.height === null || (Number.isInteger(record.height) && Number(record.height) > 0))
+    && typeof record.altAvailable === "boolean";
+}
+
+function isMediaContributionSubmitMessage(message: unknown): message is MediaContributionSubmitMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:mediaContributionSubmit"
+    && typeof record.appId === "string"
+    && typeof record.actionId === "string"
+    && typeof record.contributionId === "string"
+    && typeof record.mediaHandle === "string"
+    && Array.isArray(record.tags)
+    && record.tags.every((tag) => typeof tag === "string");
+}
+
+function isContextMediaMenuStateMessage(message: unknown): message is ContextMediaMenuStateMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:contextMediaMenuState" && typeof record.available === "boolean";
+}
+
+async function setContextMediaMenuState(available: boolean, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender) || !contextMediaMenuAction) return unsupportedSender();
+  await chrome.contextMenus.update(CONTEXT_MEDIA_MENU_ID, { visible: available });
+  return { ok: true };
+}
+
+type ContributionRegistryApp = {
+  id?: string;
+  contextMediaActions?: Array<{ id?: string; label?: string; site?: string; eligibleMedia?: string[]; presentation?: string }>;
+  mediaContributions?: Array<{ id?: string; adapter?: string; contextMediaActionId?: string; maxTags?: number; maxTagLength?: number }>;
+};
+
+function contributionDeclaration(appId: string, actionId: string, contributionId?: string) {
+  const app = (appRegistry as ContributionRegistryApp[]).find((candidate) => candidate.id === appId);
+  const action = app?.contextMediaActions?.find((candidate) => candidate.id === actionId);
+  const contribution = app?.mediaContributions?.find((candidate) => candidate.contextMediaActionId === actionId && (!contributionId || candidate.id === contributionId));
+  if (!action || action.site !== "x" || action.presentation !== "hostPanel" || !action.eligibleMedia?.includes("image") || !contribution || contribution.adapter !== "remibooru") return null;
+  return { action, contribution };
+}
+
+async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender) || !contributionDeclaration(message.appId, message.actionId)) return unsupportedSender();
+  const parsed = parseAllowedUrl(message.sourceUrl, X_CONTEXT_MEDIA_RULES);
+  if (!parsed) return { ok: false, error: "Only visible X-hosted images can be contributed." };
+  try {
+    const response = await budgetedFetch(parsed.href, { credentials: "omit" }, "remibooru:prepareMedia");
+    if (!response.ok) return { ok: false, error: `The selected image returned HTTP ${response.status}.` };
+    const mimeType = (response.headers.get("content-type") || "").split(";", 1)[0].toLowerCase();
+    if (!/^image\/(?:png|jpeg|webp|gif)$/u.test(mimeType)) return { ok: false, error: "The selected media is not a supported image." };
+    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
+    let width = message.width;
+    let height = message.height;
+    if (!width || !height) {
+      const uploadBytes = bytes.slice().buffer as ArrayBuffer;
+      const bitmap = await createImageBitmap(new Blob([uploadBytes], { type: mimeType }));
+      width = bitmap.width;
+      height = bitmap.height;
+      bitmap.close();
+    }
+    const mediaHandle = contextMediaHandles.create({ appId: message.appId, actionId: message.actionId, mimeType, bytes, width, height, altAvailable: message.altAvailable });
+    return { ok: true, mediaHandle, media: { mimeType, width, height, altAvailable: message.altAvailable } };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+async function submitMediaContribution(message: MediaContributionSubmitMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const declaration = contributionDeclaration(message.appId, message.actionId, message.contributionId);
+  if (!declaration) return { ok: false, error: "The requested contribution is not declared by this package." };
+  const maxTags = declaration.contribution.maxTags ?? 0;
+  const maxTagLength = declaration.contribution.maxTagLength ?? 0;
+  const tags = validateMediaContributionTags(message.tags, maxTags, maxTagLength);
+  if (!tags) return { ok: false, error: "The supplied tags are outside the reviewed contribution bounds." };
+  const media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
+  if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again." };
+  const form = new FormData();
+  const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType.slice("image/".length);
+  const uploadBytes = media.bytes.slice().buffer as ArrayBuffer;
+  form.set("file", new Blob([uploadBytes], { type: media.mimeType }), `upload.${extension}`);
+  if (!media.width || !media.height) {
+    contextMediaHandles.release(message.mediaHandle);
+    return { ok: false, error: "The selected image dimensions could not be verified." };
+  }
+  form.set("metadata", JSON.stringify({ width: media.width, height: media.height, globalTags: tags, spatialTags: [], authorUrls: [], mediaType: "image", pageCount: 1 }));
+  try {
+    const response = await fetch(REMIBOORU_MEMBER_POSTS_URL, { method: "POST", credentials: "include", headers: { accept: "application/json", "x-upload-incident-id": crypto.randomUUID(), "x-upload-media-type": "image", "x-upload-size-bucket": remibooruUploadSizeBucket(media.bytes.byteLength), "x-upload-page-count": "1", "x-upload-browser-family": "chrome" }, body: form });
+    const payload = (response.headers.get("content-type") || "").includes("application/json") ? await response.json() as Record<string, unknown> : null;
+    if (!response.ok) {
+      contextMediaHandles.release(message.mediaHandle);
+      return { ok: false, error: typeof payload?.error === "string" ? payload.error : `Remibooru rejected the contribution (HTTP ${response.status}).` };
+    }
+    const post = payload?.post as Record<string, unknown> | undefined;
+    if (typeof post?.id !== "string") {
+      contextMediaHandles.release(message.mediaHandle);
+      return { ok: false, error: "Remibooru returned an unsupported contribution result." };
+    }
+    contextMediaHandles.consume(message.mediaHandle);
+    return { ok: true, canonicalUrl: `https://remibooru.com/posts/${encodeURIComponent(post.id)}` };
+  } catch (error) {
+    contextMediaHandles.release(message.mediaHandle);
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -1528,6 +1686,26 @@ chrome.runtime.onInstalled.addListener((details) => {
 chrome.runtime.onStartup.addListener(() => {
   scheduleUpdateChecks();
   void runUpdateCheck();
+});
+
+// This item is host-owned. The selected URL stays inside the extension message
+// path; package callbacks will receive only an opaque handle after validation.
+const contextMediaMenuAction = (appRegistry as ContributionRegistryApp[])
+  .flatMap((app) => app.contextMediaActions || [])
+  .find((action) => action.site === "x" && action.presentation === "hostPanel" && action.eligibleMedia?.includes("image"));
+void chrome.contextMenus.remove(CONTEXT_MEDIA_MENU_ID).catch(() => undefined).then(() => {
+  if (!contextMediaMenuAction) return;
+  chrome.contextMenus.create({
+    id: CONTEXT_MEDIA_MENU_ID,
+    title: typeof contextMediaMenuAction.label === "string" ? contextMediaMenuAction.label : "Upload to Remibooru",
+    contexts: ["image"],
+    documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
+    visible: false,
+  });
+});
+chrome.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId !== CONTEXT_MEDIA_MENU_ID || typeof tab?.id !== "number" || typeof info.srcUrl !== "string") return;
+  void chrome.tabs.sendMessage(tab.id, { type: "milxdy:contextMediaSelected", sourceUrl: info.srcUrl }).catch(() => undefined);
 });
 
 chrome.alarms.onAlarm.addListener((alarm) => {
