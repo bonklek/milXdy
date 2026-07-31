@@ -15,14 +15,16 @@ type ReelSoundVoice = {
   level: number;
 };
 
-export const REEL_SOUND_MASTER_LEVEL = 0.55;
+export const REEL_SOUND_MASTER_LEVEL = 0.46;
 
 export function reelSoundVoices(direction: ReelDirection): ReelSoundVoice[] {
   const directionLift = direction < 0 ? 1.08 : 1;
   return [
-    { type: "triangle", startHz: 82 * directionLift, endHz: 54 * directionLift, delay: 0, duration: 0.16, level: 0.34 },
-    { type: "square", startHz: 126 * directionLift, endHz: 84 * directionLift, delay: 0.014, duration: 0.105, level: 0.12 },
-    { type: "sawtooth", startHz: 196 * directionLift, endHz: 132 * directionLift, delay: 0.027, duration: 0.075, level: 0.055 },
+    { type: "triangle", startHz: 76 * directionLift, endHz: 38 * directionLift, delay: 0, duration: 0.17, level: 0.5 },
+    { type: "square", startHz: 164 * directionLift, endHz: 108 * directionLift, delay: 0.006, duration: 0.034, level: 0.15 },
+    { type: "sawtooth", startHz: 216 * directionLift, endHz: 140 * directionLift, delay: 0.018, duration: 0.045, level: 0.075 },
+    { type: "square", startHz: 138 * directionLift, endHz: 92 * directionLift, delay: 0.048, duration: 0.032, level: 0.135 },
+    { type: "square", startHz: 116 * directionLift, endHz: 78 * directionLift, delay: 0.09, duration: 0.03, level: 0.12 },
   ];
 }
 
@@ -75,11 +77,11 @@ export class DockReelSoundPlayer {
       const master = context.createGain();
       const lowPass = context.createBiquadFilter();
       lowPass.type = "lowpass";
-      lowPass.frequency.setValueAtTime(520, now);
-      lowPass.Q.setValueAtTime(0.8, now);
+      lowPass.frequency.setValueAtTime(760, now);
+      lowPass.Q.setValueAtTime(0.9, now);
       master.gain.setValueAtTime(0.0001, now);
       master.gain.exponentialRampToValueAtTime(Math.max(0.0001, this.#volume * REEL_SOUND_MASTER_LEVEL), now + 0.008);
-      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.19);
+      master.gain.exponentialRampToValueAtTime(0.0001, now + 0.2);
       master.connect(lowPass).connect(context.destination);
       for (const voice of reelSoundVoices(direction)) {
         const oscillator = context.createOscillator();
