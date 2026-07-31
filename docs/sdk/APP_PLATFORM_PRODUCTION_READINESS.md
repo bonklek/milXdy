@@ -51,8 +51,9 @@ The App SDK provides:
   hashes, and reproducible build metadata.
 - **Pinned local selection:** versioned selection files, exact catalog
   revisions, Chromium recipe IDs, package IDs/versions/hashes, allowlisted
-  `packages/maintainer/` roots, symbolic-link rejection, and deterministic
-  package-set materialization. Catalog selection never acquires remote code.
+  checked-in allowlisted maintainer or reviewed first-party replacement roots,
+  symbolic-link rejection, and deterministic package-set materialization.
+  Catalog selection never acquires remote code.
 - **Transactional local builds:** exact catalog package-set replacement,
   recoverable promotion journals, a stable unpacked-extension target, and
   preservation of the last known-good output on failure.
@@ -96,7 +97,7 @@ executes package code, and the extension never imports package code at runtime.
 | Reviewed folder or ZIP package | Supported |
 | Catalog `.milxdy-selection.json` export | Supported; local-only schema pins catalog revision, recipe, package IDs, versions, and hashes |
 | Remote catalog package download | Not supported |
-| Checked-in maintainer artifact resolution | Supported below allowlisted package roots |
+| Checked-in reviewed artifact resolution | Supported below allowlisted maintainer and first-party replacement roots |
 | Manual ZIP folder and validation-only status | Supported in `local-addons/manual/` |
 | Deterministic Chromium custom build | Supported |
 | Transactional stable output and recovery | Supported in `dist/chromium-local-apps/` |
