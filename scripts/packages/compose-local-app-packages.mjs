@@ -532,6 +532,7 @@ async function analyzePackage(source, manifest) {
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
   verifyContextualPostActions(id, manifest, errors);
+  verifyContextMediaActions(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
   verifyRemoteQueries(id, manifest, errors);
@@ -927,6 +928,39 @@ function verifyContextualPostActions(id, manifest, errors) {
     if (!action?.label || typeof action.label !== "string") errors.push(`${id}: contextualPostActions require labels`);
     if (action?.placement !== "shareMenu") errors.push(`${id}: contextualPostActions placement must be shareMenu`);
   }
+}
+
+function verifyContextMediaActions(id, manifest, errors) {
+  const actions = manifest.contextMediaActions;
+  const contributions = manifest.mediaContributions;
+  if (!actions && !contributions) return;
+  if (!Array.isArray(actions) || actions.length < 1 || actions.length > 4) {
+    errors.push(`${id}: contextMediaActions requires between one and four declarations`);
+    return;
+  }
+  if (!Array.isArray(contributions) || contributions.length < 1 || contributions.length > 4) {
+    errors.push(`${id}: mediaContributions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: contextMediaActions packages must declare the userAction load trigger`);
+  const actionIds = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || actionIds.has(action.id)) errors.push(`${id}: contextMediaActions ids must be unique safe identifiers`);
+    actionIds.add(action?.id);
+    if (!action?.label || typeof action.label !== "string") errors.push(`${id}: contextMediaActions require labels`);
+    if (action?.site !== "x" || action?.presentation !== "hostPanel" || !Array.isArray(action?.eligibleMedia) || action.eligibleMedia.length !== 1 || action.eligibleMedia[0] !== "image") errors.push(`${id}: contextMediaActions supports only host-panel X image actions`);
+  }
+  const contributionIds = new Set();
+  for (const contribution of contributions) {
+    if (!contribution?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(contribution.id) || contributionIds.has(contribution.id)) errors.push(`${id}: mediaContributions ids must be unique safe identifiers`);
+    contributionIds.add(contribution?.id);
+    if (!contribution?.label || contribution.adapter !== "remibooru" || !actionIds.has(contribution.contextMediaActionId)) errors.push(`${id}: mediaContributions require a reviewed Remibooru action binding`);
+    if (!Number.isInteger(contribution.maxTags) || contribution.maxTags < 1 || contribution.maxTags > 12) errors.push(`${id}: mediaContributions maxTags must be an integer from 1 through 12`);
+    if (!Number.isInteger(contribution.maxTagLength) || contribution.maxTagLength < 1 || contribution.maxTagLength > 64) errors.push(`${id}: mediaContributions maxTagLength must be an integer from 1 through 64`);
+  }
+  const disclosure = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.privacy?.remoteServices || [])].join(" ").toLowerCase();
+  if (!/remibooru/.test(disclosure) || !/(rights|confirm|publish)/.test(disclosure)) errors.push(`${id}: mediaContributions require Remibooru rights/final-publish disclosure`);
+  if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: mediaContributions require remote-api consent`);
 }
 
 function verifyReplyAction(id, manifest, errors) {

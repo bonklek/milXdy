@@ -46,6 +46,23 @@ export type AppContextualPostAction = {
   icon?: AppIconAsset;
   placement: "shareMenu";
 };
+/** A reviewed X-image action. The host retains the selected image and exposes only an opaque handle. */
+export type AppContextMediaAction = {
+  id: string;
+  label: string;
+  site: "x";
+  eligibleMedia: Array<"image">;
+  presentation: "hostPanel";
+};
+/** A reviewed, host-owned native contribution flow; packages supply only bounded user-entered tags. */
+export type AppMediaContribution = {
+  id: string;
+  label: string;
+  adapter: "remibooru";
+  contextMediaActionId: string;
+  maxTags: number;
+  maxTagLength: number;
+};
 /** Narrow host-owned companion action; packages cannot inject arbitrary toolbar UI. */
 export type AppHostComposerAction = "nativeDrafts";
 export type AppReplyActionTemplate = {
@@ -192,6 +209,8 @@ export type MilxdyAppManifest = {
   };
   composerAction?: AppComposerAction;
   contextualPostActions?: AppContextualPostAction[];
+  contextMediaActions?: AppContextMediaAction[];
+  mediaContributions?: AppMediaContribution[];
   hostComposerActions?: AppHostComposerAction[];
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
@@ -395,6 +414,21 @@ export type MilxdyContextualPostActionContext = {
   }) => Promise<{ ok: boolean; error?: string }>;
 };
 
+/**
+ * A host-owned image selection. `mediaHandle` is opaque, short-lived, and may
+ * only be supplied back to the declared contribution callback for this action.
+ */
+export type MilxdyContextMediaActionContext = {
+  actionId: string;
+  panel: HTMLElement;
+  signal: AbortSignal;
+  close: () => void;
+  mediaHandle: string;
+  media: Readonly<{ mimeType: string; width: number | null; height: number | null; altAvailable: boolean }>;
+  openVisibleAssistantPrompt: (promptId: "remibooru-tags") => Promise<{ ok: boolean; error?: string }>;
+  submitMediaContribution: (input: { id: string; mediaHandle: string; tags: string[] }) => Promise<{ ok: boolean; canonicalUrl?: string; error?: string }>;
+};
+
 export type MilxdyContentAppModule = {
   id?: string;
   boot?: (context: MilxdyContentAppContext) => Promise<void> | void;
@@ -405,6 +439,7 @@ export type MilxdyContentAppModule = {
   onComposerAction?: (context: MilxdyComposerActionContext) => Promise<void> | void;
   onReplyAction?: (context: MilxdyReplyActionContext) => Promise<void> | void;
   onContextualPostAction?: (context: MilxdyContextualPostActionContext) => Promise<void> | void;
+  onContextMediaAction?: (context: MilxdyContextMediaActionContext) => Promise<void> | void;
   /** Host-only local attachment handoff used by reviewed app integrations. */
   stageLocalAttachment?: (file: File) => Promise<{ ok: boolean; error?: string }>;
   open?: () => Promise<void> | void;

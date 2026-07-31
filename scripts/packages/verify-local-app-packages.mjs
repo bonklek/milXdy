@@ -148,6 +148,7 @@ async function verifyPackage(packageDir, folderName) {
   await verifyLifecycleAndSites(label, packageDir, manifest);
   verifyKindRules(label, manifest);
   verifyContextualPostActions(label, manifest);
+  verifyContextMediaActions(label, manifest);
   verifyHubAndPrivacy(label, manifest);
   verifyBackgroundCapabilities(label, manifest);
   verifyCost(label, manifest.cost);
@@ -356,6 +357,25 @@ function verifyContextualPostActions(label, manifest) {
     ids.add(action?.id);
     if (!action?.label) fail(`${label}: contextualPostActions require labels`);
     if (action?.placement !== "shareMenu") fail(`${label}: contextualPostActions placement must be shareMenu`);
+  }
+}
+
+function verifyContextMediaActions(label, manifest) {
+  const actions = manifest.contextMediaActions;
+  const contributions = manifest.mediaContributions;
+  if (!actions && !contributions) return;
+  if (!Array.isArray(actions) || !Array.isArray(contributions)) {
+    fail(`${label}: contextMediaActions and mediaContributions must be declared together`);
+    return;
+  }
+  const actionIds = new Set();
+  for (const action of actions) {
+    if (!action?.id || !action?.label || action.site !== "x" || action.presentation !== "hostPanel" || action.eligibleMedia?.join(",") !== "image") fail(`${label}: contextMediaActions supports only labeled host-panel X image actions`);
+    actionIds.add(action?.id);
+  }
+  for (const contribution of contributions) {
+    if (!contribution?.id || !contribution?.label || contribution.adapter !== "remibooru" || !actionIds.has(contribution.contextMediaActionId)) fail(`${label}: mediaContributions require a reviewed Remibooru action binding`);
+    if (!Number.isInteger(contribution.maxTags) || contribution.maxTags < 1 || contribution.maxTags > 12 || !Number.isInteger(contribution.maxTagLength) || contribution.maxTagLength < 1 || contribution.maxTagLength > 64) fail(`${label}: mediaContributions tag bounds must be 1-12 items of 1-64 characters`);
   }
 }
 
