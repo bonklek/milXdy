@@ -77,7 +77,9 @@ try {
   assert.equal(Object.hasOwn(provenance, "worktree"), false);
   assert.match(background, /^importScripts\("qa-background\.js"\);/u);
   assert.match(qaBackground, /milxdy\.qa\.reloadGuard/u);
+  assert.match(qaBackground, /https:\/\/www\.remilia\.net\/\*/u, "QA reload must refresh supported RemiNet tabs");
   assert.match(qaPopup, /Last reload:/u);
+  assert.match(qaPopup, /refresh X \+ RemiNet tabs/u, "QA popup must disclose that RemiNet tabs also refresh");
   assert.match(popup, /id="milxdyQaBuild"/u);
   assert.match(popup, /src="qa-popup\.js"/u);
 } finally {
