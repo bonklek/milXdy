@@ -11,7 +11,14 @@ describe("dock DOM and style compatibility", () => {
     expect(DOCK_STYLE_ID).toBe("milxdy-overlay-dock-style");
     const runtimeStyles = `${styles.replace(/\r\n/g, "\n").replace(/\n$/, "")}\n  `;
     expect(createHash("sha256").update(runtimeStyles).digest("hex"))
-      .toBe("b250a354a31ebad2771956cb26e4bfd3a3cb7b49de3761ef693f56cac725ef5b");
+      .toBe("6cf7c0bedb65072144f07e5b6d988d47f2bdac0796f3cf19e58801db98dbb729");
+  });
+
+  it("joins and centers the rail side controls", () => {
+    expect(styles).toContain("margin: 0 0 -2px");
+    expect(styles).toContain("place-items: center");
+    expect(styles).toContain('.milxdy-overlay-dock-side-control[data-side="left"]::before');
+    expect(styles).toContain('.milxdy-overlay-dock-side-control[data-side="right"]::before');
   });
 
   it.each([
