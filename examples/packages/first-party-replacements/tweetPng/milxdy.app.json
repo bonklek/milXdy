@@ -167,7 +167,7 @@
   "contextualPostActions": [
     {
       "id": "reviewPng",
-      "label": "Review with Share Kit",
+      "label": "Share as PNG",
       "placement": "shareMenu",
       "icon": "assets/tweet-png-icon.svg"
     }

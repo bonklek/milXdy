@@ -118,4 +118,6 @@ export interface MilxdyContextualPostActionContext {
   readonly signal: AbortSignal;
   readonly storage: AppStorageFacade;
   resolveAssetUrl(path: string): string;
+  /** Retests the host-owned RemiNet browser session without reloading the page. */
+  probeRemiNetConnection(): Promise<{ connected: boolean }>;
 }
