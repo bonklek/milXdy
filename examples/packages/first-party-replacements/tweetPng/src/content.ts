@@ -9,6 +9,7 @@ type VisualThemeSettings = {
   tweetPngIncludeQuoteImages: boolean;
   tweetPngShrinkTallImages: boolean;
   tweetPngIncludeDate: boolean;
+  tweetPngIncludeWatermark: boolean;
   tweetPngIncludeStats: boolean;
   tweetPngBorder: boolean;
   tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
@@ -22,6 +23,7 @@ const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   tweetPngIncludeQuoteImages: true,
   tweetPngShrinkTallImages: true,
   tweetPngIncludeDate: true,
+  tweetPngIncludeWatermark: true,
   tweetPngIncludeStats: true,
   tweetPngBorder: true,
   tweetPngBorderPalette: "purple",
@@ -83,6 +85,7 @@ export function normalizeVisualTheme(value: unknown): VisualThemeSettings {
     tweetPngIncludeQuoteImages: bool("tweetPngIncludeQuoteImages"),
     tweetPngShrinkTallImages: bool("tweetPngShrinkTallImages"),
     tweetPngIncludeDate: bool("tweetPngIncludeDate"),
+    tweetPngIncludeWatermark: bool("tweetPngIncludeWatermark"),
     tweetPngIncludeStats: bool("tweetPngIncludeStats"),
     tweetPngBorder: bool("tweetPngBorder"),
     tweetPngBorderPalette: palette,
@@ -636,6 +639,7 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(data.date, bodyX, footerY);
   }
+  if (visualTheme.tweetPngIncludeWatermark) drawTweetPngWatermark(context, width, height);
 
   return {
     blob: await canvasToPngBlob(canvas),
@@ -1122,6 +1126,16 @@ function drawDottedBackground(context: CanvasRenderingContext2D, width: number, 
   }
 }
 
+function drawTweetPngWatermark(context: CanvasRenderingContext2D, width: number, height: number): void {
+  context.save();
+  context.fillStyle = "rgba(123, 44, 255, 0.82)";
+  context.font = `700 16px ${TWEET_PNG_FONT_FALLBACK}`;
+  context.textAlign = "right";
+  context.textBaseline = "alphabetic";
+  context.fillText("milXdy", width - 38, height - 8);
+  context.restore();
+}
+
 function roundRect(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number): void {
   const next = Math.min(radius, width / 2, height / 2);
   context.beginPath();
@@ -1176,6 +1190,7 @@ function showTweetPngModal(
         <label><input type="checkbox" data-setting="tweetPngIncludeImages"${visualTheme.tweetPngIncludeImages ? " checked" : ""}> Include image</label>
         <label><input type="checkbox" data-setting="tweetPngIncludeQuoteText"${visualTheme.tweetPngIncludeQuoteText ? " checked" : ""}> Include QRT</label>
         <label><input type="checkbox" data-setting="tweetPngIncludeQuoteImages"${visualTheme.tweetPngIncludeQuoteImages ? " checked" : ""}> Include QRT image</label>
+        <label><input type="checkbox" data-setting="tweetPngIncludeWatermark"${visualTheme.tweetPngIncludeWatermark ? " checked" : ""}> Include milXdy watermark</label>
         <p>Changes update this preview and are saved as the Share Kit defaults.</p>
       </section>
       <div class="milxdy-tweet-png-preview-stage">

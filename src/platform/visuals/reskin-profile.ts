@@ -43,6 +43,7 @@ export type VisualThemeSettings = {
   tweetPngIncludeQuoteImages: boolean;
   tweetPngShrinkTallImages: boolean;
   tweetPngIncludeDate: boolean;
+  tweetPngIncludeWatermark: boolean;
   tweetPngIncludeStats: boolean;
   tweetPngBorder: boolean;
   tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
@@ -121,6 +122,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
       "tweetPngIncludeQuoteImages",
       "tweetPngShrinkTallImages",
       "tweetPngIncludeDate",
+      "tweetPngIncludeWatermark",
       "tweetPngIncludeStats",
       "tweetPngBorder",
       "tweetPngBorderPalette",
@@ -199,6 +201,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   tweetPngIncludeQuoteImages: true,
   tweetPngShrinkTallImages: true,
   tweetPngIncludeDate: true,
+  tweetPngIncludeWatermark: true,
   tweetPngIncludeStats: true,
   tweetPngBorder: true,
   tweetPngBorderPalette: "purple",
@@ -244,6 +247,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeQuoteImages: true,
     tweetPngShrinkTallImages: true,
     tweetPngIncludeDate: true,
+    tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
     tweetPngBorderPalette: "purple",
@@ -287,6 +291,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeQuoteImages: true,
     tweetPngShrinkTallImages: true,
     tweetPngIncludeDate: true,
+    tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
     tweetPngBorderPalette: "purple",
@@ -330,6 +335,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeQuoteImages: true,
     tweetPngShrinkTallImages: true,
     tweetPngIncludeDate: true,
+    tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: false,
     tweetPngBorderPalette: "gray",
@@ -409,6 +415,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     tweetPngIncludeQuoteImages: booleanValue(record.tweetPngIncludeQuoteImages, fallback.tweetPngIncludeQuoteImages),
     tweetPngShrinkTallImages: booleanValue(record.tweetPngShrinkTallImages, fallback.tweetPngShrinkTallImages),
     tweetPngIncludeDate: booleanValue(record.tweetPngIncludeDate, fallback.tweetPngIncludeDate),
+    tweetPngIncludeWatermark: booleanValue(record.tweetPngIncludeWatermark, fallback.tweetPngIncludeWatermark),
     tweetPngIncludeStats: booleanValue(record.tweetPngIncludeStats, fallback.tweetPngIncludeStats),
     tweetPngBorder: booleanValue(record.tweetPngBorder, fallback.tweetPngBorder),
     tweetPngBorderPalette: oneOf(record.tweetPngBorderPalette, ["purple", "gray", "blue", "green"], fallback.tweetPngBorderPalette),

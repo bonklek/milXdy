@@ -17,9 +17,10 @@ Use the settings-wheel button in the preview header to change:
 - background and font color, including Paper, Lavender, Night, and Contrast presets;
 - whether post images are included;
 - whether quoted-post text is included;
-- whether quoted-post images are included.
+- whether quoted-post images are included;
+- whether the default-on **milXdy** watermark appears in the lower-right pink margin.
 
-Changes update the preview and save as defaults. Existing date, RemiStats, border, palette, and tall-image settings remain available in Apps & Features and remain part of visual/profile packs.
+Changes update the preview and save as defaults. The watermark setting is preserved with visual/profile packs. Existing date, RemiStats, border, palette, and tall-image settings remain available in Apps & Features and remain part of visual/profile packs.
 
 ## Upgrade, disable, downgrade, and rollback
 
