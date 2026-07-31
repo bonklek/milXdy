@@ -8,6 +8,8 @@
   // into account-scoped state or a server read-history mutation.
   let lastReadDismissedForDocument = false;
   const autoFilledCraftRoots = new WeakSet<Element>();
+  const nativeInspectionClick = new WeakSet<Element>();
+  let pendingInspection: { item: Element; timer: number } | null = null;
   const nativeSetTimeout = window.setTimeout.bind(window);
 
   function ensureLastReadStyle(): void {
@@ -18,7 +20,8 @@
       .milxdy-last-read-marker { position: relative; }
       .milxdy-last-read-dismiss {
         display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem;
-        margin-inline-start: .35rem; border: 1px solid currentColor; border-radius: 999px;
+        position: absolute; top: 50%; right: -.25rem; transform: translate(100%, -50%);
+        border: 1px solid currentColor; border-radius: 999px;
         padding: 0; background: Canvas; color: CanvasText; cursor: pointer; font: 700 1rem/1 sans-serif;
         opacity: 0; pointer-events: none;
       }
@@ -29,8 +32,9 @@
     document.documentElement.append(style);
   }
 
-  function click(element: Element): void {
-    element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+  function click(element: HTMLElement): void {
+    nativeInspectionClick.add(element);
+    element.click();
   }
 
   function isEmptySlot(element: Element): boolean {
@@ -48,30 +52,40 @@
     return /hammer/i.test(`${item.getAttribute("data-item-type") || ""} ${item.getAttribute("aria-label") || ""} ${item.textContent || ""} ${item.innerHTML}`);
   }
 
-  function placeSelectedItem(item: Element, destination: Element | null): void {
+  function dragToSlot(item: HTMLElement, destination: HTMLElement | null): void {
     if (!destination || !isEmptySlot(destination)) return;
-    // These are the site's existing local selection handlers.  The extension
-    // neither writes inventory state nor calls a craft/assembly endpoint.
-    click(item);
-    queueMicrotask(() => click(destination));
+    // React DnD owns the actual selection and validation. These local DOM
+    // events drive its existing drag/drop path; they neither mutate inventory
+    // themselves nor contact the craft endpoint.
+    const dataTransfer = new DataTransfer();
+    const event = (type: string, target: HTMLElement) => target.dispatchEvent(new DragEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      dataTransfer,
+    }));
+    event("dragstart", item);
+    event("dragenter", destination);
+    event("dragover", destination);
+    event("drop", destination);
+    event("dragend", item);
   }
 
-  function placeCraftingItem(item: Element): void {
+  function placeCraftingItem(item: HTMLElement): void {
     const craft = item.closest(".crafting-module");
     if (!craft) return;
     const destination = itemIsHammer(item)
-      ? craft.querySelector(".crafting-module__hammer-slot--empty")
+      ? craft.querySelector<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")
       : craft.querySelector(".crafting-module__input-slot:not(.crafting-module__input-slot--filled), .crafting-module__smash-input-slot:not(.crafting-module__smash-input-slot--filled)");
-    placeSelectedItem(item, destination);
+    dragToSlot(item, destination as HTMLElement | null);
   }
 
   function autoFillGreenSacrifice(craft: Element): void {
     if (autoFilledCraftRoots.has(craft)) return;
     autoFilledCraftRoots.add(craft);
-    const sacrifice = craft.querySelector(".crafting-module__sacrifice-input-slot");
+    const sacrifice = craft.querySelectorAll<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")[1] || null;
     if (!sacrifice || !isEmptySlot(sacrifice)) return;
-    const green = Array.from(craft.querySelectorAll(".crafting-module__beetle-item")).find(itemLooksGreen);
-    if (green) placeSelectedItem(green, sacrifice);
+    const green = Array.from(craft.querySelectorAll<HTMLElement>(".crafting-module__beetle-item")).find(itemLooksGreen);
+    if (green) dragToSlot(green, sacrifice);
   }
 
   function installLastReadDismissal(marker: HTMLElement): void {
@@ -104,10 +118,7 @@
     // Remilia's marker has no stable class name, but its visible label is a
     // stable, accessible UI contract. Restrict the match to compact elements
     // so a message merely mentioning "last read" is never altered.
-    document.querySelectorAll<HTMLElement>("div, span, p").forEach((element) => {
-      if (element.children.length > 0 || element.textContent?.trim().toLowerCase() !== "last read") return;
-      installLastReadDismissal(element);
-    });
+    document.querySelectorAll<HTMLElement>(".message-list__jump-to-last-read").forEach(installLastReadDismissal);
   }
 
   function craftFastSubmissionIsActive(): boolean {
@@ -126,12 +137,25 @@
     fastCraftSubmissionUntil = Date.now() + 12_000;
   }, true);
 
-  document.addEventListener("dblclick", (event) => {
+  document.addEventListener("click", (event) => {
     if (new URLSearchParams(location.search).get("cartridge") !== "craft") return;
     const target = event.target instanceof Element ? event.target : null;
-    const item = target?.closest(".crafting-module__beetle-item");
+    const item = target?.closest<HTMLElement>(".crafting-module__beetle-item");
     if (!item || item.classList.contains("crafting-module__beetle-item--unavailable")) return;
-    placeCraftingItem(item);
+    if (nativeInspectionClick.delete(item)) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (pendingInspection?.item === item) {
+      clearTimeout(pendingInspection.timer);
+      pendingInspection = null;
+      placeCraftingItem(item);
+      return;
+    }
+    const timer = nativeSetTimeout(() => {
+      pendingInspection = null;
+      click(item);
+    }, 220);
+    pendingInspection = { item, timer };
   }, true);
 
   // Remilia schedules these three timers after a valid Craft API submission:
