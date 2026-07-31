@@ -11,9 +11,9 @@ function boot(nextContext) {
   context = nextContext;
   context.recordDiagnostic("tweet-composer-kit.ready", { capability: "composer-adjacent-panel" });
 }
-async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, signal }) {
+async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }) {
   if (!context || signal.aborted) return;
-  panel.replaceChildren(buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, signal }));
+  panel.replaceChildren(buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }));
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
 function onReplyAction({ panel, templates, selectTemplate, openNativeReply, close, signal }) {
@@ -66,7 +66,7 @@ function onReplyAction({ panel, templates, selectTemplate, openNativeReply, clos
   panel.replaceChildren(root);
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
-function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, signal }) {
+function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }) {
   const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__composer-panel", ariaLabel: "Tweet Composer Kit" });
   const topInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Top text", ariaLabel: "Top text", autocomplete: "off" });
   const bottomInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Bottom text", ariaLabel: "Bottom text", autocomplete: "off" });
@@ -75,7 +75,7 @@ function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteSer
     el("div", { className: "tweet-composer-kit__caption-fields" }, topInput, bottomInput),
     buildMemeControls(random),
     buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }),
-    buildMediaPicker({ queryRemoteService, signal })
+    buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal })
   );
   return root;
 }
@@ -165,25 +165,26 @@ function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, ope
   panel.replaceChildren(root);
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
-function buildMediaPicker({ queryRemoteService, signal }) {
+function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal }) {
   const root = el("section", { className: "tweet-composer-kit__media-picker", ariaLabel: "Remibooru reaction media" });
   const facets = el("input", { className: "tweet-composer-kit__media-query", type: "search", maxLength: 160, placeholder: "Search Remibooru tags", ariaLabel: "Search Remibooru tags", autocomplete: "off" });
-  const recent = el("button", { className: "tweet-composer-kit__media-button", type: "button", textContent: "Recent" });
   const search = el("button", { className: "tweet-composer-kit__media-button", type: "button", textContent: "Search" });
+  const previous = el("button", { className: "tweet-composer-kit__media-page", type: "button", textContent: "\u25C0", ariaLabel: "Previous Remibooru results", title: "Previous results" });
+  const next = el("button", { className: "tweet-composer-kit__media-page", type: "button", textContent: "\u25B6", ariaLabel: "Next Remibooru results", title: "Next results" });
   const tags = el("button", { className: "tweet-composer-kit__media-button", type: "button", textContent: "Tags" });
   const results = el("div", { className: "tweet-composer-kit__media-results", role: "list", ariaLabel: "Remibooru results" });
-  const facetList = el("div", { className: "tweet-composer-kit__media-facets", ariaLabel: "Remibooru tags" });
-  const more = el("button", { className: "tweet-composer-kit__media-more", type: "button", textContent: "More", hidden: true });
   const status = el("p", { className: "tweet-composer-kit__media-status", role: "status", ariaLive: "polite" });
   const available = typeof queryRemoteService === "function";
   let nextCursor = null;
+  let currentCursor = null;
+  const previousCursors = [];
   const setBusy = (busy) => {
     root.toggleAttribute("data-busy", busy);
     root.setAttribute("aria-busy", String(busy));
-    recent.disabled = busy || !available;
     search.disabled = busy || !available;
+    previous.disabled = busy || !available || previousCursors.length === 0;
+    next.disabled = busy || !available || !nextCursor;
     tags.disabled = busy || !available;
-    more.disabled = busy || !available;
   };
   const render = (items, replace) => {
     if (replace) results.replaceChildren();
@@ -203,11 +204,11 @@ function buildMediaPicker({ queryRemoteService, signal }) {
     }
     if (!results.childElementCount) status.textContent = "No matching Remibooru media was found.";
   };
-  const load = async ({ cursor = null, recentOnly = false } = {}) => {
+  const load = async ({ cursor = null, history = "reset", suggested = false } = {}) => {
     if (!available || signal.aborted) return;
-    const parsedFacets = recentOnly ? [] : parseRemibooruFacets(facets.value);
+    const parsedFacets = parseRemibooruFacets(facets.value);
     setBusy(true);
-    status.textContent = recentOnly ? "Loading recent Remibooru media..." : "Searching Remibooru...";
+    status.textContent = suggested ? "Finding matching Remibooru media..." : "Searching Remibooru...";
     try {
       const result = await queryRemoteService("remibooru-reactions", {
         resource: "posts",
@@ -217,40 +218,34 @@ function buildMediaPicker({ queryRemoteService, signal }) {
       });
       if (!result?.ok || !result.page) throw new Error(result?.error || "Remibooru is unavailable.");
       if (signal.aborted) return;
-      render(result.page.items, !cursor);
+      render(result.page.items, true);
+      if (history === "next") previousCursors.push(currentCursor);
+      if (history === "previous") currentCursor = previousCursors.pop() || null;
+      if (history === "reset") previousCursors.splice(0);
+      if (history !== "previous") currentCursor = cursor;
       nextCursor = typeof result.page.nextCursor === "string" && result.page.nextCursor ? result.page.nextCursor : null;
-      more.hidden = !nextCursor;
       if (results.childElementCount) status.textContent = "Remibooru results. Select one to open its canonical post.";
     } catch {
       if (!signal.aborted) {
-        more.hidden = true;
         status.textContent = "Remibooru is unavailable. Try again.";
       }
     } finally {
       if (!signal.aborted) setBusy(false);
     }
   };
-  recent.addEventListener("click", () => void load({ recentOnly: true }), { signal });
-  search.addEventListener("click", () => void load(), { signal });
+  search.addEventListener("click", () => void load({ history: "reset" }), { signal });
   tags.addEventListener("click", async () => {
     if (!available || signal.aborted) return;
     setBusy(true);
-    status.textContent = "Loading Remibooru tags...";
+    status.textContent = "Finding suggested Remibooru tags...";
     try {
-      const result = await queryRemoteService("remibooru-reactions", { resource: "facets" });
-      if (!result?.ok || !Array.isArray(result.facets)) throw new Error(result?.error || "Remibooru is unavailable.");
+      const result = typeof suggestRemoteQueryFacets === "function" ? await suggestRemoteQueryFacets("remibooru-reactions") : null;
       if (signal.aborted) return;
-      facetList.replaceChildren(...result.facets.slice(0, 12).filter((facet) => facet && typeof facet.value === "string").map((facet) => {
-        const choice = el("button", { className: "tweet-composer-kit__media-facet", type: "button", textContent: facet.value, title: `${facet.postCount || 0} posts` });
-        choice.addEventListener("click", () => {
-          facets.value = facet.value;
-          void load();
-        }, { signal });
-        return choice;
-      }));
-      status.textContent = facetList.childElementCount ? "Choose a Remibooru tag to search." : "No Remibooru tags are available.";
+      const suggested = normalizeSuggestedFacets(result?.suggestions);
+      facets.value = suggested.join(" ");
+      await load({ history: "reset", suggested: true });
     } catch {
-      if (!signal.aborted) status.textContent = "Remibooru tags are unavailable. Try again.";
+      if (!signal.aborted) await load({ history: "reset", suggested: true });
     } finally {
       if (!signal.aborted) setBusy(false);
     }
@@ -258,15 +253,23 @@ function buildMediaPicker({ queryRemoteService, signal }) {
   facets.addEventListener("keydown", (event) => {
     if (event.key !== "Enter") return;
     event.preventDefault();
-    void load();
+    void load({ history: "reset" });
   }, { signal });
-  more.addEventListener("click", () => void load({ cursor: nextCursor }), { signal });
-  root.append(el("div", { className: "tweet-composer-kit__media-controls" }, facets, recent, search, tags), facetList, results, more, status);
+  previous.addEventListener("click", () => void load({ cursor: previousCursors[previousCursors.length - 1] || null, history: "previous" }), { signal });
+  next.addEventListener("click", () => void load({ cursor: nextCursor, history: "next" }), { signal });
+  root.append(el("div", { className: "tweet-composer-kit__media-controls" }, facets, search, previous, next, tags), results, status);
+  setBusy(false);
   if (!available) {
     status.textContent = "Remibooru search is not available in this build.";
-    setBusy(false);
   }
   return root;
+}
+function normalizeSuggestedFacets(suggestions) {
+  return (Array.isArray(suggestions) ? suggestions : []).map((suggestion) => {
+    if (typeof suggestion === "string") return suggestion;
+    if (suggestion && typeof suggestion.id === "string") return suggestion.id;
+    return "";
+  }).map((facet) => facet.trim()).filter(Boolean).slice(0, 5).map((facet) => facet.slice(0, 64));
 }
 function parseRemibooruFacets(value) {
   return String(value || "").split(/[\s,]+/).map((facet) => facet.trim()).filter(Boolean).slice(0, 5).map((facet) => facet.slice(0, 60));
