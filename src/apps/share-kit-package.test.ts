@@ -8,6 +8,7 @@ import {
   normalizeVisualTheme,
   setTweetPngSettingsOpen,
   tweetPngPalette,
+  tweetPngWatermarkColor,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
@@ -42,7 +43,13 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain('data-setting="tweetPngIncludeWatermark"');
     expect(packageSource).toContain("> Include milXdy watermark</label>");
     expect(packageSource).toContain('context.fillText("milXdy", width - 38, height - 8)');
-    expect(packageSource).toContain("if (visualTheme.tweetPngIncludeWatermark) drawTweetPngWatermark");
+    expect(packageSource).toContain("drawTweetPngWatermark(context, width, height, visualTheme.tweetPngBackgroundColor)");
+  });
+
+  it("renders a subtle watermark tint derived from light and dark backgrounds", () => {
+    expect(tweetPngWatermarkColor("#fffaff")).toBe("#e0dce0");
+    expect(tweetPngWatermarkColor("#000000")).toBe("#1f1f1f");
+    expect(tweetPngWatermarkColor("#15202b")).toBe("#313b44");
   });
 
   it("themes nested QRT/media cards from the selected export background", () => {

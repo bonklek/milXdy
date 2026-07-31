@@ -413,7 +413,9 @@ async function renderTweetPng(data) {
     context.font = `22px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(data.date, bodyX, footerY);
   }
-  if (visualTheme.tweetPngIncludeWatermark) drawTweetPngWatermark(context, width, height);
+  if (visualTheme.tweetPngIncludeWatermark) {
+    drawTweetPngWatermark(context, width, height, visualTheme.tweetPngBackgroundColor);
+  }
   return {
     blob: await canvasToPngBlob(canvas),
     width,
@@ -799,9 +801,17 @@ function drawDottedBackground(context, width, height) {
     for (let x = 0; x < width; x += 12) context.fillRect(x, y, 1, 1);
   }
 }
-function drawTweetPngWatermark(context, width, height) {
+function tweetPngWatermarkColor(background) {
+  const normalized = normalizeColor(background, DEFAULT_VISUAL_THEME.tweetPngBackgroundColor);
+  const channels = [1, 3, 5].map((offset) => Number.parseInt(normalized.slice(offset, offset + 2), 16));
+  const luminance = (channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722) / 255;
+  const target = luminance > 0.5 ? 0 : 255;
+  const tinted = channels.map((channel) => Math.round(channel + (target - channel) * 0.12));
+  return `#${tinted.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+function drawTweetPngWatermark(context, width, height, background) {
   context.save();
-  context.fillStyle = "rgba(123, 44, 255, 0.82)";
+  context.fillStyle = tweetPngWatermarkColor(background);
   context.font = `700 16px ${TWEET_PNG_FONT_FALLBACK}`;
   context.textAlign = "right";
   context.textBaseline = "alphabetic";
@@ -1289,5 +1299,6 @@ export {
   setTweetPngSettingsOpen,
   tweetPngMediaRemovalKey,
   tweetPngPalette,
-  tweetPngVisibleLineCount
+  tweetPngVisibleLineCount,
+  tweetPngWatermarkColor
 };
