@@ -11,6 +11,7 @@ import {
 } from "../../examples/packages/local-dev/tweet-composer-kit/src/custom-pet-contract.js";
 
 const supportedFamilies = ["milady", "remilio", "bonkler", "kagami"];
+const sourceNftNumbers = { milady: 0, remilio: 1, bonkler: 1, kagami: 1 };
 const requestedFamily = readArg("--family");
 const check = process.argv.includes("--check");
 const families = requestedFamily ? [requestedFamily] : supportedFamilies;
@@ -25,6 +26,7 @@ for (const family of families) {
   const traits = makeTraits(family);
   const request = makePetRequest({
     templateFamily: family,
+    sourceNftNumber: sourceNftNumbers[family],
     imageSha256: createHash("sha256").update(avatar).digest("hex"),
     traits,
     bodyCompletion: makeBodyCompletion(family, traits.race),

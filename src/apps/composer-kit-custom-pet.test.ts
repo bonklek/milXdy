@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import {
   BODY_COMPLETION_CATALOG,
   PET_REQUEST_FAMILIES,
+  PET_REQUEST_NFT_RANGES,
   createStoredZip,
   legColorForRace,
   listStoredZip,
@@ -57,6 +58,7 @@ async function validRequest(templateFamily = "milady") {
     avatar,
     request: makePetRequest({
       templateFamily,
+      sourceNftNumber: PET_REQUEST_NFT_RANGES[templateFamily].min,
       imageSha256: await sha256Hex(avatar),
       traits: completeTraits(),
       bodyCompletion: completeBody(),
@@ -79,6 +81,22 @@ describe("Composer Kit Custom Pet request contract", () => {
   it.each(PET_REQUEST_FAMILIES)("accepts an explicit %s family request", async (templateFamily) => {
     const { avatar, request } = await validRequest(templateFamily);
     await expect(validatePetRequest(request, avatar)).resolves.toEqual({ ok: true, errors: [] });
+  });
+
+  it.each([
+    ["milady", 0, 9999],
+    ["remilio", 1, 10000],
+    ["bonkler", 1, 150],
+    ["kagami", 1, 3000],
+  ] as const)("enforces the official %s NFT-number range", async (templateFamily, min, max) => {
+    const { request } = await validRequest(templateFamily);
+    expect(request.sourceNftNumber).toBe(min);
+    request.sourceNftNumber = max;
+    expect(validatePetRequestShape(request)).toEqual([]);
+    request.sourceNftNumber = max + 1;
+    expect(validatePetRequestShape(request)).toContain(
+      `sourceNftNumber must be an integer from ${min} to ${max} for ${templateFamily}.`,
+    );
   });
 
   it("rejects an invented or incomplete lower half", async () => {
@@ -141,5 +159,7 @@ describe("Composer Kit Custom Pet request contract", () => {
     expect(source).not.toContain("rightsConfirmed");
     expect(source).not.toContain('blankSelect("Leg color"');
     expect(source).toContain("legColorForRace(templateFamily, traits.race)");
+    expect(source).toContain("NFT number (optional)");
+    expect(source).toContain("nftNumberRangeForFamily(family.select.value)");
   });
 });

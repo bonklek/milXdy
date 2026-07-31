@@ -94,6 +94,7 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
         "schemaVersion": 1,
         "templateId": selected["templateId"],
         "family": request["templateFamily"],
+        "sourceNftNumber": request.get("sourceNftNumber"),
         "petName": pet.get("name"),
         "personality": pet.get("personality"),
         "rightsScope": request["rightsScope"],

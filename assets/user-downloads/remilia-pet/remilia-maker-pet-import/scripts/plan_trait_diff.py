@@ -20,6 +20,7 @@ METADATA_ONLY_PATHS = {
     "pet.name",
     "pet.personality",
     "rightsScope",
+    "sourceNftNumber",
 }
 SMALL_APPEARANCE_TRAITS = {"eyes", "glasses", "earrings"}
 MAJOR_SILHOUETTE_TRAITS = {"race", "hair", "shirt"}

@@ -3,6 +3,12 @@ var PET_REQUEST_SCHEMA_VERSION = 1;
 var PET_REQUEST_ADAPTER_SKILL = "remilia-maker-pet-import";
 var PET_REQUEST_EXPORT_RESOLUTION = Object.freeze({ width: 1024, height: 1024 });
 var PET_REQUEST_FAMILIES = Object.freeze(["milady", "remilio", "bonkler", "kagami"]);
+var PET_REQUEST_NFT_RANGES = Object.freeze({
+  milady: Object.freeze({ min: 0, max: 9999 }),
+  remilio: Object.freeze({ min: 1, max: 1e4 }),
+  bonkler: Object.freeze({ min: 1, max: 150 }),
+  kagami: Object.freeze({ min: 1, max: 3e3 })
+});
 var PET_REQUEST_TRAITS = Object.freeze(["race", "hair", "eyes", "glasses", "shirt", "earrings"]);
 var PET_REQUEST_INSTRUCTION = "Use $remilia-maker-pet-import with the attached Maker export bundle.";
 var PET_REQUEST_TRAIT_POLICY = Object.freeze({
@@ -141,8 +147,12 @@ function legColorForRace(templateFamily, race) {
   const tokens = new Set(`${race.assetId ?? ""} ${race.label ?? ""}`.toLowerCase().split(/[^a-z0-9]+/u).filter(Boolean));
   return rules.find((rule) => rule.aliases.some((alias) => tokens.has(alias)))?.color ?? null;
 }
+function nftNumberRangeForFamily(templateFamily) {
+  return PET_REQUEST_NFT_RANGES[templateFamily] ?? null;
+}
 function makePetRequest({
   templateFamily,
+  sourceNftNumber = null,
   imageSha256,
   traits,
   bodyCompletion,
@@ -179,6 +189,7 @@ function makePetRequest({
       deterministicCompositeVersion: 1
     }
   };
+  if (sourceNftNumber != null) request.sourceNftNumber = sourceNftNumber;
   if (petName.trim() || personality.trim()) {
     request.pet = {};
     if (petName.trim()) request.pet.name = petName.trim().slice(0, 80);
@@ -211,6 +222,12 @@ function validatePetRequestShape(request) {
   if (request.schemaVersion !== PET_REQUEST_SCHEMA_VERSION) errors.push(`schemaVersion must be ${PET_REQUEST_SCHEMA_VERSION}.`);
   if (request.adapterSkill !== PET_REQUEST_ADAPTER_SKILL) errors.push(`adapterSkill must be ${PET_REQUEST_ADAPTER_SKILL}.`);
   if (!PET_REQUEST_FAMILIES.includes(request.templateFamily)) errors.push("templateFamily is unsupported.");
+  if (request.sourceNftNumber != null) {
+    const range = nftNumberRangeForFamily(request.templateFamily);
+    if (!Number.isInteger(request.sourceNftNumber) || !range || request.sourceNftNumber < range.min || request.sourceNftNumber > range.max) {
+      errors.push(range ? `sourceNftNumber must be an integer from ${range.min} to ${range.max} for ${request.templateFamily}.` : "sourceNftNumber requires a supported templateFamily.");
+    }
+  }
   if (request.templateVersion !== 1) errors.push("templateVersion must be 1.");
   if (JSON.stringify(request.templateFamilyOptions) !== JSON.stringify(PET_REQUEST_FAMILIES)) {
     errors.push("templateFamilyOptions must declare Milady, Remilio, Bonkler, and Kagami in contract order.");
@@ -447,6 +464,21 @@ function buildCustomPetExport({ signal }) {
   });
   const family = blankSelect("Maker template family", PET_REQUEST_FAMILIES.map((id) => ({ id, label: FAMILY_LABELS[id] })));
   family.select.name = "templateFamily";
+  const nftNumberInput = element("input", {
+    className: "tweet-composer-kit__pet-input",
+    type: "number",
+    step: "1",
+    inputMode: "numeric",
+    autocomplete: "off",
+    ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help"
+  });
+  const nftNumber = labeledControl("NFT number (optional)", nftNumberInput);
+  nftNumber.hidden = true;
+  const nftNumberHelp = element("p", {
+    id: "tweet-composer-kit-pet-nft-number-help",
+    className: "tweet-composer-kit__pet-help",
+    hidden: true
+  });
   const avatar = element("input", {
     className: "tweet-composer-kit__pet-file",
     type: "file",
@@ -532,6 +564,8 @@ function buildCustomPetExport({ signal }) {
   form.append(
     fieldset("Maker source", [
       family.root,
+      nftNumber,
+      nftNumberHelp,
       labeledControl("Transparent Maker PNG", avatar),
       avatarHelp
     ]),
@@ -607,6 +641,19 @@ function buildCustomPetExport({ signal }) {
     updateBottomCompatibility(bottom.select, coverage.select.value, status);
     state.previewBytes = null;
   }, { signal });
+  family.select.addEventListener("change", () => {
+    const range = nftNumberRangeForFamily(family.select.value);
+    nftNumber.hidden = !range;
+    nftNumberHelp.hidden = !range;
+    if (!range) {
+      nftNumberInput.value = "";
+      return;
+    }
+    nftNumberInput.min = String(range.min);
+    nftNumberInput.max = String(range.max);
+    nftNumberInput.placeholder = `${range.min}\u2013${range.max}`;
+    nftNumberHelp.textContent = `${FAMILY_LABELS[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
+  }, { signal });
   for (const control of form.querySelectorAll("select, input, textarea")) {
     if (control === avatar || control === coverage.select || control === instruction) continue;
     control.addEventListener("change", () => {
@@ -618,6 +665,7 @@ function buildCustomPetExport({ signal }) {
     try {
       const selection = collectSelection({
         family,
+        nftNumberInput,
         traitInputs,
         coverage,
         bottom,
@@ -643,6 +691,7 @@ function buildCustomPetExport({ signal }) {
     try {
       const selection = collectSelection({
         family,
+        nftNumberInput,
         traitInputs,
         coverage,
         bottom,
@@ -696,6 +745,7 @@ function buildCustomPetExport({ signal }) {
 function collectSelection(controls) {
   if (!controls.state.image || !controls.state.avatarBytes) throw new Error("Choose a transparent Maker PNG.");
   const templateFamily = requiredValue(controls.family.select, "Choose a Maker template family.");
+  const sourceNftNumber = optionalNftNumber(controls.nftNumberInput, templateFamily);
   const traits = Object.fromEntries(Object.entries(controls.traitInputs).map(([trait, input]) => {
     const assetId = requiredValue(input.assetId, `Enter the ${friendlyTrait(trait)} asset ID, or "none".`);
     return [trait, { assetId, ...input.label.value.trim() ? { label: input.label.value.trim() } : {} }];
@@ -718,6 +768,7 @@ function collectSelection(controls) {
   const footwearColorVariant = requiredValue(controls.footwearColor.select, "Choose a footwear color.");
   return {
     templateFamily,
+    ...sourceNftNumber == null ? {} : { sourceNftNumber },
     traits,
     bodyCompletion: {
       legCoverage,
@@ -739,6 +790,17 @@ function collectSelection(controls) {
     petName: controls.petName.querySelector("input").value,
     personality: controls.personality.querySelector("input").value
   };
+}
+function optionalNftNumber(control, templateFamily) {
+  const raw = control.value.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  const range = nftNumberRangeForFamily(templateFamily);
+  if (!Number.isInteger(value) || !range || value < range.min || value > range.max) {
+    control.focus();
+    throw new Error(`Enter a whole ${FAMILY_LABELS[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
+  }
+  return value;
 }
 async function renderCompletedAvatar(image, selection, canvas) {
   const context2 = canvas.getContext("2d", { alpha: true });

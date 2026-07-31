@@ -190,6 +190,7 @@ def validate_request(request: dict[str, Any]) -> None:
         "templateFamily",
         "templateFamilyOptions",
         "templateVersion",
+        "sourceNftNumber",
         "imageSha256",
         "image",
         "traits",
@@ -199,7 +200,7 @@ def validate_request(request: dict[str, Any]) -> None:
         "generator",
         "pet",
     }
-    required = allowed - {"pet"}
+    required = allowed - {"pet", "sourceNftNumber"}
     reject_keys(request, allowed, "request.json")
     require_keys(request, required, "request.json")
     if request["schemaVersion"] != SCHEMA_VERSION:
@@ -212,6 +213,19 @@ def validate_request(request: dict[str, Any]) -> None:
         raise BundleValidationError("templateFamilyOptions must declare all four families in contract order.")
     if request["templateVersion"] != 1:
         raise BundleValidationError("Only templateVersion 1 is supported.")
+    if "sourceNftNumber" in request:
+        ranges = {
+            "milady": (0, 9999),
+            "remilio": (1, 10000),
+            "bonkler": (1, 150),
+            "kagami": (1, 3000),
+        }
+        lower, upper = ranges[request["templateFamily"]]
+        value = request["sourceNftNumber"]
+        if isinstance(value, bool) or not isinstance(value, int) or not lower <= value <= upper:
+            raise BundleValidationError(
+                f"sourceNftNumber must be an integer from {lower} to {upper} for {request['templateFamily']}."
+            )
     if not isinstance(request["imageSha256"], str) or not SHA256.fullmatch(request["imageSha256"]):
         raise BundleValidationError("imageSha256 must be a lowercase SHA-256 digest.")
     validate_image_record(request["image"])
