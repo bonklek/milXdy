@@ -252,6 +252,8 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
 .tweet-composer-kit__maker-row .tweet-composer-kit__maker:disabled { cursor: not-allowed; opacity: .55; }
 .tweet-composer-kit__maker-status { min-block-size: 0; margin: 0; color: var(--tck-muted); font-size: 10px; }
 .tweet-composer-kit__maker-status:empty { display: none; }
+.tweet-composer-kit__maker-status[data-state="error"] { color: var(--tck-danger); font-weight: 700; }
+.tweet-composer-kit__maker-status[data-state="success"] { color: var(--tck-success); font-weight: 700; }
 .tweet-composer-kit__composer-panel .tweet-composer-kit__notice { flex: 1 1 100%; margin: 0; border: 0; background: transparent; color: var(--tck-muted); padding: 0; font-size: 10px; }
 
 .tweet-composer-kit__media-picker { display: grid; inline-size: 276px; max-inline-size: 100%; gap: 4px; border-block-start: 1px solid var(--tck-border-subtle); padding-block-start: 6px; }
