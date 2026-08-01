@@ -52,7 +52,7 @@ import {
 import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
-import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
+import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, withExternalHandoffTimeout, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
@@ -862,19 +862,20 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     if (typeof tab.id !== "number") return { ok: false, error: "The maker tab could not be created." };
     generatedMakerTabId = tab.id;
     await waitForExternalHandoffTab(tab.id, targetUrl.href);
-    const results = message.adapter === "cheeseworld"
-      ? await chrome.scripting.executeScript({
+    const execution = message.adapter === "cheeseworld"
+      ? chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: "MAIN",
         func: renderCheeseWorldImage,
         args: [sourceImage!.dataUrl, sourceImage!.contentType, captions.topText, captions.bottomText],
       })
-      : await chrome.scripting.executeScript({
+      : chrome.scripting.executeScript({
         target: { tabId: tab.id },
         world: "MAIN",
         func: renderRemiliaMakerImage,
         args: [captions.topText, captions.bottomText, message.mode],
       });
+    const results = await withExternalHandoffTimeout(execution);
     const result = results[0]?.result as { ok?: boolean; error?: string; imageDataUrl?: string } | undefined;
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
     if (!isSafeMakerImageDataUrl(result.imageDataUrl)) return { ok: false, error: "The maker did not return a usable image." };
@@ -969,7 +970,11 @@ async function renderCheeseWorldImage(sourceDataUrl: string, contentType: string
     );
     setInputValue(top, topText);
     setInputValue(bottom, bottomText);
-    await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+    // Inactive maker tabs can suspend requestAnimationFrame. A bounded timer
+    // lets React commit the controlled caption state without depending on a
+    // visible rendering frame; the background wraps the entire injection in a
+    // hard timeout and removes the generated tab in finally.
+    await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
     const filter = await waitFor(
       () => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((candidate) => candidate.textContent?.trim().startsWith("Filter Image")) || null,
       "CheeseWorld deep-fry control is unavailable.",

@@ -149,6 +149,7 @@ function verifyPlatformContract() {
   requireIncludes(background, "renderCheeseWorldImage", "CheeseWorld deep-fry must remain a reviewed host-owned adapter");
   requireIncludes(externalHandoffContract, 'new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN)', "CheeseWorld handoff must use its fixed reviewed destination");
   requireIncludes(background, "validateExternalHandoffImageDataUrl", "CheeseWorld input must be MIME- and size-validated by the host");
+  requireIncludes(background, "withExternalHandoffTimeout", "Generated maker execution must time out so its inactive tab is always cleaned up");
   requireIncludes(background, "active: false", "Reviewed maker handoffs must open inactive tabs");
   requireIncludes(background, "finally {", "Reviewed maker handoffs must clean up generated inactive tabs after success or failure");
   requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
