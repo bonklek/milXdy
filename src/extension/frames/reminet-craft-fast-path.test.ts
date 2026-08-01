@@ -16,7 +16,11 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).toContain("store.selectSacrifice(greenType)");
     expect(source).toContain("data-milxdy-reminet-craft-placement");
     expect(source).toContain('status(`assigned-${slotId}`)');
-    expect(source).toContain("if (!placeCraftingItem(item)) click(item)");
+    expect(source).toContain("DOUBLE_CLICK_WINDOW_MS = 320");
+    expect(source).toContain('document.addEventListener("mousedown"');
+    expect(source).toContain('document.addEventListener("mouseup"');
+    expect(source).toContain("openInspectionCard(item)");
+    expect(source).toContain("if (!placeCraftingItem(item)) openInspectionCard(item)");
     expect(source).toContain("crafting-module__input-slot--5");
     expect(source).toContain("nextCraftingReplacementSlot");
     expect(source).toContain("function nextAssemblySlot");

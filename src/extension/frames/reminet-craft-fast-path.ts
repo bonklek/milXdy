@@ -1,6 +1,7 @@
 (() => {
   const SETTING_ATTRIBUTE = "data-milxdy-reminet-beetle-reduced-motion-setting";
   const PLACEMENT_STATUS_ATTRIBUTE = "data-milxdy-reminet-craft-placement";
+  const DOUBLE_CLICK_WINDOW_MS = 320;
   const FAST_TIMEOUTS = new Set([1_000, 4_500, 8_000]);
   let enabled = document.documentElement.getAttribute(SETTING_ATTRIBUTE) === "true";
   let fastCraftSubmissionUntil = 0;
@@ -13,8 +14,8 @@
   // selection. A remount starts from the first slot again; nothing is stored
   // per account or sent to Remilia.
   const nextCraftingReplacementSlot = new WeakMap<Element, number>();
-  const nativeInspectionClick = new WeakSet<Element>();
   let pendingInspection: { item: Element; timer: number } | null = null;
+  let suppressCraftGestureUntil = 0;
   const nativeSetTimeout = window.setTimeout.bind(window);
 
   function ensureLastReadStyle(): void {
@@ -38,9 +39,13 @@
     document.documentElement.append(style);
   }
 
-  function click(element: HTMLElement): void {
-    nativeInspectionClick.add(element);
-    element.click();
+  function openInspectionCard(item: Element): void {
+    const props = reactFiber(item)?.memoizedProps as Record<string, unknown> | undefined;
+    const onMouseDown = props?.onMouseDown;
+    const onMouseUp = props?.onMouseUp;
+    if (typeof onMouseDown !== "function" || typeof onMouseUp !== "function") return;
+    onMouseDown();
+    onMouseUp();
   }
 
   function itemLooksGreen(item: Element): boolean {
@@ -264,25 +269,54 @@
     fastCraftSubmissionUntil = Date.now() + 12_000;
   }, true);
 
-  document.addEventListener("click", (event) => {
-    if (new URLSearchParams(location.search).get("cartridge") !== "craft") return;
+  function craftingItemForEvent(event: MouseEvent): HTMLElement | null {
+    if (new URLSearchParams(location.search).get("cartridge") !== "craft") return null;
     const target = event.target instanceof Element ? event.target : null;
     const item = target?.closest<HTMLElement>(".crafting-module__beetle-item");
-    if (!item || item.classList.contains("crafting-module__beetle-item--unavailable")) return;
-    if (nativeInspectionClick.delete(item)) return;
+    return !item || item.classList.contains("crafting-module__beetle-item--unavailable") ? null : item;
+  }
+
+  function stopCraftingGesture(event: MouseEvent): void {
     event.preventDefault();
     event.stopImmediatePropagation();
+  }
+
+  document.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+    const item = craftingItemForEvent(event);
+    if (!item) return;
+    stopCraftingGesture(event);
     if (pendingInspection?.item === item) {
       clearTimeout(pendingInspection.timer);
       pendingInspection = null;
-      if (!placeCraftingItem(item)) click(item);
+      suppressCraftGestureUntil = Date.now() + DOUBLE_CLICK_WINDOW_MS;
+      if (!placeCraftingItem(item)) openInspectionCard(item);
       return;
     }
+    if (pendingInspection) {
+      clearTimeout(pendingInspection.timer);
+      openInspectionCard(pendingInspection.item);
+    }
     const timer = nativeSetTimeout(() => {
+      if (pendingInspection?.item !== item) return;
       pendingInspection = null;
-      click(item);
-    }, 220);
+      openInspectionCard(item);
+    }, DOUBLE_CLICK_WINDOW_MS);
     pendingInspection = { item, timer };
+  }, true);
+
+  document.addEventListener("mouseup", (event) => {
+    const item = craftingItemForEvent(event);
+    if (item && (pendingInspection?.item === item || Date.now() < suppressCraftGestureUntil)) {
+      stopCraftingGesture(event);
+    }
+  }, true);
+
+  document.addEventListener("click", (event) => {
+    const item = craftingItemForEvent(event);
+    if (item && (pendingInspection?.item === item || Date.now() < suppressCraftGestureUntil)) {
+      stopCraftingGesture(event);
+    }
   }, true);
 
   // Remilia schedules these three timers after a valid Craft API submission:
