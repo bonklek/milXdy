@@ -180,7 +180,26 @@
           "label": { "type": "string", "minLength": 1 },
           "adapter": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
           "target": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
-          "modes": { "type": "array", "items": { "enum": ["captioned", "randomMeme"] }, "uniqueItems": true, "maxItems": 2 }
+          "modes": { "type": "array", "items": { "enum": ["captioned", "randomMeme"] }, "uniqueItems": true, "maxItems": 2 },
+          "captionSource": { "enum": ["composerDraft", "packageFields"] },
+          "captionMaxLength": { "type": "integer", "minimum": 1, "maximum": 10000 },
+          "mediaTransfer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "result", "consent", "maxBytes", "allowedMimeTypes"],
+            "properties": {
+              "source": { "const": "initiatingComposerImage" },
+              "result": { "const": "replaceSameAttachment" },
+              "consent": { "const": "perInvocation" },
+              "maxBytes": { "type": "integer", "minimum": 1, "maximum": 10485760 },
+              "allowedMimeTypes": {
+                "type": "array",
+                "minItems": 1,
+                "uniqueItems": true,
+                "items": { "enum": ["image/png", "image/jpeg", "image/gif", "image/webp"] }
+              }
+            }
+          }
         }
       }
     },

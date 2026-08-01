@@ -16,6 +16,23 @@ export interface AppComposerAction {
   presentation: "anchoredPanel";
 }
 
+export interface AppExternalHandoff {
+  id: string;
+  label: string;
+  adapter: string;
+  target: string;
+  modes?: Array<"captioned" | "randomMeme">;
+  captionSource?: "composerDraft" | "packageFields";
+  captionMaxLength?: number;
+  mediaTransfer?: {
+    source: "initiatingComposerImage";
+    result: "replaceSameAttachment";
+    consent: "perInvocation";
+    maxBytes: number;
+    allowedMimeTypes: Array<"image/png" | "image/jpeg" | "image/gif" | "image/webp">;
+  };
+}
+
 export interface AppContextualPostAction {
   id: string;
   label: string;
@@ -75,6 +92,7 @@ export interface PublicAppManifest {
   surfaces: MilxdyAppSurface[];
   loadTriggers: Array<"startup" | "surface" | "dockOpen" | "idle" | "userAction">;
   composerAction?: AppComposerAction;
+  externalHandoffs?: AppExternalHandoff[];
   contextualPostActions?: AppContextualPostAction[];
 }
 
@@ -110,6 +128,11 @@ export interface MilxdyComposerActionContext {
   readonly kind: "post" | "reply";
   readonly panel: HTMLElement;
   readonly signal: AbortSignal;
+  readonly externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
+  launchExternalHandoff(id: string, options?: {
+    mode?: "captioned" | "randomMeme";
+    captions?: { topText: string; bottomText: string };
+  }): Promise<{ ok: boolean; error?: string }>;
   readonly remoteQueries: ReadonlyArray<{ id: string; label: string }>;
   queryRemoteService(id: string, request: {
     resource: "posts" | "facets";

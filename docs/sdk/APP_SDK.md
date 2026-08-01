@@ -488,6 +488,39 @@ The first reviewed adapter is `remilia-maker`, with targets `milady`, `remilio`,
 new adapter is host work with a deterministic allowlist, verified remote control
 mapping, consent disclosure, and focused tests—not a package-only change.
 
+The reviewed `cheeseworld` adapter has the single target `deepfry` and requires
+`https://cult.inc/*`. It is the only handoff that may declare `mediaTransfer`:
+
+```json
+{
+  "id": "cheeseworld-deepfry",
+  "label": "CHEESEWORLD",
+  "adapter": "cheeseworld",
+  "target": "deepfry",
+  "modes": ["captioned"],
+  "captionSource": "packageFields",
+  "captionMaxLength": 280,
+  "mediaTransfer": {
+    "source": "initiatingComposerImage",
+    "result": "replaceSameAttachment",
+    "consent": "perInvocation",
+    "maxBytes": 10485760,
+    "allowedMimeTypes": ["image/png", "image/jpeg", "image/gif", "image/webp"]
+  }
+}
+```
+
+Each explicit package click triggers host-owned disclosure and consent. After
+consent, the host requires exactly one image in the initiating composer,
+validates its declared MIME and byte limit, transfers it with the bounded Top
+and Bottom captions to the fixed CheeseWorld page, invokes the reviewed
+deep-fry control, and captures a PNG. Before replacement, the host verifies the
+same composer and the same attachment control are still connected. It replaces
+only that attachment and attempts to restore the original if replacement
+fails. Success, failure, navigation, and timeout all close only the inactive
+tab created for the handoff. The package receives no image bytes, URLs, DOM,
+tab identity, file handle, or browser API, and the host never posts.
+
 #### Reviewed remote galleries
 
 `remoteQueries` is the read-only counterpart to a handoff. It is not a generic

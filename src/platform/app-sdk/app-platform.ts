@@ -90,6 +90,14 @@ export type AppExternalHandoff = {
   captionSource?: "composerDraft" | "packageFields";
   /** Per-field bound for explicit package caption fields (1–10,000). */
   captionMaxLength?: number;
+  /** Reviewed host-only composer media transfer; packages receive no media. */
+  mediaTransfer?: {
+    source: "initiatingComposerImage";
+    result: "replaceSameAttachment";
+    consent: "perInvocation";
+    maxBytes: number;
+    allowedMimeTypes: Array<"image/png" | "image/jpeg" | "image/gif" | "image/webp">;
+  };
 };
 /** A reviewed, read-only remote gallery adapter; packages never receive raw fetch. */
 export type AppRemoteQuery = {
