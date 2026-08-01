@@ -54,7 +54,7 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
-import { OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
+import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -629,7 +629,7 @@ async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: 
     const response = await budgetedFetch(parsed.href, { credentials: "omit" }, "remibooru:prepareMedia");
     if (!response.ok) return { ok: false, error: `The selected image returned HTTP ${response.status}.` };
     const mimeType = (response.headers.get("content-type") || "").split(";", 1)[0].toLowerCase();
-    if (!/^image\/(?:png|jpeg|webp|gif)$/u.test(mimeType)) return { ok: false, error: "The selected media is not a supported image." };
+    if (!isSupportedMediaContributionMime(mimeType)) return { ok: false, error: "The selected media is not a supported image." };
     const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
     let width = message.width;
     let height = message.height;
@@ -678,7 +678,7 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     const payload = (response.headers.get("content-type") || "").includes("application/json") ? await response.json() as Record<string, unknown> : null;
     if (!response.ok) {
       contextMediaHandles.release(message.mediaHandle);
-      return { ok: false, error: typeof payload?.error === "string" ? payload.error : `Remibooru rejected the contribution (HTTP ${response.status}).` };
+      return { ok: false, error: mediaContributionFailureMessage(response.status, payload?.error) };
     }
     const post = payload?.post as Record<string, unknown> | undefined;
     if (typeof post?.id !== "string") {
@@ -690,7 +690,9 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     return { ok: true, canonicalUrl: `https://remibooru.com/posts/${encodeURIComponent(post.id)}` };
   } catch (error) {
     contextMediaHandles.release(message.mediaHandle);
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: error instanceof Error && error.message
+      ? `Remibooru could not be reached: ${error.message}`
+      : "Remibooru could not be reached. Check your connection and try again." };
   }
 }
 

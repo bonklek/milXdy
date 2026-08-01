@@ -26,4 +26,19 @@ describe("Composer Kit Remibooru closeout copy", () => {
     expect(query.cache).toEqual({ policy: "none" });
     expect(query.resultActions).toContain("attachToInitiatingComposer");
   });
+
+  it("uses one explicit public publish action with an honest native fallback", async () => {
+    const source = await readFile(`${packageRoot}/src/content.js`, "utf8");
+    const manifestSource = await readFile(`${packageRoot}/milxdy.app.json`, "utf8");
+    const runtime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+
+    expect(source).toContain("Publish to public Remibooru");
+    expect(source).toContain('textContent: "Publish to Remibooru"');
+    expect(source).toContain('href: "https://remibooru.com/upload"');
+    expect(source).toContain('textContent: "Open native uploader"');
+    expect(source).not.toMatch(/right(?:s)? to contribute/iu);
+    expect(manifestSource).not.toMatch(/rights acknowledgement|rights confirmation/iu);
+    expect(runtime).not.toContain("Confirm that you have the right");
+    expect(runtime).toContain('type: "milxdy:mediaContributionSubmit"');
+  });
 });

@@ -1750,7 +1750,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         openVisibleAssistantPrompt: async (promptId) => promptId === "remibooru-tags" ? openVisibleAssistantPrompt() : { ok: false, error: "Unsupported assistant prompt." },
         submitMediaContribution: async ({ id, mediaHandle, tags }) => {
           if (id !== contributionId || mediaHandle !== prepared.mediaHandle) return { ok: false, error: "The contribution does not match this selected image." };
-          if (!window.confirm("Confirm that you have the right to contribute this image to Remibooru and publish it with these tags.")) return { ok: false, error: "Contribution cancelled." };
           return await safeRuntimeMessage<{ ok: boolean; canonicalUrl?: string; error?: string }>({ type: "milxdy:mediaContributionSubmit", appId: app.id, actionId, contributionId, mediaHandle, tags }) || { ok: false, error: "The contribution service is unavailable." };
         },
       }));

@@ -72,3 +72,20 @@ export function remibooruUploadSizeBucket(bytes: number): string {
   if (bytes <= 25 * mb) return "10_to_25_mb";
   return "over_25_mb";
 }
+
+export function isSupportedMediaContributionMime(mimeType: string): boolean {
+  return /^image\/(?:png|jpeg|webp|gif)$/u.test(mimeType);
+}
+
+export function mediaContributionFailureMessage(status: number, remoteError?: unknown): string {
+  if (typeof remoteError === "string" && remoteError.trim()) return remoteError.trim();
+  if (status === 401) return "Sign in to Remibooru, then try again.";
+  if (status === 403) return "This Remibooru account does not currently have contributor access.";
+  if (status === 409) return "Remibooru reports that this contribution already exists.";
+  if (status === 413) return "The selected media exceeds Remibooru's upload limit.";
+  if (status === 415) return "Remibooru does not support this media format.";
+  if (status === 400 || status === 422) return "Remibooru rejected the media or tags. Review them and try again.";
+  if (status === 429) return "Remibooru is rate limiting contributions. Wait, then try again.";
+  if (status >= 500) return "Remibooru is temporarily unavailable. Try again later.";
+  return `Remibooru rejected the contribution (HTTP ${status}).`;
+}

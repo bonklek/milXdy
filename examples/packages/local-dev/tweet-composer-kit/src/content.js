@@ -89,15 +89,16 @@ export function onContextMediaAction({ actionId, panel, signal, mediaHandle, med
     return;
   }
   const tags = [];
-  const root = el("section", { className: "tweet-composer-kit__contribution", ariaLabel: "Contribute to Remibooru" });
-  const title = el("strong", { className: "tweet-composer-kit__contribution-title", textContent: "Contribute to Remibooru" });
+  const root = el("section", { className: "tweet-composer-kit__contribution", ariaLabel: "Publish to public Remibooru" });
+  const title = el("strong", { className: "tweet-composer-kit__contribution-title", textContent: "Publish to public Remibooru" });
   const dimensions = Number.isFinite(media.width) && Number.isFinite(media.height) ? ` · ${media.width} × ${media.height}` : "";
   const details = el("p", { className: "tweet-composer-kit__contribution-copy", textContent: `Selected image · ${media.mimeType || "image"}${dimensions}` });
   const input = el("input", { className: "tweet-composer-kit__contribution-input", type: "text", maxLength: 64, placeholder: "Add a tag", ariaLabel: "Add a Remibooru tag", autocomplete: "off" });
   const add = el("button", { className: "tweet-composer-kit__contribution-button", type: "button", textContent: "Add" });
   const tagList = el("div", { className: "tweet-composer-kit__contribution-tags", role: "list", ariaLabel: "Contribution tags" });
   const assistant = el("button", { className: "tweet-composer-kit__contribution-button", type: "button", textContent: "Get tag ideas in Grok" });
-  const contribute = el("button", { className: "tweet-composer-kit__contribution-button tweet-composer-kit__contribution-button--primary", type: "button", textContent: "Contribute" });
+  const contribute = el("button", { className: "tweet-composer-kit__contribution-button tweet-composer-kit__contribution-button--primary", type: "button", textContent: "Publish to Remibooru" });
+  const nativeFallback = el("a", { className: "tweet-composer-kit__contribution-link", href: "https://remibooru.com/upload", target: "_blank", rel: "noopener noreferrer", textContent: "Open native uploader" });
   const status = el("p", { className: "tweet-composer-kit__contribution-status", role: "status", ariaLive: "polite" });
   const renderTags = () => {
     tagList.replaceChildren(...tags.map((tag) => {
@@ -136,7 +137,7 @@ export function onContextMediaAction({ actionId, panel, signal, mediaHandle, med
   contribute.addEventListener("click", async () => {
     if (signal.aborted || typeof submitMediaContribution !== "function") return;
     contribute.disabled = true;
-    status.textContent = "Preparing the reviewed contribution…";
+    status.textContent = "Publishing to public Remibooru…";
     try {
       const result = await submitMediaContribution({ id: "remibooru-contribute", mediaHandle, tags: [...tags] });
       if (!result?.ok) { status.textContent = result?.error || "The contribution could not be completed."; return; }
@@ -145,7 +146,7 @@ export function onContextMediaAction({ actionId, panel, signal, mediaHandle, med
     } catch { status.textContent = "The contribution could not be completed."; }
     finally { if (!signal.aborted) contribute.disabled = tags.length === 0; }
   }, { signal });
-  root.append(title, details, el("div", { className: "tweet-composer-kit__contribution-entry" }, input, add), tagList, el("div", { className: "tweet-composer-kit__contribution-actions" }, assistant, contribute), status);
+  root.append(title, details, el("div", { className: "tweet-composer-kit__contribution-entry" }, input, add), tagList, el("div", { className: "tweet-composer-kit__contribution-actions" }, assistant, contribute, nativeFallback), status);
   renderTags();
   panel.replaceChildren(root);
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });

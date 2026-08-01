@@ -549,8 +549,9 @@ packages should retain their ordinary reviewed facets fallback.
 selected X image. The first slice permits exactly one X/image/`hostPanel`
 action bound to exactly one reviewed `remibooru` contribution. The host owns
 the Chrome image context-menu item, selected-image preview, capped image fetch,
-short-lived one-use media handle, rights/final-publish confirmation, authenticated
-request, error handling, and canonical result validation.
+short-lived one-use media handle, authenticated request, error handling, and
+canonical result validation. The package's visible publish control is the final
+user action; the platform does not add a second attestation or confirmation.
 
 The package exports `onContextMediaAction(context)` and receives only a host
 panel, an opaque `mediaHandle`, bounded MIME/dimension/alt-presence metadata,
