@@ -14,6 +14,11 @@ import {
   validatePetRequestShape,
 } from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
 
+type PetRequestFamily = keyof typeof PET_REQUEST_NFT_RANGES;
+type PetRequestWithNftNumber = ReturnType<typeof makePetRequest> & {
+  sourceNftNumber: number;
+};
+
 function pngHeader(width = 1024, height = 1024): Uint8Array {
   const bytes = new Uint8Array(33);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -52,19 +57,20 @@ function completeTraits() {
   ]));
 }
 
-async function validRequest(templateFamily = "milady") {
+async function validRequest(templateFamily: PetRequestFamily = "milady") {
   const avatar = pngHeader();
+  const request = makePetRequest({
+    templateFamily,
+    sourceNftNumber: PET_REQUEST_NFT_RANGES[templateFamily].min,
+    imageSha256: await sha256Hex(avatar),
+    traits: completeTraits(),
+    bodyCompletion: completeBody(),
+    petName: "Sanitized Sample",
+    personality: "Calm and observant.",
+  }) as PetRequestWithNftNumber;
   return {
     avatar,
-    request: makePetRequest({
-      templateFamily,
-      sourceNftNumber: PET_REQUEST_NFT_RANGES[templateFamily].min,
-      imageSha256: await sha256Hex(avatar),
-      traits: completeTraits(),
-      bodyCompletion: completeBody(),
-      petName: "Sanitized Sample",
-      personality: "Calm and observant.",
-    }),
+    request,
   };
 }
 
@@ -77,7 +83,7 @@ describe("Pets Maker request contract", () => {
     expect(legColorForRace("milady", { assetId: "milady-unmapped-v1", label: "Unmapped" })).toBeNull();
   });
 
-  it.each(PET_REQUEST_FAMILIES)("accepts an explicit %s family request", async (templateFamily) => {
+  it.each(PET_REQUEST_FAMILIES as readonly PetRequestFamily[])("accepts an explicit %s family request", async (templateFamily) => {
     const { avatar, request } = await validRequest(templateFamily);
     expect(request).not.toHaveProperty("rightsScope");
     expect(request.generator).toEqual({

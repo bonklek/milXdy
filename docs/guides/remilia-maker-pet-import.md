@@ -40,10 +40,10 @@ family-template selection, identity preparation, and hatch-pet handoff:
 
 | Family | Bundle | SHA-256 |
 |---|---|---|
-| Milady | `examples/fixtures/remilia-pet-request/milady/remilia-pet-request.zip` | `6c31279ecb6e67a9542f54d6baf9661867c77cf0698d8e24912a12222d62ea8a` |
-| Remilio | `examples/fixtures/remilia-pet-request/remilio/remilia-pet-request.zip` | `2ebef3d8386467c7ccc411c84874d3d83301c7f7872ae3db35aa453bc4f6729f` |
-| Bonkler | `examples/fixtures/remilia-pet-request/bonkler/remilia-pet-request.zip` | `981bc480fcf686b25fe679799cf87380ab35546b555882984d1a92b601f073c8` |
-| Kagami | `examples/fixtures/remilia-pet-request/kagami/remilia-pet-request.zip` | `f55bf996774cc3f7b5ea17be846b1e59b432494e8a180453360460f9a4db7487` |
+| Milady | `examples/fixtures/remilia-pet-request/milady/remilia-pet-request.zip` | `6d3abcfae5d61c5a3f26706e39a11901b522f63068d29dc65bd931b46bedd690` |
+| Remilio | `examples/fixtures/remilia-pet-request/remilio/remilia-pet-request.zip` | `b5542a066ab46339ebc71843ca17651e501dbb8d6decfc41e820be10c4240a69` |
+| Bonkler | `examples/fixtures/remilia-pet-request/bonkler/remilia-pet-request.zip` | `6d1aa2a01a7f9c0db76fb01a53f8aaf52963afb3f1369b0dc1a600130bf7b6e8` |
+| Kagami | `examples/fixtures/remilia-pet-request/kagami/remilia-pet-request.zip` | `8de16234c020368a5d315f136d72c9642a9b88316ca968aa54126e1a16e643bd` |
 
 These fixtures verify the import and delegation contract. Final sprite
 generation remains under `hatch-pet`; deterministic Maker-template QA and

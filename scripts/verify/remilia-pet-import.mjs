@@ -83,6 +83,39 @@ try {
     "corrupt image hash rejection was not actionable",
   );
 
+  for (const mismatch of [
+    {
+      name: "unsupported-family",
+      mutate: (candidate) => { candidate.templateFamily = "unknown"; },
+      expected: "Unsupported templateFamily: unknown",
+    },
+    {
+      name: "unsupported-template-version",
+      mutate: (candidate) => { candidate.templateVersion = 2; },
+      expected: "Only templateVersion 1 is supported",
+    },
+  ]) {
+    const mismatchedRequest = structuredClone(request);
+    mismatchedRequest.imageSha256 = createHash("sha256").update(entries[0].bytes).digest("hex");
+    mismatch.mutate(mismatchedRequest);
+    const mismatchedZip = createStoredZip([
+      { name: "avatar.png", bytes: entries[0].bytes },
+      { name: "request.json", bytes: new TextEncoder().encode(stableJson(mismatchedRequest)) },
+    ]);
+    const mismatchPath = path.join(temp, `${mismatch.name}.zip`);
+    await writeFile(mismatchPath, mismatchedZip);
+    const mismatchResult = spawnSync(
+      python,
+      [path.join(scripts, "validate_bundle.py"), mismatchPath],
+      pythonOptions(),
+    );
+    assert(mismatchResult.status !== 0, `${mismatch.name} bundle was accepted`);
+    assert(
+      `${mismatchResult.stdout}\n${mismatchResult.stderr}`.includes(mismatch.expected),
+      `${mismatch.name} rejection was not actionable`,
+    );
+  }
+
   const miladyRun = path.join(temp, "milady");
   const atlas = makeQaAtlas({ includeHairExpansion: true });
   const atlasPath = path.join(temp, "synthetic-v2-atlas.png");

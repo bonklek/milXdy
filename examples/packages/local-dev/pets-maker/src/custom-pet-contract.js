@@ -163,7 +163,7 @@ export function nftNumberRangeForFamily(templateFamily) {
 
 export function makePetRequest({
   templateFamily,
-  sourceNftNumber = null,
+  sourceNftNumber = /** @type {number | null} */ (null),
   imageSha256,
   traits,
   bodyCompletion,
