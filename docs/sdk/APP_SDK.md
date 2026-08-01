@@ -510,7 +510,8 @@ The reviewed `cheeseworld` adapter has the single target `deepfry` and requires
 }
 ```
 
-Each explicit package click triggers host-owned disclosure and consent. After
+Each explicit package click triggers an asynchronous host-owned disclosure and
+consent card in the anchored panel. After
 consent, the host requires exactly one image in the initiating composer,
 validates its declared MIME and byte limit, transfers it with the bounded Top
 and Bottom captions to the fixed CheeseWorld page, invokes the reviewed
