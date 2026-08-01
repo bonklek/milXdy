@@ -163,6 +163,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "new File([blob], fileName", "The host must attach reviewed image handoffs through X's existing media control");
   requireIncludes(contentRuntime, "prepareComposerImageReplacement", "Composer media replacement must capture and bind the initiating attachment in host code");
   requireIncludes(contentRuntime, "removeButtons[0] !== replacement.removeButton", "Composer media replacement must fail closed if the initiating attachment identity changes");
+  requireIncludes(contentRuntime, "attachmentIdentity", "Composer media replacement must pin the initiating file or preview identity across the handoff");
   requireIncludes(contentRuntime, "window.confirm", "Composer media replacement must require visible per-click host consent");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
