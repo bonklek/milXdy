@@ -59,7 +59,7 @@
           "capabilities": [
             "Open the host-owned native Drafts action from the composer.",
             "Manage local quick-reply phrases and explicitly select one for the host reply action.",
-            "Browse reviewed Remibooru reaction metadata and open canonical source pages.",
+            "Browse reviewed Remibooru reaction metadata, explicitly attach a sanitized thumbnail to the initiating composer, or open its canonical source page.",
             "Open declared Milady, Remilio, Bonkler, and Kagami maker handoffs after explicit caption review.",
             "Build and download a validated two-file Custom Pet request ZIP from an explicitly selected local PNG and explicit trait choices.",
             "Copy only the visible static Codex handoff sentence after an explicit clipboard action.",
@@ -116,7 +116,7 @@
             "Custom Pet export reads only the PNG selected in its visible file control, composites explicit choices locally, validates the request bundle, and downloads it without upload, cache, post, publication, or rights inference.",
             "The optional clipboard action writes only the visible static Codex handoff sentence after an explicit click.",
             "Maker captions transfer only after an explicit package action; generated media remains user-reviewed and is never posted automatically.",
-            "Remibooru results are sanitized metadata and thumbnails; the package does not attach, download, cache, upload, or post media.",
+            "Remibooru results are sanitized metadata and thumbnails. An explicit result click may ask the host to attach that recently returned thumbnail to the initiating composer; the package does not cache, expose original-media URLs, upload, or post media.",
             "A selected quick reply is submitted by the reviewed host action only after the user explicitly clicks that reply row."
           ],
           "dependencies": [],

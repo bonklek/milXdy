@@ -34,9 +34,10 @@ actions remain explicit.
   validates and downloads a two-file request ZIP, and never uploads, caches,
   posts, publishes, or infers missing rights or body choices. The optional
   clipboard control copies only its visible static handoff sentence.
-- BOORU boundary: Remibooru metadata browsing and canonical-source links are a
-  Composer Kit capability owned by #17/#188. It does not attach, download,
-  cache, upload, or post media.
+- BOORU boundary: Remibooru metadata browsing, canonical-source links, and an
+  explicit host-owned thumbnail attachment action are Composer Kit capabilities
+  owned by #17/#188. The package receives no original-media URL or bytes, keeps
+  no media or source-link cache, and cannot upload or post media.
 - Meme Maker boundary: declared maker targets and caption/random-meme modes are
   Composer Kit capabilities owned by #79/#188. Generated media remains outside
   the package until the user reviews and acts on it.
