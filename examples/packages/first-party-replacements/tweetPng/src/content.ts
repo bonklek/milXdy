@@ -1268,7 +1268,7 @@ function showTweetPngModal(
   };
   let closed = false;
   const actionSignal = actionContext?.signal;
-  const close = () => {
+  const close = (restoreFocus = true) => {
     if (closed) return;
     closed = true;
     actionSignal?.removeEventListener("abort", abortClose);
@@ -1276,7 +1276,7 @@ function showTweetPngModal(
     URL.revokeObjectURL(url);
     modal.remove();
     if (closeTweetPngReview === close) closeTweetPngReview = null;
-    if (returnFocus?.isConnected) returnFocus.focus();
+    if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
   };
   const abortClose = () => close();
   closeTweetPngReview = close;
@@ -1382,7 +1382,7 @@ function showTweetPngModal(
     })
       .then((result) => {
         if (!result.ok) throw new Error(result.error || "PNG could not be staged.");
-        close();
+        close(false);
       })
       .catch((error) => {
         setStatus(errorMessage(error));

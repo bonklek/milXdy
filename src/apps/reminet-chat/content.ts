@@ -12,6 +12,7 @@ import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } from "../../platform/app-sdk/app-platform";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { absoluteRemiliaMediaUrl, isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
+import { canMountRemiNetChatRoute } from "./route-policy";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
@@ -203,6 +204,7 @@ type ChatState = {
   composerError: string;
   replyTo: ReplyReference | null;
   minimized: boolean;
+  explicitlyOpened: boolean;
   theme: "light" | "dark" | "system";
   side: "left" | "right";
   x: number;
@@ -250,6 +252,7 @@ const state: ChatState = {
   composerError: "",
   replyTo: null,
   minimized: true,
+  explicitlyOpened: false,
   theme: "system",
   side: "right",
   x: 0,
@@ -304,6 +307,7 @@ export function onRouteChange(_route: MilxdyRouteChange): void {
 
 export function open(): void {
   if (!lifecycleActive()) return;
+  state.explicitlyOpened = true;
   if (isMessagesRoute() && !state.messagesSelected) state.messagesSelected = true;
   state.minimized = false;
   ensureRoot();
@@ -318,15 +322,24 @@ export async function stageLocalAttachment(file: File): Promise<{ ok: boolean; e
   if (error) return { ok: false, error };
   if (state.pendingAttachments.length >= 4) return { ok: false, error: "Maximum 4 attachments." };
   state.composerError = "";
-  state.pendingAttachments.push({
+  const attachment: PendingAttachment = {
     id: crypto.randomUUID(),
     name: file.name,
     mimeType: file.type,
     dataUrl: await fileToDataUrl(file),
     status: "ready",
-  });
+  };
+  state.pendingAttachments.push(attachment);
   open();
   render();
+  const composer = state.root?.querySelector<HTMLInputElement>('[data-role="input"]');
+  if (!composer?.isConnected) {
+    state.pendingAttachments = state.pendingAttachments.filter((item) => item.id !== attachment.id);
+    state.composerError = "RemiNet Chat could not open on this page.";
+    render();
+    return { ok: false, error: state.composerError };
+  }
+  composer.focus({ preventScroll: true });
   return { ok: true };
 }
 
@@ -360,19 +373,7 @@ function registerDockItem(): void {
     initialSide: state.side,
     isOpen: () => Boolean(state.root && !state.minimized),
     onOpen: () => {
-      if (isMessagesRoute() && !state.messagesSelected) {
-        state.messagesSelected = true;
-        state.minimized = false;
-        ensureRoot();
-        void refreshAuthAndHistory();
-        return;
-      }
-      if (!state.root) {
-        state.minimized = false;
-        ensureRoot();
-        void refreshAuthAndHistory();
-      }
-      render();
+      open();
     },
     onClose: () => {
       closeChatPanel();
@@ -484,15 +485,11 @@ function destroy(): void {
   state.root = null;
   state.mountMode = null;
   state.messagesSelected = false;
+  state.explicitlyOpened = false;
 }
 
 function isSupportedRoute(): boolean {
-  return location.pathname === "/"
-    || location.pathname === "/home"
-    || location.pathname === "/notifications"
-    || isMessagesRoute()
-    || /^\/[^/]+\/status\/\d+/.test(location.pathname)
-    || isProfileRoute();
+  return canMountRemiNetChatRoute(location.pathname, state.explicitlyOpened);
 }
 
 function isChatRoute(): boolean {
@@ -500,8 +497,8 @@ function isChatRoute(): boolean {
   return isSupportedRoute();
 }
 
-function isMessagesRoute(): boolean {
-  return location.pathname === "/messages" || location.pathname.startsWith("/messages/") || location.pathname.startsWith("/i/chat");
+function isMessagesRoute(pathname = location.pathname): boolean {
+  return pathname === "/messages" || pathname.startsWith("/messages/") || pathname.startsWith("/i/chat");
 }
 
 function isProfileRoute(): boolean {
@@ -840,6 +837,7 @@ function findNativeDmSelectionTarget(target: Element): HTMLElement | null {
 function clearMessagesSelection(): void {
   state.messagesSelected = false;
   state.minimized = true;
+  state.explicitlyOpened = false;
   closeSocket();
   state.root?.remove();
   state.root = null;
@@ -1705,6 +1703,7 @@ async function loadTheme(): Promise<void> {
 
 function closeChatPanel(): void {
   state.minimized = true;
+  state.explicitlyOpened = false;
   closeSocket();
   const root = state.root;
   state.root = null;
