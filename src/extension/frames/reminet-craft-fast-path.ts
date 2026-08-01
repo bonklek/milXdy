@@ -1,3 +1,12 @@
+import {
+  createCraftActivationController,
+  createLocalChatMarkerDismissals,
+  hammerSlotIsAvailable,
+  keyboardPlacementRequested,
+  nextAvailableCraftingSlot,
+  sacrificeSlotIsAvailable,
+} from "./reminet-craft-fast-path-logic";
+
 (() => {
   const SETTING_ATTRIBUTE = "data-milxdy-reminet-beetle-reduced-motion-setting";
   const PLACEMENT_STATUS_ATTRIBUTE = "data-milxdy-reminet-craft-placement";
@@ -8,14 +17,8 @@
   // This is deliberately document-scoped: the Remilia chat owns the marker and
   // recreates it on a chat remount.  We must not turn a presentational dismissal
   // into account-scoped state or a server read-history mutation.
-  const dismissedChatPositionMarkers = new Set<"last-read" | "present">();
+  const dismissedChatPositionMarkers = createLocalChatMarkerDismissals();
   const autoFilledCraftRoots = new WeakSet<Element>();
-  // Slot replacement is presentation-local just like the native crafting
-  // selection. A remount starts from the first slot again; nothing is stored
-  // per account or sent to Remilia.
-  const nextCraftingReplacementSlot = new WeakMap<Element, number>();
-  let pendingInspection: { item: Element; timer: number } | null = null;
-  let suppressCraftGestureUntil = 0;
   const nativeSetTimeout = window.setTimeout.bind(window);
 
   function ensureLastReadStyle(): void {
@@ -173,6 +176,10 @@
     }
     try {
       if (itemType.startsWith("hammer_") || itemIsHammer(item)) {
+        if (!hammerSlotIsAvailable(store.selectedHammer)) {
+          status("occupied-hammer");
+          return false;
+        }
         store.selectHammer(itemType);
         status("assigned-hammer");
         return true;
@@ -195,18 +202,13 @@
     const slots = Array.from(craft.querySelectorAll<HTMLElement>(
       ".crafting-module__input-slot:not(.crafting-module__input-slot--5)",
     )).slice(0, 3).map((_, index) => `input${index + 1}`);
-    const empty = slots.find(slotId => !store.craftingSlots[slotId]);
-    if (empty) return empty;
-    if (slots.length === 0) return null;
-    const next = nextCraftingReplacementSlot.get(craft) || 0;
-    nextCraftingReplacementSlot.set(craft, (next + 1) % slots.length);
-    return slots[next] || null;
+    return nextAvailableCraftingSlot(slots, store.craftingSlots);
   }
 
   function autoFillGreenSacrifice(craft: Element): void {
     if (autoFilledCraftRoots.has(craft)) return;
     const store = craftingStoreFor(craft);
-    if (!store || store.selectedSacrificeBeetle) return;
+    if (!store || !sacrificeSlotIsAvailable(store.selectedSacrificeBeetle)) return;
     const green = Array.from(craft.querySelectorAll<HTMLElement>(".crafting-module__beetle-item"))
       .find(item => itemTypeFor(item) === "green" || itemLooksGreen(item));
     const greenType = green ? itemTypeFor(green) : null;
@@ -221,7 +223,7 @@
 
   function installLastReadDismissal(marker: HTMLElement): void {
     const kind = chatPositionMarkerKind(marker);
-    if (dismissedChatPositionMarkers.has(kind)) {
+    if (dismissedChatPositionMarkers.isDismissed(kind)) {
       marker.classList.add("milxdy-last-read-marker--dismissed");
       return;
     }
@@ -237,7 +239,7 @@
     dismiss.addEventListener("click", (event) => {
       event.preventDefault();
       event.stopPropagation();
-      dismissedChatPositionMarkers.add(kind);
+      dismissedChatPositionMarkers.dismiss(kind);
       marker.classList.add("milxdy-last-read-marker--dismissed");
     });
     marker.append(dismiss);
@@ -245,7 +247,11 @@
 
   function syncCraftingAndLastRead(): void {
     if (new URLSearchParams(location.search).get("cartridge") === "craft") {
-      document.querySelectorAll(".crafting-module").forEach(autoFillGreenSacrifice);
+      document.querySelectorAll(".crafting-module").forEach((craft) => {
+        autoFillGreenSacrifice(craft);
+        craft.querySelectorAll<HTMLElement>(".crafting-module__beetle-item:not(.crafting-module__beetle-item--unavailable)")
+          .forEach(installCraftingKeyboardShortcut);
+      });
     }
     // Remilia's marker has no stable class name, but its visible label is a
     // stable, accessible UI contract. Restrict the match to compact elements
@@ -281,42 +287,56 @@
     event.stopImmediatePropagation();
   }
 
+  function installCraftingKeyboardShortcut(item: HTMLElement): void {
+    if (item.dataset.milxdyCraftKeyboard === "true") return;
+    item.dataset.milxdyCraftKeyboard = "true";
+    if (!item.hasAttribute("tabindex")) item.tabIndex = 0;
+    item.setAttribute("aria-keyshortcuts", "Shift+Enter");
+    item.setAttribute(
+      "aria-description",
+      "Press Shift+Enter to place this item in the next empty crafting slot. Press Enter or click once to inspect it.",
+    );
+  }
+
+  const craftActivation = createCraftActivationController<HTMLElement>({
+    delayMs: DOUBLE_CLICK_WINDOW_MS,
+    now: () => Date.now(),
+    schedule: (handler, delayMs) => nativeSetTimeout(handler, delayMs),
+    cancel: (timer) => clearTimeout(timer),
+    inspect: openInspectionCard,
+    place: placeCraftingItem,
+  });
+
   document.addEventListener("mousedown", (event) => {
     if (event.button !== 0) return;
     const item = craftingItemForEvent(event);
     if (!item) return;
     stopCraftingGesture(event);
-    if (pendingInspection?.item === item) {
-      clearTimeout(pendingInspection.timer);
-      pendingInspection = null;
-      suppressCraftGestureUntil = Date.now() + DOUBLE_CLICK_WINDOW_MS;
-      if (!placeCraftingItem(item)) openInspectionCard(item);
-      return;
-    }
-    if (pendingInspection) {
-      clearTimeout(pendingInspection.timer);
-      openInspectionCard(pendingInspection.item);
-    }
-    const timer = nativeSetTimeout(() => {
-      if (pendingInspection?.item !== item) return;
-      pendingInspection = null;
-      openInspectionCard(item);
-    }, DOUBLE_CLICK_WINDOW_MS);
-    pendingInspection = { item, timer };
+    craftActivation.pointerDown(item);
   }, true);
 
   document.addEventListener("mouseup", (event) => {
     const item = craftingItemForEvent(event);
-    if (item && (pendingInspection?.item === item || Date.now() < suppressCraftGestureUntil)) {
+    if (item && craftActivation.shouldSuppress(item)) {
       stopCraftingGesture(event);
     }
   }, true);
 
   document.addEventListener("click", (event) => {
     const item = craftingItemForEvent(event);
-    if (item && (pendingInspection?.item === item || Date.now() < suppressCraftGestureUntil)) {
+    if (item && craftActivation.shouldSuppress(item)) {
       stopCraftingGesture(event);
     }
+  }, true);
+
+  document.addEventListener("keydown", (event) => {
+    if (!enabled || !keyboardPlacementRequested(event)) return;
+    const target = event.target instanceof Element ? event.target : null;
+    const item = target?.closest<HTMLElement>(".crafting-module__beetle-item:not(.crafting-module__beetle-item--unavailable)");
+    if (!item || new URLSearchParams(location.search).get("cartridge") !== "craft") return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    craftActivation.keyboardPlace(item);
   }, true);
 
   // Remilia schedules these three timers after a valid Craft API submission:
