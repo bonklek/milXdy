@@ -43,13 +43,6 @@
     element.click();
   }
 
-  function isEmptySlot(element: Element): boolean {
-    return !element.classList.contains("crafting-module__input-slot--filled")
-      && !element.classList.contains("crafting-module__smash-input-slot--filled")
-      && !element.classList.contains("crafting-module__sacrifice-input-slot--filled")
-      && !element.querySelector(".crafting-module__input-slot-img, .crafting-module__smash-input-slot-img");
-  }
-
   function itemLooksGreen(item: Element): boolean {
     return /green/i.test(`${item.getAttribute("data-item-type") || ""} ${item.getAttribute("aria-label") || ""} ${item.textContent || ""} ${item.innerHTML}`);
   }
@@ -61,20 +54,17 @@
   type ReactFiber = {
     return?: ReactFiber | null;
     memoizedState?: unknown;
-    dependencies?: unknown;
+    memoizedProps?: unknown;
   };
 
-  type DndActions = {
-    beginDrag: (sourceIds: string[], options: Record<string, unknown>) => void;
-    hover: (targetIds: string[], options: Record<string, unknown>) => void;
-    drop: () => void;
-    endDrag: () => void;
-  };
-
-  type DndManager = {
-    getActions: () => DndActions;
-    getMonitor: () => { isDragging: () => boolean };
-    getRegistry: () => unknown;
+  type CraftingStore = {
+    mode: "assemble" | "smash";
+    craftingSlots: Record<string, string | null>;
+    assignToSlot: (slotId: string, itemType: string) => void;
+    selectedHammer: string | null;
+    selectedSacrificeBeetle: string | null;
+    selectHammer: (itemType: string) => void;
+    selectSacrifice: (itemType: string) => void;
   };
 
   function reactFiber(element: Element): ReactFiber | null {
@@ -99,110 +89,90 @@
     return visit(value, maxDepth);
   }
 
-  function isDndManager(candidate: unknown): candidate is DndManager {
+  function isCraftingStore(candidate: unknown): candidate is CraftingStore {
     if (!candidate || typeof candidate !== "object") return false;
     const record = candidate as Record<string, unknown>;
-    return typeof record.getActions === "function"
-      && typeof record.getMonitor === "function"
-      && typeof record.getRegistry === "function";
+    return (record.mode === "assemble" || record.mode === "smash")
+      && Boolean(record.craftingSlots && typeof record.craftingSlots === "object")
+      && typeof record.assignToSlot === "function"
+      && typeof record.selectHammer === "function"
+      && typeof record.selectSacrifice === "function";
   }
 
-  function handlerIdFor(element: Element, prefix: "S" | "T"): string | null {
-    let fiber = reactFiber(element);
-    for (let depth = 0; fiber && depth < 18; depth++, fiber = fiber.return || null) {
-      let hook = fiber.memoizedState as { memoizedState?: unknown; baseState?: unknown; next?: unknown } | null;
-      for (let hookCount = 0; hook && typeof hook === "object" && hookCount < 50; hookCount++) {
-        const found = findDeep(
-          [hook.memoizedState, hook.baseState],
-          (candidate): candidate is string => typeof candidate === "string" && new RegExp(`^${prefix}\\d+$`, "u").test(candidate),
-          4,
-        );
-        if (found) return found;
-        hook = hook.next as typeof hook;
-      }
-    }
-    return null;
-  }
-
-  function dndManagerFor(...elements: Element[]): DndManager | null {
+  function craftingStoreFor(...elements: Element[]): CraftingStore | null {
+    // Remilia's own drop handler ends by calling this Zustand action. Reusing
+    // that action keeps the visible slots, remaining counts, native Craft
+    // button, request payload, and error recovery under Remilia's ownership.
     for (const element of elements) {
       let fiber = reactFiber(element);
       for (let depth = 0; fiber && depth < 24; depth++, fiber = fiber.return || null) {
-        const manager = findDeep(fiber.dependencies, isDndManager, 6);
-        if (manager) return manager;
+        const store = findDeep([fiber.memoizedState, fiber.memoizedProps], isCraftingStore, 7);
+        if (store) return store;
       }
     }
     return null;
   }
 
-  function dragToSlot(item: HTMLElement, destination: HTMLElement | null): boolean {
-    const status = (value: string) => document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, value);
-    if (!destination) {
-      status("missing-destination");
-      return false;
+  function itemTypeFor(item: Element): string | null {
+    let fiber = reactFiber(item);
+    for (let depth = 0; fiber && depth < 16; depth++, fiber = fiber.return || null) {
+      const value = findDeep(
+        fiber.memoizedProps,
+        (candidate): candidate is { type: string } => {
+          if (!candidate || typeof candidate !== "object") return false;
+          const record = candidate as Record<string, unknown>;
+          return typeof record.type === "string"
+            && (typeof record.remainingCount === "number"
+              || typeof record.count === "number"
+              || typeof record.category === "number"
+              || typeof record.icon === "string");
+        },
+        5,
+      );
+      if (value) return value.type;
     }
-    const sourceId = handlerIdFor(item, "S");
-    const targetId = handlerIdFor(destination, "T");
-    const manager = dndManagerFor(item, destination);
-    if (!sourceId) {
-      status("missing-source");
-      return false;
-    }
-    if (!targetId) {
-      status("missing-target");
-      return false;
-    }
-    if (!manager) {
-      status("missing-manager");
-      return false;
-    }
-    const sourceBounds = item.getBoundingClientRect();
-    const bounds = destination.getBoundingClientRect();
-    const sourceOffset = { x: sourceBounds.left, y: sourceBounds.top };
-    const targetOffset = { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
-    const actions = manager.getActions();
-    let began = false;
-    try {
-      actions.beginDrag([sourceId], {
-        publishSource: true,
-        clientOffset: sourceOffset,
-        getSourceClientOffset: () => sourceOffset,
-      });
-      began = manager.getMonitor().isDragging();
-      if (!began) {
-        status("begin-rejected");
-        return false;
-      }
-      actions.hover([targetId], { clientOffset: targetOffset });
-      actions.drop();
-      status("dropped");
-      return true;
-    } catch {
-      status("error");
-      return false;
-    } finally {
-      try {
-        if (began && manager.getMonitor().isDragging()) actions.endDrag();
-      } catch {
-        status("error");
-      }
-    }
+    return null;
   }
 
   function placeCraftingItem(item: HTMLElement): boolean {
     const craft = item.closest(".crafting-module");
     if (!craft) return false;
-    const destination = itemIsHammer(item)
-      ? craft.querySelector<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")
-      : nextAssemblySlot(craft);
-    return dragToSlot(item, destination as HTMLElement | null);
+    const status = (value: string) => document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, value);
+    const store = craftingStoreFor(item, craft);
+    const itemType = itemTypeFor(item);
+    if (!store) {
+      status("missing-store");
+      return false;
+    }
+    if (!itemType) {
+      status("missing-item-type");
+      return false;
+    }
+    try {
+      if (itemType.startsWith("hammer_") || itemIsHammer(item)) {
+        store.selectHammer(itemType);
+        status("assigned-hammer");
+        return true;
+      }
+      const slotId = nextAssemblySlot(craft, store);
+      if (!slotId) {
+        status("missing-destination");
+        return false;
+      }
+      store.assignToSlot(slotId, itemType);
+      status(`assigned-${slotId}`);
+      return true;
+    } catch {
+      status("error");
+      return false;
+    }
   }
 
-  function nextAssemblySlot(craft: Element): HTMLElement | null {
+  function nextAssemblySlot(craft: Element, store: CraftingStore): string | null {
     const slots = Array.from(craft.querySelectorAll<HTMLElement>(
       ".crafting-module__input-slot:not(.crafting-module__input-slot--5)",
-    ));
-    const empty = slots.find(isEmptySlot);
+    )).slice(0, 3).map((_, index) => `input${index + 1}`);
+    const empty = slots.find(slotId => !store.craftingSlots[slotId]);
     if (empty) return empty;
     if (slots.length === 0) return null;
     const next = nextCraftingReplacementSlot.get(craft) || 0;
@@ -212,11 +182,14 @@
 
   function autoFillGreenSacrifice(craft: Element): void {
     if (autoFilledCraftRoots.has(craft)) return;
+    const store = craftingStoreFor(craft);
+    if (!store || store.selectedSacrificeBeetle) return;
+    const green = Array.from(craft.querySelectorAll<HTMLElement>(".crafting-module__beetle-item"))
+      .find(item => itemTypeFor(item) === "green" || itemLooksGreen(item));
+    const greenType = green ? itemTypeFor(green) : null;
+    if (!greenType) return;
+    store.selectSacrifice(greenType);
     autoFilledCraftRoots.add(craft);
-    const sacrifice = craft.querySelectorAll<HTMLElement>(".crafting-module__smash-input-slots .crafting-module__smash-input-slot")[1] || null;
-    if (!sacrifice || !isEmptySlot(sacrifice)) return;
-    const green = Array.from(craft.querySelectorAll<HTMLElement>(".crafting-module__beetle-item")).find(itemLooksGreen);
-    if (green) dragToSlot(green, sacrifice);
   }
 
   function chatPositionMarkerKind(marker: HTMLElement): "last-read" | "present" {
