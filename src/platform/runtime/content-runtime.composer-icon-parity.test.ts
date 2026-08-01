@@ -11,4 +11,15 @@ describe("composer companion icon parity", () => {
     expect(draftsStyle).toContain("stroke: currentColor; stroke-width: 1.8;");
     expect(draftsStyle).not.toContain("translateY");
   });
+
+  it("labels the companion controls as Factory and Drafts without renaming the app", async () => {
+    const manifest = JSON.parse(await readFile(
+      new URL("../../../examples/packages/local-dev/tweet-composer-kit/milxdy.app.json", import.meta.url),
+      "utf8",
+    )) as { name?: string; composerAction?: { label?: string }; hostComposerActions?: string[] };
+
+    expect(manifest.name).toBe("Tweet Composer Kit");
+    expect(manifest.composerAction?.label).toBe("Factory");
+    expect(manifest.hostComposerActions).toContain("nativeDrafts");
+  });
 });
