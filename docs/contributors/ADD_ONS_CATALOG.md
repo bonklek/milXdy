@@ -3,8 +3,8 @@
 The static source for the milXdy Add-ons Catalog lives in
 [`catalog/`](../../catalog/). The canonical hosted location is
 `https://bonklek.github.io/milXdy/addons/`; the checked-in page remains useful
-offline and is the source of truth for its metadata. It provides the two current
-package records — Composer Kit and Share Kit — with per-package disclosures,
+offline and is the source of truth for its metadata. It provides the three current
+package records — Pets Maker, Composer Kit, and Share Kit — with per-package disclosures,
 explicit selection controls, a combined review, and the supported Chromium
 custom-build workflow. BOORU and Meme Maker are Composer Kit capabilities, not
 standalone catalog entries.
@@ -14,9 +14,11 @@ The page follows the checked-in
 panels, crisp bordered controls, stable geometry, readable light/dark states,
 and no landing-page hero treatment.
 
-The catalog is a preview. Share Kit is the first selectable package because its
-reviewed source, version, exact hash, stable replacement policy, and trusted
-review are checked in. Composer Kit remains **Under review**: it is active in
+The catalog is a preview. Pets Maker is the first catalog-installed selectable
+app and remains disabled after installation until the user enables it in
+**Apps & Features**. Share Kit is also selectable as a reviewed first-party
+replacement. Their source, versions, exact hashes, policies, and trusted reviews
+are checked in. Composer Kit remains **Under review**: it is active in
 cumulative QA, but its source and trusted catalog hash are not yet committed to
 an allowlisted catalog artifact path. An under-review record is documentation,
 not an artifact or implied installation.
@@ -143,6 +145,7 @@ Run the focused checks after catalog changes:
 
 ```powershell
 npm.cmd run build:share-kit-package
+npm.cmd run build:pets-maker-package
 npm.cmd run verify:pages-catalog
 npm.cmd run verify:local-addon-selection
 npm.cmd run verify:local-addon-selection-workflow

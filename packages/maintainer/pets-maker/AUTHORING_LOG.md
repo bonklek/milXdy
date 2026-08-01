@@ -19,3 +19,17 @@ runtime. Composer Kit no longer imports or renders pet code.
 - Attribution: Remy, from the reusable maintainer-local Remilia pet source
 
 The source repository was treated as read-only and was not mutated.
+
+## Maintainer catalog review
+
+Issue #181 moved the unchanged package implementation from the local-pilot
+tree into `packages/maintainer/pets-maker` and pinned its version, declared-file
+hash, reviewed manifest, and build recipe in the checked-in catalog. The
+generated `dist/content.js` is checked in with the package so a clean checkout
+can reproduce and materialize the catalog selection without relying on an
+untracked prior build.
+
+Catalog installation preserves `defaultEnabled: false`. It does not pin the app
+to the rail or open it. The user separately enables Pets Maker through
+Apps & Features, and an explicit empty or different selection removes the
+catalog-managed package on the next transactional Prepare/Apply cycle.

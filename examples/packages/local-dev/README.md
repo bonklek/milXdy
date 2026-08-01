@@ -12,12 +12,12 @@ Verify it directly:
 pnpm.cmd run verify:local-app-package -- --package=examples/packages/local-dev/dev-note --allow-local-review --acknowledge-package-consent
 ```
 
-`pets-maker/` is the optional, disabled-by-default rail app for the Remilia
-Custom Pet pipeline. It lazy-loads on `dockOpen`, owns the pet form and bundle
-contract outside Composer Kit, and uses the local VPL-compatible Remy preview
-as its rail icon.
+The reviewed, disabled-by-default Pets Maker package now lives at
+`packages/maintainer/pets-maker/` so the local catalog can pin and install its
+exact source. It lazy-loads on `dockOpen`, owns the pet form and bundle contract
+outside Composer Kit, and uses the VPL-compatible Remy preview as its rail icon.
 
 ```powershell
 pnpm.cmd run build:pets-maker-package
-pnpm.cmd run verify:local-app-package -- --package=examples/packages/local-dev/pets-maker --allow-local-review --acknowledge-package-consent
+pnpm.cmd run verify:local-app-package -- --package=packages/maintainer/pets-maker --acknowledge-package-consent
 ```

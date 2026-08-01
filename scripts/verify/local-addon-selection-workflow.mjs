@@ -10,6 +10,7 @@ await rm(root, { recursive: true, force: true });
 await mkdir(root, { recursive: true });
 
 const catalog = JSON.parse(await readFile("catalog/data/catalog.json", "utf8"));
+const petsMaker = catalog.sections[0].packages.find((pkg) => pkg.id === "pets-maker");
 const shareKit = catalog.sections[0].packages.find((pkg) => pkg.id === "tweetPng");
 await writeFile(catalogPath, JSON.stringify(catalog));
 const selection = {
@@ -67,6 +68,40 @@ assert.match(status.buildInstanceId, /^[a-f0-9]{24}$/u);
 assert.match(status.compositionFingerprint, /^[a-f0-9]{64}$/u);
 assert.equal(status.outputDirectory, `${addOnsRoot}/stable`);
 assert.equal(JSON.parse(await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8")).buildId, status.buildId);
+
+const petsSelectionPath = `${root}/pets-selection.json`;
+await writeFile(petsSelectionPath, JSON.stringify({
+  ...selection,
+  packages: [{
+    id: petsMaker.id,
+    version: petsMaker.version,
+    packageSha256: petsMaker.artifact.packageSha256,
+  }],
+}));
+run(["prepare", `--selection=${petsSelectionPath}`]);
+const petsDenied = spawn(["apply"]);
+assert.notEqual(petsDenied.status, 0);
+assert.match(`${petsDenied.stdout}\n${petsDenied.stderr}`, /acknowledge-package-consent/u);
+run(["apply", "--acknowledge-package-consent"]);
+const petsLock = JSON.parse(await readFile(`${addOnsRoot}/.state/selection-lock.json`, "utf8"));
+assert.deepEqual(petsLock.packages.map((entry) => entry.id), ["pets-maker"]);
+const petsManifest = JSON.parse(await readFile(`${addOnsRoot}/catalog/pets-maker/milxdy.app.json`, "utf8"));
+assert.equal(petsManifest.defaultEnabled, false);
+assert.equal(petsManifest.settings.find((entry) => entry.role === "enablement")?.defaultValue, false);
+
+const combinedSelectionPath = `${root}/combined-selection.json`;
+await writeFile(combinedSelectionPath, JSON.stringify({
+  ...selection,
+  packages: [{
+    id: petsMaker.id,
+    version: petsMaker.version,
+    packageSha256: petsMaker.artifact.packageSha256,
+  }, selection.packages[0]],
+}));
+run(["prepare", `--selection=${combinedSelectionPath}`]);
+run(["apply", "--acknowledge-package-consent", "--acknowledge-first-party-replacement"]);
+const combinedStatus = JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8"));
+assert.deepEqual(combinedStatus.packages.map((entry) => entry.id).sort(), ["pets-maker", "tweetPng"]);
 
 const emptySelectionPath = `${root}/empty-selection.json`;
 await writeFile(emptySelectionPath, JSON.stringify({ ...selection, packages: [] }));

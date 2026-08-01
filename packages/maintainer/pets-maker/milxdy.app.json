@@ -4,7 +4,7 @@
   "id": "pets-maker",
   "name": "Pets Maker",
   "version": "0.1.0-pilot",
-  "description": "An optional local-only side-rail app for preparing validated Remilia Maker pet-request bundles.",
+  "description": "An optional catalog-installed side-rail app for preparing validated Remilia Maker pet-request bundles.",
   "packageKind": "app",
   "sdk": {
     "minVersion": "0.2.4",
@@ -100,8 +100,10 @@
     "webAccessibleAssets": ["assets/remy.png"]
   },
   "review": {
-    "status": "local",
-    "sourceUrl": "https://github.com/bonklek/milXdy/issues/191",
-    "notes": ["Novel optional App SDK package; local composition requires explicit review acknowledgement.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, remote services, background handlers, or page observers."]
+    "status": "reviewed",
+    "sourceUrl": "https://github.com/bonklek/milXdy/tree/main/packages/maintainer/pets-maker",
+    "reviewedBy": "milxdy-maintainer-pets-maker",
+    "reviewedAt": "2026-08-01",
+    "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, remote services, background handlers, or page observers."]
   }
 }

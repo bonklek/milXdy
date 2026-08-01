@@ -10,7 +10,7 @@ import {
   sha256Hex,
   stableJson,
   validatePetRequest,
-} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
+} from "../../packages/maintainer/pets-maker/src/custom-pet-contract.js";
 
 const python = process.env.PYTHON || "python";
 const sourceRootArg = valueFor("--source-root") || process.env.REMILIA_PETS_ROOT;

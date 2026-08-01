@@ -12,7 +12,7 @@ import {
   stableJson,
   validatePetRequest,
   validatePetRequestShape,
-} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
+} from "../../packages/maintainer/pets-maker/src/custom-pet-contract.js";
 
 type PetRequestFamily = keyof typeof PET_REQUEST_NFT_RANGES;
 type PetRequestWithNftNumber = ReturnType<typeof makePetRequest> & {
@@ -156,10 +156,10 @@ describe("Pets Maker request contract", () => {
   });
 
   it("ships as a disabled, lazy side-rail app and leaves Composer Kit pet-free", () => {
-    const source = readFileSync("examples/packages/local-dev/pets-maker/src/custom-pet-ui.js", "utf8");
-    const appSource = readFileSync("examples/packages/local-dev/pets-maker/src/content.js", "utf8");
-    const bundled = readFileSync("examples/packages/local-dev/pets-maker/dist/content.js", "utf8");
-    const manifest = JSON.parse(readFileSync("examples/packages/local-dev/pets-maker/milxdy.app.json", "utf8"));
+    const source = readFileSync("packages/maintainer/pets-maker/src/custom-pet-ui.js", "utf8");
+    const appSource = readFileSync("packages/maintainer/pets-maker/src/content.js", "utf8");
+    const bundled = readFileSync("packages/maintainer/pets-maker/dist/content.js", "utf8");
+    const manifest = JSON.parse(readFileSync("packages/maintainer/pets-maker/milxdy.app.json", "utf8"));
     const composerSource = readFileSync("examples/packages/local-dev/tweet-composer-kit/src/content.js", "utf8");
     expect(source).toContain('ariaLabel: "Custom Pet export"');
     expect(source).toContain('textContent: "Download remilia-pet-request.zip"');
