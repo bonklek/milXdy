@@ -25,6 +25,7 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).toContain("slots.find(isEmptySlot)");
     expect(source).toContain("(next + 1) % slots.length");
     expect(source).toContain("top: .2rem; right: .2rem");
+    expect(source).toContain("border-radius: 0");
     expect(source).not.toContain("transform: translate(100%, -50%)");
     expect(source).toContain("document.addEventListener(\"click\"");
     expect(source).not.toContain("new DragEvent");

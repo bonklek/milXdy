@@ -26,7 +26,7 @@
       .milxdy-last-read-dismiss {
         display: inline-grid; place-items: center; width: 1.25rem; height: 1.25rem;
         position: absolute; top: .2rem; right: .2rem;
-        border: 1px solid currentColor; border-radius: 999px;
+        border: 1px solid currentColor; border-radius: 0;
         padding: 0; background: Canvas; color: CanvasText; cursor: pointer; font: 700 1rem/1 sans-serif;
         opacity: 0; pointer-events: none;
       }
