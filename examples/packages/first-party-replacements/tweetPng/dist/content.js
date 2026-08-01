@@ -39,7 +39,7 @@ async function copyTweetPngFromTweet(tweet, statusUrl) {
   await loadVisualTheme();
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
-  if (!data.text && !data.images.length && !data.quote) return;
+  if (!data.text && !data.images.length && !data.linkCard && !data.quote) return;
   const result = await renderTweetPng(data);
   await copyTweetPng(result.blob);
 }
@@ -97,7 +97,7 @@ async function openTweetPngReviewFromTweet(tweet, statusUrl) {
   await loadVisualTheme();
   await expandTweetPngText(tweet);
   const data = extractTweetPngData(tweet, statusUrl);
-  if (!data.text && !data.images.length && !data.quote) return;
+  if (!data.text && !data.images.length && !data.linkCard && !data.quote) return;
   const result = await renderTweetPng(data);
   showTweetPngModal(tweet, statusUrl, result, data);
 }
@@ -121,6 +121,7 @@ function withoutExcludedTweetPngMedia(data, excluded) {
   return {
     ...data,
     images: data.images.filter((media) => included("post", media)),
+    linkCard: data.linkCard ? { ...data.linkCard, image: data.linkCard.image && included("embed", data.linkCard.image) ? data.linkCard.image : null } : null,
     quote: data.quote ? { ...data.quote, images: data.quote.images.filter((media) => included("quote", media)) } : null
   };
 }
@@ -142,6 +143,7 @@ function extractTweetPngData(tweet, statusUrl) {
   const avatar = tweet.querySelector('img[src*="profile_images"]');
   const images = settings.tweetPngIncludeImages ? extractTweetPngMedia(tweet, (element) => !element.closest('[data-testid="quoteTweet"]') && !quote?.element.contains(element)) : [];
   const cashtag = settings.tweetPngIncludeImages ? extractTweetPngCashtag(tweet) : null;
+  const linkCard = settings.tweetPngIncludeImages ? extractTweetPngLinkCard(tweet, quote?.element || null) : null;
   const stats = settings.tweetPngIncludeStats ? extractTweetPngStats(tweet) : null;
   return {
     author,
@@ -151,6 +153,7 @@ function extractTweetPngData(tweet, statusUrl) {
     date: settings.tweetPngIncludeDate ? extractTweetPngDate(tweet) : "",
     avatarUrl: avatar?.currentSrc || avatar?.src || "",
     images,
+    linkCard,
     cashtag,
     quote: quote ? { author: quote.author, handle: quote.handle, text: quote.text, images: quote.images } : null,
     stats
@@ -266,6 +269,27 @@ function extractTweetPngMedia(root, include = () => true) {
   }
   return Array.from(media.values()).slice(0, 4);
 }
+function tweetPngLinkCardLabels(values) {
+  const labels = values.map(normalizeTweetPngInlineText).filter(Boolean);
+  const source = labels.find((value) => /^From\s+\S+/i.test(value)) || "";
+  const title = labels.find((value) => value !== source && !/^https?:\/\//i.test(value)) || "";
+  return { title, source };
+}
+function extractTweetPngLinkCard(root, quoteElement = null) {
+  const card = Array.from(root.querySelectorAll('[data-testid="card.wrapper"]')).find((candidate) => !candidate.closest('[data-testid="quoteTweet"]') && !quoteElement?.contains(candidate));
+  if (!card) return null;
+  const leafLabels = Array.from(card.querySelectorAll("span")).filter((element) => !element.querySelector("span")).map((element) => element.textContent || "");
+  const ariaLabel = card.getAttribute("aria-label") || "";
+  const { title, source } = tweetPngLinkCardLabels([...leafLabels, ariaLabel]);
+  const preview = Array.from(card.querySelectorAll("img")).find((image) => Boolean(image.currentSrc || image.src));
+  const src = preview?.currentSrc || preview?.src || "";
+  if (!title && !source && !src) return null;
+  return {
+    title,
+    source,
+    image: src ? { src, isVideo: false } : null
+  };
+}
 function extractTweetPngCashtag(root) {
   const navigation = Array.from(root.querySelectorAll('nav[aria-label="Cashtag attachments"]')).find((element) => !element.closest('[data-testid="quoteTweet"]'));
   const card = navigation?.querySelector('a[role="link"], a[href]');
@@ -322,18 +346,20 @@ async function renderTweetPng(data) {
   context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   const quoteTextLines = data.quote?.text ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT)) : [];
   const mediaImages = await Promise.all(data.images.map(loadTweetPngMedia));
+  const linkCard = data.linkCard ? await loadTweetPngLinkCard(data.linkCard) : null;
   const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadTweetPngMedia)) : [];
   const cashtag = data.cashtag ? await loadTweetPngCashtag(data.cashtag) : null;
   const assets = await loadTweetPngRenderAssets();
   const avatarImage = data.avatarUrl ? await loadImageForCanvas(data.avatarUrl).catch(() => null) : null;
   const mediaHeight = measureTweetPngMediaHeight(mediaImages, bodyWidth, 520);
+  const linkCardHeight = linkCard ? linkCard.image?.image ? 420 : 120 : 0;
   const cashtagHeight = cashtag?.chart ? TWEET_PNG_CASHTAG_HEIGHT : 0;
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
   const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
   const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLines.length, quoteMediaHeight) : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
-    86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0) + footerHeight + 36
+    86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (linkCardHeight ? linkCardHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0) + footerHeight + 36
   );
   const height = Math.min(maxHeight, Math.max(360, uncappedHeight));
   canvas.width = width * scale;
@@ -375,7 +401,7 @@ async function renderTweetPng(data) {
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
   const maxContentY = data.date ? footerY - footerHeight : height - padding;
-  const reservedAfterText = (mediaHeight ? mediaHeight + 38 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
+  const reservedAfterText = (mediaHeight ? mediaHeight + 38 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0) + (linkCardHeight ? linkCardHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
   const textAreaBottom = maxContentY - reservedAfterText;
   const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT);
   for (const line of drawableTextLines) {
@@ -384,7 +410,7 @@ async function renderTweetPng(data) {
   }
   if (mediaImages.some(Boolean)) {
     y += 10;
-    const reservedFollowingHeight = (cashtagHeight ? cashtagHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
+    const reservedFollowingHeight = (cashtagHeight ? cashtagHeight + 28 : 0) + (linkCardHeight ? linkCardHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
     const boundedMediaHeight = Math.min(mediaHeight, Math.max(0, maxContentY - y - reservedFollowingHeight - 28));
     if (boundedMediaHeight >= 80) {
       drawTweetPngMediaGrid(context, mediaImages, bodyX, y, bodyWidth, boundedMediaHeight, palette, "post", mediaRegions);
@@ -392,11 +418,19 @@ async function renderTweetPng(data) {
     }
   }
   if (cashtag?.chart && y + 120 < maxContentY) {
-    const reservedQuoteHeight = quoteHeight ? quoteHeight + 22 : 0;
-    const boundedCashtagHeight = Math.min(cashtagHeight, Math.max(0, maxContentY - y - reservedQuoteHeight - 28));
+    const reservedFollowingHeight = (linkCardHeight ? linkCardHeight + 28 : 0) + (quoteHeight ? quoteHeight + 22 : 0);
+    const boundedCashtagHeight = Math.min(cashtagHeight, Math.max(0, maxContentY - y - reservedFollowingHeight - 28));
     if (boundedCashtagHeight >= 280) {
       drawTweetPngCashtag(context, cashtag, bodyX, y, bodyWidth, boundedCashtagHeight, palette);
       y += boundedCashtagHeight + 28;
+    }
+  }
+  if (linkCard && y + 100 < maxContentY) {
+    const reservedQuoteHeight = quoteHeight ? quoteHeight + 22 : 0;
+    const boundedLinkCardHeight = Math.min(linkCardHeight, Math.max(0, maxContentY - y - reservedQuoteHeight - 22));
+    if (boundedLinkCardHeight >= 100) {
+      drawTweetPngLinkCard(context, linkCard, bodyX, y, bodyWidth, boundedLinkCardHeight, palette, mediaRegions);
+      y += boundedLinkCardHeight + 28;
     }
   }
   if (data.quote) {
@@ -694,6 +728,44 @@ function measureTweetPngMediaHeight(images, width, maxHeight) {
   if (ratio >= 1) return Math.min(maxHeight, Math.max(260, width / ratio));
   return Math.min(maxHeight, Math.max(240, width * 0.62 / ratio));
 }
+function drawTweetPngLinkCard(context, card, x, y, width, height, palette, regions) {
+  roundRect(context, x, y, width, height, 22);
+  context.fillStyle = palette.mediaFill;
+  context.fill();
+  const imageHeight = card.image?.image ? Math.max(0, height - 104) : 0;
+  if (card.image?.image && imageHeight >= 80) {
+    context.save();
+    roundRect(context, x, y, width, height, 22);
+    context.clip();
+    drawImageCover(context, card.image.image, x, y, width, imageHeight);
+    context.restore();
+    regions.push({
+      key: tweetPngMediaRemovalKey("embed", card.image.src),
+      x,
+      y,
+      width,
+      height: imageHeight
+    });
+  }
+  if (visualTheme.tweetPngBorder) {
+    roundRect(context, x, y, width, height, 22);
+    context.strokeStyle = palette.mediaBorder;
+    context.lineWidth = 2;
+    context.stroke();
+  }
+  let textY = y + imageHeight + 34;
+  context.fillStyle = visualTheme.tweetPngFontColor;
+  context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
+  for (const line of wrapCanvasText(context, card.title, width - 48, 2)) {
+    context.fillText(line, x + 24, textY);
+    textY += 30;
+  }
+  if (card.source && textY <= y + height - 12) {
+    context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
+    context.font = `20px ${TWEET_PNG_FONT_FALLBACK}`;
+    context.fillText(card.source, x + 24, Math.min(y + height - 22, textY + 4));
+  }
+}
 function drawTweetPngMediaGrid(context, images, x, y, width, height, palette, scope, regions) {
   const visible = images.filter((media) => Boolean(media.image));
   const gap = 10;
@@ -787,6 +859,9 @@ function loadImageForCanvas(src) {
 }
 async function loadTweetPngMedia(media) {
   return { ...media, image: await loadImageForCanvas(media.src) };
+}
+async function loadTweetPngLinkCard(card) {
+  return { ...card, image: card.image ? await loadTweetPngMedia(card.image) : null };
 }
 async function loadTweetPngCashtag(cashtag) {
   const [icon, chart] = await Promise.all([
@@ -905,6 +980,10 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
         tweetPngMediaRemovalKey("post", media.src),
         `Remove post image ${index + 1}`
       ]),
+      ...nextData.linkCard?.image ? [[
+        tweetPngMediaRemovalKey("embed", nextData.linkCard.image.src),
+        "Remove link preview image"
+      ]] : [],
       ...(nextData.quote?.images || []).map((media, index) => [
         tweetPngMediaRemovalKey("quote", media.src),
         `Remove QRT image ${index + 1}`
@@ -1295,6 +1374,7 @@ export {
   copyTweetPngFromTweet,
   disable,
   extractTweetPngCashtag,
+  extractTweetPngLinkCard,
   extractTweetPngMedia,
   findTweetPngQuoteElement,
   id,
@@ -1305,6 +1385,7 @@ export {
   openTweetPngReviewFromTweet,
   setTweetPngSettingsOpen,
   shouldCloseTweetPngReview,
+  tweetPngLinkCardLabels,
   tweetPngMediaRemovalKey,
   tweetPngPalette,
   tweetPngVisibleLineCount,
