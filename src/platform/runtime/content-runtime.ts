@@ -2428,10 +2428,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
           .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
         if (!input) return { ok: false, error: "X's media control is unavailable." };
+        // X accepts a bounded image FileList. Preserve its current draft files so
+        // successive explicit gallery clicks accumulate instead of replacing them.
+        const existingFiles = Array.from(input.files || []);
+        const maxAttachments = 4;
+        if (existingFiles.length >= maxAttachments) {
+          return { ok: false, error: `X's composer supports up to ${maxAttachments} images.` };
+        }
         const transfer = new DataTransfer();
+        for (const existingFile of existingFiles) transfer.items.add(existingFile);
         transfer.items.add(new File([blob], fileName, { type: blob.type }));
         input.files = transfer.files;
-        if (input.files?.length !== 1) return { ok: false, error: "X's media control rejected the generated image." };
+        if (input.files?.length !== existingFiles.length + 1) return { ok: false, error: "X's media control rejected the selected image." };
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
         return { ok: true };
