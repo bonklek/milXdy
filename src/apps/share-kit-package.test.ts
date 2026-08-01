@@ -8,6 +8,7 @@ import {
   measureTweetPngQuoteHeight,
   normalizeVisualTheme,
   setTweetPngSettingsOpen,
+  shouldCloseTweetPngReview,
   tweetPngPalette,
   tweetPngWatermarkColor,
   tweetPngMediaRemovalKey,
@@ -79,6 +80,13 @@ describe("Share Kit package compatibility", () => {
     expect(attributes.get("aria-expanded")).toBe("false");
     expect(packageSource).toContain('target?.closest(\'[data-action="settings"]\')');
     expect(packageSource).toContain('}, true);');
+  });
+
+  it("keeps the review pane open across tab visibility changes", () => {
+    const href = "https://x.com/home";
+    expect(shouldCloseTweetPngReview(href, href)).toBe(false);
+    expect(shouldCloseTweetPngReview(href, "https://x.com/search?q=milady")).toBe(true);
+    expect(packageSource).toContain("onRouteChange(route: MilxdyRouteChange)");
   });
 
   it("marks video posters for a play overlay while preserving ordinary images", () => {
