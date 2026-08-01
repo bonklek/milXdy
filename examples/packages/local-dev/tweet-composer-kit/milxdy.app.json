@@ -73,12 +73,13 @@
       "resources": ["posts", "facets"],
       "maxPageSize": 12,
       "minIntervalMs": 750,
-      "cache": { "policy": "none" },
-      "composerSuggestions": {
-        "source": "visibleDraftKeywords",
-        "maxItems": 5,
-        "maxLength": 64
-      }
+        "cache": { "policy": "none" },
+        "composerSuggestions": {
+          "source": "visibleDraftKeywords",
+          "maxItems": 5,
+          "maxLength": 64
+        },
+        "resultActions": ["attachToInitiatingComposer"]
     }
   ],
   "contextMediaActions": [
@@ -212,14 +213,14 @@
       "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. After an explicit reply-menu click, the host types and immediately submits the selected local literal to X.",
       "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.",
       "After an explicit Milady, Remilio, Bonkler, or Kagami icon click, the user-entered Top text and Bottom text captions are transferred only to that named reviewed maker. randomMeme permits both caption fields to be empty and requests uncaptioned maker output; this package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.",
-      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. Results visibly link only to canonical Remibooru posts; the package does not attach, download, cache, or post media.",
+      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
       "After an explicit X image context-menu selection and explicit Contribute click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed Remibooru contribution flow. The host renders the preview, requires a rights acknowledgement and final publish confirmation, retains image bytes and session data, and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
       "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
       "CHEESEWORLD opens only as an explicit external link and receives no composer text."
     ],
     "remoteServices": [
       "The reviewed Remilia-maker adapter opens only after an explicit package icon click. The host validates the declared captioned or randomMeme mode before transferring the active draft to the selected named maker.",
-      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, or processes an explicitly requested reviewed media contribution after host-owned rights acknowledgement and final publish confirmation.",
+      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or processes an explicitly requested reviewed media contribution after host-owned rights acknowledgement and final publish confirmation.",
       "CHEESEWORLD is opened as a user-initiated external link; no API, upload, or text transfer occurs."
     ],
     "localStorageNotes": [
@@ -238,7 +239,7 @@
       "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. After an explicit reply-menu click, the host types and immediately submits the selected local literal to X.",
       "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.",
       "After an explicit Milady, Remilio, Bonkler, or Kagami icon click, the user-entered Top text and Bottom text captions are transferred only to that named reviewed maker. randomMeme permits both caption fields to be empty and requests uncaptioned maker output; this package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.",
-      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. Results visibly link only to canonical Remibooru posts; the package does not attach, download, cache, or post media.",
+      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
       "After an explicit X image context-menu selection and explicit Contribute click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed Remibooru contribution flow. The host renders the preview, requires a rights acknowledgement and final publish confirmation, retains image bytes and session data, and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
       "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
       "CHEESEWORLD is an ordinary explicit link and receives no composer or draft content."
@@ -248,7 +249,7 @@
     ],
     "remoteServices": [
       "The reviewed Remilia-maker adapter opens only after an explicit user action and validates the declared captioned or randomMeme mode before transferring to the selected named maker.",
-      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, or processes an explicitly requested reviewed media contribution after host-owned rights acknowledgement and final publish confirmation.",
+      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or processes an explicitly requested reviewed media contribution after host-owned rights acknowledgement and final publish confirmation.",
       "CHEESEWORLD link opens only after an explicit user action; this package makes no remote API request."
     ],
     "privacyLabels": ["local-only", "remote-api"],

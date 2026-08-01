@@ -15,9 +15,9 @@ export function boot(nextContext) {
   context.recordDiagnostic("tweet-composer-kit.ready", { capability: "composer-adjacent-panel" });
 }
 
-export async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }) {
+export async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
   if (!context || signal.aborted) return;
-  panel.replaceChildren(buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }));
+  panel.replaceChildren(buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }));
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
 
@@ -68,7 +68,7 @@ export function onReplyAction({ panel, templates, selectTemplate, openNativeRepl
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
 
-function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, signal }) {
+function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
   const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__composer-panel", ariaLabel: "Tweet Composer Kit" });
   const topInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Top text", ariaLabel: "Top text", autocomplete: "off" });
   const bottomInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Bottom text", ariaLabel: "Bottom text", autocomplete: "off" });
@@ -77,7 +77,7 @@ function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteSer
     el("div", { className: "tweet-composer-kit__caption-fields" }, topInput, bottomInput),
     buildMemeControls(random),
     buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }),
-    buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal }),
+    buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }),
   );
   return root;
 }
@@ -151,7 +151,7 @@ export function onContextMediaAction({ actionId, panel, signal, mediaHandle, med
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
 }
 
-function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal }) {
+function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
   const root = el("section", { className: "tweet-composer-kit__media-picker", ariaLabel: "Remibooru reaction media" });
   const facets = el("input", { className: "tweet-composer-kit__media-query", type: "search", maxLength: 160, placeholder: "Search Remibooru tags", ariaLabel: "Search Remibooru tags", autocomplete: "off" });
   const search = el("button", { className: "tweet-composer-kit__media-button", type: "button", textContent: "Search" });
@@ -159,6 +159,7 @@ function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal
   const next = el("button", { className: "tweet-composer-kit__media-page", type: "button", textContent: "▶", ariaLabel: "Next Remibooru results", title: "Next results" });
   const tags = el("button", { className: "tweet-composer-kit__media-button", type: "button", textContent: "Tags" });
   const results = el("div", { className: "tweet-composer-kit__media-results", role: "list", ariaLabel: "Remibooru results" });
+  const attribution = el("p", { className: "tweet-composer-kit__media-disclosure", textContent: "Remibooru thumbnails · click to attach, double-click to open the source post." });
   const status = el("p", { className: "tweet-composer-kit__media-status", role: "status", ariaLive: "polite" });
   const available = typeof queryRemoteService === "function";
   let nextCursor = null;
@@ -178,16 +179,32 @@ function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal
     const safeItems = Array.isArray(items) ? items.filter(isRemibooruResult) : [];
     for (const item of safeItems) {
       const thumbnail = el("img", { className: "tweet-composer-kit__media-thumb", src: item.thumbnailUrl, alt: "", ariaHidden: "true" });
-      const attribution = el("span", { className: "tweet-composer-kit__media-attribution", textContent: "Remibooru" });
-      results.append(el("a", {
+      const control = el("button", {
         className: "tweet-composer-kit__media-item",
-        href: item.postUrl,
-        target: "_blank",
-        rel: "noopener noreferrer",
         role: "listitem",
-        ariaLabel: "Open this Remibooru post",
-        title: "Open on Remibooru",
-      }, thumbnail, attribution));
+        type: "button",
+        ariaLabel: "Attach this Remibooru thumbnail to the composer; double-click to open its source post",
+        title: "Click to attach; double-click to open on Remibooru",
+      }, thumbnail);
+      let clickTimer = null;
+      const cancelPendingAttach = () => {
+        if (clickTimer === null) return;
+        clearTimeout(clickTimer);
+        clickTimer = null;
+      };
+      control.addEventListener("click", () => {
+        cancelPendingAttach();
+        clickTimer = setTimeout(() => {
+          clickTimer = null;
+          void attachResult(item.id, control);
+        }, 250);
+      }, { signal });
+      control.addEventListener("dblclick", () => {
+        cancelPendingAttach();
+        openCanonicalPost(root, item.postUrl);
+      }, { signal });
+      signal.addEventListener("abort", cancelPendingAttach, { once: true });
+      results.append(control);
     }
     if (!results.childElementCount) status.textContent = "No matching Remibooru media was found.";
   };
@@ -245,12 +262,35 @@ function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, signal
   }, { signal });
   previous.addEventListener("click", () => void load({ cursor: previousCursors[previousCursors.length - 1] || null, history: "previous" }), { signal });
   next.addEventListener("click", () => void load({ cursor: nextCursor, history: "next" }), { signal });
-  root.append(el("div", { className: "tweet-composer-kit__media-controls" }, facets, search, previous, next, tags), results, status);
+  const attachResult = async (itemId, control) => {
+    if (signal.aborted || typeof attachRemoteQueryResult !== "function") {
+      status.textContent = "Attaching Remibooru media is not available in this build.";
+      return;
+    }
+    control.disabled = true;
+    status.textContent = "Attaching the selected Remibooru thumbnail…";
+    try {
+      const result = await attachRemoteQueryResult("remibooru-reactions", itemId);
+      status.textContent = result?.ok ? "Thumbnail attached to the composer. It has not been posted." : result?.error || "The thumbnail could not be attached.";
+    } catch {
+      status.textContent = "The thumbnail could not be attached.";
+    } finally {
+      if (!signal.aborted) control.disabled = false;
+    }
+  };
+  root.append(el("div", { className: "tweet-composer-kit__media-controls" }, facets, search, previous, next, tags), attribution, results, status);
   setBusy(false);
   if (!available) {
     status.textContent = "Remibooru search is not available in this build.";
   }
   return root;
+}
+
+function openCanonicalPost(root, postUrl) {
+  const link = el("a", { href: postUrl, target: "_blank", rel: "noopener noreferrer" });
+  root.append(link);
+  link.click();
+  link.remove();
 }
 
 function normalizeSuggestedFacets(suggestions) {
@@ -266,7 +306,7 @@ function parseRemibooruFacets(value) {
 }
 
 function isRemibooruResult(item) {
-  return Boolean(item && typeof item.postUrl === "string" && item.postUrl.startsWith("https://remibooru.com/posts/")
+  return Boolean(item && typeof item.id === "string" && item.id.length > 0 && typeof item.postUrl === "string" && item.postUrl.startsWith("https://remibooru.com/posts/")
     && typeof item.thumbnailUrl === "string" && item.thumbnailUrl.startsWith("https://remibooru.com/media/thumbs/"));
 }
 
