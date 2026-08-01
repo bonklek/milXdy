@@ -19,7 +19,7 @@
     { "id": "tweet-composer-kit.styles", "path": "styles/composer-kit.css" }
   ],
   "composerAction": {
-    "label": "Composer Kit",
+    "label": "Factory",
     "presentation": "anchoredPanel",
     "icon": {
       "light": "assets/composer-factory-light.svg",
