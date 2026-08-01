@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "./media-contribution";
+import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "./media-contribution";
 
 describe("opaque media handles", () => {
   it("are one-use, app/action-bound, and expire", () => {
@@ -41,5 +41,23 @@ describe("opaque media handles", () => {
     expect(store.restore(handle, { appId: "kit", actionId: "upload", mimeType: "image/png", bytes: new Uint8Array([1]), width: 1, height: 1, altAvailable: false, expiresAt: 100 }, 20)).toBe(true);
     expect(store.claim(handle, "kit", "upload", 21)).not.toBeNull();
     expect(store.restore("bad", { appId: "kit", actionId: "upload", mimeType: "image/png", bytes: new Uint8Array(), width: 1, height: 1, altAvailable: false, expiresAt: 10 }, 20)).toBe(false);
+  });
+
+  it("accepts the image formats supported by the native Remibooru uploader", () => {
+    expect(isSupportedMediaContributionMime("image/png")).toBe(true);
+    expect(isSupportedMediaContributionMime("image/jpeg")).toBe(true);
+    expect(isSupportedMediaContributionMime("image/webp")).toBe(true);
+    expect(isSupportedMediaContributionMime("image/gif")).toBe(true);
+    expect(isSupportedMediaContributionMime("application/pdf")).toBe(false);
+  });
+
+  it("keeps common contribution failures understandable and retryable", () => {
+    expect(mediaContributionFailureMessage(401)).toContain("Sign in");
+    expect(mediaContributionFailureMessage(403)).toContain("contributor access");
+    expect(mediaContributionFailureMessage(409)).toContain("already exists");
+    expect(mediaContributionFailureMessage(422)).toContain("media or tags");
+    expect(mediaContributionFailureMessage(429)).toContain("rate limiting");
+    expect(mediaContributionFailureMessage(503)).toContain("temporarily unavailable");
+    expect(mediaContributionFailureMessage(422, "Tag is not allowed")).toBe("Tag is not allowed");
   });
 });

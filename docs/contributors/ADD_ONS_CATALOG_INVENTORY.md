@@ -28,16 +28,19 @@ actions remain explicit.
 - Remote scope: the host-owned adapters may contact
   `https://maker.remilia.org/*` and `https://remibooru.com/*` only after
   explicit package actions. Maker handoff sends reviewed caption fields only;
-  Remibooru queries send bounded public facets, cursor, and page size only.
+  Remibooru queries send bounded public facets, cursor, and page size, while an
+  explicit context-media publish action can send only the selected media and
+  bounded tags through the host-owned authenticated contribution adapter.
 - Local file boundary: Custom Pet export reads only the PNG selected in its
   visible file control, combines explicit trait and rights choices locally,
   validates and downloads a two-file request ZIP, and never uploads, caches,
   posts, publishes, or infers missing rights or body choices. The optional
   clipboard control copies only its visible static handoff sentence.
-- BOORU boundary: Remibooru metadata browsing, canonical-source links, and an
-  explicit host-owned thumbnail attachment action are Composer Kit capabilities
-  owned by #17/#188. The package receives no original-media URL or bytes, keeps
-  no media or source-link cache, and cannot upload or post media.
+- BOORU boundary: Remibooru metadata browsing, canonical-source links, an
+  explicit host-owned thumbnail attachment action, and explicit public
+  contribution are Composer Kit capabilities owned by #17/#24/#188. The package
+  receives no original-media URL or bytes, keeps no media or source-link cache,
+  and cannot upload without the visible publish action.
 - Meme Maker boundary: declared maker targets and caption/random-meme modes are
   Composer Kit capabilities owned by #79/#188. Generated media remains outside
   the package until the user reviews and acts on it.

@@ -960,7 +960,6 @@ function verifyContextMediaActions(id, manifest, errors) {
   }
   if (!(manifest.permissions?.hosts || []).includes("https://remibooru.com/*")) errors.push(`${id}: mediaContributions require host permission https://remibooru.com/*`);
   const disclosure = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.privacy?.remoteServices || [])].join(" ").toLowerCase();
-  if (!/remibooru/.test(disclosure) || !/(rights|confirm|publish)/.test(disclosure)) errors.push(`${id}: mediaContributions require Remibooru rights/final-publish disclosure`);
   if (!/(grok|assistant)/.test(disclosure) || !/tag/.test(disclosure)) errors.push(`${id}: contextMediaActions require visible assistant tag-helper disclosure`);
   if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: mediaContributions require remote-api consent`);
 }

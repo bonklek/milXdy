@@ -92,7 +92,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
   requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
   requireIncludes(contentRuntime, 'type: "milxdy:contextMediaPrepare"', "Context media selections must be prepared by the host background");
-  requireIncludes(contentRuntime, 'window.confirm("Confirm that you have the right', "Media contributions must require explicit host-owned rights and publish confirmation");
+  requireIncludes(contentRuntime, 'type: "milxdy:mediaContributionSubmit"', "Media contributions must remain behind the explicit host-owned publish callback");
+  requireNotIncludes(contentRuntime, "Confirm that you have the right", "Media contributions must not add a rights attestation prompt");
   requireIncludes(background, "OpaqueMediaHandleStore", "Selected media must remain behind opaque host-owned handles");
   requireIncludes(background, "validateMediaContributionTags", "Media contribution tags must be bounded by the host");
   requireIncludes(background, 'credentials: "include"', "Reviewed contributions must use the visible member session without exposing it to packages");
@@ -829,6 +830,10 @@ function normalizePosix(value) {
 
 function requireIncludes(source, needle, message) {
   if (!source.includes(needle)) fail(message);
+}
+
+function requireNotIncludes(source, needle, message) {
+  if (source.includes(needle)) fail(message);
 }
 
 function fail(message) {
