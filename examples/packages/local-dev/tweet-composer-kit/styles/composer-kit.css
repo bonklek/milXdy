@@ -113,7 +113,7 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__reply-menu {
   --tck-reply-shadow: #080509;
   --tck-reply-focus: #ff9fd1;
 }
-.tweet-composer-kit__reply-rows { display: grid; inline-size: max-content; max-inline-size: 100%; max-block-size: 172px; gap: 2px; overflow-y: auto; border: 1px solid color-mix(in srgb, var(--tck-reply-frame) 78%, var(--tck-reply-accent)); border-radius: 3px; background: color-mix(in srgb, var(--tck-reply-surface-raised) 86%, var(--tck-reply-accent) 14%); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--tck-reply-surface) 76%, #ffffff 24%); padding: 2px; }
+.tweet-composer-kit__reply-rows { display: grid; inline-size: max-content; max-inline-size: 100%; max-block-size: 172px; gap: 2px; overflow-y: auto; padding: 0; }
 .tweet-composer-kit__reply-row { display: flex; align-items: center; gap: 7px; inline-size: 100%; min-block-size: 34px; border: 1px solid transparent; border-radius: 2px; background: color-mix(in srgb, var(--tck-reply-surface) 90%, var(--tck-reply-accent) 10%); color: var(--tck-reply-ink); padding: 4px 6px; text-align: start; font: 700 12px/1.15 inherit; white-space: nowrap; cursor: pointer; }
 .tweet-composer-kit__reply-row--primary { border-inline-start: 4px solid var(--tck-reply-accent); }
 .tweet-composer-kit__reply-row:hover:not(:disabled) { border-color: var(--tck-reply-accent); background: color-mix(in srgb, var(--tck-reply-surface-raised) 62%, var(--tck-reply-accent) 38%); }
@@ -348,7 +348,7 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
   .tweet-composer-kit__mark,
   .tweet-composer-kit__maker-icon,
   .tweet-composer-kit__button--primary { border: 1px solid ButtonText; background: ButtonFace; color: ButtonText; }
-  .tweet-composer-kit__reply-rows { border: 1px solid CanvasText; background: Canvas; }
+  .tweet-composer-kit__reply-rows { border: 0; background: transparent; }
   .tweet-composer-kit__reply-row { border: 1px solid transparent; background: transparent; color: CanvasText; }
   .tweet-composer-kit__reply-row--primary { border-inline-start: 4px solid Highlight; }
   .tweet-composer-kit button:focus-visible,
