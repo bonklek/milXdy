@@ -64,7 +64,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [App SDK and Local Add-ons](docs/sdk/APP_SDK_OVERVIEW.md)
 - [Add-on catalog submissions](docs/contributors/ADD_ON_CATALOG_SUBMISSIONS.md)
 - [milXdy setup and guides](https://bonklek.github.io/milXdy/)
-- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — Composer Kit and Share Kit preview; reviewed Share Kit is selectable
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — Pets Maker, Composer Kit, and Share Kit preview; reviewed Pets Maker and Share Kit are selectable
 - [App SDK](docs/sdk/APP_SDK.md)
 - [Roadmap](docs/roadmap/ROADMAP.md)
 - [Contributing](docs/contributors/CONTRIBUTING.md)

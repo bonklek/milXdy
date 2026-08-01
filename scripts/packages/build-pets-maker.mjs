@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import esbuild from "esbuild";
 
-const packageRoot = "examples/packages/local-dev/pets-maker";
+const packageRoot = "packages/maintainer/pets-maker";
 await mkdir(`${packageRoot}/dist`, { recursive: true });
 await esbuild.build({
   entryPoints: [`${packageRoot}/src/content.js`],

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">Pets Maker character bundle</title>
+  <rect width="64" height="64" rx="8" fill="#fff5fb"/>
+  <path d="M18 30c-5-2-7-7-5-11 2-3 7-2 10 3m23 8c5-2 7-7 5-11-2-3-7-2-10 3" fill="#ff9ed2" stroke="#2c1760" stroke-width="3" stroke-linecap="round"/>
+  <path d="M18 31c0-10 6-17 14-17s14 7 14 17v11c0 7-6 12-14 12s-14-5-14-12V31z" fill="#fff" stroke="#2c1760" stroke-width="3"/>
+  <circle cx="27" cy="34" r="2.5" fill="#2c1760"/>
+  <circle cx="37" cy="34" r="2.5" fill="#2c1760"/>
+  <path d="M29 42c2 2 4 2 6 0" fill="none" stroke="#652c90" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

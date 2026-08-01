@@ -1,10 +1,39 @@
 # Initial Maintainer Add-ons Inventory
 
-This audit records the two current package boundaries for issue #181. BOORU,
+This audit records the three current package boundaries for issue #181. BOORU,
 Meme Maker, quick replies, and Drafts are capabilities within Composer Kit;
 they are not separate add-ons. The catalog selection target is Chromium,
 packages are composed at build time, and consequential composer or media
 actions remain explicit.
+
+## Pets Maker — package ID `pets-maker`
+
+- Current package: the reviewed checked-in package at
+  `packages/maintainer/pets-maker`.
+- Current catalog status: `published`; the catalog pins version
+  `0.1.0-pilot`, exact package hash, review identity, source path, and build
+  recipe.
+- Installation/activation: selection and composition make the app available
+  but preserve `defaultEnabled: false`. The user must separately enable it in
+  **Apps & Features** before the Pets rail control can appear.
+- Kind/lifecycle: lazy runtime `app`, loaded only on explicit `dockOpen`, with
+  package-owned DOM/listener cleanup on close, disable, abort, and dispose.
+- Capabilities: read one explicitly selected transparent Maker PNG; collect the
+  exact family, optional NFT number, trait IDs, lower-body, footwear, and palette
+  choices; preview a deterministic 1024x1024 composite; and download a validated
+  two-file request ZIP.
+- Settings/storage: only `milxdy.local.pets-maker.enabled`. Form state, files,
+  preview pixels, traits, and generated ZIPs are not persisted.
+- Permissions/services: no host-permission expansion, optional permission,
+  background service, remote service, browser-tab access, clipboard access, or
+  raw runtime messaging.
+- Privacy: selected files and form values remain in the open app and local ZIP.
+  Nothing is uploaded, posted, published, or cached.
+- Dependencies/conflicts: none. Pets Maker uses its own ID and does not replace
+  a built-in app.
+- Removal/rollback: an explicit catalog selection without `pets-maker` removes
+  its package from the next custom build. Interrupted or failed preparation and
+  build promotion restore the prior catalog/build directories.
 
 ## Composer Kit — package ID `tweet-composer-kit`
 
@@ -17,9 +46,8 @@ actions remain explicit.
 - Kind/lifecycle: runtime `app`, disabled by default, opened only from declared
   composer and reply actions.
 - Capabilities: host-owned native Drafts, local quick-reply phrases, Remibooru
-  browse/search, reviewed Milady/Remilio/Bonkler/Kagami maker handoffs, local
-  Custom Pet request ZIP export, an explicit static-instruction clipboard
-  action, and an explicit CHEESEWORLD link.
+  browse/search, reviewed Milady/Remilio/Bonkler/Kagami maker handoffs, and an
+  explicit CHEESEWORLD link.
 - Settings/storage: `milxdy.local.tweet-composer-kit.enabled` and up to 20
   phrases in `milxdy.local.tweet-composer-kit.customPhrases`.
 - Site scope: X/Twitter composer and reply action surfaces. The package has no
@@ -31,11 +59,6 @@ actions remain explicit.
   Remibooru queries send bounded public facets, cursor, and page size, while an
   explicit context-media publish action can send only the selected media and
   bounded tags through the host-owned authenticated contribution adapter.
-- Local file boundary: Custom Pet export reads only the PNG selected in its
-  visible file control, combines explicit trait and rights choices locally,
-  validates and downloads a two-file request ZIP, and never uploads, caches,
-  posts, publishes, or infers missing rights or body choices. The optional
-  clipboard control copies only its visible static handoff sentence.
 - BOORU boundary: Remibooru metadata browsing, canonical-source links, an
   explicit host-owned thumbnail attachment action, and explicit public
   contribution are Composer Kit capabilities owned by #17/#24/#188. The package

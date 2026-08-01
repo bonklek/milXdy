@@ -8,7 +8,7 @@ import {
   makePetRequest,
   stableJson,
   validatePetRequest,
-} from "../../examples/packages/local-dev/pets-maker/src/custom-pet-contract.js";
+} from "../../packages/maintainer/pets-maker/src/custom-pet-contract.js";
 
 const supportedFamilies = ["milady", "remilio", "bonkler", "kagami"];
 const sourceNftNumbers = { milady: 0, remilio: 1, bonkler: 1, kagami: 1 };

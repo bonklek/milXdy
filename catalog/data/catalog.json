@@ -2,7 +2,7 @@
   "$schema": "./catalog.schema.json",
   "schemaVersion": 2,
   "catalogId": "milxdy-maintainer-catalog",
-  "revision": "2026-07-31.1",
+  "revision": "2026-08-01.1",
   "catalogStatus": "preview",
   "supportedBuildTargets": [
     "chromium"
@@ -20,8 +20,93 @@
     {
       "id": "official",
       "name": "Official milXdy add-ons",
-      "description": "The two current add-on package boundaries. BOORU and Meme Maker are Composer Kit capabilities, not separate add-ons.",
+      "description": "The current reviewed package boundaries. Pets Maker is the first catalog-installed app; BOORU and Meme Maker remain Composer Kit capabilities, not separate add-ons.",
       "packages": [
+        {
+          "id": "pets-maker",
+          "name": "Pets Maker",
+          "icon": {
+            "src": "assets/addons/pets-maker.svg",
+            "alt": "Pets Maker character bundle"
+          },
+          "summary": "Prepare a validated local Remilia Maker avatar bundle for the Custom Pet pipeline.",
+          "packageKind": "app",
+          "version": "0.1.0-pilot",
+          "sdk": {
+            "minVersion": "0.2.4",
+            "targetVersion": "0.2.4"
+          },
+          "availability": "published",
+          "publisher": "milXdy maintainers",
+          "source": {
+            "repositoryUrl": "https://github.com/bonklek/milXdy",
+            "path": "packages/maintainer/pets-maker",
+            "issues": [
+              "https://github.com/bonklek/milXdy/issues/181",
+              "https://github.com/bonklek/milXdy/issues/190",
+              "https://github.com/bonklek/milXdy/issues/191",
+              "https://github.com/bonklek/milXdy/issues/192",
+              "https://github.com/bonklek/milXdy/issues/193"
+            ]
+          },
+          "artifact": {
+            "kind": "maintainer-source",
+            "path": "packages/maintainer/pets-maker",
+            "packageSha256": "2add1adc5a1a1ffc2ebfc65d9248f06f6e1d1b424bc495fd6d2f0396b47e4921",
+            "recipeId": "maintainer-local-v1"
+          },
+          "review": {
+            "status": "approved",
+            "reviewedBy": "milxdy-maintainer-pets-maker",
+            "reviewedAt": "2026-08-01",
+            "notes": [
+              "Reviewed optional package moved from the local pilot into the pinned maintainer catalog source tree.",
+              "Installation leaves the enablement setting false; the user must explicitly enable Pets Maker in Apps & Features."
+            ]
+          },
+          "capabilities": [
+            "Open a dedicated Pets Maker side-rail app only after explicit enablement and rail invocation.",
+            "Read one transparent local Maker PNG selected in the visible file control.",
+            "Collect exact Maker family, optional NFT number, trait IDs, lower-body, footwear, and palette choices.",
+            "Preview a deterministic 1024x1024 composite and download a validated two-file request ZIP."
+          ],
+          "permissions": {
+            "hosts": [],
+            "optional": [],
+            "privilegedSurfaces": [
+              "X/Twitter App SDK side-rail overlay",
+              "User-initiated local file input",
+              "User-initiated local ZIP download"
+            ],
+            "notes": [
+              "The package requests no additional host permission and has no background, browser-tab, clipboard, or runtime-messaging access.",
+              "Composition requires explicit package-consent acknowledgement because local files and extension-origin package code are privileged inputs."
+            ]
+          },
+          "siteScopes": [
+            "X/Twitter side-rail overlay opened explicitly by the user"
+          ],
+          "remoteServices": [],
+          "storage": {
+            "local": [
+              "milxdy.local.pets-maker.enabled"
+            ],
+            "sync": [],
+            "session": [],
+            "notes": [
+              "Stores only the disabled-by-default enablement toggle; form state and selected files are not persisted."
+            ]
+          },
+          "privacyNotes": [
+            "The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP.",
+            "Nothing is uploaded, posted, published, cached, or sent to a remote service.",
+            "Installing the package does not enable it, pin it to the rail, read a file, or generate a bundle."
+          ],
+          "dependencies": [],
+          "conflicts": [],
+          "replacement": null,
+          "blockers": []
+        },
         {
           "id": "tweet-composer-kit",
           "name": "Composer Kit",
@@ -29,7 +114,7 @@
             "src": "assets/addons/tweet-composer.svg",
             "alt": "Composer Kit action panel"
           },
-          "summary": "Composer actions, quick replies, Remibooru discovery, reviewed maker handoffs, and local Custom Pet export in one package.",
+          "summary": "Composer actions, quick replies, Remibooru discovery, and reviewed maker handoffs in one package.",
           "packageKind": "app",
           "version": "0.2.0-pilot",
           "sdk": {
@@ -61,8 +146,6 @@
             "Manage local quick-reply phrases and explicitly select one for the host reply action.",
             "Browse reviewed Remibooru reaction metadata, explicitly attach a sanitized thumbnail to the initiating composer, or open its canonical source page.",
             "Open declared Milady, Remilio, Bonkler, and Kagami maker handoffs after explicit caption review.",
-            "Build and download a validated two-file Custom Pet request ZIP from an explicitly selected local PNG and explicit trait choices.",
-            "Copy only the visible static Codex handoff sentence after an explicit clipboard action.",
             "Open CHEESEWORLD as an ordinary explicit external link."
           ],
           "permissions": {
@@ -76,7 +159,7 @@
               "X/Twitter reply actions",
               "Host-owned Remilia Maker handoff adapter",
               "Host-owned Remibooru query adapter",
-              "User-initiated local file, ZIP download, and static clipboard controls"
+              "Package-owned composer controls"
             ],
             "notes": [
               "The package has no raw browser messaging, tab, clipboard, or X DOM access.",
@@ -113,8 +196,6 @@
           },
           "privacyNotes": [
             "The package cannot inspect X drafts, maker pages, Remibooru pages, tabs, clipboard contents, or authentication state.",
-            "Custom Pet export reads only the PNG selected in its visible file control, composites explicit choices locally, validates the request bundle, and downloads it without upload, cache, post, publication, or rights inference.",
-            "The optional clipboard action writes only the visible static Codex handoff sentence after an explicit click.",
             "Maker captions transfer only after an explicit package action; generated media remains user-reviewed and is never posted automatically.",
             "Remibooru results are sanitized metadata and thumbnails. An explicit result click may ask the host to attach that recently returned thumbnail to the initiating composer; the package does not cache, expose original-media URLs, upload, or post media.",
             "A selected quick reply is submitted by the reviewed host action only after the user explicitly clicks that reply row."
@@ -155,7 +236,7 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "examples/packages/first-party-replacements/tweetPng",
-            "packageSha256": "632f329e6f7582470535aed207d68c2f84904e28dca3a5405ac418417530f682",
+            "packageSha256": "e9dea400638010cfbf224c099f1761da5be36d469dd9aaa5e8a81820a810eeda",
             "recipeId": "maintainer-local-v1"
           },
           "review": {

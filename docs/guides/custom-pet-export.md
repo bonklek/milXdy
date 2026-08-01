@@ -1,23 +1,28 @@
 # Pets Maker export
 
-Pets Maker is an optional, disabled-by-default App SDK package. It opens from
-the side rail as a dedicated popout and turns one explicitly selected,
+Pets Maker is an optional, disabled-by-default App SDK package installed from
+the checked-in maintainer Add-ons catalog. Installing it makes the app
+available without enabling or pinning it; the user must deliberately enable it
+in **Apps & Features**. It then opens from the side rail as a dedicated popout
+and turns one explicitly selected,
 transparent Maker PNG into a local handoff bundle for Codex. It does not upload
 the image, invoke Codex, generate animation rows, publish a pet, or post to X.
 
 ## Export
 
-1. Enable **Pets Maker** in **Apps & Features**, then open **Pets** from the rail.
-2. Select Milady, Remilio, Bonkler, or Kagami.
-3. Optionally enter the source NFT number. The app applies the family-specific
+1. Select **Pets Maker** in the Add-ons catalog and run the reviewed local
+   Prepare/Apply workflow.
+2. Enable **Pets Maker** in **Apps & Features**, then open **Pets** from the rail.
+3. Select Milady, Remilio, Bonkler, or Kagami.
+4. Optionally enter the source NFT number. The app applies the family-specific
    range: Milady 0-9999, Remilio 1-10000, Bonkler 1-150, Kagami 1-3000.
-4. Choose the transparent PNG downloaded from that Maker.
-5. Enter every stable Maker trait ID. Use `none` for an absent trait; no missing
+5. Choose the transparent PNG downloaded from that Maker.
+6. Enter every stable Maker trait ID. Use `none` for an absent trait; no missing
    trait is invented.
-6. Choose leg coverage, a compatible bottom and color, and footwear and color.
+7. Choose leg coverage, a compatible bottom and color, and footwear and color.
    Leg color is derived from the selected family's race trait and is not a
    separate input.
-7. Review the completed 1024x1024 avatar and download
+8. Review the completed 1024x1024 avatar and download
    `remilia-pet-request.zip`.
 
 The ZIP contains exactly `avatar.png` and `request.json`. The package checks the
