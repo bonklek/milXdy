@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { remibooruQueryUrl, sanitizeRemibooruPosts } from "./remote-query";
+import { REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, remibooruQueryUrl, sanitizeRemibooruPosts } from "./remote-query";
 
 describe("reviewed Remibooru query adapter", () => {
   it("builds only the reviewed posts route and repeated facet parameters", () => {
@@ -32,5 +32,21 @@ describe("reviewed Remibooru query adapter", () => {
       thumbnail: { url: "https://elsewhere.invalid/thumb.webp" },
       media: { contentType: "image/webp", width: 100, height: 100, isGif: false }, facets: [],
     }] })).toBeNull();
+  });
+
+  it("resolves only recent sanitized results in the initiating query scope", () => {
+    const page = sanitizeRemibooruPosts({ posts: [{
+      id: "post-1", postUrl: "https://remibooru.com/posts/post-1",
+      thumbnail: { url: "https://remibooru.com/media/thumbs/post-1/image.webp" },
+      media: { contentType: "image/webp", width: 100, height: 100, isGif: false }, facets: [],
+    }] });
+    expect(page).not.toBeNull();
+    const store = new RemoteQueryResultStore();
+    store.remember("tab-1:app:query", page!, 1_000);
+    expect(store.resolve("tab-1:app:query", "post-1", 1_001))
+      .toBe("https://remibooru.com/media/thumbs/post-1/image.webp");
+    expect(store.resolve("tab-2:app:query", "post-1", 1_001)).toBeNull();
+    expect(store.resolve("tab-1:app:query", "invented", 1_001)).toBeNull();
+    expect(store.resolve("tab-1:app:query", "post-1", 1_000 + REMOTE_QUERY_RESULT_TTL_MS)).toBeNull();
   });
 });

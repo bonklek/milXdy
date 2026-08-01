@@ -77,6 +77,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "remoteQueries?: AppRemoteQuery[]", "App SDK must expose declared reviewed remote queries");
   requireIncludes(appPlatform, "queryRemoteService:", "Composer actions must expose only the host-mediated remote query callback");
   requireIncludes(appPlatform, "suggestRemoteQueryFacets:", "Composer actions must expose bounded host-derived remote facet suggestions");
+  requireIncludes(appPlatform, "attachRemoteQueryResult:", "Composer actions must expose only the host-mediated reviewed result attachment callback");
+  requireIncludes(appPlatform, 'resultActions?: Array<"attachToInitiatingComposer">', "Remote result attachment must be an explicit manifest opt-in");
   requireIncludes(appPlatform, 'source: "visibleDraftKeywords"', "Remote query suggestions must declare their bounded visible-draft source");
   requireIncludes(contentRuntime, "deriveComposerKeywordSuggestions", "Composer suggestions must remain host-derived and sanitized");
   requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
@@ -149,7 +151,9 @@ function verifyPlatformContract() {
   requireIncludes(background, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
   requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
   requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
-  requireIncludes(contentRuntime, "new File([blob], \"remilia-maker.png\"", "The host must attach the generated maker PNG through X's existing media control");
+  requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");
+  requireIncludes(contentRuntime, 'type: "milxdy:remoteQueryAttach"', "Remote result attachments must use the host-routed background bridge");
+  requireIncludes(contentRuntime, "new File([blob], fileName", "The host must attach reviewed image handoffs through X's existing media control");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
   requireIncludes(contentRuntime, "activeComposerAction.panel.isConnected", "Composer actions must discard stale panels reconciled away by X before reopening");

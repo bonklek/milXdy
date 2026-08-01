@@ -12,6 +12,7 @@ export const REMIBOORU_QUERY_ORIGIN = "https://remibooru.com";
 export const MAX_REMIBOORU_PAGE_SIZE = 24;
 export const MAX_REMIBOORU_FACETS = 5;
 export const MAX_REMIBOORU_FACET_LENGTH = 80;
+export const REMOTE_QUERY_RESULT_TTL_MS = 5 * 60 * 1000;
 
 export function remibooruQueryUrl(request: RemoteQueryRequest, maxPageSize: number): URL | null {
   if (!Number.isInteger(maxPageSize) || maxPageSize < 1 || maxPageSize > MAX_REMIBOORU_PAGE_SIZE) return null;
@@ -63,6 +64,37 @@ export type SanitizedRemibooruPostPage = {
   }>;
   nextCursor: string | null;
 };
+
+/**
+ * Host-only ephemeral lookup for reviewed query results. The package may send
+ * an item ID back after an explicit click, but it cannot invent a URL or read
+ * media bytes from this store.
+ */
+export class RemoteQueryResultStore {
+  private readonly records = new Map<string, { thumbnailUrl: string; expiresAt: number }>();
+
+  remember(scope: string, page: SanitizedRemibooruPostPage, now = Date.now()): void {
+    this.prune(now);
+    for (const item of page.items) {
+      this.records.set(`${scope}:${item.id}`, {
+        thumbnailUrl: item.thumbnailUrl,
+        expiresAt: now + REMOTE_QUERY_RESULT_TTL_MS,
+      });
+    }
+  }
+
+  resolve(scope: string, itemId: string, now = Date.now()): string | null {
+    this.prune(now);
+    if (typeof itemId !== "string" || itemId.length < 1 || itemId.length > 128) return null;
+    return this.records.get(`${scope}:${itemId}`)?.thumbnailUrl ?? null;
+  }
+
+  private prune(now: number): void {
+    for (const [key, record] of this.records) {
+      if (record.expiresAt <= now) this.records.delete(key);
+    }
+  }
+}
 
 export function sanitizeRemibooruPosts(payload: unknown): SanitizedRemibooruPostPage | null {
   const root = object(payload);

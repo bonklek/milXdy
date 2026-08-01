@@ -1095,6 +1095,12 @@ function verifyRemoteQueries(id, manifest, errors) {
         errors.push(`${id}: remoteQuery composerSuggestions maxLength must be an integer from 1 through 64`);
       }
     }
+    if (query.resultActions !== undefined) {
+      if (!Array.isArray(query.resultActions) || query.resultActions.length !== 1 || query.resultActions[0] !== "attachToInitiatingComposer") {
+        errors.push(`${id}: remoteQuery resultActions may declare only attachToInitiatingComposer`);
+      }
+      if (!query.resources?.includes("posts")) errors.push(`${id}: remoteQuery result attachment requires the posts resource`);
+    }
     if (!(manifest.permissions?.hosts || []).includes(adapter.host)) errors.push(`${id}: remoteQuery ${query.id} must declare host permission ${adapter.host}`);
   }
   const disclosures = [...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.remoteServices || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || [])].join(" ").toLowerCase();
@@ -1102,8 +1108,11 @@ function verifyRemoteQueries(id, manifest, errors) {
   if (queries.some((query) => query?.composerSuggestions) && !/(draft|composer).*(keyword|suggest)|(?:keyword|suggest).*(draft|composer)/.test(disclosures)) {
     errors.push(`${id}: composerSuggestions require disclosure of host-derived draft keyword suggestions`);
   }
+  if (queries.some((query) => query?.resultActions?.includes("attachToInitiatingComposer")) && !/(attach|cop(?:y|ies)).*(composer|draft)|(?:composer|draft).*(attach|cop(?:y|ies))/.test(disclosures)) {
+    errors.push(`${id}: remoteQuery result attachment requires disclosure of the explicit host-owned composer attachment`);
+  }
   if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: remoteQueries require consent and remote-api privacy label`);
-  if ((manifest.background?.messageTypes || []).some((type) => type === "milxdy:remoteQuery")) errors.push(`${id}: remoteQueries must use the host callback, not declare the host query message type`);
+  if ((manifest.background?.messageTypes || []).some((type) => type === "milxdy:remoteQuery" || type === "milxdy:remoteQueryAttach")) errors.push(`${id}: remoteQueries must use host callbacks, not declare host query message types`);
 }
 
 function verifyPermissionsAndPrivacy(id, manifest, errors) {
