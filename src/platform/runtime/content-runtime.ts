@@ -473,6 +473,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return pending;
     }
     const startedAt = performance.now();
+    let lifecycleOwnsTeardown = false;
     const importPromise = (async () => {
       injectStylesheets(app);
       const importUrl = chrome.runtime.getURL(app.contentEntry);
@@ -505,7 +506,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
         addDisposable: (disposable) => disposables.add(disposable),
-      }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id));
+      }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id), () => abortAppWork(app.id));
+      lifecycleOwnsTeardown = true;
       state.appLifecycles.set(app.id, lifecycle);
       const activation = await lifecycle.activate();
       if (activation === "inactive-after-boot") {
@@ -520,7 +522,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       updateAppDiagnostics(app, "loaded", { loadedAt: Date.now(), loadMs });
       recordFeatureTiming(app.id, "load", startedAt);
       recordRuntimeDiagnostic(`appImport.${app.id}`, { reason, loadMs, updatedAt: Date.now() });
-      notifyLoadedAppOfRoute(app, module);
+      if (!await notifyLoadedAppOfRoute(app, module, lifecycle)) return null;
       flushDiagnosticsSoon();
       return module;
     })();
@@ -529,15 +531,61 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return await importPromise;
     } catch (error) {
       delete (window as unknown as Record<string, string | undefined>)[RUNTIME_IMPORT_FLAG];
-      abortAppWork(app.id);
-      cleanupAppResources(app.id);
-      state.pendingSurfaceImports.delete(app.id);
-      updateAppDiagnostics(app, "failed", { error: errorMessage(error) });
-      flushDiagnosticsSoon();
-      throw error;
+      if (!lifecycleOwnsTeardown) {
+        abortAppWork(app.id);
+        cleanupAppResources(app.id);
+      }
+      reportAppLifecycleFailure(app, "activation", error);
+      return null;
     } finally {
       state.loading.delete(app.id);
     }
+  }
+
+  async function invokeAppLifecycleHook(
+    app: MilxdyAppManifest,
+    hook: "route" | "open" | "close",
+    invoke: () => Promise<void>,
+    onSettled: () => void = () => undefined,
+  ): Promise<boolean> {
+    let succeeded = false;
+    try {
+      await invoke();
+      succeeded = true;
+    } catch (error) {
+      reportAppLifecycleFailure(app, hook, error);
+    }
+    try {
+      onSettled();
+    } catch (error) {
+      recordRuntimeDiagnostic(`appLifecycleInstrumentation.${app.id}`, {
+        hook,
+        error: errorMessage(error),
+        updatedAt: Date.now(),
+      });
+    }
+    return succeeded;
+  }
+
+  function reportAppLifecycleFailure(app: MilxdyAppManifest, hook: string, error: unknown): void {
+    state.pendingSurfaceImports.delete(app.id);
+    updateScannerConfiguration();
+    updateAppDiagnostics(app, "failed", { error: `${hook}: ${errorMessage(error)}` });
+    recordRuntimeDiagnostic(`appLifecycle.${app.id}`, { hook, error: errorMessage(error), updatedAt: Date.now() });
+    flushDiagnosticsSoon();
+  }
+
+  async function openApp(app: MilxdyAppManifest, reason: string): Promise<void> {
+    if (!await loadApp(app, reason)) return;
+    const lifecycle = state.appLifecycles.get(app.id);
+    if (!lifecycle) return;
+    await invokeAppLifecycleHook(app, "open", () => lifecycle.open());
+  }
+
+  async function closeApp(app: MilxdyAppManifest): Promise<void> {
+    const lifecycle = state.appLifecycles.get(app.id);
+    if (!lifecycle) return;
+    await invokeAppLifecycleHook(app, "close", () => lifecycle.close());
   }
 
   function notifyRoute(): void {
@@ -547,10 +595,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.routeSurfaceImports = 0;
     for (const app of state.apps) {
       const module = state.loaded.get(app.id);
-      if (module?.onRouteChange) {
+      const lifecycle = state.appLifecycles.get(app.id);
+      if (module?.onRouteChange && lifecycle) {
         const startedAt = performance.now();
-        void Promise.resolve(module.onRouteChange(next))
-          .finally(() => recordFeatureTiming(app.id, "route", startedAt));
+        void invokeAppLifecycleHook(app, "route", () => lifecycle.route(next), () => {
+          recordFeatureTiming(app.id, "route", startedAt);
+        });
         continue;
       }
       if (shouldLoadForRoute(app, next)) void loadApp(app, "route");
@@ -806,6 +856,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.unloadingApps.add(app.id);
     abortAppWork(app.id);
     void lifecycle.deactivate()
+      .catch((error) => reportAppLifecycleFailure(app, "disable", error))
       .finally(() => {
         state.unloadingApps.delete(app.id);
         updateScannerConfiguration();
@@ -2476,13 +2527,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       title: app.name,
       active: false,
       onActivate: () => {
-        void loadApp(app, "dockOpen").then((module) => {
-          void Promise.resolve(module?.open?.());
-        });
+        void openApp(app, "dockOpen");
       },
       onDeactivate: () => {
-        const module = state.loaded.get(app.id);
-        void Promise.resolve(module?.close?.());
+        void closeApp(app);
       },
     });
     state.dockRegistrations.set(app.id, registration);
@@ -2931,9 +2979,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const closers = state.apps
       .filter((app) => app.dock && app.available !== false)
       .map((app) => {
-        const module = state.loaded.get(app.id);
         state.dockRegistrations.get(app.id)?.update({ active: false });
-        return module?.close ? Promise.resolve(module.close()) : Promise.resolve();
+        return closeApp(app);
       });
     await Promise.allSettled(closers);
     recordRuntimeDiagnostic("dock.hideAll", {
@@ -3663,7 +3710,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       open.type = "button";
       open.textContent = "Open";
       open.addEventListener("click", () => {
-        void loadApp(app, "hubOpen").then((module) => Promise.resolve(module?.open?.()));
+        void openApp(app, "hubOpen");
       });
       controls.append(open);
     }
@@ -4929,10 +4976,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function notifyLoadedAppOfRoute(app: MilxdyAppManifest, module: MilxdyContentAppModule): void {
-    if (!module.onRouteChange) return;
-    void Promise.resolve(module.onRouteChange(state.route))
-      .finally(() => recordFeatureTiming(app.id, "route.initial", performance.now()));
+  async function notifyLoadedAppOfRoute(app: MilxdyAppManifest, module: MilxdyContentAppModule, lifecycle: ContentAppLifecycleOwner): Promise<boolean> {
+    if (!module.onRouteChange) return true;
+    return invokeAppLifecycleHook(app, "route", () => lifecycle.route(state.route), () => {
+      recordFeatureTiming(app.id, "route.initial", performance.now());
+    });
   }
 
   function updateAppDiagnostics(

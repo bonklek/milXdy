@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
-import type { MilxdyContentAppContext, MilxdyContentAppModule } from "../app-sdk/app-platform";
+import type { MilxdyContentAppContext, MilxdyContentAppModule, MilxdyRouteChange } from "../app-sdk/app-platform";
 import { ContentAppLifecycleOwner, disableContentApp, disposeContentApp } from "./content-app-lifecycle";
+
+const ROUTE: MilxdyRouteChange = {
+  href: "https://x.com/home",
+  pathname: "/home",
+  previousHref: null,
+  visible: true,
+  changedAt: 1,
+};
 
 describe("content app lifecycle owner", () => {
   it("boots before enabling an active loaded app", async () => {
@@ -14,27 +22,68 @@ describe("content app lifecycle owner", () => {
     expect(events).toEqual(["boot", "enable"]);
   });
 
+  it("aborts and tears down partial boot state before a clean retry", async () => {
+    const events: string[] = [];
+    let attempt = 0;
+    let initialized = false;
+    const module: MilxdyContentAppModule = {
+      boot: async () => {
+        events.push(`boot:${++attempt}`);
+        if (initialized) throw new Error("dirty singleton");
+        initialized = true;
+        if (attempt === 1) throw new Error("boot failed");
+      },
+      enable: async () => { events.push("enable"); },
+      disable: async () => { events.push("disable"); },
+      dispose: async () => { events.push("dispose"); initialized = false; },
+    };
+    const first = createOwner(module, () => true, () => events.push("cleanup"), () => events.push("abort"));
+
+    await expect(first.activate()).rejects.toThrow("boot failed");
+    expect(events).toEqual(["boot:1", "abort", "disable", "dispose", "cleanup"]);
+
+    const retry = createOwner(module);
+    await expect(retry.activate()).resolves.toBe("enabled");
+    expect(events).toEqual(["boot:1", "abort", "disable", "dispose", "cleanup", "boot:2", "enable"]);
+  });
+
+  it("aborts and disposes when enable rejects", async () => {
+    const events: string[] = [];
+    const owner = createOwner({
+      boot: async () => { events.push("boot"); },
+      enable: async () => { events.push("enable"); throw new Error("enable failed"); },
+      disable: async () => { events.push("disable"); },
+      dispose: async () => { events.push("dispose"); },
+    }, () => true, () => events.push("cleanup"), () => events.push("abort"));
+
+    await expect(owner.activate()).rejects.toThrow("enable failed");
+    expect(events).toEqual(["boot", "enable", "abort", "disable", "dispose", "cleanup"]);
+  });
+
   it("serializes disable behind an in-flight boot and tears down exactly once", async () => {
     const boot = deferred();
     const events: string[] = [];
     const cleanup = vi.fn();
+    const abort = vi.fn();
     const owner = createOwner({
       boot: async () => { events.push("boot"); await boot.promise; },
       enable: async () => { events.push("enable"); },
       disable: async () => { events.push("disable"); },
       dispose: async () => { events.push("dispose"); },
-    }, () => true, cleanup);
+    }, () => true, cleanup, abort);
 
     const activation = owner.activate();
     const firstDisable = owner.deactivate();
     const secondDisable = owner.deactivate();
     expect(events).toEqual(["boot"]);
+    expect(abort).toHaveBeenCalledOnce();
     boot.resolve();
 
     await expect(activation).resolves.toBe("inactive-after-boot");
     await Promise.all([firstDisable, secondDisable]);
     expect(events).toEqual(["boot", "disable", "dispose"]);
-    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledOnce();
+    expect(abort).toHaveBeenCalledOnce();
   });
 
   it("upgrades in-flight teardown to shutdown disposal and never double-disposes", async () => {
@@ -54,93 +103,97 @@ describe("content app lifecycle owner", () => {
     await expect(activation).resolves.toBe("inactive-after-boot");
     await Promise.all(shutdowns);
     expect(events).toEqual(["boot", "disable", "dispose"]);
-    expect(cleanup).toHaveBeenCalledTimes(1);
+    expect(cleanup).toHaveBeenCalledOnce();
   });
 
-  it("observes re-enable before deferred boot settles when no teardown was requested", async () => {
-    const boot = deferred();
-    const events: string[] = [];
-    let active = false;
-    const owner = createOwner({
-      boot: async () => { events.push("boot"); await boot.promise; },
-      enable: async () => { events.push("enable"); },
-    }, () => active);
-
-    const activation = owner.activate();
-    active = true;
-    boot.resolve();
-
-    await expect(activation).resolves.toBe("enabled");
-    expect(events).toEqual(["boot", "enable"]);
-  });
-
-  it("waits for in-flight enable before shutdown teardown", async () => {
-    const enable = deferred();
+  it("waits for an active route hook after abort before teardown", async () => {
+    const route = deferred();
     const events: string[] = [];
     const owner = createOwner({
-      boot: async () => { events.push("boot"); },
-      enable: async () => { events.push("enable"); await enable.promise; },
+      onRouteChange: async () => { events.push("route"); await route.promise; },
       disable: async () => { events.push("disable"); },
       dispose: async () => { events.push("dispose"); },
-    });
+    }, () => true, () => events.push("cleanup"), () => events.push("abort"));
+    await owner.activate();
 
-    const activation = owner.activate();
+    const routeCall = owner.route(ROUTE);
     await Promise.resolve();
     const shutdown = owner.dispose();
-    expect(events).toEqual(["boot", "enable"]);
-    enable.resolve();
+    expect(events).toEqual(["route", "abort"]);
+    route.resolve();
 
-    await expect(activation).resolves.toBe("inactive-after-boot");
-    await shutdown;
-    expect(events).toEqual(["boot", "enable", "disable", "dispose"]);
+    await Promise.all([routeCall, shutdown]);
+    expect(events).toEqual(["route", "abort", "disable", "dispose", "cleanup"]);
   });
 
-  it("upgrades an ordinary in-flight failing disable when shutdown arrives", async () => {
-    const disableStarted = deferred();
-    const releaseDisable = deferred();
+  it.each([
+    ["route", (owner: ContentAppLifecycleOwner) => owner.route(ROUTE)],
+    ["open", (owner: ContentAppLifecycleOwner) => owner.open()],
+    ["close", (owner: ContentAppLifecycleOwner) => owner.close()],
+  ] as const)("makes a rejecting %s hook terminal and failure-safe", async (hook, invoke) => {
     const events: string[] = [];
-    const cleanup = vi.fn(() => { events.push("cleanup"); });
-    const owner = createOwner({
-      disable: async () => {
-        events.push("disable");
-        disableStarted.resolve();
-        await releaseDisable.promise;
-        throw new Error("disable failed");
-      },
+    const module: MilxdyContentAppModule = {
+      onRouteChange: async () => { if (hook === "route") throw new Error("route failed"); },
+      open: async () => { if (hook === "open") throw new Error("open failed"); },
+      close: async () => { if (hook === "close") throw new Error("close failed"); },
+      disable: async () => { events.push("disable"); },
       dispose: async () => { events.push("dispose"); },
-    }, () => true, cleanup);
-
+    };
+    const owner = createOwner(module, () => true, () => events.push("cleanup"), () => events.push("abort"));
     await owner.activate();
-    const ordinaryDisable = owner.deactivate();
-    await disableStarted.promise;
-    const shutdown = owner.dispose();
-    releaseDisable.resolve();
 
-    await expect(ordinaryDisable).rejects.toThrow("disable failed");
-    await expect(shutdown).rejects.toThrow("disable failed");
+    await expect(invoke(owner)).rejects.toThrow(`${hook} failed`);
+    expect(events).toEqual(["abort", "disable", "dispose", "cleanup"]);
+    await expect(owner.dispose()).resolves.toBeUndefined();
+    expect(events).toEqual(["abort", "disable", "dispose", "cleanup"]);
+  });
+
+  it("attempts dispose and cleanup even when disable rejects", async () => {
+    const events: string[] = [];
+    const owner = createOwner({
+      disable: async () => { events.push("disable"); throw new Error("disable failed"); },
+      dispose: async () => { events.push("dispose"); },
+    }, () => true, () => events.push("cleanup"));
+    await owner.activate();
+
+    await expect(owner.deactivate()).rejects.toThrow("disable failed");
     expect(events).toEqual(["disable", "dispose", "cleanup"]);
-    expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it("attempts every teardown stage and aggregates independent failures", async () => {
+    const events: string[] = [];
+    const owner = createOwner({
+      disable: async () => { events.push("disable"); throw new Error("disable failed"); },
+      dispose: async () => { events.push("dispose"); throw new Error("dispose failed"); },
+    }, () => true, () => { events.push("cleanup"); throw new Error("cleanup failed"); });
+    await owner.activate();
+
+    const error = await owner.dispose().catch((failure: unknown) => failure);
+    expect(error).toBeInstanceOf(AggregateError);
+    expect((error as AggregateError).errors).toHaveLength(3);
+    expect(events).toEqual(["disable", "dispose", "cleanup"]);
   });
 });
 
-describe("content app teardown error compatibility", () => {
-  it("runtime shutdown disposes even when disable fails", async () => {
+describe("content app teardown helpers", () => {
+  it.each([
+    ["ordinary disable", disableContentApp],
+    ["runtime shutdown", disposeContentApp],
+  ] as const)("%s disposes even when disable fails", async (_label, teardown) => {
     const dispose = vi.fn();
     const module = { disable: async () => { throw new Error("disable failed"); }, dispose };
-    await expect(disposeContentApp(module)).rejects.toThrow("disable failed");
+    await expect(teardown(module)).rejects.toThrow("disable failed");
     expect(dispose).toHaveBeenCalledOnce();
   });
-
-  it("ordinary disable preserves the existing skip-dispose-on-failure behavior", async () => {
-    const dispose = vi.fn();
-    const module = { disable: async () => { throw new Error("disable failed"); }, dispose };
-    await expect(disableContentApp(module)).rejects.toThrow("disable failed");
-    expect(dispose).not.toHaveBeenCalled();
-  });
 });
 
-function createOwner(module: MilxdyContentAppModule, isActive = () => true, cleanup: () => void = () => undefined) {
-  return new ContentAppLifecycleOwner(module, {} as MilxdyContentAppContext, isActive, cleanup);
+function createOwner(
+  module: MilxdyContentAppModule,
+  isActive = () => true,
+  cleanup: () => void = () => undefined,
+  abort: () => void = () => undefined,
+) {
+  return new ContentAppLifecycleOwner(module, {} as MilxdyContentAppContext, isActive, cleanup, abort);
 }
 
 function deferred() {
