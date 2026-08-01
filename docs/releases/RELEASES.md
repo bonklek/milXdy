@@ -94,3 +94,13 @@ Do not push unless the repository owner explicitly approves the push.
 `main` is the shared integration branch and may be ahead of the latest public release. Contributors should branch from `main` and open pull requests back to `main`. Public releases are fixed by tags, release notes, and GitHub Release assets, not by holding `main` at the latest shipped version.
 
 Use release branches only when stabilizing or hotfixing a release line. Merge or cherry-pick accepted release fixes back to `main` so future feature work does not fork from stale release code.
+
+## Post-publication closeout
+
+After publishing, verify that `origin/main`, the release tag, GitHub Release,
+archive names/checksums, changelog, roadmap, and release notes all name the same
+version. Then inspect the exact GitHub milestone for that version. Close the
+milestone only after it has zero open issues and every non-shipped item has an
+explicit deferred destination. Confirm the milestone reports `closed` before
+calling the release workflow complete; do not leave the just-shipped milestone
+open for a later release steward to discover.

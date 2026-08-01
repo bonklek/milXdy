@@ -137,6 +137,20 @@ Apps should inherit light/dark mode from the shared overlay theme helpers and th
 
 Text, borders, icons, focus outlines, selected states, disabled states, and badges must stay readable in each case.
 
+## Visual Assets And Provenance
+
+Use the public-safe [author design guide](../../publication-candidates/milxdy-visual-elements/docs/AUTHOR_DESIGN_GUIDE.md)
+for composition, hierarchy, tokens, responsive behavior, imagery, motion, and
+small-size checks. The visual-elements tree is a separately publishable
+candidate and is excluded from normal extension archives.
+
+Official catalog review accepts VPL and other clearly identified licenses or
+permissions only when their exact evidence supports copying, modification,
+redistribution, and App SDK use. Preserve creator/source context, terms,
+derivative lineage, accessibility review, and correction/takedown handling.
+Unknown or incompatible rights fail closed; resemblance to the milXdy visual
+language is not permission.
+
 ## Do And Do Not
 
 Do:

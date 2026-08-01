@@ -13,9 +13,11 @@ repeatable sharing or upstream consideration.
 
 Existing default milXdy media remains part of the VPL project. If a maintainer
 wants to promote an existing file into a separately versioned official visual
-bundle, the file should receive the same explicit source/hash record as any
-other upstream entry. That catalog housekeeping is not required for a user to
-build a local custom package.
+bundle, the file receives the same explicit source/hash/license-or-permission
+record and compatibility review as any other official entry. Other assets can
+qualify under a different license or explicit permission only when the evidence
+supports copying, modification, redistribution, and App SDK use. That catalog
+housekeeping is not required for a user to build a local custom package.
 
 ## Public references
 

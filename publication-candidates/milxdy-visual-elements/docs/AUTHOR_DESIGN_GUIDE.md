@@ -153,7 +153,8 @@ signals.
   and decision records.
 - **Neochibi artifact:** constrained character components and palette
   variation inside a modest UI frame. Local authors choose their own source;
-  upstream/default examples use reviewed VPL sources.
+  upstream/default examples use reviewed sources with exact compatible
+  license-or-permission evidence.
 - **Native archival:** predictable headings, compact indexes, timestamps,
   categories, revision history, and visible provenance.
 
@@ -299,7 +300,8 @@ Requirements:
   warnings;
 - generated tones document synthesis parameters; and
 - recorded audio is declared like every other package asset and carries the
-  notices required by its actual license; upstream/default audio must be VPL.
+  notices required by its actual license or permission; upstream/default audio
+  must pass the same rights-compatibility review as visual assets.
 
 The original, dependency-free generative example under
 [`examples/semantic-sound/index.html`](../examples/semantic-sound/index.html) creates a short tone
@@ -375,7 +377,7 @@ Reject an example that:
 - mixes host chrome and package interiors without an ownership boundary;
 - claims project endorsement merely because a custom asset works locally;
 - bulk-copies public-site assets into an upstream/default submission;
-- promotes a non-VPL or unknown dependency into a default package;
+- promotes an unknown, ambiguous, or rights-incompatible dependency into a default package;
 - publishes an AI edit without its parent graph; or
 - remains incoherent at the actual rail, badge, notification, or compact-panel
   size.
@@ -385,7 +387,9 @@ Reject an example that:
 Declare each vendored export in `milxdy.app.json` and verify the package without
 network access. A `visual-assets.lock.json` is optional for local work and
 required for upstream/default promotion. Include whatever notices the selected
-asset actually requires; the upstream lane additionally requires VPL. See
+asset actually requires; the upstream lane additionally requires exact evidence
+that its license or permission supports copying, modification, redistribution,
+and App SDK use. VPL is one supported path, not the only one. See
 [Package integration](PACKAGE_INTEGRATION.md).
 
 The catalog is an authoring and review input. It is not a runtime CDN.

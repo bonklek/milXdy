@@ -11,8 +11,8 @@ principles. It does not reproduce internal operating material.
 - light, dim, dark, system, forced-color, responsive, and accessibility rules;
 - explicit state, lifecycle, motion, and sound contracts;
 - public-source design observations with local/upstream labels;
-- license-neutral local packaging plus the optional VPL upstream-promotion
-  workflow; and
+- license-neutral local packaging plus the evidence-backed rights-compatible
+  upstream-promotion policy, with VPL retained as one supported path; and
 - current public App SDK package asset declarations plus a catalog provenance
   lockfile.
 

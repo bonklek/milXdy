@@ -11,7 +11,12 @@
 
 - [Apps & Features and side rail](guides/apps-hub-and-side-rail.md)
 - [Beetol](guides/beetol.md)
+- [Composer Kit](guides/composer-kit.md)
 - [Composer Tools](guides/composer-tools.md)
+- [Pets Maker export](guides/custom-pet-export.md)
+- [Remilia Maker pet import](guides/remilia-maker-pet-import.md)
+- [Custom Pet integrated QA](guides/custom-pet-integrated-qa.md)
+- [Custom Pet QA cache](guides/remilia-pet-qa-cache.md)
 - [Link Browser](guides/link-browser.md)
 - [Milady Maxxer](guides/milady-maxxer.md)
 - [Miladychan Portal](guides/miladychan-portal.md)
@@ -30,8 +35,13 @@
 - [App SDK overview](sdk/APP_SDK_OVERVIEW.md)
 - [Use local add-ons](sdk/LOCAL_ADDONS.md)
 - [App SDK reference](sdk/APP_SDK.md)
+- [Package assets and licensing](../sdk/ASSETS_AND_LICENSING.md)
+- [Public-safe author design guide](../publication-candidates/milxdy-visual-elements/docs/AUTHOR_DESIGN_GUIDE.md)
 - [Compatibility policy](sdk/APP_SDK_COMPATIBILITY.md)
 - [Platform support contract](sdk/APP_PLATFORM_PRODUCTION_READINESS.md)
+- [SDK accessibility](../sdk/ACCESSIBILITY.md)
+- [SDK UI patterns](../sdk/UI.md)
+- [AI-assisted package authoring](../sdk/AI_AUTHORING.md)
 - [Post-reading SDK reference](sdk/POST_READING_SDK_REFERENCE.md)
 - [Package schemas](schemas/)
 
@@ -39,6 +49,7 @@
 
 - [Contributing](contributors/CONTRIBUTING.md)
 - [Add-ons catalog and submissions](contributors/ADD_ONS_CATALOG.md)
+- [Catalog submission contract](contributors/ADD_ON_CATALOG_SUBMISSIONS.md)
 - [Initial maintainer add-ons inventory](contributors/ADD_ONS_CATALOG_INVENTORY.md)
 - [Contributor UI style guide](contributors/CONTRIBUTOR_UI_STYLE_GUIDE.md)
 - [Developer QA reload](contributors/DEVELOPER_QA_RELOAD.md)
@@ -49,9 +60,11 @@
 ## Project history and reference
 
 - [Roadmap](roadmap/ROADMAP.md)
+- [Identifier media post schema](roadmap/IDENTIFIER_MEDIA_POST_SCHEMA.md)
+- [Custom Pet pipeline provenance](provenance/custom-pet-pipeline.md)
 - [Releases](releases/RELEASES.md)
-- [0.2.4 release-candidate notes](releases/RELEASE_NOTES_0.2.4.md)
-- [Latest release notes (0.2.3)](releases/RELEASE_NOTES_0.2.3.md)
+- [Latest release notes (0.2.4)](releases/RELEASE_NOTES_0.2.4.md)
+- [0.2.3 release notes](releases/RELEASE_NOTES_0.2.3.md)
 - [0.2.2 release notes](releases/RELEASE_NOTES_0.2.2.md)
 - [0.2.1 release notes](releases/RELEASE_NOTES_0.2.1.md)
 - [0.2.0 release notes](releases/RELEASE_NOTES_0.2.0.md)

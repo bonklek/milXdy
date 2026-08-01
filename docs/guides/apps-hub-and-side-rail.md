@@ -17,10 +17,16 @@ Apps & Features and the side rail manage first-party milXdy apps and feature mod
 - Use the dock gear to move the rail left or right.
 - The gear opens a dedicated compact rail-settings view; use the back arrow to return to the app catalog. App presets stay under **Change app preset** until expanded.
 - Reorder pinned app icons from the dock settings.
-- Follow the arrow above or below an overflowing rail to see whether more pinned apps are available in that direction.
+- Use the whole-item reel controls when the pinned rail overflows; the mechanical cue and arrow indicate additional apps without letting the rail overlap X's visible host shortcuts.
+- The rail automatically hides for supported media/fullscreen viewers and returns afterward with its order, side, and enabled state preserved.
 - Use Lite, Balanced, or Full setup on fresh installs to choose a starting profile.
 - Use card details to review settings ownership, permissions, privacy/data notes, storage, runtime state, and reset actions.
 
 ## Notes
 
 Enabled and pinned are separate states. An app or feature can be enabled without being pinned, and unpinned apps can still load through relevant X/Twitter surfaces or direct user actions. Global controls and presets remain in the extension popup; app-owned settings belong in app windows, while feature settings belong in Apps & Features as the settings renderer matures.
+
+Apps & Features no longer opens automatically after a delay on first run. Use
+the popup setup controls or the side-rail Apps control when you are ready. If
+one app card cannot render, the remaining cards stay available and the failed
+card shows a generic local fallback rather than exposing internal error detail.

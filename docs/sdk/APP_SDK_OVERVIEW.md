@@ -70,5 +70,7 @@ content execution, and package-owned background modules are outside the App SDK
 
 - [Local package manifest schema](../schemas/local-app-package.schema.json)
 - [Catalog selection schema](../schemas/milxdy-selection.schema.json)
+- [Package assets and licensing](../../sdk/ASSETS_AND_LICENSING.md)
+- [Public-safe author design guide](../../publication-candidates/milxdy-visual-elements/docs/AUTHOR_DESIGN_GUIDE.md) — included as a separately publishable candidate and excluded from normal extension archives
 - [Post-reading production reference](POST_READING_SDK_REFERENCE.md)
 - [Catalog maintenance and publishing](../contributors/ADD_ONS_CATALOG.md)

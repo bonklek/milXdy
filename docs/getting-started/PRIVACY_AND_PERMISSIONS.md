@@ -14,6 +14,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
+- Composer Kit queries public reaction metadata and performs explicit member contributions through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
@@ -32,7 +33,7 @@ X/Twitter content runtime on the catalog.
 
 ## Local-Only Composer Helpers
 
-Composer Tools runs inside the existing X/Twitter content runtime and reads only the active post composer text around the caret to convert typed double dashes into em dashes. It does not add host permissions, network calls, background messages, or remote services, and it ignores DMs, search fields, native inputs, and textareas.
+Composer Tools runs inside the existing X/Twitter content runtime and reads only the active supported post or DM composer text around the caret to convert typed double dashes into em dashes. It does not add host permissions, network calls, background messages, or remote services, and it ignores search fields and unrelated native inputs/textareas.
 
 ## Firefox Data Collection Manifest
 
@@ -45,9 +46,9 @@ public/profile identity lookups, selected X/Twitter context, and requested media
 or metadata sent to the remote services listed above. milXdy should not declare
 `required: ["none"]` while those flows exist.
 
-## Future Local App Packages
+## Future Local App Packages (Now Available)
 
-Future local app packages must declare host permissions, background message capabilities, background services, remote APIs, browser-session use, local-file access, workers, WASM, storage keys, and retention notes before the platform enables them. Local packages are privileged reviewed custom-build inputs, not sandboxed runtime plugins. A package copied into an `apps/` folder should stay disabled until validation and any required permission/data-use consent succeeds. Reviewed catalog entries and unreviewed local packages should remain visually distinct when package loading exists.
+Local app packages must declare host permissions, background message capabilities, background services, remote APIs, browser-session use, local-file access, workers, WASM, storage keys, and retention notes before the platform enables them. Local packages are privileged reviewed custom-build inputs, not sandboxed runtime plugins. Copied packages stay disabled until validation and any required permission/data-use consent succeeds. Reviewed catalog entries and unreviewed local packages remain visibly distinct.
 
 Current custom local builds also fail closed at composition time. Missing or
 local review status requires an explicit developer acknowledgement, privileged
@@ -63,6 +64,52 @@ or remote-page access. A reviewed host adapter may return the generated PNG and
 attach it to that same active X composer; this never posts on the user's behalf.
 A changed destination, unavailable controls, invalid image, or missing consent
 stops the transfer.
+
+## Composer Kit and Remibooru
+
+Composer Kit stores only its enablement state and up to 20 user-created quick
+reply phrases of at most 280 characters. Its **D** control opens X's native
+Drafts; the package neither reads nor stores X drafts.
+
+An explicit Remibooru search sends bounded public query terms or facets,
+pagination cursor, and page size to `https://remibooru.com`. On the explicit
+Tags action, the host may derive up to five sanitized facet IDs from the visible
+initiating composer and immediately discards the raw text. Composer Kit receives
+sanitized result IDs, thumbnail URLs, canonical post URLs, display dimensions,
+and visible attribution—not original-media URLs or raw service responses. A
+result attaches only after an explicit click and never posts.
+
+For **Publish to Remibooru**, the user first selects an eligible visible
+X-hosted image through the declared context action. The host downloads that
+image without X credentials, keeps its bytes behind an opaque short-lived
+handle, and shows the package only type/dimension metadata. The package submits
+that handle plus up to 12 user-entered tags only after the visible **Publish to
+Remibooru** click. The host uses the user's Remibooru browser session for the
+reviewed member upload and returns only success/error state and a canonical post
+URL. The flow has no second rights checkbox, ownership attestation,
+source-attribution field, or narrative disclosure form. Native Remibooru remains
+the fallback for authentication, contributor access, CAPTCHA/anti-abuse,
+moderation, duplicate, rate-limit, unsupported-media, and upstream changes.
+
+Maker handoffs send only user-reviewed declared caption fields to the selected
+`maker.remilia.org` surface after an explicit control. Composer Kit cannot read
+the Maker page or post generated media.
+
+## Share Kit
+
+Share Kit renders the explicitly selected X/Twitter post and visible media
+locally. Copy, download, browser share, colors, included media, quote context,
+watermark, and other preview choices remain local. **Share to RemiNet** stores
+one pending local attachment and opens RemiNet Chat; the image is sent to
+RemiliaNET only if the user subsequently presses Send in Chat.
+
+## Pets Maker
+
+Pets Maker is a selectable maintainer-catalog package but installs disabled by
+default. After the user enables it, the package reads only the transparent PNG
+chosen through its visible file input and the family/trait/body choices entered
+in the open form. It creates a local two-file ZIP and does not upload, post,
+publish, cache, or invoke Codex. Form state and selected files are not persisted.
 
 ## RemiNet And Beetol Login
 
