@@ -95,7 +95,38 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit {
 .tweet-composer-kit--loading .tweet-composer-kit__state { border-inline-start-width: 4px; }
 .tweet-composer-kit--error .tweet-composer-kit__state { border-color: var(--tck-danger); }
 
-.tweet-composer-kit__composer-panel { display: grid; gap: 5px; inline-size: fit-content; max-inline-size: 100%; padding: 7px; }
+.tweet-composer-kit__composer-panel {
+  --tck-surface: #fff1fb;
+  --tck-surface-raised: #f8e2f3;
+  --tck-border: #a56c9c;
+  --tck-border-subtle: #dcc0da;
+  display: grid;
+  gap: 5px;
+  inline-size: fit-content;
+  max-inline-size: 100%;
+  border-color: var(--tck-border);
+  background: linear-gradient(135deg, #fff2fb 0%, #f5eaff 100%);
+  box-shadow: 2px 2px 0 rgb(111 49 95 / 22%);
+  padding: 7px;
+}
+html[data-milxdy-x-theme="dim"] .tweet-composer-kit__composer-panel,
+html[data-milxdy-settings-theme="dim"] .tweet-composer-kit__composer-panel {
+  --tck-surface: #30233c;
+  --tck-surface-raised: #3b2b49;
+  --tck-border: #ae7daf;
+  --tck-border-subtle: #6b4f72;
+  background: linear-gradient(135deg, #352541 0%, #282f4b 100%);
+  box-shadow: 2px 2px 0 rgb(9 5 15 / 45%);
+}
+html[data-milxdy-x-theme="dark"] .tweet-composer-kit__composer-panel,
+html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
+  --tck-surface: #241827;
+  --tck-surface-raised: #34213a;
+  --tck-border: #bc7ab2;
+  --tck-border-subtle: #6c4667;
+  background: linear-gradient(135deg, #2b1a30 0%, #211a35 100%);
+  box-shadow: 2px 2px 0 rgb(0 0 0 / 54%);
+}
 .tweet-composer-kit__caption-fields { display: grid; inline-size: 276px; max-inline-size: 100%; gap: 4px; }
 .tweet-composer-kit__caption-input { inline-size: 100%; min-block-size: 30px !important; padding: 4px 7px !important; font-size: 12px !important; }
 .tweet-composer-kit__meme-controls { display: inline-flex; align-items: center; justify-self: start; gap: 6px; min-block-size: 18px; }
