@@ -40,7 +40,8 @@ describe("RemiNet crafting and Last read helpers", () => {
     expect(source).toContain("Dismiss chat position marker");
     expect(source).toContain("message-list__jump-to-last-read");
     expect(source).toContain("message-list__jump-to-present");
-    expect(source).toContain("marker.remove()");
+    expect(source).toContain("milxdy-last-read-marker--dismissed");
+    expect(source).not.toContain("marker.remove()");
     expect(source).not.toContain("chrome.storage");
     expect(source).not.toContain("fetch(");
   });

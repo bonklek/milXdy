@@ -33,6 +33,7 @@
       .milxdy-last-read-marker:hover .milxdy-last-read-dismiss,
       .milxdy-last-read-marker:focus-within .milxdy-last-read-dismiss { opacity: 1; pointer-events: auto; }
       .milxdy-last-read-dismiss:focus-visible { opacity: 1; pointer-events: auto; outline: 2px solid Highlight; outline-offset: 2px; }
+      .milxdy-last-read-marker--dismissed { display: none !important; }
     `;
     document.documentElement.append(style);
   }
@@ -225,7 +226,7 @@
   function installLastReadDismissal(marker: HTMLElement): void {
     const kind = chatPositionMarkerKind(marker);
     if (dismissedChatPositionMarkers.has(kind)) {
-      marker.remove();
+      marker.classList.add("milxdy-last-read-marker--dismissed");
       return;
     }
     if (marker.dataset.milxdyLastReadDismissal === "true") return;
@@ -241,7 +242,7 @@
       event.preventDefault();
       event.stopPropagation();
       dismissedChatPositionMarkers.add(kind);
-      marker.remove();
+      marker.classList.add("milxdy-last-read-marker--dismissed");
     });
     marker.append(dismiss);
   }
