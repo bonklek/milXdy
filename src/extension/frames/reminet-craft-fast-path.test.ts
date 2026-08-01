@@ -7,6 +7,8 @@ describe("RemiNet crafting and Last read helpers", () => {
 
     expect(source).toContain("function craftingStoreFor");
     expect(source).toContain("function itemTypeFor");
+    expect(source).toContain("React props may retain cross-origin Window proxies");
+    expect(source).toContain("keys = Object.keys");
     expect(source).toContain('typeof record.assignToSlot === "function"');
     expect(source).toContain('typeof record.selectHammer === "function"');
     expect(source).toContain("store.assignToSlot(slotId, itemType)");
