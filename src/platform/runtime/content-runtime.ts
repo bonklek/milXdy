@@ -2329,6 +2329,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       removeButton: HTMLButtonElement;
       originalDataUrl: string;
       contentType: string;
+      attachmentIdentity:
+        | { kind: "file"; input: HTMLInputElement; name: string; size: number; type: string; lastModified: number }
+        | { kind: "preview"; image: HTMLImageElement; src: string };
     };
     const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -2345,18 +2348,23 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (removeButtons.length !== 1) return { error: "CheeseWorld requires exactly one existing composer image." };
       const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
         .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
-      let blob: Blob | null = input?.files?.length === 1 ? input.files[0] : null;
+      const originalFile = input?.files?.length === 1 ? input.files[0] : null;
+      let blob: Blob | null = originalFile;
+      let attachmentIdentity: ComposerImageReplacement["attachmentIdentity"] | null = originalFile && input
+        ? { kind: "file", input, name: originalFile.name, size: originalFile.size, type: originalFile.type, lastModified: originalFile.lastModified }
+        : null;
       if (!blob) {
         const previews = Array.from(composerScope.querySelectorAll<HTMLImageElement>('[data-testid="attachments"] img[src]'))
           .filter((candidate) => candidate.offsetParent !== null && /^(?:blob:|data:image\/)/u.test(candidate.src));
         if (previews.length !== 1) return { error: "The existing composer image cannot be transferred safely." };
         try {
           blob = await fetch(previews[0].src).then((response) => response.blob());
+          attachmentIdentity = { kind: "preview", image: previews[0], src: previews[0].src };
         } catch (error) {
           return { error: errorMessage(error) };
         }
       }
-      if (!blob) return { error: "The existing composer image cannot be transferred safely." };
+      if (!blob || !attachmentIdentity) return { error: "The existing composer image cannot be transferred safely." };
       if (!transfer.allowedMimeTypes.some((type) => type === blob.type) || blob.size < 1 || blob.size > transfer.maxBytes) {
         return { error: "The composer image type or size is outside the reviewed CheeseWorld limits." };
       }
@@ -2365,6 +2373,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         removeButton: removeButtons[0],
         originalDataUrl: await blobToDataUrl(blob),
         contentType: blob.type,
+        attachmentIdentity,
       };
     };
     const launchExternalHandoff = async (id: string, options?: {
@@ -2480,7 +2489,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const currentScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const scopeNode = replacement.composerScope as Node;
       const removeButtons = Array.from(replacement.composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
-      if (!button.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected) {
+      const identityMatches = replacement.attachmentIdentity.kind === "file"
+        ? (() => {
+          const current = replacement.attachmentIdentity.input.files?.length === 1 ? replacement.attachmentIdentity.input.files[0] : null;
+          return replacement.attachmentIdentity.input.isConnected && current?.name === replacement.attachmentIdentity.name
+            && current.size === replacement.attachmentIdentity.size && current.type === replacement.attachmentIdentity.type
+            && current.lastModified === replacement.attachmentIdentity.lastModified;
+        })()
+        : replacement.attachmentIdentity.image.isConnected && replacement.attachmentIdentity.image.src === replacement.attachmentIdentity.src;
+      if (!button.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected || !identityMatches) {
         return { ok: false, error: "The initiating composer or its image changed before CheeseWorld finished." };
       }
       replacement.removeButton.click();
