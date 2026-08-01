@@ -76,12 +76,30 @@
     const seen = new Set<unknown>();
     let visited = 0;
     const visit = (candidate: unknown, depth: number): T | null => {
-      if (predicate(candidate)) return candidate;
+      try {
+        if (predicate(candidate)) return candidate;
+      } catch {
+        // React props may retain cross-origin Window proxies. Treat opaque
+        // objects as terminal leaves instead of destabilizing the host page.
+        return null;
+      }
       if (!candidate || typeof candidate !== "object" || depth <= 0 || seen.has(candidate) || visited++ > 250) return null;
       seen.add(candidate);
-      for (const key of Object.keys(candidate as Record<string, unknown>)) {
+      let keys: string[];
+      try {
+        keys = Object.keys(candidate as Record<string, unknown>);
+      } catch {
+        return null;
+      }
+      for (const key of keys) {
         if (key === "child" || key === "sibling" || key === "return" || key === "stateNode") continue;
-        const found = visit((candidate as Record<string, unknown>)[key], depth - 1);
+        let child: unknown;
+        try {
+          child = (candidate as Record<string, unknown>)[key];
+        } catch {
+          continue;
+        }
+        const found = visit(child, depth - 1);
         if (found) return found;
       }
       return null;
