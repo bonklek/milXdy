@@ -49,4 +49,17 @@ describe("reviewed Remibooru query adapter", () => {
     expect(store.resolve("tab-1:app:query", "invented", 1_001)).toBeNull();
     expect(store.resolve("tab-1:app:query", "post-1", 1_000 + REMOTE_QUERY_RESULT_TTL_MS)).toBeNull();
   });
+
+  it("restores only an unexpired sanitized result page", () => {
+    const page = sanitizeRemibooruPosts({ posts: [{
+      id: "post-1", postUrl: "https://remibooru.com/posts/post-1",
+      thumbnail: { url: "https://remibooru.com/media/thumbs/post-1/image.webp" },
+      media: { contentType: "image/webp", width: 100, height: 100, isGif: false }, facets: [],
+    }] });
+    expect(page).not.toBeNull();
+    const store = new RemoteQueryResultStore();
+    expect(store.restore("tab-1:app:query", page!, 1_000 + REMOTE_QUERY_RESULT_TTL_MS, 1_001)).toBe(true);
+    expect(store.resolve("tab-1:app:query", "post-1", 1_002)).toBe("https://remibooru.com/media/thumbs/post-1/image.webp");
+    expect(store.restore("tab-1:app:query", page!, 1_000 + REMOTE_QUERY_RESULT_TTL_MS, 1_000 + REMOTE_QUERY_RESULT_TTL_MS)).toBe(false);
+  });
 });

@@ -53,7 +53,7 @@ import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-a
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
-import { REMIBOORU_QUERY_ORIGIN, RemoteQueryResultStore, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
+import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
@@ -144,6 +144,7 @@ let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
 const remoteQueryLastRequestAt = new Map<string, number>();
 const remoteQueryCache = new Map<string, { expiresAt: number; response: Record<string, unknown> }>();
 const remoteQueryResults = new RemoteQueryResultStore();
+const REMOTE_QUERY_RESULT_SESSION_PREFIX = "milxdy.remoteQueryResult.";
 const contextMediaHandles = new OpaqueMediaHandleStore();
 const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
 const CONTEXT_MEDIA_SESSION_PREFIX = "milxdy.contextMediaHandle.";
@@ -715,7 +716,7 @@ async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.ru
   const now = Date.now();
   const cached = remoteQueryCache.get(`${key}:${targetUrl.href}`);
   if (cached && cached.expiresAt > now) {
-    rememberRemoteQueryResults(sender, message, cached.response);
+    await rememberRemoteQueryResults(sender, message, cached.response);
     return cached.response;
   }
   const minIntervalMs = declaration.minIntervalMs ?? 0;
@@ -743,7 +744,7 @@ async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.ru
     if (response.ok === true && cache?.policy === "shortLived" && Number.isInteger(cacheMaxAgeSeconds) && cacheMaxAgeSeconds >= 1 && cacheMaxAgeSeconds <= 300) {
       remoteQueryCache.set(`${key}:${targetUrl.href}`, { expiresAt: now + cacheMaxAgeSeconds * 1000, response });
     }
-    rememberRemoteQueryResults(sender, message, response);
+    await rememberRemoteQueryResults(sender, message, response);
     return response;
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "The remote gallery is unavailable." };
@@ -756,12 +757,39 @@ function remoteQueryResultScope(sender: chrome.runtime.MessageSender, appId: str
   return `${tabId}:${sender.frameId ?? 0}:${appId}:${queryId}`;
 }
 
-function rememberRemoteQueryResults(sender: chrome.runtime.MessageSender, message: RemoteQueryMessage, response: Record<string, unknown>): void {
+type StoredRemoteQueryResults = {
+  page: unknown;
+  expiresAt: unknown;
+};
+
+function remoteQueryResultSessionKey(scope: string): string {
+  return `${REMOTE_QUERY_RESULT_SESSION_PREFIX}${scope}`;
+}
+
+async function rememberRemoteQueryResults(sender: chrome.runtime.MessageSender, message: RemoteQueryMessage, response: Record<string, unknown>): Promise<void> {
   if (message.request.resource !== "posts" || response.ok !== true) return;
   const scope = remoteQueryResultScope(sender, message.appId, message.queryId);
   const page = response.page as SanitizedRemibooruPostPage | undefined;
   if (!scope || !page || !Array.isArray(page.items)) return;
-  remoteQueryResults.remember(scope, page);
+  const now = Date.now();
+  const expiresAt = now + REMOTE_QUERY_RESULT_TTL_MS;
+  if (!remoteQueryResults.remember(scope, page, now, expiresAt)) return;
+  await chrome.storage.session.set({
+    [remoteQueryResultSessionKey(scope)]: { page, expiresAt } satisfies StoredRemoteQueryResults,
+  }).catch(() => undefined);
+}
+
+async function resolveRemoteQueryResult(scope: string, itemId: string): Promise<string | null> {
+  const remembered = remoteQueryResults.resolve(scope, itemId);
+  if (remembered) return remembered;
+  const key = remoteQueryResultSessionKey(scope);
+  const session = await chrome.storage.session.get(key).catch(() => ({})) as Record<string, unknown>;
+  const stored = session[key] as StoredRemoteQueryResults | undefined;
+  if (!stored || !isStoredRemibooruResultPage(stored.page) || typeof stored.expiresAt !== "number" || !remoteQueryResults.restore(scope, stored.page, stored.expiresAt)) {
+    await chrome.storage.session.remove(key).catch(() => undefined);
+    return null;
+  }
+  return remoteQueryResults.resolve(scope, itemId);
 }
 
 async function attachRemoteQueryResult(message: RemoteQueryAttachMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -775,7 +803,7 @@ async function attachRemoteQueryResult(message: RemoteQueryAttachMessage, sender
     return { ok: false, error: "This gallery does not declare composer attachment." };
   }
   const scope = remoteQueryResultScope(sender, message.appId, message.queryId);
-  const thumbnailUrl = scope ? remoteQueryResults.resolve(scope, message.itemId) : null;
+  const thumbnailUrl = scope ? await resolveRemoteQueryResult(scope, message.itemId) : null;
   if (!thumbnailUrl) return { ok: false, error: "This gallery result is unavailable or expired." };
   try {
     return await runNetworkTask(async (signal) => {

@@ -73,14 +73,20 @@ export type SanitizedRemibooruPostPage = {
 export class RemoteQueryResultStore {
   private readonly records = new Map<string, { thumbnailUrl: string; expiresAt: number }>();
 
-  remember(scope: string, page: SanitizedRemibooruPostPage, now = Date.now()): void {
+  remember(scope: string, page: SanitizedRemibooruPostPage, now = Date.now(), expiresAt = now + REMOTE_QUERY_RESULT_TTL_MS): boolean {
     this.prune(now);
+    if (!isStoredRemibooruResultPage(page) || !Number.isFinite(expiresAt) || expiresAt <= now || expiresAt > now + REMOTE_QUERY_RESULT_TTL_MS) return false;
     for (const item of page.items) {
       this.records.set(`${scope}:${item.id}`, {
         thumbnailUrl: item.thumbnailUrl,
-        expiresAt: now + REMOTE_QUERY_RESULT_TTL_MS,
+        expiresAt,
       });
     }
+    return true;
+  }
+
+  restore(scope: string, page: SanitizedRemibooruPostPage, expiresAt: number, now = Date.now()): boolean {
+    return this.remember(scope, page, now, expiresAt);
   }
 
   resolve(scope: string, itemId: string, now = Date.now()): string | null {
@@ -94,6 +100,18 @@ export class RemoteQueryResultStore {
       if (record.expiresAt <= now) this.records.delete(key);
     }
   }
+}
+
+export function isStoredRemibooruResultPage(page: unknown): page is SanitizedRemibooruPostPage {
+  if (!page || typeof page !== "object" || Array.isArray(page)) return false;
+  const items = (page as { items?: unknown }).items;
+  return Array.isArray(items)
+    && items.length <= MAX_REMIBOORU_PAGE_SIZE
+    && items.every((item) => item && typeof item === "object"
+      && typeof (item as { id?: unknown }).id === "string"
+      && (item as { id: string }).id.length >= 1
+      && (item as { id: string }).id.length <= 128
+      && sameOriginPath((item as { thumbnailUrl?: unknown }).thumbnailUrl, "/media/thumbs/") !== null);
 }
 
 export function sanitizeRemibooruPosts(payload: unknown): SanitizedRemibooruPostPage | null {
