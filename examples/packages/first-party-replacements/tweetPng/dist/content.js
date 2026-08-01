@@ -16,6 +16,7 @@ var DEFAULT_VISUAL_THEME = {
 };
 var actionContext = null;
 var closeTweetPngReview = null;
+var tweetPngReviewHref = null;
 var visualTheme = DEFAULT_VISUAL_THEME;
 var id = "tweetPng";
 async function onContextualPostAction(context) {
@@ -23,11 +24,15 @@ async function onContextualPostAction(context) {
   actionContext = context;
   await openTweetPngReviewFromTweet(context.post, context.statusUrl);
 }
-function onRouteChange() {
-  closeTweetPngReview?.();
+function onRouteChange(route) {
+  if (shouldCloseTweetPngReview(tweetPngReviewHref, route.href)) closeTweetPngReview?.();
+}
+function shouldCloseTweetPngReview(reviewHref, nextHref) {
+  return Boolean(reviewHref && reviewHref !== nextHref);
 }
 function disable() {
   closeTweetPngReview?.();
+  tweetPngReviewHref = null;
   actionContext = null;
 }
 async function copyTweetPngFromTweet(tweet, statusUrl) {
@@ -830,6 +835,7 @@ function roundRect(context, x, y, width, height, radius) {
 }
 function showTweetPngModal(tweet, statusUrl, result, data) {
   closeTweetPngReview?.();
+  tweetPngReviewHref = location.href;
   document.querySelector("#milxdy-tweet-png-modal")?.remove();
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let currentBlob = result.blob;
@@ -929,6 +935,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     URL.revokeObjectURL(url);
     modal.remove();
     if (closeTweetPngReview === close) closeTweetPngReview = null;
+    tweetPngReviewHref = null;
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
   };
   const abortClose = () => close();
@@ -1297,6 +1304,7 @@ export {
   onRouteChange,
   openTweetPngReviewFromTweet,
   setTweetPngSettingsOpen,
+  shouldCloseTweetPngReview,
   tweetPngMediaRemovalKey,
   tweetPngPalette,
   tweetPngVisibleLineCount,

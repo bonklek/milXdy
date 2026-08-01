@@ -1,4 +1,4 @@
-import type { MilxdyContextualPostActionContext } from "../../../../../sdk/types/index";
+import type { MilxdyContextualPostActionContext, MilxdyRouteChange } from "../../../../../sdk/types/index";
 
 const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
@@ -33,6 +33,7 @@ const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
 
 let actionContext: MilxdyContextualPostActionContext | null = null;
 let closeTweetPngReview: (() => void) | null = null;
+let tweetPngReviewHref: string | null = null;
 
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
 
@@ -44,12 +45,17 @@ export async function onContextualPostAction(context: MilxdyContextualPostAction
   await openTweetPngReviewFromTweet(context.post, context.statusUrl);
 }
 
-export function onRouteChange(): void {
-  closeTweetPngReview?.();
+export function onRouteChange(route: MilxdyRouteChange): void {
+  if (shouldCloseTweetPngReview(tweetPngReviewHref, route.href)) closeTweetPngReview?.();
+}
+
+export function shouldCloseTweetPngReview(reviewHref: string | null, nextHref: string): boolean {
+  return Boolean(reviewHref && reviewHref !== nextHref);
 }
 
 export function disable(): void {
   closeTweetPngReview?.();
+  tweetPngReviewHref = null;
   actionContext = null;
 }
 
@@ -1177,6 +1183,7 @@ function showTweetPngModal(
   data: TweetPngData,
 ): void {
   closeTweetPngReview?.();
+  tweetPngReviewHref = location.href;
   document.querySelector("#milxdy-tweet-png-modal")?.remove();
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   let currentBlob = result.blob;
@@ -1276,6 +1283,7 @@ function showTweetPngModal(
     URL.revokeObjectURL(url);
     modal.remove();
     if (closeTweetPngReview === close) closeTweetPngReview = null;
+    tweetPngReviewHref = null;
     if (restoreFocus && returnFocus?.isConnected) returnFocus.focus();
   };
   const abortClose = () => close();
