@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { canMountRemiNetChatRoute } from "./reminet-chat/route-policy";
 import {
   extractTweetPngCashtag,
   extractTweetPngMedia,
@@ -104,6 +105,7 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain("probeRemiNetConnection()");
     expect(packageSource).toContain("openRemiNetSession()");
     expect(packageSource).toContain("stageRemiNetChatPng({");
+    expect(packageSource).toContain("close(false)");
     expect(packageSource).toContain("setRemiNetConnected(connected)");
     expect(runtimeSource).toContain("probeRemiNetConnection: async");
     expect(runtimeSource).toContain('type: "reminetChat:authStatus"');
@@ -120,8 +122,16 @@ describe("Share Kit package compatibility", () => {
     expect(stageStart).toBeGreaterThan(-1);
     expect(stageSource).toContain('status: "ready"');
     expect(stageSource).toContain("fileToDataUrl(file)");
+    expect(stageSource).toContain("open()");
+    expect(stageSource).toContain("composer.focus({ preventScroll: true })");
+    expect(stageSource).toContain("if (!composer?.isConnected)");
     expect(stageSource).not.toContain("uploadPendingAttachments");
     expect(stageSource).not.toContain("runtimeSendMessage");
+    expect(chatSource).toContain("state.explicitlyOpened = true");
+    expect(canMountRemiNetChatRoute("/search?q=milady")).toBe(false);
+    expect(canMountRemiNetChatRoute("/search?q=milady", true)).toBe(true);
+    expect(canMountRemiNetChatRoute("/explore", true)).toBe(true);
+    expect(canMountRemiNetChatRoute("/compose/post", true)).toBe(true);
     expect(backgroundSource).toContain("if (!isXContentScriptSender(sender)) return unsupportedSender()");
     expect(backgroundSource).toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
     expect(runtimeSource).toContain('blob.type !== "image/png"');
