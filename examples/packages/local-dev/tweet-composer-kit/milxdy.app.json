@@ -63,6 +63,22 @@
       "modes": ["captioned", "randomMeme"],
       "captionSource": "packageFields",
       "captionMaxLength": 280
+    },
+    {
+      "id": "cheeseworld-deepfry",
+      "label": "#CHEESEWORLD Meme Maker",
+      "adapter": "cheeseworld",
+      "target": "deepfry",
+      "modes": ["captioned"],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280,
+      "mediaTransfer": {
+        "source": "initiatingComposerImage",
+        "result": "replaceSameAttachment",
+        "consent": "perInvocation",
+        "maxBytes": 10485760,
+        "allowedMimeTypes": ["image/png", "image/jpeg", "image/gif", "image/webp"]
+      }
     }
   ],
   "remoteQueries": [
@@ -188,7 +204,7 @@
     }
   ],
   "permissions": {
-    "hosts": ["https://maker.remilia.org/*", "https://remibooru.com/*"]
+    "hosts": ["https://maker.remilia.org/*", "https://remibooru.com/*", "https://cult.inc/*"]
   },
   "cost": {
     "startup": "cheap",
@@ -205,7 +221,8 @@
     "presets": ["full"],
     "permissionNotes": [
       "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
-      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access."
+      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
+      "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. After an explicit CHEESEWORLD tile click and per-invocation host consent, the host may transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
     ],
     "dataNotes": [
       "Stores only enablement and up to 20 custom reply phrases in browser-local storage.",
@@ -216,12 +233,12 @@
       "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
       "After an explicit X image context-menu selection and explicit Publish to Remibooru click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed public Remibooru contribution flow. The host retains image bytes and session data and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
       "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
-      "CHEESEWORLD opens only as an explicit external link and receives no composer text."
+      "After an explicit CHEESEWORLD tile click, the Top text and Bottom text captions are transferred to CULT/IN CheeseWorld. With per-invocation consent, the host transfers exactly one bounded initiating-composer image and replaces that same attachment with the result. The host never posts, and this package receives no image bytes, URLs, DOM, tabs, file handles, or browser APIs."
     ],
     "remoteServices": [
       "The reviewed Remilia-maker adapter opens only after an explicit package icon click. The host validates the declared captioned or randomMeme mode before transferring the active draft to the selected named maker.",
       "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or publishes an explicitly requested reviewed media contribution after the package's visible Publish to Remibooru action.",
-      "CHEESEWORLD is opened as a user-initiated external link; no API, upload, or text transfer occurs."
+      "The reviewed CULT/IN CheeseWorld adapter runs only after an explicit CHEESEWORLD tile click and per-invocation host consent. The host transfers the entered captions and exactly one initiating-composer PNG, JPEG, GIF, or WebP image up to 10 MiB, then replaces only that same attachment with the CheeseWorld result; the host never posts."
     ],
     "localStorageNotes": [
       "Stores enablement and up to 20 custom reply phrases."
@@ -231,7 +248,8 @@
   "privacy": {
     "permissionNotes": [
       "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
-      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access."
+      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
+      "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. After an explicit CHEESEWORLD tile click and per-invocation host consent, the host may transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
     ],
     "dataNotes": [
       "Custom reply phrases remain in declared browser-local storage, bounded to 20 entries of at most 280 characters.",
@@ -242,7 +260,7 @@
       "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
       "After an explicit X image context-menu selection and explicit Publish to Remibooru click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed public Remibooru contribution flow. The host retains image bytes and session data and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
       "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
-      "CHEESEWORLD is an ordinary explicit link and receives no composer or draft content."
+      "After an explicit CHEESEWORLD tile click, the Top text and Bottom text captions are transferred to CULT/IN CheeseWorld. With per-invocation consent, the host transfers exactly one bounded initiating-composer image and replaces that same attachment with the result. The host never posts, and this package receives no image bytes, URLs, DOM, tabs, file handles, or browser APIs."
     ],
     "localStorageNotes": [
       "Stores enablement and up to 20 custom reply phrases."
@@ -250,7 +268,7 @@
     "remoteServices": [
       "The reviewed Remilia-maker adapter opens only after an explicit user action and validates the declared captioned or randomMeme mode before transferring to the selected named maker.",
       "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or publishes an explicitly requested reviewed media contribution after the package's visible Publish to Remibooru action.",
-      "CHEESEWORLD link opens only after an explicit user action; this package makes no remote API request."
+      "The reviewed CULT/IN CheeseWorld adapter runs only after an explicit CHEESEWORLD tile click and per-invocation host consent. The host transfers the entered captions and exactly one initiating-composer PNG, JPEG, GIF, or WebP image up to 10 MiB, then replaces only that same attachment with the CheeseWorld result; the host never posts."
     ],
     "privacyLabels": ["local-only", "remote-api"],
     "consentRequired": true

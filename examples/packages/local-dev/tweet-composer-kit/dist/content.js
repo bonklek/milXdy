@@ -1,7 +1,7 @@
 // examples/packages/local-dev/tweet-composer-kit/src/content.js
 var context = null;
 var makers = [
-  { label: "#CHEESEWORLD Meme Maker", asset: "assets/makers/cheeseworld.png", theme: "cheeseworld", href: "https://cult.inc/cheeseworld" },
+  { label: "#CHEESEWORLD Meme Maker", asset: "assets/makers/cheeseworld.png", theme: "cheeseworld", handoffId: "cheeseworld-deepfry" },
   { label: "Milady Maker", asset: "assets/makers/milady.png", theme: "milady", handoffId: "milady-maker" },
   { label: "Redacted Remilio Babies Maker", asset: "assets/makers/remilio.png", theme: "remilio", handoffId: "remilio-maker" },
   { label: "Bonkler Factory", asset: "assets/makers/bonkler.png", theme: "bonkler", handoffId: "bonkler-maker" },
@@ -322,7 +322,7 @@ function buildMemeControls(random) {
   const info = el(
     "button",
     { className: "tweet-composer-kit__info", type: "button", ariaLabel: "How meme this post works", ariaDescribedBy: tooltipId, textContent: "i" },
-    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Choose a maker. Captioned sends the Top text and Bottom text you enter; random meme permits both fields to be empty and asks for an uncaptioned random output. CHEESEWORLD stays a normal link." })
+    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Choose a maker. Captioned sends the Top text and Bottom text you enter; random meme permits both fields to be empty and asks for an uncaptioned random output. CHEESEWORLD always uses captioned mode and asks for per-click consent before the host sends one composer image for replacement." })
   );
   return el(
     "div",
@@ -334,28 +334,40 @@ function buildMemeControls(random) {
 function buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }) {
   const root = el("div", { className: "tweet-composer-kit__maker-group" });
   const list = el("div", { className: "tweet-composer-kit__maker-row", ariaLabel: "Maker destinations" });
-  const status = el("p", { className: "tweet-composer-kit__maker-status", role: "status", ariaLive: "polite" });
+  const status = el("p", { className: "tweet-composer-kit__maker-status", role: "status", ariaLive: "polite", ariaAtomic: "true" });
   const available = new Set(Array.isArray(externalHandoffs) ? externalHandoffs.map((action) => action && action.id) : []);
   for (const maker of makers) {
     const className = `tweet-composer-kit__maker tweet-composer-kit__maker--${maker.theme}`;
     const image = el("img", { className: "tweet-composer-kit__maker-thumb", src: context.resolveAssetUrl(maker.asset), alt: "", ariaHidden: "true" });
-    if (maker.href) {
-      list.append(el("a", { className, href: maker.href, target: "_blank", rel: "noopener noreferrer", ariaLabel: maker.label, title: maker.label }, image));
-      continue;
-    }
     const action = el("button", { className, type: "button", ariaLabel: maker.label, title: maker.label, disabled: typeof launchExternalHandoff !== "function" || !available.has(maker.handoffId) }, image);
     action.addEventListener("click", async () => {
       if (signal.aborted || action.disabled) return;
       setMakerBusy(list, action, true);
-      status.textContent = `${maker.label} is preparing an image\u2026`;
+      setMakerStatus(status, "busy", `${maker.label} is preparing an image\u2026`);
       try {
-        await launchExternalHandoff(maker.handoffId, {
-          mode: random.checked ? "randomMeme" : "captioned",
-          captions: { topText: topInput.value, bottomText: bottomInput.value }
-        });
-        if (!signal.aborted) status.textContent = `${maker.label} handoff complete. Check the active composer.`;
-      } catch {
-        if (!signal.aborted) status.textContent = `${maker.label} could not open. Try again.`;
+        if (maker.handoffId === "cheeseworld-deepfry") {
+          const { ok, error } = await launchExternalHandoff("cheeseworld-deepfry", {
+            mode: "captioned",
+            captions: { topText: topInput.value, bottomText: bottomInput.value }
+          });
+          if (!signal.aborted && !ok) {
+            const detail = typeof error === "string" && error.trim() ? ` ${error.trim()}` : " Try again.";
+            setMakerStatus(status, "error", `${maker.label} could not replace the composer image.${detail}`);
+          } else if (!signal.aborted) {
+            setMakerStatus(status, "success", `${maker.label} replaced the initiating composer image.`);
+          }
+        } else {
+          await launchExternalHandoff(maker.handoffId, {
+            mode: random.checked ? "randomMeme" : "captioned",
+            captions: { topText: topInput.value, bottomText: bottomInput.value }
+          });
+          if (!signal.aborted) setMakerStatus(status, "success", `${maker.label} handoff complete. Check the active composer.`);
+        }
+      } catch (error) {
+        if (!signal.aborted) {
+          const detail = maker.handoffId === "cheeseworld-deepfry" && error instanceof Error && error.message.trim() ? ` ${error.message.trim()}` : " Try again.";
+          setMakerStatus(status, "error", `${maker.label} could not open.${detail}`);
+        }
       } finally {
         if (!signal.aborted) setMakerBusy(list, action, false);
       }
@@ -364,6 +376,10 @@ function buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInp
   }
   root.append(list, status);
   return root;
+}
+function setMakerStatus(status, state, message) {
+  status.dataset.state = state;
+  status.textContent = message;
 }
 function setMakerBusy(list, activeAction, busy) {
   list.classList.toggle("is-busy", busy);
