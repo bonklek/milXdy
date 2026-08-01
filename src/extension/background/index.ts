@@ -53,7 +53,7 @@ import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-a
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
-import { remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest } from "../../platform/app-sdk/remote-query";
+import { REMIBOORU_QUERY_ORIGIN, RemoteQueryResultStore, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
@@ -110,6 +110,13 @@ type RemoteQueryMessage = {
   request: RemoteQueryRequest;
 };
 
+type RemoteQueryAttachMessage = {
+  type: "milxdy:remoteQueryAttach";
+  appId: string;
+  queryId: string;
+  itemId: string;
+};
+
 type ContextMediaPrepareMessage = {
   type: "milxdy:contextMediaPrepare";
   appId: string;
@@ -136,6 +143,7 @@ let addOnsCatalogTabId: number | null = null;
 let addOnsCatalogLaunch: Promise<Record<string, unknown>> | null = null;
 const remoteQueryLastRequestAt = new Map<string, number>();
 const remoteQueryCache = new Map<string, { expiresAt: number; response: Record<string, unknown> }>();
+const remoteQueryResults = new RemoteQueryResultStore();
 const contextMediaHandles = new OpaqueMediaHandleStore();
 const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
 const CONTEXT_MEDIA_SESSION_PREFIX = "milxdy.contextMediaHandle.";
@@ -288,6 +296,11 @@ setupBackgroundMessageRouter([
     type: "milxdy:remoteQuery",
     matches: isRemoteQueryMessage,
     handle: (message, sender) => queryRemoteService(message, sender),
+  },
+  {
+    type: "milxdy:remoteQueryAttach",
+    matches: isRemoteQueryAttachMessage,
+    handle: (message, sender) => attachRemoteQueryResult(message, sender),
   },
   {
     type: "milxdy:contextMediaPrepare",
@@ -503,6 +516,17 @@ function isRemoteQueryMessage(message: unknown): message is RemoteQueryMessage {
     && Boolean(request && (request.resource === "posts" || request.resource === "facets"));
 }
 
+function isRemoteQueryAttachMessage(message: unknown): message is RemoteQueryAttachMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "milxdy:remoteQueryAttach"
+    && typeof record.appId === "string"
+    && typeof record.queryId === "string"
+    && typeof record.itemId === "string"
+    && record.itemId.length >= 1
+    && record.itemId.length <= 128;
+}
+
 function isContextMediaPrepareMessage(message: unknown): message is ContextMediaPrepareMessage {
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
@@ -690,7 +714,10 @@ async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.ru
   const key = `${message.appId}:${message.queryId}`;
   const now = Date.now();
   const cached = remoteQueryCache.get(`${key}:${targetUrl.href}`);
-  if (cached && cached.expiresAt > now) return cached.response;
+  if (cached && cached.expiresAt > now) {
+    rememberRemoteQueryResults(sender, message, cached.response);
+    return cached.response;
+  }
   const minIntervalMs = declaration.minIntervalMs ?? 0;
   const lastRequestAt = remoteQueryLastRequestAt.get(key) ?? 0;
   if (!Number.isInteger(minIntervalMs) || minIntervalMs < 250 || minIntervalMs > 60_000) return { ok: false, error: "The remote query rate policy is invalid." };
@@ -716,9 +743,59 @@ async function queryRemoteService(message: RemoteQueryMessage, sender: chrome.ru
     if (response.ok === true && cache?.policy === "shortLived" && Number.isInteger(cacheMaxAgeSeconds) && cacheMaxAgeSeconds >= 1 && cacheMaxAgeSeconds <= 300) {
       remoteQueryCache.set(`${key}:${targetUrl.href}`, { expiresAt: now + cacheMaxAgeSeconds * 1000, response });
     }
+    rememberRemoteQueryResults(sender, message, response);
     return response;
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : "The remote gallery is unavailable." };
+  }
+}
+
+function remoteQueryResultScope(sender: chrome.runtime.MessageSender, appId: string, queryId: string): string | null {
+  const tabId = sender.tab?.id;
+  if (typeof tabId !== "number") return null;
+  return `${tabId}:${sender.frameId ?? 0}:${appId}:${queryId}`;
+}
+
+function rememberRemoteQueryResults(sender: chrome.runtime.MessageSender, message: RemoteQueryMessage, response: Record<string, unknown>): void {
+  if (message.request.resource !== "posts" || response.ok !== true) return;
+  const scope = remoteQueryResultScope(sender, message.appId, message.queryId);
+  const page = response.page as SanitizedRemibooruPostPage | undefined;
+  if (!scope || !page || !Array.isArray(page.items)) return;
+  remoteQueryResults.remember(scope, page);
+}
+
+async function attachRemoteQueryResult(message: RemoteQueryAttachMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const app = (appRegistry as Array<{
+    id?: string;
+    remoteQueries?: Array<{ id?: string; adapter?: string; resultActions?: string[] }>;
+  }>).find((candidate) => candidate.id === message.appId);
+  const declaration = app?.remoteQueries?.find((candidate) => candidate.id === message.queryId);
+  if (!declaration || declaration.adapter !== "remibooru" || !declaration.resultActions?.includes("attachToInitiatingComposer")) {
+    return { ok: false, error: "This gallery does not declare composer attachment." };
+  }
+  const scope = remoteQueryResultScope(sender, message.appId, message.queryId);
+  const thumbnailUrl = scope ? remoteQueryResults.resolve(scope, message.itemId) : null;
+  if (!thumbnailUrl) return { ok: false, error: "This gallery result is unavailable or expired." };
+  try {
+    return await runNetworkTask(async (signal) => {
+      const response = await fetch(thumbnailUrl, { signal, credentials: "omit" });
+      const finalUrl = new URL(response.url);
+      if (!response.ok || finalUrl.origin !== REMIBOORU_QUERY_ORIGIN || !finalUrl.pathname.startsWith("/media/thumbs/")) {
+        return { ok: false, error: "Remibooru returned an unsupported image." };
+      }
+      const contentType = (response.headers.get("content-type") || "").split(";", 1)[0].trim().toLowerCase();
+      if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(contentType)) {
+        return { ok: false, error: "Remibooru returned an unsupported image type." };
+      }
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (bytes.length < 1 || bytes.length > 10 * 1024 * 1024) {
+        return { ok: false, error: "The Remibooru image is unavailable or too large." };
+      }
+      return { ok: true, imageDataUrl: `data:${contentType};base64,${base64Encode(bytes)}`, contentType };
+    }, "remibooru-result-attachment");
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "The Remibooru image is unavailable." };
   }
 }
 

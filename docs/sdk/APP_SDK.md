@@ -504,9 +504,16 @@ The first adapter is `remibooru`. It accepts only `posts` and `facets`:
 facet values. The host returns only a bounded sanitized page: item ID, canonical
 post URL, same-origin thumbnail URL, safe media dimensions/type, facets,
 attribution, and next cursor. Original media URLs and raw response fields are
-never returned. A package may visibly attribute Remibooru and open only the
-canonical post URL after another explicit click; it cannot attach, download,
-cache source links, or post media.
+never returned. A package must visibly attribute Remibooru and may open only
+the canonical post URL after an explicit click. A reviewed query may separately
+declare `resultActions: ["attachToInitiatingComposer"]`. From another explicit
+result click, `attachRemoteQueryResult(id, itemId)` lets the host resolve a
+recently returned result, fetch only its sanitized same-origin thumbnail, and
+attach it to the same composer that opened the package action. The package
+receives no additional URL or media bytes, cannot redirect the attachment to
+another composer, and cannot submit the post. Result IDs expire from host
+memory after five minutes. Attribution may be picker-level rather than repeated
+on every thumbnail, but it must remain visible.
 
 A reviewed query may additionally declare bounded composer-derived facet
 suggestions. `composerSuggestions` supports only `visibleDraftKeywords`, at
@@ -527,6 +534,7 @@ packages should retain their ordinary reviewed facets fallback.
   "maxPageSize": 12,
   "minIntervalMs": 750,
   "cache": { "policy": "none" },
+  "resultActions": ["attachToInitiatingComposer"],
   "composerSuggestions": {
     "source": "visibleDraftKeywords",
     "maxItems": 5,

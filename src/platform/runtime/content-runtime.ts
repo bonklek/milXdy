@@ -2361,7 +2361,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         ...(split || { topText: "", bottomText: "" }),
       });
       const result = response && response.ok === true
-        ? await attachExternalHandoffImage(composerScope, response.imageDataUrl)
+        ? await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")
         : { ok: false, error: response?.error || "The maker handoff could not start." };
       recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
       return result;
@@ -2391,20 +2391,46 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const suggestions = deriveComposerKeywordSuggestions(editor?.innerText || editor?.textContent || "", declaration);
       return { ok: true, suggestions };
     };
-    const attachExternalHandoffImage = async (composerScope: ParentNode, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
-      if (typeof imageDataUrl !== "string" || !imageDataUrl.startsWith("data:image/png;base64,")) {
-        return { ok: false, error: "The maker did not return a PNG." };
+    const remoteQueryAttachmentFileName = (contentType: string | undefined): string => {
+      const extension = contentType === "image/png" ? "png"
+        : contentType === "image/jpeg" ? "jpg"
+          : contentType === "image/gif" ? "gif"
+            : "webp";
+      return `remibooru-result.${extension}`;
+    };
+    const attachRemoteQueryResult: MilxdyComposerActionContext["attachRemoteQueryResult"] = async (id, itemId) => {
+      if (!navigator.userActivation?.isActive) return { ok: false, error: "Attach a gallery result from its control." };
+      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
+      if (!query || !query.resultActions?.includes("attachToInitiatingComposer")) {
+        return { ok: false, error: "This gallery does not declare composer attachment." };
+      }
+      if (typeof itemId !== "string" || itemId.length < 1 || itemId.length > 128) {
+        return { ok: false, error: "This gallery result is invalid." };
+      }
+      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string; contentType?: string }>({
+        type: "milxdy:remoteQueryAttach", appId: app.id, queryId: query.id, itemId,
+      });
+      const result = response?.ok === true
+        ? await attachImageToComposer(composerScope, response.imageDataUrl, remoteQueryAttachmentFileName(response.contentType))
+        : { ok: false, error: response?.error || "The gallery result could not be attached." };
+      recordRuntimeDiagnostic(`remoteQueryAttachment.${app.id}`, { query: query.id, ok: result.ok, updatedAt: Date.now() });
+      return result;
+    };
+    const attachImageToComposer = async (composerScope: ParentNode, imageDataUrl: string | undefined, fileName: string): Promise<{ ok: boolean; error?: string }> => {
+      if (typeof imageDataUrl !== "string" || !/^data:image\/(?:png|jpeg|gif|webp);base64,/u.test(imageDataUrl)) {
+        return { ok: false, error: "The image handoff returned unsupported media." };
       }
       try {
         const blob = await fetch(imageDataUrl).then((response) => response.blob());
-        if (blob.type !== "image/png" || blob.size === 0 || blob.size > 10 * 1024 * 1024) {
-          return { ok: false, error: "The generated image is unavailable or too large." };
+        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(blob.type) || blob.size === 0 || blob.size > 10 * 1024 * 1024) {
+          return { ok: false, error: "The image is unavailable or too large." };
         }
         const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
           .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
         if (!input) return { ok: false, error: "X's media control is unavailable." };
         const transfer = new DataTransfer();
-        transfer.items.add(new File([blob], "remilia-maker.png", { type: "image/png" }));
+        transfer.items.add(new File([blob], fileName, { type: blob.type }));
         input.files = transfer.files;
         if (input.files?.length !== 1) return { ok: false, error: "X's media control rejected the generated image." };
         input.dispatchEvent(new Event("input", { bubbles: true }));
@@ -2433,6 +2459,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         remoteQueries: (app.remoteQueries || []).map(({ id, label }) => ({ id, label })),
         queryRemoteService,
         suggestRemoteQueryFacets,
+        attachRemoteQueryResult,
       }));
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);

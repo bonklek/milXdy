@@ -110,6 +110,31 @@ export interface MilxdyComposerActionContext {
   readonly kind: "post" | "reply";
   readonly panel: HTMLElement;
   readonly signal: AbortSignal;
+  readonly remoteQueries: ReadonlyArray<{ id: string; label: string }>;
+  queryRemoteService(id: string, request: {
+    resource: "posts" | "facets";
+    cursor?: string;
+    limit?: number;
+    facets?: string[];
+  }): Promise<{
+    ok: boolean;
+    error?: string;
+    page?: {
+      items: Array<{
+        id: string;
+        postUrl: string;
+        thumbnailUrl: string;
+        media: { contentType: string; width: number; height: number; isGif: boolean };
+        facets: Array<{ kind: string; value: string; category: string }>;
+        attribution: { label: string; uploader: string | null };
+      }>;
+      nextCursor: string | null;
+    };
+    facets?: Array<{ kind: string; value: string; category: string; postCount: number }>;
+  }>;
+  suggestRemoteQueryFacets(id: string): Promise<{ ok: boolean; error?: string; suggestions: string[] }>;
+  /** Attaches one recently returned reviewed result to this initiating composer; never posts. */
+  attachRemoteQueryResult(id: string, itemId: string): Promise<{ ok: boolean; error?: string }>;
   close(): void;
 }
 

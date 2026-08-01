@@ -100,6 +100,8 @@ export type AppRemoteQuery = {
   maxPageSize: number;
   minIntervalMs: number;
   cache: { policy: "none" } | { policy: "shortLived"; maxAgeSeconds: number };
+  /** Explicit host-owned actions permitted for sanitized results. */
+  resultActions?: Array<"attachToInitiatingComposer">;
   /** Optional host-derived suggestions; packages never receive the draft text. */
   composerSuggestions?: {
     source: "visibleDraftKeywords";
@@ -380,6 +382,15 @@ export type MilxdyComposerActionContext = {
       nextCursor: string | null;
     };
     facets?: Array<{ kind: string; value: string; category: string; postCount: number }>;
+  }>;
+  /**
+   * Resolves a previously returned result inside the host and attaches its
+   * reviewed media to the composer that opened this action. Packages receive
+   * neither media bytes nor a new URL, and the host never submits the post.
+   */
+  attachRemoteQueryResult: (id: string, itemId: string) => Promise<{
+    ok: boolean;
+    error?: string;
   }>;
   /** Derives bounded facet candidates from the initiating visible composer. */
   suggestRemoteQueryFacets: (id: string) => Promise<{
