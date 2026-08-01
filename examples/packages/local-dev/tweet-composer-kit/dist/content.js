@@ -241,7 +241,7 @@ function buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, attach
       if (history === "reset") previousCursors.splice(0);
       if (history !== "previous") currentCursor = cursor;
       nextCursor = typeof result.page.nextCursor === "string" && result.page.nextCursor ? result.page.nextCursor : null;
-      if (results.childElementCount) status.textContent = "Remibooru results. Select one to open its canonical post.";
+      if (results.childElementCount) status.textContent = "Remibooru results. Click a thumbnail to attach it; double-click to open its canonical post.";
     } catch {
       if (!signal.aborted) {
         status.textContent = "Remibooru is unavailable. Try again.";

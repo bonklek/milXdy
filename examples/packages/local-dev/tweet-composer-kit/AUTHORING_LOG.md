@@ -4,7 +4,30 @@
 
 This package was authored as if the author had only the published milXdy App SDK 0.2.3 material. No repository implementation, first-party feature code, build scripts, or private runtime imports were consulted. The package uses a prebuilt JavaScript content entry, manifest-declared local storage, and the documented docked-overlay lifecycle.
 
-Out of scope: Grok/guru work and all Booru, Miladybooru, Meme Depot, CHEESEWORLD gallery, or reply-media browsing, search, storage, selection, upload, and insertion. CHEESEWORLD remains a disclosed link after a user click. The four declared Remilia makers use only the reviewed host-mediated handoff callback after an explicit icon click; the package never receives maker/X DOM, image bytes, clipboard, tab, or browser access.
+The initial external-author baseline excluded Grok/guru work and all Booru, Miladybooru, Meme Depot, CHEESEWORLD gallery, or reply-media browsing, search, storage, selection, upload, and insertion. The later reviewed #17 continuation adds bounded Remibooru queries and an explicit host-owned thumbnail attachment action without giving the package raw fetch, original-media URLs, image bytes, X DOM, tab, or browser access. CHEESEWORLD remains a disclosed link after a user click. The four declared Remilia makers use only the reviewed host-mediated handoff callback after an explicit icon click.
+
+## Issue #17 discovery and cache decision
+
+The link-only X-post cache prototype was evaluated and rejected for the 0.2.4
+picker. Persisting X status URLs would add storage, reset, privacy, dead-link
+pruning, and inaccessible-source states while still depending on posts that can
+be deleted, protected, rate-limited, or changed by upstream behavior. It would
+not make the underlying reaction media durable, and it would duplicate the
+approved source's own canonical-post index.
+
+Composer Kit instead uses bounded, no-cache Remibooru queries. The manifest
+declares `cache.policy: "none"`; searches send at most five AND-filtered public
+facet IDs, a bounded page size, and an opaque cursor. The host returns only
+sanitized metadata, same-origin thumbnails, visible attribution, canonical post
+links, and the next cursor. A single explicit result click may attach the
+recently returned thumbnail to the same composer that opened the panel; a
+double-click opens the canonical Remibooru post. The package receives no extra
+URL or bytes, the host forgets attachment result IDs after five minutes, and no
+action submits the X post.
+
+A future X-link index would require its own approved storage/disclosure,
+reset/pruning, unavailable-source, and user-value evidence. It is deferred, not
+partially shipped under #17.
 
 ## Maker thumbnail provenance
 
