@@ -9,94 +9,32 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 ## Most Recent Release
 
-`0.2.3` is the current release. See its [release notes](../releases/RELEASE_NOTES_0.2.3.md) and the descending [changelog](../../CHANGELOG.md) for shipped details.
-
-## Released: 0.2.2 - Prepared App SDK Update
-
-Theme: make first-party apps easier to understand, configure, package, and maintain by cleaning up Apps and Features IA, settings schema, presets, app metadata, diagnostics, local package groundwork, filesystem layout, and first-party lifecycle compliance.
-
-- Clean up Apps and Features management.
-  - move app and feature settings into a clearer left-menu information architecture
-  - define settings schema, preset participation, storage compatibility, and reset behavior
-  - keep app cards, enablement, privacy notes, costs, and storage disclosures registry-driven
-- Make first-party apps comply with the current platform contract.
-  - clarify boot, enable, disable, route-change, surface-delivery, overlay open/close, and dispose behavior for bundled apps
-  - keep shared scanners, route handling, visual effects, storage, and background fetches centralized instead of duplicated inside each app
-- Add SDK-ready diagnostics.
-  - compare Max against lighter setup choices with long-task, frame-gap, FPS, and feature timing data
-  - make performance reports usable without opening DevTools
-  - base any deeper scanner rewrite on measured app/runtime data rather than assumption
-- Standardize app presentation controls.
-  - define app chrome style presets, per-app overrides, root visual controls, and profile-pack participation
-  - document contributor-facing UI style for classic app surfaces
-- Prepare reviewed local package and custom-build groundwork.
-  - define the local package manifest schema and checked example package shapes
-  - add composer, verifier, trust-gate, and custom Chromium build workflows for reviewed local package inputs
-  - keep marketplace discovery, package signatures, and polished normal-user package installation out of this release
-
-## Released: 0.2.3 - Reliability And Recovery
-
-Theme: make the prepared app platform resilient across lifecycle failures, slow or stale network work, authenticated RemiliaNET features, X interaction hot paths, and accessibility-sensitive UI.
-
-- Improve reliability and accessibility across the shared runtime and first-party apps.
-  - isolate app lifecycle, surface-delivery, and idle-task failures so one app cannot strand shared cleanup or queued work
-  - make startup, network, storage, worker, speech, and local-file workflows cancelable and recoverable
-  - restore reversible teardown and last-user-intent behavior across Maxxer, Music, Post-reading, Chat, Wiki, and Miladychan
-- Harden RemiliaNET recovery and actions.
-  - return Beetol Hunt results before background state reconciliation and preserve the final reward before cooldown
-  - bound Chat authentication and WebSocket opening, reuse recent valid authentication, and make logout authoritative over cached or in-flight work
-  - show RemiStats poke controls only after confirming the visible account is a RemiliaNET identity
-- Remove interaction and browsing hot paths.
-  - preserve X's native Like feedback and use compositor-friendly Maxxer feedback
-  - replace mutation-driven button rescans with a capped visible-page check
-  - replace the root relational dock selector with a static left-rail safe area
-- Improve app surfaces and accessibility.
-  - add rail overflow direction indicators and compact one-row rail ordering controls
-  - group Root Visual controls without changing stored theme/profile-pack shape
-  - open supported Wiki tabs and collapsed sections before read-aloud highlights them
-  - improve keyboard, focus, reduced-motion, live-region, and screen-reader behavior
-  - include Firefox/Waterfox compatibility, browser-specific update downloads, fullscreen DM media, and Tweet PNG improvements introduced after `0.2.2`
+`0.2.4` is the current release. See its [release notes](../releases/RELEASE_NOTES_0.2.4.md) and the descending [changelog](../../CHANGELOG.md) for shipped details.
 
 ## Coming Platform Direction: Composable App/Mod System
 
 The long-term goal remains a reviewed composable app system where packages declare surfaces, permissions, assets, settings, privacy notes, performance cost, background services, and lifecycle hooks while sharing milXdy's scanners, schedulers, overlays, and network infrastructure. External installation and stable third-party compatibility remain future work.
 
-## Planned: 0.2.4 - Composer Kit
+## Released: 0.2.4 - Composer Kit
 
-Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker/meme-designer integrations, and AI-assisted metadata normalization.
+Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker integrations, optional custom pets, and a usable local add-on pipeline.
 
-- Share Kit — Tweet PNG and RemiNet sharing.
-  - add granular Tweet PNG metadata and styling settings so users can choose which identity, date, source, RemiStats, and border details appear before copy, download, browser share, or upload
-  - support direct Tweet PNG upload to RemiNet only after endpoint/API and browser-session auth behavior are confirmed
-  - require preview/review behavior before upload and never send or upload PNGs automatically
-- Miladychan posting from the portal.
-  - let users create posts on Miladychan from inside milXdy instead of only browsing and opening the native site
-  - preserve pseudonymous board expectations and make posting destination/board/thread state explicit
-  - handle auth/session, validation, upload/media, captcha/upstream constraints, drafts, and failure states clearly
-- Miladybooru or Meme Depot reply picker.
-  - investigate a Tenor-like reply picker using an approved Milady image corpus
-  - include CHEESEWORLD booru/gallery feasibility in the same reply-media picker research
-  - support search, scrollable gallery browsing, and clear user action before inserting media
-  - define caching, attribution, and source reliability expectations before shipping
-- Composer meme designer and maker integrations.
-  - integrate CULT, INC. #CHEESEWORLD generator/meme maker as a composer-adjacent reaction-media path
-  - define how Milady Maker, Remilia/Remilio maker surfaces, Bonkler Maker, and related generators open, embed, or receive composer context
-  - keep generated/selected media user-reviewed before inserting, saving, or posting
-- Meme saver folder.
-  - add a local reaction image/gif collection near reply attachment controls
-  - support save-to-collection for uploaded reply images
-- Quick composer helpers.
-  - add a small Milady-head reply action that can send `milady`, `remilio`, or a user-selected phrase
-  - route Maker-style buttons through the broader composer meme designer where technically possible
-- Grok-assisted posting and metadata normalization.
-  - design an optional editing flow that standardizes formatting, metadata, identifiers, links, and readability
-  - preserve the user's voice and require final review before publishing
-  - avoid automatic posting or invisible metadata changes
+- Composer Kit ships quick replies, native X Drafts, bounded Remibooru browsing and attachment, explicit public Remibooru contribution, and reviewed Maker/CHEESEWORLD handoffs.
+- Share Kit ships reviewed local Tweet PNG controls, watermarking, link-card/quote handling, and deliberate RemiNet Chat staging without automatic send.
+- Miladychan Portal ships explicit pseudonymous text posting, final destination confirmation, local failed-submit recovery, watched threads, and native fallback.
+- Pets Maker becomes the first selectable maintainer-catalog add-on and remains disabled by default until enabled in Apps & Features.
+- The Custom Pet pipeline ships versioned Maker request bundles, four family templates, deterministic QA, and local cache/resume.
+- App SDK 0.2.4 ships reviewed external and multi-package composition, explicit host callbacks, catalog selection, transactional recovery, and sanitized provenance.
+- RemiNet/Beetol, side-rail, visual, lifecycle, security, and documentation refinements complete the release.
 
 ## Planned: 0.2.5 - Reader Voice
 
 Theme: Post-reading companion voice experiments and long-form audio export.
 
+- Multi-site app runtime ([#74](https://github.com/bonklek/milXdy/issues/74)).
+  - define site-aware app metadata, routes, surfaces, permissions, privacy notes, load triggers, and fallback behavior for RemiliaNET, Miladychan, Remilia Wiki, X/Twitter, and explicitly reviewed related hosts
+  - keep X-only apps X-only, preserve least-privilege content-script matching, and decide whether each non-X host receives a full rail, a smaller launcher, or only declared feature modules
+  - add cross-host QA without treating existing background host permissions as evidence that the full runtime already injects on those sites
 - Post-reading TTS side package.
   - document install instructions for a local TTS companion package
   - link to the external repo when ready

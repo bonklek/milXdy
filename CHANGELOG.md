@@ -2,13 +2,16 @@
 
 ## 0.2.4
 
-Status: release candidate.
+Status: released.
 
 See [milXdy 0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
 
-- Adds reviewed Composer Kit, Share Kit, Miladychan posting, and Custom Pet package workflows.
-- Advances the App SDK and maintainer catalog with external-package composition, explicit host-mediated actions, sanitized provenance, and cumulative QA support.
-- Includes the 0.2.4 reliability, security, RemiNet, Beetol, side-rail, accessibility, and documentation improvements described in the release notes.
+- Ships Composer Kit quick replies, native Drafts, Remibooru search/attachment/contribution, and explicit Remilia Maker handoffs as one composer-adjacent add-on.
+- Moves Tweet PNG into Share Kit with local review controls, optional watermarking, link-card handling, and deliberate RemiNet Chat staging.
+- Adds pseudonymous text posting, watched-thread feedback, navigation improvements, and native fallback to Miladychan Portal.
+- Publishes Pets Maker as the first selectable maintainer-catalog add-on. It installs disabled by default and exports a validated local pet-request bundle without uploading or posting.
+- Advances the App SDK and local Add-ons workflow with reviewed multi-package composition, explicit host-mediated actions, remote-query and contribution contracts, sanitized provenance, transactional recovery, and catalog selection.
+- Adds RemiNet/Beetol crafting and chat refinements, side-rail controls and feedback, memory-only Remilia token custody, app-failure containment, architecture gates, and broad runtime cleanup.
 
 ## 0.2.3
 

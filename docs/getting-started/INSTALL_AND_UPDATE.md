@@ -4,7 +4,8 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, download `milXdy-<version>-chromium.zip`.
+For Chrome, Brave, or Edge, download `milXdy-0.2.4-chromium.zip`. Firefox and
+Waterfox use `milXdy-0.2.4-firefox.zip`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
@@ -14,6 +15,21 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 4. Enable **Developer mode**.
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
+
+## Optional 0.2.4 add-ons
+
+The normal release archive contains the base extension. The checked-in
+[Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) prepares a separate
+Chromium custom build from reviewed local package sources:
+
+- **Pets Maker** is the first selectable maintainer add-on and remains disabled after installation until enabled in **Apps & Features**.
+- **Share Kit** is a selectable reviewed first-party replacement that preserves the existing Tweet PNG identity and settings.
+- **Composer Kit** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
+
+Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.4 source
+checkout. Load `dist/chromium-local-apps/` once and reload that same extension
+card after later successful rebuilds. Do not load the custom build alongside the
+normal build as a second extension.
 
 ## Firefox Beta Install
 

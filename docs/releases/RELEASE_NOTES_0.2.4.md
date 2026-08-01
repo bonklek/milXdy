@@ -1,33 +1,164 @@
 # milXdy 0.2.4 Release Notes
 
-Status: release candidate. These notes describe the integrated candidate and will be finalized before publication.
+milXdy `0.2.4` is the **Composer Kit** release. It turns the App SDK groundwork
+from earlier releases into visible composer, sharing, add-on, and custom-pet
+workflows while tightening the shared runtime underneath them.
 
 ## Composer Kit
 
-- Adds reviewed composer and reply actions, native Drafts routing, quick-reply helpers, Remibooru browsing, and explicit Remilia Maker handoffs through the App SDK package boundary.
-- Keeps package actions user-initiated and preserves host-owned focus, dismissal, posting, media, and permission controls.
+- Adds one compact composer/reply add-on for quick replies, X native Drafts,
+  Remibooru reaction browsing, public Remibooru contribution, and reviewed
+  Remilia Maker/CHEESEWORLD handoffs.
+- Opens the quick-reply panel from the invoking Reply control, preserves focus
+  and dismissal behavior, and verifies a declared quick-reply value before the
+  configured submission action.
+- Uses X's native Drafts instead of creating a second local draft store.
+- Browses bounded Remibooru pages and facets with visible attribution,
+  canonical-source links, and explicit thumbnail attachment to the initiating
+  composer. Nothing is attached or posted automatically.
+- Adds **Publish to Remibooru** for an explicitly selected eligible X-hosted
+  image. The user reviews the public destination and bounded tags, then the
+  visible Publish button performs the upload. There is no extra rights
+  checkbox, ownership attestation, attribution field, or narrative disclosure
+  form. Authentication, contributor access, CAPTCHA/anti-abuse, moderation, and
+  unsupported upstream states retain a native-uploader fallback.
+- Keeps package code away from X DOM, cookies, tabs, image bytes, raw browser
+  messaging, and remote-session details; reviewed host callbacks own those
+  boundaries.
+
+See [Composer Kit](../guides/composer-kit.md).
 
 ## Share Kit
 
-- Moves Tweet PNG into the reviewed Share Kit package while preserving preview, copy, download, browser share, settings compatibility, and rollback behavior.
-- Adds granular visual controls, a subtle optional milXdy watermark, and an explicit RemiNet Chat staging flow without automatic posting.
+- Moves Tweet PNG into the reviewed Share Kit package while preserving its
+  stable feature identity and existing visual/profile settings.
+- Keeps selected post text, media, quote context, date, stats, borders, palette,
+  copy, download, and browser-share behavior inside a local review dialog.
+- Adds live color previews, full-text and cashtag rendering, improved quote-post
+  context, removable included images, themed link cards, and a subtle optional
+  milXdy watermark.
+- Adds deliberate **Share to RemiNet** staging. The reviewed PNG becomes a
+  pending local RemiNet Chat attachment and is not uploaded until the user
+  presses Send in Chat.
 
-## Miladychan and RemiNet
+See [Share Kit — Tweet PNG](../guides/tweet-png.md).
 
-- Adds explicit pseudonymous text posting to the Miladychan Portal with destination confirmation, failed-submit recovery, watched-thread feedback, and native-site fallback.
-- Improves RemiNet Chat placement and recovery, Beetol interactions, media-viewer rail behavior, and authenticated session handling.
+## Miladychan Portal
 
-## Custom pets and add-ons
+- Adds explicit `milXdy`-pseudonymous text-only thread and reply posting with an
+  editable visible name and final destination confirmation.
+- Keeps Miladychan credentials, RemiNet/X identity, wallet identity, cookies,
+  and extension identity out of the posting request.
+- Retains a failed text submission locally, preserves native fallback for
+  CAPTCHA/media/session/full-board behavior, and never uploads media.
+- Adds local watched threads, fresh-post rail feedback on open/refresh, clearer
+  board/thread navigation, top and bottom composers, JUMP controls, quote-link
+  insertion, and transient target highlighting.
 
-- Adds the optional Pets Maker package, versioned Maker export bundles, reusable family templates, deterministic validation, and resumable diagnostics.
-- Adds maintainer catalog and local custom-build selection groundwork with reviewed package validation, consent, provenance, and rollback controls.
+See [Miladychan Portal](../guides/miladychan-portal.md).
 
-## Platform and reliability
+## Pets Maker and the custom-pet pipeline
 
-- Extends the App SDK to 0.2.4 with reviewed external-package composition, sanitized QA provenance, package-owned panels, explicit host callbacks, and stronger lifecycle verification.
-- Reduces legacy runtime code, decomposes side-rail ownership, contains individual app-card failures, keeps Remilia tokens out of local storage, and requires explicit first-run Hub invocation.
+- Publishes Pets Maker as the first selectable maintainer-catalog add-on. It is
+  optional and remains disabled after installation until the user explicitly
+  enables it in **Apps & Features**.
+- Turns one user-selected transparent Milady, Remilio, Bonkler, or Kagami Maker
+  PNG plus declared traits and body choices into a deterministic, validated
+  two-file `remilia-pet-request.zip`.
+- Adds a versioned Codex import skill, four reusable motion-template families,
+  objective pose/envelope checks, trait-aware diagnostics, and local cache/resume
+  for exact validated outputs.
+- Keeps source art, form state, generated bundles, and validation caches local.
+  Pets Maker does not upload, post, publish, invoke Codex, infer missing traits,
+  or add a rights declaration.
 
-## Candidate limitations
+See [Pets Maker export](../guides/custom-pet-export.md), [Remilia Maker pet
+import](../guides/remilia-maker-pet-import.md), and [Custom Pet integrated
+QA](../guides/custom-pet-integrated-qa.md).
 
-- This candidate is not published yet. Final Chromium and Firefox archives, checksums, manual browser QA, and the exact shipped issue disposition remain release gates.
-- Package features that depend on third-party authentication, CAPTCHA, or upstream availability retain an explicit native-site fallback.
+## Add-ons Catalog and App SDK 0.2.4
+
+- Adds a deterministic Chromium catalog-selection workflow for checked-in,
+  hash-pinned maintainer packages with explicit capability/privacy review,
+  acknowledgements, transactional promotion, rollback, and reload detection.
+- Makes Pets Maker and Share Kit selectable. Composer Kit remains visibly
+  **Under review** in the catalog until its exact source and trusted hash are
+  committed to an allowlisted catalog path; the record does not pretend to be
+  an installable artifact.
+- Supports reviewed external folder/ZIP staging and multi-package composition
+  without retaining author paths in provenance.
+- Adds generic package-owned composer/reply panels, native Drafts, maker
+  handoffs, bounded composer suggestions, reviewed Remibooru queries,
+  explicit remote-result attachments, and host-owned media contribution.
+- Adds public starter templates, lifecycle harnesses, schemas, TypeScript types,
+  accessibility guidance, asset declarations, and contributor UI guidance.
+- Includes a public-safe visual design guide and a separately excluded
+  visual-elements repository candidate. Official catalog admission is based on
+  documented permission or licensing compatible with copying, modification,
+  redistribution, and App SDK use—not VPL alone. VPL remains supported;
+  unknown or incompatible rights fail closed. The separate repository is not
+  represented as published by this extension release.
+
+See [App SDK overview](../sdk/APP_SDK_OVERVIEW.md), [Local Add-ons](../sdk/LOCAL_ADDONS.md),
+and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
+
+## RemiNet, Beetol, rail, and visual polish
+
+- Keeps Remilia access and refresh tokens in background memory and clears
+  legacy content-readable token keys.
+- Improves RemiNet Chat placement on X Messages, reaction behavior, transient
+  authentication-tab handling, and hover/focus dismissal for **Last read** and
+  **Jump to present** markers.
+- Adds faster Beetle Crafting item placement through RemiliaNET's existing UI,
+  protects occupied slots, preserves native inspection, and never crafts or
+  submits automatically.
+- Adds Beetol reward audio/visual feedback, lower-volume junk crunch, refresh
+  ordering, and signed-out-state cleanup.
+- Adds left/right rail switching, pointer reordering and persistence, a
+  whole-item reel with mechanical feedback, media-viewer hiding, shortcut
+  clearance, and stronger enable/disable recovery.
+- Aligns composer/factory/Drafts icons, themes quick replies, expands the em
+  dash helper to DMs, shows the standard 280-character zero boundary, improves
+  notification/read-state visuals, and keeps verified display names readable.
+
+## Runtime and maintenance
+
+- Contains an individual Apps & Features card-render failure instead of losing
+  the rest of the catalog.
+- Stops automatically opening Apps & Features on first run; setup remains an
+  explicit user action.
+- Decomposes side-rail and app lifecycle ownership, centralizes background
+  message authorization, adds architecture/negative-fixture gates, and removes
+  more than two thousand lines of unreferenced legacy modules.
+- Reorganizes the public documentation by audience and preserves exhaustive
+  index/link coverage.
+
+## Known limitations
+
+- milXdy remains an unpacked GitHub beta rather than a Chrome Web Store or
+  Firefox Add-ons listing.
+- Catalog-managed custom builds are Chromium-only in 0.2.4. Firefox/Waterfox
+  uses the normal release archive, and File System Access features remain
+  browser-limited.
+- Composer Kit is part of the reviewed 0.2.4 package composition but is not yet
+  selectable from the public catalog record.
+- Remibooru contribution requires an eligible image, an authenticated account
+  with contributor access, and upstream acceptance. Use the native uploader
+  when the reviewed flow cannot proceed.
+- Miladychan direct posting is text-only. CAPTCHA, media, session-bound, and
+  unsupported-board behavior remains on the native site.
+- **Share to RemiNet** stages a local attachment for review; it does not send a
+  chat message automatically.
+- The standalone visual-elements repository, versioned catalog releases, and
+  broader multi-site runtime are follow-up work. The multi-site runtime is
+  scheduled with 0.2.5 rather than silently implied by 0.2.4 host permissions.
+
+## Issue map
+
+The user-visible release work spans Composer Kit and sharing issues `#16`,
+`#17`, `#24`, `#25`, `#68`, `#79`, `#187`, `#188`, and `#189`; Miladychan
+Portal `#41`; the catalog and visual-authoring work in `#181` and `#183`; the
+Pets Maker pipeline in `#190`–`#193`; and RemiNet/Beetol work in `#194`.
+Open GitHub issues continue to track remaining publication, catalog, or upstream
+follow-through; their presence does not imply that every acceptance item listed
+in those issues shipped unchanged.

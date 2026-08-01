@@ -102,6 +102,10 @@ manager's package placement, transaction recovery, or persistent status flow.
   asset access just like the public runtime facade.
 - Copy the public UI CSS into the package instead of importing private overlay
   modules, then satisfy the accessibility and asset-license checklists.
+- Use the [public-safe author design guide](../publication-candidates/milxdy-visual-elements/docs/AUTHOR_DESIGN_GUIDE.md)
+  for visual-language guidance. Its separate repository candidate is excluded
+  from normal extension archives, and its official asset policy accepts only
+  rights-compatible, evidence-backed entries; VPL is supported but not required.
 
 The starter declaration exposes the complete public context and omits private
 runtime helpers such as cross-app loading. Apps stay portable by depending only

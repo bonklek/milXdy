@@ -1,6 +1,6 @@
 # Composer Tools User Guide
 
-Composer Tools adds small local helpers while writing X/Twitter posts.
+Composer Tools adds small local helpers while writing X/Twitter posts and DMs.
 
 ## Where To Find It
 
@@ -13,9 +13,9 @@ Composer Tools adds small local helpers while writing X/Twitter posts.
 
 ## Double Dash To Em Dash
 
-When enabled, typing `--` in an X/Twitter post composer is converted locally into an em dash.
+When enabled, typing `--` in a supported X/Twitter post or DM composer is converted locally into an em dash.
 
-Composer Tools runs only in supported X/Twitter post textboxes. It does not run in DMs, search fields, native inputs, textareas, or normal extension settings inputs.
+Composer Tools runs only in supported X/Twitter composer textboxes. It does not run in search fields, unrelated native inputs/textareas, or normal extension settings inputs.
 
 ## Privacy
 

@@ -2,6 +2,10 @@
 
 Share Kit owns the reviewed local Tweet PNG workflow. The base milXdy client owns only the generic contextual post-action, lifecycle, storage, and package-review seams.
 
+Share Kit is a selectable reviewed first-party replacement in the 0.2.4
+Add-ons Catalog. Selecting it preserves the stable `tweetPng` identity; review
+the replacement acknowledgement during the local Prepare/Apply workflow.
+
 ## Export a post
 
 1. Open an X/Twitter post share menu and choose **Share as PNG**.
@@ -24,6 +28,9 @@ Use the settings-wheel button in the preview header to change:
 - whether quoted-post text is included;
 - whether quoted-post images are included;
 - whether the default-on **milXdy** watermark appears in the lower-right pink margin.
+
+Visible external links can render as themed link cards, and quoted-post context
+remains part of the preview rather than being flattened into the main post.
 
 Changes update the preview and save as defaults. The watermark setting is preserved with visual/profile packs. Existing date, RemiStats, border, palette, and tall-image settings remain available in Apps & Features and remain part of visual/profile packs.
 

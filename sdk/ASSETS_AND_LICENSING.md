@@ -24,9 +24,16 @@ acceptance, composition, or static scanning is not legal approval and does not
 transfer copyright or trademark rights.
 
 This general package policy is license-neutral. Declaring an asset, supplying a
-hash, or calling material VPL does not admit it to any official VPL catalog;
-that future catalog requires separate file-level provenance evidence and human
-review. Treat visual URLs and screenshots as reference material, not package
-assets, unless the exact file is an intentionally declared shipping export.
-Packages vendor those declared files into the reviewed build and must not
-hot-load arbitrary remote assets at runtime.
+hash, or naming a license does not admit it to the official visual catalog. The
+catalog accepts VPL and other clearly documented licenses or permissions only
+when the evidence supports the intended copying, modification, redistribution,
+and App SDK use. Unknown, ambiguous, or incompatible rights fail closed.
+
+Every cataloged asset keeps its creator/source context, exact license or
+permission text and proof, compatibility decision, derivative lineage where
+applicable, visual/accessibility review, version, deprecation/replacement state,
+and takedown/correction route. VPL remains fully supported but is not the sole
+admission path. Treat visual URLs and screenshots as reference material, not
+package assets, unless the exact file is an intentionally declared shipping
+export. Packages vendor those declared files into the reviewed build and must
+not hot-load arbitrary remote assets at runtime.

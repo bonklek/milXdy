@@ -6,15 +6,17 @@ This repository candidate gives App SDK authors public contributor guidance,
 semantic design tokens, reusable UI recipes, working HTML/CSS/JavaScript
 examples, and optional asset metadata for custom milXdy modifications.
 
-Local custom packages are user-controlled. Authors may use their own assets and
-their own licensing choices; the visual-elements tooling does not block a local
-package because an asset is not VPL. Authors remain responsible for what they
-choose to copy, modify, or distribute.
+Local custom packages are user-controlled. Authors remain responsible for what
+they choose to copy, modify, or distribute.
 
-VPL becomes mandatory only when an asset or package is proposed for inclusion
-in milXdy's default/upstream codebase. The upstream review lane verifies that
-requirement without turning it into a restriction on local customization. See
-[Asset and contribution policy](docs/ASSET_AND_CONTRIBUTION_POLICY.md).
+The intended official catalog policy is rights-compatible, not VPL-only. VPL
+remains supported, and another license or explicit permission can qualify only
+when exact evidence supports the intended copying, modification,
+redistribution, and App SDK use. Every accepted entry retains creator/source
+context, exact terms and proof, compatibility review, derivative lineage where
+applicable, accessibility/visual review, deprecation history, and a
+takedown/correction route. Unknown, ambiguous, or incompatible rights fail
+closed. See [Asset and contribution policy](docs/ASSET_AND_CONTRIBUTION_POLICY.md).
 
 ## Start here
 
@@ -61,8 +63,10 @@ npm run verify
 
 The verification suite checks schema/fixture behavior, file hashes, local
 links, SVG safety, remote-runtime references, private path leaks, package asset
-alignment, and extension release-archive exclusion. It applies strict VPL
-continuity checks only to entries marked `upstream-default`.
+alignment, and extension release-archive exclusion. The current candidate's
+`upstream-default` validator is still conservatively VPL-only and must be
+generalized to the evidence-backed rights-compatible policy before this
+candidate is published as the official catalog.
 
 ## Publication boundary
 

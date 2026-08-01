@@ -71,9 +71,33 @@ After changing major toggles, reload affected X/Twitter tabs so old content scri
 
 ## Composer Tools
 
-Composer Tools is a lightweight feature module for X/Twitter post composers. When enabled from Apps & Features, or from the Main tab popup mirror during settings migration, typing `--` in a supported post composer is converted locally into an em dash.
+Composer Tools is a lightweight feature module for X/Twitter post and DM composers. When enabled from Apps & Features, or from the Main tab popup mirror during settings migration, typing `--` in a supported composer is converted locally into an em dash.
 
-The helper ignores DMs, search fields, native inputs, textareas, and extension settings inputs. It reads only the active composer text around the caret and does not send composer text to a remote service.
+The helper ignores search fields, unrelated native inputs/textareas, and extension settings inputs. It reads only the active supported composer text around the caret and does not send composer text to a remote service.
+
+## Composer Kit
+
+Composer Kit is the reviewed 0.2.4 package composition for quick replies,
+native X Drafts, Remibooru reaction browsing/contribution, and explicit
+Maker/CHEESEWORLD handoffs. It adds composer and reply controls rather than a
+new rail app. Every insert, attachment, contribution, and handoff begins with a
+visible user action. See the dedicated [Composer Kit guide](composer-kit.md).
+
+## Share Kit
+
+Open an X post's share menu and choose **Share as PNG** to review text, visible
+media, quote context, colors, borders, stats, and the optional watermark before
+copying, downloading, using browser share, or staging the PNG in RemiNet Chat.
+Staging never sends the chat message automatically. See [Share Kit — Tweet
+PNG](tweet-png.md).
+
+## Pets Maker
+
+Pets Maker is the first selectable maintainer-catalog add-on. Installation
+makes it available but deliberately leaves it disabled; enable it separately in
+**Apps & Features**. The app reads one explicitly selected transparent Maker
+PNG and declared traits, previews the deterministic composite, and downloads a
+validated two-file request ZIP locally. See [Pets Maker export](custom-pet-export.md).
 
 ## Platform Performance Modes
 
@@ -285,6 +309,9 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`; an explicit confirmed text-only post uses fixed create-thread or create-reply endpoints without cookies or account credentials.
+- Composer Kit uses `https://remibooru.com` only for explicit reviewed search, attachment, and contribution actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
+- Share Kit renders locally; RemiNet staging becomes a remote upload only if the user later presses Send in Chat.
+- Pets Maker reads only the explicitly selected local PNG and writes only the user-requested local ZIP; it has no remote service.
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.

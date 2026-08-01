@@ -2,8 +2,9 @@
 
 ## 0.1.0-candidate.0
 
-- Added license-neutral local-custom guidance and a separate VPL requirement
-  for default/upstream inclusion.
+- Added license-neutral local-custom guidance and documented the corrected
+  rights-compatible target for default/upstream inclusion; VPL remains a
+  supported path rather than the sole admission gate.
 - Added optional source records, review decisions, derivative metadata,
   package locks, deprecation, and removal rules.
 - Added semantic tokens, original CSS recipes, responsive utility UI, and
