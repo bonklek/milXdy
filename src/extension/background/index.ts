@@ -52,7 +52,7 @@ import {
 import { parseAllowedUrl, type UrlAllowRule } from "../../platform/browser/url-allowlist";
 import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES } from "../../platform/app-sdk/addons-catalog";
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
-import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
+import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
@@ -831,7 +831,7 @@ async function attachRemoteQueryResult(message: RemoteQueryAttachMessage, sender
 
 async function launchExternalHandoff(message: ExternalHandoffMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender)) return unsupportedSender();
-  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string; modes?: string[]; captionMaxLength?: number }> }>)
+  const app = (appRegistry as Array<{ id?: string; externalHandoffs?: Array<{ id?: string; adapter?: string; target?: string; modes?: string[]; captionMaxLength?: number; mediaTransfer?: { source?: string; result?: string; consent?: string; maxBytes?: number; allowedMimeTypes?: string[] } }> }>)
     .find((candidate) => candidate.id === message.appId);
   const declaration = app?.externalHandoffs?.find((candidate) => candidate.id === message.handoffId);
   if (!declaration || declaration.adapter !== message.adapter || declaration.target !== message.target) {
@@ -840,6 +840,20 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
   if (!(declaration.modes || ["captioned"]).includes(message.mode)) return { ok: false, error: "The requested handoff mode is not declared by this package." };
   const captions = validateExternalHandoffCaptions(message, declaration.captionMaxLength);
   if (!captions) return { ok: false, error: "The requested captions are invalid for this handoff." };
+  const mediaTransfer = declaration.mediaTransfer;
+  const sourceImage = message.adapter === "cheeseworld"
+    ? validateExternalHandoffImageDataUrl(message.imageDataUrl, mediaTransfer?.maxBytes)
+    : null;
+  if (message.adapter === "cheeseworld" && (
+    mediaTransfer?.source !== "initiatingComposerImage"
+    || mediaTransfer.result !== "replaceSameAttachment"
+    || mediaTransfer.consent !== "perInvocation"
+    || !sourceImage
+    || !mediaTransfer.allowedMimeTypes?.includes(sourceImage.contentType)
+  )) return { ok: false, error: "The requested CheeseWorld media replacement is outside the reviewed declaration." };
+  if (message.adapter !== "cheeseworld" && message.imageDataUrl !== undefined) {
+    return { ok: false, error: "This handoff does not accept composer media." };
+  }
   const targetUrl = externalHandoffUrl(message.adapter, message.target);
   if (!targetUrl) return { ok: false, error: "Unsupported maker destination." };
   let generatedMakerTabId: number | null = null;
@@ -848,12 +862,19 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     if (typeof tab.id !== "number") return { ok: false, error: "The maker tab could not be created." };
     generatedMakerTabId = tab.id;
     await waitForExternalHandoffTab(tab.id, targetUrl.href);
-    const results = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      world: "MAIN",
-      func: renderRemiliaMakerImage,
-      args: [captions.topText, captions.bottomText, message.mode],
-    });
+    const results = message.adapter === "cheeseworld"
+      ? await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: renderCheeseWorldImage,
+        args: [sourceImage!.dataUrl, sourceImage!.contentType, captions.topText, captions.bottomText],
+      })
+      : await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        world: "MAIN",
+        func: renderRemiliaMakerImage,
+        args: [captions.topText, captions.bottomText, message.mode],
+      });
     const result = results[0]?.result as { ok?: boolean; error?: string; imageDataUrl?: string } | undefined;
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
     if (!isSafeMakerImageDataUrl(result.imageDataUrl)) return { ok: false, error: "The maker did not return a usable image." };
@@ -891,6 +912,86 @@ function waitForExternalHandoffTab(tabId: number, expectedHref: string): Promise
 
 function isSafeMakerImageDataUrl(value: unknown): value is string {
   return typeof value === "string" && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(value) && value.length <= 15_000_000;
+}
+
+/** Runs only in the reviewed CheeseWorld tab after an explicit package gesture. */
+async function renderCheeseWorldImage(sourceDataUrl: string, contentType: string, topText: string, bottomText: string): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
+  const waitFor = async <T>(read: () => T | null, message: string, timeoutMs = 20_000): Promise<T> => {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const value = read();
+      if (value) return value;
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
+    }
+    throw new Error(message);
+  };
+  const setInputValue = (input: HTMLInputElement, value: string): void => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    if (!setter) throw new Error("CheeseWorld text controls are unavailable.");
+    setter.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  };
+  try {
+    const upload = await waitFor(
+      () => document.querySelector<HTMLInputElement>("#uploadImage"),
+      "CheeseWorld upload control is unavailable.",
+    );
+    const blob = await fetch(sourceDataUrl).then((response) => response.blob());
+    if (blob.type !== contentType || blob.size < 1 || blob.size > 10 * 1024 * 1024) {
+      return { ok: false, error: "CheeseWorld rejected the source image." };
+    }
+    const transfer = new DataTransfer();
+    transfer.items.add(new File([blob], "milxdy-cheeseworld-source", { type: contentType }));
+    const backgroundCanvas = document.querySelector<HTMLCanvasElement>("#background");
+    if (!backgroundCanvas) return { ok: false, error: "CheeseWorld image canvas is unavailable." };
+    const uploadApplied = new Promise<boolean>((resolve) => {
+      const timeout = window.setTimeout(() => finish(false), 20_000);
+      const observer = new MutationObserver(() => finish(true));
+      const finish = (applied: boolean) => {
+        window.clearTimeout(timeout);
+        observer.disconnect();
+        resolve(applied);
+      };
+      observer.observe(backgroundCanvas, { attributes: true, attributeFilter: ["width", "height"] });
+    });
+    upload.files = transfer.files;
+    upload.dispatchEvent(new Event("input", { bubbles: true }));
+    upload.dispatchEvent(new Event("change", { bubbles: true }));
+    if (!await uploadApplied) return { ok: false, error: "CheeseWorld did not accept the source image." };
+    const top = await waitFor(
+      () => Array.from(document.querySelectorAll<HTMLInputElement>('input[type="text"]')).find((input) => input.placeholder.startsWith("Top Text")) || null,
+      "CheeseWorld top caption is unavailable.",
+    );
+    const bottom = await waitFor(
+      () => Array.from(document.querySelectorAll<HTMLInputElement>('input[type="text"]')).find((input) => input.placeholder.startsWith("Bottom Text")) || null,
+      "CheeseWorld bottom caption is unavailable.",
+    );
+    setInputValue(top, topText);
+    setInputValue(bottom, bottomText);
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+    const filter = await waitFor(
+      () => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find((candidate) => candidate.textContent?.trim().startsWith("Filter Image")) || null,
+      "CheeseWorld deep-fry control is unavailable.",
+    );
+    filter.click();
+    await waitFor(
+      () => Array.from(document.querySelectorAll<HTMLElement>("span")).find((candidate) => candidate.textContent?.includes("Meme cheesed!")) || null,
+      "CheeseWorld did not finish deep-frying the image.",
+      30_000,
+    );
+    const canvas = await waitFor(() => {
+      const container = document.querySelector<HTMLElement>("#generated-canvas");
+      const candidate = container?.querySelector<HTMLCanvasElement>("canvas");
+      return container && !container.classList.contains("hidden") && candidate?.width && candidate.height ? candidate : null;
+    }, "CheeseWorld did not expose the deep-fried image.");
+    const imageDataUrl = canvas.toDataURL("image/png");
+    return /^data:image\/png;base64,[A-Za-z0-9+/=]+$/u.test(imageDataUrl)
+      ? { ok: true, imageDataUrl }
+      : { ok: false, error: "CheeseWorld returned an unsupported result." };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** Runs only in the reviewed maker tab after an explicit package gesture. */

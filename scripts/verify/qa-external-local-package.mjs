@@ -18,6 +18,31 @@ try {
   manifest.siteScopes = manifest.siteScopes.map((scope) => ({ ...scope, surfaces: ["composerAction", "replyAction"] }));
   manifest.composerAction = { label: "Developer Note", presentation: "anchoredPanel", icon: "dev-note-icon.svg" };
   manifest.hostComposerActions = ["nativeDrafts"];
+  manifest.externalHandoffs = [{
+    id: "cheeseworld-deepfry",
+    label: "CHEESEWORLD",
+    adapter: "cheeseworld",
+    target: "deepfry",
+    modes: ["captioned"],
+    captionSource: "packageFields",
+    captionMaxLength: 280,
+    mediaTransfer: {
+      source: "initiatingComposerImage",
+      result: "replaceSameAttachment",
+      consent: "perInvocation",
+      maxBytes: 10 * 1024 * 1024,
+      allowedMimeTypes: ["image/png", "image/jpeg", "image/gif", "image/webp"],
+    },
+  }];
+  manifest.permissions = { hosts: ["https://cult.inc/*"] };
+  manifest.hub.dataNotes.push("After each explicit click and host consent, CheeseWorld receives the initiating composer image and captions; the host replaces only that same attachment and never posts.");
+  manifest.hub.remoteServices = ["CULT, INC. CheeseWorld is contacted only for an explicit per-click same-composer replacement; milXdy never sends the post."];
+  manifest.hub.privacyLabels = ["local-only", "remote-api"];
+  manifest.privacy.permissionNotes.push("https://cult.inc/* is used only by the reviewed CheeseWorld adapter after per-invocation consent.");
+  manifest.privacy.dataNotes.push("After each explicit click and host consent, CheeseWorld receives the initiating composer image and captions; the host replaces only that same attachment and never posts.");
+  manifest.privacy.remoteServices = ["CULT, INC. CheeseWorld is contacted only for an explicit per-click same-composer replacement; milXdy never sends the post."];
+  manifest.privacy.privacyLabels = ["local-only", "remote-api"];
+  manifest.privacy.consentRequired = true;
   manifest.storageKeys.local = [...new Set([...(manifest.storageKeys.local || []), "milxdy.local.dev-note.replyPhrases"])];
   manifest.settings.push({
     id: "dev-note.replyPhrases",
@@ -91,6 +116,7 @@ try {
   assert.match(runtimeRegistry, /replyAction:\s*\{\s*templates:/u, "staged external reply action must reach the runtime registry");
   assert.match(runtimeRegistry, /sendAfterInsert:\s*true/u, "staged external reply action must preserve its explicit send opt-in");
   assert.match(runtimeRegistry, /hostComposerActions:\s*\["nativeDrafts"\]/u, "staged external apps must preserve declared host companion actions");
+  assert.match(runtimeRegistry, /adapter:\s*"cheeseworld"[\s\S]{0,600}?result:\s*"replaceSameAttachment"[\s\S]{0,300}?consent:\s*"perInvocation"/u, "staged external apps must preserve reviewed CheeseWorld media-replacement policy");
   assert.match(runtimeRegistry, /storageListKey:\s*"milxdy\.local\.dev-note\.replyPhrases"/u, "staged external reply actions must preserve bounded storage-list templates");
   assert.match(runtimeRegistry, /composerAction:[\s\S]{0,240}?icon:\s*"local-apps\/dev-note\/dev-note-icon\.svg"/u, "staged external composer icons must be rebased to the package output prefix");
   assert.match(

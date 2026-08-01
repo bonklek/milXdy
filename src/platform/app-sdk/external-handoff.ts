@@ -1,6 +1,6 @@
-export type ExternalHandoffAdapter = "remilia-maker";
+export type ExternalHandoffAdapter = "remilia-maker" | "cheeseworld";
 
-export type ExternalHandoffTarget = "milady" | "remilio" | "bonkler" | "kagami";
+export type ExternalHandoffTarget = "milady" | "remilio" | "bonkler" | "kagami" | "deepfry";
 export type ExternalHandoffMode = "captioned" | "randomMeme";
 
 export type ExternalHandoffRequest = {
@@ -11,6 +11,7 @@ export type ExternalHandoffRequest = {
   mode: ExternalHandoffMode;
   topText: string;
   bottomText: string;
+  imageDataUrl?: string;
 };
 
 export type SplitExternalHandoffText = {
@@ -20,21 +21,42 @@ export type SplitExternalHandoffText = {
 
 export const REMILIA_MAKER_HANDOFF_ORIGIN = "https://maker.remilia.org";
 export const REMILIA_MAKER_HANDOFF_HOST = "https://maker.remilia.org/*";
+export const CHEESEWORLD_HANDOFF_ORIGIN = "https://cult.inc";
+export const CHEESEWORLD_HANDOFF_HOST = "https://cult.inc/*";
+export const MAX_EXTERNAL_HANDOFF_IMAGE_BYTES = 10 * 1024 * 1024;
+export const EXTERNAL_HANDOFF_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 export const MAX_EXTERNAL_HANDOFF_TEXT_LENGTH = 10_000;
 
 const remiliaMakerTargets = new Set<ExternalHandoffTarget>(["milady", "remilio", "bonkler", "kagami"]);
+const externalHandoffTargets = new Set<ExternalHandoffTarget>([...remiliaMakerTargets, "deepfry"]);
 
 export function isExternalHandoffAdapter(value: unknown): value is ExternalHandoffAdapter {
-  return value === "remilia-maker";
+  return value === "remilia-maker" || value === "cheeseworld";
 }
 
 export function isExternalHandoffTarget(value: unknown): value is ExternalHandoffTarget {
-  return typeof value === "string" && remiliaMakerTargets.has(value as ExternalHandoffTarget);
+  return typeof value === "string" && externalHandoffTargets.has(value as ExternalHandoffTarget);
 }
 
 export function externalHandoffUrl(adapter: ExternalHandoffAdapter, target: ExternalHandoffTarget): URL | null {
-  if (adapter !== "remilia-maker" || !isExternalHandoffTarget(target)) return null;
-  return new URL(`/${target}`, REMILIA_MAKER_HANDOFF_ORIGIN);
+  if (adapter === "remilia-maker" && remiliaMakerTargets.has(target)) return new URL(`/${target}`, REMILIA_MAKER_HANDOFF_ORIGIN);
+  if (adapter === "cheeseworld" && target === "deepfry") return new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN);
+  return null;
+}
+
+export function validateExternalHandoffImageDataUrl(value: unknown, maxBytes = MAX_EXTERNAL_HANDOFF_IMAGE_BYTES): {
+  dataUrl: string;
+  contentType: typeof EXTERNAL_HANDOFF_IMAGE_MIME_TYPES[number];
+  byteLength: number;
+} | null {
+  if (typeof value !== "string" || !Number.isInteger(maxBytes) || maxBytes < 1 || maxBytes > MAX_EXTERNAL_HANDOFF_IMAGE_BYTES) return null;
+  const match = /^data:(image\/(?:png|jpeg|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$/u.exec(value);
+  if (!match || !EXTERNAL_HANDOFF_IMAGE_MIME_TYPES.includes(match[1] as typeof EXTERNAL_HANDOFF_IMAGE_MIME_TYPES[number])) return null;
+  const padding = match[2].endsWith("==") ? 2 : match[2].endsWith("=") ? 1 : 0;
+  const byteLength = Math.floor(match[2].length * 3 / 4) - padding;
+  return byteLength >= 1 && byteLength <= maxBytes
+    ? { dataUrl: value, contentType: match[1] as typeof EXTERNAL_HANDOFF_IMAGE_MIME_TYPES[number], byteLength }
+    : null;
 }
 
 /** Accept literal user-entered fields without rewriting their text. */

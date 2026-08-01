@@ -38,6 +38,7 @@ import type {
   AppIconAsset,
   AppContextualPostAction,
   AppDiagnostics,
+  AppExternalHandoff,
   AppLoadState,
   AppPreset,
   AppRuntimeScheduler,
@@ -2323,6 +2324,49 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const openNativeDrafts = () => openNativeDraftsFor(button, close);
+    type ComposerImageReplacement = {
+      composerScope: ParentNode;
+      removeButton: HTMLButtonElement;
+      originalDataUrl: string;
+      contentType: string;
+    };
+    const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The composer image could not be read."));
+      reader.onerror = () => reject(reader.error || new Error("The composer image could not be read."));
+      reader.readAsDataURL(blob);
+    });
+    const prepareComposerImageReplacement = async (composerScope: ParentNode, handoff: AppExternalHandoff): Promise<ComposerImageReplacement | { error: string }> => {
+      const transfer = handoff.mediaTransfer;
+      if (!transfer || transfer.source !== "initiatingComposerImage" || transfer.result !== "replaceSameAttachment" || transfer.consent !== "perInvocation") {
+        return { error: "This package does not declare reviewed composer-image replacement." };
+      }
+      const removeButtons = Array.from(composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
+      if (removeButtons.length !== 1) return { error: "CheeseWorld requires exactly one existing composer image." };
+      const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
+        .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
+      let blob: Blob | null = input?.files?.length === 1 ? input.files[0] : null;
+      if (!blob) {
+        const previews = Array.from(composerScope.querySelectorAll<HTMLImageElement>('[data-testid="attachments"] img[src]'))
+          .filter((candidate) => candidate.offsetParent !== null && /^(?:blob:|data:image\/)/u.test(candidate.src));
+        if (previews.length !== 1) return { error: "The existing composer image cannot be transferred safely." };
+        try {
+          blob = await fetch(previews[0].src).then((response) => response.blob());
+        } catch (error) {
+          return { error: errorMessage(error) };
+        }
+      }
+      if (!blob) return { error: "The existing composer image cannot be transferred safely." };
+      if (!transfer.allowedMimeTypes.some((type) => type === blob.type) || blob.size < 1 || blob.size > transfer.maxBytes) {
+        return { error: "The composer image type or size is outside the reviewed CheeseWorld limits." };
+      }
+      return {
+        composerScope,
+        removeButton: removeButtons[0],
+        originalDataUrl: await blobToDataUrl(blob),
+        contentType: blob.type,
+      };
+    };
     const launchExternalHandoff = async (id: string, options?: {
       mode?: "captioned" | "randomMeme";
       captions?: { topText: string; bottomText: string };
@@ -2349,7 +2393,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         : Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
           .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
       const split = explicitCaptions || splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
-      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme") return { ok: false, error: usesPackageFields ? "Enter a top or bottom caption before opening a maker." : "Write a draft before opening a maker." };
+      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme" && !handoff.mediaTransfer) return { ok: false, error: usesPackageFields ? "Enter a top or bottom caption before opening a maker." : "Write a draft before opening a maker." };
+      let replacement: ComposerImageReplacement | null = null;
+      if (handoff.mediaTransfer) {
+        const accepted = window.confirm("Send this composer image and the Top/Bottom captions to CULT, INC. CheeseWorld to deep-fry it, then replace only this attachment? milXdy will not post.");
+        if (!accepted) return { ok: false, error: "CheeseWorld replacement cancelled." };
+        const prepared = await prepareComposerImageReplacement(composerScope, handoff);
+        if ("error" in prepared) return { ok: false, error: prepared.error };
+        replacement = prepared;
+      }
       const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string }>({
         type: "milxdy:externalHandoff",
         appId: app.id,
@@ -2358,9 +2410,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         target: handoff.target,
         mode,
         ...(split || { topText: "", bottomText: "" }),
+        ...(replacement ? { imageDataUrl: replacement.originalDataUrl } : {}),
       });
       const result = response && response.ok === true
-        ? await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")
+        ? replacement
+          ? await replaceComposerImage(replacement, response.imageDataUrl)
+          : await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")
         : { ok: false, error: response?.error || "The maker handoff could not start." };
       recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
       return result;
@@ -2421,7 +2476,25 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordRuntimeDiagnostic(`remoteQueryAttachment.${app.id}`, { query: query.id, ok: result.ok, updatedAt: Date.now() });
       return result;
     };
-    const attachImageToComposer = async (composerScope: ParentNode, imageDataUrl: string | undefined, fileName: string): Promise<{ ok: boolean; error?: string }> => {
+    const replaceComposerImage = async (replacement: ComposerImageReplacement, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
+      const currentScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const scopeNode = replacement.composerScope as Node;
+      const removeButtons = Array.from(replacement.composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
+      if (!button.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected) {
+        return { ok: false, error: "The initiating composer or its image changed before CheeseWorld finished." };
+      }
+      replacement.removeButton.click();
+      const deadline = Date.now() + 3_000;
+      while (replacement.removeButton.isConnected && Date.now() < deadline) {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+      }
+      if (replacement.removeButton.isConnected) return { ok: false, error: "X did not release the original composer image." };
+      const attached = await attachImageToComposer(replacement.composerScope, imageDataUrl, "cheeseworld-deepfry.png", false);
+      if (attached.ok) return attached;
+      const restored = await attachImageToComposer(replacement.composerScope, replacement.originalDataUrl, "cheeseworld-original", false);
+      return { ok: false, error: restored.ok ? attached.error : `${attached.error || "Replacement failed"} The original image could not be restored.` };
+    };
+    const attachImageToComposer = async (composerScope: ParentNode, imageDataUrl: string | undefined, fileName: string, preserveExisting = true): Promise<{ ok: boolean; error?: string }> => {
       if (typeof imageDataUrl !== "string" || !/^data:image\/(?:png|jpeg|gif|webp);base64,/u.test(imageDataUrl)) {
         return { ok: false, error: "The image handoff returned unsupported media." };
       }
@@ -2435,7 +2508,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if (!input) return { ok: false, error: "X's media control is unavailable." };
         // X accepts a bounded image FileList. Preserve its current draft files so
         // successive explicit gallery clicks accumulate instead of replacing them.
-        const existingFiles = Array.from(input.files || []);
+        const existingFiles = preserveExisting ? Array.from(input.files || []) : [];
         const maxAttachments = 4;
         if (existingFiles.length >= maxAttachments) {
           return { ok: false, error: `X's composer supports up to ${maxAttachments} images.` };

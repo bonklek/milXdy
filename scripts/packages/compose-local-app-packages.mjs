@@ -71,6 +71,10 @@ const supportedExternalHandoffAdapters = new Map([
     host: "https://maker.remilia.org/*",
     targets: new Set(["milady", "remilio", "bonkler", "kagami"]),
   }],
+  ["cheeseworld", {
+    host: "https://cult.inc/*",
+    targets: new Set(["deepfry"]),
+  }],
 ]);
 const supportedRemoteQueryAdapters = new Map([
   ["remibooru", {
@@ -1032,6 +1036,28 @@ function verifyExternalHandoffs(id, manifest, errors) {
       if (!/explicit/.test(disclosures) || !/(caption|top text|bottom text)/.test(disclosures)) {
         errors.push(`${id}: package-field captions require an explicit caption-transfer privacy disclosure`);
       }
+    }
+    if (handoff.adapter === "cheeseworld") {
+      const transfer = handoff.mediaTransfer;
+      const allowedTypes = new Set(["image/png", "image/jpeg", "image/gif", "image/webp"]);
+      if (!transfer || transfer.source !== "initiatingComposerImage" || transfer.result !== "replaceSameAttachment" || transfer.consent !== "perInvocation") {
+        errors.push(`${id}: cheeseworld requires per-invocation initiating-composer image replacement`);
+      }
+      if (!Number.isInteger(transfer?.maxBytes) || transfer.maxBytes < 1 || transfer.maxBytes > 10 * 1024 * 1024) {
+        errors.push(`${id}: cheeseworld mediaTransfer maxBytes must be an integer from 1 through 10485760`);
+      }
+      if (!Array.isArray(transfer?.allowedMimeTypes) || transfer.allowedMimeTypes.length < 1 || transfer.allowedMimeTypes.some((type) => !allowedTypes.has(type)) || new Set(transfer.allowedMimeTypes).size !== transfer.allowedMimeTypes.length) {
+        errors.push(`${id}: cheeseworld mediaTransfer allowedMimeTypes must be unique reviewed image MIME types`);
+      }
+      if (handoff.captionSource !== "packageFields" || handoff.modes?.length !== 1 || handoff.modes[0] !== "captioned") {
+        errors.push(`${id}: cheeseworld requires bounded packageFields captions in captioned mode`);
+      }
+      const disclosures = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.remoteServices || [])].join(" ").toLowerCase();
+      if (!/(cheeseworld|cult)/.test(disclosures) || !/per[- ]?(?:click|invocation)|each click/.test(disclosures) || !/replac/.test(disclosures) || !/(same|initiating).*(composer|draft)/.test(disclosures) || !/(never|does not).*(post|send)/.test(disclosures)) {
+        errors.push(`${id}: cheeseworld requires per-click same-composer replacement and no-post disclosure`);
+      }
+    } else if (handoff.mediaTransfer !== undefined) {
+      errors.push(`${id}: mediaTransfer is available only to the reviewed cheeseworld adapter`);
     }
     if (!(manifest.permissions?.hosts || []).includes(adapter.host)) {
       errors.push(`${id}: externalHandoff ${handoff.id} must declare host permission ${adapter.host}`);

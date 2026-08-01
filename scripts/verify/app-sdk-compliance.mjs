@@ -7,6 +7,7 @@ const registryPath = "src/platform/app-sdk/first-party-apps.json";
 const registry = JSON.parse(await readFile(registryPath, "utf8"));
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
+const externalHandoffContract = await readFile("src/platform/app-sdk/external-handoff.ts", "utf8");
 const contentRuntime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
 const backgroundMessagePolicy = await readFile("src/platform/runtime/background-message-policy.ts", "utf8");
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
@@ -82,6 +83,8 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, 'source: "visibleDraftKeywords"', "Remote query suggestions must declare their bounded visible-draft source");
   requireIncludes(contentRuntime, "deriveComposerKeywordSuggestions", "Composer suggestions must remain host-derived and sanitized");
   requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
+  requireIncludes(appPlatform, 'result: "replaceSameAttachment"', "Reviewed media handoffs must declare same-attachment replacement");
+  requireIncludes(appPlatform, 'consent: "perInvocation"', "Reviewed media replacement must require consent on every invocation");
   requireIncludes(appPlatform, "captions?: { topText: string; bottomText: string }", "Composer actions must support bounded explicit caption fields");
   requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
   requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
@@ -143,6 +146,9 @@ function verifyPlatformContract() {
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
   requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
   requireIncludes(background, "renderRemiliaMakerImage", "External maker handoffs must be host-owned adapter code");
+  requireIncludes(background, "renderCheeseWorldImage", "CheeseWorld deep-fry must remain a reviewed host-owned adapter");
+  requireIncludes(externalHandoffContract, 'new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN)', "CheeseWorld handoff must use its fixed reviewed destination");
+  requireIncludes(background, "validateExternalHandoffImageDataUrl", "CheeseWorld input must be MIME- and size-validated by the host");
   requireIncludes(background, "active: false", "Reviewed maker handoffs must open inactive tabs");
   requireIncludes(background, "finally {", "Reviewed maker handoffs must clean up generated inactive tabs after success or failure");
   requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
@@ -155,6 +161,9 @@ function verifyPlatformContract() {
   requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");
   requireIncludes(contentRuntime, 'type: "milxdy:remoteQueryAttach"', "Remote result attachments must use the host-routed background bridge");
   requireIncludes(contentRuntime, "new File([blob], fileName", "The host must attach reviewed image handoffs through X's existing media control");
+  requireIncludes(contentRuntime, "prepareComposerImageReplacement", "Composer media replacement must capture and bind the initiating attachment in host code");
+  requireIncludes(contentRuntime, "removeButtons[0] !== replacement.removeButton", "Composer media replacement must fail closed if the initiating attachment identity changes");
+  requireIncludes(contentRuntime, "window.confirm", "Composer media replacement must require visible per-click host consent");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
   requireIncludes(contentRuntime, "activeComposerAction.panel.isConnected", "Composer actions must discard stale panels reconciled away by X before reopening");
