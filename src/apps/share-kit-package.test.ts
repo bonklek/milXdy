@@ -10,6 +10,7 @@ import {
   setTweetPngSettingsOpen,
   shouldCloseTweetPngReview,
   tweetPngPalette,
+  tweetPngLinkCardLabels,
   tweetPngWatermarkColor,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
@@ -209,6 +210,20 @@ describe("Share Kit package compatibility", () => {
       iconUrl: "https://abs.twimg.com/ethereum.png",
     });
     expect(extractTweetPngCashtag(post)?.chartUrl).toContain(encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg"'));
+  });
+
+  it("captures and themes external link-card embeds", () => {
+    expect(tweetPngLinkCardLabels([
+      "EXCLUSIVE: Pump.fun Laid Off Employees Two Months Before Token Vesting",
+      "From sandmark.com",
+    ])).toEqual({
+      title: "EXCLUSIVE: Pump.fun Laid Off Employees Two Months Before Token Vesting",
+      source: "From sandmark.com",
+    });
+    expect(packageSource).toContain('[data-testid="card.wrapper"]');
+    expect(packageSource).toContain("drawTweetPngLinkCard(context, linkCard");
+    expect(packageSource).toContain('tweetPngMediaRemovalKey("embed", card.image.src)');
+    expect(packageSource).toContain("palette.mediaFill");
   });
 
   it("selects the enclosing QRT card instead of its nested photo link", () => {
