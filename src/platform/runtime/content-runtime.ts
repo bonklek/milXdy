@@ -2397,6 +2397,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             : "webp";
       return `remibooru-result.${extension}`;
     };
+    const composerImageAttachmentCount = (composerScope: ParentNode): number =>
+      composerScope.querySelectorAll('button[aria-label*="remove media" i], button[data-testid="removeMedia"]').length;
     const attachRemoteQueryResult: MilxdyComposerActionContext["attachRemoteQueryResult"] = async (id, itemId) => {
       if (!navigator.userActivation?.isActive) return { ok: false, error: "Attach a gallery result from its control." };
       const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
@@ -2407,6 +2409,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         return { ok: false, error: "This gallery result is invalid." };
       }
       const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      if (composerImageAttachmentCount(composerScope) >= 4) {
+        return { ok: false, error: "X's composer supports up to 4 images." };
+      }
       const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string; contentType?: string }>({
         type: "milxdy:remoteQueryAttach", appId: app.id, queryId: query.id, itemId,
       });
