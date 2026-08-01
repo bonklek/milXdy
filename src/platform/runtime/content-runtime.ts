@@ -2192,7 +2192,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function createNativeDraftsIcon(): SVGSVGElement {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("viewBox", "0 0 24 24");
+    svg.setAttribute("viewBox", "3 2 18 20");
     svg.setAttribute("aria-hidden", "true");
     svg.setAttribute("focusable", "false");
     svg.classList.add("milxdy-composer-drafts-icon");
@@ -2483,7 +2483,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .milxdy-composer-action { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: rgb(83, 100, 113); font: 700 15px/1 system-ui; line-height: 0; cursor: pointer; }
       .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible, .milxdy-composer-action[aria-expanded="true"] { background: rgba(15, 20, 25, .10); outline: none; }
       .milxdy-composer-action img { display: block; width: 18px; height: 18px; margin: 0; object-fit: contain; }
-      .milxdy-composer-drafts-icon { display: block; width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transform: translateY(2px); }
+      .milxdy-composer-drafts-icon { display: block; width: 20px; height: 20px; margin: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
       .milxdy-standard-counter-zero-fallback { color: rgb(83, 100, 113); font: 400 13px/10.4px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
       html[data-milxdy-x-theme="dark"] .milxdy-composer-action,
       html[data-milxdy-x-theme="dim"] .milxdy-composer-action { color: rgb(139, 152, 165); }
