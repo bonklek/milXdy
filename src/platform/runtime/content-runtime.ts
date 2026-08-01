@@ -2507,9 +2507,21 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       if (replacement.removeButton.isConnected) return { ok: false, error: "X did not release the original composer image." };
       const attached = await attachImageToComposer(replacement.composerScope, imageDataUrl, "cheeseworld-deepfry.png", false);
-      if (attached.ok) return attached;
+      const replacementAccepted = attached.ok && await waitForComposerImage(replacement.composerScope, replacement.removeButton);
+      if (replacementAccepted) return { ok: true };
       const restored = await attachImageToComposer(replacement.composerScope, replacement.originalDataUrl, "cheeseworld-original", false);
-      return { ok: false, error: restored.ok ? attached.error : `${attached.error || "Replacement failed"} The original image could not be restored.` };
+      const restoreAccepted = restored.ok && await waitForComposerImage(replacement.composerScope, replacement.removeButton);
+      const replacementError = attached.error || "X did not accept the CheeseWorld replacement image.";
+      return { ok: false, error: restoreAccepted ? `${replacementError} The original image was restored.` : `${replacementError} The original image could not be restored.` };
+    };
+    const waitForComposerImage = async (composerScope: ParentNode, previousRemoveButton: HTMLButtonElement): Promise<boolean> => {
+      const deadline = Date.now() + 5_000;
+      while (Date.now() < deadline) {
+        const removeButtons = Array.from(composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
+        if (removeButtons.length === 1 && removeButtons[0] !== previousRemoveButton && removeButtons[0].isConnected) return true;
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
+      }
+      return false;
     };
     const attachImageToComposer = async (composerScope: ParentNode, imageDataUrl: string | undefined, fileName: string, preserveExisting = true): Promise<{ ok: boolean; error?: string }> => {
       if (typeof imageDataUrl !== "string" || !/^data:image\/(?:png|jpeg|gif|webp);base64,/u.test(imageDataUrl)) {

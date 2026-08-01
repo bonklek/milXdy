@@ -24,6 +24,7 @@ export const REMILIA_MAKER_HANDOFF_HOST = "https://maker.remilia.org/*";
 export const CHEESEWORLD_HANDOFF_ORIGIN = "https://cult.inc";
 export const CHEESEWORLD_HANDOFF_HOST = "https://cult.inc/*";
 export const MAX_EXTERNAL_HANDOFF_IMAGE_BYTES = 10 * 1024 * 1024;
+export const EXTERNAL_HANDOFF_RENDER_TIMEOUT_MS = 45_000;
 export const EXTERNAL_HANDOFF_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
 export const MAX_EXTERNAL_HANDOFF_TEXT_LENGTH = 10_000;
 
@@ -57,6 +58,21 @@ export function validateExternalHandoffImageDataUrl(value: unknown, maxBytes = M
   return byteLength >= 1 && byteLength <= maxBytes
     ? { dataUrl: value, contentType: match[1] as typeof EXTERNAL_HANDOFF_IMAGE_MIME_TYPES[number], byteLength }
     : null;
+}
+
+export async function withExternalHandoffTimeout<T>(task: Promise<T>, timeoutMs = EXTERNAL_HANDOFF_RENDER_TIMEOUT_MS): Promise<T> {
+  if (!Number.isFinite(timeoutMs) || timeoutMs < 1) throw new Error("The maker timeout is invalid.");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error("The maker did not finish in time.")), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 /** Accept literal user-entered fields without rewriting their text. */

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { externalHandoffUrl, splitExternalHandoffText, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl } from "./external-handoff";
+import { externalHandoffUrl, splitExternalHandoffText, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, withExternalHandoffTimeout } from "./external-handoff";
 
 describe("external maker handoff", () => {
   it("uses the sole newline as a caption boundary", () => {
@@ -27,6 +27,11 @@ describe("external maker handoff", () => {
     });
     expect(validateExternalHandoffImageDataUrl("data:image/svg+xml;base64,AQID", 3)).toBeNull();
     expect(validateExternalHandoffImageDataUrl("data:image/png;base64,AQID", 2)).toBeNull();
+  });
+
+  it("fails a stalled inactive-tab render within the host deadline", async () => {
+    await expect(withExternalHandoffTimeout(new Promise<never>(() => undefined), 5))
+      .rejects.toThrow("The maker did not finish in time.");
   });
 
   it("preserves explicit package captions exactly within the declared bound", () => {
