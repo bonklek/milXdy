@@ -1032,7 +1032,11 @@ async function renderRemiliaMakerImage(topText: string, bottomText: string, mode
     setInput(top, topText);
     setInput(bottom, bottomText);
   } else {
+    // The maker applies a random meme preset asynchronously.  Do not capture
+    // the already-rendered base token while its new preset is still pending;
+    // this is especially visible when both package caption fields are empty.
     randomMeme.click();
+    await waitForRender();
   }
   // The reviewed maker exposes its complete renderer only from its own main
   // world. Rendering there preserves its selected layers, text treatment, and
