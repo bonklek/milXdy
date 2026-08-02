@@ -15,7 +15,7 @@ The current release is **0.2.4 — Composer Kit**. See the [0.2.4 release notes]
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
 - **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
-- **Composer Kit**: quick replies, native X Drafts routing, Remibooru reaction search and contribution, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
+- **Composer Kit**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that turns an explicitly selected Maker PNG and declared traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
@@ -81,7 +81,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | --- | --- |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Apps & Features and side rail](docs/guides/apps-hub-and-side-rail.md) | Enable apps/features, pin rail icons, choose Lite/Balanced/Full setup, and manage the dock. |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Root Visual Enhancements](docs/guides/root-visual-enhancements.md) | Appearance presets, visual polish, sounds, notifications, and performance-related visual behavior. |
-| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Composer Kit](docs/guides/composer-kit.md) | Use quick replies, native Drafts, Remibooru reactions/contributions, and reviewed Maker handoffs. |
+| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Composer Kit](docs/guides/composer-kit.md) | Use quick replies, native Drafts, Remibooru reactions, and reviewed Maker handoffs. |
 | <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Share Kit — Tweet PNG](docs/guides/tweet-png.md) | Review and export local PNG images or stage one deliberately in RemiNet Chat. |
 | <img src="catalog/assets/addons/pets-maker.svg" alt="" width="20"> [Pets Maker](docs/guides/custom-pet-export.md) | Install the optional add-on, declare Maker traits, and export a validated local pet-request ZIP. |
 | <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Hyperlinks](docs/guides/remilia-wiki-hyperlinks.md) | Inline wiki links, hover previews, match limits, debug mode, and link styling. |

@@ -29,23 +29,6 @@ instead.
 Composer Kit does not receive original-media URLs or image bytes, and it does
 not maintain a local media cache or saved-media collection.
 
-## Publish an image to Remibooru
-
-Use the **Upload to Remibooru** context action on an eligible visible X-hosted
-image. The panel shows the selected image type and dimensions, the public
-Remibooru destination, and controls for up to 12 bounded tags.
-
-1. Review the selected image and destination.
-2. Add or remove tags. **Get tag ideas in Grok** opens a visible assistant prompt; it does not silently edit the tags.
-3. Click **Publish to Remibooru**. That visible button is the final upload action.
-4. On success, use **View on Remibooru** to open the canonical post.
-
-There is no extra rights checkbox, ownership attestation, source-attribution
-field, or narrative disclosure step. Nothing uploads before the visible Publish
-action. If authentication, contributor access, CAPTCHA/anti-abuse behavior,
-format limits, moderation, duplication, rate limits, or upstream availability
-blocks the reviewed flow, use **Open native uploader**.
-
 ## Maker handoffs
 
 The Factory control offers reviewed Milady, Remilio, Bonkler, and Kagami Maker
@@ -58,9 +41,11 @@ receive X draft text, inspect the Maker page, or post the result.
 
 - Composer Kit has no direct X DOM, browser-tab, clipboard, cookie, or raw extension-message access.
 - Remibooru search sends only the explicit query/facets, bounded page size, and pagination cursor.
-- The contribution flow gives the package only an opaque, short-lived media handle and bounded tags; the host owns image bytes and Remibooru session use.
 - Maker handoffs send only user-reviewed declared caption fields.
-- Every composer, reply, attachment, contribution, and maker action begins with an explicit user control.
+- Every composer, reply, attachment, and maker action begins with an explicit user control.
+
+Publishing media to Remibooru is planned for 0.2.5 and is not part of the
+0.2.4 Composer Kit surface.
 
 See [Privacy and permissions](../getting-started/PRIVACY_AND_PERMISSIONS.md)
 for the complete remote-service and storage summary.

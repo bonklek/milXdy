@@ -14,7 +14,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
-- Composer Kit queries public reaction metadata and performs explicit member contributions through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
+- Composer Kit queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
@@ -78,18 +78,6 @@ initiating composer and immediately discards the raw text. Composer Kit receives
 sanitized result IDs, thumbnail URLs, canonical post URLs, display dimensions,
 and visible attribution—not original-media URLs or raw service responses. A
 result attaches only after an explicit click and never posts.
-
-For **Publish to Remibooru**, the user first selects an eligible visible
-X-hosted image through the declared context action. The host downloads that
-image without X credentials, keeps its bytes behind an opaque short-lived
-handle, and shows the package only type/dimension metadata. The package submits
-that handle plus up to 12 user-entered tags only after the visible **Publish to
-Remibooru** click. The host uses the user's Remibooru browser session for the
-reviewed member upload and returns only success/error state and a canonical post
-URL. The flow has no second rights checkbox, ownership attestation,
-source-attribution field, or narrative disclosure form. Native Remibooru remains
-the fallback for authentication, contributor access, CAPTCHA/anti-abuse,
-moderation, duplicate, rate-limit, unsupported-media, and upstream changes.
 
 Maker handoffs send only user-reviewed declared caption fields to the selected
 `maker.remilia.org` surface after an explicit control. Composer Kit cannot read
