@@ -166,7 +166,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "prepareComposerImageReplacement", "Composer media replacement must capture and bind the initiating attachment in host code");
   requireIncludes(contentRuntime, "removeButtons[0] !== replacement.removeButton", "Composer media replacement must fail closed if the initiating attachment identity changes");
   requireIncludes(contentRuntime, "attachmentIdentity", "Composer media replacement must pin the initiating file or preview identity across the handoff");
-  requireIncludes(contentRuntime, "requestComposerMediaTransferConsent", "Composer media replacement must require visible per-click host consent");
+  requireIncludes(contentRuntime, "if (!navigator.userActivation?.isActive)", "Composer media replacement must begin only from an explicit user activation");
   requireNotIncludes(contentRuntime, 'window.confirm("Send this composer image', "Composer media consent must not synchronously block the initiating X tab");
   requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
   requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");

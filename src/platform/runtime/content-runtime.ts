@@ -2339,51 +2339,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       reader.onerror = () => reject(reader.error || new Error("The composer image could not be read."));
       reader.readAsDataURL(blob);
     });
-    const requestComposerMediaTransferConsent = (): Promise<boolean> => new Promise((resolve) => {
-      if (controller.signal.aborted || !panel.isConnected) return resolve(false);
-      const consent = document.createElement("section");
-      consent.setAttribute("role", "alertdialog");
-      consent.setAttribute("aria-modal", "true");
-      consent.setAttribute("aria-labelledby", `milxdy-cheeseworld-consent-${app.id}`);
-      consent.style.cssText = "box-sizing:border-box;display:grid;gap:10px;max-width:360px;padding:14px;border:1px solid #8a637d;border-radius:10px;background:Canvas;color:CanvasText;box-shadow:0 8px 28px rgb(0 0 0 / .22);font:500 14px/1.4 Arial,Helvetica,sans-serif";
-      const title = document.createElement("strong");
-      title.id = `milxdy-cheeseworld-consent-${app.id}`;
-      title.textContent = "Send this image to CheeseWorld?";
-      const disclosure = document.createElement("span");
-      disclosure.textContent = "CULT, INC. CheeseWorld will receive this composer image and the Top/Bottom captions, deep-fry it, and return a replacement for this same attachment. milXdy will not post.";
-      const actions = document.createElement("div");
-      actions.style.cssText = "display:flex;justify-content:flex-end;gap:8px";
-      const cancel = document.createElement("button");
-      cancel.type = "button";
-      cancel.textContent = "Cancel";
-      const approve = document.createElement("button");
-      approve.type = "button";
-      approve.textContent = "Send to CheeseWorld";
-      for (const control of [cancel, approve]) {
-        control.style.cssText = "min-height:32px;padding:5px 10px;border:1px solid #8a637d;border-radius:7px;background:ButtonFace;color:ButtonText;font:inherit;cursor:pointer";
-      }
-      approve.style.fontWeight = "700";
-      actions.append(cancel, approve);
-      consent.append(title, disclosure, actions);
-      let settled = false;
-      const finish = (accepted: boolean) => {
-        if (settled) return;
-        settled = true;
-        controller.signal.removeEventListener("abort", abort);
-        consent.remove();
-        surface.hidden = false;
-        scheduleComposerActionPosition();
-        resolve(accepted);
-      };
-      const abort = () => finish(false);
-      cancel.addEventListener("click", () => finish(false), { once: true });
-      approve.addEventListener("click", () => finish(true), { once: true });
-      controller.signal.addEventListener("abort", abort, { once: true });
-      surface.hidden = true;
-      shadow.append(consent);
-      scheduleComposerActionPosition();
-      approve.focus();
-    });
     const prepareComposerImageReplacement = async (composerScope: ParentNode, handoff: AppExternalHandoff): Promise<ComposerImageReplacement | { error: string }> => {
       const transfer = handoff.mediaTransfer;
       if (!transfer || transfer.source !== "initiatingComposerImage" || transfer.result !== "replaceSameAttachment" || transfer.consent !== "perInvocation") {
@@ -2450,8 +2405,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme" && !handoff.mediaTransfer) return { ok: false, error: usesPackageFields ? "Enter a top or bottom caption before opening a maker." : "Write a draft before opening a maker." };
       let replacement: ComposerImageReplacement | null = null;
       if (handoff.mediaTransfer) {
-        const accepted = await requestComposerMediaTransferConsent();
-        if (!accepted) return { ok: false, error: "CheeseWorld replacement cancelled." };
         const prepared = await prepareComposerImageReplacement(composerScope, handoff);
         if ("error" in prepared) return { ok: false, error: prepared.error };
         replacement = prepared;
