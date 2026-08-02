@@ -116,7 +116,7 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "const openBelow = spaceBelow >= naturalHeight || spaceBelow >= spaceAbove;", "Composer panels must choose the viewport side with enough reachable space");
   requireIncludes(contentRuntime, "panel.dataset.placement = openBelow ? \"bottom\" : \"top\";", "Composer panels must record their responsive above/below placement");
   requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);", "Composer panels must adapt when package content changes size");
-  requireIncludes(contentRuntime, "const openNativeDrafts = () => openNativeDraftsFor(button, close);", "Composer packages must use the host-owned X Drafts handoff");
+  requireIncludes(contentRuntime, "const openNativeDrafts = () => openNativeDraftsFor(currentButton(), close);", "Composer packages must use the host-owned X Drafts handoff from the current rebound control");
   requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
   requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
   requireIncludes(contentRuntime, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
