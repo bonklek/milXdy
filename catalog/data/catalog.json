@@ -236,13 +236,13 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "examples/packages/first-party-replacements/tweetPng",
-            "packageSha256": "e9dea400638010cfbf224c099f1761da5be36d469dd9aaa5e8a81820a810eeda",
+            "packageSha256": "63e7b0edf520503c699070c28c7843d54f365b18ab3667c09fe66a0e1099c45c",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
             "reviewedBy": "milxdy-first-party-share-kit",
-            "reviewedAt": "2026-07-30",
+            "reviewedAt": "2026-08-02",
             "notes": [
               "Reviewed first-party replacement preserving the stable tweetPng identity and existing visual/profile settings."
             ]

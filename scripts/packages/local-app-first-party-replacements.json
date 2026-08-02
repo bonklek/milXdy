@@ -9,7 +9,7 @@
         "catalog/tweetPng",
         "catalog-staging/tweetPng"
       ],
-      "packageSha256": "e9dea400638010cfbf224c099f1761da5be36d469dd9aaa5e8a81820a810eeda",
+      "packageSha256": "63e7b0edf520503c699070c28c7843d54f365b18ab3667c09fe66a0e1099c45c",
       "reason": "Reviewed Share Kit replacement preserving the stable tweetPng identity and settings."
     },
     {
