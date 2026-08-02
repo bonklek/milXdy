@@ -1,6 +1,7 @@
 // examples/packages/first-party-replacements/tweetPng/src/content.ts
 var RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 var VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
+var TWEET_PNG_QUOTE_BORDER_WIDTH = 4;
 var DEFAULT_VISUAL_THEME = {
   tweetPngIncludeImages: true,
   tweetPngIncludeQuoteText: true,
@@ -677,7 +678,7 @@ function drawTweetPngQuote(context, options) {
   context.fill();
   if (visualTheme.tweetPngBorder) {
     context.strokeStyle = options.palette.quoteBorder;
-    context.lineWidth = 2;
+    context.lineWidth = TWEET_PNG_QUOTE_BORDER_WIDTH;
     context.stroke();
   }
   let y = options.y + padding + 6;
@@ -1371,6 +1372,7 @@ function injectTweetPngStyles() {
   document.documentElement.appendChild(style);
 }
 export {
+  TWEET_PNG_QUOTE_BORDER_WIDTH,
   copyTweetPngFromTweet,
   disable,
   extractTweetPngCashtag,
