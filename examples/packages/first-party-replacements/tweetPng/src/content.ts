@@ -2,6 +2,7 @@ import type { MilxdyContextualPostActionContext, MilxdyRouteChange } from "../..
 
 const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
+export const TWEET_PNG_QUOTE_BORDER_WIDTH = 4;
 
 type VisualThemeSettings = {
   tweetPngIncludeImages: boolean;
@@ -989,7 +990,7 @@ function drawTweetPngQuote(
   context.fill();
   if (visualTheme.tweetPngBorder) {
     context.strokeStyle = options.palette.quoteBorder;
-    context.lineWidth = 2;
+    context.lineWidth = TWEET_PNG_QUOTE_BORDER_WIDTH;
     context.stroke();
   }
 

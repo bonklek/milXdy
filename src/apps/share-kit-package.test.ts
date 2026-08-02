@@ -9,6 +9,7 @@ import {
   normalizeVisualTheme,
   setTweetPngSettingsOpen,
   shouldCloseTweetPngReview,
+  TWEET_PNG_QUOTE_BORDER_WIDTH,
   tweetPngPalette,
   tweetPngLinkCardLabels,
   tweetPngWatermarkColor,
@@ -67,6 +68,11 @@ describe("Share Kit package compatibility", () => {
       mediaFill: "#15202b",
       quoteBorder: "#a8cef5",
     });
+  });
+
+  it("uses a heavier border to distinguish quoted posts", () => {
+    expect(TWEET_PNG_QUOTE_BORDER_WIDTH).toBe(4);
+    expect(packageSource).toContain("context.lineWidth = TWEET_PNG_QUOTE_BORDER_WIDTH");
   });
 
   it("opens and closes settings with synchronized accessible state", () => {
