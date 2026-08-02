@@ -69,9 +69,11 @@ import {
     mode: "assemble" | "smash";
     craftingSlots: Record<string, string | null>;
     assignToSlot: (slotId: string, itemType: string) => void;
+    removeFromSlot: (slotId: string) => void;
     selectedHammer: string | null;
     selectedSacrificeBeetle: string | null;
     selectHammer: (itemType: string) => void;
+    clearHammer: () => void;
     selectSacrifice: (itemType: string) => void;
   };
 
@@ -121,7 +123,9 @@ import {
     return (record.mode === "assemble" || record.mode === "smash")
       && Boolean(record.craftingSlots && typeof record.craftingSlots === "object")
       && typeof record.assignToSlot === "function"
+      && typeof record.removeFromSlot === "function"
       && typeof record.selectHammer === "function"
+      && typeof record.clearHammer === "function"
       && typeof record.selectSacrifice === "function";
   }
 
@@ -286,6 +290,40 @@ import {
     event.preventDefault();
     event.stopImmediatePropagation();
   }
+
+  document.addEventListener("contextmenu", (event) => {
+    if (!enabled || new URLSearchParams(location.search).get("cartridge") !== "craft") return;
+    const target = event.target instanceof Element ? event.target : null;
+    const craft = target?.closest(".crafting-module");
+    if (!target || !craft) return;
+    const store = craftingStoreFor(target, craft);
+    if (!store) return;
+
+    const materialSlot = target.closest<HTMLElement>(
+      ".crafting-module__input-slot:not(.crafting-module__input-slot--5)",
+    );
+    if (materialSlot) {
+      const materialSlots = Array.from(craft.querySelectorAll<HTMLElement>(
+        ".crafting-module__input-slot:not(.crafting-module__input-slot--5)",
+      )).slice(0, 3);
+      const slotIndex = materialSlots.indexOf(materialSlot);
+      const slotId = slotIndex >= 0 ? `input${slotIndex + 1}` : null;
+      if (!slotId || !store.craftingSlots[slotId]) return;
+      stopCraftingGesture(event);
+      store.removeFromSlot(slotId);
+      document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, `removed-${slotId}`);
+      return;
+    }
+
+    const smashSlots = Array.from(craft.querySelectorAll<HTMLElement>(
+      ".crafting-module__smash-input-slots .crafting-module__smash-input-slot",
+    ));
+    const hammerSlot = target.closest<HTMLElement>(".crafting-module__smash-input-slot");
+    if (!hammerSlot || smashSlots[0] !== hammerSlot || !store.selectedHammer) return;
+    stopCraftingGesture(event);
+    store.clearHammer();
+    document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, "removed-hammer");
+  }, true);
 
   function installCraftingKeyboardShortcut(item: HTMLElement): void {
     if (item.dataset.milxdyCraftKeyboard === "true") return;

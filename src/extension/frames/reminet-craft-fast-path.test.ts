@@ -98,6 +98,18 @@ describe("RemiNet crafting placement behavior", () => {
     expect(craft).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
+
+  it("removes only occupied material and hammer selections through native store actions", async () => {
+    const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
+
+    expect(source).toContain('document.addEventListener("contextmenu"');
+    expect(source).toContain('typeof record.removeFromSlot === "function"');
+    expect(source).toContain('typeof record.clearHammer === "function"');
+    expect(source).toContain("if (!slotId || !store.craftingSlots[slotId]) return");
+    expect(source).toContain("store.removeFromSlot(slotId)");
+    expect(source).toContain("smashSlots[0] !== hammerSlot || !store.selectedHammer");
+    expect(source).toContain("store.clearHammer()");
+  });
 });
 
 describe("RemiNet chat marker dismissal", () => {
