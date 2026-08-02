@@ -1,35 +1,42 @@
-.tweet-composer-kit__pet-export { display: grid; inline-size: 100%; gap: 8px; }
-.tweet-composer-kit__pet-heading { display: grid; gap: 2px; color: var(--tck-ink); font-size: 13px; }
-.tweet-composer-kit__pet-local-note { color: var(--tck-muted); font-size: 11px; font-weight: 500; }
-.tweet-composer-kit__pet-primary,
-.tweet-composer-kit__pet-secondary { min-block-size: 44px; border: 1px solid var(--tck-border); border-radius: 5px; background: var(--tck-surface-raised); color: var(--tck-ink); padding: 7px 9px; font: 700 12px/1.2 inherit; cursor: pointer; }
-.tweet-composer-kit__pet-primary { border-color: var(--tck-accent); background: var(--tck-accent); color: var(--tck-accent-ink); }
-.tweet-composer-kit__pet-secondary:hover:not(:disabled) { border-color: var(--tck-accent); }
-.tweet-composer-kit__pet-primary:hover:not(:disabled) { background: var(--tck-accent-hover); }
-.tweet-composer-kit__pet-form { display: grid; gap: 9px; }
-.tweet-composer-kit__pet-fieldset { display: grid; min-inline-size: 0; gap: 7px; margin: 0; border: 1px solid var(--tck-border-subtle); border-radius: 5px; padding: 8px; }
-.tweet-composer-kit__pet-fieldset legend { color: var(--tck-ink); padding-inline: 4px; font-size: 12px; font-weight: 800; }
+.tweet-composer-kit__pet-export { display: grid; inline-size: 100%; gap: 10px; }
+.tweet-composer-kit__pet-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 3px 8px; border: 1px solid var(--pets-frame-soft); border-inline-start: 5px solid var(--pets-accent); border-radius: 4px; background: color-mix(in srgb, var(--pets-paper-raised) 84%, transparent); padding: 8px 9px; color: var(--pets-ink); }
+.tweet-composer-kit__pet-heading strong { font: 800 13px/1.15 var(--pets-font-display); letter-spacing: .02em; }
+.tweet-composer-kit__pet-heading::after { content: "LOCAL / PRIVATE"; grid-column: 2; grid-row: 1 / span 2; border: 1px solid var(--pets-frame); border-radius: 2px; background: var(--pets-paper); color: var(--pets-accent-dark); padding: 3px 5px; font: 900 8px/1 var(--pets-font-ui); letter-spacing: .08em; }
+.tweet-composer-kit__pet-local-note { color: var(--pets-muted); font-size: 10px; font-weight: 650; }
+.tweet-composer-kit__pet-form { display: grid; gap: 10px; counter-reset: pet-step; }
+.tweet-composer-kit__pet-fieldset { display: grid; min-inline-size: 0; gap: 8px; margin: 0; border: 1px solid var(--pets-frame-soft); border-inline-end-width: 3px; border-block-end-width: 3px; border-radius: 5px; background: linear-gradient(180deg, color-mix(in srgb, var(--pets-highlight) 46%, transparent), transparent 34px), var(--pets-paper-raised); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 74%, transparent); padding: 9px; counter-increment: pet-step; }
+.tweet-composer-kit__pet-fieldset legend { color: var(--pets-violet); padding-inline: 5px; font: 800 12px/1.1 var(--pets-font-display); letter-spacing: .025em; }
+.tweet-composer-kit__pet-fieldset legend::before { content: "0" counter(pet-step) " / "; color: var(--pets-accent-dark); font-family: var(--pets-font-ui); font-size: 9px; letter-spacing: .06em; }
 .tweet-composer-kit__pet-field { display: grid; gap: 4px; margin: 0; }
-.tweet-composer-kit__pet-label,
-.tweet-composer-kit__pet-trait-name { color: var(--tck-ink); font-size: 11px; font-weight: 800; }
-.tweet-composer-kit__pet-input,
-.tweet-composer-kit__pet-file,
-.tweet-composer-kit__pet-select,
-.tweet-composer-kit__pet-instruction { display: block; inline-size: 100%; min-block-size: 40px; border: 1px solid var(--tck-border); border-radius: 4px; background: var(--tck-surface-raised); color: var(--tck-ink); padding: 6px 7px; font: 500 12px/1.25 inherit; }
+.tweet-composer-kit__pet-label, .tweet-composer-kit__pet-trait-name { color: var(--pets-ink); font: 800 10px/1.15 var(--pets-font-ui); letter-spacing: .035em; text-transform: uppercase; }
+.tweet-composer-kit__pet-input, .tweet-composer-kit__pet-file, .tweet-composer-kit__pet-select, .tweet-composer-kit__pet-instruction { display: block; inline-size: 100%; min-block-size: 40px; border: 1px solid var(--pets-frame-soft); border-radius: 3px; background: var(--pets-paper); color: var(--pets-ink); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 68%, transparent); padding: 7px 8px; font: 600 12px/1.25 var(--pets-font-ui); }
+.tweet-composer-kit__pet-input:hover, .tweet-composer-kit__pet-file:hover, .tweet-composer-kit__pet-select:hover { border-color: var(--pets-frame); }
+.tweet-composer-kit__pet-input::placeholder { color: color-mix(in srgb, var(--pets-muted) 78%, transparent); }
 .tweet-composer-kit__pet-file { overflow: hidden; padding: 5px; }
-.tweet-composer-kit__pet-trait { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 4px; align-items: center; }
+.tweet-composer-kit__pet-trait { display: grid; grid-template-columns: 80px minmax(0, 1fr); gap: 5px; align-items: center; border-block-end: 1px dotted color-mix(in srgb, var(--pets-frame-soft) 58%, transparent); padding-block-end: 6px; }
+.tweet-composer-kit__pet-trait:last-child { border-block-end: 0; padding-block-end: 0; }
 .tweet-composer-kit__pet-trait .tweet-composer-kit__pet-input:last-child { grid-column: 2; }
-.tweet-composer-kit__pet-help { margin: 0; color: var(--tck-muted); font-size: 11px; line-height: 1.35; }
-.tweet-composer-kit__pet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
-.tweet-composer-kit__pet-preview { inline-size: min(100%, 320px); block-size: auto; justify-self: center; border: 1px solid var(--tck-border); background: repeating-conic-gradient(#d8d5dd 0 25%, #fff 0 50%) 50% / 16px 16px; }
-.tweet-composer-kit__pet-preview[hidden],
-.tweet-composer-kit__pet-instruction[hidden],
-.tweet-composer-kit__pet-secondary[hidden] { display: none; }
-.tweet-composer-kit__pet-status { min-block-size: 1.35em; margin: 0; color: var(--tck-muted); font-size: 11px; line-height: 1.35; }
-.tweet-composer-kit__pet-instruction { min-block-size: 58px; resize: vertical; }
+.tweet-composer-kit__pet-help { margin: 0; color: var(--pets-muted); font-size: 10px; line-height: 1.4; }
+.tweet-composer-kit__pet-actions { display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); gap: 7px; }
+.tweet-composer-kit__pet-primary, .tweet-composer-kit__pet-secondary { min-block-size: 44px; border: 1px solid var(--pets-frame); border-inline-end-width: 3px; border-block-end-width: 3px; border-radius: 4px; background: var(--pets-paper-raised); color: var(--pets-ink); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 70%, transparent); padding: 7px 9px; font: 850 11px/1.2 var(--pets-font-ui); letter-spacing: .02em; cursor: pointer; }
+.tweet-composer-kit__pet-primary { border-color: var(--pets-violet); background: linear-gradient(135deg, var(--pets-accent), var(--pets-accent-dark)); color: #fffaf5; text-shadow: 0 1px 0 rgb(48 16 39 / 42%); }
+.tweet-composer-kit__pet-secondary:hover:not(:disabled) { background: var(--pets-accent-soft); }
+.tweet-composer-kit__pet-primary:hover:not(:disabled) { filter: saturate(1.14) brightness(1.05); }
+.tweet-composer-kit__pet-primary:active:not(:disabled), .tweet-composer-kit__pet-secondary:active:not(:disabled) { translate: 1px 1px; border-width: 2px 1px 1px 2px; }
+.tweet-composer-kit__pet-primary:disabled, .tweet-composer-kit__pet-secondary:disabled { cursor: progress; filter: grayscale(.3); opacity: .68; }
+.tweet-composer-kit__pet-preview { inline-size: min(100%, 330px); block-size: auto; justify-self: center; border: 8px solid var(--pets-paper); outline: 1px solid var(--pets-frame); background: repeating-conic-gradient(#dfd7e3 0 25%, #fffaf5 0 50%) 50% / 16px 16px; box-shadow: 4px 4px 0 var(--pets-shadow); }
+.tweet-composer-kit__pet-preview[hidden], .tweet-composer-kit__pet-instruction[hidden], .tweet-composer-kit__pet-secondary[hidden] { display: none; }
+.tweet-composer-kit__pet-status { min-block-size: 1.35em; margin: 0; border-inline-start: 3px solid var(--pets-blue); color: var(--pets-muted); padding-inline-start: 7px; font-size: 10px; line-height: 1.4; }
+.tweet-composer-kit__pet-status:empty { border-inline-start-color: transparent; }
+.tweet-composer-kit__pet-instruction { min-block-size: 64px; resize: vertical; }
 
 @media (max-width: 380px) {
+  .tweet-composer-kit__pet-heading { grid-template-columns: 1fr; }
+  .tweet-composer-kit__pet-heading::after { grid-column: 1; grid-row: auto; justify-self: start; }
   .tweet-composer-kit__pet-actions { grid-template-columns: 1fr; }
   .tweet-composer-kit__pet-trait { grid-template-columns: 1fr; }
   .tweet-composer-kit__pet-trait .tweet-composer-kit__pet-input:last-child { grid-column: 1; }
+}
+@media (forced-colors: active) {
+  .tweet-composer-kit__pet-heading, .tweet-composer-kit__pet-fieldset, .tweet-composer-kit__pet-primary, .tweet-composer-kit__pet-secondary, .tweet-composer-kit__pet-preview { border-color: CanvasText; box-shadow: none; }
 }

@@ -1,21 +1,60 @@
 :root {
-  --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #fff);
-  --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #f7f9f9);
-  --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #cfd9de);
-  --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #0f1419);
-  --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #536471);
-  --milxdy-sdk-color-accent: var(--milxdy-overlay-app-accent, #d84f87);
-  --milxdy-sdk-color-focus: #1d9bf0;
-  --milxdy-sdk-font-ui: var(--milxdy-font-ui, system-ui, -apple-system, "Segoe UI", sans-serif);
-  --milxdy-sdk-shadow-panel: 0 8px 32px rgb(0 0 0 / 24%);
+  --pets-paper: var(--milxdy-overlay-app-surface, #fff8f3);
+  --pets-paper-raised: var(--milxdy-overlay-app-surface-2, #f8e5ef);
+  --pets-paper-deep: var(--milxdy-overlay-app-surface-3, #e9c9dd);
+  --pets-ink: var(--milxdy-overlay-app-text, #2a1730);
+  --pets-muted: var(--milxdy-overlay-app-muted, #6f5b70);
+  --pets-frame: #713761;
+  --pets-frame-soft: #b783a7;
+  --pets-highlight: #fffdf8;
+  --pets-accent: var(--milxdy-overlay-app-accent, #d84f87);
+  --pets-accent-dark: #6f315f;
+  --pets-accent-soft: #f5c2dd;
+  --pets-violet: #342060;
+  --pets-blue: #315ba8;
+  --pets-focus: #1267b1;
+  --pets-grid: rgb(111 49 95 / 7%);
+  --pets-shadow: rgb(55 24 49 / 28%);
+  --pets-font-ui: var(--milxdy-font-ui, "Milxdy Remilia Hei", "Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+  --pets-font-display: var(--milxdy-font-tweet, "Milxdy Remilia Mincho", Georgia, "Times New Roman", serif);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --milxdy-sdk-color-surface: var(--milxdy-overlay-app-surface, #000);
-    --milxdy-sdk-color-surface-raised: var(--milxdy-overlay-app-surface-2, #16181c);
-    --milxdy-sdk-color-border: var(--milxdy-overlay-app-border, #2f3336);
-    --milxdy-sdk-color-text: var(--milxdy-overlay-app-text, #e7e9ea);
-    --milxdy-sdk-color-muted: var(--milxdy-overlay-app-muted, #8b98a5);
-  }
+html[data-milxdy-x-theme="dim"],
+html[data-milxdy-settings-theme="dim"] {
+  --pets-paper: #2d2639;
+  --pets-paper-raised: #3d2b45;
+  --pets-paper-deep: #50334f;
+  --pets-ink: #fff4fb;
+  --pets-muted: #d7c5d5;
+  --pets-frame: #ba7ca8;
+  --pets-frame-soft: #74556f;
+  --pets-highlight: #67506a;
+  --pets-accent: #ee83b9;
+  --pets-accent-dark: #f4a5ca;
+  --pets-accent-soft: #5b3451;
+  --pets-violet: #c7b4ff;
+  --pets-blue: #91c4ff;
+  --pets-focus: #8ac8ff;
+  --pets-grid: rgb(255 197 231 / 7%);
+  --pets-shadow: rgb(5 3 8 / 60%);
+}
+
+html[data-milxdy-x-theme="dark"],
+html[data-milxdy-settings-theme="dark"] {
+  --pets-paper: #18131d;
+  --pets-paper-raised: #281b2b;
+  --pets-paper-deep: #392138;
+  --pets-ink: #fff3fa;
+  --pets-muted: #cfbdcc;
+  --pets-frame: #a86494;
+  --pets-frame-soft: #5f4259;
+  --pets-highlight: #51394e;
+  --pets-accent: #f080b9;
+  --pets-accent-dark: #ffacd3;
+  --pets-accent-soft: #4d2945;
+  --pets-violet: #c8b5ff;
+  --pets-blue: #91c8ff;
+  --pets-focus: #8eceff;
+  --pets-grid: rgb(255 185 224 / 7%);
+  --pets-shadow: rgb(0 0 0 / 72%);
 }

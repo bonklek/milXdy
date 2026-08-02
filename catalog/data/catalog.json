@@ -2,7 +2,7 @@
   "$schema": "./catalog.schema.json",
   "schemaVersion": 2,
   "catalogId": "milxdy-maintainer-catalog",
-  "revision": "2026-08-01.1",
+  "revision": "2026-08-02.1",
   "catalogStatus": "preview",
   "supportedBuildTargets": [
     "chromium"
@@ -52,13 +52,13 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "packages/maintainer/pets-maker",
-            "packageSha256": "2add1adc5a1a1ffc2ebfc65d9248f06f6e1d1b424bc495fd6d2f0396b47e4921",
+            "packageSha256": "7798ba322fe04c0e21d7cac5d65479ae91d5bab2fc5ffa87f07ec97e94f04362",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
             "reviewedBy": "milxdy-maintainer-pets-maker",
-            "reviewedAt": "2026-08-01",
+            "reviewedAt": "2026-08-02",
             "notes": [
               "Reviewed optional package moved from the local pilot into the pinned maintainer catalog source tree.",
               "Installation leaves the enablement setting false; the user must explicitly enable Pets Maker in Apps & Features."

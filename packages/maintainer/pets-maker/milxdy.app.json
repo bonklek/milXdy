@@ -66,9 +66,9 @@
   },
   "loadTriggers": ["dockOpen"],
   "chrome": {
-    "nativeStyle": "native",
+    "nativeStyle": "reminet",
     "supportedStyles": ["native", "classic", "reminet"],
-    "notes": ["Uses copied public SDK semantic tokens and compact overlay primitives."]
+    "notes": ["Uses package-owned Remilia pet-lab chrome aligned with the public RemiNet window style and SDK semantic tokens."]
   },
   "hub": {
     "category": "media",

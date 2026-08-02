@@ -1,46 +1,81 @@
 .pets-maker-app {
-  --tck-surface-raised: var(--milxdy-sdk-color-surface-raised);
-  --tck-border: var(--milxdy-sdk-color-border);
-  --tck-border-subtle: color-mix(in srgb, var(--milxdy-sdk-color-border) 72%, transparent);
-  --tck-ink: var(--milxdy-sdk-color-text);
-  --tck-muted: var(--milxdy-sdk-color-muted);
-  --tck-accent: var(--milxdy-sdk-color-accent);
-  --tck-accent-hover: color-mix(in srgb, var(--milxdy-sdk-color-accent) 82%, #000);
-  --tck-accent-ink: #fff;
+  --tck-surface-raised: var(--pets-paper-raised);
+  --tck-border: var(--pets-frame);
+  --tck-border-subtle: var(--pets-frame-soft);
+  --tck-ink: var(--pets-ink);
+  --tck-muted: var(--pets-muted);
+  --tck-accent: var(--pets-accent-dark);
+  --tck-accent-hover: color-mix(in srgb, var(--pets-accent) 78%, var(--pets-violet));
+  --tck-accent-ink: #fffaf5;
   position: fixed;
   z-index: 2147483000;
   inset-block-start: 64px;
   inset-inline-end: 16px;
   box-sizing: border-box;
-  inline-size: min(460px, calc(100vw - 32px));
+  inline-size: min(484px, calc(100vw - 32px));
   max-block-size: calc(100vh - 80px);
   overflow: hidden;
-  border: 1px solid var(--milxdy-sdk-color-border);
-  border-radius: 10px;
-  background: var(--milxdy-sdk-color-surface);
-  color: var(--milxdy-sdk-color-text);
-  box-shadow: var(--milxdy-sdk-shadow-panel);
-  font: 14px/1.4 var(--milxdy-sdk-font-ui);
+  border: 1px solid var(--pets-frame);
+  border-inline-end-width: 4px;
+  border-block-end-width: 5px;
+  border-radius: 7px;
+  background:
+    repeating-linear-gradient(0deg, var(--pets-grid) 0 1px, transparent 1px 9px),
+    repeating-linear-gradient(90deg, var(--pets-grid) 0 1px, transparent 1px 9px),
+    var(--pets-paper);
+  color: var(--pets-ink);
+  box-shadow: inset 2px 2px 0 color-mix(in srgb, var(--pets-highlight) 76%, transparent), 5px 5px 0 var(--pets-shadow);
+  font: 13px/1.45 var(--pets-font-ui);
   isolation: isolate;
 }
 
 .pets-maker-app,
-.pets-maker-app * { box-sizing: border-box; }
-.pets-maker-app__header { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-block-end: 1px solid var(--milxdy-sdk-color-border); background: var(--milxdy-sdk-color-surface-raised); }
-.pets-maker-app__icon { inline-size: 40px; block-size: 40px; object-fit: contain; }
-.pets-maker-app__title { flex: 1; margin: 0; font-size: 16px; line-height: 1.2; }
-.pets-maker-app__close { inline-size: 44px; block-size: 44px; border: 1px solid var(--milxdy-sdk-color-border); border-radius: 6px; background: transparent; color: inherit; font: 700 22px/1 inherit; cursor: pointer; }
-.pets-maker-app__close:hover { background: color-mix(in srgb, var(--milxdy-sdk-color-accent) 14%, transparent); }
-.pets-maker-app__body { max-block-size: calc(100vh - 145px); overflow: auto; padding: 10px; }
-.pets-maker-app :focus-visible { outline: 3px solid var(--milxdy-sdk-color-focus); outline-offset: 2px; }
+.pets-maker-app *,
+.pets-maker-app *::before,
+.pets-maker-app *::after { box-sizing: border-box; }
+
+.pets-maker-app__header {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 68px;
+  padding: 8px 9px;
+  border-block-end: 1px solid var(--pets-frame);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--pets-highlight) 65%, transparent), transparent 45%), var(--pets-paper-deep);
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--pets-frame) 24%, transparent);
+}
+.pets-maker-app__icon-frame {
+  display: grid;
+  place-items: end center;
+  inline-size: 52px;
+  block-size: 52px;
+  overflow: hidden;
+  border: 1px solid var(--pets-frame);
+  border-inline-end-width: 3px;
+  border-block-end-width: 3px;
+  border-radius: 5px;
+  background: radial-gradient(circle at 50% 34%, #fff9dc 0 26%, transparent 27%), linear-gradient(145deg, #ffc7e2, #cbbcff);
+  box-shadow: inset 1px 1px 0 rgb(255 255 255 / 72%);
+}
+.pets-maker-app__icon { inline-size: 48px; block-size: 48px; object-fit: contain; filter: drop-shadow(0 2px 0 rgb(53 28 65 / 22%)); }
+.pets-maker-app__heading { min-inline-size: 0; }
+.pets-maker-app__eyebrow { margin: 0 0 1px; color: var(--pets-accent-dark); font: 800 9px/1.1 var(--pets-font-ui); letter-spacing: .16em; text-transform: uppercase; }
+.pets-maker-app__title { overflow: hidden; margin: 0; color: var(--pets-violet); font: 800 20px/1.05 var(--pets-font-display); letter-spacing: .01em; text-overflow: ellipsis; text-shadow: 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 82%, transparent); white-space: nowrap; }
+.pets-maker-app__subtitle { overflow: hidden; margin: 3px 0 0; color: var(--pets-muted); font: 700 10px/1.15 var(--pets-font-ui); letter-spacing: .035em; text-overflow: ellipsis; white-space: nowrap; }
+.pets-maker-app__close { inline-size: 34px; block-size: 34px; border: 1px solid var(--pets-frame); border-inline-end-width: 3px; border-block-end-width: 3px; border-radius: 4px; background: var(--pets-paper-raised); color: var(--pets-ink); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 76%, transparent); font: 800 20px/1 var(--pets-font-ui); cursor: pointer; }
+.pets-maker-app__close:hover { background: var(--pets-accent-soft); color: var(--pets-violet); }
+.pets-maker-app__close:active { translate: 1px 1px; border-width: 2px 1px 1px 2px; }
+.pets-maker-app__body { max-block-size: calc(100vh - 153px); overflow: auto; padding: 11px; scrollbar-color: var(--pets-frame-soft) var(--pets-paper-raised); scrollbar-width: thin; }
+.pets-maker-app :focus-visible { outline: 3px solid var(--pets-focus); outline-offset: 2px; }
 
 @media (max-width: 520px) {
   .pets-maker-app { inset: 8px; inline-size: auto; max-block-size: calc(100vh - 16px); }
-  .pets-maker-app__body { max-block-size: calc(100vh - 82px); }
+  .pets-maker-app__body { max-block-size: calc(100vh - 86px); }
 }
-
+@media (prefers-reduced-motion: reduce) {
+  .pets-maker-app *, .pets-maker-app *::before, .pets-maker-app *::after { scroll-behavior: auto !important; transition: none !important; }
+}
 @media (forced-colors: active) {
-  .pets-maker-app,
-  .pets-maker-app__header,
-  .pets-maker-app__close { border-color: CanvasText; }
+  .pets-maker-app, .pets-maker-app__header, .pets-maker-app__icon-frame, .pets-maker-app__close { border-color: CanvasText; box-shadow: none; }
 }
