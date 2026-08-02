@@ -322,7 +322,7 @@ function buildMemeControls(random) {
   const info = el(
     "button",
     { className: "tweet-composer-kit__info", type: "button", ariaLabel: "How meme this post works", ariaDescribedBy: tooltipId, textContent: "i" },
-    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Choose a maker. Captioned sends the Top text and Bottom text you enter; random meme permits both fields to be empty and asks for an uncaptioned random output. CHEESEWORLD always uses captioned mode and asks for per-click consent before the host sends one composer image for replacement." })
+    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Choose a maker. Captioned sends the Top text and Bottom text you enter; random meme permits both fields to be empty and asks for an uncaptioned random output. Clicking CHEESEWORLD sends one composer image and its captions for replacement; milXdy never posts." })
   );
   return el(
     "div",
