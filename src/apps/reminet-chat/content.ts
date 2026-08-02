@@ -2744,6 +2744,10 @@ async function uploadPendingAttachments(): Promise<{ ok: true; images: MediaAtta
       return { ok: false, error: String(response.error || "Upload failed.") };
     }
     const media = normalizeMedia(response.media) || {};
+    if (mediaId(media) === null) {
+      attachment.status = "error";
+      return { ok: false, error: "RemiNet did not confirm the attachment. The image was not sent; try again." };
+    }
     if (attachment.mimeType.startsWith("video/")) video = media;
     else images.push(media);
   }

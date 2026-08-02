@@ -9,6 +9,7 @@ import {
   isRemiliaSessionRefreshUrl,
 } from "../../platform/auth/remilia-auth";
 import { resolveSocketAuthCredential } from "./socket-auth-policy";
+import { confirmedMediaFromResponse } from "./media-upload-contract";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
@@ -354,16 +355,11 @@ async function uploadAttachment(name: unknown, mimeType: unknown, dataUrl: unkno
 
   const confirmed = await remiliaRequest("POST", "/media/upload/confirm", { tokens: [token] });
   if (!confirmed.ok) return confirmed;
-  const data = confirmed.data && typeof confirmed.data === "object" ? confirmed.data as Record<string, unknown> : {};
+  const media = confirmedMediaFromResponse(confirmed.data);
+  if (!media) return { ok: false, error: "UPLOAD_CONFIRMATION_MISSING_MEDIA", data: confirmed.data };
   return {
     ok: true,
-    media: {
-      url: firstArrayString(data.urls),
-      mimeType: firstArrayString(data.mime_types),
-      mediaId: firstArrayNumber(data.media_ids),
-      width: firstArrayNumber(data.widths),
-      height: firstArrayNumber(data.heights),
-    },
+    media,
   };
 }
 
@@ -478,15 +474,6 @@ function stringFrom(value: unknown, key: string): string {
   if (!value || typeof value !== "object") return "";
   const candidate = (value as Record<string, unknown>)[key];
   return typeof candidate === "string" ? candidate : "";
-}
-
-function firstArrayString(value: unknown): string | null {
-  return Array.isArray(value) && typeof value[0] === "string" ? value[0] : null;
-}
-
-function firstArrayNumber(value: unknown): number | null {
-  const numeric = Array.isArray(value) ? Number(value[0]) : NaN;
-  return Number.isFinite(numeric) ? numeric : null;
 }
 
 function parseJson(text: string): unknown {
