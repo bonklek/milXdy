@@ -158,6 +158,9 @@ describe("Pets Maker request contract", () => {
   it("ships as a disabled, lazy side-rail app and leaves Composer Kit pet-free", () => {
     const source = readFileSync("packages/maintainer/pets-maker/src/custom-pet-ui.js", "utf8");
     const appSource = readFileSync("packages/maintainer/pets-maker/src/content.js", "utf8");
+    const themeSource = readFileSync("packages/maintainer/pets-maker/styles/theme.css", "utf8");
+    const overlaySource = readFileSync("packages/maintainer/pets-maker/styles/overlay.css", "utf8");
+    const makerStyles = readFileSync("packages/maintainer/pets-maker/styles/maker.css", "utf8");
     const bundled = readFileSync("packages/maintainer/pets-maker/dist/content.js", "utf8");
     const manifest = JSON.parse(readFileSync("packages/maintainer/pets-maker/milxdy.app.json", "utf8"));
     const composerSource = readFileSync("examples/packages/local-dev/tweet-composer-kit/src/content.js", "utf8");
@@ -172,9 +175,19 @@ describe("Pets Maker request contract", () => {
     expect(manifest.loadTriggers).toEqual(["dockOpen"]);
     expect(manifest.hub.rail).toEqual({ supported: true, defaultPinned: true });
     expect(manifest.dock.icon).toBe("assets/remy.png");
+    expect(manifest.chrome.nativeStyle).toBe("reminet");
     expect(manifest.privacy.dataNotes.join(" ")).toContain("Nothing is uploaded");
     expect(appSource).toContain('panel.className = "pets-maker-app"');
     expect(appSource).toContain('resolveAssetUrl("assets/remy.png")');
+    expect(appSource).toContain('eyebrow.textContent = "Remilia pet lab / 01"');
+    expect(appSource).toContain('subtitle.textContent = "Maker avatar → validated Codex handoff"');
+    expect(appSource).not.toContain("Ã—");
+    expect(themeSource).toContain('var(--milxdy-font-ui, "Milxdy Remilia Hei"');
+    expect(overlaySource).toContain("border-inline-end-width: 4px");
+    expect(overlaySource).toContain("repeating-linear-gradient");
+    expect(makerStyles).toContain('content: "LOCAL / PRIVATE"');
+    expect(makerStyles).toContain('content: "0" counter(pet-step) " / "');
+    expect(makerStyles).toContain("@media (forced-colors: active)");
     expect(composerSource).not.toContain("buildCustomPetExport");
     expect(composerSource).not.toContain("custom-pet-ui");
     expect(source).not.toContain("Rights scope");

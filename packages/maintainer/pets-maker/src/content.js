@@ -26,21 +26,33 @@ export function open() {
 
   const header = document.createElement("header");
   header.className = "pets-maker-app__header";
+  const iconFrame = document.createElement("div");
+  iconFrame.className = "pets-maker-app__icon-frame";
   const icon = document.createElement("img");
   icon.className = "pets-maker-app__icon";
   icon.src = appContext.resolveAssetUrl("assets/remy.png");
   icon.alt = "";
+  iconFrame.append(icon);
+  const heading = document.createElement("div");
+  heading.className = "pets-maker-app__heading";
+  const eyebrow = document.createElement("p");
+  eyebrow.className = "pets-maker-app__eyebrow";
+  eyebrow.textContent = "Remilia pet lab / 01";
   const title = document.createElement("h2");
   title.id = "pets-maker-title";
   title.className = "pets-maker-app__title";
   title.textContent = "Pets Maker";
+  const subtitle = document.createElement("p");
+  subtitle.className = "pets-maker-app__subtitle";
+  subtitle.textContent = "Maker avatar → validated Codex handoff";
+  heading.append(eyebrow, title, subtitle);
   const closeButton = document.createElement("button");
   closeButton.className = "pets-maker-app__close";
   closeButton.type = "button";
   closeButton.setAttribute("aria-label", "Close Pets Maker");
   closeButton.textContent = "×";
   closeButton.addEventListener("click", close, { signal });
-  header.append(icon, title, closeButton);
+  header.append(iconFrame, heading, closeButton);
 
   const body = document.createElement("div");
   body.className = "pets-maker-app__body";
