@@ -10,7 +10,7 @@ import {
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
-import { createComposerActionBindingRegistry } from "./composer-action-binding";
+import { composerActionButtonIdentity, findPackageComposerActionButton } from "./composer-action-identity";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { eligibleContextMediaActions } from "./context-media-actions";
 import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions";
@@ -276,9 +276,10 @@ export type ContentRuntime = {
 export function createContentRuntime(apps: readonly MilxdyAppManifest[]): ContentRuntime {
   // Chrome keeps content-script DOM across an extension reload, while the old
   // script's event listeners disappear with its runtime. A per-runtime token
-  // lets the next runtime replace those inert host controls exactly once.
+  // elects one delegated composer-action owner without depending on toolbar
+  // nodes that X may clone or replace.
   const composerActionBindingToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
-  const composerActionBindings = createComposerActionBindingRegistry();
+  let composerActionOwnerSequence = 0;
   const state: RuntimeState = {
     apps,
     enabledApps: new Set(),
@@ -1798,6 +1799,29 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     for (const panel of Array.from(document.querySelectorAll<HTMLElement>(".milxdy-composer-action-panel[data-app-id]"))) {
       panel.remove();
     }
+    document.documentElement.dataset.milxdyComposerActionRuntime = composerActionBindingToken;
+    const onComposerActionClick = (event: MouseEvent) => {
+      if (document.documentElement.dataset.milxdyComposerActionRuntime !== composerActionBindingToken) return;
+      const target = event.target;
+      const button = target instanceof Element
+        ? target.closest<HTMLButtonElement>("button.milxdy-composer-action[data-app-id]")
+        : null;
+      const identity = composerActionButtonIdentity(button);
+      if (!button || !identity) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if (identity.hostAction === "nativeDrafts") {
+        openNativeDraftsFor(button);
+        return;
+      }
+      if (identity.hostAction !== null) return;
+      const app = state.apps.find((candidate) => candidate.id === identity.appId
+        && state.enabledApps.has(candidate.id)
+        && candidate.available !== false
+        && candidate.composerAction);
+      if (app) void openComposerAction(app, button);
+    };
+    document.addEventListener("click", onComposerActionClick, true);
     const refreshScheduler = createComposerActionRefreshScheduler(refreshComposerActionButtons);
     refreshComposerActionButtons();
     const observer = new MutationObserver(() => refreshScheduler.request());
@@ -1805,6 +1829,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(() => {
       observer.disconnect();
       refreshScheduler.dispose();
+    });
+    state.runtimeDisposables.add(() => {
+      document.removeEventListener("click", onComposerActionClick, true);
+      if (document.documentElement.dataset.milxdyComposerActionRuntime === composerActionBindingToken) {
+        delete document.documentElement.dataset.milxdyComposerActionRuntime;
+      }
     });
     state.runtimeDisposables.add(closeComposerActionPanel);
   }
@@ -2091,6 +2121,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         slot.className = "milxdy-composer-actions";
         actionRow.append(slot);
       }
+      if (!slot.dataset.milxdyComposerActionOwner) {
+        composerActionOwnerSequence += 1;
+        slot.dataset.milxdyComposerActionOwner = `${composerActionBindingToken}:${composerActionOwnerSequence}`;
+      }
+      const ownerId = slot.dataset.milxdyComposerActionOwner!;
       const expected = new Set(apps.flatMap((app) => [app.id, ...(app.hostComposerActions || []).map((actionId) => `${app.id}:${actionId}`)]));
       for (const button of Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))) {
         const key = button.dataset.hostAction ? `${button.dataset.appId}:${button.dataset.hostAction}` : button.dataset.appId || "";
@@ -2099,28 +2134,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       for (const app of apps) {
         const action = app.composerAction;
         if (!action) continue;
-        let button = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"))
-          .find((candidate) => candidate.dataset.appId === app.id) || null;
-        if (composerActionBindings.needsBinding(button, composerActionBindingToken)) {
-          const replacement = button ? button.cloneNode(false) as HTMLButtonElement : document.createElement("button");
-          if (button) button.replaceWith(replacement);
-          else slot.append(replacement);
-          button = replacement;
+        let button = findPackageComposerActionButton(
+          slot.querySelectorAll<HTMLButtonElement>("button[data-app-id]"),
+          app.id,
+        );
+        if (!button) {
+          button = document.createElement("button");
+          slot.append(button);
           button.type = "button";
           button.dataset.appId = app.id;
-          button.dataset.milxdyComposerActionBinding = composerActionBindingToken;
-          composerActionBindings.remember(button);
           button.className = "milxdy-composer-action";
-          // This is an extension-owned control mounted in X's delegated
-          // toolbar. Keep its user gesture out of X's toolbar handlers so a
-          // reconciliation cannot consume the package action before it opens.
-          button.addEventListener("click", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            void openComposerAction(app, button!);
-          });
         }
         if (!button) continue;
+        if (activeComposerAction?.appId === app.id && activeComposerAction.ownerId === ownerId) {
+          activeComposerAction.button = button;
+        }
+        if (pendingComposerAction?.appId === app.id && pendingComposerAction.ownerId === ownerId) {
+          pendingComposerAction.button = button;
+        }
         button.title = action.label;
         button.setAttribute("aria-label", action.label);
         button.setAttribute("aria-haspopup", "dialog");
@@ -2137,24 +2168,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if ((app.hostComposerActions || []).includes("nativeDrafts")) {
           let drafts = Array.from(slot.querySelectorAll<HTMLButtonElement>("button[data-app-id][data-host-action='nativeDrafts']"))
             .find((candidate) => candidate.dataset.appId === app.id) || null;
-          if (composerActionBindings.needsBinding(drafts, composerActionBindingToken)) {
-            const replacement = drafts ? drafts.cloneNode(false) as HTMLButtonElement : document.createElement("button");
-            if (drafts) drafts.replaceWith(replacement);
-            else slot.append(replacement);
-            drafts = replacement;
+          if (!drafts) {
+            drafts = document.createElement("button");
+            slot.append(drafts);
             drafts.type = "button";
             drafts.dataset.appId = app.id;
             drafts.dataset.hostAction = "nativeDrafts";
-            drafts.dataset.milxdyComposerActionBinding = composerActionBindingToken;
-            composerActionBindings.remember(drafts);
             drafts.className = "milxdy-composer-action milxdy-composer-host-action";
             drafts.replaceChildren(createNativeDraftsIcon());
             drafts.title = "Drafts";
             drafts.setAttribute("aria-label", "Open X Drafts");
-            // Resolve from the companion itself. The package action can be
-            // reconciled independently by X, while this host control remains
-            // the explicit user gesture that opens native Drafts.
-            drafts.addEventListener("click", () => openNativeDraftsFor(drafts!));
           }
           if (drafts) syncNativeDraftsVisual(drafts, actionRow);
         }
@@ -2213,13 +2236,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     else button.style.removeProperty("color");
   }
 
-  let activeComposerAction: { appId: string; button: HTMLButtonElement; panel: HTMLElement; close: () => void } | null = null;
-  let pendingComposerAction: { appId: string; button: HTMLButtonElement; cancelled: boolean } | null = null;
+  let activeComposerAction: { appId: string; ownerId: string; button: HTMLButtonElement; panel: HTMLElement; close: () => void } | null = null;
+  let pendingComposerAction: { appId: string; ownerId: string; button: HTMLButtonElement; cancelled: boolean } | null = null;
 
   async function openComposerAction(app: MilxdyAppManifest, button: HTMLButtonElement): Promise<void> {
+    const ownerId = button.closest<HTMLElement>("[data-milxdy-composer-actions]")?.dataset.milxdyComposerActionOwner || "";
     // A repeated activation of the same action is a toggle, not a close/open
     // cycle. This is host lifecycle behavior shared by every package.
-    if (activeComposerAction?.appId === app.id && activeComposerAction.button === button) {
+    if (activeComposerAction?.appId === app.id && activeComposerAction.ownerId === ownerId) {
+      activeComposerAction.button = button;
       if (activeComposerAction.panel.isConnected) {
         activeComposerAction.close();
         return;
@@ -2231,7 +2256,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     // The module import always crosses an async boundary. Treat a second
     // activation during that boundary as the matching toggle-off instead of
     // allowing two opens to race and leave the toolbar out of sync.
-    if (pendingComposerAction?.appId === app.id && pendingComposerAction.button === button) {
+    if (pendingComposerAction?.appId === app.id && pendingComposerAction.ownerId === ownerId) {
+      pendingComposerAction.button = button;
       pendingComposerAction.cancelled = true;
       pendingComposerAction = null;
       button.setAttribute("aria-expanded", "false");
@@ -2239,7 +2265,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     if (pendingComposerAction) pendingComposerAction.cancelled = true;
     activeComposerAction?.close();
-    const request = { appId: app.id, button, cancelled: false };
+    const request = { appId: app.id, ownerId, button, cancelled: false };
     pendingComposerAction = request;
     const module = await loadApp(app, "composerAction");
     if (request.cancelled || pendingComposerAction !== request) return;
@@ -2248,6 +2274,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       recordRuntimeDiagnostic(`composerAction.${app.id}`, { error: "Package declares composerAction but does not export onComposerAction" });
       return;
     }
+    button = request.button;
     const controller = new AbortController();
     const panel = document.createElement("section");
     panel.className = "milxdy-composer-action-panel";
@@ -2261,6 +2288,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     panel.style.visibility = "hidden";
     document.body.append(panel);
     button.setAttribute("aria-expanded", "true");
+    const currentButton = () => activeComposerAction?.appId === app.id && activeComposerAction.ownerId === ownerId
+      ? activeComposerAction.button
+      : button;
     let resizeFrame = 0;
     const positionComposerActionPanel = () => {
       // A stylesheet or package callback may settle after the user has
@@ -2269,7 +2299,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (controller.signal.aborted || !panel.isConnected) return;
       const gap = 8;
       const viewportInset = 8;
-      const rect = button.getBoundingClientRect();
+      const rect = currentButton().getBoundingClientRect();
       const naturalHeight = panel.getBoundingClientRect().height;
       const spaceBelow = Math.max(0, window.innerHeight - rect.bottom - gap - viewportInset);
       const spaceAbove = Math.max(0, rect.top - gap - viewportInset);
@@ -2309,12 +2339,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       window.removeEventListener("resize", scheduleComposerActionPosition);
       panelSizeObserver?.disconnect();
       window.cancelAnimationFrame(resizeFrame);
+      const invoker = currentButton();
       if (activeComposerAction?.close === close) activeComposerAction = null;
-      button.setAttribute("aria-expanded", "false");
-      button.focus();
+      invoker.setAttribute("aria-expanded", "false");
+      if (invoker.isConnected) invoker.focus();
     };
     const dismiss = (event: PointerEvent) => {
-      if (panel.contains(event.target as Node) || button.contains(event.target as Node)) return;
+      if (panel.contains(event.target as Node) || currentButton().contains(event.target as Node)) return;
       close();
     };
     const dismissOnEscape = (event: KeyboardEvent) => {
@@ -2323,7 +2354,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       event.stopImmediatePropagation();
       close();
     };
-    const openNativeDrafts = () => openNativeDraftsFor(button, close);
+    const openNativeDrafts = () => openNativeDraftsFor(currentButton(), close);
     type ComposerImageReplacement = {
       composerScope: ParentNode;
       removeButton: HTMLButtonElement;
@@ -2391,7 +2422,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       // feedback so it remains consistent, user-preference-respecting, and
       // unavailable to unreviewed package code.
       playInterfaceLaunchSound();
-      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const usesPackageFields = handoff.captionSource === "packageFields";
       const explicitCaptions = usesPackageFields
         ? validateExternalHandoffCaptions(options?.captions, handoff.captionMaxLength)
@@ -2446,7 +2477,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (!query || !declaration || !query.resources.includes("facets")) {
         return { ok: false, error: "Composer suggestions are not declared for this gallery.", suggestions: [] };
       }
-      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
         .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
       const suggestions = deriveComposerKeywordSuggestions(editor?.innerText || editor?.textContent || "", declaration);
@@ -2470,7 +2501,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (typeof itemId !== "string" || itemId.length < 1 || itemId.length > 128) {
         return { ok: false, error: "This gallery result is invalid." };
       }
-      const composerScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       if (composerImageAttachmentCount(composerScope) >= 4) {
         return { ok: false, error: "X's composer supports up to 4 images." };
       }
@@ -2484,7 +2515,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return result;
     };
     const replaceComposerImage = async (replacement: ComposerImageReplacement, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
-      const currentScope = button.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
+      const invoker = currentButton();
+      const currentScope = invoker.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
       const scopeNode = replacement.composerScope as Node;
       const removeButtons = Array.from(replacement.composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
       const identityMatches = replacement.attachmentIdentity.kind === "file"
@@ -2495,7 +2527,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
             && current.lastModified === replacement.attachmentIdentity.lastModified;
         })()
         : replacement.attachmentIdentity.image.isConnected && replacement.attachmentIdentity.image.src === replacement.attachmentIdentity.src;
-      if (!button.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected || !identityMatches) {
+      if (!invoker.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected || !identityMatches) {
         return { ok: false, error: "The initiating composer or its image changed before CheeseWorld finished." };
       }
       replacement.removeButton.click();
@@ -2552,7 +2584,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         return { ok: false, error: errorMessage(error) };
       }
     };
-    activeComposerAction = { appId: app.id, button, panel, close };
+    activeComposerAction = { appId: app.id, ownerId, button, panel, close };
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
@@ -2561,7 +2593,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       await installComposerActionPackageStyles(app, shadow);
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       await Promise.resolve(module.onComposerAction({
-        kind: button.closest('[role="dialog"]') ? "reply" : "post",
+        kind: currentButton().closest('[role="dialog"]') ? "reply" : "post",
         panel: surface,
         signal: controller.signal,
         close,
