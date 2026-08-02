@@ -1,5 +1,8 @@
 # Custom Pet integrated QA
 
+> Planned 0.2.5 pipeline evidence. This workflow is not part of the 0.2.4
+> shipped feature set.
+
 The #190 integration proof exercises the complete local contract without
 committing or uploading a character raster:
 

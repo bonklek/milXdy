@@ -7,8 +7,8 @@ workflows while tightening the shared runtime underneath them.
 ## Composer Kit
 
 - Adds one compact composer/reply add-on for quick replies, X native Drafts,
-  Remibooru reaction browsing, public Remibooru contribution, and reviewed
-  Remilia Maker/CHEESEWORLD handoffs.
+  Remibooru reaction browsing and attachment, and reviewed Remilia
+  Maker/CHEESEWORLD handoffs.
 - Opens the quick-reply panel from the invoking Reply control, preserves focus
   and dismissal behavior, and verifies a declared quick-reply value before the
   configured submission action.
@@ -16,12 +16,6 @@ workflows while tightening the shared runtime underneath them.
 - Browses bounded Remibooru pages and facets with visible attribution,
   canonical-source links, and explicit thumbnail attachment to the initiating
   composer. Nothing is attached or posted automatically.
-- Adds **Publish to Remibooru** for an explicitly selected eligible X-hosted
-  image. The user reviews the public destination and bounded tags, then the
-  visible Publish button performs the upload. There is no extra rights
-  checkbox, ownership attestation, attribution field, or narrative disclosure
-  form. Authentication, contributor access, CAPTCHA/anti-abuse, moderation, and
-  unsupported upstream states retain a native-uploader fallback.
 - Keeps package code away from X DOM, cookies, tabs, image bytes, raw browser
   messaging, and remote-session details; reviewed host callbacks own those
   boundaries.
@@ -65,16 +59,14 @@ See [Miladychan Portal](../guides/miladychan-portal.md).
 - Turns one user-selected transparent Milady, Remilio, Bonkler, or Kagami Maker
   PNG plus declared traits and body choices into a deterministic, validated
   two-file `remilia-pet-request.zip`.
-- Adds a versioned Codex import skill, four reusable motion-template families,
-  objective pose/envelope checks, trait-aware diagnostics, and local cache/resume
-  for exact validated outputs.
+- Adds a versioned local pet-request bundle and explicit Codex handoff.
+- Gives the Pets Maker rail window Remilia-themed chrome plus movable and
+  resizable window controls.
 - Keeps source art, form state, generated bundles, and validation caches local.
   Pets Maker does not upload, post, publish, invoke Codex, infer missing traits,
   or add a rights declaration.
 
-See [Pets Maker export](../guides/custom-pet-export.md), [Remilia Maker pet
-import](../guides/remilia-maker-pet-import.md), and [Custom Pet integrated
-QA](../guides/custom-pet-integrated-qa.md).
+See [Pets Maker export](../guides/custom-pet-export.md).
 
 ## Add-ons Catalog and App SDK 0.2.4
 
@@ -88,17 +80,10 @@ QA](../guides/custom-pet-integrated-qa.md).
 - Supports reviewed external folder/ZIP staging and multi-package composition
   without retaining author paths in provenance.
 - Adds generic package-owned composer/reply panels, native Drafts, maker
-  handoffs, bounded composer suggestions, reviewed Remibooru queries,
-  explicit remote-result attachments, and host-owned media contribution.
+  handoffs, bounded composer suggestions, reviewed Remibooru queries, and
+  explicit remote-result attachments.
 - Adds public starter templates, lifecycle harnesses, schemas, TypeScript types,
   accessibility guidance, asset declarations, and contributor UI guidance.
-- Includes a public-safe visual design guide and a separately excluded
-  visual-elements repository candidate. Official catalog admission is based on
-  documented permission or licensing compatible with copying, modification,
-  redistribution, and App SDK use—not VPL alone. VPL remains supported;
-  unknown or incompatible rights fail closed. The separate repository is not
-  represented as published by this extension release.
-
 See [App SDK overview](../sdk/APP_SDK_OVERVIEW.md), [Local Add-ons](../sdk/LOCAL_ADDONS.md),
 and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
 
@@ -110,8 +95,8 @@ and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
   authentication-tab handling, and hover/focus dismissal for **Last read** and
   **Jump to present** markers.
 - Adds faster Beetle Crafting item placement through RemiliaNET's existing UI,
-  protects occupied slots, preserves native inspection, and never crafts or
-  submits automatically.
+  protects occupied slots, supports right-click clearing of selected items,
+  preserves native inspection, and never crafts or submits automatically.
 - Adds Beetol reward audio/visual feedback, lower-volume junk crunch, refresh
   ordering, and signed-out-state cleanup.
 - Adds left/right rail switching, pointer reordering and persistence, a
@@ -142,23 +127,18 @@ and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
   browser-limited.
 - Composer Kit is part of the reviewed 0.2.4 package composition but is not yet
   selectable from the public catalog record.
-- Remibooru contribution requires an eligible image, an authenticated account
-  with contributor access, and upstream acceptance. Use the native uploader
-  when the reviewed flow cannot proceed.
 - Miladychan direct posting is text-only. CAPTCHA, media, session-bound, and
   unsupported-board behavior remains on the native site.
 - **Share to RemiNet** stages a local attachment for review; it does not send a
   chat message automatically.
-- The standalone visual-elements repository, versioned catalog releases, and
-  broader multi-site runtime are follow-up work. The multi-site runtime is
-  scheduled with 0.2.5 rather than silently implied by 0.2.4 host permissions.
+- Remibooru contribution, the rights-compatible visual-elements repository,
+  the Maker pet-import/QA pipeline, versioned catalog releases, and the broader
+  multi-site runtime are 0.2.5 follow-up work rather than 0.2.4 features.
 
 ## Issue map
 
 The user-visible release work spans Composer Kit and sharing issues `#16`,
-`#17`, `#24`, `#25`, `#68`, `#79`, `#187`, `#188`, and `#189`; Miladychan
-Portal `#41`; the catalog and visual-authoring work in `#181` and `#183`; the
-Pets Maker pipeline in `#190`–`#193`; and RemiNet/Beetol work in `#194`.
-Open GitHub issues continue to track remaining publication, catalog, or upstream
-follow-through; their presence does not imply that every acceptance item listed
-in those issues shipped unchanged.
+`#17`, `#25`, `#68`, `#79`, `#187`, `#188`, and `#189`; Miladychan Portal
+`#41`; the catalog work in `#181`; Pets Maker issues `#190` and `#191`; and
+RemiNet/Beetol work in `#194`. Issues `#24`, `#74`, `#183`, `#192`, and `#193`
+are explicitly scheduled for 0.2.5 and are not represented as shipped here.

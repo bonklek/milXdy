@@ -78,9 +78,9 @@ The helper ignores search fields, unrelated native inputs/textareas, and extensi
 ## Composer Kit
 
 Composer Kit is the reviewed 0.2.4 package composition for quick replies,
-native X Drafts, Remibooru reaction browsing/contribution, and explicit
+native X Drafts, Remibooru reaction browsing/attachment, and explicit
 Maker/CHEESEWORLD handoffs. It adds composer and reply controls rather than a
-new rail app. Every insert, attachment, contribution, and handoff begins with a
+new rail app. Every insert, attachment, and handoff begins with a
 visible user action. See the dedicated [Composer Kit guide](composer-kit.md).
 
 ## Share Kit
@@ -309,7 +309,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`; an explicit confirmed text-only post uses fixed create-thread or create-reply endpoints without cookies or account credentials.
-- Composer Kit uses `https://remibooru.com` only for explicit reviewed search, attachment, and contribution actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
+- Composer Kit uses `https://remibooru.com` only for explicit reviewed search and attachment actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
 - Share Kit renders locally; RemiNet staging becomes a remote upload only if the user later presses Send in Chat.
 - Pets Maker reads only the explicitly selected local PNG and writes only the user-requested local ZIP; it has no remote service.
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.

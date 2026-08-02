@@ -1,5 +1,9 @@
 # Custom Pet pipeline provenance
 
+> The #192/#193 adapter, template, envelope-QA, and cache/resume material below
+> is scheduled for 0.2.5. In 0.2.4, Pets Maker ships only the versioned request
+> bundle and explicit local Codex handoff covered by #190/#191.
+
 This record distinguishes copied material from independently implemented work. It contains no user image, private prompt, or machine-specific path.
 
 ## Composer Kit baseline
@@ -10,7 +14,7 @@ The versioned package under `examples/packages/local-dev/tweet-composer-kit/` wa
 - imported package content SHA-256: `f7baa0e50a1a5f44236e23ac5af2d317000a7d7b2148112cb213b5515c8a39c7`
 - imported manifest SHA-256: `9217246fa3487f2cd8296ab3bcc53f5ac4ce862f8246a3240e96c7eb2cc4c705`
 - license compatibility: both the source package context and milXdy use the Viral Public License
-- retained behavior: quick replies, native Drafts, Maker handoffs, Remibooru browsing/contribution handoff, and CHEESEWORLD link
+- retained behavior: quick replies, native Drafts, Maker handoffs, Remibooru browsing/attachment, and CHEESEWORLD link
 
 The Custom Pet contract, completion catalog, canvas compositor, ZIP writer, tests, and schema were implemented in this task. No user image or pet-generation raster was imported.
 
