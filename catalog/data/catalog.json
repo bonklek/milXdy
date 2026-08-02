@@ -2,7 +2,7 @@
   "$schema": "./catalog.schema.json",
   "schemaVersion": 2,
   "catalogId": "milxdy-maintainer-catalog",
-  "revision": "2026-08-02.1",
+  "revision": "2026-08-02.2",
   "catalogStatus": "preview",
   "supportedBuildTargets": [
     "chromium"
@@ -52,7 +52,7 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "packages/maintainer/pets-maker",
-            "packageSha256": "7798ba322fe04c0e21d7cac5d65479ae91d5bab2fc5ffa87f07ec97e94f04362",
+            "packageSha256": "55591ee5bf65fdd87c27c8c667a49ea0a8984fb390978896d2f5ad79d0f791c5",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
