@@ -315,11 +315,10 @@ import {
       return;
     }
 
-    const smashSlots = Array.from(craft.querySelectorAll<HTMLElement>(
-      ".crafting-module__smash-input-slots .crafting-module__smash-input-slot",
-    ));
-    const hammerSlot = target.closest<HTMLElement>(".crafting-module__smash-input-slot");
-    if (!hammerSlot || smashSlots[0] !== hammerSlot || !store.selectedHammer) return;
+    const hammerSlot = target.closest<HTMLElement>(
+      ".crafting-module__smash-input-slots > .crafting-module__input-slot-filled:not(.crafting-module__sacrifice-input-slot--filled)",
+    );
+    if (!hammerSlot || !store.selectedHammer) return;
     stopCraftingGesture(event);
     store.clearHammer();
     document.documentElement.setAttribute(PLACEMENT_STATUS_ATTRIBUTE, "removed-hammer");

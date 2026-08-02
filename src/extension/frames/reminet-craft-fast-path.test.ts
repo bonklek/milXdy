@@ -107,7 +107,8 @@ describe("RemiNet crafting placement behavior", () => {
     expect(source).toContain('typeof record.clearHammer === "function"');
     expect(source).toContain("if (!slotId || !store.craftingSlots[slotId]) return");
     expect(source).toContain("store.removeFromSlot(slotId)");
-    expect(source).toContain("smashSlots[0] !== hammerSlot || !store.selectedHammer");
+    expect(source).toContain(".crafting-module__input-slot-filled:not(.crafting-module__sacrifice-input-slot--filled)");
+    expect(source).toContain("if (!hammerSlot || !store.selectedHammer) return");
     expect(source).toContain("store.clearHammer()");
   });
 });
