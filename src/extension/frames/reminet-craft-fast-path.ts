@@ -296,7 +296,10 @@ import {
     const target = event.target instanceof Element ? event.target : null;
     const craft = target?.closest(".crafting-module");
     if (!target || !craft) return;
-    const store = craftingStoreFor(target, craft);
+    // Filled destination slots are rendered by leaf components whose React
+    // ancestry does not retain the Zustand store. Inventory items do retain it.
+    const storeAnchor = craft.querySelector(".crafting-module__beetle-item");
+    const store = craftingStoreFor(target, craft, ...(storeAnchor ? [storeAnchor] : []));
     if (!store) return;
 
     const materialSlot = target.closest<HTMLElement>(

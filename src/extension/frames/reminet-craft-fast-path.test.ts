@@ -103,6 +103,7 @@ describe("RemiNet crafting placement behavior", () => {
     const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
 
     expect(source).toContain('document.addEventListener("contextmenu"');
+    expect(source).toContain('const storeAnchor = craft.querySelector(".crafting-module__beetle-item")');
     expect(source).toContain('typeof record.removeFromSlot === "function"');
     expect(source).toContain('typeof record.clearHammer === "function"');
     expect(source).toContain("if (!slotId || !store.craftingSlots[slotId]) return");
