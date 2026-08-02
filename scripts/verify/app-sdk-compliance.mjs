@@ -157,6 +157,7 @@ function verifyPlatformContract() {
   requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
   requireIncludes(background, "#randomMemeButton", "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
   requireIncludes(background, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
+  requireIncludes(background, "randomMeme.click();\n    await waitForRender();", "Random-meme handoffs must wait for an asynchronous preset render before capture");
   requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
   requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
   requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");
