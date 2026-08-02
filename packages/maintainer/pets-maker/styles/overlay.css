@@ -10,11 +10,18 @@
   position: fixed;
   z-index: 2147483000;
   inset-block-start: 64px;
-  inset-inline-end: 16px;
+  inset-inline-end: 76px;
   box-sizing: border-box;
-  inline-size: min(484px, calc(100vw - 32px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  inline-size: min(484px, calc(100vw - 92px));
+  min-inline-size: min(340px, calc(100vw - 16px));
+  min-block-size: min(360px, calc(100vh - 16px));
+  block-size: min(760px, calc(100vh - 80px));
+  max-inline-size: calc(100vw - 16px);
   max-block-size: calc(100vh - 80px);
   overflow: hidden;
+  resize: both;
   border: 1px solid var(--pets-frame);
   border-inline-end-width: 4px;
   border-block-end-width: 5px;
@@ -28,6 +35,24 @@
   font: 13px/1.45 var(--pets-font-ui);
   isolation: isolate;
 }
+
+.pets-maker-app__wip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-block-size: 28px;
+  padding: 5px 10px;
+  border-block-end: 1px solid var(--pets-frame);
+  background: repeating-linear-gradient(135deg, #ffe767 0 9px, #ffd1dc 9px 18px);
+  color: #3a2146;
+  font: 800 10px/1.2 var(--pets-font-ui);
+  letter-spacing: .035em;
+  text-align: center;
+  text-transform: uppercase;
+}
+.pets-maker-app__wip strong { letter-spacing: .14em; }
+.pets-maker-app__wip span { font-weight: 700; text-transform: none; }
 
 .pets-maker-app,
 .pets-maker-app *,
@@ -44,7 +69,11 @@
   border-block-end: 1px solid var(--pets-frame);
   background: linear-gradient(135deg, color-mix(in srgb, var(--pets-highlight) 65%, transparent), transparent 45%), var(--pets-paper-deep);
   box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--pets-frame) 24%, transparent);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
+.pets-maker-app[data-dragging="true"] .pets-maker-app__header { cursor: grabbing; }
 .pets-maker-app__icon-frame {
   display: grid;
   place-items: end center;
@@ -66,16 +95,17 @@
 .pets-maker-app__close { inline-size: 34px; block-size: 34px; border: 1px solid var(--pets-frame); border-inline-end-width: 3px; border-block-end-width: 3px; border-radius: 4px; background: var(--pets-paper-raised); color: var(--pets-ink); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 76%, transparent); font: 800 20px/1 var(--pets-font-ui); cursor: pointer; }
 .pets-maker-app__close:hover { background: var(--pets-accent-soft); color: var(--pets-violet); }
 .pets-maker-app__close:active { translate: 1px 1px; border-width: 2px 1px 1px 2px; }
-.pets-maker-app__body { max-block-size: calc(100vh - 153px); overflow: auto; padding: 11px; scrollbar-color: var(--pets-frame-soft) var(--pets-paper-raised); scrollbar-width: thin; }
+.pets-maker-app__body { min-block-size: 0; overflow: auto; padding: 11px; scrollbar-color: var(--pets-frame-soft) var(--pets-paper-raised); scrollbar-width: thin; }
 .pets-maker-app :focus-visible { outline: 3px solid var(--pets-focus); outline-offset: 2px; }
 
 @media (max-width: 520px) {
-  .pets-maker-app { inset: 8px; inline-size: auto; max-block-size: calc(100vh - 16px); }
-  .pets-maker-app__body { max-block-size: calc(100vh - 86px); }
+  .pets-maker-app { inset: 8px; inline-size: auto; min-inline-size: 0; block-size: calc(100vh - 16px); min-block-size: 0; max-block-size: calc(100vh - 16px); resize: none; }
+  .pets-maker-app__wip { align-items: flex-start; flex-direction: column; gap: 1px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pets-maker-app *, .pets-maker-app *::before, .pets-maker-app *::after { scroll-behavior: auto !important; transition: none !important; }
 }
 @media (forced-colors: active) {
-  .pets-maker-app, .pets-maker-app__header, .pets-maker-app__icon-frame, .pets-maker-app__close { border-color: CanvasText; box-shadow: none; }
+  .pets-maker-app, .pets-maker-app__wip, .pets-maker-app__header, .pets-maker-app__icon-frame, .pets-maker-app__close { border-color: CanvasText; box-shadow: none; }
+  .pets-maker-app__wip { background: Canvas; color: CanvasText; }
 }

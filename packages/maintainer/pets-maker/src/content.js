@@ -5,6 +5,7 @@ let appContext = null;
 let panel = null;
 let panelController = null;
 let previousFocus = null;
+let dragState = null;
 
 export function boot(context) {
   appContext = context;
@@ -24,8 +25,22 @@ export function open() {
   panel.tabIndex = -1;
   panel.addEventListener("keydown", onPanelKeydown, { signal });
 
+  const wipBanner = document.createElement("div");
+  wipBanner.className = "pets-maker-app__wip";
+  wipBanner.setAttribute("role", "note");
+  const wipLabel = document.createElement("strong");
+  wipLabel.textContent = "WORK IN PROGRESS";
+  const wipDetail = document.createElement("span");
+  wipDetail.textContent = "Preview build — controls and output may change.";
+  wipBanner.append(wipLabel, wipDetail);
+
   const header = document.createElement("header");
   header.className = "pets-maker-app__header";
+  header.setAttribute("aria-label", "Drag Pets Maker window");
+  header.addEventListener("pointerdown", onPanelPointerDown, { signal });
+  header.addEventListener("pointermove", onPanelPointerMove, { signal });
+  header.addEventListener("pointerup", onPanelPointerEnd, { signal });
+  header.addEventListener("pointercancel", onPanelPointerEnd, { signal });
   const iconFrame = document.createElement("div");
   iconFrame.className = "pets-maker-app__icon-frame";
   const icon = document.createElement("img");
@@ -57,7 +72,7 @@ export function open() {
   const body = document.createElement("div");
   body.className = "pets-maker-app__body";
   body.append(buildCustomPetExport({ signal }));
-  panel.append(header, body);
+  panel.append(wipBanner, header, body);
   previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.append(panel);
   panel.focus();
@@ -79,6 +94,7 @@ export function dispose() {
 }
 
 function removePanel() {
+  dragState = null;
   panelController?.abort();
   panelController = null;
   panel?.remove();
@@ -91,4 +107,41 @@ function onPanelKeydown(event) {
   if (event.key !== "Escape") return;
   event.preventDefault();
   close();
+}
+
+function onPanelPointerDown(event) {
+  if (!panel || event.button !== 0 || event.target.closest("button, a, input, select, textarea")) return;
+  const handle = event.currentTarget;
+  const bounds = panel.getBoundingClientRect();
+  dragState = {
+    pointerId: event.pointerId,
+    offsetX: event.clientX - bounds.left,
+    offsetY: event.clientY - bounds.top,
+  };
+  panel.style.inset = "auto";
+  panel.style.left = `${bounds.left}px`;
+  panel.style.top = `${bounds.top}px`;
+  panel.dataset.dragging = "true";
+  handle.setPointerCapture(event.pointerId);
+  event.preventDefault();
+}
+
+function onPanelPointerMove(event) {
+  if (!panel || !dragState || dragState.pointerId !== event.pointerId) return;
+  const margin = 8;
+  const bounds = panel.getBoundingClientRect();
+  const maxLeft = Math.max(margin, window.innerWidth - bounds.width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - bounds.height - margin);
+  const left = Math.min(maxLeft, Math.max(margin, event.clientX - dragState.offsetX));
+  const top = Math.min(maxTop, Math.max(margin, event.clientY - dragState.offsetY));
+  panel.style.left = `${left}px`;
+  panel.style.top = `${top}px`;
+}
+
+function onPanelPointerEnd(event) {
+  if (!dragState || dragState.pointerId !== event.pointerId) return;
+  const handle = event.currentTarget;
+  if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  delete panel?.dataset.dragging;
+  dragState = null;
 }
