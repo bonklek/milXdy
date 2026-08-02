@@ -126,10 +126,11 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "playInterfaceLaunchSound();", "External handoffs must use the host-owned, user-preference-respecting loading cue");
   requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
   requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
-  requireIncludes(contentRuntime, "rect.bottom + 8", "Reply-action menus must open below the X reply control");
+  requireIncludes(contentRuntime, "gap: 8", "Reply-action menus must open below the X reply control");
   requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
-  requireIncludes(contentRuntime, "panel.style.top = `${anchoredTop + window.scrollY}px`", "Reply-action panels must leave the viewport with their scrolling Reply control instead of pinning to an edge");
-  requireIncludes(contentRuntime, "panel.style.visibility = hiddenBehindHeader ? \"hidden\" : \"visible\"", "Reply-action panels must not draw through X's sticky column header");
+  requireIncludes(contentRuntime, "resolveReplyActionPanelPosition", "Reply-action panels must resolve from their initiating control's viewport coordinates");
+  requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(positionReplyActionPanel);", "Reply-action panels must re-anchor after package content changes their measured width");
+  requireIncludes(contentRuntime, "panel.style.visibility = position.hidden ? \"hidden\" : \"visible\"", "Reply-action panels must not draw through X's sticky column header");
   requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
   requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
   requireIncludes(contentRuntime, "[contenteditable=\"true\"][data-testid^=\"tweetTextarea_\"]", "Reply insertion must target X's actual editable element, not an inherited editable wrapper");

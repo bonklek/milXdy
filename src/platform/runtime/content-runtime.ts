@@ -14,6 +14,7 @@ import { composerActionButtonIdentity, findPackageComposerActionButton } from ".
 import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { eligibleContextMediaActions } from "./context-media-actions";
 import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions";
+import { resolveReplyActionPanelPosition } from "./reply-action-position";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
@@ -1894,6 +1895,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const surface = document.createElement("div");
     surface.className = "milxdy-reply-action-surface";
     shadow.append(surface);
+    let panelSizeObserver: ResizeObserver | null = null;
     const positionReplyActionPanel = () => {
       const rect = button.getBoundingClientRect();
       const primaryColumn = button.closest<HTMLElement>('[data-testid="primaryColumn"]');
@@ -1904,23 +1906,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           if (candidateRect.top > 8 || candidateRect.bottom <= 0) return bottom;
           return Math.max(bottom, candidateRect.bottom);
         }, 0);
-      const anchoredTop = rect.bottom + 8;
-      // The panel lives in the document flow rather than the viewport so it
-      // follows its invoking Reply control as its post scrolls and leaves the
-      // viewport with that post instead of detaching beneath a sticky header.
-      panel.style.left = `${Math.max(8, Math.min(rect.left + window.scrollX, document.documentElement.scrollWidth - 300))}px`;
-      panel.style.top = `${anchoredTop + window.scrollY}px`;
-      // Once the Reply control is underneath X's sticky column header, hiding
-      // the still-anchored panel avoids drawing it through that header.
-      const hiddenBehindHeader = stickyHeaderBottom > 0 && anchoredTop < stickyHeaderBottom;
-      panel.style.visibility = hiddenBehindHeader ? "hidden" : "visible";
-      panel.setAttribute("aria-hidden", String(hiddenBehindHeader));
-      panel.style.maxHeight = `${Math.max(48, window.innerHeight - Math.max(8, rect.bottom) - 16)}px`;
+      const position = resolveReplyActionPanelPosition({
+        anchor: rect,
+        panelWidth: panel.getBoundingClientRect().width,
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        stickyHeaderBottom,
+        gap: 8,
+      });
+      // Viewport coordinates avoid X's responsive body/sidebar containing
+      // blocks while the scroll listener still keeps the menu attached to its
+      // initiating Reply control instead of pinning it to the viewport.
+      panel.style.left = `${position.left}px`;
+      panel.style.top = `${position.top}px`;
+      panel.style.visibility = position.hidden ? "hidden" : "visible";
+      panel.setAttribute("aria-hidden", String(position.hidden));
+      panel.style.maxHeight = `${position.maxHeight}px`;
     };
-    positionReplyActionPanel();
     const close = () => {
       if (!panel.isConnected) return;
       controller.abort();
+      panelSizeObserver?.disconnect();
+      panelSizeObserver = null;
       panel.remove();
       document.removeEventListener("pointerdown", dismiss, true);
       window.removeEventListener("keydown", dismissOnEscape, true);
@@ -1960,6 +1967,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text, sendAfterInsert: template.sendAfterInsert === true }];
     });
     document.body.append(panel);
+    positionReplyActionPanel();
+    if (typeof ResizeObserver !== "undefined") {
+      panelSizeObserver = new ResizeObserver(positionReplyActionPanel);
+      panelSizeObserver.observe(panel);
+    }
     activeReplyActionClose = close;
     activeReplyActionButton = button;
     document.addEventListener("pointerdown", dismiss, true);
@@ -2662,7 +2674,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       html[data-milxdy-x-theme="dim"] .milxdy-standard-counter-zero-fallback,
       html[data-milxdy-settings-theme="dark"] .milxdy-standard-counter-zero-fallback { color: rgb(139, 152, 165); }
       .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
-      .milxdy-reply-action-panel { position: absolute; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
+      .milxdy-reply-action-panel { position: fixed; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
     `;
     document.documentElement.append(style);
   }
