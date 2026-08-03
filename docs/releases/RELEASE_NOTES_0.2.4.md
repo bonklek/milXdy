@@ -20,7 +20,7 @@ workflows while tightening the shared runtime underneath them.
   messaging, and remote-session details; reviewed host callbacks own those
   boundaries.
 
-See [Post-Factory](../guides/composer-kit.md).
+See [Post-Factory](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/guides/composer-kit.md).
 
 ## Share Kit
 
@@ -35,7 +35,7 @@ See [Post-Factory](../guides/composer-kit.md).
   pending local RemiNet Chat attachment and is not uploaded until the user
   presses Send in Chat.
 
-See [Share Kit — Tweet PNG](../guides/tweet-png.md).
+See [Share Kit — Tweet PNG](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/guides/tweet-png.md).
 
 ## Miladychan Portal
 
@@ -49,7 +49,7 @@ See [Share Kit — Tweet PNG](../guides/tweet-png.md).
   board/thread navigation, top and bottom composers, JUMP controls, quote-link
   insertion, and transient target highlighting.
 
-See [Miladychan Portal](../guides/miladychan-portal.md).
+See [Miladychan Portal](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/guides/miladychan-portal.md).
 
 ## Pets Maker and the custom-pet pipeline
 
@@ -68,7 +68,7 @@ See [Miladychan Portal](../guides/miladychan-portal.md).
   Pets Maker does not upload the selected image, post, publish, invoke Codex,
   infer missing traits, or add a rights declaration.
 
-See [Pets Maker export](../guides/custom-pet-export.md).
+See [Pets Maker export](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/guides/custom-pet-export.md).
 
 ## Add-ons Catalog and App SDK 0.2.4
 
@@ -86,8 +86,9 @@ See [Pets Maker export](../guides/custom-pet-export.md).
   explicit remote-result attachments.
 - Adds public starter templates, lifecycle harnesses, schemas, TypeScript types,
   accessibility guidance, asset declarations, and contributor UI guidance.
-See [App SDK overview](../sdk/APP_SDK_OVERVIEW.md), [Local Add-ons](../sdk/LOCAL_ADDONS.md),
-and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
+See [App SDK overview](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/sdk/APP_SDK_OVERVIEW.md),
+[Local Add-ons](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/sdk/LOCAL_ADDONS.md), and
+[Add-ons Catalog](https://github.com/bonklek/milXdy/blob/dc9b313da56d4b6669a626862feb64e16f34f1d6/docs/contributors/ADD_ONS_CATALOG.md).
 
 ## RemiNet, Beetol, rail, and visual polish
 

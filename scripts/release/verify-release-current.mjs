@@ -69,6 +69,10 @@ assert(
   "roadmap must include the package version as planned, upcoming, or released",
 );
 assert(releaseNotes.includes(`# milXdy ${packageJson.version}`), "current release notes heading must match package version");
+assert(
+  !/\[[^\]]+\]\((?!https?:\/\/|#|mailto:)[^)]+\)/i.test(releaseNotes),
+  "current release notes must use public absolute links because the same Markdown is published as the GitHub Release body",
+);
 assert(changelog.includes(`## ${packageJson.version}`), "changelog must include the package version heading");
 
 console.log(`Current release contract verification passed for extension ${extensionVersion} (package ${packageJson.version}, App SDK ${packageJson.appSdkVersion}).`);
