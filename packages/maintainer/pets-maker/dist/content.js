@@ -433,6 +433,74 @@ function crc32(bytes) {
   return (crc ^ 4294967295) >>> 0;
 }
 
+// packages/maintainer/pets-maker/src/maker-metadata.js
+var MAKER_METADATA_ORIGIN = "https://maker.remilia.org";
+var MAX_METADATA_BYTES = 256 * 1024;
+var FAMILY_METADATA_NAMES = Object.freeze({
+  milady: "Milady",
+  remilio: "Remilio",
+  bonkler: "Bonkler",
+  kagami: "Kagami"
+});
+var FAMILY_TRAIT_TYPES = Object.freeze({
+  milady: Object.freeze({ race: "Race", hair: "Hair", eyes: "Eyes", glasses: "Glasses", shirt: "Shirt", earrings: "Earrings" }),
+  remilio: Object.freeze({ race: "Race", hair: "Hair", eyes: "Eyes", glasses: "Glasses", shirt: "Shirt", earrings: "Earrings" }),
+  bonkler: Object.freeze({ race: "Body", hair: "Head", eyes: "Face", glasses: "Glasses", shirt: "Armor", earrings: "Earrings" }),
+  kagami: Object.freeze({ race: "Girl", hair: "Hair", eyes: "Eyes", glasses: "Glasses", shirt: "Outfit", earrings: "Earrings" })
+});
+function makerMetadataUrl(family, tokenId) {
+  const familyName = FAMILY_METADATA_NAMES[family];
+  if (!familyName || !Number.isInteger(tokenId) || tokenId < 0) throw new Error("Unsupported Maker metadata request.");
+  return `${MAKER_METADATA_ORIGIN}/metadata/${encodeURIComponent(familyName)}/${tokenId}`;
+}
+async function fetchMakerTraits(family, tokenId, { signal, fetchImpl = fetch } = {}) {
+  const response = await fetchImpl(makerMetadataUrl(family, tokenId), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
+    signal
+  });
+  if (!response.ok) throw new Error(`Maker metadata request failed (${response.status}).`);
+  const declaredLength = Number(response.headers.get("content-length") || 0);
+  if (declaredLength > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
+  const text = await response.text();
+  if (text.length > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
+  let metadata;
+  try {
+    metadata = JSON.parse(text);
+  } catch {
+    throw new Error("Maker metadata response was not valid JSON.");
+  }
+  return traitsFromMakerMetadata(family, metadata);
+}
+function traitsFromMakerMetadata(family, metadata) {
+  const traitTypes = FAMILY_TRAIT_TYPES[family];
+  if (!traitTypes || !metadata || !Array.isArray(metadata.attributes) || metadata.attributes.length > 64) {
+    throw new Error("Maker metadata did not contain a supported trait list.");
+  }
+  const attributes = /* @__PURE__ */ new Map();
+  for (const item of metadata.attributes) {
+    if (!item || typeof item.trait_type !== "string" || typeof item.value !== "string") continue;
+    const type = item.trait_type.trim();
+    const value = item.value.trim();
+    if (!type || !value || type.length > 80 || value.length > 120) continue;
+    attributes.set(type.toLowerCase(), { type, value });
+  }
+  return Object.fromEntries(Object.entries(traitTypes).map(([trait, sourceType]) => {
+    const source = attributes.get(sourceType.toLowerCase());
+    if (!source) return [trait, { assetId: "none", label: "None" }];
+    return [trait, {
+      assetId: makerAssetId(family, source.type, source.value),
+      label: source.value
+    }];
+  }));
+}
+function makerAssetId(family, traitType, value) {
+  const slug = `${traitType}-${value}`.normalize("NFKD").toLowerCase().replace(/[^a-z0-9]+/gu, "-").replace(/^-+|-+$/gu, "").slice(0, 58).replace(/-+$/u, "") || "unknown";
+  return `${family}-${slug}-v1`;
+}
+
 // packages/maintainer/pets-maker/src/custom-pet-ui.js
 var FAMILY_LABELS = Object.freeze({
   milady: "Milady",
@@ -468,7 +536,14 @@ function buildCustomPetExport({ signal }) {
     autocomplete: "off",
     ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help"
   });
-  const nftNumber = labeledControl("NFT number (optional)", nftNumberInput);
+  const fetchTraitsButton = element("button", {
+    className: "tweet-composer-kit__pet-secondary tweet-composer-kit__pet-fetch",
+    type: "button",
+    textContent: "Fetch",
+    disabled: true
+  });
+  const nftNumberRow = element("div", { className: "tweet-composer-kit__pet-nft-row" }, nftNumberInput, fetchTraitsButton);
+  const nftNumber = labeledControl("NFT number (optional)", nftNumberRow);
   nftNumber.hidden = true;
   const nftNumberHelp = element("p", {
     id: "tweet-composer-kit-pet-nft-number-help",
@@ -636,12 +711,45 @@ function buildCustomPetExport({ signal }) {
     nftNumberHelp.hidden = !range;
     if (!range) {
       nftNumberInput.value = "";
+      fetchTraitsButton.disabled = true;
       return;
     }
     nftNumberInput.min = String(range.min);
     nftNumberInput.max = String(range.max);
     nftNumberInput.placeholder = `${range.min}\u2013${range.max}`;
     nftNumberHelp.textContent = `${FAMILY_LABELS[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
+    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+  }, { signal });
+  nftNumberInput.addEventListener("input", () => {
+    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+  }, { signal });
+  fetchTraitsButton.addEventListener("click", async () => {
+    const templateFamily = requiredValue(family.select, "Choose a Maker template family.");
+    const sourceNftNumber = optionalNftNumber(nftNumberInput, templateFamily);
+    if (sourceNftNumber == null) {
+      nftNumberInput.focus();
+      status.textContent = "Enter an NFT number before fetching traits.";
+      return;
+    }
+    fetchTraitsButton.disabled = true;
+    fetchTraitsButton.textContent = "Fetching\u2026";
+    status.textContent = `Fetching ${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits\u2026`;
+    try {
+      const traits = await fetchMakerTraits(templateFamily, sourceNftNumber, { signal });
+      for (const [trait, value] of Object.entries(traits)) {
+        traitInputs[trait].assetId.value = value.assetId;
+        traitInputs[trait].label.value = value.label;
+      }
+      state.previewBytes = null;
+      status.textContent = `${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits populated from Maker metadata.`;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : "Maker traits could not be fetched.";
+    } finally {
+      if (!signal.aborted) {
+        fetchTraitsButton.textContent = "Fetch";
+        updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+      }
+    }
   }, { signal });
   for (const control of form.querySelectorAll("select, input, textarea")) {
     if (control === avatar || control === coverage.select || control === instruction) continue;
@@ -789,6 +897,11 @@ function optionalNftNumber(control, templateFamily) {
     throw new Error(`Enter a whole ${FAMILY_LABELS[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
   }
   return value;
+}
+function updateFetchButton(button, family, rawNumber) {
+  const range = nftNumberRangeForFamily(family);
+  const value = Number(String(rawNumber).trim());
+  button.disabled = !range || !Number.isInteger(value) || value < range.min || value > range.max;
 }
 async function renderCompletedAvatar(image, selection, canvas) {
   const context = canvas.getContext("2d", { alpha: true });
@@ -1090,8 +1203,9 @@ function open() {
   const closeButton = document.createElement("button");
   closeButton.className = "pets-maker-app__close";
   closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close Pets Maker");
-  closeButton.textContent = "\xD7";
+  closeButton.setAttribute("aria-label", "Minimize Pets Maker");
+  closeButton.title = "Minimize";
+  closeButton.textContent = "\u2212";
   closeButton.addEventListener("click", close, { signal });
   header.append(iconFrame, heading, closeButton);
   const body = document.createElement("div");

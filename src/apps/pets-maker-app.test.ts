@@ -13,6 +13,10 @@ import {
   validatePetRequest,
   validatePetRequestShape,
 } from "../../packages/maintainer/pets-maker/src/custom-pet-contract.js";
+import {
+  makerMetadataUrl,
+  traitsFromMakerMetadata,
+} from "../../packages/maintainer/pets-maker/src/maker-metadata.js";
 
 type PetRequestFamily = keyof typeof PET_REQUEST_NFT_RANGES;
 type PetRequestWithNftNumber = ReturnType<typeof makePetRequest> & {
@@ -75,6 +79,38 @@ async function validRequest(templateFamily: PetRequestFamily = "milady") {
 }
 
 describe("Pets Maker request contract", () => {
+  it("maps official family metadata into deterministic request traits", () => {
+    expect(makerMetadataUrl("milady", 1000)).toBe("https://maker.remilia.org/metadata/Milady/1000");
+    expect(traitsFromMakerMetadata("milady", {
+      attributes: [
+        { trait_type: "Race", value: "Clay" },
+        { trait_type: "Hair", value: "OG Frosted Blonde" },
+        { trait_type: "Eyes", value: "Classic" },
+        { trait_type: "Shirt", value: "Blue Pink Shirt" },
+      ],
+    })).toEqual({
+      race: { assetId: "milady-race-clay-v1", label: "Clay" },
+      hair: { assetId: "milady-hair-og-frosted-blonde-v1", label: "OG Frosted Blonde" },
+      eyes: { assetId: "milady-eyes-classic-v1", label: "Classic" },
+      glasses: { assetId: "none", label: "None" },
+      shirt: { assetId: "milady-shirt-blue-pink-shirt-v1", label: "Blue Pink Shirt" },
+      earrings: { assetId: "none", label: "None" },
+    });
+  });
+
+  it("uses family-specific metadata aliases for Bonkler and Kagami", () => {
+    expect(traitsFromMakerMetadata("bonkler", { attributes: [
+      { trait_type: "Body", value: "Another Freaking Mech" },
+      { trait_type: "Head", value: "Technics Record Player" },
+      { trait_type: "Face", value: "Gendo" },
+      { trait_type: "Armor", value: "White Trim" },
+    ] }).race.label).toBe("Another Freaking Mech");
+    expect(traitsFromMakerMetadata("kagami", { attributes: [
+      { trait_type: "Girl", value: "Lavender" },
+      { trait_type: "Outfit", value: "Coconut" },
+    ] }).shirt).toEqual({ assetId: "kagami-outfit-coconut-v1", label: "Coconut" });
+  });
+
   it("derives leg color from family-specific race mappings", () => {
     expect(legColorForRace("milady", { assetId: "milady-alien-skin-v1", label: "Alien" })).toBe("fantasy-green");
     expect(legColorForRace("remilio", { assetId: "remilio-zombie-race-v1", label: "Zombie" })).toBe("cool-pale");
@@ -176,10 +212,14 @@ describe("Pets Maker request contract", () => {
     expect(manifest.hub.rail).toEqual({ supported: true, defaultPinned: true });
     expect(manifest.dock.icon).toBe("assets/remy.png");
     expect(manifest.chrome.nativeStyle).toBe("reminet");
+    expect(manifest.permissions.hosts).toEqual(["https://maker.remilia.org/*"]);
+    expect(manifest.privacy.privacyLabels).toContain("remote-api");
     expect(manifest.privacy.dataNotes.join(" ")).toContain("Nothing is uploaded");
     expect(appSource).toContain('panel.className = "pets-maker-app"');
     expect(appSource).toContain('resolveAssetUrl("assets/remy.png")');
     expect(appSource).toContain('wipLabel.textContent = "WORK IN PROGRESS"');
+    expect(appSource).toContain('closeButton.setAttribute("aria-label", "Minimize Pets Maker")');
+    expect(appSource).toContain('closeButton.textContent = "−"');
     expect(appSource).toContain('header.addEventListener("pointerdown", onPanelPointerDown');
     expect(appSource).toContain("handle.setPointerCapture(event.pointerId)");
     expect(appSource).toContain("window.innerWidth - bounds.width - margin");
@@ -204,6 +244,8 @@ describe("Pets Maker request contract", () => {
     expect(source).not.toContain('blankSelect("Leg color"');
     expect(source).toContain("legColorForRace(templateFamily, traits.race)");
     expect(source).toContain("NFT number (optional)");
+    expect(source).toContain('textContent: "Fetch"');
+    expect(source).toContain("fetchMakerTraits(templateFamily, sourceNftNumber");
     expect(source).toContain("nftNumberRangeForFamily(family.select.value)");
   });
 });

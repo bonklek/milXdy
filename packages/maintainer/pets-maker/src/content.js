@@ -64,8 +64,9 @@ export function open() {
   const closeButton = document.createElement("button");
   closeButton.className = "pets-maker-app__close";
   closeButton.type = "button";
-  closeButton.setAttribute("aria-label", "Close Pets Maker");
-  closeButton.textContent = "×";
+  closeButton.setAttribute("aria-label", "Minimize Pets Maker");
+  closeButton.title = "Minimize";
+  closeButton.textContent = "−";
   closeButton.addEventListener("click", close, { signal });
   header.append(iconFrame, heading, closeButton);
 

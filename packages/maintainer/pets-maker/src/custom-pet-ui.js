@@ -16,6 +16,7 @@ import {
   stableJson,
   validatePetRequest,
 } from "./custom-pet-contract.js";
+import { fetchMakerTraits } from "./maker-metadata.js";
 
 const FAMILY_LABELS = Object.freeze({
   milady: "Milady",
@@ -50,7 +51,14 @@ export function buildCustomPetExport({ signal }) {
     autocomplete: "off",
     ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help",
   });
-  const nftNumber = labeledControl("NFT number (optional)", nftNumberInput);
+  const fetchTraitsButton = element("button", {
+    className: "tweet-composer-kit__pet-secondary tweet-composer-kit__pet-fetch",
+    type: "button",
+    textContent: "Fetch",
+    disabled: true,
+  });
+  const nftNumberRow = element("div", { className: "tweet-composer-kit__pet-nft-row" }, nftNumberInput, fetchTraitsButton);
+  const nftNumber = labeledControl("NFT number (optional)", nftNumberRow);
   nftNumber.hidden = true;
   const nftNumberHelp = element("p", {
     id: "tweet-composer-kit-pet-nft-number-help",
@@ -217,12 +225,45 @@ export function buildCustomPetExport({ signal }) {
     nftNumberHelp.hidden = !range;
     if (!range) {
       nftNumberInput.value = "";
+      fetchTraitsButton.disabled = true;
       return;
     }
     nftNumberInput.min = String(range.min);
     nftNumberInput.max = String(range.max);
     nftNumberInput.placeholder = `${range.min}–${range.max}`;
     nftNumberHelp.textContent = `${FAMILY_LABELS[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
+    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+  }, { signal });
+  nftNumberInput.addEventListener("input", () => {
+    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+  }, { signal });
+  fetchTraitsButton.addEventListener("click", async () => {
+    const templateFamily = requiredValue(family.select, "Choose a Maker template family.");
+    const sourceNftNumber = optionalNftNumber(nftNumberInput, templateFamily);
+    if (sourceNftNumber == null) {
+      nftNumberInput.focus();
+      status.textContent = "Enter an NFT number before fetching traits.";
+      return;
+    }
+    fetchTraitsButton.disabled = true;
+    fetchTraitsButton.textContent = "Fetching…";
+    status.textContent = `Fetching ${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits…`;
+    try {
+      const traits = await fetchMakerTraits(templateFamily, sourceNftNumber, { signal });
+      for (const [trait, value] of Object.entries(traits)) {
+        traitInputs[trait].assetId.value = value.assetId;
+        traitInputs[trait].label.value = value.label;
+      }
+      state.previewBytes = null;
+      status.textContent = `${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits populated from Maker metadata.`;
+    } catch (error) {
+      status.textContent = error instanceof Error ? error.message : "Maker traits could not be fetched.";
+    } finally {
+      if (!signal.aborted) {
+        fetchTraitsButton.textContent = "Fetch";
+        updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+      }
+    }
   }, { signal });
   for (const control of form.querySelectorAll("select, input, textarea")) {
     if (control === avatar || control === coverage.select || control === instruction) continue;
@@ -370,6 +411,12 @@ function optionalNftNumber(control, templateFamily) {
     throw new Error(`Enter a whole ${FAMILY_LABELS[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
   }
   return value;
+}
+
+function updateFetchButton(button, family, rawNumber) {
+  const range = nftNumberRangeForFamily(family);
+  const value = Number(String(rawNumber).trim());
+  button.disabled = !range || !Number.isInteger(value) || value < range.min || value > range.max;
 }
 
 async function renderCompletedAvatar(image, selection, canvas) {

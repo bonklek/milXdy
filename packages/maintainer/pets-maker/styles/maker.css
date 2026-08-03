@@ -8,6 +8,8 @@
 .tweet-composer-kit__pet-fieldset legend { color: var(--pets-violet); padding-inline: 5px; font: 800 12px/1.1 var(--pets-font-display); letter-spacing: .025em; }
 .tweet-composer-kit__pet-fieldset legend::before { content: "0" counter(pet-step) " / "; color: var(--pets-accent-dark); font-family: var(--pets-font-ui); font-size: 9px; letter-spacing: .06em; }
 .tweet-composer-kit__pet-field { display: grid; gap: 4px; margin: 0; }
+.tweet-composer-kit__pet-nft-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 7px; align-items: stretch; }
+.tweet-composer-kit__pet-nft-row .tweet-composer-kit__pet-fetch { min-inline-size: 76px; min-block-size: 40px; }
 .tweet-composer-kit__pet-label, .tweet-composer-kit__pet-trait-name { color: var(--pets-ink); font: 800 10px/1.15 var(--pets-font-ui); letter-spacing: .035em; text-transform: uppercase; }
 .tweet-composer-kit__pet-input, .tweet-composer-kit__pet-file, .tweet-composer-kit__pet-select, .tweet-composer-kit__pet-instruction { display: block; inline-size: 100%; min-block-size: 40px; border: 1px solid var(--pets-frame-soft); border-radius: 3px; background: var(--pets-paper); color: var(--pets-ink); box-shadow: inset 1px 1px 0 color-mix(in srgb, var(--pets-highlight) 68%, transparent); padding: 7px 8px; font: 600 12px/1.25 var(--pets-font-ui); }
 .tweet-composer-kit__pet-input:hover, .tweet-composer-kit__pet-file:hover, .tweet-composer-kit__pet-select:hover { border-color: var(--pets-frame); }
@@ -36,6 +38,7 @@
   .tweet-composer-kit__pet-actions { grid-template-columns: 1fr; }
   .tweet-composer-kit__pet-trait { grid-template-columns: 1fr; }
   .tweet-composer-kit__pet-trait .tweet-composer-kit__pet-input:last-child { grid-column: 1; }
+  .tweet-composer-kit__pet-nft-row { grid-template-columns: 1fr; }
 }
 @media (forced-colors: active) {
   .tweet-composer-kit__pet-heading, .tweet-composer-kit__pet-fieldset, .tweet-composer-kit__pet-primary, .tweet-composer-kit__pet-secondary, .tweet-composer-kit__pet-preview { border-color: CanvasText; box-shadow: none; }
