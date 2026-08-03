@@ -7,8 +7,8 @@
   "description": "A minimal third-party local package that records an SDK diagnostic when enabled.",
   "packageKind": "feature",
   "sdk": {
-    "minVersion": "0.2.4",
-    "targetVersion": "0.2.4",
+    "minVersion": "0.2.5",
+    "targetVersion": "0.2.5",
     "notes": [
       "Novel package sample for local custom builds."
     ]

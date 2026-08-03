@@ -1,6 +1,6 @@
 # milXdy App SDK
 
-milXdy App SDK 0.2.4 builds reviewed app packages into custom Chromium editions
+milXdy App SDK 0.2.5 builds reviewed app packages into custom Chromium editions
 of milXdy. Packages declare their features, lifecycle, settings, storage,
 assets, permissions, privacy effects, and performance cost through a versioned
 manifest. milXdy supplies the shared runtime, Apps & Features integration,

@@ -1,6 +1,6 @@
 # App Platform Support Contract
 
-milXdy App SDK 0.2.4 is the supported platform for building reviewed apps into
+milXdy App SDK 0.2.5 is the supported platform for building reviewed apps into
 custom Chromium distributions of milXdy. It gives app authors a versioned
 manifest, typed lifecycle, declared capabilities, shared runtime services,
 starter templates, deterministic packaging, and fail-closed trust checks.
@@ -115,7 +115,7 @@ executes package code, and the extension never imports package code at runtime.
 
 ## External Reference
 
-Post-reading is the production reference app for App SDK 0.2.4. Its standalone
+Post-reading is the production reference app for App SDK 0.2.5. Its standalone
 repository builds the same feature source as a milXdy package, targets the
 public SDK declarations, uses declared storage and assets, and is pinned by
 source commit and package hash. The cross-repository verification gate builds,

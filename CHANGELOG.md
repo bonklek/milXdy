@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.5
+
+Status: candidate; feature scope is not yet approved.
+
+See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
+
+- Initializes the 0.2.5 release line and App SDK declarations from the clean post-0.2.4 `main` baseline.
+- Reserves Reader Voice as the public theme while candidate issue scope, acceptance criteria, and manual QA remain subject to maintainer approval.
+- Does not represent any deferred 0.2.4 issue or historical release-branch implementation as shipped or accepted.
+
 ## 0.2.4
 
 Status: released.
