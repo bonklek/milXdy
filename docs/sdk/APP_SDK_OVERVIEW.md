@@ -45,10 +45,10 @@ The catalog is a selection surface. It produces a small
 `.milxdy-selection.json`; the checked-in local manager owns catalog-revision
 resolution, package-hash verification, filesystem placement, composition, and
 build promotion. It never downloads catalog package code. The first inventory
-contains Pets Maker, Composer Kit, and Share Kit. Pets Maker is the first
+contains Pets Maker, Post-Factory, and Share Kit. Pets Maker is the first
 catalog-installed app, remains disabled by default, and requires explicit
 enablement after composition. BOORU and Meme
-Maker are disclosed as Composer Kit capabilities rather than separate add-ons;
+Maker are disclosed as Post-Factory capabilities rather than separate add-ons;
 catalog publication remains a separate maintainer action and is not
 required for the manual trusted-ZIP workflow.
 

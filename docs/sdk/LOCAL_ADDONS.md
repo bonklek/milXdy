@@ -23,11 +23,11 @@ The output folder is stable. Do not load the temporary build under `tmp/`.
 this workflow:
 
 1. **Get more add-ons** opens the configured GitHub catalog URL in a new tab.
-   The first maintainer inventory lists Pets Maker, Composer Kit, and Share Kit
+   The first maintainer inventory lists Pets Maker, Post-Factory, and Share Kit
    with fail-closed availability and review states. Pets Maker is available for
    selection but stays disabled until separately enabled in Apps & Features.
    BOORU and Meme Maker are
-   Composer Kit capabilities, not separate add-ons. The page exports only a
+   Post-Factory capabilities, not separate add-ons. The page exports only a
    small selection recipe; it never downloads package code.
 2. For separately obtained manual ZIPs, **Load downloaded add-ons** opens a
    user-initiated multi-file picker. milXdy does not scan Downloads or request

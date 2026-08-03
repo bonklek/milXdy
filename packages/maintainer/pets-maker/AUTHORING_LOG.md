@@ -5,7 +5,7 @@
 Pets Maker is a novel, optional App SDK package. Its app lifecycle, form,
 deterministic compositing contract, styles, and icon live entirely under this
 package. The core extension supplies only its existing public overlay-app
-runtime. Composer Kit no longer imports or renders pet code.
+runtime. Post-Factory no longer imports or renders pet code.
 
 ## Remy rail icon provenance
 

@@ -2,7 +2,7 @@
   "$schema": "https://milxdy.local/schemas/local-app-package.schema.json",
   "manifestVersion": 1,
   "id": "tweet-composer-kit",
-  "name": "Tweet Composer Kit",
+  "name": "Post-Factory",
   "version": "0.2.0-pilot",
   "description": "A local-only composer companion pilot with local reply phrases, host-owned Drafts, reviewed Maker handoffs, and Remibooru tools.",
   "packageKind": "app",
@@ -149,8 +149,8 @@
   "settings": [
     {
       "id": "tweet-composer-kit.enabled",
-      "label": "Tweet Composer Kit",
-      "description": "Enable the local Composer Kit pilot.",
+      "label": "Post-Factory",
+      "description": "Enable the local Post-Factory pilot.",
       "scope": "app",
       "location": "appsAndFeatures",
       "role": "enablement",
@@ -220,7 +220,7 @@
     "rail": { "supported": false, "defaultPinned": false },
     "presets": ["full"],
     "permissionNotes": [
-      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
+      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Post-Factory maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
       "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
       "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. After an explicit CHEESEWORLD tile click and per-invocation host consent, the host may transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
     ],
@@ -247,7 +247,7 @@
   },
   "privacy": {
     "permissionNotes": [
-      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Composer Kit maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
+      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. After an explicit Post-Factory maker-icon click, the host transfers the active draft to the named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
       "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
       "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. After an explicit CHEESEWORLD tile click and per-invocation host consent, the host may transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
     ],

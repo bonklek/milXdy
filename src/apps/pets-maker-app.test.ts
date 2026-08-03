@@ -191,7 +191,7 @@ describe("Pets Maker request contract", () => {
     expect(BODY_COMPLETION_CATALOG.footwear.every((item) => item.assetVersion === 1 && item.assetId.endsWith("-v1"))).toBe(true);
   });
 
-  it("ships as a disabled, lazy side-rail app and leaves Composer Kit pet-free", () => {
+  it("ships as a disabled, lazy side-rail app and leaves Post-Factory pet-free", () => {
     const source = readFileSync("packages/maintainer/pets-maker/src/custom-pet-ui.js", "utf8");
     const appSource = readFileSync("packages/maintainer/pets-maker/src/content.js", "utf8");
     const themeSource = readFileSync("packages/maintainer/pets-maker/styles/theme.css", "utf8");

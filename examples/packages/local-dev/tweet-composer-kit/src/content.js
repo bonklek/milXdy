@@ -26,7 +26,7 @@ export function onReplyAction({ panel, templates, selectTemplate, openNativeRepl
   const menuTemplates = Array.isArray(templates)
     ? templates.filter((template) => template && typeof template.id === "string" && template.id.length > 0)
     : [];
-  const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__reply-menu", ariaLabel: "Composer Kit quick reply" });
+  const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__reply-menu", ariaLabel: "Post-Factory quick reply" });
   const status = el("p", { className: "tweet-composer-kit__status", ariaLive: "polite", role: "status" });
   const rows = el("div", { className: "tweet-composer-kit__reply-rows", role: "menu", ariaLabel: "Quick reply choices" });
   const buttons = [];
@@ -69,7 +69,7 @@ export function onReplyAction({ panel, templates, selectTemplate, openNativeRepl
 }
 
 function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
-  const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__composer-panel", ariaLabel: "Tweet Composer Kit" });
+  const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__composer-panel", ariaLabel: "Post-Factory" });
   const topInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Top text", ariaLabel: "Top text", autocomplete: "off" });
   const bottomInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Bottom text", ariaLabel: "Bottom text", autocomplete: "off" });
   const random = el("input", { id: "tweet-composer-kit-random-meme", className: "tweet-composer-kit__random-toggle", type: "checkbox" });
