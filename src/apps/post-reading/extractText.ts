@@ -1,6 +1,7 @@
-import { CARD_WRAPPER, QUOTE_TWEET, TWEET_PHOTO, TWEET_TEXT, USER_NAME, X_ARTICLE_BODY } from "./selectors";
+import { CARD_WRAPPER, QUOTE_TWEET, TWEET_PHOTO, TWEET_TEXT, USER_NAME } from "./selectors";
 import type { PostReadingSettings, ReadablePost } from "./shared/types";
 import { findXStatusHrefInText, normalizeXStatusUrl } from "./urlPolicy";
+import { extractXArticleTextContainers, isXArticleSurface } from "../../platform/scanner/x-article";
 
 export function extractReadablePost(tweet: HTMLElement, settings: PostReadingSettings): ReadablePost | null {
   if (isXArticleContainer(tweet)) return extractReadableArticle(tweet, settings);
@@ -87,22 +88,11 @@ function sameDisplayName(left: string, right: string): boolean {
 }
 
 function isXArticleContainer(element: HTMLElement): boolean {
-  return /^\/i\/article\/\d+/.test(window.location.pathname)
-    && Boolean(element.matches('[data-testid="primaryColumn"], main, article') || element.querySelector(X_ARTICLE_BODY));
+  return isXArticleSurface(element);
 }
 
 function getArticleBodyElements(container: HTMLElement): HTMLElement[] {
-  const candidates = Array.from(container.querySelectorAll<HTMLElement>(`${X_ARTICLE_BODY}, h1, h2, p`))
-    .filter(isReadableArticleTextElement);
-  return Array.from(new Set(candidates));
-}
-
-function isReadableArticleTextElement(element: HTMLElement): boolean {
-  if (element.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
-  const text = cleanText(element.innerText || element.textContent || "");
-  if (text.length < 2) return false;
-  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
-  return true;
+  return extractXArticleTextContainers(container);
 }
 
 function extractArticleAuthorName(container: HTMLElement): string | null {

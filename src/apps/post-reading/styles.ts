@@ -525,11 +525,13 @@ export function injectStyles(): void {
     .post-reading-checkbox input {
       margin: 0;
     }
-    article[data-post-reading-active="true"][data-post-reading-active-background="true"] {
+    article[data-post-reading-active="true"][data-post-reading-active-background="true"],
+    [data-testid="twitterArticleReadView"][data-post-reading-active="true"][data-post-reading-active-background="true"] {
       box-shadow: inset 3px 0 0 rgba(199, 102, 147, 0.9);
       background: linear-gradient(90deg, rgba(199, 102, 147, 0.08), transparent 42%);
     }
-    article[data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"] {
+    article[data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"],
+    [data-testid="twitterArticleReadView"][data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"] {
       outline-color: rgba(199, 102, 147, 0.55) !important;
       box-shadow:
         inset 4px 0 0 rgba(199, 102, 147, 0.85),
@@ -731,7 +733,8 @@ export function injectStyles(): void {
       .post-reading-full-quote-body {
         color: rgb(231, 233, 234);
       }
-      article[data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"] {
+      article[data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"],
+      [data-testid="twitterArticleReadView"][data-post-reading-active="true"][data-post-reading-active-background="true"][data-miladymaxxer-effect="milady"] {
         background:
           linear-gradient(90deg, rgba(220, 133, 174, 0.13), rgba(220, 133, 174, 0) 38%),
           linear-gradient(180deg, rgb(32, 26, 14) 0%, rgb(24, 20, 10) 100%) !important;

@@ -1,4 +1,5 @@
 import { safeLocalGet, safeLocalSet } from "../background/extension-runtime";
+import { extractXArticleTextContainers, isXArticleRoute as isXArticleRoutePath, X_ARTICLE_ROOT } from "./x-article";
 
 export type TwitterSurfaceKind = "tweet" | "xArticle" | "userCell" | "notification" | "directMessage" | "profile";
 
@@ -17,7 +18,7 @@ export type TwitterSurface = {
 type Listener = (surface: TwitterSurface) => void;
 
 const TWEET = 'article[data-testid="tweet"]';
-const X_ARTICLE = '[data-testid="primaryColumn"]';
+const X_ARTICLE = X_ARTICLE_ROOT;
 const USER_CELL = '[data-testid="UserCell"], [data-testid="user-cell"]';
 const NOTIFICATION = 'article[data-testid="notification"]';
 const DIRECT_MESSAGE = '[data-testid^="message-"]:not([data-testid^="message-text-"])';
@@ -496,7 +497,7 @@ function isNotificationsRoute(): boolean {
 }
 
 function isXArticleRoute(): boolean {
-  return /^\/i\/article\/\d+/.test(location.pathname);
+  return isXArticleRoutePath(location.pathname);
 }
 
 function isNotificationPointerTarget(target: EventTarget | null): boolean {
@@ -647,26 +648,7 @@ function extractTextContainers(kind: TwitterSurfaceKind, element: HTMLElement): 
 }
 
 function extractArticleTextContainers(element: HTMLElement): HTMLElement[] {
-  const explicit = Array.from(element.querySelectorAll<HTMLElement>([
-    '[data-testid*="article" i] [dir="auto"]',
-    '[data-testid*="Article" i] [dir="auto"]',
-    '[data-testid*="article" i] p',
-    '[data-testid*="Article" i] p',
-    '[role="article"] [dir="auto"]',
-    'main [dir="auto"]',
-  ].join(","))).filter(isReadableArticleTextNode);
-  const unique = Array.from(new Set(explicit));
-  if (unique.length > 0) return unique;
-  return Array.from(element.querySelectorAll<HTMLElement>('h1, h2, p, [dir="auto"]'))
-    .filter(isReadableArticleTextNode);
-}
-
-function isReadableArticleTextNode(node: HTMLElement): boolean {
-  if (node.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
-  const text = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
-  if (text.length < 2) return false;
-  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
-  return true;
+  return extractXArticleTextContainers(element);
 }
 
 function isReadableNotificationTextNode(node: HTMLElement): boolean {

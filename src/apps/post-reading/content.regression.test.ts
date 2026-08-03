@@ -68,6 +68,23 @@ describe("Post-reading content regression contracts", () => {
     expect(source).toContain("onNext: () => nextTweetOrQuotingText()");
     expect(source).toContain("[settings.keyNextTweet, () => nextTweetOrQuotingText()]");
   });
+
+  it("keeps article extraction, highlighting, and long-form button eligibility on one contract", () => {
+    expect(source).toContain('import { extractXArticleTextContainers, isXArticleSurface } from "../../platform/scanner/x-article"');
+    expect(functionBody("getArticleBodies")).toContain("extractXArticleTextContainers(article)");
+    expect(functionBody("processTweet")).toContain('kind !== "xArticle" && !existingButton');
+    expect(functionBody("findArticleHighlightTargets")).toContain("target.segments = buildSmoothHighlightSegments(target)");
+  });
+
+  it("stops and clears the active post or article reader on client-side navigation", () => {
+    const body = functionBody("onRouteChange");
+    expect(body).toContain("cancelOcr()");
+    expect(body).toContain("clearBodyHighlight()");
+    expect(body).toContain("speech.stop()");
+    expect(body).toContain("currentTweet = null");
+    expect(body).toContain("pendingTweets.clear()");
+    expect(body).not.toContain("wikiSpeech.stop()");
+  });
 });
 
 function functionBody(name: string): string {

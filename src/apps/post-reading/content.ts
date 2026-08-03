@@ -14,7 +14,7 @@ import {
 } from "./navigation";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
-import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
+import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT } from "./selectors";
 import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./shared/types";
 import { playEndDing } from "./sounds";
 import { SpeechController, type BoundarySupport } from "./speech";
@@ -22,8 +22,9 @@ import { injectStyles } from "./styles";
 import { configurePostReadingStorage, loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
 import type { TwitterSurface } from "../../platform/scanner/twitter-scanner";
+import { extractXArticleTextContainers, isXArticleSurface } from "../../platform/scanner/x-article";
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
-import type { AppRuntimeScheduler, MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
+import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } from "../../platform/app-sdk/app-platform";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 
 const processed = new WeakMap<HTMLElement, string>();
@@ -357,6 +358,20 @@ export function onSurface(surface: TwitterSurface): void {
   scheduleScan();
 }
 
+export function onRouteChange(route: MilxdyRouteChange): void {
+  if (!lifecycleActive() || !route.previousHref || route.previousHref === route.href) return;
+  cancelPendingHighlightWork();
+  cancelOcr();
+  clearFullQuotePreview();
+  clearBodyHighlight();
+  clearActiveTweets();
+  speech.stop();
+  currentTweet = null;
+  pendingTweets.clear();
+  removeReadButtons();
+  player.setPostNavigationAvailability({ previous: false, next: false });
+}
+
 export function disable(): void {
   if (settings) settings = { ...settings, enabled: false };
   cancelOcr();
@@ -508,7 +523,7 @@ function processTweet(
     placeReadButton(tweet, existingButton, anchor, footer, kind);
     return;
   }
-  if (!existingButton && signature.length > policy.maxTextCharsForButton) {
+  if (kind !== "xArticle" && !existingButton && signature.length > policy.maxTextCharsForButton) {
     processed.set(tweet, signature);
     recordRuntimeDiagnostic("buttonSkipped", {
       reason: "performanceTextCap",
@@ -2182,22 +2197,11 @@ function prepareSmoothBody(body: HTMLElement, textOverride?: string): HTMLElemen
 }
 
 function isXArticleContainer(element: HTMLElement): boolean {
-  return /^\/i\/article\/\d+/.test(window.location.pathname)
-    && Boolean(element.matches('[data-testid="primaryColumn"], main, article') || element.querySelector(X_ARTICLE_BODY));
+  return isXArticleSurface(element);
 }
 
 function getArticleBodies(article: HTMLElement): HTMLElement[] {
-  const candidates = Array.from(article.querySelectorAll<HTMLElement>(`${X_ARTICLE_BODY}, h1, h2, p`))
-    .filter(isReadableArticleBody);
-  return Array.from(new Set(candidates));
-}
-
-function isReadableArticleBody(element: HTMLElement): boolean {
-  if (element.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
-  const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
-  if (text.length < 2) return false;
-  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
-  return true;
+  return extractXArticleTextContainers(article);
 }
 
 function prepareWordBody(body: HTMLElement): HTMLElement[] {
@@ -2522,7 +2526,9 @@ function findArticleHighlightTargets(article: HTMLElement, spokenText: string, p
     if (!text) continue;
     const range = findBodyRange(spokenText, text, "first", cursor);
     if (!range) continue;
-    targets.push({ body, kind: "main", ...range });
+    const target: HighlightTarget = { body, kind: "main", ...range };
+    target.segments = buildSmoothHighlightSegments(target);
+    targets.push(target);
     cursor = range.end;
   }
   if (targets.length === 0) {
