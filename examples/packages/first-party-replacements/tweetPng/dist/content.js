@@ -958,7 +958,6 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
         <img class="milxdy-tweet-png-preview" src="${url}" alt="Rendered post PNG preview">
         <div class="milxdy-tweet-png-media-controls" aria-label="Included image controls"></div>
       </div>
-      <p>Review before sharing. Nothing is sent automatically.</p>
       <p class="milxdy-tweet-png-status" role="status" aria-live="polite"></p>
     </div>
   `;

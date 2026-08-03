@@ -130,6 +130,10 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).not.toContain('href="https://www.remilia.net/"');
   });
 
+  it("keeps the review pane free of the redundant sharing caption", () => {
+    expect(packageSource).not.toContain("Review before sharing. Nothing is sent automatically.");
+  });
+
   it("keeps RemiNet staging local and constrains reconnect to a fixed inactive tab", () => {
     const stageStart = chatSource.indexOf("export async function stageLocalAttachment");
     const stageEnd = chatSource.indexOf("\nexport function close", stageStart);
