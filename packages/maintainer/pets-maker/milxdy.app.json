@@ -55,12 +55,23 @@
       "surfaces": ["overlayApp"],
       "presentation": "sideRailOverlay",
       "notes": ["Uses the shared X/Twitter App SDK runtime and requests no additional host permission."]
+    },
+    {
+      "site": "remiliaNet",
+      "hosts": ["https://maker.remilia.org/*"],
+      "integration": "contentScript",
+      "surfaces": ["overlayApp"],
+      "presentation": "userAction",
+      "notes": ["After an explicit Fetch click, reads only public NFT metadata for the selected Maker family and number; the app does not mount a UI on the Maker site."]
     }
   ],
+  "permissions": {
+    "hosts": ["https://maker.remilia.org/*"]
+  },
   "cost": {
     "startup": "cheap",
     "perSurface": "moderate",
-    "network": "none",
+    "network": "batched",
     "worker": "none",
     "domWrite": "moderate"
   },
@@ -76,18 +87,18 @@
     "longDescription": "Choose a Maker family and NFT number, provide the local transparent avatar and exact traits, complete the lower body, preview the deterministic composite, and download a validated bundle.",
     "rail": { "supported": true, "defaultPinned": true },
     "presets": ["full"],
-    "permissionNotes": [],
-    "dataNotes": ["Reads only the PNG selected in the visible app form and processes it in memory for preview and download."],
-    "remoteServices": [],
+    "permissionNotes": ["The https://maker.remilia.org/* host permission is used only after an explicit Fetch click to read public metadata for the selected family and NFT number."],
+    "dataNotes": ["Reads only the PNG selected in the visible app form and processes it in memory for preview and download.", "An explicit Fetch sends only the selected public Maker family and NFT number; returned public traits populate the visible form and are not cached."],
+    "remoteServices": ["The official Maker metadata endpoint is queried only after an explicit Fetch click and returns public NFT traits."],
     "localStorageNotes": ["Stores only the generated app enablement toggle."],
-    "privacyLabels": ["local-only", "local-files"]
+    "privacyLabels": ["local-only", "local-files", "remote-api"]
   },
   "privacy": {
-    "permissionNotes": [],
-    "dataNotes": ["The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP. Nothing is uploaded, posted, published, or cached."],
+    "permissionNotes": ["The https://maker.remilia.org/* host permission is used only after an explicit Fetch click to read public metadata for the selected family and NFT number."],
+    "dataNotes": ["The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP. Nothing is uploaded, posted, published, or cached.", "An explicit Fetch sends only the selected public Maker family and NFT number to maker.remilia.org and populates the visible trait fields from its public response."],
     "localStorageNotes": ["Stores only app enablement; maker form state and selected files are not persisted."],
-    "remoteServices": [],
-    "privacyLabels": ["local-only", "local-files"],
+    "remoteServices": ["The official Maker metadata endpoint is queried only after an explicit Fetch click and returns public NFT traits."],
+    "privacyLabels": ["local-only", "local-files", "remote-api"],
     "consentRequired": true
   },
   "package": {
@@ -104,6 +115,6 @@
     "sourceUrl": "https://github.com/bonklek/milXdy/tree/main/packages/maintainer/pets-maker",
     "reviewedBy": "milxdy-maintainer-pets-maker",
     "reviewedAt": "2026-08-01",
-    "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, remote services, background handlers, or page observers."]
+    "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, background handlers, or page observers; its only remote call is an explicit read of public Maker metadata."]
   }
 }
