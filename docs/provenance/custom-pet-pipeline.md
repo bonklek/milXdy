@@ -6,9 +6,9 @@
 
 This record distinguishes copied material from independently implemented work. It contains no user image, private prompt, or machine-specific path.
 
-## Composer Kit baseline
+## Post-Factory baseline
 
-The versioned package under `examples/packages/local-dev/tweet-composer-kit/` was imported from the maintainer-reviewed local Composer Kit pilot already used by the 0.2.4 shared QA extension.
+The versioned package under `examples/packages/local-dev/tweet-composer-kit/` was imported from the maintainer-reviewed local Post-Factory pilot already used by the 0.2.4 shared QA extension.
 
 - package ID: `tweet-composer-kit`
 - imported package content SHA-256: `f7baa0e50a1a5f44236e23ac5af2d317000a7d7b2148112cb213b5515c8a39c7`

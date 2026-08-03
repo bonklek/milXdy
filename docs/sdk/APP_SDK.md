@@ -411,7 +411,7 @@ not style the X document, and the runtime never loads undeclared package files.
 
 ```json
 "composerAction": {
-  "label": "Composer Kit",
+  "label": "Post-Factory",
   "presentation": "anchoredPanel"
 }
 ```

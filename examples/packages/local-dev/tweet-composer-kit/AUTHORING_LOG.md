@@ -1,4 +1,4 @@
-# Tweet Composer Kit — external-author pilot log
+# Post-Factory — external-author pilot log
 
 ## Scope and method
 
@@ -15,7 +15,7 @@ be deleted, protected, rate-limited, or changed by upstream behavior. It would
 not make the underlying reaction media durable, and it would duplicate the
 approved source's own canonical-post index.
 
-Composer Kit instead uses bounded, no-cache Remibooru queries. The manifest
+Post-Factory instead uses bounded, no-cache Remibooru queries. The manifest
 declares `cache.policy: "none"`; searches send at most five AND-filtered public
 facet IDs, a bounded page size, and an opaque cursor. The host returns only
 sanitized metadata, same-origin thumbnails, visible attribution, canonical post
@@ -97,7 +97,7 @@ Quick replies, the bounded local phrase list, and native Drafts use only reviewe
 
 For issues #190–#193, the reviewed pilot package was moved into
 `examples/packages/local-dev/tweet-composer-kit/` without changing its package
-ID. This gives the existing Composer Kit a reviewable source boundary and keeps
+ID. This gives the existing Post-Factory a reviewable source boundary and keeps
 it composable with the existing Share Kit package in the one shared extension.
 
 The continuation adds a user-initiated Custom Pet export inside the existing
@@ -115,7 +115,7 @@ without a user or reference image.
 ## Migration to the optional Pets Maker app
 
 The Custom Pet form, request contract, canvas/ZIP work, and pet-specific styles
-were moved to `../pets-maker/`. Composer Kit no longer imports, renders, or
+were moved to `../pets-maker/`. Post-Factory no longer imports, renders, or
 describes pet functionality. The historical continuation above records the
 earlier pilot location; current ownership is the disabled-by-default Pets Maker
 rail package requested during issue #191 follow-up QA.

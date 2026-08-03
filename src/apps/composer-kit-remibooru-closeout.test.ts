@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const packageRoot = "examples/packages/local-dev/tweet-composer-kit";
 
-describe("Composer Kit Remibooru closeout copy", () => {
+describe("Post-Factory Remibooru closeout copy", () => {
   it("describes explicit attachment and canonical opening without auto-posting", async () => {
     const source = await readFile(`${packageRoot}/src/content.js`, "utf8");
     const catalog = await readFile("catalog/data/catalog.json", "utf8");

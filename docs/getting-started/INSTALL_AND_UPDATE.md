@@ -24,7 +24,7 @@ Chromium custom build from reviewed local package sources:
 
 - **Pets Maker** is the first selectable maintainer add-on and remains disabled after installation until enabled in **Apps & Features**.
 - **Share Kit** is a selectable reviewed first-party replacement that preserves the existing Tweet PNG identity and settings.
-- **Composer Kit** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
+- **Post-Factory** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
 
 Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.4 source
 checkout. Load `dist/chromium-local-apps/` once and reload that same extension

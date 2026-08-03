@@ -18,7 +18,7 @@ describe("composer companion icon parity", () => {
       "utf8",
     )) as { name?: string; composerAction?: { label?: string }; hostComposerActions?: string[] };
 
-    expect(manifest.name).toBe("Tweet Composer Kit");
+    expect(manifest.name).toBe("Post-Factory");
     expect(manifest.composerAction?.label).toBe("Factory");
     expect(manifest.hostComposerActions).toContain("nativeDrafts");
   });

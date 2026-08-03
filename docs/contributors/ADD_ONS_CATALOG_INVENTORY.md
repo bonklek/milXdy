@@ -1,7 +1,7 @@
 # Initial Maintainer Add-ons Inventory
 
 This audit records the three current package boundaries for issue #181. BOORU,
-Meme Maker, quick replies, and Drafts are capabilities within Composer Kit;
+Meme Maker, quick replies, and Drafts are capabilities within Post-Factory;
 they are not separate add-ons. The catalog selection target is Chromium,
 packages are composed at build time, and consequential composer or media
 actions remain explicit.
@@ -37,9 +37,9 @@ actions remain explicit.
   its package from the next custom build. Interrupted or failed preparation and
   build promotion restore the prior catalog/build directories.
 
-## Composer Kit — package ID `tweet-composer-kit`
+## Post-Factory — package ID `tweet-composer-kit`
 
-- Current package: the `Tweet Composer Kit 0.2.0-pilot` package exercised in
+- Current package: the `Post-Factory 0.2.0-pilot` package exercised in
   cumulative QA by issue #188.
 - Current catalog status: `under-review`. The package is maintainer-authored and
   present in QA, but its source root and exact package hash are not yet checked
@@ -60,15 +60,15 @@ actions remain explicit.
   explicit package actions. Maker handoff sends reviewed caption fields only;
   Remibooru queries send bounded public facets, cursor, and page size.
 - BOORU boundary: Remibooru metadata browsing, canonical-source links, an
-  explicit host-owned thumbnail attachment action are Composer Kit capabilities
+  explicit host-owned thumbnail attachment action are Post-Factory capabilities
   owned by #17/#188. The package receives no original-media URL or bytes and
   keeps no media or source-link cache. Public contribution remains tracked for
   0.2.5 in #24 and is not a 0.2.4 catalog capability.
 - Meme Maker boundary: declared maker targets and caption/random-meme modes are
-  Composer Kit capabilities owned by #79/#188. Generated media remains outside
+  Post-Factory capabilities owned by #79/#188. Generated media remains outside
   the package until the user reviews and acts on it.
 - Core boundary: package validation, host callbacks, safe background adapters,
-  Apps & Features, and permission enforcement stay in core. Composer Kit owns
+  Apps & Features, and permission enforcement stay in core. Post-Factory owns
   its panel, reply list, remote-query UI, and maker choices.
 - Migration/conflicts: it uses a distinct package ID and does not replace the
   built-in `composerTools` typing helper.

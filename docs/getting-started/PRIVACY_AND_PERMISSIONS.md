@@ -14,7 +14,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
-- Composer Kit queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
+- Post-Factory queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
 - Pets Maker contacts `https://maker.remilia.org` only after the user clicks **Fetch**; it sends the selected public Maker family and NFT number and receives public trait metadata.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
@@ -66,22 +66,22 @@ attach it to that same active X composer; this never posts on the user's behalf.
 A changed destination, unavailable controls, invalid image, or missing consent
 stops the transfer.
 
-## Composer Kit and Remibooru
+## Post-Factory and Remibooru
 
-Composer Kit stores only its enablement state and up to 20 user-created quick
+Post-Factory stores only its enablement state and up to 20 user-created quick
 reply phrases of at most 280 characters. Its **D** control opens X's native
 Drafts; the package neither reads nor stores X drafts.
 
 An explicit Remibooru search sends bounded public query terms or facets,
 pagination cursor, and page size to `https://remibooru.com`. On the explicit
 Tags action, the host may derive up to five sanitized facet IDs from the visible
-initiating composer and immediately discards the raw text. Composer Kit receives
+initiating composer and immediately discards the raw text. Post-Factory receives
 sanitized result IDs, thumbnail URLs, canonical post URLs, display dimensions,
 and visible attribution—not original-media URLs or raw service responses. A
 result attaches only after an explicit click and never posts.
 
 Maker handoffs send only user-reviewed declared caption fields to the selected
-`maker.remilia.org` surface after an explicit control. Composer Kit cannot read
+`maker.remilia.org` surface after an explicit control. Post-Factory cannot read
 the Maker page or post generated media.
 
 ## Share Kit

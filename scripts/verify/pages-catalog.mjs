@@ -128,9 +128,9 @@ function verifyCatalog(value, policy, reviews) {
   for (const id of ["pets-maker", "tweet-composer-kit", "tweetPng"]) {
     if (!packageById.has(id)) failures.push(`initial maintainer catalog is missing ${id}`);
   }
-  if (packages.length !== 3) failures.push("current maintainer catalog must contain exactly Pets Maker, Composer Kit, and Share Kit");
+  if (packages.length !== 3) failures.push("current maintainer catalog must contain exactly Pets Maker, Post-Factory, and Share Kit");
   if (packageById.get("pets-maker")?.availability !== "published") failures.push("reviewed checked-in Pets Maker must be selectable");
-  if (packageById.get("tweet-composer-kit")?.availability !== "under-review") failures.push("Composer Kit must fail closed until its source and trusted review are checked in");
+  if (packageById.get("tweet-composer-kit")?.availability !== "under-review") failures.push("Post-Factory must fail closed until its source and trusted review are checked in");
   if (packageById.get("tweetPng")?.availability !== "published") failures.push("reviewed checked-in Share Kit must be selectable");
   if (packages.some((pkg) => ["booru", "memeMaker", "composerTools"].includes(pkg.id))) failures.push("feature concepts and the built-in typing helper must not appear as standalone add-ons");
 

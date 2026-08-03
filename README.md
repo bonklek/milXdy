@@ -8,14 +8,14 @@ milXdy is a beta Manifest V3 browser extension for X/Twitter. It combines severa
 
 This project is intended for GitHub beta distribution and local browser testing. It is not currently packaged through the Chrome Web Store or Firefox Add-ons.
 
-The current release is **0.2.4 — Composer Kit**. See the [0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
+The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
 
 ## Features
 
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
 - **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
-- **Composer Kit**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
+- **Post-Factory**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that can fetch public Maker traits by family and NFT number, then turns an explicitly selected Maker PNG and reviewed traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
@@ -69,7 +69,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 - [App SDK and Local Add-ons](docs/sdk/APP_SDK_OVERVIEW.md)
 - [Add-on catalog submissions](docs/contributors/ADD_ON_CATALOG_SUBMISSIONS.md)
 - [milXdy setup and guides](https://bonklek.github.io/milXdy/)
-- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — Pets Maker, Composer Kit, and Share Kit inventory; Pets Maker and Share Kit are selectable, while Composer Kit remains clearly marked under review
+- [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) — Pets Maker, Post-Factory, and Share Kit inventory; Pets Maker and Share Kit are selectable, while Post-Factory remains clearly marked under review
 - [App SDK](docs/sdk/APP_SDK.md)
 - [Roadmap](docs/roadmap/ROADMAP.md)
 - [Contributing](docs/contributors/CONTRIBUTING.md)
@@ -81,7 +81,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | --- | --- |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Apps & Features and side rail](docs/guides/apps-hub-and-side-rail.md) | Enable apps/features, pin rail icons, choose Lite/Balanced/Full setup, and manage the dock. |
 | <img src="assets/brand/milxdy-logo-square.png" alt="" width="20"> [Root Visual Enhancements](docs/guides/root-visual-enhancements.md) | Appearance presets, visual polish, sounds, notifications, and performance-related visual behavior. |
-| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Composer Kit](docs/guides/composer-kit.md) | Use quick replies, native Drafts, Remibooru reactions, and reviewed Maker handoffs. |
+| <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Post-Factory](docs/guides/composer-kit.md) | Use quick replies, native Drafts, Remibooru reactions, and reviewed Maker handoffs. |
 | <img src="assets/brand/milxdy-logo-square-bevel.png" alt="" width="20"> [Share Kit — Tweet PNG](docs/guides/tweet-png.md) | Review and export local PNG images or stage one deliberately in RemiNet Chat. |
 | <img src="catalog/assets/addons/pets-maker.svg" alt="" width="20"> [Pets Maker](docs/guides/custom-pet-export.md) | Install the optional add-on, declare Maker traits, and export a validated local pet-request ZIP. |
 | <img src="assets/apps/wiki-sidebar/remilia-wiki-favicon.png" alt="" width="20"> [Remilia Wiki Hyperlinks](docs/guides/remilia-wiki-hyperlinks.md) | Inline wiki links, hover previews, match limits, debug mode, and link styling. |

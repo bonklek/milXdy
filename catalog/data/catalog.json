@@ -20,7 +20,7 @@
     {
       "id": "official",
       "name": "Official milXdy add-ons",
-      "description": "The current reviewed package boundaries. Pets Maker is the first catalog-installed app; BOORU and Meme Maker remain Composer Kit capabilities, not separate add-ons.",
+      "description": "The current reviewed package boundaries. Pets Maker is the first catalog-installed app; BOORU and Meme Maker remain Post-Factory capabilities, not separate add-ons.",
       "packages": [
         {
           "id": "pets-maker",
@@ -121,10 +121,10 @@
         },
         {
           "id": "tweet-composer-kit",
-          "name": "Composer Kit",
+          "name": "Post-Factory",
           "icon": {
             "src": "assets/addons/tweet-composer.svg",
-            "alt": "Composer Kit action panel"
+            "alt": "Post-Factory action panel"
           },
           "summary": "Composer actions, quick replies, Remibooru discovery, and reviewed maker handoffs in one package.",
           "packageKind": "app",
@@ -149,7 +149,7 @@
           "review": {
             "status": "in-progress",
             "notes": [
-              "Composer Kit is active in cumulative QA as a locally reviewed package, but its maintainer source is not yet checked into an allowlisted catalog artifact path.",
+              "Post-Factory is active in cumulative QA as a locally reviewed package, but its maintainer source is not yet checked into an allowlisted catalog artifact path.",
               "It remains non-selectable until source, package hash, and trusted catalog review are committed together."
             ]
           },
@@ -218,7 +218,7 @@
           "blockers": [
             {
               "issue": "https://github.com/bonklek/milXdy/issues/188",
-              "reason": "The current Composer Kit 0.2.0-pilot source and exact package hash must be synchronized into this catalog checkout and receive trusted catalog review before selection can be enabled."
+              "reason": "The current Post-Factory 0.2.0-pilot source and exact package hash must be synchronized into this catalog checkout and receive trusted catalog review before selection can be enabled."
             }
           ]
         },

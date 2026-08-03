@@ -75,13 +75,13 @@ Composer Tools is a lightweight feature module for X/Twitter post and DM compose
 
 The helper ignores search fields, unrelated native inputs/textareas, and extension settings inputs. It reads only the active supported composer text around the caret and does not send composer text to a remote service.
 
-## Composer Kit
+## Post-Factory
 
-Composer Kit is the reviewed 0.2.4 package composition for quick replies,
+Post-Factory is the reviewed 0.2.4 package composition for quick replies,
 native X Drafts, Remibooru reaction browsing/attachment, and explicit
 Maker/CHEESEWORLD handoffs. It adds composer and reply controls rather than a
 new rail app. Every insert, attachment, and handoff begins with a
-visible user action. See the dedicated [Composer Kit guide](composer-kit.md).
+visible user action. See the dedicated [Post-Factory guide](composer-kit.md).
 
 ## Share Kit
 
@@ -309,7 +309,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Grok prompts are pasted into X's native Grok interface.
 - Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may load avatars from `https://pfp.remilia.net`; chat live updates use `wss://www.remilia.net`.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`; an explicit confirmed text-only post uses fixed create-thread or create-reply endpoints without cookies or account credentials.
-- Composer Kit uses `https://remibooru.com` only for explicit reviewed search and attachment actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
+- Post-Factory uses `https://remibooru.com` only for explicit reviewed search and attachment actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
 - Share Kit renders locally; RemiNet staging becomes a remote upload only if the user later presses Send in Chat.
 - Pets Maker reads the explicitly selected local PNG and writes only the user-requested local ZIP. After an explicit **Fetch**, it sends only the selected public Maker family and NFT number to `https://maker.remilia.org` to populate visible trait fields; it does not send the PNG.
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.

@@ -15,7 +15,7 @@ pnpm.cmd run verify:local-app-package -- --package=examples/packages/local-dev/d
 The reviewed, disabled-by-default Pets Maker package now lives at
 `packages/maintainer/pets-maker/` so the local catalog can pin and install its
 exact source. It lazy-loads on `dockOpen`, owns the pet form and bundle contract
-outside Composer Kit, and uses the VPL-compatible Remy preview as its rail icon.
+outside Post-Factory, and uses the VPL-compatible Remy preview as its rail icon.
 
 ```powershell
 pnpm.cmd run build:pets-maker-package

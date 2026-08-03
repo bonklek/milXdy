@@ -15,11 +15,11 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 The long-term goal remains a reviewed composable app system where packages declare surfaces, permissions, assets, settings, privacy notes, performance cost, background services, and lifecycle hooks while sharing milXdy's scanners, schedulers, overlays, and network infrastructure. External installation and stable third-party compatibility remain future work.
 
-## Released: 0.2.4 - Composer Kit
+## Released: 0.2.4 - Post-Factory
 
 Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker integrations, optional custom pets, and a usable local add-on pipeline.
 
-- Composer Kit ships quick replies, native X Drafts, bounded Remibooru browsing and attachment, and reviewed Maker/CHEESEWORLD handoffs.
+- Post-Factory ships quick replies, native X Drafts, bounded Remibooru browsing and attachment, and reviewed Maker/CHEESEWORLD handoffs.
 - Share Kit ships reviewed local Tweet PNG controls, watermarking, link-card/quote handling, and deliberate RemiNet Chat staging without automatic send.
 - Miladychan Portal ships explicit pseudonymous text posting, final destination confirmation, local failed-submit recovery, watched threads, and native fallback.
 - Pets Maker becomes the first selectable maintainer-catalog add-on and remains disabled by default until enabled in Apps & Features.
@@ -29,7 +29,7 @@ Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker inte
 
 ## Planned: 0.2.5 - Reader Voice
 
-- Add reviewed Remibooru contribution from Composer Kit (#24).
+- Add reviewed Remibooru contribution from Post-Factory (#24).
 - Publish the rights-compatible App SDK visual-elements repository and author guide (#183).
 - Complete the Maker pet-import adapter, reusable motion templates, envelope QA, and cache/resume (#192/#193).
 

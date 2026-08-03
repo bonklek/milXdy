@@ -11,7 +11,7 @@
 
 - [Apps & Features and side rail](guides/apps-hub-and-side-rail.md)
 - [Beetol](guides/beetol.md)
-- [Composer Kit](guides/composer-kit.md)
+- [Post-Factory](guides/composer-kit.md)
 - [Composer Tools](guides/composer-tools.md)
 - [Pets Maker export](guides/custom-pet-export.md)
 - [Remilia Maker pet import (planned 0.2.5)](guides/remilia-maker-pet-import.md)

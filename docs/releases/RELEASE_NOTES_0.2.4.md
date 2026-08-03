@@ -1,10 +1,10 @@
 # milXdy 0.2.4 Release Notes
 
-milXdy `0.2.4` is the **Composer Kit** release. It turns the App SDK groundwork
+milXdy `0.2.4` is the **Post-Factory** release. It turns the App SDK groundwork
 from earlier releases into visible composer, sharing, add-on, and custom-pet
 workflows while tightening the shared runtime underneath them.
 
-## Composer Kit
+## Post-Factory
 
 - Adds one compact composer/reply add-on for quick replies, X native Drafts,
   Remibooru reaction browsing and attachment, and reviewed Remilia
@@ -20,7 +20,7 @@ workflows while tightening the shared runtime underneath them.
   messaging, and remote-session details; reviewed host callbacks own those
   boundaries.
 
-See [Composer Kit](../guides/composer-kit.md).
+See [Post-Factory](../guides/composer-kit.md).
 
 ## Share Kit
 
@@ -75,7 +75,7 @@ See [Pets Maker export](../guides/custom-pet-export.md).
 - Adds a deterministic Chromium catalog-selection workflow for checked-in,
   hash-pinned maintainer packages with explicit capability/privacy review,
   acknowledgements, transactional promotion, rollback, and reload detection.
-- Makes Pets Maker and Share Kit selectable. Composer Kit remains visibly
+- Makes Pets Maker and Share Kit selectable. Post-Factory remains visibly
   **Under review** in the catalog until its exact source and trusted hash are
   committed to an allowlisted catalog path; the record does not pretend to be
   an installable artifact.
@@ -127,7 +127,7 @@ and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
 - Catalog-managed custom builds are Chromium-only in 0.2.4. Firefox/Waterfox
   uses the normal release archive, and File System Access features remain
   browser-limited.
-- Composer Kit is part of the reviewed 0.2.4 package composition but is not yet
+- Post-Factory is part of the reviewed 0.2.4 package composition but is not yet
   selectable from the public catalog record.
 - Miladychan direct posting is text-only. CAPTCHA, media, session-bound, and
   unsupported-board behavior remains on the native site.
@@ -139,7 +139,7 @@ and [Add-ons Catalog](../contributors/ADD_ONS_CATALOG.md).
 
 ## Issue map
 
-The user-visible release work spans Composer Kit and sharing issues `#16`,
+The user-visible release work spans Post-Factory and sharing issues `#16`,
 `#17`, `#25`, `#68`, `#79`, `#187`, `#188`, and `#189`; Miladychan Portal
 `#41`; the catalog work in `#181`; Pets Maker issues `#190` and `#191`; and
 RemiNet/Beetol work in `#194`. Issues `#24`, `#74`, `#183`, `#192`, and `#193`

@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
-describe("Composer Kit quick-reply theme", () => {
+describe("Post-Factory quick-reply theme", () => {
   it("uses a scoped pink and purple treatment in light, dim, and dark modes", async () => {
     const css = await readFile(
       new URL("../../../examples/packages/local-dev/tweet-composer-kit/styles/composer-kit.css", import.meta.url),
