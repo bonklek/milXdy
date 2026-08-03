@@ -3,10 +3,10 @@
   "reviews": [
     {
       "id": "pets-maker",
-      "version": "0.1.0-pilot",
-      "packageSha256": "55591ee5bf65fdd87c27c8c667a49ea0a8984fb390978896d2f5ad79d0f791c5",
+      "version": "0.1.1-pilot",
+      "packageSha256": "9e835e324bed1784bd184b4ac4e23f03734dd612832a9ac58103004243291b4f",
       "reviewedBy": "milxdy-maintainer-pets-maker",
-      "reviewedAt": "2026-08-02"
+      "reviewedAt": "2026-08-03"
     },
     {
       "id": "tweetPng",

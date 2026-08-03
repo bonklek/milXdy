@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "id": "pets-maker",
   "name": "Pets Maker",
-  "version": "0.1.0-pilot",
+  "version": "0.1.1-pilot",
   "description": "An optional catalog-installed side-rail app for preparing validated Remilia Maker pet-request bundles.",
   "packageKind": "app",
   "sdk": {
@@ -54,7 +54,7 @@
       "integration": "overlayApp",
       "surfaces": ["overlayApp"],
       "presentation": "sideRailOverlay",
-      "notes": ["Uses the shared X/Twitter App SDK runtime and requests no additional host permission."]
+      "notes": ["Uses the shared X/Twitter App SDK runtime and adds no X/Twitter host permission."]
     },
     {
       "site": "remiliaNet",
@@ -95,7 +95,7 @@
   },
   "privacy": {
     "permissionNotes": ["The https://maker.remilia.org/* host permission is used only after an explicit Fetch click to read public metadata for the selected family and NFT number."],
-    "dataNotes": ["The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP. Nothing is uploaded, posted, published, or cached.", "An explicit Fetch sends only the selected public Maker family and NFT number to maker.remilia.org and populates the visible trait fields from its public response."],
+    "dataNotes": ["The selected PNG and body choices stay in the open app and generated local ZIP; the image is never uploaded.", "An explicit Fetch sends only the selected public Maker family and NFT number to maker.remilia.org and populates the visible trait fields from its public response; returned traits are not cached.", "Nothing is posted or published."],
     "localStorageNotes": ["Stores only app enablement; maker form state and selected files are not persisted."],
     "remoteServices": ["The official Maker metadata endpoint is queried only after an explicit Fetch click and returns public NFT traits."],
     "privacyLabels": ["local-only", "local-files", "remote-api"],
@@ -114,7 +114,7 @@
     "status": "reviewed",
     "sourceUrl": "https://github.com/bonklek/milXdy/tree/main/packages/maintainer/pets-maker",
     "reviewedBy": "milxdy-maintainer-pets-maker",
-    "reviewedAt": "2026-08-01",
+    "reviewedAt": "2026-08-03",
     "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, background handlers, or page observers; its only remote call is an explicit read of public Maker metadata."]
   }
 }

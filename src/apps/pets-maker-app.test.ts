@@ -214,7 +214,8 @@ describe("Pets Maker request contract", () => {
     expect(manifest.chrome.nativeStyle).toBe("reminet");
     expect(manifest.permissions.hosts).toEqual(["https://maker.remilia.org/*"]);
     expect(manifest.privacy.privacyLabels).toContain("remote-api");
-    expect(manifest.privacy.dataNotes.join(" ")).toContain("Nothing is uploaded");
+    expect(manifest.privacy.dataNotes.join(" ")).toContain("image is never uploaded");
+    expect(manifest.privacy.dataNotes.join(" ")).toContain("family and NFT number");
     expect(appSource).toContain('panel.className = "pets-maker-app"');
     expect(appSource).toContain('resolveAssetUrl("assets/remy.png")');
     expect(appSource).toContain('wipLabel.textContent = "WORK IN PROGRESS"');
