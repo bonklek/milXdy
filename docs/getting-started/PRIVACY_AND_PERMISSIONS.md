@@ -15,6 +15,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
 - Composer Kit queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
+- Pets Maker contacts `https://maker.remilia.org` only after the user clicks **Fetch**; it sends the selected public Maker family and NFT number and receives public trait metadata.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
@@ -94,10 +95,13 @@ RemiliaNET only if the user subsequently presses Send in Chat.
 ## Pets Maker
 
 Pets Maker is a selectable maintainer-catalog package but installs disabled by
-default. After the user enables it, the package reads only the transparent PNG
-chosen through its visible file input and the family/trait/body choices entered
-in the open form. It creates a local two-file ZIP and does not upload, post,
-publish, cache, or invoke Codex. Form state and selected files are not persisted.
+default. After the user enables it, the package reads the transparent PNG chosen
+through its visible file input and the family/trait/body choices entered in the
+open form. An explicit **Fetch** sends only the selected public Maker family and
+NFT number to `maker.remilia.org`; returned public traits populate the visible
+form and are not cached. The package creates a local two-file ZIP and does not
+upload the selected image, post, publish, or invoke Codex. Form state and
+selected files are not persisted.
 
 ## RemiNet And Beetol Login
 

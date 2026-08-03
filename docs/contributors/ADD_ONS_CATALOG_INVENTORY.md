@@ -20,15 +20,17 @@ actions remain explicit.
   package-owned DOM/listener cleanup on close, disable, abort, and dispose.
 - Capabilities: read one explicitly selected transparent Maker PNG; collect the
   exact family, optional NFT number, trait IDs, lower-body, footwear, and palette
-  choices; preview a deterministic 1024x1024 composite; and download a validated
-  two-file request ZIP.
+  choices; explicitly fetch public traits for a selected family and NFT number;
+  preview a deterministic 1024x1024 composite; and download a validated two-file
+  request ZIP.
 - Settings/storage: only `milxdy.local.pets-maker.enabled`. Form state, files,
   preview pixels, traits, and generated ZIPs are not persisted.
-- Permissions/services: no host-permission expansion, optional permission,
-  background service, remote service, browser-tab access, clipboard access, or
-  raw runtime messaging.
+- Permissions/services: adds `https://maker.remilia.org/*` for the explicit
+  public metadata Fetch action; no optional permission, background service,
+  browser-tab access, clipboard access, or raw runtime messaging.
 - Privacy: selected files and form values remain in the open app and local ZIP.
-  Nothing is uploaded, posted, published, or cached.
+  Fetch sends only the selected public family and NFT number; returned traits
+  populate the form and are not cached. The selected PNG is never uploaded.
 - Dependencies/conflicts: none. Pets Maker uses its own ID and does not replace
   a built-in app.
 - Removal/rollback: an explicit catalog selection without `pets-maker` removes

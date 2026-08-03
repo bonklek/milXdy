@@ -2,7 +2,7 @@
   "$schema": "./catalog.schema.json",
   "schemaVersion": 2,
   "catalogId": "milxdy-maintainer-catalog",
-  "revision": "2026-08-02.2",
+  "revision": "2026-08-03.1",
   "catalogStatus": "preview",
   "supportedBuildTargets": [
     "chromium"
@@ -31,7 +31,7 @@
           },
           "summary": "Prepare a validated local Remilia Maker avatar bundle for the Custom Pet pipeline.",
           "packageKind": "app",
-          "version": "0.1.0-pilot",
+          "version": "0.1.1-pilot",
           "sdk": {
             "minVersion": "0.2.4",
             "targetVersion": "0.2.4"
@@ -44,49 +44,60 @@
             "issues": [
               "https://github.com/bonklek/milXdy/issues/181",
               "https://github.com/bonklek/milXdy/issues/190",
-              "https://github.com/bonklek/milXdy/issues/191",
-              "https://github.com/bonklek/milXdy/issues/192",
-              "https://github.com/bonklek/milXdy/issues/193"
+              "https://github.com/bonklek/milXdy/issues/191"
             ]
           },
           "artifact": {
             "kind": "maintainer-source",
             "path": "packages/maintainer/pets-maker",
-            "packageSha256": "55591ee5bf65fdd87c27c8c667a49ea0a8984fb390978896d2f5ad79d0f791c5",
+            "packageSha256": "9e835e324bed1784bd184b4ac4e23f03734dd612832a9ac58103004243291b4f",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
             "reviewedBy": "milxdy-maintainer-pets-maker",
-            "reviewedAt": "2026-08-02",
+            "reviewedAt": "2026-08-03",
             "notes": [
               "Reviewed optional package moved from the local pilot into the pinned maintainer catalog source tree.",
-              "Installation leaves the enablement setting false; the user must explicitly enable Pets Maker in Apps & Features."
+              "Installation leaves the enablement setting false; the user must explicitly enable Pets Maker in Apps & Features.",
+              "The 0.1.1 review covers the explicit public Maker metadata Fetch action; the selected image is never sent to that service."
             ]
           },
           "capabilities": [
             "Open a dedicated Pets Maker side-rail app only after explicit enablement and rail invocation.",
             "Read one transparent local Maker PNG selected in the visible file control.",
             "Collect exact Maker family, optional NFT number, trait IDs, lower-body, footwear, and palette choices.",
+            "Fetch public Maker traits for an explicitly selected family and NFT number and place them in the visible form for review.",
             "Preview a deterministic 1024x1024 composite and download a validated two-file request ZIP."
           ],
           "permissions": {
-            "hosts": [],
+            "hosts": [
+              "https://maker.remilia.org/*"
+            ],
             "optional": [],
             "privilegedSurfaces": [
               "X/Twitter App SDK side-rail overlay",
               "User-initiated local file input",
+              "User-initiated public Maker metadata request",
               "User-initiated local ZIP download"
             ],
             "notes": [
-              "The package requests no additional host permission and has no background, browser-tab, clipboard, or runtime-messaging access.",
+              "The only added host permission is maker.remilia.org for the explicit Fetch action; the package has no background, browser-tab, clipboard, or raw runtime-messaging access.",
               "Composition requires explicit package-consent acknowledgement because local files and extension-origin package code are privileged inputs."
             ]
           },
           "siteScopes": [
-            "X/Twitter side-rail overlay opened explicitly by the user"
+            "X/Twitter side-rail overlay opened explicitly by the user",
+            "Public Maker metadata requested only after an explicit Fetch"
           ],
-          "remoteServices": [],
+          "remoteServices": [
+            {
+              "name": "Remilia Maker metadata",
+              "origin": "https://maker.remilia.org",
+              "purpose": "Populate visible Pets Maker trait fields after an explicit Fetch.",
+              "dataSent": "Selected public Maker family and NFT number only; no image, account, cookie, or authentication data."
+            }
+          ],
           "storage": {
             "local": [
               "milxdy.local.pets-maker.enabled"
@@ -98,8 +109,9 @@
             ]
           },
           "privacyNotes": [
-            "The selected PNG, traits, NFT number, and body choices stay in the open app and generated local ZIP.",
-            "Nothing is uploaded, posted, published, cached, or sent to a remote service.",
+            "The selected PNG and body choices stay in the open app and generated local ZIP; the image is never uploaded.",
+            "An explicit Fetch sends only the selected public Maker family and NFT number; returned traits populate the visible form and are not cached.",
+            "Nothing is posted or published.",
             "Installing the package does not enable it, pin it to the rail, read a file, or generate a bundle."
           ],
           "dependencies": [],

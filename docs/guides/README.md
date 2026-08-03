@@ -311,7 +311,7 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org`; an explicit confirmed text-only post uses fixed create-thread or create-reply endpoints without cookies or account credentials.
 - Composer Kit uses `https://remibooru.com` only for explicit reviewed search and attachment actions and opens `https://maker.remilia.org` only for an explicit declared handoff. The package does not receive remote-session data, image bytes, or raw X draft text.
 - Share Kit renders locally; RemiNet staging becomes a remote upload only if the user later presses Send in Chat.
-- Pets Maker reads only the explicitly selected local PNG and writes only the user-requested local ZIP; it has no remote service.
+- Pets Maker reads the explicitly selected local PNG and writes only the user-requested local ZIP. After an explicit **Fetch**, it sends only the selected public Maker family and NFT number to `https://maker.remilia.org` to populate visible trait fields; it does not send the PNG.
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.

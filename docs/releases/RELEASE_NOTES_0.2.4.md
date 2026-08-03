@@ -60,11 +60,13 @@ See [Miladychan Portal](../guides/miladychan-portal.md).
   PNG plus declared traits and body choices into a deterministic, validated
   two-file `remilia-pet-request.zip`.
 - Adds a versioned local pet-request bundle and explicit Codex handoff.
+- Adds an explicit, credentialless **Fetch** action that sends only the selected
+  public Maker family and NFT number to populate visible trait fields.
 - Gives the Pets Maker rail window Remilia-themed chrome plus movable and
   resizable window controls.
 - Keeps source art, form state, generated bundles, and validation caches local.
-  Pets Maker does not upload, post, publish, invoke Codex, infer missing traits,
-  or add a rights declaration.
+  Pets Maker does not upload the selected image, post, publish, invoke Codex,
+  infer missing traits, or add a rights declaration.
 
 See [Pets Maker export](../guides/custom-pet-export.md).
 
