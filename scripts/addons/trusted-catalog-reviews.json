@@ -11,9 +11,9 @@
     {
       "id": "tweetPng",
       "version": "0.2.4",
-      "packageSha256": "000079e70475e856a7f39f944e89dbc51dbdf0a633c0f644cf894f2e27d9fe48",
+      "packageSha256": "ce59d98c76589cd8f5830829440a5e2adb2bda515429f4452aa4bb5b5f005ba5",
       "reviewedBy": "milxdy-first-party-share-kit",
-      "reviewedAt": "2026-08-03"
+      "reviewedAt": "2026-08-06"
     }
   ]
 }
