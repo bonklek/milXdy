@@ -9,6 +9,14 @@ import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const reportPath = `tmp/release-evidence/remilia-migration-artifact-scan-${version}.json`;
+const MAX_ARCHIVE_ENTRY_BYTES = 256 * 1024 * 1024;
+const MAX_TEXT_SCAN_BYTES = 16 * 1024 * 1024;
+const crcTable = new Uint32Array(256);
+for (let index = 0; index < crcTable.length; index += 1) {
+  let value = index;
+  for (let bit = 0; bit < 8; bit += 1) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+  crcTable[index] = value >>> 0;
+}
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   await withReleaseArtifactLock("verify Remilia migration release artifacts", async () => {
@@ -30,7 +38,8 @@ async function scanArchives() {
     const path = `release/milXdy-${version}-${build.target}.zip`;
     const archive = await readFile(path);
     const files = [];
-    for (const entry of listZipEntries(archive).sort((a, b) => a.fileName.localeCompare(b.fileName))) {
+    const entries = listZipEntries(archive).sort((a, b) => a.fileName.localeCompare(b.fileName));
+    for (const entry of entries) {
       const content = readZipEntry(archive, entry);
       scanContent(path, entry.fileName, content);
       files.push({
@@ -71,46 +80,88 @@ export function scanContent(archivePath, entryName, content) {
 }
 
 function isTextCandidate(fileName, content) {
-  if (content.length > 16 * 1024 * 1024 || content.includes(0)) return false;
+  if (content.length > MAX_TEXT_SCAN_BYTES || content.includes(0)) return false;
   return /(?:^|\/)(?:[^/]+\.(?:css|csv|html|js|json|md|mjs|svg|txt|xml)|LICENSE|NOTICE)$/i.test(fileName);
 }
 
-function readZipEntry(zip, entry) {
+export function readZipEntry(zip, entry) {
   const compressed = zip.subarray(entry.dataOffset, entry.dataOffset + entry.compressedSize);
-  if (entry.compressionMethod === 0) return Buffer.from(compressed);
-  if (entry.compressionMethod === 8) return inflateRawSync(compressed);
-  throw new Error(`${entry.fileName}: unsupported ZIP compression method ${entry.compressionMethod}`);
+  let content;
+  if (entry.compressionMethod === 0) content = Buffer.from(compressed);
+  else if (entry.compressionMethod === 8) content = inflateRawSync(compressed, { maxOutputLength: MAX_ARCHIVE_ENTRY_BYTES });
+  else throw new Error(`${entry.fileName}: unsupported ZIP compression method ${entry.compressionMethod}`);
+  if (content.length !== entry.uncompressedSize) throw new Error(`${entry.fileName}: ZIP uncompressed size mismatch`);
+  if (crc32(content) !== entry.crc32) throw new Error(`${entry.fileName}: ZIP CRC mismatch`);
+  return content;
 }
 
 export function listZipEntries(zip) {
   const eocdOffset = findEndOfCentralDirectory(zip);
+  if (zip.readUInt16LE(eocdOffset + 4) !== 0 || zip.readUInt16LE(eocdOffset + 6) !== 0) {
+    throw new Error("Multi-disk ZIP archives are unsupported");
+  }
   const entryCount = zip.readUInt16LE(eocdOffset + 10);
+  if (entryCount !== zip.readUInt16LE(eocdOffset + 8)) throw new Error("ZIP entry count mismatch");
+  const directorySize = zip.readUInt32LE(eocdOffset + 12);
   const directoryOffset = zip.readUInt32LE(eocdOffset + 16);
+  if (directoryOffset + directorySize !== eocdOffset) throw new Error("Invalid ZIP central directory bounds");
   let offset = directoryOffset;
   const entries = [];
+  const names = new Set();
   for (let index = 0; index < entryCount; index += 1) {
+    if (offset + 46 > eocdOffset) throw new Error("Truncated ZIP central directory");
     if (zip.readUInt32LE(offset) !== 0x02014b50) throw new Error("Invalid ZIP central directory");
+    const flags = zip.readUInt16LE(offset + 8);
+    if (flags & 0x0001) throw new Error("Encrypted ZIP entries are unsupported");
     const compressionMethod = zip.readUInt16LE(offset + 10);
+    const crc32Value = zip.readUInt32LE(offset + 16);
     const compressedSize = zip.readUInt32LE(offset + 20);
+    const uncompressedSize = zip.readUInt32LE(offset + 24);
+    if (uncompressedSize > MAX_ARCHIVE_ENTRY_BYTES) throw new Error("ZIP entry exceeds scan size limit");
     const fileNameLength = zip.readUInt16LE(offset + 28);
     const extraLength = zip.readUInt16LE(offset + 30);
     const commentLength = zip.readUInt16LE(offset + 32);
     const localHeaderOffset = zip.readUInt32LE(offset + 42);
+    const nextOffset = offset + 46 + fileNameLength + extraLength + commentLength;
+    if (nextOffset > eocdOffset) throw new Error("Truncated ZIP central directory entry");
     const fileName = zip.subarray(offset + 46, offset + 46 + fileNameLength).toString("utf8").replace(/\\/g, "/");
+    validateEntryName(fileName);
+    if (names.has(fileName)) throw new Error(`${fileName}: duplicate ZIP entry`);
+    names.add(fileName);
     if (!fileName.endsWith("/")) {
+      if (localHeaderOffset + 30 > directoryOffset) throw new Error(`${fileName}: invalid ZIP local header bounds`);
       if (zip.readUInt32LE(localHeaderOffset) !== 0x04034b50) throw new Error(`${fileName}: invalid ZIP local header`);
+      if (zip.readUInt16LE(localHeaderOffset + 6) !== flags) throw new Error(`${fileName}: ZIP flag mismatch`);
+      if (zip.readUInt16LE(localHeaderOffset + 8) !== compressionMethod) throw new Error(`${fileName}: ZIP compression mismatch`);
       const localNameLength = zip.readUInt16LE(localHeaderOffset + 26);
       const localExtraLength = zip.readUInt16LE(localHeaderOffset + 28);
+      const localName = zip.subarray(localHeaderOffset + 30, localHeaderOffset + 30 + localNameLength).toString("utf8").replace(/\\/g, "/");
+      if (localName !== fileName) throw new Error(`${fileName}: ZIP local/central name mismatch`);
+      const dataOffset = localHeaderOffset + 30 + localNameLength + localExtraLength;
+      if (dataOffset + compressedSize > directoryOffset) throw new Error(`${fileName}: ZIP data exceeds local-file bounds`);
       entries.push({
         fileName,
         compressionMethod,
         compressedSize,
-        dataOffset: localHeaderOffset + 30 + localNameLength + localExtraLength,
+        uncompressedSize,
+        crc32: crc32Value,
+        dataOffset,
       });
     }
-    offset += 46 + fileNameLength + extraLength + commentLength;
+    offset = nextOffset;
   }
+  if (offset !== eocdOffset) throw new Error("ZIP central directory size mismatch");
   return entries;
+}
+
+function validateEntryName(fileName) {
+  if (!fileName || fileName.startsWith("/") || /^[A-Za-z]:\//.test(fileName)) {
+    throw new Error(`${fileName || "<empty>"}: unsafe ZIP entry path`);
+  }
+  const segments = fileName.endsWith("/") ? fileName.slice(0, -1).split("/") : fileName.split("/");
+  if (segments.some((segment) => segment === "" || segment === "." || segment === "..")) {
+    throw new Error(`${fileName}: unsafe ZIP entry path`);
+  }
 }
 
 function findEndOfCentralDirectory(zip) {
@@ -122,4 +173,10 @@ function findEndOfCentralDirectory(zip) {
 
 function sha256(value) {
   return createHash("sha256").update(value).digest("hex");
+}
+
+function crc32(buffer) {
+  let value = 0xffffffff;
+  for (const byte of buffer) value = crcTable[(value ^ byte) & 0xff] ^ (value >>> 8);
+  return (value ^ 0xffffffff) >>> 0;
 }

@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createDeterministicZip } from "../build/deterministic-zip.mjs";
-import { listZipEntries, scanContent } from "../release/verify-remilia-migration-artifacts.mjs";
+import { listZipEntries, readZipEntry, scanContent } from "../release/verify-remilia-migration-artifacts.mjs";
 
 const root = await mkdtemp(join(tmpdir(), "milxdy-remilia-artifact-scan-"));
 
@@ -42,11 +42,24 @@ try {
   await writeFile(join(source, "nested", "popup.js"), "export const safe = true;\n");
   await createDeterministicZip(source, archive);
   const zip = await readFile(archive);
-  assert.deepEqual(listZipEntries(zip).map((entry) => entry.fileName), ["manifest.json", "nested/popup.js"]);
-  for (const entry of listZipEntries(zip)) {
+  const entries = listZipEntries(zip);
+  assert.deepEqual(entries.map((entry) => entry.fileName), ["manifest.json", "nested/popup.js"]);
+  for (const entry of entries) {
     assert.equal(typeof entry.dataOffset, "number");
     assert.equal(entry.compressionMethod, 8);
+    assert.equal(readZipEntry(zip, entry).length, entry.uncompressedSize);
   }
+
+  const wrongCrc = { ...entries[0], crc32: entries[0].crc32 ^ 1 };
+  assert.throws(() => readZipEntry(zip, wrongCrc), /ZIP CRC mismatch/);
+
+  const unsafeZip = Buffer.from(zip);
+  const safeName = Buffer.from("nested/popup.js");
+  const unsafeName = Buffer.from("../evil/file.js");
+  for (let offset = unsafeZip.indexOf(safeName); offset !== -1; offset = unsafeZip.indexOf(safeName, offset + safeName.length)) {
+    unsafeName.copy(unsafeZip, offset);
+  }
+  assert.throws(() => listZipEntries(unsafeZip), /unsafe ZIP entry path/);
 
   console.log("Remilia migration artifact scan fixtures passed.");
 } finally {
