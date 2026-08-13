@@ -280,7 +280,7 @@ App SDK `context.sendMessage()` calls are app-scoped. The content runtime extrac
 
 Use `src/platform/browser/url-allowlist.ts` for background fetch URL policy checks. Service handlers should declare small rule sets near the service they protect, then call `parseAllowedUrl()` or `isAllowedUrl()` before any fetch that uses a URL supplied by content scripts, app UI, remote payloads, QR imports, or user-controlled metadata.
 
-Shared services register through the router. Direct `safeRuntimeMessage`, `chrome.runtime.sendMessage`, and `chrome.runtime.connect` bridges are reserved for documented internal surfaces that cannot receive App SDK context, such as packaged frames or stateful streaming ports. These internal privileged bridges are not local package APIs and not sandbox boundaries: each bridge validates senders in its background handler and remains covered by compliance verification.
+Shared services register through the router. Direct `safeRuntimeMessage`, `chrome.runtime.sendMessage`, and `chrome.runtime.connect` bridges are reserved for documented internal surfaces that cannot receive App SDK context, such as packaged frames or stateful streaming ports. These internal privileged bridges are not local package APIs and not sandbox boundaries: each bridge validates senders in its background handler and remains covered by compliance verification. RemiNet legacy adapters are restricted further to same-extension top-frame X/Twitter and RemiliaNET senders, exact service origins, typed bounded payloads, and redacted public failures; packages cannot invoke them.
 
 ## Package Compliance Contract
 
@@ -306,7 +306,7 @@ First-party platform examples:
 
 | Package | Integration | Notes |
 | --- | --- | --- |
-| RemiNet Chat | Aligned with internal socket bridge | Uses shared dock chrome and App SDK routed background messages. Declares runtime lifecycle metadata and explicit X direct-message route scopes for side-rail overlay behavior on `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. The WebSocket stream remains a stateful `runtime.connect` bridge between validated same-extension top-frame X/Twitter and RemiliaNET senders. |
+| RemiNet Chat | Official REST plus isolated legacy adapters | Uses official REST as history and text/reply authority. The undocumented `wss://www.remilia.net/api/ws` bridge is optional acceleration plus legacy media/reaction mutation, while `/media/upload/` and `/media/upload/confirm` are restricted to explicit attachment sends. All three transports remain trusted first-party internals between validated same-extension top-frame X/Twitter and RemiliaNET senders; absence never disables official text chat. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
 | Miladychan Portal | Aligned | Uses shared overlay chrome, route through background router, and declares remote-service/privacy metadata. Keep public board fetches on allowlisted routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
@@ -318,6 +318,8 @@ First-party platform examples:
 | Share Kit | Invoked-only external replacement | Retains the compatibility ID `tweetPng`, declares a `contextualPostActions` share-menu action, and owns Tweet PNG rendering/review UI entirely inside the reviewed package. The base client supplies only the generic host contract. |
 | Composer Tools | Aligned lightweight feature | Runtime-loaded local-only feature with a metadata-backed Apps & Features enablement toggle. Its document input listeners are scoped to supported X/Twitter post composers and cleaned up through runtime disposables. |
 | Root Visuals | Core visual runtime feature | Uses shared runtime scheduling and `deliverySurfaces: ["notification"]`. Theme watching is attribute-only on document theme roots, and the home-logo observer attaches only to discovered header/h1 page-chrome roots. |
+
+RemiNet legacy-adapter removal is evidence-gated. Remove the realtime adapter only after a documented scoped official stream covers delivery, edit, delete, and reaction parity; passes payload, privacy, reconnect, and extension-worker restart tests; and ships for one release cycle with the legacy path disabled by default. Remove the media adapter only after a documented official upload plus media-bearing post path (or an explicit upstream decision not to support media) matches type, size, timeout, retry, privacy, and confirmation behavior, pending attachments survive failure tests, and no upload/confirm/media-socket-submit callers remain.
 
 Platform boundaries:
 

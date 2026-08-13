@@ -7,7 +7,10 @@ const files = {
   postReadingOcr: await readFile("src/apps/post-reading/ocr.ts", "utf8"),
   postReadingOcrHost: await readFile("src/extension/frames/ocr-host.ts", "utf8"),
   reminetChatBackground: await readFile("src/apps/reminet-chat/background.ts", "utf8"),
+  reminetLegacyAdapters: await readFile("src/apps/reminet-chat/legacy-adapters.ts", "utf8"),
+  reminetLegacyMediaUpload: await readFile("src/apps/reminet-chat/legacy-media-upload.ts", "utf8"),
   reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
+  reminetLegacySocket: await readFile("src/extension/frames/reminet-chat-legacy-socket.ts", "utf8"),
   reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
   extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
@@ -39,9 +42,10 @@ console.log("Internal messaging bridge verification passed.");
 
 function verifyReminetChatSocketBridge() {
   const onConnect = functionBody(files.reminetChatBackground, "chrome.runtime.onConnect.addListener");
-  const senderPolicy = functionBody(files.reminetChatBackground, "isReminetChatSocketSender");
+  const senderPolicy = functionBody(files.reminetLegacyAdapters, "isAllowedLegacySender");
   const registerSiteBridge = functionBody(files.reminetChatBackground, "registerSiteSocketBridge");
   const bridge = files.reminetChatBridge;
+  const socketTransport = files.reminetLegacySocket;
   assertIncludes(onConnect, "if (port.name !== SOCKET_PORT_NAME) return;", "RemiNet socket bridge must ignore unrelated port names");
   assertIncludes(onConnect, "if (!isReminetChatSocketSender(port.sender))", "RemiNet socket bridge must validate sender before socket setup");
   assertIncludes(onConnect, "port.disconnect();", "RemiNet socket bridge must disconnect invalid senders");
@@ -50,17 +54,26 @@ function verifyReminetChatSocketBridge() {
   assertNotIncludes(files.reminetChatBackground, "chrome.tabs.create", "RemiNet socket recovery must not open hidden tabs");
   assertNotIncludes(files.reminetChatBackground, "chrome.tabs.remove", "RemiNet socket recovery must not close tabs");
 
-  assertIncludes(registerSiteBridge, 'isAllowedReminetChatSender(port.sender, ["www.remilia.net"])', "RemiNet site bridge must accept only RemiliaNET top-frame senders");
-  assertIncludes(registerSiteBridge, 'startsWith("socket:")', "RemiNet site bridge must relay only socket events");
-  assertIncludes(registerSiteBridge, "client.postMessage(record)", "RemiNet site bridge must broadcast live frames to connected chat clients");
+  assertIncludes(registerSiteBridge, 'isAllowedLegacySender(port.sender, "remilia-bridge")', "RemiNet site bridge must accept only exact RemiliaNET top-frame senders");
+  assertIncludes(registerSiteBridge, "parseLegacySocketBridgeEvent(message)", "RemiNet site bridge must schema-validate every socket event");
+  assertIncludes(registerSiteBridge, "broadcastSocketEvent(event)", "RemiNet site bridge must broadcast only validated live events");
 
-  assertIncludes(bridge, 'chrome.runtime.connect({ name: SOCKET_PORT_NAME })', "RemiNet site bridge must use its dedicated runtime port");
-  assertIncludes(bridge, 'new WebSocket(SOCKET_URL)', "RemiNet live socket must be created in the RemiliaNET page context");
-  assertIncludes(bridge, 'type: "subscribe"', "RemiNet live socket must subscribe after opening");
-  assertIncludes(bridge, 'socket.send(JSON.stringify(record.payload))', "RemiNet site bridge must forward submitted chat payloads unchanged");
-  assertIncludes(bridge, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
-  assertIncludes(bridge, "reconnectTimer = setTimeout(connectPort", "RemiNet site bridge must reconnect after a background-worker restart");
-  assertIncludes(bridge, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
+  assertIncludes(bridge, "startReminetLegacySocketBridge()", "RemiNet page bridge must start the isolated legacy socket module");
+  assertIncludes(socketTransport, 'chrome.runtime.connect({ name: SOCKET_PORT_NAME })', "RemiNet site bridge must use its dedicated runtime port");
+  assertIncludes(socketTransport, 'new WebSocket(LEGACY_SOCKET_URL)', "RemiNet live socket must be created at the exact legacy endpoint in the RemiliaNET page context");
+  assertIncludes(socketTransport, "isExactLegacySocketUrl(LEGACY_SOCKET_URL)", "RemiNet live socket must fail closed unless its endpoint is exact");
+  assertIncludes(socketTransport, 'type: "subscribe"', "RemiNet live socket must subscribe after opening");
+  assertIncludes(socketTransport, 'socket.send(JSON.stringify(command.mutation))', "RemiNet site bridge must forward only typed legacy mutations");
+  assertIncludes(socketTransport, 'type: "socket:mutation-sent"', "RemiNet site bridge must acknowledge only locally serialized mutations");
+  assertIncludes(socketTransport, "parseLegacySocketFrame(event.data)", "RemiNet site bridge must reject malformed and oversized frames before relay");
+  assertIncludes(socketTransport, 'type: "socket:hint"', "RemiNet site bridge must relay only typed hints rather than raw frame payloads");
+  assertNotIncludes(socketTransport, 'post({ type: "socket:frame"', "RemiNet site bridge must not expose raw frame bodies outside RemiliaNET");
+  assertIncludes(socketTransport, "LEGACY_SOCKET_OPEN_TIMEOUT_MS", "RemiNet live socket opening must have a deadline");
+  assertIncludes(socketTransport, 'reason: "remote-close"', "RemiNet live socket close events must redact server-provided reasons");
+  assertNotIncludes(socketTransport, "reason: event.reason", "RemiNet live socket must never relay raw close reasons");
+  assertIncludes(socketTransport, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
+  assertIncludes(socketTransport, "legacyPortReconnectDelay(portReconnectAttempts)", "RemiNet site bridge must use bounded reconnect backoff after a background-worker restart");
+  assertIncludes(socketTransport, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
   assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*"]', "RemiNet site bridge must be injected only on RemiliaNET pages");
   assertIncludes(files.extensionManifest, '"js": ["reminetChatBridge.js"]', "RemiNet site bridge must be declared in the extension manifest");
   assertIncludes(files.extensionManifest, '"js": ["reminetCraftFastPath.js"]', "RemiNet crafting fast path must be declared in the extension manifest");
@@ -80,8 +93,14 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(auth, "prepareRemiliaAccess([\"remilia:chat.read\"], { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
   assertIncludes(auth, "abort.abort(new DOMException", "RemiNet socket auth timeout must abort underlying authentication work");
 
-  assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\"])", "RemiNet socket sender policy must restrict to X/Twitter hosts");
-  verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");
+  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatSocketSender"), 'isAllowedLegacySender(sender, "x-content")', "RemiNet socket sender policy must use the typed X/Twitter legacy role");
+  assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "RemiNet legacy sender policy must require same-extension sender id");
+  assertIncludes(senderPolicy, 'typeof sender.tab?.id !== "number"', "RemiNet legacy sender policy must require tab context");
+  assertIncludes(senderPolicy, "sender.frameId !== undefined && sender.frameId !== 0", "RemiNet legacy sender policy must reject non-top frames");
+  assertIncludes(senderPolicy, "sender.url || sender.origin || sender.tab.url", "RemiNet legacy sender policy must inspect sender URL sources");
+  assertIncludes(senderPolicy, 'url.protocol !== "https:"', "RemiNet legacy sender policy must reject non-HTTPS senders");
+  assertIncludes(senderPolicy, 'url.origin === LEGACY_SOCKET_ORIGIN', "RemiNet site sender policy must require the exact RemiliaNET origin");
+  assertIncludes(senderPolicy, 'url.origin === "https://x.com" || url.origin === "https://twitter.com"', "RemiNet client sender policy must require exact X/Twitter origins");
 }
 
 function verifyReminetChatRuntimeBridge() {
@@ -193,16 +212,22 @@ function verifyPostReadingOcrBridge() {
 
 function verifyReminetUploadCaps() {
   const background = files.reminetChatBackground;
-  const upload = functionBody(background, "uploadAttachment");
-  assertIncludes(background, "MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet uploads must cap image attachments");
-  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet uploads must cap video attachments");
-  assertIncludes(background, "ALLOWED_ATTACHMENT_IMAGE_TYPES", "RemiNet uploads must enumerate allowed image MIME types");
-  assertIncludes(background, "ALLOWED_ATTACHMENT_VIDEO_TYPES", "RemiNet uploads must enumerate allowed video MIME types");
-  assertIncludes(upload, "isAllowedAttachmentMimeType(declaredMimeType)", "RemiNet upload handler must validate declared MIME type before decoding");
-  assertIncludes(upload, "decodeAttachmentDataUrl(dataUrl)", "RemiNet upload handler must decode data URLs through capped validation");
-  assertIncludes(upload, "decoded.contentType !== declaredMimeType", "RemiNet upload handler must reject MIME mismatches");
-  assertIncludes(upload, "decoded.tooLarge || decoded.bytes.byteLength > maxBytes", "RemiNet upload handler must reject oversized decoded payloads");
-  assertIncludes(functionBody(background, "decodeAttachmentDataUrl"), "estimatedBase64Bytes(base64) > maxBytes", "RemiNet upload decoder must reject oversized base64 before full decode");
+  const contract = files.reminetLegacyAdapters;
+  const executor = files.reminetLegacyMediaUpload;
+  assertIncludes(contract, "LEGACY_MAX_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet legacy uploads must cap image attachments");
+  assertIncludes(contract, "LEGACY_MAX_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet legacy uploads must cap video attachments");
+  assertIncludes(contract, "LEGACY_IMAGE_TYPES", "RemiNet legacy uploads must enumerate allowed image MIME types");
+  assertIncludes(contract, "LEGACY_VIDEO_TYPES", "RemiNet legacy uploads must enumerate allowed video MIME types");
+  assertIncludes(background, "executeLegacyMediaUpload(request)", "RemiNet upload handler must delegate to the isolated legacy executor");
+  assertIncludes(background, 'isAllowedLegacySender(sender, "x-content")', "RemiNet legacy upload messages must require the exact X/Twitter sender role");
+  assertIncludes(executor, "decodeLegacyAttachmentDataUrl(request)", "RemiNet legacy upload executor must decode through strict capped validation");
+  assertIncludes(executor, "estimatedBase64Bytes(base64) > maxBytes", "RemiNet upload decoder must reject oversized base64 before full decode");
+  assertIncludes(executor, "LEGACY_UPLOAD_TIMEOUT_MS", "RemiNet upload must have a deadline");
+  assertIncludes(executor, "LEGACY_CONFIRM_TIMEOUT_MS", "RemiNet confirmation must have a deadline");
+  assertIncludes(executor, "LEGACY_RESPONSE_MAX_BYTES", "RemiNet legacy JSON responses must have a byte ceiling");
+  assertIncludes(executor, 'credentials: "include"', "RemiNet legacy media mutation must use only the existing browser session");
+  assertNotIncludes(executor, "response.text()", "RemiNet legacy media failures must not buffer or relay raw response bodies");
+  assertNotIncludes(background, 'error instanceof Error ? error.message', "RemiNet legacy upload failures must not relay exception text");
 }
 
 function verifyMiladyLevelUpSender() {

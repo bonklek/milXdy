@@ -9,7 +9,15 @@ import {
   type RemiliaAuthGrant,
 } from "../../platform/auth/remilia-auth";
 import { resolveSocketAuthCredential } from "./socket-auth-policy";
-import { confirmedMediaFromResponse } from "./media-upload-contract";
+import {
+  isAllowedLegacySender,
+  parseLegacyMediaUploadRequest,
+  parseLegacySocketBridgeEvent,
+  parseLegacySocketClientCommand,
+  type LegacySocketBridgeCommand,
+  type LegacySocketBridgeEvent,
+} from "./legacy-adapters";
+import { executeLegacyMediaUpload } from "./legacy-media-upload";
 
 const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
@@ -18,26 +26,16 @@ const SITE_SOCKET_PORT_NAME = "reminetChat:site-socket";
 const SOCKET_AUTH_TIMEOUT_MS = 12_000;
 const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
-const MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024;
-const ALLOWED_ATTACHMENT_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
-const ALLOWED_ATTACHMENT_VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 let socketAuthReadyUntil = 0;
 let socketAuthPromise: Promise<{ ok: boolean; signedIn: boolean; error?: string }> | null = null;
 let socketAuthGeneration = 0;
 
-type DecodedAttachment = {
-  contentType: string;
-  bytes: Uint8Array<ArrayBuffer>;
-  tooLarge?: boolean;
-};
-
 type ChatMessage =
   | { type: "reminetChat:authStatus" }
   | { type: "reminetChat:getHistory"; limit?: number; before?: number; after?: number }
   | { type: "reminetChat:prepareSocket" }
-  | { type: "reminetChat:uploadAttachment"; name?: string; mimeType?: string; dataUrl?: string }
+  | { type: "reminetChat:legacy:uploadAttachment"; mimeType?: string; dataUrl?: string }
   | { type: "reminetChat:fetchMedia"; url?: string };
 
 registerBackgroundMessageHandlers([{
@@ -71,12 +69,17 @@ chrome.runtime.onConnect.addListener((port) => {
   };
 
   port.onMessage.addListener((message: unknown) => {
-    const record = objectValue(message);
-    if (record.type === "connect") {
+    const command = parseLegacySocketClientCommand(message);
+    if (!command) {
+      post({ type: "socket:error", error: "Connection interrupted.", reason: "invalid-client-command" });
+      post({ type: "socket:reconcile", reason: "legacy-frame-dropped" });
+      return;
+    }
+    if (command.type === "connect") {
       if (!siteSocketBridge) {
         post({
           type: "socket:error",
-          error: "Open or refresh a signed-in RemiliaNET tab.",
+          error: "Connection interrupted.",
           reason: "site-bridge-required",
         });
         return;
@@ -84,17 +87,17 @@ chrome.runtime.onConnect.addListener((port) => {
       postToSiteSocketBridge({ type: "connect" });
       return;
     }
-    if (record.type === "close") {
+    if (command.type === "close") {
       socketClients.delete(port);
       if (socketClients.size === 0) postToSiteSocketBridge({ type: "close" });
       return;
     }
-    if (record.type === "send") {
-      if (!siteSocketBridge || typeof record.payload !== "object" || record.payload === null) {
-        post({ type: "socket:error", error: "Socket is not open." });
+    if (command.type === "mutate") {
+      if (!siteSocketBridge) {
+        post({ type: "socket:error", error: "Socket is not open.", reason: "site-socket-not-open" });
         return;
       }
-      postToSiteSocketBridge({ type: "send", payload: record.payload });
+      postToSiteSocketBridge(command);
     }
   });
   port.onDisconnect.addListener(() => {
@@ -104,7 +107,7 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 function registerSiteSocketBridge(port: chrome.runtime.Port): void {
-  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"])) {
+  if (!isAllowedLegacySender(port.sender, "remilia-bridge")) {
     port.disconnect();
     return;
   }
@@ -112,15 +115,13 @@ function registerSiteSocketBridge(port: chrome.runtime.Port): void {
   if (!siteSocketBridge) siteSocketBridge = port;
   port.onMessage.addListener((message: unknown) => {
     if (siteSocketBridge !== port) return;
-    const record = objectValue(message);
-    if (!String(record.type || "").startsWith("socket:")) return;
-    for (const client of socketClients) {
-      try {
-        client.postMessage(record);
-      } catch {
-        socketClients.delete(client);
-      }
+    const event = parseLegacySocketBridgeEvent(message);
+    if (!event) {
+      broadcastSocketEvent({ type: "socket:error", error: "Connection interrupted.", reason: "invalid-bridge-event" });
+      broadcastSocketEvent({ type: "socket:reconcile", reason: "legacy-frame-dropped" });
+      return;
     }
+    broadcastSocketEvent(event);
   });
   port.onDisconnect.addListener(() => {
     siteSocketBridges.delete(port);
@@ -128,24 +129,33 @@ function registerSiteSocketBridge(port: chrome.runtime.Port): void {
     siteSocketBridge = siteSocketBridges.values().next().value ?? null;
     if (siteSocketBridge && socketClients.size > 0) {
       postToSiteSocketBridge({ type: "connect" });
+      broadcastSocketEvent({ type: "socket:reconcile", reason: "legacy-worker-restart" });
       return;
     }
+    broadcastSocketEvent({
+      type: "socket:error",
+      error: "Connection interrupted.",
+      reason: "site-bridge-required",
+    });
+    broadcastSocketEvent({ type: "socket:reconcile", reason: "legacy-socket-close" });
+  });
+  if (socketClients.size > 0) {
+    postToSiteSocketBridge({ type: "connect" });
+    broadcastSocketEvent({ type: "socket:reconcile", reason: "legacy-worker-restart" });
+  }
+}
+
+function broadcastSocketEvent(event: LegacySocketBridgeEvent): void {
     for (const client of socketClients) {
       try {
-        client.postMessage({
-          type: "socket:error",
-          error: "Open or refresh a signed-in RemiliaNET tab.",
-          reason: "site-bridge-required",
-        });
+        client.postMessage(event);
       } catch {
         socketClients.delete(client);
       }
     }
-  });
-  if (socketClients.size > 0) postToSiteSocketBridge({ type: "connect" });
 }
 
-function postToSiteSocketBridge(message: Record<string, unknown>): void {
+function postToSiteSocketBridge(message: LegacySocketBridgeCommand): void {
   try {
     siteSocketBridge?.postMessage(message);
   } catch {
@@ -155,7 +165,7 @@ function postToSiteSocketBridge(message: Record<string, unknown>): void {
 }
 
 function isReminetChatSocketSender(sender: chrome.runtime.MessageSender | undefined): boolean {
-  return isAllowedReminetChatSender(sender, ["x.com", "twitter.com"]);
+  return isAllowedLegacySender(sender, "x-content");
 }
 
 function isReminetChatMessageSender(sender: chrome.runtime.MessageSender | undefined): boolean {
@@ -180,7 +190,7 @@ function isChatMessage(message: unknown): message is ChatMessage {
   return type === "reminetChat:authStatus"
     || type === "reminetChat:getHistory"
     || type === "reminetChat:prepareSocket"
-    || type === "reminetChat:uploadAttachment"
+    || type === "reminetChat:legacy:uploadAttachment"
     || type === "reminetChat:fetchMedia";
 }
 
@@ -202,15 +212,18 @@ async function handleChatMessage(message: ChatMessage, sender: chrome.runtime.Me
       if (typeof message.after === "number" && Number.isFinite(message.after)) params.set("after", String(message.after));
       return await remiliaAuthedFetch("GET", `/api/chats/${CHAT_ID}/messages?${params.toString()}`);
     }
-    if (message.type === "reminetChat:uploadAttachment") {
-      return await uploadAttachment(message.name, message.mimeType, message.dataUrl);
+    if (message.type === "reminetChat:legacy:uploadAttachment") {
+      if (!isAllowedLegacySender(sender, "x-content")) return { ok: false, error: "UNSUPPORTED_SENDER" };
+      const request = parseLegacyMediaUploadRequest(message);
+      if (!request) return { ok: false, error: "INVALID_ATTACHMENT", retryable: false };
+      return await uploadAttachment(request);
     }
     if (message.type === "reminetChat:fetchMedia") {
       return await fetchMediaDataUrl(message.url);
     }
     return { ok: false, error: "UNSUPPORTED_MESSAGE" };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } catch {
+    return { ok: false, error: "REQUEST_FAILED" };
   }
 }
 
@@ -323,85 +336,10 @@ async function remiliaRequest(method: string, path: string, body: unknown, acces
   return { ok: true, status: response.status, data };
 }
 
-async function uploadAttachment(name: unknown, mimeType: unknown, dataUrl: unknown): Promise<Record<string, unknown>> {
-  const prepared = await prepareRemiliaAccess(["remilia:chat.write"]);
-  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
-  if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return { ok: false, error: "INVALID_ATTACHMENT" };
-
-  const declaredMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
-  if (!isAllowedAttachmentMimeType(declaredMimeType)) return { ok: false, error: "UNSUPPORTED_ATTACHMENT_TYPE" };
-  const decoded = decodeAttachmentDataUrl(dataUrl);
-  if (!decoded) return { ok: false, error: "INVALID_ATTACHMENT" };
-  if (decoded.contentType !== declaredMimeType) return { ok: false, error: "ATTACHMENT_TYPE_MISMATCH" };
-  const maxBytes = maxAttachmentBytes(decoded.contentType);
-  if (decoded.tooLarge || decoded.bytes.byteLength > maxBytes) return { ok: false, error: "ATTACHMENT_TOO_LARGE" };
-
-  const blob = new Blob([decoded.bytes], { type: decoded.contentType });
-  const file = new File([blob], typeof name === "string" && name ? name : "attachment", {
-    type: decoded.contentType,
-  });
-  const form = new FormData();
-  form.append("file", file);
-
-  const uploaded = await remiliaMultipart("/media/upload/", form, prepared.accessToken);
-  if (!uploaded.ok) return uploaded;
-  const token = stringFrom(uploaded.data, "token");
-  if (!token) return { ok: false, error: "UPLOAD_TOKEN_MISSING", data: uploaded.data };
-
-  const confirmed = await remiliaRequest("POST", "/media/upload/confirm", { tokens: [token] }, prepared.accessToken);
-  if (!confirmed.ok) return confirmed;
-  const media = confirmedMediaFromResponse(confirmed.data);
-  if (!media) return { ok: false, error: "UPLOAD_CONFIRMATION_MISSING_MEDIA", data: confirmed.data };
-  return {
-    ok: true,
-    media,
-  };
-}
-
-function decodeAttachmentDataUrl(dataUrl: string): DecodedAttachment | null {
-  const match = /^data:([^;,]+);base64,([A-Za-z0-9+/=\s]+)$/u.exec(dataUrl);
-  if (!match) return null;
-  const contentType = match[1].toLowerCase();
-  if (!isAllowedAttachmentMimeType(contentType)) return null;
-  const base64 = match[2].replace(/\s+/g, "");
-  const maxBytes = maxAttachmentBytes(contentType);
-  if (estimatedBase64Bytes(base64) > maxBytes) return { contentType, bytes: new Uint8Array(new ArrayBuffer(0)), tooLarge: true };
-  try {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(new ArrayBuffer(binary.length));
-    for (let index = 0; index < binary.length; index += 1) {
-      bytes[index] = binary.charCodeAt(index);
-    }
-    return { contentType, bytes };
-  } catch {
-    return null;
-  }
-}
-
-function isAllowedAttachmentMimeType(value: string): boolean {
-  return ALLOWED_ATTACHMENT_IMAGE_TYPES.has(value) || ALLOWED_ATTACHMENT_VIDEO_TYPES.has(value);
-}
-
-function maxAttachmentBytes(contentType: string): number {
-  return ALLOWED_ATTACHMENT_VIDEO_TYPES.has(contentType) ? MAX_ATTACHMENT_VIDEO_BYTES : MAX_ATTACHMENT_IMAGE_BYTES;
-}
-
-function estimatedBase64Bytes(value: string): number {
-  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
-  return Math.floor((value.length * 3) / 4) - padding;
-}
-
-async function remiliaMultipart(path: string, body: FormData, accessToken: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: "POST",
-    credentials: "omit",
-    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
-    body,
-  });
-  const text = await response.text().catch(() => "");
-  const data = text ? parseJson(text) : null;
-  if (!response.ok) return { ok: false, status: response.status, data };
-  return { ok: true, status: response.status, data };
+async function uploadAttachment(request: { mimeType: string; dataUrl: string }): Promise<Record<string, unknown>> {
+  const ready = await prepareSocketAuth();
+  if (!ready.ok) return { ok: false, authRequired: true, error: "AUTH_REQUIRED", retryable: false };
+  return await executeLegacyMediaUpload(request);
 }
 
 async function fetchMediaDataUrl(url: unknown): Promise<Record<string, unknown>> {
@@ -455,12 +393,6 @@ async function blobToDataUrl(blob: Blob, contentType: string): Promise<string> {
     binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
   }
   return `data:${contentType};base64,${btoa(binary)}`;
-}
-
-function stringFrom(value: unknown, key: string): string {
-  if (!value || typeof value !== "object") return "";
-  const candidate = (value as Record<string, unknown>)[key];
-  return typeof candidate === "string" ? candidate : "";
 }
 
 function parseJson(text: string): unknown {

@@ -31,7 +31,7 @@
     "src/apps/wiki-sidebar/content.ts": 968,
     "src/apps/wiki-sidebar/frameContent.ts": 1038,
     "src/extension/background/index.ts": 1236,
-    "src/extension/frames/reminet-chat-bridge.ts": 596,
+    "src/extension/frames/reminet-chat-bridge.ts": 501,
     "src/extension/popup/index.ts": 2599,
     "src/platform/overlay/app-layout.ts": 798,
     "src/platform/runtime/content-runtime.ts": 5838,
