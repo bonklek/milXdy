@@ -153,6 +153,10 @@ describe("Share Kit rich-text editor", () => {
     expect(packageSource).toContain("Edits stay in this export.");
     expect(packageSource).toContain("layoutTweetPngRichInlineBlocks(");
     expect(packageSource).toContain("fragment.style.strikethrough");
+    expect(packageSource).toContain("currentBlob = nextResult.blob");
+    expect(packageSource).toContain("copyTweetPng(currentBlob)");
+    expect(packageSource).toContain("downloadBlob(currentBlob, tweetPngFileName(currentData))");
+    expect(packageSource).toContain("blob: currentBlob");
     expect(packageSource).not.toContain("milxdy.settings.tweetPngRichText");
   });
 });
