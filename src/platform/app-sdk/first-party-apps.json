@@ -3199,6 +3199,30 @@
         "remiliaAuth"
       ]
     },
+    "remiliaCapabilities": [
+      {
+        "id": "remilia.chat.read",
+        "operations": [
+          "listGlobalChatMessages"
+        ],
+        "scopes": [
+          "remilia:chat.read"
+        ],
+        "consent": "enablement",
+        "reason": "Read official Remilia global chat history while RemiNet Chat is enabled."
+      },
+      {
+        "id": "remilia.chat.write",
+        "operations": [
+          "postGlobalChatMessage"
+        ],
+        "scopes": [
+          "remilia:chat.write"
+        ],
+        "consent": "perInvocation",
+        "reason": "Post text or replies to official Remilia global chat after an explicit Send action."
+      }
+    ],
     "permissions": {
       "hosts": [
         "https://www.remilia.net/*",

@@ -13,6 +13,31 @@ import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } 
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { absoluteRemiliaMediaUrl, isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import { canMountRemiNetChatRoute } from "./route-policy";
+import {
+  CHAT_REST_MESSAGE_LIMIT_BYTES,
+  ChatRestController,
+  chatRestUtf8Bytes,
+  type ChatRestCapabilityInvoker,
+  type ChatRestFailureKind,
+  type ChatRestReconciliationReason,
+} from "./chat-rest";
+import type { RemiliaApiChatMessage, RemiliaApiChatPage, RemiliaApiError, RemiliaApiResult } from "../../platform/auth/remilia-api";
+import {
+  SHOCKED_REACTION,
+  legacyMessageId,
+  messageIdOrNull,
+  normalizeChatMessage,
+  normalizeMedia,
+  normalizeReactionEmoji,
+  officialChatMessageRecord,
+  officialIdentityToApiUser,
+  type ApiMessage,
+  type ApiUser,
+  type MediaAttachment,
+  type MessageId,
+  type Reaction,
+  type ReplyReference,
+} from "./chat-model";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
@@ -31,21 +56,12 @@ const WIDTH_KEY = "milxdy.reminetChat.width";
 const HEIGHT_KEY = "milxdy.reminetChat.height";
 const TOP_KEY = "milxdy.reminetChat.top";
 const MAX_MESSAGES = 1200;
-const HISTORY_PAGE_SIZE = 30;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
 const LEFT_RAIL_MIN_HEIGHT_PX = 260;
 const SOCKET_STALE_TIMEOUT_MS = 70_000;
 const SOCKET_RECOVERY_MIN_GAP_MS = 5_000;
-const RECENT_REFRESH_LIMIT = 20;
-const SHOCKED_REACTION = "\u{1f62e}";
 const REACTIONS = [SHOCKED_REACTION, "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
-const REACTION_ALIASES = new Map([
-  ["\u{1f62e}", SHOCKED_REACTION],
-  ["\u{1f632}", SHOCKED_REACTION],
-  ["\u{1f631}", SHOCKED_REACTION],
-  ["\u{1f633}", SHOCKED_REACTION],
-]);
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const POKE_ICON = "\u{1faf5}";
@@ -71,98 +87,13 @@ let cancelSendResetTimer: (() => void) | null = null;
 let cancelMountRetryTimer: (() => void) | null = null;
 const unavailableRuntimeSendMessage: MilxdyContentAppContext["sendMessage"] = () => Promise.resolve(null);
 let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = unavailableRuntimeSendMessage;
+let invokeRemiliaCapability: ChatRestCapabilityInvoker | null = null;
 let recordDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
+let chatRestController: ChatRestController | null = null;
 
 type RuntimeRecord = Record<string, unknown>;
-
-type ApiUser = {
-  id?: number;
-  userId?: number;
-  user_id?: number;
-  handle?: string;
-  userHandle?: string;
-  user_handle?: string;
-  username?: string;
-  twitterHandle?: string;
-  twitter_handle?: string;
-  twitterUsername?: string;
-  twitter_username?: string;
-  twitterUrl?: string;
-  twitter_url?: string;
-  xHandle?: string;
-  x_handle?: string;
-  xUsername?: string;
-  x_username?: string;
-  xUrl?: string;
-  x_url?: string;
-  displayName?: string;
-  display_name?: string;
-  name?: string;
-  profilePicUrl?: string;
-  profile_pic_url?: string;
-  pfpUrl?: string;
-  pfp_url?: string;
-  color?: number | string;
-  theme?: string;
-  connections?: unknown[];
-};
-
-type MediaAttachment = {
-  mediaId?: number | null;
-  media_id?: number | null;
-  url?: string | null;
-  width?: number | null;
-  height?: number | null;
-  mimeType?: string | null;
-  mime_type?: string | null;
-  thumbnailUrl?: string | null;
-  thumbnail_url?: string | null;
-};
-
-type Reaction = {
-  userId?: number;
-  user_id?: number;
-  user?: ApiUser | null;
-  username?: string;
-  handle?: string;
-  name?: string;
-  emoji?: string;
-};
-
-type ReplyReference = {
-  id: number;
-  authorId?: number;
-  author_id?: number;
-  body?: string;
-};
-
-type ApiMessage = {
-  id: number;
-  chatId?: number;
-  chat_id?: number;
-  authorId?: number;
-  author_id?: number;
-  userId?: number;
-  user_id?: number;
-  body?: string;
-  createdAt?: number;
-  created_at?: number;
-  isDeleted?: boolean;
-  is_deleted?: boolean;
-  images?: MediaAttachment[] | null;
-  video?: MediaAttachment | null;
-  reactions?: Reaction[] | null;
-  replyToMessageId?: number | null;
-  reply_to_message_id?: number | null;
-  inReplyToId?: number;
-  in_reply_to_id?: number;
-  replyTo?: ReplyReference | null;
-  reply_to?: ReplyReference | null;
-  inReplyTo?: ReplyReference | null;
-  in_reply_to?: ReplyReference | null;
-};
 
 type PendingAttachment = {
   id: string;
@@ -173,7 +104,7 @@ type PendingAttachment = {
 };
 
 type MessageGroup = {
-  authorId: number;
+  authorKey: string;
   messages: ApiMessage[];
 };
 
@@ -197,6 +128,7 @@ type ChatState = {
   loadingOlder: boolean;
   hasMoreOlder: boolean;
   showOlderButton: boolean;
+  olderCursor: string | null;
   sending: boolean;
   signedIn: boolean;
   enabled: boolean;
@@ -222,7 +154,7 @@ type ChatState = {
   appFrame: OverlayAppFrame | null;
   layoutReady: boolean;
   hostImageViewerOpen: boolean;
-  activeMessageActionId: number | null;
+  activeMessageActionId: MessageId | null;
 };
 
 const state: ChatState = {
@@ -245,6 +177,7 @@ const state: ChatState = {
   loadingOlder: false,
   hasMoreOlder: true,
   showOlderButton: false,
+  olderCursor: null,
   sending: false,
   signedIn: false,
   enabled: true,
@@ -281,7 +214,11 @@ export function boot(context?: MilxdyContentAppContext): void {
   lifecycleSignal = context?.signal || null;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   runtimeSendMessage = context?.sendMessage || unavailableRuntimeSendMessage;
+  invokeRemiliaCapability = context?.invokeRemiliaCapability
+    ? (operation, params) => context.invokeRemiliaCapability!(operation, params)
+    : null;
   recordDiagnostic = context?.recordDiagnostic || recordDiagnostic;
+  chatRestController = createChatRestController();
   ensureOverlayAppChromeStyles();
   registerDockItem();
   ensureRoot();
@@ -304,6 +241,7 @@ export function onRouteChange(_route: MilxdyRouteChange): void {
   ensureRoot();
   scheduleMountRetry();
   void refreshAuthAndHistory();
+  updateOfficialPolling();
 }
 
 export function open(): void {
@@ -315,6 +253,7 @@ export function open(): void {
   scheduleMountRetry();
   render();
   void refreshAuthAndHistory();
+  updateOfficialPolling();
 }
 
 export async function stageLocalAttachment(file: File): Promise<{ ok: boolean; error?: string }> {
@@ -355,15 +294,72 @@ export function disable(): void {
 
 export function dispose(): void {
   disable();
+  chatRestController?.dispose();
+  chatRestController = null;
   state.appFrame?.remove();
   state.appFrame = null;
   addRuntimeDisposable = () => undefined;
+  invokeRemiliaCapability = null;
   lifecycleSignal = null;
   booted = false;
 }
 
 function lifecycleActive(): boolean {
   return booted && state.enabled && lifecycleSignal?.aborted !== true;
+}
+
+function createChatRestController(): ChatRestController {
+  return new ChatRestController({
+    invokeCapability: (operation, params) => invokeRemiliaCapability?.(operation, params)
+      ?? Promise.resolve({
+        ok: false,
+        error: {
+          category: "broker",
+          code: "client_unavailable",
+          message: "The Remilia capability service is unavailable.",
+          status: 0,
+        },
+      }),
+    scheduler: runtimeScheduler,
+    onPage: ({ page, reason }) => {
+      if (!lifecycleActive()) return;
+      ingestOfficialChatPage(page);
+      state.signedIn = true;
+      if (reason === "initial" || reason === "manual") {
+        state.olderCursor = page.next_cursor;
+        state.hasMoreOlder = page.has_more;
+        state.showOlderButton = page.has_more;
+      } else if (reason === "older") {
+        state.olderCursor = page.next_cursor;
+        state.hasMoreOlder = page.has_more;
+        state.showOlderButton = page.has_more;
+      } else if (reason === "post" && page.messages[0]) {
+        state.currentUser = officialIdentityToApiUser(page.messages[0].author);
+      }
+      sortAndTrimMessages(reason === "older" ? "oldest" : "newest");
+      state.recoveryVisibleState = "none";
+      state.recoveryMessage = "";
+      renderStatus("Live");
+      render();
+    },
+    onFailure: handleOfficialChatFailure,
+    recordDiagnostic: (key, value) => recordChatDiagnostic(key, value),
+  });
+}
+
+export function requestOfficialChatReconciliation(reason: ChatRestReconciliationReason): Promise<RemiliaApiResult<RemiliaApiChatPage> | null> {
+  return chatRestController?.requestReconciliation(reason) ?? Promise.resolve(null);
+}
+
+function updateOfficialPolling(): void {
+  chatRestController?.setPollingActive(Boolean(
+    lifecycleActive()
+      && state.enabled
+      && state.signedIn
+      && !state.minimized
+      && !document.hidden
+      && isChatRoute(),
+  ));
 }
 
 function registerDockItem(): void {
@@ -406,11 +402,18 @@ function observeLayoutSignals(): void {
   window.addEventListener("resize", scheduleLayout, { passive: true });
   addRuntimeDisposable(() => window.removeEventListener("resize", scheduleLayout));
   const visibilityListener = () => {
-    if (document.hidden) closeSocket();
+    if (document.hidden) {
+      closeSocket();
+      updateOfficialPolling();
+    }
     else if (lifecycleActive()) {
       ensureRoot();
       scheduleMountRetry();
-      if (state.signedIn && isChatRoute()) void recoverChatConnection("visibility-resume", { visible: false, force: true });
+      updateOfficialPolling();
+      if (state.signedIn && isChatRoute()) {
+        void requestOfficialChatReconciliation("visibility-resume");
+        connectSocket();
+      }
     }
   };
   document.addEventListener("visibilitychange", visibilityListener);
@@ -471,8 +474,12 @@ function destroy(): void {
   removePseudoChatRow();
   restoreNativeDmPane();
   state.messages = [];
+  state.olderCursor = null;
+  state.hasMoreOlder = true;
+  state.showOlderButton = false;
   state.users.clear();
   state.pendingAttachments = [];
+  updateOfficialPolling();
   state.composerError = "";
   state.replyTo = null;
   state.signedIn = false;
@@ -957,7 +964,7 @@ function createRoot(): HTMLElement {
       <form class="milxdy-chat-composer" data-role="form">
         <input data-role="file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
         <button data-role="attach" data-chat-action="attach" type="button" title="Attach media">+</button>
-        <input data-role="input" type="text" maxlength="500" autocomplete="off" placeholder="Say something">
+        <input data-role="input" type="text" maxlength="8192" autocomplete="off" placeholder="Say something">
         <button data-role="send" type="submit">Send</button>
       </form>
       <div class="milxdy-chat-resize-grip" data-role="resize" data-resize-axis="y" title="Drag to resize chat height"></div>
@@ -992,96 +999,85 @@ function createRoot(): HTMLElement {
     event.preventDefault();
     void addPendingFiles(files);
   });
-  root.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    const action = target?.closest<HTMLElement>("[data-chat-action]");
-    if (!action) return;
-    event.preventDefault();
-    const kind = action.dataset.chatAction;
-    if (kind === "attach") root.querySelector<HTMLInputElement>('[data-role="file"]')?.click();
-    if (kind === "remove-attachment") removePendingAttachment(action.dataset.attachmentId || "");
-    if (kind === "react") {
-      const messageId = Number(action.dataset.messageId);
-      state.activeMessageActionId = Number.isFinite(messageId) ? messageId : null;
-      reactToMessage(messageId, action.dataset.emoji || "");
-    }
-    if (kind === "reply") setReplyTo(Number(action.dataset.messageId));
-    if (kind === "cancel-reply") clearReplyTo();
-    if (kind === "poke") void pokeUser(action.dataset.username || "");
-    if (kind === "load-older") void loadOlderMessages();
-    if (kind === "retry-session") void recoverChatConnection("manual-retry", { visible: true, force: true });
-  });
+  root.addEventListener("click", handleChatActionClick);
   return root;
+}
+
+function handleChatActionClick(event: MouseEvent): void {
+  const root = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const target = event.target instanceof Element ? event.target : null;
+  const action = target?.closest<HTMLElement>("[data-chat-action]");
+  if (!root || !action) return;
+  event.preventDefault();
+  const kind = action.dataset.chatAction;
+  if (kind === "attach") root.querySelector<HTMLInputElement>('[data-role="file"]')?.click();
+  if (kind === "remove-attachment") removePendingAttachment(action.dataset.attachmentId || "");
+  if (kind === "react") {
+    const messageId = messageIdOrNull(action.dataset.messageId);
+    state.activeMessageActionId = messageId;
+    if (messageId) reactToMessage(messageId, action.dataset.emoji || "");
+  }
+  if (kind === "reply") {
+    const messageId = messageIdOrNull(action.dataset.messageId);
+    if (messageId) setReplyTo(messageId);
+  }
+  if (kind === "cancel-reply") clearReplyTo();
+  if (kind === "poke") void pokeUser(action.dataset.username || "");
+  if (kind === "load-older") void loadOlderMessages();
+  if (kind === "retry-session") void refreshAuthAndHistory(true);
 }
 
 async function refreshAuthAndHistory(force = false): Promise<void> {
   if (!lifecycleActive()) return;
   if (state.minimized) return;
   if (!state.enabled || !isChatRoute() || state.loading && !force) return;
+  const controller = chatRestController;
+  if (!controller) return;
   state.loading = true;
   state.recoveryVisibleState = "none";
   state.recoveryMessage = "";
   if (force) {
     state.hasMoreOlder = true;
     state.showOlderButton = false;
+    state.olderCursor = null;
   }
-  renderStatus("Checking RemiNet session...");
-  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:authStatus").then(asRecord).catch(() => null);
+  renderStatus("Loading official chat...");
+  const history = force
+    ? await controller.requestReconciliation("manual")
+    : await controller.loadInitial();
   if (!lifecycleActive()) return;
-  state.signedIn = Boolean(auth?.signedIn);
-  state.currentUser = state.signedIn ? normalizeCurrentUser(auth?.user) : null;
-  if (!state.signedIn) {
-    state.loading = false;
-    closeSocket();
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    render();
-    return;
-  }
-
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE }, "reminetChat:getHistory")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
-  if (!lifecycleActive()) return;
-  if (history.ok) {
-    ingestApiPayload(history.data);
-    sortAndTrimMessages();
-    state.hasMoreOlder = state.messages.some((message) => message.id > 0);
-    renderStatus("Live");
+  if (history?.ok) {
+    state.signedIn = true;
     connectSocket();
-  } else {
-    if (history.authRequired) setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    else renderStatus("Could not load chat.");
+  } else if (!state.signedIn) {
+    closeSocket();
   }
   state.loading = false;
+  updateOfficialPolling();
   render();
 }
 
 async function loadOlderMessages(): Promise<void> {
   if (!lifecycleActive()) return;
-  if (!state.signedIn || state.loadingOlder || state.messages.length === 0) return;
-  const before = oldestMessageId();
-  if (!before) return;
+  const controller = chatRestController;
+  const before = state.olderCursor;
+  if (!controller || !state.signedIn || state.loadingOlder || !before) return;
   const scroller = state.root?.querySelector<HTMLElement>('[data-role="messages"]') || null;
   const previousHeight = scroller?.scrollHeight || 0;
   const previousTop = scroller?.scrollTop || 0;
   const previousIds = new Set(state.messages.map((message) => message.id));
   state.loadingOlder = true;
   render();
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE, before }, "reminetChat:getHistoryOlder")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  const history = await controller.loadOlder(before);
   if (!lifecycleActive()) return;
   if (history.ok) {
-    const historyCount = countPayloadMessages(history.data);
-    ingestApiPayload(history.data);
-    sortAndTrimMessages("oldest");
     const addedMessages = state.messages.some((message) => !previousIds.has(message.id));
-    state.hasMoreOlder = addedMessages;
+    state.hasMoreOlder = history.data.has_more && Boolean(history.data.next_cursor) && addedMessages;
     state.showOlderButton = state.hasMoreOlder;
   } else {
     state.hasMoreOlder = false;
     state.showOlderButton = false;
-    renderStatus(history.authRequired ? "Sign in to RemiliaNET." : "Could not load older chat.");
+    renderStatus("Could not load older chat.");
   }
   state.loadingOlder = false;
   render();
@@ -1092,6 +1088,46 @@ async function loadOlderMessages(): Promise<void> {
     const delta = nextScroller.scrollHeight - previousHeight;
     nextScroller.scrollTop = Math.max(0, previousTop + delta);
   });
+}
+
+function ingestOfficialChatPage(page: RemiliaApiChatPage): void {
+  for (const message of page.messages) ingestOfficialChatMessage(message);
+}
+
+function ingestOfficialChatMessage(message: RemiliaApiChatMessage): void {
+  const normalized = normalizeChatMessage(message.id, officialChatMessageRecord(message));
+  if (normalized) upsertMessage(normalized);
+}
+
+function handleOfficialChatFailure(error: RemiliaApiError, kind: ChatRestFailureKind): void {
+  if (!lifecycleActive()) return;
+  if (kind === "auth-expired" || kind === "missing-scope") {
+    state.signedIn = false;
+    updateOfficialPolling();
+  }
+  if (kind === "auth-expired") {
+    setRecoveryVisibleState("auth-required", "Reconnect Remilia");
+    state.composerError = "Reconnect your Remilia account.";
+  } else if (kind === "missing-scope") {
+    setRecoveryVisibleState("auth-required", "Reconnect with Chat access");
+    state.composerError = "Reconnect Remilia and grant Chat access.";
+  } else if (kind === "rate-limited") {
+    renderStatus("Chat is rate limited.");
+    state.composerError = "Wait before trying Chat again.";
+  } else if (kind === "offline") {
+    renderStatus("Chat offline — retrying");
+    state.composerError = "Remilia Chat is offline. Nothing was sent.";
+  } else if (kind !== "cancelled") {
+    renderStatus("Could not refresh chat.");
+    state.composerError = "Remilia Chat could not complete the request.";
+  }
+  recordChatDiagnostic("official-rest.failure", {
+    kind,
+    category: error.category,
+    code: error.code,
+    status: error.status,
+  });
+  render();
 }
 
 function ingestApiPayload(payload: unknown): void {
@@ -1128,7 +1164,7 @@ function ingestMessages(value: unknown): void {
   for (const [id, message] of entries) {
     if (!message || typeof message !== "object") continue;
     ingestMessageUser(message as RuntimeRecord);
-    const next = normalizeMessage(Number(id), message as RuntimeRecord);
+    const next = normalizeChatMessage(id, message as RuntimeRecord);
     if (next) upsertMessage(next);
   }
 }
@@ -1141,99 +1177,6 @@ function ingestMessageUser(message: RuntimeRecord): void {
   if (!authorId) return;
   state.users.set(authorId, { ...state.users.get(authorId), ...record });
   queueProfileLookup(authorId, record);
-}
-
-function normalizeMessage(id: number, value: RuntimeRecord): ApiMessage | null {
-  const messageId = Number(value.id ?? id);
-  if (!Number.isFinite(messageId)) return null;
-  return {
-    id: messageId,
-    chatId: numberOrUndefined(value.chatId ?? value.chat_id),
-    chat_id: numberOrUndefined(value.chat_id ?? value.chatId),
-    authorId: numberOrUndefined(value.authorId ?? value.author_id ?? value.userId ?? value.user_id),
-    author_id: numberOrUndefined(value.author_id ?? value.authorId ?? value.user_id ?? value.userId),
-    userId: numberOrUndefined(value.userId ?? value.user_id ?? value.authorId ?? value.author_id),
-    user_id: numberOrUndefined(value.user_id ?? value.userId ?? value.author_id ?? value.authorId),
-    body: typeof value.body === "string" ? value.body : "",
-    createdAt: numberOrUndefined(value.createdAt ?? value.created_at),
-    created_at: numberOrUndefined(value.created_at ?? value.createdAt),
-    isDeleted: Boolean(value.isDeleted ?? value.is_deleted),
-    is_deleted: Boolean(value.is_deleted ?? value.isDeleted),
-    images: normalizeImages(value.images),
-    video: normalizeMedia(value.video),
-    reactions: normalizeReactions(value.reactions),
-    replyToMessageId: numberOrNull(value.replyToMessageId ?? value.reply_to_message_id ?? value.inReplyToId ?? value.in_reply_to_id),
-    reply_to_message_id: numberOrNull(value.reply_to_message_id ?? value.replyToMessageId ?? value.in_reply_to_id ?? value.inReplyToId),
-    inReplyToId: numberOrUndefined(value.inReplyToId ?? value.in_reply_to_id ?? value.replyToMessageId ?? value.reply_to_message_id),
-    in_reply_to_id: numberOrUndefined(value.in_reply_to_id ?? value.inReplyToId ?? value.reply_to_message_id ?? value.replyToMessageId),
-    replyTo: normalizeReplyReference(value.replyTo ?? value.replyToMessage ?? value.parentMessage),
-    reply_to: normalizeReplyReference(value.reply_to ?? value.reply_to_message ?? value.parent_message),
-    inReplyTo: normalizeReplyReference(value.inReplyTo ?? value.inReplyToMessage),
-    in_reply_to: normalizeReplyReference(value.in_reply_to ?? value.in_reply_to_message),
-  };
-}
-
-function normalizeImages(value: unknown): MediaAttachment[] | null {
-  if (!Array.isArray(value)) return null;
-  return value.map(normalizeMedia).filter((item): item is MediaAttachment => Boolean(item));
-}
-
-function normalizeMedia(value: unknown): MediaAttachment | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  return {
-    mediaId: numberOrNull(record.mediaId ?? record.media_id),
-    media_id: numberOrNull(record.media_id ?? record.mediaId),
-    url: stringOrNull(record.url ?? record.src ?? record.mediaUrl ?? record.media_url ?? record.videoUrl ?? record.video_url ?? record.sourceUrl ?? record.source_url),
-    width: numberOrNull(record.width),
-    height: numberOrNull(record.height),
-    mimeType: stringOrNull(record.mimeType ?? record.mime_type),
-    mime_type: stringOrNull(record.mime_type ?? record.mimeType),
-    thumbnailUrl: stringOrNull(record.thumbnailUrl ?? record.thumbnail_url ?? record.thumbUrl ?? record.thumb_url ?? record.posterUrl ?? record.poster_url),
-    thumbnail_url: stringOrNull(record.thumbnail_url ?? record.thumbnailUrl ?? record.thumb_url ?? record.thumbUrl ?? record.poster_url ?? record.posterUrl),
-  };
-}
-
-function normalizeReactions(value: unknown): Reaction[] | null {
-  if (!Array.isArray(value)) return null;
-  return value.map((item) => {
-    const record = objectValue(item);
-    const user = normalizeReactionUser(record.user ?? record.author ?? record.profile);
-    return {
-      userId: numberOrUndefined(record.userId ?? record.user_id),
-      user_id: numberOrUndefined(record.user_id ?? record.userId),
-      user,
-      username: stringOrUndefined(record.username ?? record.userName ?? record.user_name ?? record.handle),
-      handle: stringOrUndefined(record.handle ?? record.userHandle ?? record.user_handle),
-      name: stringOrUndefined(record.name ?? record.displayName ?? record.display_name),
-      emoji: normalizeReactionEmoji(stringOrUndefined(record.emoji ?? record.reaction)),
-    };
-  }).filter((item) => item.emoji);
-}
-
-function normalizeReactionEmoji(value: unknown): string {
-  if (typeof value !== "string") return "";
-  const normalized = value.trim().replace(/\ufe0f/g, "");
-  return REACTION_ALIASES.get(normalized) || normalized;
-}
-
-function normalizeReactionUser(value: unknown): ApiUser | null {
-  return value && typeof value === "object" ? value as ApiUser : null;
-}
-
-function normalizeReplyReference(value: unknown): ReplyReference | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  const id = numberOrUndefined(record.id ?? record.messageId ?? record.message_id);
-  const authorId = numberOrUndefined(record.authorId ?? record.author_id ?? record.userId ?? record.user_id);
-  const body = stringOrUndefined(record.body ?? record.text ?? record.message);
-  if (!id) return null;
-  return {
-    id,
-    authorId,
-    author_id: authorId,
-    body: body || "",
-  };
 }
 
 function upsertMessage(message: ApiMessage): void {
@@ -1344,41 +1287,17 @@ async function recoverChatConnection(
   recordChatDiagnostic("recovery.start", { reason, visible: Boolean(options.visible), socketState: state.socketState });
 
   closeSocket();
-  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:recoveryAuthStatus")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  const history = await requestOfficialChatReconciliation(options.force ? "manual" : "realtime-gap");
   if (!lifecycleActive()) return;
-  const signedIn = Boolean(auth?.signedIn);
-  recordChatDiagnostic("recovery.auth", { reason, signedIn, ok: auth?.ok !== false, error: auth?.error });
-  state.signedIn = signedIn;
-  state.currentUser = signedIn ? normalizeCurrentUser(auth?.user) : null;
-  if (!signedIn) {
-    state.recoveryInFlight = false;
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required" });
-    render();
-    return;
-  }
-
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: RECENT_REFRESH_LIMIT }, "reminetChat:recoveryHistory")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
-  if (!lifecycleActive()) return;
-  if (history.ok) {
-    ingestApiPayload(history.data);
-    sortAndTrimMessages();
+  if (history?.ok) {
+    state.signedIn = true;
     state.recoveryVisibleState = "none";
     state.recoveryMessage = "";
     connectSocket();
     renderStatus("Live");
     recordChatDiagnostic("recovery.finalState", { reason, state: "reconnected", messages: state.messages.length });
-  } else if (history.authRequired) {
-    state.signedIn = false;
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required-history" });
-  } else {
-    setRecoveryVisibleState("failed", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "failed", error: history.error, status: history.status });
+  } else if (history) {
+    recordChatDiagnostic("recovery.finalState", { reason, state: "failed" });
   }
   state.recoveryInFlight = false;
   render();
@@ -1394,23 +1313,14 @@ function handleSocketFrame(data: unknown): void {
   }
   const payload = frame.payload;
   if (frame.type === "deliver" || frame.type === "message_edit" || frame.type === "reaction") {
-    const previousMessages = new Map(state.messages.map((message) => [message.id, message]));
-    ingestApiPayload(payload);
-    const messageId = payload && typeof payload === "object" ? Number((payload as RuntimeRecord).message_id) : NaN;
-    if (Number.isFinite(messageId)) removeOptimisticForServerEcho(messageId);
-    playSocketFrameSound(frame.type, payload, previousMessages);
-    sortAndTrimMessages();
-    render();
+    void requestOfficialChatReconciliation("realtime-hint");
   }
   if (frame.type === "message_delete" && payload && typeof payload === "object") {
-    const id = Number((payload as RuntimeRecord).message_id);
-    const message = state.messages.find((item) => item.id === id);
-    if (message) message.isDeleted = true;
-    render();
+    void requestOfficialChatReconciliation("realtime-hint");
   }
   if (frame.type === "error") {
-    const message = payload && typeof payload === "object" ? String((payload as RuntimeRecord).message || "") : "";
-    renderStatus(message || "Chat error.");
+    renderStatus("Chat update unavailable.");
+    void requestOfficialChatReconciliation("realtime-invalid");
   }
 }
 
@@ -1421,6 +1331,17 @@ async function submitMessage(): Promise<void> {
   if (!input || state.sending) return;
   const text = input.value.trim();
   if (!text && state.pendingAttachments.length === 0) return;
+  if (text && chatRestUtf8Bytes(text) > CHAT_REST_MESSAGE_LIMIT_BYTES) {
+    state.composerError = "Chat messages must be 8,192 UTF-8 bytes or fewer.";
+    render();
+    return;
+  }
+
+  if (state.pendingAttachments.length === 0) {
+    await submitOfficialTextMessage(input, text);
+    return;
+  }
+
   if (state.socketState !== "open") connectSocket();
   if (state.socketState !== "open") {
     renderStatus("Chat is reconnecting.");
@@ -1439,7 +1360,7 @@ async function submitMessage(): Promise<void> {
     return;
   }
 
-  const optimisticId = -Date.now();
+  const optimisticId = `local:${Date.now()}`;
   upsertMessage({
     id: optimisticId,
     chatId: CHAT_ID,
@@ -1461,7 +1382,7 @@ async function submitMessage(): Promise<void> {
     payload: {
       chat_id: CHAT_ID,
       text,
-      in_reply_to_id: Number.isFinite(inReplyToId) ? inReplyToId : undefined,
+      in_reply_to_id: inReplyToId ? legacyMessageId(inReplyToId) : undefined,
       media_ids: mediaIds.length ? mediaIds : undefined,
     },
   });
@@ -1482,6 +1403,27 @@ async function submitMessage(): Promise<void> {
     state.sending = false;
     render();
   }, 350);
+}
+
+async function submitOfficialTextMessage(input: HTMLInputElement, text: string): Promise<void> {
+  const controller = chatRestController;
+  if (!controller || !text) return;
+  state.sending = true;
+  state.composerError = "";
+  render();
+  const result = await controller.postMessage(text, state.replyTo?.id);
+  if (!lifecycleActive()) return;
+  state.sending = false;
+  if (!result.ok) {
+    state.composerError = result.error.message;
+    render();
+    return;
+  }
+  input.value = "";
+  state.replyTo = null;
+  state.composerError = "";
+  playChatSound("send");
+  render();
 }
 
 function handleSocketPortMessage(message: unknown): void {
@@ -1606,7 +1548,7 @@ function render(): void {
 
   const focusedMessageControl = captureFocusedMessageControl(messages);
   const atBottom = messages.scrollHeight - messages.scrollTop <= messages.clientHeight + 48;
-  const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && state.messages.some((message) => message.id > 0));
+  const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && Boolean(state.olderCursor));
   loadOlder.hidden = true;
   loadOlder.innerHTML = "";
   const messageHtml = groupMessages(state.messages.filter((message) => !message.isDeleted && !message.is_deleted))
@@ -1709,6 +1651,7 @@ function closeChatPanel(): void {
   state.minimized = true;
   state.explicitlyOpened = false;
   closeSocket();
+  updateOfficialPolling();
   const root = state.root;
   state.root = null;
   state.mountMode = null;
@@ -1754,51 +1697,6 @@ function applySoundSettingChanges(changes: Record<string, chrome.storage.Storage
   if (changes[SOUND_REACT_TO_ME_KEY]) state.soundReactToMe = changes[SOUND_REACT_TO_ME_KEY].newValue !== false;
   if (changes[SOUND_MESSAGE_KEY]) state.soundMessage = changes[SOUND_MESSAGE_KEY].newValue !== false;
   if (changes[SOUND_POKE_KEY]) state.soundPoke = changes[SOUND_POKE_KEY].newValue !== false;
-}
-
-function playSocketFrameSound(type: unknown, payload: unknown, previousMessages: Map<number, ApiMessage>): void {
-  if (type === "deliver") {
-    const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
-    if (!message || messageAuthorId(message) === currentUserId()) return;
-    if (!previousMessages.has(message.id)) playChatSound("message");
-    return;
-  }
-  if (type !== "reaction") return;
-  const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
-  if (!message || messageAuthorId(message) !== currentUserId()) return;
-  const previous = previousMessages.get(message.id);
-  if (reactionSignature(previous) !== reactionSignature(message)) playChatSound("reactToMe");
-}
-
-function messageFromPayloadId(payload: unknown): ApiMessage | null {
-  if (!payload || typeof payload !== "object") return null;
-  const id = Number((payload as RuntimeRecord).message_id ?? (payload as RuntimeRecord).messageId ?? (payload as RuntimeRecord).id);
-  return Number.isFinite(id) ? state.messages.find((message) => message.id === id) || null : null;
-}
-
-function messageFromSocketPayload(payload: unknown): ApiMessage | null {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as RuntimeRecord;
-  const candidates = [
-    record.message,
-    record.chatMessage,
-    record.chat_message,
-    record.data,
-    payload,
-  ];
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const message = normalizeMessage(Number(objectValue(candidate).id ?? objectValue(candidate).message_id), candidate as RuntimeRecord);
-    if (message) return message;
-  }
-  return null;
-}
-
-function reactionSignature(message: ApiMessage | undefined): string {
-  return (message?.reactions || [])
-    .map((reaction) => `${normalizeReactionEmoji(reaction.emoji) || ""}:${reaction.userId ?? reaction.user_id ?? reaction.username ?? reaction.handle ?? reaction.name ?? ""}`)
-    .sort()
-    .join("|");
 }
 
 type ChatSoundKind = "send" | "react" | "reactToMe" | "message" | "poke";
@@ -2072,12 +1970,12 @@ function rightDockMinTop(): number {
 function groupMessages(messages: ApiMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const message of messages) {
-    const authorId = messageAuthorId(message);
+    const authorKey = messageAuthorKey(message);
     const last = groups[groups.length - 1];
-    if (last && last.authorId === authorId && messageTime(message) - messageTime(last.messages[last.messages.length - 1]) < 10 * 60 * 1000) {
+    if (last && last.authorKey === authorKey && messageTime(message) - messageTime(last.messages[last.messages.length - 1]) < 10 * 60 * 1000) {
       last.messages.push(message);
     } else {
-      groups.push({ authorId, messages: [message] });
+      groups.push({ authorKey, messages: [message] });
     }
   }
   return groups;
@@ -2085,9 +1983,10 @@ function groupMessages(messages: ApiMessage[]): MessageGroup[] {
 
 function renderMessageGroup(group: MessageGroup): string {
   const first = group.messages[0];
-  const user = userForAuthor(group.authorId, first);
+  const authorId = messageAuthorId(first);
+  const user = userForAuthor(authorId, first);
   const handleValue = remiliaHandle(user);
-  const name = displayName(user, group.authorId, first);
+  const name = displayName(user, authorId, first);
   const avatar = renderAvatarImage(user);
   const color = remiliaUserColor(user);
   const profileUrl = handleValue ? `https://www.remilia.net/~${encodeURIComponent(handleValue)}` : "https://www.remilia.net";
@@ -2127,6 +2026,7 @@ function renderStackedMessage(message: ApiMessage): string {
       ${renderReplyContext(message)}
       ${message.body ? `<div class="milxdy-chat-text">${formatBody(message.body)}</div>` : ""}
       ${renderAttachments(message)}
+      ${message.editedAt || message.edited_at ? `<span class="milxdy-chat-edited" title="Edited message">edited</span>` : ""}
       ${renderReactionCounts(message)}
       ${renderMessageActions(message)}
     </div>
@@ -2135,6 +2035,11 @@ function renderStackedMessage(message: ApiMessage): string {
 
 function messageAuthorId(message: ApiMessage): number {
   return message.authorId ?? message.author_id ?? message.userId ?? message.user_id ?? 0;
+}
+
+function messageAuthorKey(message: ApiMessage): string {
+  const handleValue = remiliaHandle(message.author || null).toLowerCase();
+  return handleValue ? `handle:${handleValue}` : `id:${messageAuthorId(message)}`;
 }
 
 function xLogoSvg(): string {
@@ -2158,15 +2063,21 @@ function renderReplyContext(message: ApiMessage): string {
 }
 
 function renderAttachments(message: ApiMessage): string {
-  const images = message.images || [];
-  const video = message.video;
-  if (!images.length && !video) return "";
+  const media = message.media?.length
+    ? message.media
+    : [...(message.images || []), ...(message.video ? [message.video] : [])];
+  if (!media.length) return "";
   return `
     <div class="milxdy-chat-media">
-      ${images.map(renderImageAttachment).join("")}
-      ${video ? renderVideoAttachment(video) : ""}
+      ${media.map((attachment) => isVideoAttachment(attachment) ? renderVideoAttachment(attachment) : renderImageAttachment(attachment)).join("")}
     </div>
   `;
+}
+
+function isVideoAttachment(media: MediaAttachment): boolean {
+  return media.kind?.toLowerCase().includes("video") === true
+    || media.mimeType?.toLowerCase().startsWith("video/") === true
+    || media.mime_type?.toLowerCase().startsWith("video/") === true;
 }
 
 function renderImageAttachment(media: MediaAttachment): string {
@@ -2282,7 +2193,7 @@ function reactionCounts(message: ApiMessage): Map<string, number> {
   for (const reaction of message.reactions || []) {
     const emoji = normalizeReactionEmoji(reaction.emoji);
     if (!emoji) continue;
-    counts.set(emoji, (counts.get(emoji) || 0) + 1);
+    counts.set(emoji, (counts.get(emoji) || 0) + Math.max(1, Math.floor(reaction.count ?? 1)));
   }
   return counts;
 }
@@ -2346,8 +2257,7 @@ function renderReplyPreview(container: HTMLElement): void {
   `;
 }
 
-function setReplyTo(messageId: number): void {
-  if (!Number.isFinite(messageId)) return;
+function setReplyTo(messageId: MessageId): void {
   const message = state.messages.find((item) => item.id === messageId);
   if (!message) return;
   state.replyTo = {
@@ -2415,12 +2325,12 @@ function compactText(value: string, maxLength: number): string {
   return compact.length > maxLength ? `${compact.slice(0, Math.max(0, maxLength - 1))}...` : compact;
 }
 
-function reactToMessage(messageId: number, emoji: string): void {
+function reactToMessage(messageId: MessageId, emoji: string): void {
   const normalizedEmoji = normalizeReactionEmoji(emoji);
-  if (!Number.isFinite(messageId) || !normalizedEmoji || state.socketState !== "open") return;
+  if (!normalizedEmoji || state.socketState !== "open") return;
   const message = state.messages.find((item) => item.id === messageId);
   const type = message && currentUserReacted(message, normalizedEmoji) ? "unreact" : "react";
-  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: messageId, emoji: normalizedEmoji } })) return;
+  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: legacyMessageId(messageId), emoji: normalizedEmoji } })) return;
   if (type === "react") playChatSound("react");
 }
 
@@ -2795,7 +2705,10 @@ function removePendingAttachment(id: string): void {
 }
 
 function userForAuthor(authorId: number, message: ApiMessage): ApiUser | null {
-  return state.users.get(authorId) || (authorId && authorId === currentUserId() ? state.currentUser : null) || (message.id < 0 ? state.currentUser : null);
+  return message.author
+    || state.users.get(authorId)
+    || (authorId && authorId === currentUserId() ? state.currentUser : null)
+    || (message.id.startsWith("local:") ? state.currentUser : null);
 }
 
 function queueProfileLookup(authorId: number, user: ApiUser): void {
@@ -2882,7 +2795,7 @@ function profileUserFromResponse(response: RuntimeRecord): ApiUser | null {
 
 function displayName(user: ApiUser | null, authorId: number, message: ApiMessage): string {
   const handleValue = remiliaHandle(user);
-  return user?.displayName || user?.display_name || user?.name || handleValue || (message.id < 0 ? "You" : `User ${authorId || "?"}`);
+  return user?.displayName || user?.display_name || user?.name || handleValue || (message.id.startsWith("local:") ? "You" : `User ${authorId || "?"}`);
 }
 
 function remiliaUserColor(user: ApiUser | null): string {
@@ -2906,7 +2819,7 @@ function remiliaHandle(user: ApiUser | null): string {
 }
 
 function avatarUrl(user: ApiUser | null): string {
-  return user?.profilePicUrl || user?.profile_pic_url || user?.pfpUrl || user?.pfp_url || "";
+  return user?.profilePicUrl || user?.profile_pic_url || user?.pfpUrl || user?.pfp_url || user?.avatar_url || user?.avatar_url_small || "";
 }
 
 function connectedXHandle(user: ApiUser | null): string {
@@ -3033,70 +2946,13 @@ function cleanUsername(value: string): string {
   return value.trim().replace(/^[@~]/, "").replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
-function normalizeCurrentUser(value: unknown): ApiUser | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  const nested = record.user && typeof record.user === "object" ? record.user as RuntimeRecord : record;
-  return {
-    id: numberOrUndefined(nested.id ?? nested.userId ?? nested.user_id),
-    userId: numberOrUndefined(nested.userId ?? nested.user_id ?? nested.id),
-    handle: stringOrUndefined(nested.handle ?? nested.userHandle ?? nested.user_handle ?? nested.username),
-    userHandle: stringOrUndefined(nested.userHandle ?? nested.user_handle ?? nested.handle ?? nested.username),
-    username: stringOrUndefined(nested.username ?? nested.handle ?? nested.userHandle),
-    displayName: stringOrUndefined(nested.displayName ?? nested.display_name ?? nested.name),
-    name: stringOrUndefined(nested.name ?? nested.displayName ?? nested.display_name),
-    profilePicUrl: stringOrUndefined(nested.profilePicUrl ?? nested.profile_pic_url ?? nested.pfpUrl ?? nested.pfp_url),
-    pfpUrl: stringOrUndefined(nested.pfpUrl ?? nested.pfp_url ?? nested.profilePicUrl ?? nested.profile_pic_url),
-    color: stringOrUndefined(nested.color),
-    theme: stringOrUndefined(nested.theme),
-    connections: Array.isArray(nested.connections) ? nested.connections : undefined,
-  };
-}
-
 function currentUserId(): number {
   return state.currentUser?.userId || state.currentUser?.user_id || state.currentUser?.id || 0;
-}
-
-function removeOptimisticForServerEcho(serverMessageId: number): void {
-  const serverMessage = state.messages.find((message) => message.id === serverMessageId);
-  if (!serverMessage) return;
-  const serverBody = serverMessage.body || "";
-  const serverAuthor = messageAuthorId(serverMessage);
-  const currentAuthor = currentUserId();
-  state.messages = state.messages.filter((message) => {
-    if (message.id >= 0) return true;
-    if ((message.body || "") !== serverBody) return true;
-    if (currentAuthor && serverAuthor && currentAuthor !== serverAuthor) return true;
-    return Math.abs(messageTime(serverMessage) - messageTime(message)) > 60_000;
-  });
 }
 
 function sortAndTrimMessages(_anchor: "newest" | "oldest" = "newest"): void {
   state.messages.sort((left, right) => messageTime(left) - messageTime(right));
   state.messages = state.messages.slice(-MAX_MESSAGES);
-}
-
-function oldestMessageId(): number | null {
-  let oldest: ApiMessage | null = null;
-  for (const message of state.messages) {
-    if (!Number.isFinite(message.id) || message.id <= 0) continue;
-    if (!oldest || messageTime(message) < messageTime(oldest)) oldest = message;
-  }
-  return oldest?.id ?? null;
-}
-
-function countPayloadMessages(payload: unknown): number {
-  if (Array.isArray(payload)) return payload.length;
-  if (!payload || typeof payload !== "object") return 0;
-  const record = payload as RuntimeRecord;
-  let count = 0;
-  if (record.global && typeof record.global === "object") count = Math.max(count, countPayloadMessages(record.global));
-  if (record.data && typeof record.data === "object") count = Math.max(count, countPayloadMessages(record.data));
-  if (record.results && typeof record.results === "object") count = Math.max(count, countPayloadMessages(record.results));
-  if (record.items && typeof record.items === "object") count = Math.max(count, countPayloadMessages(record.items));
-  if (Array.isArray(record.messages)) return Math.max(count, record.messages.length);
-  if (record.messages && typeof record.messages === "object") return Math.max(count, Object.keys(record.messages).length);
-  return count;
 }
 
 function messageTime(message: ApiMessage): number {
