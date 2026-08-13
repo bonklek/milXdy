@@ -1,8 +1,13 @@
 import { registerBackgroundMessageHandlers } from "../../platform/background/router";
+import { RemiliaApiClient } from "../../platform/auth/remilia-api";
 import {
   createLegacyBeetleActionsAdapter,
   isLegacyBeetleAction,
 } from "./legacy-beetle-actions";
+import {
+  officialBeetleReadFailure,
+  readOfficialBeetleSnapshot,
+} from "./official-beetle-reads";
 import {
   REMILIA_BASE_URL,
   prepareRemiliaAccess,
@@ -10,9 +15,11 @@ import {
   disconnectRemiliaAuth,
   getRemiliaAuthStatus,
   isRemiliaDisconnected,
+  remiliaAuthProvider,
 } from "../../platform/auth/remilia-auth";
 
 const BASE_URL = REMILIA_BASE_URL;
+const officialBeetleReads = new RemiliaApiClient({ auth: remiliaAuthProvider });
 const POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const INCOMING_POKE_WINDOW_MS = POKE_COOLDOWN_MS;
 const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
@@ -133,14 +140,13 @@ async function remiliaAuthedFetch(method, path, body, retry = true) {
 }
 
 async function getState() {
-  const result = await remiliaAuthedFetch('GET', '/api/beetle/user');
-  if (!result.ok) return result;
-  await setStored({ lastUser: result.data, lastFetchedAt: Date.now() });
-  return {
-    ok: true,
-    user: result.data,
-    fetchedAt: Date.now(),
-  };
+  try {
+    const snapshot = await readOfficialBeetleSnapshot(officialBeetleReads);
+    await setStored({ lastUser: snapshot.user, lastFetchedAt: snapshot.fetchedAt });
+    return { ok: true, ...snapshot };
+  } catch (error) {
+    return officialBeetleReadFailure(error);
+  }
 }
 
 async function runAction(action) {
@@ -200,10 +206,10 @@ function sleep(ms) {
 }
 
 async function crunchJunk({ runId, onProgress } = {}) {
-  const before = await remiliaFetch('GET', '/api/beetle/user');
+  const before = await getState();
   if (!before.ok) return before;
 
-  const pool = junkPool(before.data?.inventory);
+  const pool = junkPool(before.user?.inventory);
   if (pool.length < 2) {
     return { ok: false, error: 'Not enough loose junk.' };
   }

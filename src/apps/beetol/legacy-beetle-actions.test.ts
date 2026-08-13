@@ -87,6 +87,8 @@ describe("legacy Beetle endpoint isolation", () => {
 
     expect(background).toContain("legacyBeetleActions.runAction(action)");
     expect(background).toContain("legacyBeetleActions.craftJunk(pool[i], pool[i + 1])");
+    expect(background).toContain("readOfficialBeetleSnapshot(officialBeetleReads)");
+    expect(background).not.toContain("/api/beetle/user");
     expect(background).not.toMatch(/remilia(?:Authed)?Fetch\('POST',\s*['`]\/api\/beetle\/action/);
     expect(remistats).toContain("legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL)");
     expect(remistats).not.toContain("/api/beetle/trophy/");

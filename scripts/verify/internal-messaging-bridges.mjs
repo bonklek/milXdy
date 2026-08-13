@@ -116,7 +116,10 @@ function verifyBeetolRuntimeBridge() {
   assertIncludes(contentScriptPolicy, "url.hostname === 'www.remilia.net'", "Beetol content-script sender policy must allow supported RemiliaNET pages");
 
   const action = functionBody(files.beetolBackground, "runAction");
-  assertIncludes(action, "remiliaAuthedFetch('POST'", "Beetol actions must submit through the authenticated mutation path");
+  assertIncludes(action, "legacyBeetleActions.runAction(action)", "Beetol actions must submit through the typed legacy authenticated adapter");
+  assertNotIncludes(action, "/api/v1/", "Legacy Beetol actions must never masquerade as official API v1 operations");
+  assertIncludes(files.beetolBackground, "readOfficialBeetleSnapshot(officialBeetleReads)", "Beetol state must use the official typed Beetle reads");
+  assertNotIncludes(files.beetolBackground, "/api/beetle/user", "Beetol must not retain the undocumented state read endpoint");
   assertIncludes(action, "getStored({ lastUser: null })", "Beetol actions may use the last snapshot for reward comparison without a blocking preflight GET");
   assertNotIncludes(action, "remiliaAuthedFetch('GET'", "Beetol actions must not spend their shared message deadline on a preflight state GET");
   assertNotIncludes(action, "await getState()", "Beetol actions must return the mutation result before trailing state reconciliation");
