@@ -56,8 +56,8 @@
           <ul class="onboarding-tasks" id="onboardingTasks"></ul>
           <div class="onboarding-actions">
             <button class="secondary-button primary-action" id="onboardingApplyFull" type="button">Enable full setup</button>
-            <button class="secondary-button" id="onboardingOpenRemilia" type="button">Open RemiliaNET</button>
-            <button class="secondary-button" id="onboardingRetryRemilia" type="button">Retry session</button>
+            <button class="secondary-button" id="onboardingOpenRemilia" type="button">Review Remilia connection</button>
+            <button class="secondary-button" id="onboardingRetryRemilia" type="button">Check connection</button>
             <button class="secondary-button" id="onboardingOpenX" type="button">Open or refresh X</button>
             <button class="secondary-button" id="onboardingPinToolbar" type="button">Pinned in toolbar</button>
             <button class="secondary-button" id="onboardingAppearance" type="button">Review appearance</button>
@@ -366,14 +366,47 @@
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
           <label class="setting"><span><strong>Reduce remilia.net Beetle Hunt motion</strong><small>Reduce decorative and idle motion on remilia.net while preserving action-result feedback. Does not change the X/Twitter Beetol panel.</small></span><input type="checkbox" data-control="reminet.beetleReducedMotion"></label>
           <label class="setting"><span><strong>Use instant Beetle results</strong><small>Use the existing Remilia Beetle display pane for direct Claim/Hunt results instead of the site's video sequence. Reload the page after a result to sync native inventory and cooldown text.</small></span><input type="checkbox" data-control="reminet.beetleInstantResults"></label>
-          <div class="auth-session" id="beetolSession">
-            <div class="auth-box"><strong id="beetolStatus">Checking session...</strong><small id="beetolAuthDetail">Sign in on remilia.net, then retry the browser session to use Beetol hunts and RemiStats pokes.</small></div>
-            <button class="secondary-button" id="beetolLogout" type="button" hidden>Log out</button>
-          </div>
-          <div class="inline-actions">
-            <button class="secondary-button" id="beetolOpenSso" type="button">Open RemiliaNET</button>
-            <button class="secondary-button" id="beetolRetrySession" type="button">Retry session</button>
-          </div>
+          <section class="remilia-connection" id="remiliaConnection" tabindex="-1" aria-labelledby="remiliaConnectionTitle" data-phase="connecting">
+            <div class="remilia-connection-heading">
+              <div>
+                <h4 id="remiliaConnectionTitle">Official Remilia connection</h4>
+                <p>Connect through Remilia Login. milXdy does not reuse your website cookies or silently reconnect an old browser session.</p>
+              </div>
+              <span class="remilia-auth-version" aria-label="Connection state version 1">Auth v1</span>
+            </div>
+            <div class="remilia-migration" id="remiliaMigration" role="region" aria-labelledby="remiliaMigrationTitle" hidden>
+              <strong id="remiliaMigrationTitle">Delete old login data</strong>
+              <p>This update removes legacy tokens and browser-session login state. Your appearance, app, audio, and other ordinary settings stay unchanged. Deleting the old data will not connect an account.</p>
+              <button class="primary-button" id="remiliaCompleteMigration" type="button">Delete old login data</button>
+            </div>
+            <div class="remilia-consent" id="remiliaConsent" aria-labelledby="remiliaConsentTitle">
+              <strong id="remiliaConsentTitle">Before you connect</strong>
+              <p>Remilia Login will show the exact requested access. Read abilities load account data for enabled features; write abilities run only after you choose the matching action.</p>
+            </div>
+            <div class="remilia-auth-status" id="remiliaAuthStatus" role="status" aria-live="polite" aria-atomic="true">
+              <strong id="remiliaAuthTitle">Checking connection...</strong>
+              <span id="remiliaIdentity" hidden></span>
+              <small id="remiliaAuthDetail">Waiting for the background connection service.</small>
+            </div>
+            <div class="remilia-auth-error" id="remiliaAuthError" role="alert" tabindex="-1" hidden></div>
+            <div class="remilia-scopes" aria-labelledby="remiliaScopesTitle">
+              <strong id="remiliaScopesTitle">Requested abilities</strong>
+              <ul id="remiliaScopeList">
+                <li><span aria-hidden="true"></span><div><strong>Loading abilities...</strong></div></li>
+              </ul>
+            </div>
+            <div class="remilia-actions" id="remiliaActions">
+              <button class="primary-button" id="remiliaConnect" type="button" hidden>Connect with Remilia</button>
+              <button class="primary-button" id="remiliaReconnect" type="button" hidden>Reconnect</button>
+              <button class="secondary-button" id="remiliaDisconnect" type="button" hidden>Disconnect</button>
+              <button class="secondary-button danger-button" id="remiliaRevoke" type="button" hidden>Revoke authorization</button>
+            </div>
+            <label class="setting remilia-ui-rollback">
+              <span><strong>Use compact connection layout</strong><small>Presentation rollback only. Official Remilia Login, token deletion, and the no-cookie boundary remain enforced.</small></span>
+              <input id="remiliaUiRollback" type="checkbox">
+            </label>
+            <p class="message remilia-auth-message" id="remiliaAuthMessage" aria-live="polite"></p>
+          </section>
           <div class="auth-diagnostic" id="beetolPokeDiagnostic" hidden></div>
           <div class="field-grid">
             <label class="field"><span>Panel color</span><select id="beetolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>

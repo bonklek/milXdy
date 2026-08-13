@@ -46,6 +46,20 @@ import {
   type VisualThemeSettings,
   type ProfileAudioSettings,
 } from "../../platform/visuals/reskin-profile";
+import {
+  REMILIA_AUTH_MESSAGE,
+  REMILIA_CONNECTION_UI_KEY,
+  REMILIA_CONNECTION_UI_VERSION,
+  REMILIA_CONSENT_VERSION,
+  REMILIA_MIGRATION_VERSION,
+  normalizeRemiliaAuthResponse,
+  normalizeRemiliaConnectionUiState,
+  remiliaConnectionView,
+  remiliaErrorMessage,
+  remiliaIdentityLabel,
+  remiliaScopeRows,
+  type RemiliaAuthStatus,
+} from "./remilia-connection";
 
 type ControlBinding = {
   area: Area;
@@ -70,7 +84,6 @@ const GITHUB_ISSUES_NEW_URL = "https://github.com/bonklek/milXdy/issues/new";
 const X_FEEDBACK_REPLY_URL = "https://x.com/intent/tweet";
 const X_FEEDBACK_POST_ID = "2069113443664220227";
 const X_FEEDBACK_COLLECTOR_URL = `https://x.com/MiladyBonkle/status/${X_FEEDBACK_POST_ID}`;
-const REMILIA_NET_LOGIN_URL = "https://www.remilia.net/";
 const X_HOME_URL = "https://x.com/home";
 const LAST_POKE_DIAGNOSTIC_KEY = "milxdy.remistats.lastPokeDiagnostic";
 const SETTINGS_THEME_KEY = "milxdy.settings.theme";
@@ -243,7 +256,7 @@ async function boot(): Promise<void> {
   setupPostReadingVoiceSelect();
   await renderWikiLaterItems();
   observeWikiLaterItems();
-  await setupBeetolPanel();
+  await setupRemiliaConnectionPanel();
   await renderStatus();
 }
 
@@ -394,8 +407,9 @@ async function setupOnboarding(): Promise<void> {
     });
   });
   openRemilia?.addEventListener("click", () => {
-    void openExternalUrl(REMILIA_NET_LOGIN_URL);
-    showOnboardingMessage("Finish RemiliaNET sign-in, then retry the session.");
+    activatePanel("remistats");
+    document.getElementById("remiliaConnection")?.focus({ preventScroll: false });
+    showOnboardingMessage("Review the requested abilities, then connect when you are ready.");
   });
   retryRemilia?.addEventListener("click", () => {
     retryRemilia.disabled = true;
@@ -445,22 +459,23 @@ async function renderOnboarding(): Promise<void> {
       RAIL_PIN_KEY,
       ONBOARDING_TOOLBAR_PINNED_KEY,
     ]),
-    chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null),
+    chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status }).catch(() => null),
     hasOpenXTab(),
     isToolbarPinned(),
   ]);
-  const signedIn = Boolean(remiliaAuth?.signedIn);
+  const connection = normalizeRemiliaAuthResponse(remiliaAuth);
+  const signedIn = connection.phase === "connected";
   const fullSetup = await isFullStartSetup(local);
   const toolbarPinned = toolbarPinnedByBrowser || local[ONBOARDING_TOOLBAR_PINNED_KEY] === true;
   const tasks = [
     ["Full suite enabled", fullSetup, "Max appearance, app enablement, audio defaults, and rail pins."],
-    ["RemiliaNET signed in", signedIn, signedIn ? "Browser session detected." : "Needed for Beetol, RemiStats pokes, and chat."],
+    ["Remilia connected", signedIn, signedIn ? "Official account connection active." : "Needed for Beetol, RemiStats pokes, and chat."],
     ["Toolbar pinned", toolbarPinned, "Keep milXdy one click away after install."],
     ["X opened or refreshed", hasXTab, "Open X so the side rail and enabled apps can mount."],
   ] as const;
   const done = tasks.filter(([, complete]) => complete).length;
   progress.textContent = `${done}/${tasks.length} ready`;
-  if (retryRemilia) retryRemilia.textContent = signedIn ? "Session ready" : "Retry session";
+  if (retryRemilia) retryRemilia.textContent = signedIn ? "Connection ready" : "Check connection";
   tasksRoot.textContent = "";
   for (const [label, complete, detail] of tasks) {
     const item = document.createElement("li");
@@ -2719,84 +2734,208 @@ function escapeHtml(value: string): string {
   })[char] ?? char);
 }
 
-async function setupBeetolPanel(): Promise<void> {
-  const session = document.getElementById("beetolSession");
-  const status = document.getElementById("beetolStatus");
-  const authDetail = document.getElementById("beetolAuthDetail");
-  const logout = document.getElementById("beetolLogout") as HTMLButtonElement | null;
-  const openSso = document.getElementById("beetolOpenSso") as HTMLButtonElement | null;
-  const retrySession = document.getElementById("beetolRetrySession") as HTMLButtonElement | null;
+async function setupRemiliaConnectionPanel(): Promise<void> {
+  const root = document.getElementById("remiliaConnection");
+  const migration = document.getElementById("remiliaMigration");
+  const consent = document.getElementById("remiliaConsent");
+  const statusTitle = document.getElementById("remiliaAuthTitle");
+  const statusDetail = document.getElementById("remiliaAuthDetail");
+  const identity = document.getElementById("remiliaIdentity");
+  const error = document.getElementById("remiliaAuthError");
+  const scopeList = document.getElementById("remiliaScopeList");
+  const connect = document.getElementById("remiliaConnect") as HTMLButtonElement | null;
+  const reconnect = document.getElementById("remiliaReconnect") as HTMLButtonElement | null;
+  const disconnect = document.getElementById("remiliaDisconnect") as HTMLButtonElement | null;
+  const revoke = document.getElementById("remiliaRevoke") as HTMLButtonElement | null;
+  const completeMigration = document.getElementById("remiliaCompleteMigration") as HTMLButtonElement | null;
+  const rollback = document.getElementById("remiliaUiRollback") as HTMLInputElement | null;
+  const message = document.getElementById("remiliaAuthMessage");
   const pokeDiagnostic = document.getElementById("beetolPokeDiagnostic");
   const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
   const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
-  const message = document.getElementById("beetolMessage");
+  const required = [
+    root, migration, consent, statusTitle, statusDetail, identity, error, scopeList, connect, reconnect,
+    disconnect, revoke, completeMigration, rollback, message, pokeDiagnostic, color, mode,
+  ];
+  if (required.some((node) => !node)) return;
 
-  if (!session || !status || !authDetail || !logout || !openSso || !retrySession || !pokeDiagnostic || !color || !mode || !message) return;
-
-  const settings = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
-  color.value = typeof settings.beetolColor === "string" ? settings.beetolColor : "red";
-  mode.value = typeof settings.beetolMode === "string" ? settings.beetolMode : "settings";
+  const actionButtons = [connect, reconnect, disconnect, revoke, completeMigration] as HTMLButtonElement[];
+  const stored = await chrome.storage.local.get(["beetolColor", "beetolMode", REMILIA_CONNECTION_UI_KEY]);
+  color!.value = typeof stored.beetolColor === "string" ? stored.beetolColor : "red";
+  mode!.value = typeof stored.beetolMode === "string" ? stored.beetolMode : "settings";
+  const uiState = normalizeRemiliaConnectionUiState(stored[REMILIA_CONNECTION_UI_KEY]);
+  rollback!.checked = uiState.compatibilityPresentation;
+  root!.dataset.compatibility = String(uiState.compatibilityPresentation);
 
   const setMessage = (text: string, kind = "") => {
-    message.textContent = text;
-    if (kind) message.dataset.kind = kind;
-    else delete message.dataset.kind;
+    message!.textContent = text;
+    if (kind) message!.dataset.kind = kind;
+    else delete message!.dataset.kind;
   };
 
-  const renderAuth = (signedIn: boolean, method = "") => {
-    session.toggleAttribute("data-signed-in", signedIn);
-    status.parentElement?.toggleAttribute("data-signed-in", signedIn);
-    status.textContent = signedIn
-      ? `Login active${method === "session" ? " via browser session" : ""}`
-      : "Not signed in";
-    authDetail.textContent = signedIn
-      ? ""
-      : "Sign in on remilia.net, then retry the browser session to use Beetol hunts and RemiStats pokes.";
-    logout.hidden = !signedIn;
-    openSso.hidden = signedIn;
-    retrySession.hidden = signedIn;
-    if (signedIn) pokeDiagnostic.hidden = true;
+  const setBusy = (busy: boolean) => {
+    root!.toggleAttribute("aria-busy", busy);
+    for (const button of actionButtons) button.disabled = busy;
   };
 
-  const auth = await chrome.runtime.sendMessage({ type: "beetol:authStatus" }).catch(() => null);
-  const signedIn = Boolean(auth?.signedIn);
-  renderAuth(signedIn, typeof auth?.method === "string" ? auth.method : "");
-  if (signedIn) pokeDiagnostic.hidden = true;
-  else await renderPokeDiagnostic(pokeDiagnostic);
+  const renderStatus = async (authStatus: RemiliaAuthStatus, announceError = false): Promise<void> => {
+    const view = remiliaConnectionView(authStatus);
+    root!.dataset.phase = view.phase;
+    root!.dataset.tone = view.tone;
+    statusTitle!.textContent = view.title;
+    statusDetail!.textContent = view.detail;
+    migration!.hidden = !view.showMigration;
+    consent!.hidden = !view.showConsent;
+    connect!.hidden = !view.showConnect;
+    reconnect!.hidden = !view.showReconnect;
+    disconnect!.hidden = !view.showDisconnect;
+    revoke!.hidden = !view.showRevoke;
 
-  openSso.addEventListener("click", () => {
-    openExternalUrl(REMILIA_NET_LOGIN_URL);
-    setMessage("Click Log in on RemiliaNET, finish the site login flow, then click Retry session.");
+    const connectedIdentity = authStatus.phase === "connected" ? remiliaIdentityLabel(authStatus.identity) : "";
+    identity!.textContent = connectedIdentity;
+    identity!.hidden = !connectedIdentity;
+
+    scopeList!.textContent = "";
+    const rows = remiliaScopeRows(authStatus);
+    if (rows.length === 0) {
+      const item = document.createElement("li");
+      const marker = document.createElement("span");
+      marker.setAttribute("aria-hidden", "true");
+      const body = document.createElement("div");
+      const label = document.createElement("strong");
+      label.textContent = "Abilities unavailable";
+      const detail = document.createElement("small");
+      detail.textContent = "Reload after the connection service has been updated.";
+      body.append(label, detail);
+      item.append(marker, body);
+      scopeList!.append(item);
+    } else {
+      for (const row of rows) {
+        const item = document.createElement("li");
+        item.dataset.granted = String(row.granted);
+        item.setAttribute("aria-label", `${row.label}: ${row.granted ? "granted" : "not granted"}`);
+        const marker = document.createElement("span");
+        marker.setAttribute("aria-hidden", "true");
+        const body = document.createElement("div");
+        const label = document.createElement("strong");
+        label.textContent = row.label;
+        const detail = document.createElement("small");
+        detail.textContent = `${row.detail} ${row.granted ? "Granted." : "Not granted."}`;
+        body.append(label, detail);
+        item.append(marker, body);
+        scopeList!.append(item);
+      }
+    }
+
+    const showError = authStatus.phase !== "unsupported" && (authStatus.phase === "error" || Boolean(authStatus.lastError));
+    error!.hidden = !showError;
+    error!.textContent = showError ? remiliaErrorMessage(authStatus.lastError) : "";
+    if (announceError && showError) error!.focus({ preventScroll: false });
+
+    if (authStatus.phase === "connected") pokeDiagnostic!.hidden = true;
+    else await renderPokeDiagnostic(pokeDiagnostic!);
+  };
+
+  const fetchStatus = async (announceError = false): Promise<RemiliaAuthStatus> => {
+    const response = await chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status }).catch(() => null);
+    const authStatus = normalizeRemiliaAuthResponse(response);
+    await renderStatus(authStatus, announceError);
+    return authStatus;
+  };
+
+  const runAction = async (
+    request: Record<string, unknown>,
+    pendingText: string,
+    successText: string | ((response: Record<string, unknown>) => string),
+  ): Promise<void> => {
+    setBusy(true);
+    setMessage(pendingText);
+    try {
+      const response = await chrome.runtime.sendMessage(request).catch(() => null);
+      const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
+      if (!record || record.ok === false) {
+        const failure = normalizeRemiliaAuthResponse(response);
+        await renderStatus(failure, true);
+        setMessage(remiliaErrorMessage(failure.lastError), "error");
+        return;
+      }
+      const latest = await fetchStatus(true);
+      if (latest.phase === "error" || latest.lastError) {
+        setMessage(remiliaErrorMessage(latest.lastError), "error");
+        return;
+      }
+      setMessage(typeof successText === "function" ? successText(record) : successText, "success");
+      await renderOnboarding();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  connect!.addEventListener("click", () => {
+    void runAction(
+      { type: REMILIA_AUTH_MESSAGE.connect, consentVersion: REMILIA_CONSENT_VERSION },
+      "Opening Remilia Login...",
+      "Remilia account connected.",
+    );
   });
-
-  retrySession.addEventListener("click", () => {
-    retrySession.disabled = true;
-    setMessage("Checking browser session...");
-    void chrome.runtime.sendMessage({ type: "beetol:sessionStatus" }).then((response) => {
-      const signedIn = Boolean(response?.signedIn);
-      renderAuth(signedIn, signedIn ? "session" : "");
-      setMessage(signedIn
-        ? "Browser session detected."
-        : "No browser session detected. Complete RemiliaNET SSO first.",
-      signedIn ? "" : "warn");
-    }).finally(() => {
-      retrySession.disabled = false;
+  reconnect!.addEventListener("click", () => {
+    void runAction(
+      { type: REMILIA_AUTH_MESSAGE.reconnect, consentVersion: REMILIA_CONSENT_VERSION },
+      "Opening Remilia Login to reconnect...",
+      "Remilia account reconnected.",
+    );
+  });
+  completeMigration!.addEventListener("click", () => {
+    void runAction(
+      {
+        type: REMILIA_AUTH_MESSAGE.completeMigration,
+        migrationVersion: REMILIA_MIGRATION_VERSION,
+        decision: "delete-legacy",
+      },
+      "Deleting old login data...",
+      "Old login data deleted. No account was connected; connect only when you are ready.",
+    );
+  });
+  disconnect!.addEventListener("click", () => {
+    void runAction(
+      { type: REMILIA_AUTH_MESSAGE.disconnect },
+      "Disconnecting...",
+      "Disconnected. Your other milXdy settings were kept.",
+    );
+  });
+  revoke!.addEventListener("click", () => {
+    const confirmed = window.confirm("Revoke this Remilia authorization? milXdy will remove its local credentials but keep your other settings.");
+    if (!confirmed) return;
+    void runAction(
+      { type: REMILIA_AUTH_MESSAGE.revoke },
+      "Revoking authorization...",
+      (response) => response.remoteRevoked === false
+        ? "Local credentials removed. Remilia could not confirm remote revocation; you can review active authorizations on Remilia. Your other milXdy settings were kept."
+        : "Authorization revoked and local credentials removed. Your other milXdy settings were kept.",
+    );
+  });
+  rollback!.addEventListener("change", () => {
+    const compatibilityPresentation = rollback!.checked;
+    root!.dataset.compatibility = String(compatibilityPresentation);
+    void chrome.storage.local.set({
+      [REMILIA_CONNECTION_UI_KEY]: {
+        schemaVersion: REMILIA_CONNECTION_UI_VERSION,
+        presentationVersion: REMILIA_CONNECTION_UI_VERSION,
+        compatibilityPresentation,
+      },
     });
+    setMessage(compatibilityPresentation
+      ? "Compact presentation enabled. Official authorization and credential protections remain active."
+      : "Full connection details restored.");
+  });
+  color!.addEventListener("change", () => {
+    void chrome.storage.local.set({ beetolColor: color!.value });
+  });
+  mode!.addEventListener("change", () => {
+    void chrome.storage.local.set({ beetolMode: mode!.value });
   });
 
-  logout.addEventListener("click", () => {
-    void chrome.runtime.sendMessage({ type: "beetol:logout" }).then(() => {
-      setMessage("Disconnected from milXdy. Your RemiliaNET website session may still be active.");
-      renderAuth(false);
-    });
-  });
-
-  color.addEventListener("change", () => {
-    void chrome.storage.local.set({ beetolColor: color.value });
-  });
-  mode.addEventListener("change", () => {
-    void chrome.storage.local.set({ beetolMode: mode.value });
-  });
+  await fetchStatus();
 }
 
 async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
