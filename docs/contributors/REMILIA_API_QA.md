@@ -31,7 +31,7 @@ pass. Record only observed results from the exact integrated candidate.
 | `connect-fail-closed` | State, redirect, code, timeout, and concurrent-login failures | Required | Mismatch/replay/timeout fails closed without credential or log leakage |
 | `scope-status` | Granted and missing abilities | Required | Granted scopes are understandable; missing scope is distinct and reconnectable |
 | `disconnect-revoke` | Disconnect, local revoke, remote failure | Required | Credentials clear; unrelated settings remain; no cookie-auth rollback |
-| `restart-refresh` | Worker/browser restart and token rotation | Required | Worker suspension preserves session custody; full browser restart ends credentials and returns explicit reconnect state; no hidden tab/session fallback |
+| `restart-refresh` | Popup reopen, worker restart, extension reload, browser-session end, and token rotation | Required | Popup reopen and MV3 worker restart within the same browser session preserve custody; extension reload and full browser-session end expose no credential/identity and return expired/disconnected with explicit Reconnect while durable migration completion prevents a legacy prompt; no silent reconnect or retired fallback |
 | `public-profile` | Public profile read | Required | Tokenless profile succeeds; unknown profile is a bounded not-found result |
 | `connected-profile` | Connected `/me` profile | Required | Own profile loads with no credential exposed outside background |
 | `directory-resolution` | Remilia, X, GitHub, Discord resolution and batching | Required | 1/50/>50 inputs, misses, duplicates, handle changes, cache expiry are deterministic |

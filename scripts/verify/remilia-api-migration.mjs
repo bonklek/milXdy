@@ -129,6 +129,9 @@ for (const required of [
   "Connect with Remilia",
   "Revoke authorization",
   "Remilia connection is unavailable in Firefox",
+  "Popup close/reopen and an MV3 worker restart",
+  "extension reload or a full browser restart",
+  "completed migration remains durable",
 ]) {
   assert(accountGuide.includes(required), `account guide must include final connection UI contract ${JSON.stringify(required)}`);
 }

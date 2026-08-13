@@ -135,7 +135,8 @@ selected files are not persisted.
   diagnostics, or logs.
 - Access, refresh, and ID tokens plus expiry, connected identity, and granted
   scopes live only in trusted-context `chrome.storage.session`. They survive an
-  MV3 worker restart but end when the browser session ends. Token-free
+  MV3 worker restart but end on extension reload or when the browser session
+  ends. Token-free
   control/migration/error metadata alone may use local storage.
 - A refresh response can rotate the refresh token. An expired or revoked grant
   returns to an explicit reconnect state; milXdy does not open a hidden tab or

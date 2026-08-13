@@ -63,10 +63,13 @@ hidden tabs, or browser-session reuse.
 
 Access, refresh, and ID tokens plus connected identity/scopes live only in
 trusted `chrome.storage.session`. They survive Manifest V3 worker suspension but
-end with the browser session. After a full browser restart, milXdy returns to a
-disconnected/reconnect-required state; it never opens a hidden RemiliaNET tab or
-adopts a web session. Within one browser session, trusted background code may
-rotate a refresh token when the official service returns one.
+end on extension reload or with the browser session. Popup close/reopen and an
+MV3 worker restart within the same browser session retain the connection. After
+extension reload or a full browser restart, milXdy returns to a
+disconnected or expired/reconnect-required state; completed migration remains durable, so
+the legacy prompt and cookie/session fallback do not return. Within one browser
+session, trusted background code may rotate a refresh token when the official
+service returns one.
 
 ## Abilities And Errors
 

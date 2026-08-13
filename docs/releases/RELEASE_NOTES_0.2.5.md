@@ -15,8 +15,8 @@ Firefox evidence matrix, release gates, and maintainer acceptance are complete.
   diagnostics receive no credentials.
 - Keeps tokens, expiry, connected identity, and scopes only in trusted
   `chrome.storage.session`: worker suspension is supported, while a full browser
-  restart ends the connection and requires explicit reconnect without a
-  cookie/session fallback.
+  restart or extension reload ends the connection and requires explicit
+  reconnect without a cookie/session fallback.
 - Gives existing installations a one-time migration prompt. Legacy credentials
   are removed, ordinary settings remain, and the user stays disconnected until
   choosing Connect.
