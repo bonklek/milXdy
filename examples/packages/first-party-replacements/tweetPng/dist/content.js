@@ -920,6 +920,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   let url = URL.createObjectURL(result.blob);
   let renderVersion = 0;
   let previewUpdateTimer = null;
+  let copyFeedbackTimer = null;
   const modal = document.createElement("div");
   modal.id = "milxdy-tweet-png-modal";
   modal.innerHTML = `
@@ -965,6 +966,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   const mediaControls = modal.querySelector(".milxdy-tweet-png-media-controls");
   const settings = modal.querySelector("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector('[data-action="settings"]');
+  const copyButton = modal.querySelector('[data-action="copy"]');
   const disconnectedControls = modal.querySelector("[data-reminet-disconnected]");
   const shareToRemiNetButton = modal.querySelector('[data-action="reminet"]');
   const status = modal.querySelector(".milxdy-tweet-png-status");
@@ -1011,6 +1013,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     closed = true;
     actionSignal?.removeEventListener("abort", abortClose);
     if (previewUpdateTimer !== null) window.clearTimeout(previewUpdateTimer);
+    if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
     URL.revokeObjectURL(url);
     modal.remove();
     if (closeTweetPngReview === close) closeTweetPngReview = null;
@@ -1056,8 +1059,19 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
       first.focus();
     }
   });
-  modal.querySelector('[data-action="copy"]')?.addEventListener("click", () => {
-    void copyTweetPng(currentBlob).then(() => setStatus("PNG copied.")).catch((error) => setStatus(errorMessage(error)));
+  copyButton?.addEventListener("click", () => {
+    copyButton.disabled = true;
+    void copyTweetPng(currentBlob).then(() => {
+      copyButton.textContent = "Copied to clipboard";
+      setStatus("Copied to clipboard.");
+      if (copyFeedbackTimer !== null) window.clearTimeout(copyFeedbackTimer);
+      copyFeedbackTimer = window.setTimeout(() => {
+        if (copyButton.isConnected) copyButton.textContent = "Copy PNG";
+        copyFeedbackTimer = null;
+      }, 2e3);
+    }).catch((error) => setStatus(errorMessage(error))).finally(() => {
+      if (copyButton.isConnected) copyButton.disabled = false;
+    });
   });
   modal.querySelector('[data-action="download"]')?.addEventListener("click", () => {
     downloadBlob(currentBlob, tweetPngFileName(currentData));

@@ -588,8 +588,11 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] div,
   html[data-milxdy-reskin-profile="moderate"] article [data-milxdy-display-name="true"] span {
-    flex: 0 0 auto !important;
-    max-width: none !important;
+    /* Each wrapper has to be allowed to shrink.  Otherwise the outer cluster
+       clips its natural-width child in the middle of a glyph before this
+       text-overflow rule can render an ellipsis. */
+    flex: 0 1 auto !important;
+    max-width: 100% !important;
     min-width: 0 !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
@@ -652,9 +655,11 @@ export const RESKIN_CSS = `
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"],
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] div,
   html[data-milxdy-reskin-profile="max"] article [data-milxdy-display-name="true"] span {
-    flex: 0 0 auto !important;
+    /* Keep the text wrapper shrinkable so ellipsis is painted before the
+       capped display-name cluster has to hide any overflow. */
+    flex: 0 1 auto !important;
     min-width: 0 !important;
-    max-width: none !important;
+    max-width: 100% !important;
     overflow: hidden !important;
     overflow-wrap: normal !important;
     text-overflow: ellipsis !important;

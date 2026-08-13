@@ -134,6 +134,14 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).not.toContain("Review before sharing. Nothing is sent automatically.");
   });
 
+  it("confirms a successful PNG copy on the button and resets the label", () => {
+    expect(packageSource).toContain('copyButton.textContent = "Copied to clipboard"');
+    expect(packageSource).toContain('setStatus("Copied to clipboard.")');
+    expect(packageSource).toContain('copyButton.textContent = "Copy PNG"');
+    expect(packageSource).toContain("copyButton.disabled = true");
+    expect(packageSource).toContain("copyButton.disabled = false");
+  });
+
   it("keeps RemiNet staging local and constrains reconnect to a fixed inactive tab", () => {
     const stageStart = chatSource.indexOf("export async function stageLocalAttachment");
     const stageEnd = chatSource.indexOf("\nexport function close", stageStart);
