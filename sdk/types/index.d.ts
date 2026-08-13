@@ -40,6 +40,25 @@ export interface AppContextualPostAction {
   placement: "shareMenu";
 }
 
+/** A reviewed X-image action. The host retains the selected image and exposes only an opaque handle. */
+export interface AppContextMediaAction {
+  id: string;
+  label: string;
+  site: "x";
+  eligibleMedia: Array<"image">;
+  presentation: "hostPanel";
+}
+
+/** A reviewed, host-owned native contribution flow; packages supply only bounded user-entered tags. */
+export interface AppMediaContribution {
+  id: string;
+  label: string;
+  adapter: "remibooru";
+  contextMediaActionId: string;
+  maxTags: number;
+  maxTagLength: number;
+}
+
 export interface TwitterSurface {
   kind: TwitterSurfaceKind;
   element: HTMLElement;
@@ -94,6 +113,8 @@ export interface PublicAppManifest {
   composerAction?: AppComposerAction;
   externalHandoffs?: AppExternalHandoff[];
   contextualPostActions?: AppContextualPostAction[];
+  contextMediaActions?: AppContextMediaAction[];
+  mediaContributions?: AppMediaContribution[];
 }
 
 export interface MilxdyContentAppContext {
@@ -117,6 +138,7 @@ export interface MilxdyContentAppModule {
   onSurface?(surface: TwitterSurface): Promise<void> | void;
   onComposerAction?(context: MilxdyComposerActionContext): Promise<void> | void;
   onContextualPostAction?(context: MilxdyContextualPostActionContext): Promise<void> | void;
+  onContextMediaAction?(context: MilxdyContextMediaActionContext): Promise<void> | void;
   /** Host-only local attachment handoff used by reviewed app integrations. */
   stageLocalAttachment?(file: File): Promise<{ ok: boolean; error?: string }>;
   open?(): Promise<void> | void;
@@ -177,4 +199,28 @@ export interface MilxdyContextualPostActionContext {
     blob: Blob;
     fileName: string;
   }): Promise<{ ok: boolean; error?: string }>;
+}
+
+/**
+ * A host-owned image selection. `mediaHandle` is opaque, short-lived, and may
+ * only be supplied back to the declared contribution callback for this action.
+ */
+export interface MilxdyContextMediaActionContext {
+  readonly actionId: string;
+  readonly panel: HTMLElement;
+  readonly signal: AbortSignal;
+  close(): void;
+  readonly mediaHandle: string;
+  readonly media: Readonly<{
+    mimeType: string;
+    width: number | null;
+    height: number | null;
+    altAvailable: boolean;
+  }>;
+  openVisibleAssistantPrompt(promptId: "remibooru-tags"): Promise<{ ok: boolean; error?: string }>;
+  submitMediaContribution(input: {
+    id: string;
+    mediaHandle: string;
+    tags: string[];
+  }): Promise<{ ok: boolean; canonicalUrl?: string; error?: string }>;
 }

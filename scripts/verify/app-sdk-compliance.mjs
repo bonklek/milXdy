@@ -21,6 +21,7 @@ const postReadingTtsEngines = await readFile("src/apps/post-reading/ttsEngines.t
 const reminetChatBackground = await readFile("src/apps/reminet-chat/background.ts", "utf8");
 const beetolBackground = await readFile("src/apps/beetol/background.js", "utf8");
 const appSdkDocs = await readFile("docs/sdk/APP_SDK.md", "utf8");
+const publicSdkTypes = await readFile("sdk/types/index.d.ts", "utf8");
 const privacyDocs = await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8");
 const routedBackgroundTypes = await collectRoutedBackgroundTypes();
 
@@ -94,6 +95,12 @@ function verifyPlatformContract() {
   requireIncludes(appPlatform, "contextMediaActions?: AppContextMediaAction[]", "App SDK manifest must expose reviewed contextual media actions");
   requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
   requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
+  requireIncludes(publicSdkTypes, "export interface AppContextMediaAction", "Public SDK declarations must expose reviewed contextual media actions");
+  requireIncludes(publicSdkTypes, "export interface AppMediaContribution", "Public SDK declarations must expose reviewed native media contributions");
+  requireIncludes(publicSdkTypes, "contextMediaActions?: AppContextMediaAction[]", "Public SDK manifest declarations must expose contextual media actions");
+  requireIncludes(publicSdkTypes, "mediaContributions?: AppMediaContribution[]", "Public SDK manifest declarations must expose media contributions");
+  requireIncludes(publicSdkTypes, "export interface MilxdyContextMediaActionContext", "Public SDK declarations must expose the host-owned contextual media callback");
+  requireIncludes(publicSdkTypes, "onContextMediaAction?", "Public SDK module declarations must expose the contextual media lifecycle hook");
   requireIncludes(contentRuntime, 'type: "milxdy:contextMediaPrepare"', "Context media selections must be prepared by the host background");
   requireIncludes(contentRuntime, 'type: "milxdy:mediaContributionSubmit"', "Media contributions must remain behind the explicit host-owned publish callback");
   requireNotIncludes(contentRuntime, "Confirm that you have the right", "Media contributions must not add a rights attestation prompt");
