@@ -89,6 +89,40 @@ describe("Post-reading audio export broker", () => {
     }));
   });
 
+  it("applies no-follow and no-referrer controls to the returned loopback audio read", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        audioUrl: "http://127.0.0.1:8787/result.mp3",
+        audioContentType: "audio/mpeg",
+      }), { status: 200, headers: { "content-type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(new Uint8Array([0x49, 0x44, 0x33]), {
+        status: 200,
+        headers: { "content-type": "audio/mpeg" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await handlePostReadingBackgroundMessage({
+      type: "post-reading:generateAudioExport",
+      requestId: "request-audio-read-1",
+      endpoint: "http://localhost:8787/tts",
+      text: "Reviewed text",
+      rate: 1,
+      volume: 1,
+      voiceURI: null,
+    }, {
+      id: "milxdy-test",
+      tab: { id: 29, url: "https://example.com/article" },
+      frameId: 0,
+      url: "https://example.com/article",
+    } as chrome.runtime.MessageSender);
+    expect(response).toMatchObject({ ok: true, audioBase64: "SUQz", audioContentType: "audio/mpeg" });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenNthCalledWith(2, "http://127.0.0.1:8787/result.mp3", expect.objectContaining({
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    }));
+  });
+
   it("rejects remote endpoints before network access", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
