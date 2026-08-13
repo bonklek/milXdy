@@ -4,6 +4,7 @@ import "../../apps/milady-maxxer/background";
 import "../../apps/beetol/background.js";
 import "../../apps/reminet-chat/background";
 import "./remilia-auth-router";
+import "../../platform/background/remilia-api-registration";
 import { createBackgroundNetworkDeadlineSignal, initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
 import { browserAction } from "../../platform/background/browser-action";
 import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";

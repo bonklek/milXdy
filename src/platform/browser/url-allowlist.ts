@@ -6,6 +6,8 @@ export type UrlAllowRule = {
   pathPrefix?: string;
   pathPattern?: RegExp;
   hrefPattern?: RegExp;
+  allowedSearchParams?: readonly string[];
+  allowHash?: boolean;
 };
 
 export function parseAllowedUrl(value: string, rules: readonly UrlAllowRule[]): URL | null {
@@ -29,6 +31,13 @@ function urlMatchesRule(url: URL, rule: UrlAllowRule): boolean {
   if (rule.pathPrefix && !url.pathname.startsWith(rule.pathPrefix)) return false;
   if (rule.pathPattern && !rule.pathPattern.test(url.pathname)) return false;
   if (rule.hrefPattern && !rule.hrefPattern.test(url.href)) return false;
+  if (rule.allowHash === false && url.hash) return false;
+  if (rule.allowedSearchParams) {
+    const allowed = new Set(rule.allowedSearchParams);
+    for (const key of url.searchParams.keys()) {
+      if (!allowed.has(key)) return false;
+    }
+  }
   return true;
 }
 
