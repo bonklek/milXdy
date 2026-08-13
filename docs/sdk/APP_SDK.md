@@ -288,6 +288,12 @@ metadata. The trusted background validates the same-extension sender, package
 and composition identity, capability declaration, user grant, delegated scope,
 fixed route class, input bounds, and cancellation before making a request.
 
+The broker is the sole production Remilia API path for content and package
+principals. Package/content code must not call the internal
+`remiliaApi:request` route. Background-owned services may consume the trusted
+host client singleton internally; that implementation seam is not an App SDK
+capability or a runtime authorization boundary.
+
 The broker returns normalized results and redacted error classes. It does not
 provide authenticated arbitrary fetch, OAuth endpoints, authorization headers,
 cookies, authorization codes, raw private responses, or a bearer or refresh

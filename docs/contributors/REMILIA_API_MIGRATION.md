@@ -28,7 +28,9 @@ The official API client accepts only fixed API-v1 route classes. It injects the
 bearer token in the trusted background, makes at most one refresh retry after an
 authentication failure, preserves `insufficient_scope`, `requires_user`,
 cooldown, and rate-limit errors as distinct outcomes, and rejects arbitrary
-authenticated URLs.
+authenticated URLs. Background-owned services may import the trusted client
+singleton directly. Its raw runtime route is not a content-script, page, App
+SDK, or local-package API.
 
 Chromium beta owns the public Remilia Login client and stable callback identity.
 The Firefox production profile is intentionally keyless and has no login client
@@ -83,7 +85,9 @@ disconnected. Status reads do not silently delete or adopt credentials.
 Reviewed packages request typed Remilia capabilities from the host; they do not
 receive OAuth primitives or authenticated fetch. The broker covers profile,
 directory, stats, notifications, poke, Beetle, and chat operations exposed by
-the installed host version.
+the installed host version. It is the sole production Remilia API path for
+content and package principals; those principals must not call
+`remiliaApi:request` directly.
 
 Every broker call must validate:
 

@@ -61,6 +61,8 @@ for (const required of [
   "documented public shelf asset/read",
   "Browser-session adoption, cookie mutation, hidden-tab refresh",
   "App SDK Capability Broker",
+  "sole production Remilia API path for content and package principals",
+  "must not call `remiliaApi:request` directly",
 ]) {
   assert(normalizedMigration.includes(required), `migration contract must include ${JSON.stringify(required)}`);
 }
@@ -84,6 +86,8 @@ for (const required of [
   "Remilia capability broker",
   "authenticated arbitrary fetch",
   "bearer or refresh token",
+  "sole production Remilia API path for content and package principals",
+  "must not call the internal `remiliaApi:request` route",
 ]) {
   assert(normalizedSdk.includes(required), `App SDK reference must include ${JSON.stringify(required)}`);
 }

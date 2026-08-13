@@ -73,6 +73,8 @@ Firefox evidence matrix, release gates, and maintainer acceptance are complete.
   stats, notifications, poke, Beetle, and chat operations.
 - Validates package identity, composition, declarations, user consent, scope,
   sender, route class, and input bounds before privileged work.
+- Makes brokered capabilities the sole production Remilia API path for content
+  and packages; the internal raw router is not an App SDK surface.
 - Does not expose OAuth, tokens, cookies, raw private responses, or
   authenticated arbitrary fetch to Post-Factory or another package.
 
