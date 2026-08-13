@@ -9,6 +9,7 @@ import json
 import re
 import stat
 import struct
+import zlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -155,15 +156,132 @@ def validate_entries(infos: list[Any]) -> None:
 
 
 def validate_png(value: bytes) -> None:
-    if len(value) < 24 or value[:8] != b"\x89PNG\r\n\x1a\n":
+    if len(value) < 45 or value[:8] != b"\x89PNG\r\n\x1a\n":
         raise BundleValidationError("avatar.png is not a PNG.")
-    if value[12:16] != b"IHDR":
-        raise BundleValidationError("avatar.png is missing its IHDR header.")
-    width, height = struct.unpack(">II", value[16:24])
+    chunks: list[tuple[bytes, bytes]] = []
+    offset = 8
+    saw_iend = False
+    while offset < len(value):
+        if len(value) - offset < 12:
+            raise BundleValidationError("avatar.png has a truncated chunk header.")
+        length = struct.unpack(">I", value[offset : offset + 4])[0]
+        chunk_type = value[offset + 4 : offset + 8]
+        end = offset + 12 + length
+        if end > len(value):
+            raise BundleValidationError(
+                f"avatar.png has a truncated {chunk_type.decode('ascii', 'replace')} chunk."
+            )
+        chunk_data = value[offset + 8 : offset + 8 + length]
+        declared_crc = struct.unpack(">I", value[offset + 8 + length : end])[0]
+        actual_crc = zlib.crc32(chunk_type + chunk_data) & 0xFFFFFFFF
+        if declared_crc != actual_crc:
+            raise BundleValidationError(
+                f"avatar.png {chunk_type.decode('ascii', 'replace')} CRC-32 mismatch."
+            )
+        chunks.append((chunk_type, chunk_data))
+        offset = end
+        if chunk_type == b"IEND":
+            saw_iend = True
+            if length != 0:
+                raise BundleValidationError("avatar.png IEND chunk must be empty.")
+            if offset != len(value):
+                raise BundleValidationError("avatar.png contains bytes after IEND.")
+            break
+    if not saw_iend:
+        raise BundleValidationError("avatar.png is missing its IEND chunk.")
+    if not chunks or chunks[0][0] != b"IHDR" or len(chunks[0][1]) != 13:
+        raise BundleValidationError("avatar.png is missing its canonical IHDR header.")
+    if sum(chunk_type == b"IHDR" for chunk_type, _ in chunks) != 1:
+        raise BundleValidationError("avatar.png must contain exactly one IHDR chunk.")
+    if sum(chunk_type == b"IEND" for chunk_type, _ in chunks) != 1:
+        raise BundleValidationError("avatar.png must contain exactly one IEND chunk.")
+    width, height, bit_depth, color_type, compression, filtering, interlace = struct.unpack(
+        ">IIBBBBB", chunks[0][1]
+    )
     if (width, height) != (1024, 1024):
         raise BundleValidationError(
             f"avatar.png must be 1024x1024; received {width}x{height}."
         )
+    if (bit_depth, color_type, compression, filtering, interlace) != (8, 6, 0, 0, 0):
+        raise BundleValidationError(
+            "avatar.png must be non-interlaced 8-bit RGBA using standard PNG compression and filtering."
+        )
+    idat_indexes = [index for index, (chunk_type, _) in enumerate(chunks) if chunk_type == b"IDAT"]
+    if not idat_indexes:
+        raise BundleValidationError("avatar.png is missing image data.")
+    if idat_indexes != list(range(idat_indexes[0], idat_indexes[-1] + 1)):
+        raise BundleValidationError("avatar.png IDAT chunks must be consecutive.")
+    known_critical = {b"IHDR", b"PLTE", b"IDAT", b"IEND"}
+    for chunk_type, _ in chunks:
+        if chunk_type[:1].isupper() and chunk_type not in known_critical:
+            raise BundleValidationError(
+                f"avatar.png contains unsupported critical chunk {chunk_type.decode('ascii', 'replace')}."
+            )
+    compressed = b"".join(chunks[index][1] for index in idat_indexes)
+    expected_size = height * (1 + width * 4)
+    inflater = zlib.decompressobj()
+    try:
+        decoded = inflater.decompress(compressed, expected_size + 1)
+    except zlib.error as exc:
+        raise BundleValidationError(f"avatar.png image data is invalid: {exc}") from exc
+    if (
+        len(decoded) != expected_size
+        or not inflater.eof
+        or inflater.unconsumed_tail
+        or inflater.unused_data
+    ):
+        raise BundleValidationError("avatar.png image data has an invalid decoded length or stream boundary.")
+    if not png_has_transparency(decoded, width, height):
+        raise BundleValidationError("avatar.png must retain a transparent background; the RGBA image is fully opaque.")
+
+
+def png_has_transparency(decoded: bytes, width: int, height: int) -> bool:
+    bytes_per_pixel = 4
+    stride = width * bytes_per_pixel
+    previous = bytearray(stride)
+    offset = 0
+    has_transparency = False
+    for row_index in range(height):
+        filter_type = decoded[offset]
+        offset += 1
+        if filter_type > 4:
+            raise BundleValidationError(
+                f"avatar.png row {row_index} uses invalid PNG filter {filter_type}."
+            )
+        raw = decoded[offset : offset + stride]
+        offset += stride
+        current = bytearray(stride)
+        for index, value in enumerate(raw):
+            left = current[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            above = previous[index]
+            upper_left = previous[index - bytes_per_pixel] if index >= bytes_per_pixel else 0
+            if filter_type == 0:
+                reconstructed = value
+            elif filter_type == 1:
+                reconstructed = value + left
+            elif filter_type == 2:
+                reconstructed = value + above
+            elif filter_type == 3:
+                reconstructed = value + ((left + above) // 2)
+            else:
+                reconstructed = value + paeth_predictor(left, above, upper_left)
+            current[index] = reconstructed & 0xFF
+        if any(alpha < 255 for alpha in current[3::4]):
+            has_transparency = True
+        previous = current
+    return has_transparency
+
+
+def paeth_predictor(left: int, above: int, upper_left: int) -> int:
+    estimate = left + above - upper_left
+    left_distance = abs(estimate - left)
+    above_distance = abs(estimate - above)
+    upper_left_distance = abs(estimate - upper_left)
+    if left_distance <= above_distance and left_distance <= upper_left_distance:
+        return left
+    if above_distance <= upper_left_distance:
+        return above
+    return upper_left
 
 
 def parse_request(value: bytes) -> dict[str, Any]:
@@ -174,12 +292,21 @@ def parse_request(value: bytes) -> dict[str, Any]:
     except UnicodeDecodeError as exc:
         raise BundleValidationError("request.json must be UTF-8.") from exc
     try:
-        request = json.loads(text)
+        request = json.loads(text, object_pairs_hook=reject_duplicate_json_keys)
     except json.JSONDecodeError as exc:
         raise BundleValidationError(f"request.json is invalid JSON: {exc}") from exc
     if not isinstance(request, dict):
         raise BundleValidationError("request.json must contain an object.")
     return request
+
+
+def reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise BundleValidationError(f"request.json contains duplicate field: {key}.")
+        result[key] = value
+    return result
 
 
 def validate_request(request: dict[str, Any]) -> None:

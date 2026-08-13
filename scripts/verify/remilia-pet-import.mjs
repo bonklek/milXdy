@@ -1,6 +1,6 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PNG } from "pngjs";
 import {
@@ -19,6 +19,21 @@ const families = ["milady", "remilio", "bonkler", "kagami"];
 await rm(temp, { recursive: true, force: true });
 await mkdir(temp, { recursive: true });
 try {
+  const familyReviews = JSON.parse(
+    await readFile("docs/evidence/custom-pet-mvp/maker-family-semantic-reviews.json", "utf8"),
+  );
+  assert(
+    familyReviews.status === "approved" && familyReviews.publicationActionAuthorized === false,
+    "family semantic-review evidence is incomplete or authorizes publication",
+  );
+  for (const family of families) {
+    const review = familyReviews.families?.[family];
+    assert(review?.status === "approved", `${family}: family sample review is not approved`);
+    assert(
+      /^[a-f0-9]{64}$/.test(review.source?.atlasSha256),
+      `${family}: family sample review does not bind its atlas hash`,
+    );
+  }
   for (const family of families) {
     const bundle = path.join(fixtures, family, "remilia-pet-request.zip");
     const validation = path.join(temp, `${family}-validation.json`);
@@ -52,10 +67,26 @@ try {
     assert(validationJson.templateId === `${family}-v1`, `${family}: wrong validated template`);
     assert(selectedJson.templateId === `${family}-v1`, `${family}: wrong selected template`);
     assert(selectedJson.motionProfile.runtimeRows.length === 11, `${family}: missing runtime rows`);
+    assert(
+      selectedJson.manifest.geometry.alphaRegistration?.baseline === 0.976,
+      `${family}: template does not separate atlas alpha registration from conceptual landmarks`,
+    );
     assert(identity.family === family && identity.bodyCompletion, `${family}: incomplete identity brief`);
+    assert(
+      identity.policyContract?.path === "references/trait-policies.json" &&
+        /^[a-f0-9]{64}$/.test(identity.policyContract.sha256) &&
+        identity.traits.every((trait) => trait.evidence?.policySha256 === identity.policyContract.sha256),
+      `${family}: identity brief is not traceable to the versioned trait policy`,
+    );
     assert(handoff.delegateSkill === "hatch-pet", `${family}: adapter did not delegate to hatch-pet`);
     assert(handoff.runtimeRows.length === 11, `${family}: hatch handoff missing rows`);
     assert(/^[a-f0-9]{64}$/.test(provenance.inputFingerprint), `${family}: invalid provenance fingerprint`);
+    assert(
+      provenance.adapterVersion === 2 &&
+        provenance.policyVersion === 1 &&
+        provenance.policySha256 === identity.policyContract.sha256,
+      `${family}: provenance does not bind the adapter and policy versions`,
+    );
     assert(
       provenance.localDataPolicy.rawBundleCached === false &&
         provenance.localDataPolicy.finalValidatedAtlasCache === "user-selected-local-directory-only",
@@ -81,6 +112,77 @@ try {
   assert(
     `${rejected.stdout}\n${rejected.stderr}`.includes("SHA-256 mismatch"),
     "corrupt image hash rejection was not actionable",
+  );
+
+  const duplicateRequest = new TextDecoder().decode(entries[1].bytes).replace(
+    /\{\s*/u,
+    '{"schemaVersion":1,',
+  );
+  const duplicateZip = createStoredZip([
+    { name: "avatar.png", bytes: entries[0].bytes },
+    { name: "request.json", bytes: new TextEncoder().encode(duplicateRequest) },
+  ]);
+  const duplicatePath = path.join(temp, "duplicate-field.zip");
+  await writeFile(duplicatePath, duplicateZip);
+  const duplicateResult = spawnSync(
+    python,
+    [path.join(scripts, "validate_bundle.py"), duplicatePath],
+    pythonOptions(),
+  );
+  assert(duplicateResult.status !== 0, "duplicate request field was accepted");
+  assert(
+    `${duplicateResult.stdout}\n${duplicateResult.stderr}`.includes("duplicate field: schemaVersion"),
+    "duplicate request field rejection was not actionable",
+  );
+
+  const corruptPng = Buffer.from(entries[0].bytes);
+  const idatTypeOffset = corruptPng.indexOf(Buffer.from("IDAT", "ascii"));
+  assert(idatTypeOffset > 0, "fixture PNG has no IDAT chunk");
+  corruptPng[idatTypeOffset + 4] ^= 0x01;
+  const corruptPngRequest = JSON.parse(new TextDecoder().decode(entries[1].bytes));
+  corruptPngRequest.imageSha256 = createHash("sha256").update(corruptPng).digest("hex");
+  const corruptPngZip = createStoredZip([
+    { name: "avatar.png", bytes: corruptPng },
+    { name: "request.json", bytes: new TextEncoder().encode(stableJson(corruptPngRequest)) },
+  ]);
+  const corruptPngPath = path.join(temp, "corrupt-png-crc.zip");
+  await writeFile(corruptPngPath, corruptPngZip);
+  const corruptPngResult = spawnSync(
+    python,
+    [path.join(scripts, "validate_bundle.py"), corruptPngPath],
+    pythonOptions(),
+  );
+  assert(corruptPngResult.status !== 0, "corrupt PNG chunk was accepted");
+  assert(
+    `${corruptPngResult.stdout}\n${corruptPngResult.stderr}`.includes("CRC-32 mismatch"),
+    "corrupt PNG rejection was not actionable",
+  );
+
+  const templateCopy = path.join(temp, "templates");
+  await cp(path.join(skillRoot, "assets", "templates"), templateCopy, { recursive: true });
+  const invalidMotionPath = path.join(templateCopy, "motion-profile-v1.json");
+  const invalidMotion = JSON.parse(await readFile(invalidMotionPath, "utf8"));
+  delete invalidMotion.runtimeRows[0].phases;
+  await writeFile(invalidMotionPath, `${JSON.stringify(invalidMotion, null, 2)}\n`);
+  const invalidTemplate = spawnSync(
+    python,
+    [
+      "-c",
+      [
+        "import sys",
+        `sys.path.insert(0, ${JSON.stringify(path.resolve(scripts))})`,
+        "from pathlib import Path",
+        "from select_template import select_template",
+        "select_template('milady', 1, Path(sys.argv[1]))",
+      ].join("; "),
+      path.resolve(templateCopy),
+    ],
+    pythonOptions(),
+  );
+  assert(invalidTemplate.status !== 0, "motion template without a full phase sequence was accepted");
+  assert(
+    `${invalidTemplate.stdout}\n${invalidTemplate.stderr}`.includes("invalid phase sequence"),
+    "invalid motion-template rejection was not actionable",
   );
 
   for (const mismatch of [

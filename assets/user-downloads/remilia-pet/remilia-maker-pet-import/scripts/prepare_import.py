@@ -12,18 +12,21 @@ from typing import Any
 from select_template import select_template
 from validate_bundle import (
     BundleValidationError,
+    TRAIT_POLICY,
     TRAITS,
     extract_bundle,
     load_bundle,
+    reject_duplicate_json_keys,
     sha256_bytes,
     write_json,
 )
 
 
-ADAPTER_VERSION = 1
+ADAPTER_VERSION = 2
 PROMPT_VERSION = 1
-POLICY_VERSION = 1
 STYLE_SETTINGS = {"preset": "auto", "notes": "Preserve the authoritative Maker identity and selected family motion grammar."}
+SKILL_ROOT = Path(__file__).resolve().parents[1]
+TRAIT_POLICY_PATH = SKILL_ROOT / "references" / "trait-policies.json"
 
 
 def canonical_hash(value: Any) -> str:
@@ -45,8 +48,9 @@ def prepare_import(bundle_path: Path, output_dir: Path) -> dict[str, Any]:
         bundle.request["templateFamily"],
         bundle.request["templateVersion"],
     )
-    identity = build_identity_brief(bundle.request, selected)
-    provenance = build_provenance(bundle, selected, identity)
+    policy = load_trait_policy_contract()
+    identity = build_identity_brief(bundle.request, selected, policy)
+    provenance = build_provenance(bundle, selected, identity, policy)
     handoff = build_hatch_handoff(bundle.request, selected, identity, provenance)
     run_state = build_run_state(bundle.request, selected, provenance)
 
@@ -75,7 +79,45 @@ def prepare_import(bundle_path: Path, output_dir: Path) -> dict[str, Any]:
     }
 
 
-def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> dict[str, Any]:
+def load_trait_policy_contract() -> dict[str, Any]:
+    try:
+        policy = json.loads(
+            TRAIT_POLICY_PATH.read_text(encoding="utf-8"),
+            object_pairs_hook=reject_duplicate_json_keys,
+        )
+    except (OSError, json.JSONDecodeError) as exc:
+        raise BundleValidationError(f"Trait policy contract is invalid: {exc}") from exc
+    if not isinstance(policy, dict):
+        raise BundleValidationError("Trait policy contract must contain an object.")
+    if policy.get("schemaVersion") != 1 or policy.get("policyVersion") != 1:
+        raise BundleValidationError("Trait policy schemaVersion and policyVersion must both be 1.")
+    if policy.get("requiredTraitKeys") != list(TRAITS):
+        raise BundleValidationError("Trait policy requiredTraitKeys do not match the Maker contract.")
+    actions = policy.get("identityActions")
+    expected_action_keys = set(TRAITS) | {"bodyCompletion"}
+    if not isinstance(actions, dict) or set(actions) != expected_action_keys:
+        raise BundleValidationError("Trait policy identityActions are incomplete or unsupported.")
+    if any(not isinstance(action, str) or not action for action in actions.values()):
+        raise BundleValidationError("Trait policy identityActions must be nonempty strings.")
+    if policy.get("nonPetTraits") != TRAIT_POLICY:
+        raise BundleValidationError("Trait policy nonPetTraits do not match the bundle omission contract.")
+    rights = policy.get("rights")
+    private_review = rights.get("private-review") if isinstance(rights, dict) else None
+    if not isinstance(private_review, dict) or private_review.get("publicationAllowed") is not False:
+        raise BundleValidationError("Trait policy must keep private-review publication disabled.")
+    return {
+        "document": policy,
+        "path": "references/trait-policies.json",
+        "sha256": hashlib.sha256(TRAIT_POLICY_PATH.read_bytes()).hexdigest(),
+    }
+
+
+def build_identity_brief(
+    request: dict[str, Any],
+    selected: dict[str, Any],
+    policy: dict[str, Any],
+) -> dict[str, Any]:
+    actions = policy["document"]["identityActions"]
     traits = []
     for trait_name in TRAITS:
         value = request["traits"][trait_name]
@@ -84,8 +126,13 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
                 "category": trait_name,
                 "assetId": value["assetId"],
                 "label": value.get("label"),
-                "policy": trait_policy(trait_name, value["assetId"]),
-                "evidence": "maker-sidecar",
+                "policy": trait_policy(actions[trait_name], value["assetId"]),
+                "evidence": {
+                    "source": "maker-sidecar",
+                    "policyPath": policy["path"],
+                    "policyVersion": policy["document"]["policyVersion"],
+                    "policySha256": policy["sha256"],
+                },
             }
         )
     pet = request.get("pet", {})
@@ -99,6 +146,13 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
         "canonicalImage": "input/avatar.png",
         "traits": traits,
         "bodyCompletion": request["bodyCompletion"],
+        "bodyCompletionPolicy": actions["bodyCompletion"],
+        "policyContract": {
+            "path": policy["path"],
+            "schemaVersion": policy["document"]["schemaVersion"],
+            "policyVersion": policy["document"]["policyVersion"],
+            "sha256": policy["sha256"],
+        },
         "omittedMaterial": ["background", "friend", "overlay"],
         "adaptations": {
             "shirtText": "Preserve shirt color/material/layout but convert readable text to an unreadable motif."
@@ -114,20 +168,17 @@ def build_identity_brief(request: dict[str, Any], selected: dict[str, Any]) -> d
     }
 
 
-def trait_policy(trait_name: str, asset_id: str) -> str:
+def trait_policy(policy_action: str, asset_id: str) -> str:
     if asset_id == "none":
         return "preserve-explicit-absence"
-    if trait_name == "hair":
-        return "preserve-with-hair-expansion-zone"
-    if trait_name == "shirt":
-        return "preserve-with-unreadable-text-adaptation"
-    return "preserve"
+    return policy_action
 
 
 def build_provenance(
     bundle: Any,
     selected: dict[str, Any],
     identity: dict[str, Any],
+    policy: dict[str, Any],
 ) -> dict[str, Any]:
     relevant = {
         "imageSha256": bundle.summary["imageSha256"],
@@ -138,7 +189,8 @@ def build_provenance(
         "templateVersion": bundle.request["templateVersion"],
         "adapterVersion": ADAPTER_VERSION,
         "promptVersion": PROMPT_VERSION,
-        "policyVersion": POLICY_VERSION,
+        "policyVersion": policy["document"]["policyVersion"],
+        "policySha256": policy["sha256"],
         "styleSettings": STYLE_SETTINGS,
     }
     return {
@@ -146,7 +198,9 @@ def build_provenance(
         "adapterSkill": "remilia-maker-pet-import",
         "adapterVersion": ADAPTER_VERSION,
         "promptVersion": PROMPT_VERSION,
-        "policyVersion": POLICY_VERSION,
+        "policyVersion": policy["document"]["policyVersion"],
+        "policyPath": policy["path"],
+        "policySha256": policy["sha256"],
         "bundleSha256": bundle.summary["bundleSha256"],
         "requestSha256": bundle.summary["requestSha256"],
         "imageSha256": bundle.summary["imageSha256"],
@@ -157,7 +211,7 @@ def build_provenance(
         "inputFingerprint": canonical_hash(relevant),
         "cacheKeyContract": (
             "sha256(canonical-json(imageSha256, traits, traitPolicy, bodyCompletion, "
-            "templateFamily, templateVersion, adapterVersion, promptVersion, policyVersion, styleSettings))"
+            "templateFamily, templateVersion, adapterVersion, promptVersion, policyVersion, policySha256, styleSettings))"
         ),
         "localDataPolicy": {
             "scope": "user-selected-run-directory",

@@ -22,8 +22,8 @@ gate without replacing hatch-pet's package validation.
    python scripts/validate_bundle.py <bundle.zip> --json-out <run>/bundle-validation.json
    ```
 
-3. Stop on any archive, schema, PNG, SHA-256, trait, policy, or body-completion
-   error. A legacy upper-body bundle without explicit legs, bottom,
+3. Stop on any archive, duplicate JSON field, schema, PNG structure/CRC,
+   transparent-RGBA, SHA-256, trait, policy, or body-completion error. A legacy upper-body bundle without explicit legs, bottom,
    footwear, asset versions, and colors is incomplete; do not fill it in.
 4. Prepare a local run:
 
@@ -33,6 +33,9 @@ gate without replacing hatch-pet's package validation.
 
    The command writes a validated input copy, selected template record,
    full-body identity brief, hatch-pet handoff, provenance, and row state.
+   The identity brief records the exact bundled trait-policy version and
+   SHA-256 used for every translated trait; provenance fingerprints bind that
+   policy hash and adapter version so changed policy cannot reuse stale work.
 5. Read `<run>/identity-brief.md`,
    `<run>/selected-template.json`, and `<run>/hatch-pet-handoff.json`.
    Treat the composited PNG and `bodyCompletion` choices as authoritative.

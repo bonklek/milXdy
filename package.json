@@ -69,6 +69,7 @@
     "verify:local-app-trust-gates": "node scripts/packages/verify-local-app-trust-gates.mjs",
     "verify:remilia-pet-import": "node scripts/verify/remilia-pet-import.mjs",
     "verify:remilia-pet-integration": "node scripts/verify/remilia-pet-integration.mjs",
+    "verify:remilia-pet-family-integration": "node scripts/verify/remilia-pet-family-integration.mjs",
     "verify:pages-catalog": "node scripts/verify/pages-catalog.mjs",
     "build:local-apps:chromium": "node scripts/build/build-local-apps.mjs",
     "addons:status": "node scripts/addons/manage-local-addons.mjs status",
