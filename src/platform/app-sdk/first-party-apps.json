@@ -2245,6 +2245,7 @@
         "remistats:getUser",
         "remistats:getMyStats",
         "remistats:markNotificationsRead",
+        "reminetIdentity:resolve",
         "reminetIdentity:getProfile",
         "beetol:poke",
         "beetol:pokeEligibility",

@@ -25,22 +25,26 @@ function publicProfile(username: string, xHandle?: string) {
   };
 }
 
+function successDirectoryResults(identifiers: readonly ReminetDirectoryIdentifier[], mapping: Record<string, string | null>) {
+  return {
+    ok: true as const,
+    status: 200,
+    data: identifiers.map((query) => ({
+      query,
+      identity: mapping[`${query.type}:${query.value}`] === null
+        ? null
+        : {
+            handle: mapping[`${query.type}:${query.value}`] ?? query.value,
+            display_name: "Resolved",
+            avatar_url: "https://example.test/avatar.png",
+          },
+    })),
+  };
+}
+
 function apiFor(mapping: Record<string, string | null>, profileXHandles: Record<string, string> = {}): ReminetIdentityApi {
   return {
-    resolveDirectory: vi.fn(async (identifiers) => ({
-      ok: true as const,
-      status: 200,
-      data: identifiers.map((query: ReminetDirectoryIdentifier) => ({
-        query,
-        identity: mapping[`${query.type}:${query.value}`] === null
-          ? null
-          : {
-              handle: mapping[`${query.type}:${query.value}`] ?? query.value,
-              display_name: "Resolved",
-              avatar_url: "https://example.test/avatar.png",
-            },
-      })),
-    })),
+    resolveDirectory: vi.fn(async (identifiers) => successDirectoryResults(identifiers, mapping)),
     getUserProfile: vi.fn(async (username) => ({
       ok: true as const,
       status: 200,

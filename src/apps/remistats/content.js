@@ -392,38 +392,29 @@ async function processBatch(usernames) {
   // infinite retry loop as the MutationObserver keeps firing.
   const requested = Array.from(usernames).map(u => u.toLowerCase());
   try {
-    const responses = await Promise.all(requested.map(async (handle) => {
-      const response = await runtimeSendMessage({ type: 'remistats:getUser', handle }, 'remistats:getUser');
-      return [handle, response];
-    }));
+    const response = await runtimeSendMessage({
+      type: 'reminetIdentity:resolve',
+      identifiers: requested.map((value) => ({ type: 'x_handle', value })),
+    }, 'reminetIdentity:resolve');
+    if (!response?.ok || !Array.isArray(response.results)) return results;
 
-    for (const [requestedHandle, response] of responses) {
-      if (!response?.ok) {
-        if (response?.notFound || response?.status === 404) {
-          setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
-          results[requestedHandle] = null;
-        }
-        continue;
-      }
-
-      const data = response.data || {};
-      if (data.max_beetles !== undefined) maxBeetles = Math.max(1, nonNegativeNumber(data.max_beetles, maxBeetles));
-      if (data.max_score !== undefined) maxScore = Math.max(1, nonNegativeNumber(data.max_score, maxScore));
-
-      if (data.user) {
-        const user = data.user;
-        const userData = transformApiResponse(user, requestedHandle, response.cached !== true);
-        if (userData.remiliaUsername) confirmPokeIdentity(userData.remiliaUsername);
-        const normalized = cleanUsername(user.twitterHandle || requestedHandle).toLowerCase();
-        setScoreCache(requestedHandle, { data: userData, timestamp: Date.now() });
-        results[requestedHandle] = userData;
-        if (normalized && normalized !== requestedHandle) {
-          setScoreCache(normalized, { data: userData, timestamp: Date.now() });
-          results[normalized] = userData;
-        }
-      } else {
+    for (let index = 0; index < requested.length; index += 1) {
+      const requestedHandle = requested[index];
+      const resolved = response.results[index];
+      if (resolved?.status === 'not_found') {
         setScoreCache(requestedHandle, { data: null, timestamp: Date.now() });
         results[requestedHandle] = null;
+        continue;
+      }
+      if (resolved?.status !== 'resolved' || !resolved.profile) continue;
+      const userData = transformSharedIdentityProfile(resolved.profile, requestedHandle);
+      if (userData.remiliaUsername) confirmPokeIdentity(userData.remiliaUsername);
+      const normalized = cleanUsername(userData.twitterHandle || requestedHandle).toLowerCase();
+      setScoreCache(requestedHandle, { data: userData, timestamp: Date.now() });
+      results[requestedHandle] = userData;
+      if (normalized && normalized !== requestedHandle) {
+        setScoreCache(normalized, { data: userData, timestamp: Date.now() });
+        results[normalized] = userData;
       }
     }
   } catch (error) {
@@ -433,6 +424,20 @@ async function processBatch(usernames) {
   }
 
   return results;
+}
+
+function transformSharedIdentityProfile(profile, fallbackHandle = '') {
+  return {
+    username: cleanUsername(profile.remiliaUsername || fallbackHandle),
+    remiliaUsername: cleanUsername(profile.remiliaUsername) || null,
+    twitterHandle: cleanUsername(profile.xHandle || fallbackHandle),
+    displayName: profile.displayName,
+    score: profile.remiStatsScore,
+    beetleCount: profile.beetleCount,
+    followers: nonNegativeNumber(profile.friendCount),
+    pfpProject: profile.pfpProject,
+    pfpId: profile.pfpId,
+  };
 }
 
 // Transform API response to extension format

@@ -6,6 +6,7 @@ import "../../apps/remistats/background.js";
 import "../../apps/reminet-chat/background";
 import "./remilia-auth-router";
 import "../../platform/background/remilia-api-registration";
+import { remiliaApiClient } from "../../platform/background/remilia-api-registration";
 import { createBackgroundNetworkDeadlineSignal, initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
 import { browserAction } from "../../platform/background/browser-action";
 import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";
@@ -15,15 +16,18 @@ import {
   GWEI_NAME_SERVICE_ADDRESS,
   REMINET_IDENTITY_CACHE_KEY,
   REMINET_IDENTITY_CACHE_TTL_MS,
+  REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS,
   addressFromEthCallResult,
   concatHex,
   contractForPfpProject,
+  clearPublicProfileMiss,
   decodeAbiStringResult,
   emptyIdentityProfile,
   emptyReminetIdentityCache,
   ensNameCallData,
   ensResolverCallData,
   extractGweiNameCandidates,
+  freshPublicProfileMiss,
   gweiGatewayUrl,
   gweiResolveCallData,
   gweiReverseResolveCallData,
@@ -39,12 +43,21 @@ import {
   normalizeXHandle,
   ownerOfCallData,
   pruneSharedIdentityCache,
+  rememberPublicProfileMiss,
   rememberSharedIdentity,
   reverseEnsNameForAddress,
   type ReminetIdentityCache,
   type ReminetIdentityCacheEntry,
   type ReminetIdentityProfile,
 } from "../../platform/auth/reminet-identity";
+import {
+  resolveReminetIdentities,
+  identityProfileFromApiV1,
+} from "../../platform/auth/reminet-identity-service";
+import {
+  mergeReminetDirectoryCache,
+  type ReminetDirectoryIdentifier,
+} from "../../platform/auth/reminet-directory";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,
@@ -79,6 +92,13 @@ type ReminetIdentityMessage = {
   type: "reminetIdentity:getProfile";
   xHandle?: string;
   remiliaUsername?: string;
+  force?: boolean;
+  maxAgeMs?: number;
+};
+
+type ReminetIdentityResolveMessage = {
+  type: "reminetIdentity:resolve";
+  identifiers: ReminetDirectoryIdentifier[];
   force?: boolean;
   maxAgeMs?: number;
 };
@@ -389,6 +409,11 @@ setupBackgroundMessageRouter([
     matches: isReminetIdentityMessage,
     handle: (message, sender) => resolveReminetIdentityForSender(message, sender),
   },
+  {
+    type: "reminetIdentity:resolve",
+    matches: isReminetIdentityResolveMessage,
+    handle: (message, sender) => resolveReminetIdentityBatchForSender(message, sender),
+  },
 ]);
 void initializeBackgroundNetworkBudget();
 
@@ -403,6 +428,20 @@ function isReminetIdentityMessage(message: unknown): message is ReminetIdentityM
   const record = message as Record<string, unknown>;
   return record.type === "reminetIdentity:getProfile"
     && (typeof record.xHandle === "string" || typeof record.remiliaUsername === "string");
+}
+
+function isReminetIdentityResolveMessage(message: unknown): message is ReminetIdentityResolveMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "reminetIdentity:resolve"
+    && Array.isArray(record.identifiers)
+    && record.identifiers.length <= 1_000
+    && record.identifiers.every((identifier) => {
+      if (!identifier || typeof identifier !== "object") return false;
+      const candidate = identifier as Record<string, unknown>;
+      return ["handle", "x_handle", "github", "discord"].includes(String(candidate.type))
+        && typeof candidate.value === "string";
+    });
 }
 
 function isUpdateMessage(message: unknown): message is UpdateMessage {
@@ -1170,6 +1209,29 @@ async function resolveReminetIdentityForSender(message: ReminetIdentityMessage, 
   return resolveReminetIdentity(message);
 }
 
+async function resolveReminetIdentityBatchForSender(
+  message: ReminetIdentityResolveMessage,
+  sender: chrome.runtime.MessageSender,
+): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const cache = await loadIdentityCache();
+  const resolved = await resolveReminetIdentities(message.identifiers, cache, {
+    resolveDirectory: async (identifiers) => {
+      const response = await remiliaApiClient.resolveDirectory(identifiers);
+      return response.ok ? { ...response, data: response.data.results } : response;
+    },
+    getUserProfile: (username) => remiliaApiClient.getUserProfile(username),
+  }, {
+    force: message.force === true,
+    positiveTtlMs: normalizeIdentityMaxAge(message.maxAgeMs),
+    profileMaxAgeMs: normalizeIdentityMaxAge(message.maxAgeMs),
+  });
+  await mutateSharedIdentityCache((latest) => {
+    mergeReminetIdentityCaches(latest, resolved.cache);
+  });
+  return { ok: true, results: resolved.results, batchSizes: resolved.batchSizes };
+}
+
 async function loadCurrentPerformanceMode(): Promise<PerformanceMode> {
   const stored = await chrome.storage.local.get({ [PERFORMANCE_MODE_KEY]: "balanced" }).catch(() => ({})) as Record<string, unknown>;
   return normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
@@ -1216,43 +1278,66 @@ async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<
 
   let profile = cached?.profile || emptyIdentityProfile();
   const warnings: string[] = [];
+  let publicProfileCachedAt: number | undefined;
   if (xHandle) profile = mergeIdentityProfile(profile, { xHandle }, "input");
   if (remiliaUsername) profile = mergeIdentityProfile(profile, { remiliaUsername }, "input");
 
   if (xHandle) {
-    const remiStatsResponse = await fetchRemiStatsUser(xHandle, message.force === true);
-    if (remiStatsResponse.ok) {
-      profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, xHandle), "remistats");
-    } else if (remiStatsResponse.notFound || remiStatsResponse.status === 404) {
-      profile = mergeIdentityProfile(profile, { xHandle }, "remistats:notFound");
+    const directory = await resolveReminetIdentities([{ type: "x_handle", value: xHandle }], cache, {
+      resolveDirectory: async (identifiers) => {
+        const response = await remiliaApiClient.resolveDirectory(identifiers);
+        return response.ok ? { ...response, data: response.data.results } : response;
+      },
+      getUserProfile: (username) => remiliaApiClient.getUserProfile(username),
+    }, { force: message.force === true, positiveTtlMs: maxAgeMs, profileMaxAgeMs: maxAgeMs });
+    const resolved = directory.results[0];
+    if (resolved?.profile) {
+      profile = mergeIdentityProfile(profile, resolved.profile);
+      publicProfileCachedAt = resolved.profile.provenance.some((entry) => entry.endpoint.startsWith("GET /api/v1/users/"))
+        ? Date.now()
+        : undefined;
+    } else if (resolved?.status === "not_found") {
+      profile = mergeIdentityProfile(profile, { xHandle }, "remilia-api-v1:directory:notFound");
+    } else if (resolved?.error) {
+      warnings.push(`REMILIA_DIRECTORY_${resolved.error.code.toUpperCase()}`);
     }
+    mergeReminetIdentityCaches(cache, directory.cache);
   }
 
   const resolvedUsername = normalizeRemiliaUsername(profile.remiliaUsername || remiliaUsername);
-  let publicProfileCachedAt: number | undefined;
-  if (resolvedUsername) {
-    const remiliaProfile = await fetchRemiliaPublicProfile(resolvedUsername);
-    if (remiliaProfile) {
-      profile = mergeIdentityProfile(profile, profileFromRemiliaResponse(remiliaProfile, resolvedUsername), "remilia.net");
+  if (resolvedUsername && publicProfileCachedAt === undefined) {
+    const remiliaProfile = await fetchRemiliaPublicProfile(resolvedUsername, cache, message.force === true);
+    if (remiliaProfile.ok && remiliaProfile.data) {
+      profile = mergeIdentityProfile(
+        profile,
+        identityProfileFromApiV1(remiliaProfile.data, resolvedUsername),
+        "remilia-api-v1:profile",
+      );
       publicProfileCachedAt = Date.now();
-    } else {
+    } else if (!remiliaProfile.notFound) {
       warnings.push("REMILIA_PROFILE_UNAVAILABLE");
-    }
-  }
-
-  const resolvedXHandle = normalizeXHandle(profile.xHandle);
-  if (!xHandle && resolvedXHandle) {
-    const remiStatsResponse = await fetchRemiStatsUser(resolvedXHandle, message.force === true);
-    if (remiStatsResponse.ok) {
-      profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, resolvedXHandle), "remistats");
     }
   }
 
   profile = await attachNftOwner(profile);
   profile = await attachEnsName(profile);
   profile = await attachGweiName(profile);
+  await mutateSharedIdentityCache((latest) => mergeReminetIdentityCaches(latest, cache));
   await rememberIdentityProfile(profile, { publicProfileCachedAt });
   return { ok: true, cached: false, partial: warnings.length > 0, warnings, profile };
+}
+
+function mergeReminetIdentityCaches(target: ReminetIdentityCache, source: ReminetIdentityCache): void {
+  mergeReminetDirectoryCache(target.directory, source.directory);
+  for (const [key, entry] of Object.entries(source.records)) {
+    if (!target.records[key] || target.records[key].cachedAt <= entry.cachedAt) target.records[key] = entry;
+  }
+  Object.assign(target.aliases, source.aliases);
+  for (const [key, entry] of Object.entries(source.publicProfileMisses)) {
+    if (!target.publicProfileMisses[key] || target.publicProfileMisses[key].cachedAt <= entry.cachedAt) {
+      target.publicProfileMisses[key] = entry;
+    }
+  }
 }
 
 function normalizeIdentityMaxAge(value: unknown): number {
@@ -1261,19 +1346,24 @@ function normalizeIdentityMaxAge(value: unknown): number {
   return Math.max(0, Math.min(7 * 24 * 60 * 60 * 1000, numeric));
 }
 
-async function fetchRemiliaPublicProfile(username: string): Promise<unknown | null> {
+async function fetchRemiliaPublicProfile(
+  username: string,
+  cache?: ReminetIdentityCache,
+  force = false,
+): Promise<{ ok: boolean; data: unknown | null; notFound: boolean }> {
   const clean = normalizeRemiliaUsername(username);
-  if (!clean) return null;
-  try {
-    const response = await budgetedFetch(`https://www.remilia.net/api/profile/~${encodeURIComponent(clean)}`, {
-      credentials: "omit",
-      headers: { Accept: "application/json" },
-    }, "reminetIdentity:profile");
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
+  if (!clean) return { ok: false, data: null, notFound: true };
+  if (!force && cache && freshPublicProfileMiss(cache, clean, REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS)) {
+    return { ok: false, data: null, notFound: true };
   }
+  const response = await remiliaApiClient.getUserProfile(clean);
+  if (response.ok) {
+    if (cache) clearPublicProfileMiss(cache, clean);
+    return { ok: true, data: response.data, notFound: false };
+  }
+  const notFound = response.error.status === 404 || ["not_found", "user_not_found"].includes(response.error.code);
+  if (notFound && cache) rememberPublicProfileMiss(cache, clean);
+  return { ok: false, data: null, notFound };
 }
 
 async function attachNftOwner(profile: ReminetIdentityProfile): Promise<ReminetIdentityProfile> {

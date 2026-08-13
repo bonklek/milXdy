@@ -164,23 +164,12 @@ export async function resolveReminetDirectoryIdentifiers(
   const resolvedByKey = new Map<string, ReminetDirectoryResolution>();
   const normalized = identifiers.map((identifier) => normalizeReminetDirectoryIdentifier(identifier));
   const pendingByKey = new Map<string, ReminetDirectoryIdentifier>();
-
-  for (const query of normalized) {
-    if (!query) continue;
-    const key = remiNetDirectoryCacheKey(query);
-    if (resolvedByKey.has(key) || pendingByKey.has(key)) continue;
-    const positive = working.positive[key];
-    if (options.force !== true && positive && observedAt - positive.cachedAt < positiveTtlMs) {
-      resolvedByKey.set(key, resolution(query, positive.identity, "resolved", true));
-      continue;
-    }
-    const negative = working.negative[key];
-    if (options.force !== true && negative && observedAt - negative.cachedAt < negativeTtlMs) {
-      resolvedByKey.set(key, resolution(query, null, "not_found", true));
-      continue;
-    }
-    pendingByKey.set(key, query);
-  }
+  collectPendingQueries(normalized, working, resolvedByKey, pendingByKey, {
+    observedAt,
+    positiveTtlMs,
+    negativeTtlMs,
+    force: options.force === true,
+  });
 
   const pending = Array.from(pendingByKey.values());
   const batchSizes: number[] = [];
@@ -198,50 +187,7 @@ export async function resolveReminetDirectoryIdentifiers(
       continue;
     }
 
-    const responseByKey = new Map<string, ReminetDirectoryApiResult[]>();
-    for (const candidate of response.data) {
-      if (!isDirectoryResult(candidate)) continue;
-      const query = normalizeReminetDirectoryIdentifier(candidate.query);
-      const key = query ? remiNetDirectoryCacheKey(query) : "";
-      if (!key || !pendingByKey.has(key)) continue;
-      const group = responseByKey.get(key) ?? [];
-      group.push(candidate);
-      responseByKey.set(key, group);
-    }
-
-    for (const query of batch) {
-      const key = remiNetDirectoryCacheKey(query);
-      const candidates = responseByKey.get(key) ?? [];
-      const normalizedIdentities = candidates
-        .map((candidate) => candidate.identity ? normalizeDirectoryIdentity(candidate.identity) : null);
-      const handles = new Set(normalizedIdentities.flatMap((identity) => identity ? [identity.handle] : []));
-      const hasMiss = normalizedIdentities.some((identity) => identity === null);
-      if (candidates.length === 0) {
-        resolvedByKey.set(key, invalidResponseResolution(query));
-        continue;
-      }
-      if (handles.size > 1 || (handles.size === 1 && hasMiss)) {
-        resolvedByKey.set(key, {
-          ...resolution(query, null, "error", false),
-          error: { code: "duplicate_mapping", category: "invalid_response", status: 0 },
-        });
-        continue;
-      }
-      if (handles.size === 0) {
-        working.negative[key] = { query, cachedAt: observedAt, source: "remilia-api-v1:directory" };
-        delete working.positive[key];
-        resolvedByKey.set(key, resolution(query, null, "not_found", false));
-        continue;
-      }
-      const identity = normalizedIdentities.find((candidate): candidate is ReminetDirectoryIdentity => Boolean(candidate));
-      if (!identity) {
-        resolvedByKey.set(key, invalidResponseResolution(query));
-        continue;
-      }
-      working.positive[key] = { query, identity, cachedAt: observedAt, source: "remilia-api-v1:directory" };
-      delete working.negative[key];
-      resolvedByKey.set(key, resolution(query, identity, "resolved", false));
-    }
+    applyBatchResponse(batch, response.data, pendingByKey, working, resolvedByKey, observedAt);
   }
 
   const pruned = pruneReminetDirectoryCache(working, { ...options, now: () => observedAt });
@@ -260,6 +206,102 @@ export async function resolveReminetDirectoryIdentifiers(
     return resolvedByKey.get(remiNetDirectoryCacheKey(query)) ?? invalidResponseResolution(query);
   });
   return { results, cache: pruned, batchSizes };
+}
+
+function collectPendingQueries(
+  normalized: readonly (ReminetDirectoryIdentifier | null)[],
+  cache: ReminetDirectoryCache,
+  resolved: Map<string, ReminetDirectoryResolution>,
+  pending: Map<string, ReminetDirectoryIdentifier>,
+  options: { observedAt: number; positiveTtlMs: number; negativeTtlMs: number; force: boolean },
+): void {
+  for (const query of normalized) {
+    if (!query) continue;
+    const key = remiNetDirectoryCacheKey(query);
+    if (resolved.has(key) || pending.has(key)) continue;
+    const positive = cache.positive[key];
+    if (!options.force && positive && options.observedAt - positive.cachedAt < options.positiveTtlMs) {
+      resolved.set(key, resolution(query, positive.identity, "resolved", true));
+      continue;
+    }
+    const negative = cache.negative[key];
+    if (!options.force && negative && options.observedAt - negative.cachedAt < options.negativeTtlMs) {
+      resolved.set(key, resolution(query, null, "not_found", true));
+      continue;
+    }
+    pending.set(key, query);
+  }
+}
+
+function applyBatchResponse(
+  batch: readonly ReminetDirectoryIdentifier[],
+  response: readonly ReminetDirectoryApiResult[],
+  pending: ReadonlyMap<string, ReminetDirectoryIdentifier>,
+  cache: ReminetDirectoryCache,
+  resolved: Map<string, ReminetDirectoryResolution>,
+  observedAt: number,
+): void {
+  const responseByKey = groupBatchResponse(response, pending);
+  for (const query of batch) {
+    const key = remiNetDirectoryCacheKey(query);
+    const candidates = responseByKey.get(key) ?? [];
+    const identities = candidates.map((candidate) => candidate.identity ? normalizeDirectoryIdentity(candidate.identity) : null);
+    const handles = new Set(identities.flatMap((identity) => identity ? [identity.handle] : []));
+    const hasMiss = identities.some((identity) => identity === null);
+    if (candidates.length === 0) resolved.set(key, invalidResponseResolution(query));
+    else if (handles.size > 1 || (handles.size === 1 && hasMiss)) resolved.set(key, duplicateMappingResolution(query));
+    else if (handles.size === 0) rememberDirectoryMiss(cache, resolved, key, query, observedAt);
+    else rememberDirectoryIdentity(cache, resolved, key, query, identities, observedAt);
+  }
+}
+
+function groupBatchResponse(
+  response: readonly ReminetDirectoryApiResult[],
+  pending: ReadonlyMap<string, ReminetDirectoryIdentifier>,
+): Map<string, ReminetDirectoryApiResult[]> {
+  const groups = new Map<string, ReminetDirectoryApiResult[]>();
+  for (const candidate of response) {
+    if (!isDirectoryResult(candidate)) continue;
+    const query = normalizeReminetDirectoryIdentifier(candidate.query);
+    const key = query ? remiNetDirectoryCacheKey(query) : "";
+    if (!key || !pending.has(key)) continue;
+    groups.set(key, [...(groups.get(key) ?? []), candidate]);
+  }
+  return groups;
+}
+
+function duplicateMappingResolution(query: ReminetDirectoryIdentifier): ReminetDirectoryResolution {
+  return {
+    ...resolution(query, null, "error", false),
+    error: { code: "duplicate_mapping", category: "invalid_response", status: 0 },
+  };
+}
+
+function rememberDirectoryMiss(
+  cache: ReminetDirectoryCache,
+  resolved: Map<string, ReminetDirectoryResolution>,
+  key: string,
+  query: ReminetDirectoryIdentifier,
+  observedAt: number,
+): void {
+  cache.negative[key] = { query, cachedAt: observedAt, source: "remilia-api-v1:directory" };
+  delete cache.positive[key];
+  resolved.set(key, resolution(query, null, "not_found", false));
+}
+
+function rememberDirectoryIdentity(
+  cache: ReminetDirectoryCache,
+  resolved: Map<string, ReminetDirectoryResolution>,
+  key: string,
+  query: ReminetDirectoryIdentifier,
+  identities: readonly (ReminetDirectoryIdentity | null)[],
+  observedAt: number,
+): void {
+  const identity = identities.find((candidate): candidate is ReminetDirectoryIdentity => Boolean(candidate));
+  if (!identity) return void resolved.set(key, invalidResponseResolution(query));
+  cache.positive[key] = { query, identity, cachedAt: observedAt, source: "remilia-api-v1:directory" };
+  delete cache.negative[key];
+  resolved.set(key, resolution(query, identity, "resolved", false));
 }
 
 function resolution(
