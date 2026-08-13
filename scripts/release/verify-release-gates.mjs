@@ -4,6 +4,7 @@ import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
 const gates = [
   ["TypeScript", ["node_modules/typescript/bin/tsc", "--noEmit"]],
   ["Current release docs/contracts", ["scripts/release/verify-release-current.mjs"]],
+  ["Chromium beta identity", ["scripts/verify/chromium-beta-identity.mjs"]],
   ["Build Chromium/Firefox profiles", ["scripts/build/build-profiles.mjs"]],
   ["Filesystem layout", ["scripts/verify/filesystem-layout.mjs"]],
   ["Localization metadata", ["scripts/verify/locales.mjs"]],

@@ -470,7 +470,7 @@ function coordinatorMessage(action, build) {
 
 function runBuilder(builder, stagingRelative, builderArgs = [], quiet = false) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", `--output-dir=${stagingRelative}`, ...builderArgs], {
+    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", "--channel=production", `--output-dir=${stagingRelative}`, ...builderArgs], {
       cwd: resolve("."),
       stdio: quiet ? "ignore" : "inherit",
       windowsHide: true,

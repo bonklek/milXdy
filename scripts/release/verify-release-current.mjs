@@ -32,17 +32,20 @@ if (branchVersion) {
 }
 assert(typeof packageJson.scripts?.["verify:release"] === "string", "package scripts must include verify:release");
 assert(typeof packageJson.scripts?.["verify:release:gates"] === "string", "package scripts must include verify:release:gates");
+assert(typeof packageJson.scripts?.["verify:chromium-beta-identity"] === "string", "package scripts must include verify:chromium-beta-identity");
 assert(typeof packageJson.scripts?.["verify:app-smoke"] === "string", "package scripts must include verify:app-smoke");
 assert(typeof packageJson.scripts?.["verify:post-reading:distribution"] === "string", "package scripts must include verify:post-reading:distribution");
 assert(typeof packageJson.scripts?.["verify:post-reading:standalone"] === "string", "package scripts must include verify:post-reading:standalone");
 assert(typeof packageJson.scripts?.["verify:remistats-tooltip-escaping"] === "string", "package scripts must include verify:remistats-tooltip-escaping");
 assert(packageJson.scripts["verify:release"] === "node scripts/release/verify-release-current.mjs", "verify:release must run the current release contract verifier");
 assert(packageJson.scripts["verify:release:gates"] === "node scripts/release/verify-release-gates.mjs", "verify:release:gates must run the current release gate");
+assert(packageJson.scripts["verify:chromium-beta-identity"] === "node scripts/verify/chromium-beta-identity.mjs", "verify:chromium-beta-identity must run the beta identity verifier");
 assert(packageJson.scripts["verify:app-smoke"] === "node scripts/smoke/app-smoke.mjs", "verify:app-smoke must run the current app smoke verifier");
 assert(packageJson.scripts["verify:post-reading:distribution"] === "node scripts/verify/post-reading-distribution.mjs", "verify:post-reading:distribution must run the Post-reading distribution verifier");
 assert(packageJson.scripts["verify:post-reading:standalone"] === packageJson.scripts["verify:post-reading:distribution"], "verify:post-reading:standalone must remain a compatibility alias for verify:post-reading:distribution");
 assert(packageJson.scripts["verify:remistats-tooltip-escaping"] === "node scripts/verify/remistats-tooltip-escaping.mjs", "verify:remistats-tooltip-escaping must run the RemiStats tooltip escaping verifier");
 assert(releaseGate.includes("scripts/release/verify-release-current.mjs"), "current release gate must run current release contracts");
+assert(releaseGate.includes("scripts/verify/chromium-beta-identity.mjs"), "current release gate must verify the Chromium beta identity contract");
 assert(releaseGate.includes("scripts/build/build-profiles.mjs"), "current release gate must rebuild profile outputs");
 assert(releaseGate.includes("scripts/verify/filesystem-layout.mjs"), "current release gate must verify filesystem layout");
 assert(releaseGate.includes("scripts/build/build-post-reading-distribution.mjs"), "current release gate must rebuild Post-reading distribution output");

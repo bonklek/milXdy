@@ -33,7 +33,7 @@ For reproducible release archives, use the npm lockfile as the canonical depende
 
 `scripts/release/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, browser builds, copied assets, or archive metadata changes.
 
-The release build emits browser-ready files under `dist/chromium` and `dist/firefox`. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
+The release build emits the pinned public Chromium beta under `dist/chromium-beta` and Firefox under `dist/firefox`. The keyless Chromium production/development profile remains separately available under `dist/chromium`, and developer QA uses its own identity and external output. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
 
 ## Snapshot Builds
 
@@ -45,18 +45,19 @@ Use release candidates, such as `v0.2.2-rc.1`, only when the release scope is ne
 
 Required outputs include:
 
-- `dist/chromium/content.js`
-- `dist/chromium/background.js`
-- `dist/chromium/popup.js`
-- `dist/chromium/features/wiki.js`
-- `dist/chromium/features/post-reading.js`
-- `dist/chromium/features/remistats.js`
-- `dist/chromium/features/miladymaxxer.js`
-- `dist/chromium/features/beetol.js`
-- `dist/chromium/features/reminetChat.js`
-- `dist/chromium/worker.js`
-- `dist/chromium/ocr.html`
-- `dist/chromium/ocrHost.js`
+- `dist/chromium-beta/content.js`
+- `dist/chromium-beta/background.js`
+- `dist/chromium-beta/popup.js`
+- `dist/chromium-beta/remilia-login-client.json`
+- `dist/chromium-beta/features/wiki.js`
+- `dist/chromium-beta/features/post-reading.js`
+- `dist/chromium-beta/features/remistats.js`
+- `dist/chromium-beta/features/miladymaxxer.js`
+- `dist/chromium-beta/features/beetol.js`
+- `dist/chromium-beta/features/reminetChat.js`
+- `dist/chromium-beta/worker.js`
+- `dist/chromium-beta/ocr.html`
+- `dist/chromium-beta/ocrHost.js`
 - `dist/firefox/manifest.json`
 
 Disabled feature bundles should not be downloaded or parsed on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.

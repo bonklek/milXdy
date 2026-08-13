@@ -1,6 +1,6 @@
 export const releaseBuilds = [
-  { dir: "dist/chromium", target: "chromium", profile: "full" },
-  { dir: "dist/firefox", target: "firefox", profile: "full" },
+  { dir: "dist/chromium-beta", target: "chromium", profile: "full", channel: "beta" },
+  { dir: "dist/firefox", target: "firefox", profile: "full", channel: "production" },
 ];
 
 export const coreHostPermissions = [

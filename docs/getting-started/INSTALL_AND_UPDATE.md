@@ -57,7 +57,7 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen.
+Then load `dist/chromium-beta` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen. The keyless Chromium production/development profile remains separately available under `dist/chromium`.
 
 ## Safe Manual Updates
 
@@ -85,4 +85,4 @@ npm install
 npm run build:profiles
 ```
 
-Then reload the same existing milXdy extension card that points to `dist/chromium`, or reload the Firefox temporary add-on from `dist/firefox/manifest.json`.
+Then reload the same existing milXdy extension card that points to `dist/chromium-beta`, or reload the Firefox temporary add-on from `dist/firefox/manifest.json`.

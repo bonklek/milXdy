@@ -10,6 +10,7 @@ import { publishFileAtomically, withReleaseArtifactLock, writeFileAtomically } f
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const chromiumBetaProfile = JSON.parse(await readFile("assets/extension/profiles/chromium-beta.json", "utf8"));
 const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
 if (!isExtensionVersion(version)) {
   throw new Error(`package.json extensionVersion must be a browser extension version, got "${version}"`);
@@ -48,6 +49,13 @@ async function verifyBuildDir(build) {
   if (build.target === "chromium" && manifest.background?.service_worker !== "background.js") {
     throw new Error(`${manifestPath} is missing Chromium service worker background`);
   }
+  if (build.channel === "beta") {
+    assertChromiumBetaManifest(manifest, manifestPath);
+    assertChromiumBetaLoginContract(
+      JSON.parse(await readFile(`${build.dir}/remilia-login-client.json`, "utf8")),
+      `${build.dir}/remilia-login-client.json`,
+    );
+  }
 }
 
 async function createZip(sourceDir, archive) {
@@ -69,6 +77,9 @@ async function verifyArchive(archive, build) {
     throw new Error(`${archive} manifest version ${manifest.version} does not match extension version ${version}`);
   }
   assertArchiveManifestShape(archive, build, manifest);
+  if (build.channel === "beta") {
+    assertChromiumBetaLoginContract(JSON.parse(readZipText(zip, "remilia-login-client.json")), archive);
+  }
   assertArchiveFeatureSet(zip, archive, build);
   assertArchiveFiles(zip, archive, build);
   assertMarkdownArchivePolicy(zip, archive);
@@ -98,6 +109,7 @@ function assertArchiveManifestShape(archive, build, manifest) {
   } else {
     if (manifest.background?.service_worker !== "background.js") throw new Error(`${archive}: Chromium archive must use background.service_worker`);
   }
+  if (build.channel === "beta") assertChromiumBetaManifest(manifest, archive);
 
   const apps = appsForProfile(registry, build.profile);
   const hosts = new Set(manifest.host_permissions || []);
@@ -181,6 +193,7 @@ function assertArchiveFiles(zip, archive, build) {
     "popup.html",
     "popup.css",
     "popup.js",
+    ...(build.channel === "beta" ? ["remilia-login-client.json"] : []),
     ...apps.flatMap((app) => (app.requiredOutputs || [])),
     ...apps.flatMap((app) => (app.css || []).map((sheet) => `${sheet.targetDir}/${sheet.target}`)),
   ];
@@ -202,6 +215,35 @@ function assertArchiveFiles(zip, archive, build) {
   if (apps.some((app) => app.id === "miladymaxxer")) {
     for (const dir of ["ort", "generated", "models"]) assertArchiveDirectory(entries, archive, dir);
     if (!entries.has("milady-logo.png")) throw new Error(`${archive}: expected milady-logo.png missing from archive`);
+  }
+}
+
+function assertChromiumBetaManifest(manifest, label) {
+  if (manifest.name !== chromiumBetaProfile.name) throw new Error(`${label}: Chromium beta name mismatch`);
+  if (manifest.version_name !== `${version} Beta`) throw new Error(`${label}: Chromium beta version_name mismatch`);
+  if (manifest.key !== chromiumBetaProfile.manifestKey) throw new Error(`${label}: Chromium beta manifest key mismatch`);
+  if (!(manifest.permissions || []).includes(chromiumBetaProfile.identityPermission)) {
+    throw new Error(`${label}: Chromium beta identity permission missing`);
+  }
+  if (manifest.action?.default_title !== chromiumBetaProfile.name) {
+    throw new Error(`${label}: Chromium beta action title mismatch`);
+  }
+}
+
+function assertChromiumBetaLoginContract(contract, label) {
+  const expected = {
+    schemaVersion: 1,
+    channel: "beta",
+    clientType: "public",
+    clientId: chromiumBetaProfile.remiliaLogin.clientId,
+    issuerUri: chromiumBetaProfile.remiliaLogin.issuerUri,
+    authorizationScope: "openid",
+    extensionId: chromiumBetaProfile.extensionId,
+    redirectPath: chromiumBetaProfile.remiliaLogin.redirectPath,
+    redirectUri: chromiumBetaProfile.remiliaLogin.redirectUri,
+  };
+  if (JSON.stringify(contract) !== JSON.stringify(expected)) {
+    throw new Error(`${label}: Chromium beta Remilia Login contract mismatch`);
   }
 }
 
