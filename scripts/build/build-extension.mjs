@@ -401,6 +401,10 @@ function validateLocalAppPlanMetadata(plan, packageRoots, copyTargetsByPackage) 
       assertLocalPackageTarget(packageId, asset, `web-accessible asset ${packageId}`);
       if (!copyTargets.has(asset)) throw new Error(`Local app plan metadata for ${packageId} has a web-accessible asset outside the composer copy map.`);
     }
+    for (const action of app.pageContextActions || []) {
+      assertLocalPackageTarget(packageId, action.entry, `page context action ${packageId}:${action.id}`);
+      if (!copyTargets.has(action.entry)) throw new Error(`Local app plan metadata for ${packageId} has a page context action entry outside the composer copy map.`);
+    }
   }
 
   const declaredAddedHosts = unique(Array.from(privacyById.values()).flatMap((entry) => entry.permissions?.addedHosts || [])).sort();

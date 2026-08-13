@@ -221,6 +221,7 @@ export type MilxdyAppManifest = {
   description: string;
   packageKind?: AppPackageKind;
   contentEntry: string;
+  pageContextActions?: AppPageContextAction[];
   available?: boolean;
   unavailableReason?: string;
   css?: Array<{ id: string; path: string }>;
@@ -300,6 +301,24 @@ export type MilxdyAppManifest = {
   };
   isEnabled: () => Promise<boolean>;
   setEnabled?: (enabled: boolean) => Promise<void>;
+};
+
+export type AppPageContextAction = {
+  id: string;
+  label: string;
+  entry: string;
+  documentUrlPatterns: Array<"http://*/*" | "https://*/*">;
+};
+
+export type MilxdyPageContextActionHost<TSync extends object = Record<string, unknown>> = {
+  appId: string;
+  actionId: string;
+  storage: {
+    sync: {
+      values: Partial<TSync>;
+      set(values: Partial<TSync>): Promise<void>;
+    };
+  };
 };
 
 export type MilxdyLocalPackageAsset = {

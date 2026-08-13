@@ -550,6 +550,9 @@ async function analyzePackage(source, manifest) {
   verifySdk(id, manifest, errors, warnings);
   verifyExecutableContentEntry(id, manifest, errors);
   collectFile(source, manifest.contentEntry, "contentEntry", files, errors);
+  for (const action of manifest.pageContextActions || []) {
+    collectFile(source, action.entry, `pageContextAction ${action.id || "<unknown>"} entry`, files, errors);
+  }
   for (const sheet of manifest.css || []) {
     for (const field of Object.keys(sheet)) {
       if (forbiddenCssFields.has(field)) errors.push(`${id}: css entry must not include first-party build field ${field}`);
@@ -575,6 +578,7 @@ async function analyzePackage(source, manifest) {
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
   verifyContextualPostActions(id, manifest, errors);
+  verifyPageContextActions(id, manifest, errors);
   verifyContextMediaActions(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
@@ -775,6 +779,10 @@ function toGeneratedRegistryApp(record) {
   const manifest = structuredClone(record.manifest);
   const firstParty = firstPartyById.get(record.id);
   manifest.contentEntry = record.contentEntry.target;
+  manifest.pageContextActions = (manifest.pageContextActions || []).map((action) => ({
+    ...action,
+    entry: packageOutputPath(record.id, action.entry),
+  }));
   manifest.css = record.css.map((sheet) => ({
     id: sheet.id,
     path: sheet.target,
@@ -972,6 +980,28 @@ function verifyContextualPostActions(id, manifest, errors) {
     ids.add(action?.id);
     if (!action?.label || typeof action.label !== "string") errors.push(`${id}: contextualPostActions require labels`);
     if (action?.placement !== "shareMenu") errors.push(`${id}: contextualPostActions placement must be shareMenu`);
+  }
+}
+
+function verifyPageContextActions(id, manifest, errors) {
+  const actions = manifest.pageContextActions;
+  if (!actions) return;
+  if (!Array.isArray(actions) || actions.length === 0 || actions.length > 4) {
+    errors.push(`${id}: pageContextActions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: pageContextActions packages must declare the userAction load trigger`);
+  const ids = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || ids.has(action.id)) errors.push(`${id}: pageContextActions ids must be unique safe identifiers`);
+    ids.add(action?.id);
+    if (!action?.label || typeof action.label !== "string") errors.push(`${id}: pageContextActions require labels`);
+    if (typeof action?.entry !== "string" || path.extname(action.entry).toLowerCase() !== ".js") errors.push(`${id}: pageContextActions entries must be executable .js files`);
+    const patterns = action?.documentUrlPatterns;
+    if (!Array.isArray(patterns) || patterns.length === 0 || patterns.length > 2 || new Set(patterns).size !== patterns.length
+      || patterns.some((pattern) => pattern !== "http://*/*" && pattern !== "https://*/*")) {
+      errors.push(`${id}: pageContextActions documentUrlPatterns may contain only unique HTTP/HTTPS active-tab patterns`);
+    }
   }
 }
 

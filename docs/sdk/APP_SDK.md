@@ -58,6 +58,7 @@ Required fields:
 
 - `id`, `name`, `version`, `description`
 - `contentEntry` for the lazy-loaded content bundle
+- optional `pageContextActions` for explicit HTTP/HTTPS active-tab actions backed by a packaged secondary JavaScript entry
 - `defaultEnabled` plus `storageKeys` used for enablement changes; adapters read `defaultEnabled` as the fallback when no stored user choice exists
 - `surfaces` such as `tweet`, `userCell`, `profile`, `notification`, `directMessage`, `route`, or `overlayApp`
 - `package` asset hints for build and app-store presentation
@@ -398,6 +399,32 @@ assets it declared. An unavailable or disabled package receives no action.
 This contract does not grant upload, posting, or background-service behavior.
 Those remain separate client capabilities with their own declarations and
 review.
+
+### Page context actions
+
+A package may declare one to four `pageContextActions` for an explicit browser
+context-menu invocation on the active page. Each action declares a safe unique
+`id`, a visible `label`, a packaged secondary `.js` `entry`, and one or both of
+`http://*/*` and `https://*/*` in `documentUrlPatterns`. The package must include
+`userAction` in `loadTriggers`.
+
+The host registers the menu, validates the clicked page scheme, reads only the
+package's declared sync-storage keys, installs a key-filtered
+`MilxdyPageContextActionHost` in the active tab's isolated world, and then runs
+the declared entry. No entry is injected on startup, navigation, or background
+tab discovery, and `file:`, extension, browser-internal, and script URLs are
+rejected. The secondary entry is copied as reviewed package content; it is not
+a web-accessible resource and receives no generic tab, scripting, or runtime
+messaging API.
+
+```json
+"pageContextActions": [{
+  "id": "review-page",
+  "label": "Review this page",
+  "entry": "dist/review-page.js",
+  "documentUrlPatterns": ["http://*/*", "https://*/*"]
+}]
+```
 
 ### Composer actions
 

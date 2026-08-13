@@ -58,6 +58,7 @@ import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, withExternalHandoffTimeout, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { isSupportedMediaContributionMime, MEDIA_CONTRIBUTION_MAX_BYTES, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
+import { registerPageContextActions, type PageContextActionApp } from "../../platform/background/page-context-actions";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -151,6 +152,8 @@ const REMOTE_QUERY_RESULT_SESSION_PREFIX = "milxdy.remoteQueryResult.";
 const contextMediaHandles = new OpaqueMediaHandleStore();
 const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
 const CONTEXT_MEDIA_SESSION_PREFIX = "milxdy.contextMediaHandle.";
+
+registerPageContextActions(appRegistry as PageContextActionApp[]);
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";

@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const publicTypes = await readFile("sdk/types/index.d.ts", "utf8");
 const starterManifest = JSON.parse(await readFile("sdk/templates/basic-feature/milxdy.app.json", "utf8"));
+const novelPackageManifest = JSON.parse(await readFile("examples/packages/local-dev/dev-note/milxdy.app.json", "utf8"));
 const dockedStarterManifest = JSON.parse(await readFile("sdk/templates/docked-app/milxdy.app.json", "utf8"));
 const dockedStarterJavaScript = await readFile("sdk/templates/docked-app/content.js", "utf8");
 const themePrimitives = await readFile("sdk/ui/theme.css", "utf8");
@@ -37,6 +38,9 @@ assert(!publicTypes.includes("scheduleScan"), "public declarations must not expo
 assert(publicTypes.includes("requestSurfaceRescan(): void"), "public declarations must expose the bounded surface-rescan request used by external packages");
 assert(publicTypes.includes("readonly storage: AppStorageFacade"), "public declarations must expose declared-key app storage");
 assert(publicTypes.includes("resolveAssetUrl(path: string): string"), "public declarations must expose guarded asset URL resolution");
+assert(publicTypes.includes("MilxdyPageContextActionHost"), "public declarations must expose the manifest-declared page context action host");
+assert(publicTypes.includes('Array<"http://*/*" | "https://*/*">'), "page context actions must remain restricted to HTTP/HTTPS active-tab pages");
+assert(novelPackageManifest.pageContextActions?.[0]?.entry === "dist/page-action.js", "novel package fixture must exercise a packaged page context action entry");
 assert(starterManifest.sdk?.minVersion === packageJson.appSdkVersion, "starter template sdk.minVersion must match package.json appSdkVersion");
 assert(starterManifest.sdk?.targetVersion === packageJson.appSdkVersion, "starter template sdk.targetVersion must match package.json appSdkVersion");
 assert(starterManifest.defaultEnabled === false, "starter template must start disabled");

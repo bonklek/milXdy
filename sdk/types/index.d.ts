@@ -59,6 +59,24 @@ export interface AppMediaContribution {
   maxTagLength: number;
 }
 
+export interface AppPageContextAction {
+  id: string;
+  label: string;
+  entry: string;
+  documentUrlPatterns: Array<"http://*/*" | "https://*/*">;
+}
+
+export interface MilxdyPageContextActionHost<TSync extends object = Record<string, unknown>> {
+  readonly appId: string;
+  readonly actionId: string;
+  readonly storage: {
+    readonly sync: {
+      readonly values: Partial<TSync>;
+      set(values: Partial<TSync>): Promise<void>;
+    };
+  };
+}
+
 export interface TwitterSurface {
   kind: TwitterSurfaceKind;
   element: HTMLElement;
@@ -115,6 +133,7 @@ export interface PublicAppManifest {
   contextualPostActions?: AppContextualPostAction[];
   contextMediaActions?: AppContextMediaAction[];
   mediaContributions?: AppMediaContribution[];
+  pageContextActions?: AppPageContextAction[];
 }
 
 export interface MilxdyContentAppContext {
