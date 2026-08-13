@@ -1,6 +1,6 @@
 # Connect A Remilia Account
 
-milXdy 0.2.5 connects to RemiliaNET through the official Remilia Login flow.
+milXdy 0.2.5 Chromium beta connects to RemiliaNET through the official Remilia Login flow.
 The extension opens the Remilia authorization page, you approve the listed
 abilities, and RemiliaNET returns control to the same installed extension.
 milXdy does not reuse a RemiliaNET browser session, read RemiliaNET cookies, or
@@ -19,6 +19,15 @@ ask for a username, password, client secret, authorization code, or token.
 The authorization uses OIDC Authorization Code with PKCE S256. The callback is
 bound to milXdy's installed beta identity, and state validation prevents a
 callback from an unrelated login attempt from being accepted.
+
+## Firefox Compatibility
+
+The 0.2.5 Firefox build is intentionally keyless and does not include a Remilia
+identity client or registered login callback. Its Remilia connection status is
+`UNSUPPORTED`; the popup explains that boundary without showing Connect,
+Reconnect, Disconnect, or Revoke controls. milXdy does not fall back to website
+cookies, session adoption, or hidden tabs. Public/non-auth behavior and other
+Firefox-supported settings and features remain available.
 
 ## Existing Installations
 

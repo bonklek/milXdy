@@ -124,7 +124,8 @@ selected files are not persisted.
 ## Remilia Account And Credential Custody
 
 - milXdy uses the official public Remilia Login client and OIDC Authorization
-  Code with PKCE S256. Login is visible and requires explicit user consent.
+  Code with PKCE S256 in the Chromium beta profile. Login is visible and
+  requires explicit user consent.
 - The registered callback must match the installed beta identity exactly.
   Callback state, PKCE verifier/challenge, authorization code, access token,
   refresh token, and ID token are handled only by the trusted extension
@@ -144,6 +145,10 @@ selected files are not persisted.
 - milXdy does not use the browser `cookies` permission for Remilia
   authentication. Any retained permission must have a separate documented
   consumer and security disposition.
+- The Firefox profile is keyless and has no Remilia Login identity client or
+  registered callback. It reports the connection as `UNSUPPORTED`, exposes no
+  login actions, and does not restore a cookie/session fallback. Non-auth
+  Firefox behavior remains independent of the connection boundary.
 
 ## Remilia Delegated Scopes
 

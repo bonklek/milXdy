@@ -4,8 +4,14 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, download `milXdy-0.2.5-chromium.zip`. Firefox and
-Waterfox use `milXdy-0.2.5-firefox.zip`.
+For Chrome, Brave, or Edge, download `milXdy-0.2.5-chromium.zip`. This is the
+authenticated Chromium beta profile: its pinned public manifest key preserves
+extension ID `idlmhjcedjkmbkndigbiobfjadhlmgki` and the exact registered Remilia
+callback `https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth`.
+The packaged public Login client ID is `tpa-milxdy`; it is an identifier, not a
+secret, and no client secret or signing private key is included.
+Firefox and Waterfox use `milXdy-0.2.5-firefox.zip`; that profile is keyless and
+reports Remilia connection as unsupported while retaining non-auth behavior.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
@@ -15,6 +21,10 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 4. Enable **Developer mode**.
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
+
+Keep the Chromium archive on the same extension card. Loading a source
+production build or maintainer QA build is not an equivalent beta identity and
+cannot use the beta Remilia callback.
 
 ## Optional 0.2.5 add-ons
 
@@ -34,6 +44,10 @@ normal build as a second extension.
 ## Firefox Beta Install
 
 Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterfox](../contributors/FIREFOX_QA.md) for installation notes and browser-specific limitations.
+
+The 0.2.5 Firefox archive does not include Remilia Login. It must not offer a
+cookie/session fallback; the popup reports the connection as intentionally
+unsupported and leaves unrelated features available.
 
 1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.
@@ -57,7 +71,12 @@ npm install
 npm run build:profiles
 ```
 
-Then load `dist/chromium-beta` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen. The keyless Chromium production/development profile remains separately available under `dist/chromium`.
+For the release-equivalent authenticated Chromium beta profile, run
+`npm run build:chromium -- --channel=beta` and load `dist/chromium-beta` from
+`chrome://extensions`. The default `dist/chromium` source output is intentionally
+keyless production and is not the Remilia Login beta client. Load
+`dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary
+add-on screen for Firefox compatibility testing.
 
 ## Safe Manual Updates
 
@@ -90,4 +109,6 @@ npm install
 npm run build:profiles
 ```
 
-Then reload the same existing milXdy extension card that points to `dist/chromium-beta`, or reload the Firefox temporary add-on from `dist/firefox/manifest.json`.
+Then reload the same existing milXdy extension card that points to
+`dist/chromium-beta`, or reload the Firefox temporary add-on from
+`dist/firefox/manifest.json`.

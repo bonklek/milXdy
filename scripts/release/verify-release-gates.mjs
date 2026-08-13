@@ -6,6 +6,7 @@ const gates = [
   ["Current release docs/contracts", ["scripts/release/verify-release-current.mjs"]],
   ["Chromium beta identity", ["scripts/verify/chromium-beta-identity.mjs"]],
   ["Remilia migration docs/evidence contracts", ["scripts/verify/remilia-api-migration.mjs"]],
+  ["Remilia migration artifact scan fixtures", ["scripts/verify/remilia-migration-artifact-scan.mjs"]],
   ["Build Chromium/Firefox profiles", ["scripts/build/build-profiles.mjs"]],
   ["Filesystem layout", ["scripts/verify/filesystem-layout.mjs"]],
   ["Localization metadata", ["scripts/verify/locales.mjs"]],

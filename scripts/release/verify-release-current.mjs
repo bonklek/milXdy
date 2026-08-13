@@ -36,6 +36,7 @@ assert(typeof packageJson.scripts?.["verify:release"] === "string", "package scr
 assert(typeof packageJson.scripts?.["verify:remilia-migration"] === "string", "package scripts must include verify:remilia-migration");
 assert(typeof packageJson.scripts?.["verify:remilia-migration:live"] === "string", "package scripts must include verify:remilia-migration:live");
 assert(typeof packageJson.scripts?.["verify:remilia-migration:artifacts"] === "string", "package scripts must include verify:remilia-migration:artifacts");
+assert(typeof packageJson.scripts?.["verify:remilia-migration:artifact-scan"] === "string", "package scripts must include verify:remilia-migration:artifact-scan");
 assert(typeof packageJson.scripts?.["verify:release:gates"] === "string", "package scripts must include verify:release:gates");
 assert(typeof packageJson.scripts?.["verify:chromium-beta-identity"] === "string", "package scripts must include verify:chromium-beta-identity");
 assert(typeof packageJson.scripts?.["verify:app-smoke"] === "string", "package scripts must include verify:app-smoke");
@@ -46,6 +47,7 @@ assert(packageJson.scripts["verify:release"] === "node scripts/release/verify-re
 assert(packageJson.scripts["verify:remilia-migration"] === "node scripts/verify/remilia-api-migration.mjs", "verify:remilia-migration must run the migration contract verifier");
 assert(packageJson.scripts["verify:remilia-migration:live"] === "node scripts/verify/remilia-api-migration.mjs --require-live", "verify:remilia-migration:live must require live evidence");
 assert(packageJson.scripts["verify:remilia-migration:artifacts"] === "node scripts/release/verify-remilia-migration-artifacts.mjs", "verify:remilia-migration:artifacts must scan release archives");
+assert(packageJson.scripts["verify:remilia-migration:artifact-scan"] === "node scripts/verify/remilia-migration-artifact-scan.mjs", "verify:remilia-migration:artifact-scan must run scanner fixtures");
 assert(packageJson.scripts["verify:release:gates"] === "node scripts/release/verify-release-gates.mjs", "verify:release:gates must run the current release gate");
 assert(packageJson.scripts["verify:chromium-beta-identity"] === "node scripts/verify/chromium-beta-identity.mjs", "verify:chromium-beta-identity must run the beta identity verifier");
 assert(packageJson.scripts["verify:app-smoke"] === "node scripts/smoke/app-smoke.mjs", "verify:app-smoke must run the current app smoke verifier");
@@ -55,6 +57,7 @@ assert(packageJson.scripts["verify:remistats-tooltip-escaping"] === "node script
 assert(releaseGate.includes("scripts/release/verify-release-current.mjs"), "current release gate must run current release contracts");
 assert(releaseGate.includes("scripts/verify/chromium-beta-identity.mjs"), "current release gate must verify the Chromium beta identity contract");
 assert(releaseGate.includes("scripts/verify/remilia-api-migration.mjs"), "current release gate must verify Remilia migration docs/evidence contracts");
+assert(releaseGate.includes("scripts/verify/remilia-migration-artifact-scan.mjs"), "current release gate must run Remilia migration artifact scan fixtures");
 assert(releaseGate.includes("scripts/build/build-profiles.mjs"), "current release gate must rebuild profile outputs");
 assert(releaseGate.includes("scripts/verify/filesystem-layout.mjs"), "current release gate must verify filesystem layout");
 assert(releaseGate.includes("scripts/build/build-post-reading-distribution.mjs"), "current release gate must rebuild Post-reading distribution output");

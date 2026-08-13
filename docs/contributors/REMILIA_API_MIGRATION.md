@@ -27,6 +27,12 @@ authentication failure, preserves `insufficient_scope`, `requires_user`,
 cooldown, and rate-limit errors as distinct outcomes, and rejects arbitrary
 authenticated URLs.
 
+Chromium beta owns the public Remilia Login client and stable callback identity.
+The Firefox production profile is intentionally keyless and has no login client
+or registered callback in 0.2.5. Firefox must return normalized `UNSUPPORTED`
+without displaying auth actions or falling back to retired browser-session
+mechanisms; tokenless public and unrelated non-auth behavior remain available.
+
 ## Official Coverage
 
 All official paths are relative to `https://www.remilia.net/api/v1`.

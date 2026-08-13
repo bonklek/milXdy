@@ -86,6 +86,22 @@ for (const required of [
   assert(normalizedSdk.includes(required), `App SDK reference must include ${JSON.stringify(required)}`);
 }
 
+const install = files.get("docs/getting-started/INSTALL_AND_UPDATE.md").replace(/\s+/g, " ");
+for (const required of [
+  "tpa-milxdy",
+  "idlmhjcedjkmbkndigbiobfjadhlmgki",
+  "https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth",
+  "dist/chromium-beta",
+  "keyless",
+]) {
+  assert(install.includes(required), `install guide must include beta identity boundary ${JSON.stringify(required)}`);
+}
+
+const firefoxGuide = await readFile("docs/contributors/FIREFOX_QA.md", "utf8");
+for (const required of ["keyless", "UNSUPPORTED", "no identity client/callback claim", "cookie/session", "non-auth"]) {
+  assert(firefoxGuide.includes(required), `Firefox guide must include compatibility boundary ${JSON.stringify(required)}`);
+}
+
 const requiredCaseIds = [
   "migration-prompt",
   "connect-pkce",
@@ -109,21 +125,35 @@ const requiredCaseIds = [
   "error-separation",
   "keyboard-screen-reader",
 ];
+const requiredFirefoxCaseIds = [
+  "firefox-no-client",
+  "firefox-unsupported-ui",
+  "firefox-no-fallback",
+  "firefox-no-token-leakage",
+  "firefox-public-profile",
+  "firefox-non-auth",
+  "firefox-build",
+];
 
 assert(evidence.schemaVersion === 1, `${evidencePath}: schemaVersion must be 1`);
 assert(evidence.release === packageJson.version, `${evidencePath}: release must match package version`);
 assert(Array.isArray(evidence.results), `${evidencePath}: results must be an array`);
 assertEqualList(evidence.results.map((result) => result.id).sort(), [...requiredCaseIds].sort(), `${evidencePath}: case IDs`);
+assert(Array.isArray(evidence.firefoxCompatibility), `${evidencePath}: firefoxCompatibility must be an array`);
+assertEqualList(evidence.firefoxCompatibility.map((result) => result.id).sort(), [...requiredFirefoxCaseIds].sort(), `${evidencePath}: Firefox compatibility case IDs`);
 
 for (const result of evidence.results) {
   assert(["pending", "pass", "fail", "blocked"].includes(result.chromium), `${result.id}: invalid Chromium status`);
-  assert(["pending", "pass", "fail", "blocked"].includes(result.firefox), `${result.id}: invalid Firefox status`);
+  assert(result.note === null || isRedactedNote(result.note), `${result.id}: note must be null or a short redacted string`);
+}
+for (const result of evidence.firefoxCompatibility) {
+  assert(["pending", "pass", "fail"].includes(result.status), `${result.id}: invalid Firefox compatibility status`);
   assert(result.note === null || isRedactedNote(result.note), `${result.id}: note must be null or a short redacted string`);
 }
 
 if (requireLive) {
   assert(/^[a-f0-9]{40}$/.test(String(evidence.sourceCommit || "")), `${evidencePath}: live evidence requires a full source commit`);
-  for (const browser of ["chromium", "firefox"]) {
+  for (const browser of ["chromium", "firefoxCompatibility"]) {
     const identity = evidence.browsers?.[browser];
     for (const field of ["browserVersion", "buildId", "testedAt", "tester"]) {
       assert(typeof identity?.[field] === "string" && identity[field].trim(), `${evidencePath}: ${browser}.${field} is required for live evidence`);
@@ -132,11 +162,14 @@ if (requireLive) {
   }
   for (const result of evidence.results) {
     assert(result.chromium === "pass", `${result.id}: Chromium live acceptance is ${result.chromium}, expected pass`);
-    assert(result.firefox === "pass", `${result.id}: Firefox live acceptance is ${result.firefox}, expected pass`);
+  }
+  for (const result of evidence.firefoxCompatibility) {
+    assert(result.status === "pass", `${result.id}: Firefox compatibility acceptance is ${result.status}, expected pass`);
   }
   console.log(`Remilia migration live evidence passed for ${evidence.sourceCommit}.`);
 } else {
-  const pending = evidence.results.reduce((count, result) => count + Number(result.chromium !== "pass") + Number(result.firefox !== "pass"), 0);
+  const pending = evidence.results.reduce((count, result) => count + Number(result.chromium !== "pass"), 0)
+    + evidence.firefoxCompatibility.reduce((count, result) => count + Number(result.status !== "pass"), 0);
   console.log(`Remilia migration static contracts passed (${pending} manual browser result(s) not yet recorded as pass).`);
 }
 

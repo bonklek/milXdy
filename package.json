@@ -84,6 +84,7 @@
     "verify:remilia-migration": "node scripts/verify/remilia-api-migration.mjs",
     "verify:remilia-migration:live": "node scripts/verify/remilia-api-migration.mjs --require-live",
     "verify:remilia-migration:artifacts": "node scripts/release/verify-remilia-migration-artifacts.mjs",
+    "verify:remilia-migration:artifact-scan": "node scripts/verify/remilia-migration-artifact-scan.mjs",
     "verify:release": "node scripts/release/verify-release-current.mjs",
     "verify:release:gates": "node scripts/release/verify-release-gates.mjs",
     "verify:release:020": "node scripts/release/verify-release-020.mjs",

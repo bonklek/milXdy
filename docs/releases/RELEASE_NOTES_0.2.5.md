@@ -82,6 +82,10 @@ Firefox evidence matrix, release gates, and maintainer acceptance are complete.
 - Adds a static migration contract verifier, a strict live-evidence verifier,
   and a deterministic extracted-archive scan for credentials and
   machine-specific paths.
+- Records complete authenticated behavior against the stable Chromium beta
+  client. Firefox compatibility verifies its intentional keyless `UNSUPPORTED`
+  connection state, absence of retired fallback/leakage, and unaffected
+  public/non-auth behavior.
 - Final release preparation builds both browsers, runs Firefox lint, packages
   deterministic archives, verifies checksums, and reproduces both archives from
   the same integrated source tree.

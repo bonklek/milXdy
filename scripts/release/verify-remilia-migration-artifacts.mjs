@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { inflateRawSync } from "node:zlib";
 import { releaseBuilds } from "./release-builds.mjs";
 import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
@@ -9,17 +10,19 @@ const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const version = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const reportPath = `tmp/release-evidence/remilia-migration-artifact-scan-${version}.json`;
 
-await withReleaseArtifactLock("verify Remilia migration release artifacts", async () => {
-  const first = await scanArchives();
-  const second = await scanArchives();
-  const firstText = `${JSON.stringify(first, null, 2)}\n`;
-  const secondText = `${JSON.stringify(second, null, 2)}\n`;
-  if (firstText !== secondText) throw new Error("Remilia migration artifact scan report is not reproducible");
-  await mkdir(dirname(reportPath), { recursive: true });
-  await writeFile(reportPath, firstText, "utf8");
-  console.log(`Remilia migration artifact scan passed: ${first.reportSha256}`);
-  console.log(`Report: ${reportPath}`);
-});
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  await withReleaseArtifactLock("verify Remilia migration release artifacts", async () => {
+    const first = await scanArchives();
+    const second = await scanArchives();
+    const firstText = `${JSON.stringify(first, null, 2)}\n`;
+    const secondText = `${JSON.stringify(second, null, 2)}\n`;
+    if (firstText !== secondText) throw new Error("Remilia migration artifact scan report is not reproducible");
+    await mkdir(dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, firstText, "utf8");
+    console.log(`Remilia migration artifact scan passed: ${first.reportSha256}`);
+    console.log(`Report: ${reportPath}`);
+  });
+}
 
 async function scanArchives() {
   const archives = [];
@@ -48,7 +51,7 @@ async function scanArchives() {
   return { ...report, reportSha256: sha256(Buffer.from(JSON.stringify(report))) };
 }
 
-function scanContent(archivePath, entryName, content) {
+export function scanContent(archivePath, entryName, content) {
   if (!isTextCandidate(entryName, content)) return;
   const text = content.toString("utf8");
   const prohibited = [
@@ -79,7 +82,7 @@ function readZipEntry(zip, entry) {
   throw new Error(`${entry.fileName}: unsupported ZIP compression method ${entry.compressionMethod}`);
 }
 
-function listZipEntries(zip) {
+export function listZipEntries(zip) {
   const eocdOffset = findEndOfCentralDirectory(zip);
   const entryCount = zip.readUInt16LE(eocdOffset + 10);
   const directoryOffset = zip.readUInt32LE(eocdOffset + 16);
