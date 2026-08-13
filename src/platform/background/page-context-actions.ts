@@ -8,6 +8,7 @@ export type PageContextActionApp = {
   pageContextActions?: AppPageContextAction[];
   defaultEnabled?: boolean;
   storageKeys?: { sync?: string[] };
+  background?: { messageTypes?: string[] };
   settings?: Array<{
     role?: string;
     defaultValue?: unknown;
@@ -19,6 +20,7 @@ type ResolvedPageContextAction = {
   appId: string;
   action: AppPageContextAction;
   syncKeys: string[];
+  messageTypes: string[];
   enablement: { area: "local" | "sync"; key: string; fallback: boolean } | null;
 };
 
@@ -78,6 +80,7 @@ function resolvePageContextActions(apps: PageContextActionApp[]): Map<string, Re
         appId: app.id,
         action,
         syncKeys: [...new Set(app.storageKeys?.sync || [])],
+        messageTypes: [...new Set(app.background?.messageTypes || [])],
         enablement: enablementFor(app),
       });
     }
@@ -107,7 +110,7 @@ async function invokePageContextAction(tabId: number, value: ResolvedPageContext
   await chrome.scripting.executeScript({
     target: { tabId },
     func: installPageContextActionHost,
-    args: [HOST_GLOBAL, value.appId, value.action.id, value.syncKeys, stored],
+    args: [HOST_GLOBAL, value.appId, value.action.id, value.syncKeys, stored, value.messageTypes],
   });
   await chrome.scripting.executeScript({
     target: { tabId },
@@ -121,6 +124,7 @@ function installPageContextActionHost(
   actionId: string,
   allowedSyncKeys: string[],
   stored: Record<string, unknown>,
+  allowedMessageTypes: string[],
 ): void {
   const allowed = new Set(allowedSyncKeys);
   const host = {
@@ -134,6 +138,15 @@ function installPageContextActionHost(
           if (Object.keys(safe).length > 0) await chrome.storage.sync.set(safe);
         },
       },
+    },
+    async sendMessage<T = unknown>(message: unknown): Promise<T | null> {
+      const type = message && typeof message === "object" && !Array.isArray(message)
+        ? (message as Record<string, unknown>).type
+        : null;
+      const authorized = typeof type === "string" && allowedMessageTypes.some((pattern) =>
+        pattern.endsWith(":*") ? type.startsWith(pattern.slice(0, -1)) : type === pattern);
+      if (!authorized) return null;
+      return await chrome.runtime.sendMessage(message).catch(() => null) as T | null;
     },
   };
   Object.defineProperty(globalThis, globalName, { configurable: true, value: host });

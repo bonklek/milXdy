@@ -319,6 +319,7 @@ export type MilxdyPageContextActionHost<TSync extends object = Record<string, un
       set(values: Partial<TSync>): Promise<void>;
     };
   };
+  sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
 };
 
 export type MilxdyLocalPackageAsset = {

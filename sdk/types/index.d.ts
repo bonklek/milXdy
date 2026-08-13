@@ -75,6 +75,7 @@ export interface MilxdyPageContextActionHost<TSync extends object = Record<strin
       set(values: Partial<TSync>): Promise<void>;
     };
   };
+  sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
 }
 
 export interface TwitterSurface {
