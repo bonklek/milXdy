@@ -165,6 +165,11 @@ The Reader tab controls post and Wiki read-aloud behavior.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running on `localhost`, `127.0.0.1`, or `[::1]`.
+- In a direct-message conversation, use **Read conversation aloud** only when
+  you want the visible bubbles spoken. DM reading always uses browser Web
+  Speech; it never sends DM text to custom TTS, audio export, OCR, full-quote,
+  background, diagnostic, or persistent-storage paths, and leaving/stopping
+  the conversation clears its transient queue.
 - **Include quote posts**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output. **Fetch full quotes** is off by default; when you enable it, Post-reading uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without sending browser cookies or session tokens.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
@@ -187,7 +192,13 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 
 ### Pokes
 
-The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter. When the same account appears multiple times on screen, visible poke buttons for that account update to the same cooldown state after a successful poke.
+The poke button uses the official Remilia account connection and the
+`remilia:pokes.write` ability. It plays a short sound and shakes while sending.
+A successful poke invents no cooldown: only the service's `next_allowed_at` or
+`Retry-After` establishes a deadline. A prior unexpired authoritative deadline
+may appear after a network/timeout failure only when visibly labeled **offline
+fallback**. When the same account appears multiple times, visible controls
+reconcile to that same authoritative state.
 
 **Like tweets when poking** is off by default. When enabled, a successful tweet poke also clicks X's Like button for that tweet if it is not already liked.
 
@@ -203,14 +214,20 @@ During beta testing, the RemiNet connector tab may show the last poke diagnostic
 
 ### Incoming pokes
 
-When RemiNet connector auth is available, milXdy can show a small incoming poke flag for accounts that recently poked you. This is based on recent RemiliaNET notifications inside the active poke window, so it is a current-activity hint rather than a full all-time poke history. **Gold poke alerts** in Appearance gives these flags a shiny gold finish.
+When the official account has `remilia:notifications.read`, milXdy can show a
+small incoming poke flag for a recent notification. Response bodies are not
+persisted; bounded opaque read keys prevent replay. **Gold poke alerts** in
+Appearance gives these flags a shiny gold finish.
 
 ### RemiNet Chat
 
 Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/Twitter routes and add a RemiNet entry to X Messages.
 
-- The chat uses the same RemiNet connector login as pokes and Beetol Game.
-- It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
+- The chat uses the same official Remilia account connection as pokes and
+  Beetol.
+- Official REST owns history, polling, text, and reply posting. The temporary
+  WebSocket adapter supplies body-free acceleration hints only; chat remains
+  usable without it.
 - When you scroll to the oldest loaded messages, use **Show more** to load another batch of older chat history.
 - It supports reactions, pokes, attachments, allowlisted media and pfp.remilia.net avatar previews, profile lookups, and minimized mode.
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
@@ -249,7 +266,7 @@ Enable **Show Beetol hunt panel** to mount the Beetol Game hover panel on X/Twit
 
 - **Beetol color** controls the panel accent.
 - **Beetol mode** controls dark/light styling.
-- The panel uses the same RemiNet connector login as pokes.
+- The panel uses the same official Remilia account connection as pokes.
 
 ## Miladychan Portal
 

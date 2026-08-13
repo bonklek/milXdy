@@ -38,7 +38,9 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 milXdy injects its shared runtime only on these reviewed HTTPS hosts:
 
 - `x.com` and `twitter.com`: full side rail, Apps & Features, X route service, and the shared Twitter surface scanner.
-- `www.remilia.net`: a filtered launcher for RemiNet Chat and Beetol. Existing RemiliaNET session/auth and socket bridges remain separately validated.
+- `www.remilia.net`: a filtered launcher for RemiNet Chat and Beetol. The
+  temporary socket bridge remains separately validated; it does not adopt the
+  website session or provide Remilia authentication.
 - `remilia.wiki` and `wiki.remilia.org`: a feature-only runtime for direct Post-reading article controls and route handling; the existing validated embedded-Wiki bridge remains separate.
 - `boards.miladychan.org`: a filtered Miladychan Portal launcher. Public JSON and explicit text-only posting still use the fixed background allowlist with credentials omitted.
 

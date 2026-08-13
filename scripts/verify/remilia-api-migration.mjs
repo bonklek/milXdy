@@ -37,6 +37,9 @@ const staleInstructions = [
   [/RemiliaNET `authToken` cookie/i, "authToken-cookie instruction"],
   [/briefly open[^.]*inactive tab/i, "hidden-tab refresh instruction"],
   [/browser `cookies` permission[^.]*RemiliaNET/i, "RemiliaNET cookies-permission instruction"],
+  [/uses the RemiNet connector login/i, "retired connector-login instruction"],
+  [/assumes? a 24-hour poke cooldown/i, "invented fixed poke cooldown instruction"],
+  [/session\/auth and socket bridges remain/i, "retired website-session auth bridge instruction"],
 ];
 
 for (const [pattern, label] of staleInstructions) {
@@ -154,6 +157,15 @@ for (const required of [
   "completed migration remains durable",
 ]) {
   assert(accountGuide.includes(required), `account guide must include final connection UI contract ${JSON.stringify(required)}`);
+}
+
+const userGuide = files.get("docs/guides/README.md").replace(/\s+/g, " ");
+for (const required of [
+  "successful poke invents no cooldown",
+  "Official REST owns history, polling, text, and reply posting",
+  "DM reading always uses browser Web Speech",
+]) {
+  assert(userGuide.includes(required), `user guide must include ${JSON.stringify(required)}`);
 }
 
 const firefoxGuide = await readFile("docs/contributors/FIREFOX_QA.md", "utf8");
