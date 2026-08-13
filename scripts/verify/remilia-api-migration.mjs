@@ -70,6 +70,14 @@ for (const required of [
   "App SDK Capability Broker",
   "sole production Remilia API path for content and package principals",
   "must not call `remiliaApi:request` directly",
+  "remilia.profile.public",
+  "remilia.pokes.write",
+  "Per invocation with active user gesture",
+  "opaque 32-hex values",
+  "expire within 12 hours",
+  "Production registration installs the capability broker",
+  "credential_isolation",
+  "unacknowledgeable errors",
 ]) {
   assert(normalizedMigration.includes(required), `migration contract must include ${JSON.stringify(required)}`);
 }
@@ -95,6 +103,9 @@ for (const required of [
   "bearer or refresh token",
   "sole production Remilia API path for content and package principals",
   "must not call the internal `remiliaApi:request` route",
+  "require consent per invocation plus an active user gesture",
+  "expire within 12 hours",
+  "cannot be acknowledged through",
 ]) {
   assert(normalizedSdk.includes(required), `App SDK reference must include ${JSON.stringify(required)}`);
 }

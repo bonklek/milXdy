@@ -44,7 +44,7 @@ pass. Record only observed results from the exact integrated candidate.
 | `chat-reconnect` | Visibility polling, offline, restart | Required | Polls never overlap; reconnect/restart restores REST source of truth |
 | `chat-legacy-realtime` | WebSocket disabled/failing | Required | REST history and text posting continue; socket is acceleration only |
 | `chat-legacy-media` | Media upload/confirm failure | Required | No unconfirmed message/media send; error/log contains no path, token, or private body |
-| `post-factory-isolation` | Reviewed package capability use | Required | Approved broker operation works; package cannot obtain token/cookie/raw authenticated fetch or bypass the broker through `remiliaApi:request` |
+| `post-factory-isolation` | Reviewed package capability use | Required | Public-profile declaration works; raw router has no production response; sender/document/package/grant mismatch fails; write requires active per-invocation gesture; recursive credential isolation and composer trust gates reject bypasses |
 | `error-separation` | 401, 403 scope, 403 user, 429 cooldown/rate, offline | Required | Each state has distinct accessible UI and redacted diagnostics |
 | `keyboard-screen-reader` | Connection and migration UI accessibility | Required | Keyboard order, focus, names, live status, dark/forced color behavior remain usable |
 

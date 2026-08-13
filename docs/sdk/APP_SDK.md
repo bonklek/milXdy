@@ -294,6 +294,16 @@ principals. Package/content code must not call the internal
 host client singleton internally; that implementation seam is not an App SDK
 capability or a runtime authorization boundary.
 
+Read capabilities use explicit enablement grants. `remilia.pokes.write` /
+`pokeUser` and `remilia.chat.write` / `postGlobalChatMessage` require consent
+per invocation plus an active user gesture. Grants are opaque, bound to the
+sender document/tab, package, composition/declaration fingerprint, and expire
+within 12 hours; disable/dispose revokes them. Reviewed-local packages must
+carry reviewed status, remote-API and credential-isolation disclosures, and
+explicit package-consent acknowledgement. Direct fetch/XHR/WebSocket/runtime
+messaging or OAuth/token/cookie/credentialed-fetch code is rejected by trust
+gates and cannot be acknowledged through.
+
 The broker returns normalized results and redacted error classes. It does not
 provide authenticated arbitrary fetch, OAuth endpoints, authorization headers,
 cookies, authorization codes, raw private responses, or a bearer or refresh

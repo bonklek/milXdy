@@ -110,11 +110,47 @@ Every broker call must validate:
 - user consent/grant and the endpoint's delegated scope;
 - fixed route class, normalized input, output bounds, and cancellation.
 
+| Capability | Allowed operations | Exact delegated scopes | Consent |
+| --- | --- | --- | --- |
+| `remilia.profile.public` | `getUserProfile` | None | Enablement |
+| `remilia.profile.me` | `getMe` | None | Enablement |
+| `remilia.directory.read` | `resolveDirectory`, `listDirectoryUsers` | `remilia:directory.read` | Enablement |
+| `remilia.stats.read` | `getMyStats` | `remilia:stats.read` | Enablement |
+| `remilia.notifications.read` | `listMyNotifications` | `remilia:notifications.read` | Enablement |
+| `remilia.pokes.write` | `pokeUser` | `remilia:pokes.write` | Per invocation with active user gesture |
+| `remilia.beetle.read` | `getMyBeetle`, `getMyBeetleCards` | `remilia:beetle.read` | Enablement |
+| `remilia.chat.read` | `listGlobalChatMessages` | `remilia:chat.read` | Enablement |
+| `remilia.chat.write` | `postGlobalChatMessage` | `remilia:chat.write` | Per invocation with active user gesture |
+
+Declarations contain an exact capability ID, operation subset, official scope
+set, fixed consent mode, and bounded reason. Reviewed-local composition also
+requires reviewed status, `privacy.consentRequired`, a remote-API label,
+credential-isolation disclosure, and explicit package-consent acknowledgement.
+Grants are opaque 32-hex values bound to sender document/tab, package,
+composition identity, and declaration fingerprint; they expire within 12 hours
+and are revoked on disable/dispose.
+
+Production registration installs the capability broker over the shared client,
+not the raw API router. Calls require the same extension, a top-frame numeric
+tab, exact HTTPS X/Twitter origin, document binding where available, exact
+grant/package/declaration/scope match, and an active gesture for per-invocation
+writes. Raw routes/scopes/tokens and extra parameters fail closed.
+
 Packages may receive normalized capability results and redacted error classes.
 They may not request tokens, cookies, authorization headers, arbitrary URLs,
 raw private responses, credential storage, login callbacks, or a generic
 authenticated proxy. A package that lacks a declaration, grant, scope, or
 recognized sender fails closed before a network request.
+
+Broker-only errors are stable and bounded: `invalid_request`,
+`unauthorized_sender`, `package_not_reviewed`, `consent_required`,
+`package_not_granted`, `grant_revoked`, `capability_not_declared`,
+`operation_not_declared`, `scope_mismatch`, `credential_isolation`, and
+`client_unavailable`. Recursive isolation rejects access/refresh tokens,
+Authorization/Bearer values, cookies/Set-Cookie, credentials, and client
+secrets. Composer trust gates treat direct fetch/XHR/WebSocket/runtime
+messaging and OAuth/token/cookie/credentialed-fetch material as unacknowledgeable
+errors, not warnings a user can override.
 
 ## Change And Review Rules
 
