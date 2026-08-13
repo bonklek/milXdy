@@ -493,10 +493,8 @@ export type MilxdyContextualPostActionContext = {
   signal: AbortSignal;
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
-  /** Retests the host-owned RemiNet browser session without reloading the page. */
+  /** Retests the host-owned RemiNet authorization without reloading the page. */
   probeRemiNetConnection: () => Promise<{ connected: boolean }>;
-  /** Opens the fixed RemiliaNET session page in an inactive tab. */
-  openRemiNetSession: () => Promise<{ ok: boolean; error?: string }>;
   /** Stages a reviewed PNG locally in RemiNet Chat. Upload still requires Send. */
   stageRemiNetChatPng: (input: {
     blob: Blob;

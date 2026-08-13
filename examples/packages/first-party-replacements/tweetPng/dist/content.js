@@ -1,4 +1,4 @@
-// node_modules/@chenglou/pretext/dist/generated/bidi-data.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/generated/bidi-data.js
 var latin1BidiTypes = [
   "BN",
   "BN",
@@ -974,7 +974,7 @@ var nonLatin1BidiRanges = [
   [1114110, 1114111, "BN"]
 ];
 
-// node_modules/@chenglou/pretext/dist/bidi.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/bidi.js
 function classifyCodePoint(codePoint) {
   if (codePoint <= 255)
     return latin1BidiTypes[codePoint];
@@ -1132,7 +1132,7 @@ function computeSegmentLevels(normalized, segStarts) {
   return segLevels;
 }
 
-// node_modules/@chenglou/pretext/dist/analysis.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/analysis.js
 var collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g;
 var needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/;
 function getWhiteSpaceProfile(whiteSpace) {
@@ -2314,7 +2314,7 @@ function analyzeText(text, profile, whiteSpace = "normal", wordBreak = "normal")
   };
 }
 
-// node_modules/@chenglou/pretext/dist/measurement.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/measurement.js
 var measureContext = null;
 var segmentMetricCaches = /* @__PURE__ */ new Map();
 var cachedEngineProfile = null;
@@ -2508,7 +2508,7 @@ function getFontMeasurementState(font, needsEmojiCorrection) {
   return { cache, fontSize, emojiCorrection };
 }
 
-// node_modules/@chenglou/pretext/dist/line-break.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/line-break.js
 function consumesAtLineStart(kind) {
   return kind === "space" || kind === "zero-width-break" || kind === "soft-hyphen";
 }
@@ -3298,7 +3298,7 @@ function stepPreparedLineGeometry(prepared, cursor, maxWidth) {
   return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth);
 }
 
-// node_modules/@chenglou/pretext/dist/line-text.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/line-text.js
 var sharedGraphemeSegmenter2 = null;
 var sharedLineTextCaches = /* @__PURE__ */ new WeakMap();
 function getSharedGraphemeSegmenter2() {
@@ -3360,7 +3360,7 @@ function buildLineTextFromRange(prepared, cache, startSegmentIndex, startGraphem
   return text;
 }
 
-// node_modules/@chenglou/pretext/dist/layout.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/layout.js
 var sharedGraphemeSegmenter3 = null;
 function getSharedGraphemeSegmenter3() {
   if (sharedGraphemeSegmenter3 === null) {
@@ -3718,7 +3718,7 @@ function layoutWithLines(prepared, maxWidth, lineHeight) {
   return { lineCount, height: lineCount * lineHeight, lines };
 }
 
-// node_modules/@chenglou/pretext/dist/rich-inline.js
+// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/rich-inline.js
 var COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+/;
 var LEADING_COLLAPSIBLE_BOUNDARY_RE = /^[ \t\n\f\r]+/;
 var TRAILING_COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+$/;
@@ -5354,10 +5354,9 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
-            <button type="button" data-action="reconnect" title="Open RemiliaNET in a background tab">Reconnect</button>
-            <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
-          </span>
+            <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
+              <button type="button" data-action="refresh" title="Retest Remilia Chat authorization">Refresh authorization</button>
+            </span>
           <button type="button" data-action="reminet" title="Stage this PNG in RemiNet Chat" hidden>Share to RemiNet</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
@@ -5543,27 +5542,11 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     setRemiNetConnected(connected);
     return connected;
   };
-  modal.querySelector('[data-action="reconnect"]')?.addEventListener("click", (event) => {
-    const button = event.currentTarget;
-    const context = actionContext;
-    if (!context) {
-      setStatus("RemiNet reconnect is unavailable.");
-      return;
-    }
-    button.disabled = true;
-    setStatus("Opening RemiliaNET in a background tab...");
-    void context.openRemiNetSession().then((result2) => {
-      if (!result2.ok) throw new Error(result2.error || "RemiliaNET could not be opened.");
-      setStatus("RemiliaNET opened in a background tab. Sign in there, then select Refresh.");
-    }).catch((error) => setStatus(errorMessage(error))).finally(() => {
-      if (button.isConnected) button.disabled = false;
-    });
-  });
   modal.querySelector('[data-action="refresh"]')?.addEventListener("click", (event) => {
     const button = event.currentTarget;
     button.disabled = true;
     setStatus("Checking RemiNet connection...");
-    void probeRemiNetConnection().then((connected) => setStatus(connected ? "RemiNet connection is live." : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again.")).catch((error) => setStatus(errorMessage(error))).finally(() => {
+    void probeRemiNetConnection().then((connected) => setStatus(connected ? "RemiNet connection is live." : "Remilia Chat authorization is unavailable. Connect Remilia from the extension popup, then refresh authorization.")).catch((error) => setStatus(errorMessage(error))).finally(() => {
       if (button.isConnected) button.disabled = false;
     });
   });

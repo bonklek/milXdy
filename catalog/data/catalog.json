@@ -249,7 +249,7 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "examples/packages/first-party-replacements/tweetPng",
-            "packageSha256": "08aa20835b5b7529f88aaabce815297b12894aefa568547275644e1fb985dba7",
+            "packageSha256": "f88683aed02a28f9c80e667af5782a36d9306a6286d3f46a5950652d02e91d7a",
             "recipeId": "maintainer-local-v1"
           },
           "review": {

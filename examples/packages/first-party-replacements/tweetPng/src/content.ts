@@ -1297,10 +1297,9 @@ function showTweetPngModal(
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
-            <button type="button" data-action="reconnect" title="Open RemiliaNET in a background tab">Reconnect</button>
-            <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
-          </span>
+            <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
+              <button type="button" data-action="refresh" title="Retest Remilia Chat authorization">Refresh authorization</button>
+            </span>
           <button type="button" data-action="reminet" title="Stage this PNG in RemiNet Chat" hidden>Share to RemiNet</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
@@ -1492,25 +1491,6 @@ function showTweetPngModal(
     setRemiNetConnected(connected);
     return connected;
   };
-  modal.querySelector<HTMLButtonElement>('[data-action="reconnect"]')?.addEventListener("click", (event) => {
-    const button = event.currentTarget as HTMLButtonElement;
-    const context = actionContext;
-    if (!context) {
-      setStatus("RemiNet reconnect is unavailable.");
-      return;
-    }
-    button.disabled = true;
-    setStatus("Opening RemiliaNET in a background tab...");
-    void context.openRemiNetSession()
-      .then((result) => {
-        if (!result.ok) throw new Error(result.error || "RemiliaNET could not be opened.");
-        setStatus("RemiliaNET opened in a background tab. Sign in there, then select Refresh.");
-      })
-      .catch((error) => setStatus(errorMessage(error)))
-      .finally(() => {
-        if (button.isConnected) button.disabled = false;
-      });
-  });
   modal.querySelector<HTMLButtonElement>('[data-action="refresh"]')?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     button.disabled = true;
@@ -1518,7 +1498,7 @@ function showTweetPngModal(
     void probeRemiNetConnection()
       .then((connected) => setStatus(connected
         ? "RemiNet connection is live."
-        : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again."))
+        : "Remilia Chat authorization is unavailable. Connect Remilia from the extension popup, then refresh authorization."))
       .catch((error) => setStatus(errorMessage(error)))
       .finally(() => {
         if (button.isConnected) button.disabled = false;

@@ -1608,14 +1608,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
         const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
         return { connected: Boolean(record?.signedIn) };
       },
-      openRemiNetSession: async () => {
-        const response = await chrome.runtime.sendMessage({ type: "milxdy:openRemiNetSession" }).catch(() => null);
-        const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
-        return {
-          ok: record?.ok === true,
-          error: typeof record?.error === "string" ? record.error : undefined,
-        };
-      },
       stageRemiNetChatPng: async ({ blob, fileName }) => {
         if (blob.type && blob.type !== "image/png") return { ok: false, error: "Only PNG images can be staged." };
         if (blob.size > 10 * 1024 * 1024) return { ok: false, error: "Images must be 10 MB or smaller." };

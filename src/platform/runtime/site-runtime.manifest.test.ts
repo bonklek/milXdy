@@ -17,7 +17,7 @@ async function fixtures() {
     readFile(new URL("../app-sdk/first-party-apps.json", import.meta.url), "utf8"),
   ]);
   return {
-    manifest: JSON.parse(manifestSource) as { content_scripts?: Array<{ js?: string[]; matches?: string[] }>; web_accessible_resources?: Array<{ matches?: string[] }> },
+    manifest: JSON.parse(manifestSource) as { permissions?: string[]; content_scripts?: Array<{ js?: string[]; matches?: string[] }>; web_accessible_resources?: Array<{ matches?: string[] }> },
     registry: JSON.parse(registrySource) as RegistryApp[],
   };
 }
@@ -30,6 +30,14 @@ function contentApps(registry: RegistryApp[], site: string): string[] {
 }
 
 describe("multi-site manifest contract", () => {
+  it("omits ambient browser-session and broad tab metadata permissions", async () => {
+    const { manifest } = await fixtures();
+    expect(manifest.permissions).not.toContain("cookies");
+    expect(manifest.permissions).not.toContain("tabs");
+    expect(manifest.permissions).toContain("activeTab");
+    expect(manifest.permissions).toContain("scripting");
+  });
+
   it("keeps executable and web-accessible matches aligned to the approved origins", async () => {
     const { manifest } = await fixtures();
     const runtime = manifest.content_scripts?.find((entry) => entry.js?.includes("content.js"));

@@ -148,7 +148,7 @@ function mountBeetolGame(context = {}) {
         <div class="beetol-head">
           <div>
             <div class="beetol-title">Beetol Game</div>
-            <div id="beetol-user" class="beetol-subtitle">Checking session...</div>
+            <div id="beetol-user" class="beetol-subtitle">Checking Remilia authorization...</div>
           </div>
           <button id="beetol-refresh" class="beetol-icon-btn" type="button" title="Refresh">&#8635;</button>
           <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
@@ -156,7 +156,7 @@ function mountBeetolGame(context = {}) {
         <div id="beetol-signed-out" class="beetol-signed-out-msg">
           <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
           <span>to RemiliaNET, then retry Beetol.</span>
-          <button id="beetol-retry-session" type="button">Retry session</button>
+          <button id="beetol-retry-session" type="button">Reconnect Remilia</button>
         </div>
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
@@ -904,18 +904,18 @@ function mountBeetolGame(context = {}) {
   async function checkAuthStatus(silent = false) {
     if (!lifecycleActive()) return false;
     state.loading = true;
-    if (!silent) setMessage('Checking session...');
+    if (!silent) setMessage('Checking Remilia authorization...');
     render();
     const response = await send({ type: 'beetol:authStatus' });
     if (!lifecycleActive()) return false;
     state.loading = false;
     if (!response?.signedIn) {
-      enterSignedOutState(response?.error || 'No RemiliaNET browser session detected.');
+      enterSignedOutState(response?.error || 'Remilia authorization is required.');
       render();
       return false;
     }
     state.signedIn = true;
-    setMessage('Session detected.');
+    setMessage('Remilia authorization connected.');
     render();
     await refreshState(true);
     return true;
@@ -932,7 +932,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
+      enterSignedOutState('Remilia authorization expired.');
       render();
       return;
     }
@@ -972,7 +972,7 @@ function mountBeetolGame(context = {}) {
     const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
 
     if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
+      enterSignedOutState('Remilia authorization expired.');
       render();
       return;
     }
@@ -1070,7 +1070,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
+      enterSignedOutState('Remilia authorization expired.');
       render();
       return;
     }
