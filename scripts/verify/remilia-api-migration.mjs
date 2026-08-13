@@ -103,6 +103,18 @@ for (const required of [
   assert(install.includes(required), `install guide must include beta identity boundary ${JSON.stringify(required)}`);
 }
 
+const accountGuide = files.get("docs/getting-started/REMILIA_ACCOUNT.md").replace(/\s+/g, " ");
+for (const required of [
+  "Official Remilia connection",
+  "Connect through Remilia Login",
+  "Delete old login data",
+  "Connect with Remilia",
+  "Revoke authorization",
+  "Remilia connection is unavailable in Firefox",
+]) {
+  assert(accountGuide.includes(required), `account guide must include final connection UI contract ${JSON.stringify(required)}`);
+}
+
 const firefoxGuide = await readFile("docs/contributors/FIREFOX_QA.md", "utf8");
 for (const required of ["keyless", "UNSUPPORTED", "no identity client/callback claim", "cookie/session", "non-auth"]) {
   assert(firefoxGuide.includes(required), `Firefox guide must include compatibility boundary ${JSON.stringify(required)}`);

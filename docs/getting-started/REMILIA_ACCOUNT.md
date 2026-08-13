@@ -8,12 +8,17 @@ ask for a username, password, client secret, authorization code, or token.
 
 ## Connect
 
-1. Open the milXdy popup and find **Remilia account**.
-2. Review the abilities milXdy requests. They correspond to Remilia's named
-   delegated scopes and can include profile, stats, notifications, directory,
-   poke, Beetle, and chat access.
-3. Choose **Connect**. Finish sign-in and consent on RemiliaNET.
-4. Return to milXdy. Confirm that the connected identity and granted abilities
+1. Open the milXdy popup and find **Official Remilia connection**.
+2. Review the boundary: “Connect through Remilia Login. milXdy does not reuse
+   your website cookies or silently reconnect an old browser session.”
+3. Review the exact requested abilities. `openid` confirms the account;
+   `remilia:stats.read`, `remilia:notifications.read`,
+   `remilia:beetle.read`, `remilia:chat.read`, and
+   `remilia:directory.read` load enabled read features. The
+   `remilia:pokes.write` and `remilia:chat.write` abilities run only after the
+   user chooses the corresponding poke or text-message action.
+4. Choose **Connect with Remilia**. Finish sign-in and consent on RemiliaNET.
+5. Return to milXdy. Confirm that the connected identity and granted abilities
    are the ones you expected.
 
 The authorization uses OIDC Authorization Code with PKCE S256. The callback is
@@ -24,20 +29,22 @@ callback from an unrelated login attempt from being accepted.
 
 The 0.2.5 Firefox build is intentionally keyless and does not include a Remilia
 identity client or registered login callback. Its Remilia connection status is
-`UNSUPPORTED`; the popup explains that boundary without showing Connect,
-Reconnect, Disconnect, or Revoke controls. milXdy does not fall back to website
+`UNSUPPORTED`; the popup says **Remilia connection is unavailable in Firefox**
+and explains that the build is intentionally keyless. It shows no consent,
+Connect, Reconnect, Disconnect, or Revoke controls. milXdy does not fall back to website
 cookies, session adoption, or hidden tabs. Public/non-auth behavior and other
 Firefox-supported settings and features remain available.
 
 ## Existing Installations
 
 0.2.5 does not silently carry forward the old browser-session connector. An
-existing installation shows a one-time migration notice and removes legacy
-connector credentials before official login can begin. Ordinary extension
-settings, app enablement, appearance choices, and unrelated local data are not
-part of that cleanup.
+existing installation shows a one-time migration notice. Choose **Delete old
+login data** to remove the known legacy token/browser-session state. This
+explicit deletion leaves milXdy disconnected and does not connect an account.
+Ordinary appearance, app, audio, and other settings are not part of that
+cleanup.
 
-Choose **Connect** after migration when you want Remilia features. Dismissing or
+Choose **Connect with Remilia** after migration when you want Remilia features. Dismissing or
 cancelling login leaves milXdy disconnected; it does not fall back to cookies,
 hidden tabs, or browser-session reuse.
 
@@ -48,8 +55,11 @@ hidden tabs, or browser-session reuse.
   warning.
 - **Disconnect** clears milXdy's local Remilia credentials. It does not erase
   unrelated settings or claim to end every RemiliaNET web session.
-- **Revoke** requests remote revocation or logout when the service supports it,
+- **Revoke authorization** asks for confirmation, requests remote revocation or
+  logout when the service supports it,
   then clears local credentials even if the remote request is unavailable.
+  When Remilia cannot confirm remote revocation, review active Remilia
+  authorizations; local credentials are still removed.
 
 Access, refresh, and ID tokens plus connected identity/scopes live only in
 trusted `chrome.storage.session`. They survive Manifest V3 worker suspension but

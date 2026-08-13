@@ -26,7 +26,7 @@ pass. Record only observed results from the exact integrated candidate.
 
 | ID | Behavior | Chromium beta | Required observation |
 | --- | --- | --- | --- |
-| `migration-prompt` | Existing browser-session installation | Required | One-time prompt; no silent connection; legacy auth removed; unrelated settings preserved |
+| `migration-prompt` | Existing browser-session installation | Required | One-time prompt; explicit **Delete old login data** removes known legacy auth and ends disconnected; deletion does not connect; unrelated settings remain |
 | `connect-pkce` | Connect and callback validation | Required | Visible Remilia consent; exact callback; success returns connected identity; cancel/deny stays disconnected |
 | `connect-fail-closed` | State, redirect, code, timeout, and concurrent-login failures | Required | Mismatch/replay/timeout fails closed without credential or log leakage |
 | `scope-status` | Granted and missing abilities | Required | Granted scopes are understandable; missing scope is distinct and reconnectable |
@@ -53,7 +53,7 @@ pass. Record only observed results from the exact integrated candidate.
 | ID | Required observation |
 | --- | --- |
 | `firefox-no-client` | Manifest/profile is keyless and contains no Remilia Login identity permission, client JSON, or registered callback claim |
-| `firefox-unsupported-ui` | Connection status is normalized `UNSUPPORTED`; UI explains Chromium beta availability and disables/hides interactive connect/reconnect without a broken flow |
+| `firefox-unsupported-ui` | Connection status is normalized `UNSUPPORTED`; neutral **Remilia connection is unavailable in Firefox** state explains the keyless build and hides consent plus all connection actions without an alert |
 | `firefox-no-fallback` | No cookie/session adoption, hidden tab, legacy token restore, or silent website-session reuse occurs |
 | `firefox-no-token-leakage` | Source, storage surfaces, logs, diagnostics, DOM/content/package messages, and packaged artifacts expose no credential or authorization material |
 | `firefox-public-profile` | Tokenless official public profile behavior remains usable or fails as a bounded network result independent of authenticated login support |
