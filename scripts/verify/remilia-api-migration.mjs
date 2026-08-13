@@ -84,6 +84,8 @@ for (const required of [
   "Production registration installs the capability broker",
   "credential_isolation",
   "unacknowledgeable errors",
+  "rejected before status lookup",
+  "never connected identity, granted/missing scopes",
 ]) {
   assert(normalizedMigration.includes(required), `migration contract must include ${JSON.stringify(required)}`);
 }

@@ -24,6 +24,11 @@ authorization codes, PKCE verifiers, and OIDC state must not cross into page
 DOM, content scripts, local packages, App SDK context, exported settings,
 profile packs, diagnostics, or logs.
 
+Auth status is privileged account metadata even when token-free. An
+unauthorized sender must be rejected before status lookup and receive only a
+generic bounded error—never connected identity, granted/missing scopes,
+migration details, or other auth state.
+
 The official API client accepts only fixed API-v1 route classes. It injects the
 bearer token in the trusted background, makes at most one refresh retry after an
 authentication failure, preserves `insufficient_scope`, `requires_user`,

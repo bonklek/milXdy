@@ -133,6 +133,10 @@ selected files are not persisted.
 - Credentials are not sent to X/Twitter pages, content scripts, the DOM, local
   packages, App SDK context, sync storage, exported settings, profile packs,
   diagnostics, or logs.
+- Token-free connection status is still private account metadata. Rejected
+  content/page/package senders receive only a generic authorization error; the
+  background does not look up or return identity, scopes, migration state, or
+  other connection details for them.
 - Access, refresh, and ID tokens plus expiry, connected identity, and granted
   scopes live only in trusted-context `chrome.storage.session`. They survive an
   MV3 worker restart but end on extension reload or when the browser session
