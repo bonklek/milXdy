@@ -20,11 +20,6 @@ import {
 
 const BASE_URL = REMILIA_BASE_URL;
 const officialBeetleReads = new RemiliaApiClient({ auth: remiliaAuthProvider });
-const POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
-const INCOMING_POKE_WINDOW_MS = POKE_COOLDOWN_MS;
-const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
-const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
-const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
 const CRUNCH_STEP_MS = 717;
 const MESSAGE_TYPES = new Set([
   'beetol:logout',
@@ -33,9 +28,6 @@ const MESSAGE_TYPES = new Set([
   'beetol:getState',
   'beetol:action',
   'beetol:crunchJunk',
-  'beetol:poke',
-  'beetol:pokeEligibility',
-  'beetol:incomingPokes',
 ]);
 const KNOWN_ITEM_KEYS = new Set([
   'green', 'purple', 'ladybug', 'cucumber', 'monarch', 'pond', 'giraffe_weevil', 'pillbug',
@@ -268,253 +260,6 @@ async function crunchJunk({ runId, onProgress } = {}) {
   };
 }
 
-async function pokeUser(username) {
-  const cleanUsername = normalizeUsername(username);
-  if (!cleanUsername) return { ok: false, error: 'MISSING_USERNAME' };
-  const result = await remiliaPokeFetch(cleanUsername);
-  if (!result.ok) {
-    const cooldownMs = !result.authRequired && isExplicitPokeCooldownResponse(result)
-      ? extractCooldownMs(result.data)
-      : 0;
-    return cooldownMs > 0 ? { ...result, cooldownMs } : result;
-  }
-
-  const data = result.data || {};
-  const responseCooldownMs = extractCooldownMs(data);
-  if (data.success === false || data.ok === false || isExplicitPokeCooldownResponse(result)) {
-    return {
-      ok: false,
-      status: result.status,
-      data,
-      cooldownMs: responseCooldownMs,
-      error: data.message || data.error || 'POKE_REJECTED',
-    };
-  }
-
-  return {
-    ...result,
-    cooldownMs: responseCooldownMs || POKE_COOLDOWN_MS,
-  };
-}
-
-async function getPokeEligibility(username) {
-  const cleanUsername = normalizeUsername(username);
-  if (!cleanUsername) return { ok: false, error: 'MISSING_USERNAME' };
-  return {
-    ok: true,
-    username: cleanUsername,
-    canPoke: true,
-    cooldownMs: 0,
-    skippedProfileLookup: true,
-  };
-}
-
-async function getIncomingPokes() {
-  const cached = await getStored([INCOMING_POKE_CACHE_KEY]);
-  const cache = cached[INCOMING_POKE_CACHE_KEY];
-  if (cache?.fetchedAt && Date.now() - cache.fetchedAt < INCOMING_POKE_CACHE_MS) {
-    return { ok: true, ...cache, cached: true };
-  }
-
-  const result = await remiliaAuthedFetch('GET', '/api/notifications?type=poke&limit=50');
-  if (!result.ok) return result;
-
-  const notifications = collectNotificationItems(result.data);
-  const pokers = [];
-  const seen = new Set();
-  const cutoff = Date.now() - INCOMING_POKE_WINDOW_MS;
-
-  for (const notification of notifications) {
-    const type = String(notification?.type || notification?.notificationType || notification?.action || '').toLowerCase();
-    if (type && type !== 'poke') continue;
-    const timestamp = extractNotificationTimestamp(notification);
-    if (!timestamp || timestamp < cutoff) continue;
-
-    const sender = extractNotificationSender(notification);
-    const handle = normalizeUsername(sender?.userHandle || sender?.username || sender?.handle || sender?.twitterHandle || sender);
-    if (!handle) continue;
-
-    const key = handle.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    pokers.push(handle);
-  }
-
-  const payload = {
-    pokers,
-    fetchedAt: Date.now(),
-    notificationCount: notifications.length,
-  };
-  await setStored({ [INCOMING_POKE_CACHE_KEY]: payload });
-  return { ok: true, ...payload };
-}
-
-function collectNotificationItems(data) {
-  const candidates = [
-    data?.notifications,
-    data?.data?.notifications,
-    data?.items,
-    data?.data?.items,
-    data?.results,
-    data?.data?.results,
-  ];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-  }
-  return Array.isArray(data) ? data : [];
-}
-
-function extractNotificationSender(notification) {
-  const content = notification?.content || notification?.data || {};
-  return (
-    content.from
-    || content.sender
-    || content.actor
-    || notification?.from
-    || notification?.sender
-    || notification?.actor
-    || notification?.user
-    || content.user
-    || null
-  );
-}
-
-function extractNotificationTimestamp(notification) {
-  const content = notification?.content || notification?.data || {};
-  const values = [
-    notification?.createdAt,
-    notification?.created_at,
-    notification?.timestamp,
-    notification?.time,
-    notification?.date,
-    notification?.updatedAt,
-    content?.createdAt,
-    content?.created_at,
-    content?.timestamp,
-    content?.time,
-    content?.date,
-  ];
-
-  for (const value of values) {
-    const timestamp = normalizeTimestamp(value);
-    if (timestamp) return timestamp;
-  }
-  return 0;
-}
-
-function normalizeTimestamp(value) {
-  if (value == null) return 0;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value <= 0) return 0;
-    return value < 10000000000 ? value * 1000 : value;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return 0;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) return normalizeTimestamp(numeric);
-    const parsed = Date.parse(trimmed);
-    return Number.isFinite(parsed) ? parsed : 0;
-  }
-  return 0;
-}
-
-function normalizeUsername(value) {
-  return typeof value === 'string' ? value.replace(/^@/, '').trim() : '';
-}
-
-async function remiliaPokeFetch(username) {
-  if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
-  const prepared = await prepareRemiliaAccess(['remilia:pokes.write']);
-  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
-
-  const firstResult = await remiliaPokeFetchWithPrepared(username, prepared);
-  if (!pokeResultNeedsSessionRefresh(firstResult)) return firstResult;
-
-  const refreshed = await refreshRemiliaAccess(['remilia:pokes.write']);
-  if (!refreshed.ok) {
-    await clearStoredAuth();
-    return firstResult;
-  }
-
-  const retryResult = await remiliaPokeFetchWithPrepared(username, refreshed);
-  return { ...retryResult, authRefresh: { ok: true } };
-}
-
-async function remiliaPokeFetchWithPrepared(username, prepared) {
-  if (!prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
-  const attempts = [{ authMethod: 'bearer', credentials: 'omit', accessToken: prepared.accessToken }];
-  const results = [];
-  for (const attempt of attempts) {
-    const result = await remiliaRequest('POST', '/api/pokeUser', { username }, attempt);
-    results.push(summarizeRequestResult(result));
-    if (result.ok && result.data?.success !== false && result.data?.ok !== false && !isExplicitPokeCooldownResponse(result)) {
-      const accepted = {
-        ...result,
-        ok: true,
-        username,
-        authMethod: attempt.authMethod,
-        cooldownMs: extractCooldownMs(result.data),
-        attempts,
-      };
-      await storePokeDiagnostic(accepted);
-      return accepted;
-    }
-    if (result.ok && isExplicitPokeCooldownResponse(result)) {
-      const rejected = {
-        ...result,
-        ok: false,
-        username,
-        authMethod: attempt.authMethod,
-        cooldownMs: extractCooldownMs(result.data),
-        error: result.data?.message || result.data?.error || 'POKE_COOLDOWN',
-      };
-      await storePokeDiagnostic(rejected);
-      return rejected;
-    }
-    if (result.status && result.status !== 401 && result.status !== 403) {
-      await storePokeDiagnostic({ ok: false, username, attempts: results });
-      return result;
-    }
-  }
-
-  const fallback = {
-    ok: false,
-    authRequired: results.some(result => result.status === 401 || result.status === 403),
-    error: 'POKE_AUTH_FAILED',
-    username,
-    attempts: results,
-  };
-  await storePokeDiagnostic(fallback);
-  return fallback;
-}
-
-function pokeResultNeedsSessionRefresh(result) {
-  if (!result || result.ok || !result.authRequired) return false;
-  const attempts = Array.isArray(result.attempts) ? result.attempts : [];
-  if (attempts.some(attempt => attempt.status === 401 || attempt.status === 403)) return true;
-  return result.error === 'POKE_AUTH_FAILED' || result.error === 'REMILIA_LOGIN_REQUIRED';
-}
-
-function summarizeRequestResult(result) {
-  return {
-    ok: Boolean(result?.ok),
-    status: result?.status || 0,
-    authMethod: result?.authMethod || '',
-    success: result?.data?.success,
-    message: result?.data?.message || result?.data?.error || '',
-  };
-}
-
-async function storePokeDiagnostic(diagnostic) {
-  await setStored({
-    [LAST_POKE_DIAGNOSTIC_KEY]: {
-      ...diagnostic,
-      updatedAt: Date.now(),
-    },
-  });
-}
-
 function extractCooldownMs(data, action) {
   const nested = data?.data || {};
   const actionCooldowns = data?.cooldowns || nested?.cooldowns || {};
@@ -605,31 +350,6 @@ function isCooldownMessage(message) {
   return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
 }
 
-function isExplicitPokeCooldownResponse(response) {
-  if (!response || response.authRequired) return false;
-  const data = response.data || {};
-  const nested = data.data || {};
-  const fields = [
-    response.error,
-    data.error,
-    data.message,
-    data.reason,
-    data.code,
-    nested.error,
-    nested.message,
-    nested.reason,
-    nested.code,
-  ];
-  return fields.some(isExplicitPokeCooldownText);
-}
-
-function isExplicitPokeCooldownText(value) {
-  const text = String(value || '');
-  return /already\s+poked|poke(?:\s+is)?\s+on\s+cool\s*down|poke\s+cool\s*down|cool\s*down/i.test(text)
-    || /try again(?:\s+\w+){0,4}\s+to\s+poke/i.test(text)
-    || /try again(?:\s+\w+){0,4}\s+(?:after|when|once)(?:\s+\w+){0,4}\s+cool\s*down/i.test(text);
-}
-
 function normalizeCooldownMs(value) {
   if (value == null || value === false) return 0;
   if (typeof value === 'number') {
@@ -706,15 +426,6 @@ async function handleBeetolMessage(message, sender) {
       },
     });
   }
-  if (message?.type === 'beetol:poke') {
-    return pokeUser(message.username);
-  }
-  if (message?.type === 'beetol:pokeEligibility') {
-    return getPokeEligibility(message.username);
-  }
-  if (message?.type === 'beetol:incomingPokes') {
-    return getIncomingPokes();
-  }
   return { ok: false, error: 'UNKNOWN_BEETOL_MESSAGE' };
 }
 
@@ -761,15 +472,5 @@ async function getAuthStatus() {
     signedIn: status.phase === 'connected',
     method: status.phase === 'connected' ? 'oidc' : null,
     user: status.identity || null,
-  };
-}
-
-async function authStatusFromWhoami(method = 'token') {
-  const whoami = await remiliaFetch('GET', '/api/profile/whoami');
-  return {
-    ok: true,
-    signedIn: Boolean(whoami.ok),
-    method: whoami.ok ? method : null,
-    user: whoami.ok ? whoami.data : null,
   };
 }

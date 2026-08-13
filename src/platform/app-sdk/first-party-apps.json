@@ -1886,7 +1886,8 @@
       "local": [
         "milxdy.settings.visualTheme",
         "milxdy.remistats.pokeCooldowns",
-        "milxdy.remistats.incomingPokeCache"
+        "milxdy.remistats.notificationReadState",
+        "milxdy.remistats.lastPokeDiagnostic"
       ]
     },
     "settings": [
@@ -2184,7 +2185,7 @@
           "directMessage"
         ],
         "notes": [
-          "Uses routed RemiliaNET and RemiStats service calls for profile, poke, and trophy data; it does not inject into RemiliaNET pages."
+        "Uses routed official Remilia API calls for delegated account stats, notifications, and pokes; public profile badges retain the separate unauthenticated RemiStats lookup."
         ]
       }
     ],
@@ -2220,10 +2221,10 @@
         "full"
       ],
       "permissionNotes": [
-        "Fetches RemiStats and RemiliaNET profile data for visible handles, Remilia profile images for tooltips, and Milady Maker banner images for profile banners."
+        "Fetches public RemiStats profile data for visible handles and delegated official Remilia account stats, notifications, and poke actions after connection."
       ],
       "dataNotes": [
-        "Sends X handles to the RemiStats API when badge data is needed, may resolve verified PFP owners through Ethereum RPC, loads Remilia profile images from pfp.remilia.net, and background-proxies Milady Maker NFT banner images without account credentials or cookies."
+        "Sends X handles to the public RemiStats API for badge data. Official account stats, paged notifications, and pokes use background-held delegated credentials and exact scopes; content code receives no token."
       ],
       "remoteServices": [
         "api.remistats.net",
@@ -2233,7 +2234,7 @@
         "ethereum.publicnode.com"
       ],
       "localStorageNotes": [
-        "Stores badge, poke cooldown, and theme state."
+        "Stores badge/theme state, authoritative poke deadlines for labeled offline fallback, and opaque local notification read keys without notification payloads."
       ],
       "privacyLabels": [
         "remote-api"
@@ -2242,8 +2243,11 @@
     "background": {
       "messageTypes": [
         "remistats:getUser",
+        "remistats:getMyStats",
+        "remistats:markNotificationsRead",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "beetol:incomingPokes",
         "milxdy:fetchImageDataUrl"
       ]
@@ -3187,6 +3191,7 @@
         "reminetChat:*",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "remistats:getUser",
         "reminetIdentity:getProfile"
       ],

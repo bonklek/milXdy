@@ -2,6 +2,7 @@ import "../../apps/wiki-links/background";
 import "../../apps/post-reading/background";
 import "../../apps/milady-maxxer/background";
 import "../../apps/beetol/background.js";
+import "../../apps/remistats/background.js";
 import "../../apps/reminet-chat/background";
 import "./remilia-auth-router";
 import "../../platform/background/remilia-api-registration";

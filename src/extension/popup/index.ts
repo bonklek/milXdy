@@ -2951,8 +2951,10 @@ async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
   root.hidden = false;
   root.textContent = [
     `Last poke: ${diagnostic.ok ? "ok" : "failed"} (${updatedAt})`,
-    `Target: ${String(diagnostic.username || "")}`,
-    `Error: ${String(diagnostic.error || "")}`,
+    `Status: ${Number(diagnostic.status) || 0}`,
+    `Category: ${String(diagnostic.category || "none")}`,
+    `Code: ${String(diagnostic.code || "none")}`,
+    ...(diagnostic.cooldownSource ? [`Cooldown: ${String(diagnostic.cooldownSource)}`] : []),
   ].join("\n");
 }
 
