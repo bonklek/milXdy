@@ -17,6 +17,7 @@ const compatibility = await readFile("docs/sdk/APP_SDK_COMPATIBILITY.md", "utf8"
 const docsIndex = await readFile("docs/INDEX.md", "utf8");
 const referenceDocs = await readFile("docs/sdk/POST_READING_SDK_REFERENCE.md", "utf8");
 const referenceCompatibility = JSON.parse(await readFile("sdk/references/post-reading.compatibility.json", "utf8"));
+const referenceAcceptance = JSON.parse(await readFile("sdk/references/post-reading.acceptance.json", "utf8"));
 const replacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const postReadingPolicy = replacementPolicy.replacements?.find((candidate) => candidate.id === "post-reading");
 
@@ -59,8 +60,16 @@ assert(docsIndex.includes("APP_SDK_COMPATIBILITY.md") && docsIndex.includes("APP
 assert(docsIndex.includes("POST_READING_SDK_REFERENCE.md"), "docs index must link the external SDK reference");
 assert(referenceCompatibility.packageId === "post-reading", "external compatibility mirror must identify Post-reading");
 assert(referenceCompatibility.appSdk?.targetVersion === packageJson.appSdkVersion, "external reference must target the current App SDK");
+assert(referenceAcceptance.packageId === referenceCompatibility.packageId, "external acceptance mirror must identify the compatibility package");
+assert(referenceAcceptance.packageVersion === referenceCompatibility.packageVersion, "external acceptance mirror must match the compatibility package version");
+assert(referenceAcceptance.appSdkVersion === packageJson.appSdkVersion, "external acceptance mirror must target the current App SDK");
+for (const id of ["install-connect", "update-version-mismatch", "enable-disable", "launch-navigation", "settings-migration", "messaging-boundaries", "tts-fallback", "error-offline-timeout-cancellation", "privacy-consent", "theme-layout-accessibility", "uninstall-cleanup"]) {
+  const scenario = referenceAcceptance.scenarios?.find((candidate) => candidate.id === id);
+  assert(scenario?.automated && scenario?.manual, `external acceptance mirror must define ${id}`);
+}
 assert(!referenceCompatibility.reviewedExceptions.some((entry) => /storage|asset URL/i.test(entry)), "external reference must use public storage and asset URL capabilities");
 assert(referenceDocs.includes("verify:post-reading-sdk-reference"), "external reference docs must publish the cross-repository gate");
+assert(referenceDocs.includes("milxdy.acceptance.json") && referenceDocs.includes("Browser-only fallback"), "external reference docs must publish the acceptance matrix and browser-only recovery path");
 assert(/^[0-9a-f]{40}$/.test(postReadingPolicy?.sourceCommit || ""), "external reference trust policy must pin a full Git commit");
 
 const checks = [

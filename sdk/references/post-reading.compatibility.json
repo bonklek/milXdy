@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.1",
+  "packageVersion": "0.2.0-sdk.2",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/milxdy-sdk-integration",
+  "sourceBranch": "codex/issue-18-sdk-sync",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
     "minVersion": "0.2.5",

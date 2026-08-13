@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "packageId": "post-reading",
+  "packageVersion": "0.2.0-sdk.2",
+  "appSdkVersion": "0.2.5",
+  "browserTarget": "chromium",
+  "scenarios": [
+    {
+      "id": "install-connect",
+      "automated": "Source, commit, hash, manifest, compatibility, composition, and complete Chromium output are verified.",
+      "manual": "Load the reviewed custom build and confirm Post-reading appears in Apps & Features and on supported X surfaces."
+    },
+    {
+      "id": "update-version-mismatch",
+      "automated": "The exact package commit, hash, package version, and App SDK version pair fail closed on drift.",
+      "manual": "Replace the previous package build, reload the same extension, and confirm settings survive; an incompatible package must leave the last-known-good or built-in reader available."
+    },
+    {
+      "id": "enable-disable",
+      "automated": "The manifest declares generated enablement and exports disable/dispose lifecycle hooks.",
+      "manual": "Disable, reload, and verify controls, player, speech, listeners, and highlights are absent; re-enable and verify recovery."
+    },
+    {
+      "id": "launch-navigation",
+      "automated": "The package exports boot, onSurface, open, and close and declares tweet and X Article delivery.",
+      "manual": "Launch from a post and an X Article, navigate routes, rescan repeated surfaces, and confirm only one working control per surface."
+    },
+    {
+      "id": "settings-migration",
+      "automated": "Declared sync/local storage keys, defaults, package version, and mirrored compatibility are validated.",
+      "manual": "Change voice, speed, volume, and reading options; reload, reset, update, and verify compatible persistence/default recovery."
+    },
+    {
+      "id": "messaging-boundaries",
+      "automated": "Direct runtime messaging and undeclared browser storage/asset access are rejected; the reviewed post-reading namespace is declared.",
+      "manual": "Exercise full-quote requests and confirm success and failure stay within the visible reader flow without leaking unrelated host capabilities."
+    },
+    {
+      "id": "tts-fallback",
+      "automated": "Browser Web Speech remains the default and the custom endpoint is a declared user-configured remote service.",
+      "manual": "Read with browser TTS, then use an unavailable custom endpoint, cancel, select browser TTS again, and confirm local speech recovers."
+    },
+    {
+      "id": "error-offline-timeout-cancellation",
+      "automated": "Lifecycle cancellation, bounded scheduling, routed-message failure, and OCR timeout contracts are included in package verification.",
+      "manual": "Test offline quote/OCR/custom-TTS failure, cancel active work, navigate away, and confirm actionable status plus clean recovery."
+    },
+    {
+      "id": "privacy-consent",
+      "automated": "Permissions, remote services, privacy labels, consent, and package API scans are enforced by the composer.",
+      "manual": "Confirm no companion service, voice/model download, OCR, or custom TTS transmission starts without the corresponding user choice."
+    },
+    {
+      "id": "theme-layout-accessibility",
+      "automated": "The package declares reader chrome and composes through the public host surface.",
+      "manual": "Check light/dark theme, keyboard controls, focus, zoom/reflow, reduced motion, and forced colors in the reader player."
+    },
+    {
+      "id": "uninstall-cleanup",
+      "automated": "The external package is a reviewed build-time replacement and normal builds remain independent of it.",
+      "manual": "Remove the external package selection, rebuild/reload the same extension, and verify the built-in browser-only Post-reading controls and saved compatible settings still work."
+    }
+  ]
+}

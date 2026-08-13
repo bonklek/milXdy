@@ -33,12 +33,18 @@ if (sourceCommit !== referencePolicy.sourceCommit) {
 }
 
 try {
+  run(process.execPath, ["scripts/sync-milxdy-sdk.mjs", "--check", `--milxdy-repo=${workspace}`], referenceRepo);
   run(process.execPath, ["scripts/build-milxdy-package.mjs"], referenceRepo);
-  run(process.execPath, ["scripts/verify-milxdy-package.mjs"], referenceRepo);
+  run(process.execPath, ["scripts/verify-milxdy-package.mjs"], referenceRepo, false, {
+    MILXDY_SDK_TYPES: path.join(workspace, "sdk", "types", "index.d.ts"),
+  });
 
   const externalCompatibility = JSON.parse(await readFile(path.join(referenceRepo, "milxdy.compatibility.json"), "utf8"));
   const localCompatibility = JSON.parse(await readFile("sdk/references/post-reading.compatibility.json", "utf8"));
   assertEqual(externalCompatibility, localCompatibility, "Post-reading compatibility contract drifted from the milXdy mirror");
+  const externalAcceptance = JSON.parse(await readFile(path.join(referenceRepo, "milxdy.acceptance.json"), "utf8"));
+  const localAcceptance = JSON.parse(await readFile("sdk/references/post-reading.acceptance.json", "utf8"));
+  assertEqual(externalAcceptance, localAcceptance, "Post-reading acceptance contract drifted from the milXdy mirror");
 
   await rm(stageRoot, { recursive: true, force: true });
   await mkdir(stageRoot, { recursive: true });
@@ -47,6 +53,8 @@ try {
   const stagedManifestPath = path.join(packageRoot, "milxdy.app.json");
   const stagedContentPath = path.join(packageRoot, "dist", "content.js");
   const stagedManifest = JSON.parse(await readFile(stagedManifestPath, "utf8"));
+  const stagedAcceptance = JSON.parse(await readFile(path.join(packageRoot, "milxdy.acceptance.json"), "utf8"));
+  assertEqual(stagedAcceptance, localAcceptance, "Built Post-reading package omitted or changed the acceptance contract");
   const stagedContent = await readFile(stagedContentPath);
   stagedManifest.review.sourceUrl = "https://github.com/example/untrusted-post-reading";
   await writeFile(stagedManifestPath, `${JSON.stringify(stagedManifest, null, 2)}\n`);
@@ -78,8 +86,13 @@ try {
   await rm(stageRoot, { recursive: true, force: true });
 }
 
-function run(command, args, cwd, capture = false) {
-  const result = spawnSync(command, args, { cwd, encoding: capture ? "utf8" : undefined, stdio: capture ? "pipe" : "inherit" });
+function run(command, args, cwd, capture = false, extraEnv = {}) {
+  const result = spawnSync(command, args, {
+    cwd,
+    env: { ...process.env, ...extraEnv },
+    encoding: capture ? "utf8" : undefined,
+    stdio: capture ? "pipe" : "inherit",
+  });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed with exit ${result.status}`);
   return result;
