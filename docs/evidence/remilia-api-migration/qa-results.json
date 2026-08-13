@@ -37,7 +37,8 @@
     { "id": "chat-legacy-media", "chromium": "pending", "note": null },
     { "id": "post-factory-isolation", "chromium": "pending", "note": null },
     { "id": "error-separation", "chromium": "pending", "note": null },
-    { "id": "keyboard-screen-reader", "chromium": "pending", "note": null }
+    { "id": "keyboard-screen-reader", "chromium": "pending", "note": null },
+    { "id": "dm-read-aloud-privacy", "chromium": "pending", "note": null }
   ],
   "firefoxCompatibility": [
     { "id": "firefox-no-client", "status": "pending", "note": null },

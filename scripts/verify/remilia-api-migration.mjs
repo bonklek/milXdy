@@ -19,6 +19,7 @@ const currentGuides = [
   "docs/guides/tweet-png.md",
   "docs/contributors/REMILIA_API_MIGRATION.md",
   "docs/contributors/REMILIA_API_QA.md",
+  "docs/releases/RELEASE_NOTES_0.2.5.md",
   "docs/sdk/APP_SDK.md",
   "docs/sdk/APP_SDK_OVERVIEW.md",
   "sdk/README.md",
@@ -107,6 +108,9 @@ for (const required of [
   "remilia:chat.write",
   "temporary legacy adapters",
   "does not use the browser `cookies` permission for Remilia authentication",
+  "Direct-message read-aloud is a stricter local boundary",
+  "DM text is excluded from custom TTS, audio export, OCR, full-quote retrieval",
+  "message references are transient",
 ]) {
   assert(normalizedPrivacy.includes(required), `privacy guide must include ${JSON.stringify(required)}`);
 }
@@ -179,6 +183,7 @@ const requiredCaseIds = [
   "post-factory-isolation",
   "error-separation",
   "keyboard-screen-reader",
+  "dm-read-aloud-privacy",
 ];
 const requiredFirefoxCaseIds = [
   "firefox-no-client",
@@ -189,6 +194,34 @@ const requiredFirefoxCaseIds = [
   "firefox-non-auth",
   "firefox-build",
 ];
+
+const candidateEvidence = files.get("docs/contributors/REMILIA_API_QA.md").replace(/\s+/g, " ");
+for (const required of [
+  "a7b3caedf5d7f94d3a4fb8af45e0f6185a687e9f",
+  "1e4c9cae7551252c264addb5439f5be157d6e1aa56adc94faa5be33a86102245",
+  "3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9",
+  "8bff62a878e857dc1cfd25e80a292fd7790d0d41fc2236d033a51596868d86ed",
+  "a6f64ffa2dd14ef460e591cbfaba129be69216c25e02a9c372fadb552a6976a8",
+  "9e4f54212af30502be6156c0cb3204f5d4e19bddb1b4d1078ac437c760e2c915",
+  "6c2d63aa8af9ac391a79b4d9fd236640f3648776a2e016d59cf1d1cd80a99ca1",
+  "6431524956daf49fc90e5c9592ba646defd803ec529ef6b5903a4380153d75c5",
+  "browser-local Web Speech only",
+  "Public changelog, roadmap, and prior release notes remain",
+  "does not convert an automated result into live acceptance",
+]) {
+  assert(candidateEvidence.includes(required), `candidate evidence must include ${JSON.stringify(required)}`);
+}
+
+const releaseMedia = files.get("docs/releases/RELEASE_NOTES_0.2.5.md").replace(/\s+/g, " ");
+for (const required of [
+  "This is candidate copy",
+  "intentionally keyless",
+  "Privacy-safe screenshot brief",
+  "Never capture tokens",
+  "Screenshots are release media, not evidence",
+]) {
+  assert(releaseMedia.includes(required), `release media brief must include ${JSON.stringify(required)}`);
+}
 
 assert(evidence.schemaVersion === 1, `${evidencePath}: schemaVersion must be 1`);
 assert(evidence.release === packageJson.version, `${evidencePath}: release must match package version`);

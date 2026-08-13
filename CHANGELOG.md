@@ -25,6 +25,9 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 - Retains Reader Voice and the other accepted 0.2.5 work under the Speaking
   Special release theme; no candidate item is represented as shipped before
   integrated manual acceptance.
+- Records exact candidate package/archive/pet hashes, public-history exception,
+  DM Web Speech privacy prerequisite, and unpublished X/screenshot briefs
+  without marking pending browser observations as accepted.
 
 ## 0.2.4
 

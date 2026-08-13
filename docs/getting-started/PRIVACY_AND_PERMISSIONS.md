@@ -25,6 +25,13 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
 - Post-reading custom HTTP TTS is optional and local-only. When selected, milXdy sends the text being read plus speed, volume, and voice metadata only to a loopback endpoint such as `http://localhost`, `http://127.0.0.1`, or `http://[::1]`; remote custom TTS endpoints and returned remote audio URLs are rejected.
+- Direct-message read-aloud is a stricter local boundary: it always uses the
+  browser's Web Speech engine, even when custom HTTP TTS is selected. DM text is
+  excluded from custom TTS, audio export, OCR, full-quote retrieval, background
+  routes, diagnostics, and persistent storage. Only metadata-only diagnostics
+  are allowed; message references are transient and stop, completion,
+  navigation, disable, disposal, and uninstall clear the active conversation
+  state.
 
 ## Site Runtime Scope
 

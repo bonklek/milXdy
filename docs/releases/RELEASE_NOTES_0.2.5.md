@@ -78,6 +78,17 @@ Firefox evidence matrix, release gates, and maintainer acceptance are complete.
 - Does not expose OAuth, tokens, cookies, raw private responses, or
   authenticated arbitrary fetch to Post-Factory or another package.
 
+## Reader Voice and direct-message privacy
+
+- Direct-message read-aloud is explicit and uses browser-local Web Speech even
+  when custom TTS is selected.
+- DM content is excluded from custom TTS, audio export, OCR, full-quote fetches,
+  background routes, diagnostics, and persistent storage. Diagnostics remain
+  metadata-only, message references remain transient, and all lifecycle exits
+  must clean up the active conversation state.
+- Manual release acceptance must observe that custody and cleanup on the exact
+  integrated candidate; source checks alone do not certify it.
+
 ## Migration and release evidence
 
 - Updates installation, account migration, privacy, troubleshooting, RemiStats,
@@ -100,6 +111,32 @@ The public migration guide is available at
 https://github.com/bonklek/milXdy/blob/main/docs/getting-started/REMILIA_ACCOUNT.md.
 The contributor coverage and removal contract is available at
 https://github.com/bonklek/milXdy/blob/main/docs/contributors/REMILIA_API_MIGRATION.md.
+
+## Unpublished X draft
+
+> milXdy 0.2.5 Speaking Special moves supported Remilia features to official
+> Remilia Login and API v1: explicit connection and migration, account data,
+> Beetle reads, pokes, and global chat, with background-only credentials and a
+> reviewed package capability broker. It also brings Reader Voice work,
+> deterministic custom-pet tooling, and Share Kit Unicode/rich-text export.
+> Chromium beta login and Firefox compatibility remain subject to the linked
+> release QA record.
+
+This is candidate copy, not permission to publish. Remove the last sentence
+only after exact-candidate live acceptance. Never imply authenticated Firefox
+support: Firefox 0.2.5 is intentionally keyless.
+
+## Privacy-safe screenshot brief
+
+After Running and On-disk identities match, capture the disconnected official
+connection boundary, granted abilities with identifiers cropped, migration
+deletion explanation, one public official-data surface, the neutral Firefox
+unsupported state, Share Kit sample Unicode/rich-text preview, and Reader Voice
+controls on a synthetic conversation. Never capture tokens, callback state or
+codes, consent URLs, storage/network inspectors, DMs, private chat/media,
+notification bodies, local paths, wallet/account identifiers, or personal
+browser UI. Screenshots are release media, not evidence that an unrecorded
+manual row passed.
 
 ## Candidate limitations
 
