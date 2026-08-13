@@ -239,7 +239,7 @@ export function parseLegacySocketBridgeCommand(value: unknown): LegacySocketBrid
 }
 
 export function parseLegacySocketBridgeEvent(value: unknown): LegacySocketBridgeEvent | null {
-  if (encodedByteLength(value) > LEGACY_SOCKET_FRAME_MAX_BYTES + 1024) return null;
+  if (encodedByteLength(value) > LEGACY_SOCKET_COMMAND_MAX_BYTES) return null;
   const record = objectRecord(value);
   if (!record) return null;
   const type = record?.type;
@@ -324,7 +324,8 @@ export function parseLegacyMediaUploadOutcome(value: unknown): LegacyMediaUpload
   }
   if (record.ok !== true || !hasExactKeys(record, ["ok", "media"])) return null;
   const media = exactRecord(record.media, ["mediaId", "url", "mimeType", "width", "height"]);
-  if (!media || !hasExactKeys(media, ["mediaId", "url", "mimeType", "width", "height"])) return null;
+  if (!media || Object.keys(media).length !== 5 || !hasExactKeys(media, ["mediaId", "url", "mimeType", "width", "height"])) return null;
+  if (media.url !== null && typeof media.url !== "string") return null;
   const mediaId = positiveInteger(media.mediaId);
   const mimeType = nonEmptyString(media.mimeType)?.toLowerCase() ?? null;
   const url = nullableString(media.url);

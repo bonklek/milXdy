@@ -49,11 +49,13 @@ describe("RemiNet Chat official REST wiring", () => {
 
   it("does not surface raw realtime error payloads", async () => {
     const source = await readFile(new URL("./content.ts", import.meta.url), "utf8");
-    const handler = source.slice(source.indexOf("function handleSocketFrame"), source.indexOf("async function submitMessage"));
+    const handler = source.slice(source.indexOf("function handleSocketPortMessage"), source.indexOf("function dispatchLegacyMutation"));
 
+    expect(handler).toContain("parseLegacySocketBridgeEvent(message)");
     expect(handler).toContain('renderStatus("Chat update unavailable.")');
     expect(handler).not.toContain("record.message");
     expect(handler).not.toContain("payload.message");
+    expect(handler).not.toContain("socket:frame");
   });
 
   it("keeps an established session usable across bounded offline retries", async () => {

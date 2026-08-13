@@ -18,6 +18,7 @@ import {
 
 export type LegacyMediaUploadDependencies = Readonly<{
   fetch: typeof fetch;
+  accessToken: string;
 }>;
 
 type DecodedLegacyAttachment = Readonly<{
@@ -37,7 +38,7 @@ const GENERIC_FILE_EXTENSIONS: Readonly<Record<string, string>> = Object.freeze(
 
 export async function executeLegacyMediaUpload(
   request: LegacyMediaUploadRequest,
-  dependencies: LegacyMediaUploadDependencies = { fetch },
+  dependencies: LegacyMediaUploadDependencies,
 ): Promise<LegacyMediaUploadOutcome> {
   const decoded = decodeLegacyAttachmentDataUrl(request);
   if (!decoded.ok) return decoded;
@@ -50,7 +51,7 @@ export async function executeLegacyMediaUpload(
   const uploaded = await requestLegacyJson(
     dependencies.fetch,
     LEGACY_MEDIA_UPLOAD_URL,
-    { method: "POST", body: form },
+    { method: "POST", headers: { Authorization: `Bearer ${dependencies.accessToken}` }, body: form },
     LEGACY_UPLOAD_TIMEOUT_MS,
     "LEGACY_UPLOAD_TIMEOUT",
     "LEGACY_UPLOAD_REJECTED",
@@ -65,7 +66,7 @@ export async function executeLegacyMediaUpload(
     LEGACY_MEDIA_CONFIRM_URL,
     {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${dependencies.accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({ tokens: [token] }),
     },
     LEGACY_CONFIRM_TIMEOUT_MS,
@@ -91,6 +92,7 @@ export function decodeLegacyAttachmentDataUrl(
   const contentType = match[1].toLowerCase();
   if (contentType !== declaredMimeType) return publicLegacyFailure("ATTACHMENT_TYPE_MISMATCH", false);
   const base64 = match[2];
+  if (base64.length === 0 || estimatedBase64Bytes(base64) === 0) return publicLegacyFailure("INVALID_ATTACHMENT", false);
   const maxBytes = maxLegacyAttachmentBytes(contentType);
   if (estimatedBase64Bytes(base64) > maxBytes) return publicLegacyFailure("ATTACHMENT_TOO_LARGE", false);
   try {
@@ -121,12 +123,13 @@ async function requestLegacyJson(
     try {
       response = await fetchImpl(endpoint, {
         ...init,
-        credentials: "include",
+        credentials: "omit",
         headers: {
           Accept: "application/json",
           ...(init.headers || {}),
         },
         redirect: "error",
+        referrerPolicy: "no-referrer",
         signal: deadline.signal,
       });
     } catch (error) {

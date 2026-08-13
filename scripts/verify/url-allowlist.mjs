@@ -180,7 +180,8 @@ async function verifyBackgroundRuleContracts() {
   assert(remiliaMediaSource.includes('"www.remilia.net"') && remiliaMediaSource.includes('"pfp.remilia.net"'), "RemiNet media allowlist must include intended exact media hosts");
   assert(reminetBackground.includes("MAX_INLINE_MEDIA_BYTES"), "RemiNet media bridge must cap inline media response size");
   assert(reminetBackground.includes("UNSUPPORTED_MEDIA_TYPE"), "RemiNet media bridge must reject unsupported media content types");
-  assert(reminetBackground.includes('const response = await fetch(url, { credentials: "omit" })'), "RemiNet media bridge must remain credentialless on every media host");
+  assert(reminetBackground.includes('credentials: "omit", redirect: "error", referrerPolicy: "no-referrer"'), "RemiNet media bridge must reject redirects, omit credentials, and suppress referrers on every media host");
+  assert(reminetBackground.includes('response.url && !isAllowedMediaUrl(response.url)'), "RemiNet media bridge must revalidate the final response URL");
   assert(!reminetBackground.includes("shouldSendRemiliaMediaCredentials"), "RemiNet media bridge must not reuse browser-session credentials");
   assert(reminetContent.includes("renderUnsupportedMediaLink"), "RemiNet content must render unsupported remote media through a dedicated fallback");
   assert(reminetContent.includes("absoluteRemiliaMediaUrl(media.url)"), "RemiNet image attachments must normalize through the shared media allowlist");

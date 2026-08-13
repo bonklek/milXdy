@@ -38,6 +38,20 @@ import {
   type Reaction,
   type ReplyReference,
 } from "./chat-model";
+import {
+  LEGACY_CHAT_ID,
+  LEGACY_SOCKET_IDLE_TIMEOUT_MS,
+  parseLegacyMediaUploadOutcome,
+  parseLegacySocketBridgeEvent,
+  type LegacySocketMutation,
+} from "./legacy-adapters";
+import {
+  legacyMediaAttachment,
+  legacyMediaFailureMessage,
+  legacyMediaSubmitMutation,
+  legacyReplyId,
+} from "./legacy-content-adapter";
+import { LegacyMutationDispatcher } from "./legacy-mutation-dispatcher";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
@@ -59,7 +73,6 @@ const MAX_MESSAGES = 1200;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
 const LEFT_RAIL_MIN_HEIGHT_PX = 260;
-const SOCKET_STALE_TIMEOUT_MS = 70_000;
 const SOCKET_RECOVERY_MIN_GAP_MS = 5_000;
 const REACTIONS = [SHOCKED_REACTION, "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
@@ -92,6 +105,7 @@ let recordDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefi
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
 let chatRestController: ChatRestController | null = null;
+const legacyMutationDispatcher = new LegacyMutationDispatcher();
 
 type RuntimeRecord = Record<string, unknown>;
 
@@ -101,6 +115,7 @@ type PendingAttachment = {
   mimeType: string;
   dataUrl: string;
   status: "ready" | "uploading" | "error";
+  uploadedMedia?: MediaAttachment;
 };
 
 type MessageGroup = {
@@ -294,6 +309,7 @@ export function disable(): void {
 
 export function dispose(): void {
   disable();
+  legacyMutationDispatcher.rejectAll();
   chatRestController?.dispose();
   chatRestController = null;
   state.appFrame?.remove();
@@ -1024,7 +1040,7 @@ function handleChatActionClick(event: MouseEvent): void {
   if (kind === "cancel-reply") clearReplyTo();
   if (kind === "poke") void pokeUser(action.dataset.username || "");
   if (kind === "load-older") void loadOlderMessages();
-  if (kind === "retry-session") void refreshAuthAndHistory(true);
+  if (kind === "retry-connection") void refreshAuthAndHistory(true);
 }
 
 async function refreshAuthAndHistory(force = false): Promise<void> {
@@ -1201,6 +1217,7 @@ function connectSocket(): void {
     state.socketPort.onDisconnect.addListener(() => {
       state.socketPort = null;
       state.socketState = "closed";
+      legacyMutationDispatcher.rejectAll();
       clearSocketStaleTimer();
       void recoverChatConnection("port-disconnect", { visible: false });
     });
@@ -1215,6 +1232,7 @@ function closeSocket(): void {
   cancelReconnectTimer = null;
   state.reconnectTimer = null;
   clearSocketStaleTimer();
+  legacyMutationDispatcher.rejectAll();
   if (state.socketPort) {
     try {
       state.socketPort.postMessage({ type: "close" });
@@ -1248,13 +1266,13 @@ function markSocketActivity(reason: string): void {
 function scheduleSocketStaleTimer(): void {
   clearSocketStaleTimer();
   if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
-  const dueIn = Math.max(1_000, state.lastSocketActivityAt + SOCKET_STALE_TIMEOUT_MS - Date.now());
+  const dueIn = Math.max(1_000, state.lastSocketActivityAt + LEGACY_SOCKET_IDLE_TIMEOUT_MS - Date.now());
   cancelStaleTimer = runtimeScheduler.timeout(() => {
     cancelStaleTimer = null;
     state.staleTimer = null;
     if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
     const idleMs = Date.now() - state.lastSocketActivityAt;
-    if (idleMs >= SOCKET_STALE_TIMEOUT_MS) {
+    if (idleMs >= LEGACY_SOCKET_IDLE_TIMEOUT_MS) {
       void recoverChatConnection("socket-stale-timeout", { visible: false });
     } else {
       scheduleSocketStaleTimer();
@@ -1282,7 +1300,7 @@ async function recoverChatConnection(
   if (!options.force && now - state.lastRecoveryAt < SOCKET_RECOVERY_MIN_GAP_MS) return;
   state.lastRecoveryAt = now;
   state.recoveryInFlight = true;
-  if (options.visible) setRecoveryVisibleState("recovering", "Checking RemiNet session...");
+  if (options.visible) setRecoveryVisibleState("recovering", "Checking Remilia Chat authorization...");
   else renderStatus("Reconnecting...");
   recordChatDiagnostic("recovery.start", { reason, visible: Boolean(options.visible), socketState: state.socketState });
 
@@ -1301,27 +1319,6 @@ async function recoverChatConnection(
   }
   state.recoveryInFlight = false;
   render();
-}
-
-function handleSocketFrame(data: unknown): void {
-  if (typeof data !== "string") return;
-  let frame: RuntimeRecord;
-  try {
-    frame = JSON.parse(data);
-  } catch {
-    return;
-  }
-  const payload = frame.payload;
-  if (frame.type === "deliver" || frame.type === "message_edit" || frame.type === "reaction") {
-    void requestOfficialChatReconciliation("realtime-hint");
-  }
-  if (frame.type === "message_delete" && payload && typeof payload === "object") {
-    void requestOfficialChatReconciliation("realtime-hint");
-  }
-  if (frame.type === "error") {
-    renderStatus("Chat update unavailable.");
-    void requestOfficialChatReconciliation("realtime-invalid");
-  }
 }
 
 async function submitMessage(): Promise<void> {
@@ -1347,6 +1344,13 @@ async function submitMessage(): Promise<void> {
     renderStatus("Chat is reconnecting.");
     return;
   }
+  const replyToId = state.replyTo?.id;
+  const legacyReplyToId = legacyReplyId(replyToId);
+  if (replyToId && legacyReplyToId === null) {
+    state.composerError = "This legacy media adapter cannot reply to that message. Remove the reply or the attachment and try again.";
+    render();
+    return;
+  }
 
   state.sending = true;
   state.composerError = "";
@@ -1359,43 +1363,50 @@ async function submitMessage(): Promise<void> {
     render();
     return;
   }
+  await submitUploadedLegacyMedia(input, text, replyToId, legacyReplyToId, uploaded);
+}
 
-  const optimisticId = `local:${Date.now()}`;
+async function submitUploadedLegacyMedia(
+  input: HTMLInputElement,
+  text: string,
+  replyToId: MessageId | undefined,
+  legacyReplyToId: number | null,
+  uploaded: { images: MediaAttachment[]; video: MediaAttachment | null },
+): Promise<void> {
+  const mutation = legacyMediaSubmitMutation(text, legacyReplyToId, [...uploaded.images, ...(uploaded.video ? [uploaded.video] : [])]);
+  if (!mutation) {
+    state.sending = false;
+    state.composerError = legacyMediaFailureMessage("LEGACY_CONFIRM_RESPONSE_INVALID");
+    render();
+    return;
+  }
+  const sent = await dispatchLegacyMutation(mutation);
+  if (!lifecycleActive()) return;
+  if (!sent.ok) {
+    state.sending = false;
+    state.pendingAttachments.forEach((attachment) => { attachment.status = "error"; });
+    state.composerError = legacyMediaFailureMessage(sent.error);
+    render();
+    return;
+  }
   upsertMessage({
-    id: optimisticId,
+    id: `local:${Date.now()}`,
     chatId: CHAT_ID,
     authorId: currentUserId(),
     body: text,
     createdAt: Date.now(),
     images: uploaded.images,
     video: uploaded.video,
-    inReplyToId: state.replyTo?.id,
-    in_reply_to_id: state.replyTo?.id,
+    inReplyToId: replyToId,
+    in_reply_to_id: replyToId,
     replyTo: state.replyTo,
   });
   sortAndTrimMessages();
-  render();
-  const mediaIds = [...uploaded.images.map(mediaId), mediaId(uploaded.video)].filter((id): id is number => typeof id === "number");
-  const inReplyToId = state.replyTo?.id;
-  const sent = sendSocketPayload({
-    type: "submit",
-    payload: {
-      chat_id: CHAT_ID,
-      text,
-      in_reply_to_id: inReplyToId ? legacyMessageId(inReplyToId) : undefined,
-      media_ids: mediaIds.length ? mediaIds : undefined,
-    },
-  });
-  if (!sent) {
-    state.sending = false;
-    renderStatus("Chat is reconnecting.");
-    render();
-    return;
-  }
   playChatSound("send");
   input.value = "";
   clearPendingAttachments();
   state.replyTo = null;
+  void requestOfficialChatReconciliation("post");
   cancelSendResetTimer?.();
   cancelSendResetTimer = runtimeScheduler.timeout(() => {
     cancelSendResetTimer = null;
@@ -1427,14 +1438,19 @@ async function submitOfficialTextMessage(input: HTMLInputElement, text: string):
 }
 
 function handleSocketPortMessage(message: unknown): void {
-  const record = asRecord(message);
-  if (record.type === "socket:connecting") {
+  const event = parseLegacySocketBridgeEvent(message);
+  if (!event) {
+    void requestOfficialChatReconciliation("realtime-invalid");
+    return;
+  }
+  if (legacyMutationDispatcher.accept(event)) return;
+  if (event.type === "socket:connecting") {
     state.socketState = "connecting";
     renderStatus("Connecting...");
     markSocketActivity("connecting");
     return;
   }
-  if (record.type === "socket:open") {
+  if (event.type === "socket:open") {
     state.socketState = "open";
     state.reconnectAttempts = 0;
     state.recoveryVisibleState = "none";
@@ -1444,64 +1460,58 @@ function handleSocketPortMessage(message: unknown): void {
     render();
     return;
   }
-  if (record.type === "socket:heartbeat") {
-    if (record.ok === false) {
-      void recoverChatConnection(String(record.reason || "heartbeat-not-open"), { visible: false });
-      return;
-    }
+  if (event.type === "socket:heartbeat") {
     markSocketActivity("heartbeat");
     return;
   }
-  if (record.type === "socket:frame") {
-    markSocketActivity("frame");
-    handleSocketFrame(record.data);
+  if (event.type === "socket:hint") {
+    markSocketActivity("hint");
+    if (event.event === "error") {
+      renderStatus("Chat update unavailable.");
+      void requestOfficialChatReconciliation("realtime-invalid");
+    } else {
+      void requestOfficialChatReconciliation("realtime-hint");
+    }
     return;
   }
-  if (record.type === "socket:close") {
+  if (event.type === "socket:reconcile") {
+    void requestOfficialChatReconciliation(event.reason === "legacy-frame-dropped" ? "realtime-invalid" : "realtime-gap");
+    return;
+  }
+  if (event.type === "socket:close") {
     state.socketState = "closed";
     clearSocketStaleTimer();
     recordChatDiagnostic("socket.close", {
-      code: record.code,
-      reason: record.reason,
-      wasClean: record.wasClean,
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean,
     });
     void recoverChatConnection("socket-close", { visible: false });
     return;
   }
-  if (record.type === "socket:error") {
+  if (event.type === "socket:error") {
     clearSocketStaleTimer();
     recordChatDiagnostic("socket.error", {
-      error: record.error,
-      reason: record.reason,
-      authRequired: record.authRequired,
+      reason: event.reason,
     });
-    if (record.authRequired) {
-      state.signedIn = false;
-      setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-      render();
-      return;
-    }
-    if (record.reason === "site-bridge-required") {
+    if (event.reason === "site-bridge-required") {
       state.socketState = "closed";
       state.composerError = "Open or refresh a signed-in RemiliaNET tab to enable live chat.";
-      setRecoveryVisibleState("failed", "Retry connection");
+      setRecoveryVisibleState("failed", "Reconnect Chat");
       render();
       return;
     }
-    void recoverChatConnection(String(record.reason || "socket-error"), { visible: true });
+    void recoverChatConnection(event.reason, { visible: true });
   }
 }
 
-function sendSocketPayload(payload: Record<string, unknown>): boolean {
-  if (!state.socketPort || state.socketState !== "open") return false;
-  try {
-    state.socketPort.postMessage({ type: "send", payload });
-    return true;
-  } catch {
-    state.socketState = "closed";
-    void recoverChatConnection("send-port-failed", { visible: true });
-    return false;
-  }
+function dispatchLegacyMutation(mutation: LegacySocketMutation) {
+  if (state.socketState !== "open") return Promise.resolve({
+    ok: false,
+    error: "LEGACY_MEDIA_SUBMIT_UNAVAILABLE",
+    retryable: true,
+  } as const);
+  return legacyMutationDispatcher.dispatch(state.socketPort, mutation);
 }
 
 function render(): void {
@@ -1604,17 +1614,17 @@ function setRecoveryVisibleState(next: ChatState["recoveryVisibleState"], messag
 }
 
 function renderReconnectState(): string {
-  const label = state.recoveryMessage || "Reconnect / Retry session";
+  const label = state.recoveryMessage || "Reconnect Chat";
   const copy = state.recoveryVisibleState === "recovering"
-    ? "Checking your existing RemiliaNET browser session..."
+    ? "Checking Remilia Chat authorization..."
     : state.recoveryVisibleState === "failed"
-      ? state.composerError || "Chat connection stalled. Retry your current browser session."
-      : "RemiliaNET needs your browser session again. Sign in if prompted, then retry.";
+      ? state.composerError || "The Chat connection stalled. Reconnect Chat to continue."
+      : "Remilia Chat authorization is required. Connect Remilia with Chat access, then reconnect.";
   const disabled = state.recoveryVisibleState === "recovering" ? " disabled" : "";
   return `
     <div class="milxdy-chat-empty milxdy-chat-reconnect">
       <span>${escapeHtml(copy)}</span>
-      <button type="button" data-chat-action="retry-session"${disabled}>${escapeHtml(label)}</button>
+      <button type="button" data-chat-action="retry-connection"${disabled}>${escapeHtml(label)}</button>
       <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Open RemiliaNET</a>
     </div>
   `;
@@ -2328,10 +2338,16 @@ function compactText(value: string, maxLength: number): string {
 function reactToMessage(messageId: MessageId, emoji: string): void {
   const normalizedEmoji = normalizeReactionEmoji(emoji);
   if (!normalizedEmoji || state.socketState !== "open") return;
+  const numericMessageId = legacyMessageId(messageId);
+  if (typeof numericMessageId !== "number") return;
   const message = state.messages.find((item) => item.id === messageId);
   const type = message && currentUserReacted(message, normalizedEmoji) ? "unreact" : "react";
-  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: legacyMessageId(messageId), emoji: normalizedEmoji } })) return;
-  if (type === "react") playChatSound("react");
+  void dispatchLegacyMutation({
+    type,
+    payload: { chat_id: LEGACY_CHAT_ID, message_id: numericMessageId, emoji: normalizedEmoji },
+  }).then((result) => {
+    if (result.ok && type === "react") playChatSound("react");
+  });
 }
 
 function renderPokeButton(username: string): string {
@@ -2670,24 +2686,30 @@ async function uploadPendingAttachments(): Promise<{ ok: true; images: MediaAtta
   let video: MediaAttachment | null = null;
   for (const attachment of state.pendingAttachments) {
     if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
+    if (attachment.uploadedMedia) {
+      if (attachment.mimeType.startsWith("video/")) video = attachment.uploadedMedia;
+      else images.push(attachment.uploadedMedia);
+      continue;
+    }
     attachment.status = "uploading";
     render();
     const response = await runtimeSendMessage({
-      type: "reminetChat:uploadAttachment",
-      name: attachment.name,
+      type: "reminetChat:legacy:uploadAttachment",
       mimeType: attachment.mimeType,
       dataUrl: attachment.dataUrl,
-    }, "reminetChat:uploadAttachment").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+    }, "reminetChat:legacy:uploadAttachment").catch(() => null);
     if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
-    if (!response.ok) {
+    const outcome = parseLegacyMediaUploadOutcome(response);
+    if (!outcome || !outcome.ok) {
       attachment.status = "error";
-      return { ok: false, error: String(response.error || "Upload failed.") };
+      return { ok: false, error: legacyMediaFailureMessage(outcome?.error ?? "LEGACY_ADAPTER_UNAVAILABLE") };
     }
-    const media = normalizeMedia(response.media) || {};
+    const media = legacyMediaAttachment(outcome.media);
     if (mediaId(media) === null) {
       attachment.status = "error";
       return { ok: false, error: "RemiNet did not confirm the attachment. The image was not sent; try again." };
     }
+    attachment.uploadedMedia = media;
     if (attachment.mimeType.startsWith("video/")) video = media;
     else images.push(media);
   }

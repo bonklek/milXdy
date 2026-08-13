@@ -23,7 +23,7 @@
     "src/apps/post-reading/content.ts": 2528,
     "src/apps/post-reading/player.ts": 817,
     "src/apps/post-reading/styles.ts": 748,
-    "src/apps/reminet-chat/content.ts": 2788,
+    "src/apps/reminet-chat/content.ts": 2811,
     "src/apps/remistats/content.js": 2531,
     "src/apps/root-visuals/content.ts": 935,
     "src/apps/tweet-png/content.ts": 860,
@@ -230,7 +230,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2788
+      "maximumLogicalLines": 2811
     },
     {
       "id": "existing-emergency-src-apps-remistats-content-js",

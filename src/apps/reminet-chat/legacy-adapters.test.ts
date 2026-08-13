@@ -5,6 +5,7 @@ import {
   LEGACY_MEDIA_CONFIRM_URL,
   LEGACY_MEDIA_UPLOAD_URL,
   LEGACY_SOCKET_FRAME_MAX_BYTES,
+  LEGACY_SOCKET_IDLE_TIMEOUT_MS,
   LEGACY_SOCKET_URL,
   isAllowedLegacySender,
   isExactLegacyHttpEndpoint,
@@ -44,6 +45,7 @@ describe("legacy adapter registry", () => {
   });
 
   it("bounds extension-worker reconnect backoff", () => {
+    expect(LEGACY_SOCKET_IDLE_TIMEOUT_MS).toBe(70_000);
     expect([0, 1, 2, 3, 4, 5, 99].map(legacyPortReconnectDelay)).toEqual([500, 1_000, 2_500, 5_000, 10_000, 10_000, 10_000]);
   });
 });
@@ -98,6 +100,7 @@ describe("legacy sender and socket schemas", () => {
     expect(parseLegacySocketFrame(JSON.stringify({ type: "deliver", payload: {}, token: "secret" }))).toBeNull();
     expect(parseLegacySocketFrame("x".repeat(LEGACY_SOCKET_FRAME_MAX_BYTES + 1))).toBeNull();
     expect(parseLegacySocketBridgeEvent({ type: "socket:hint", event: "unknown", at: 123 })).toBeNull();
+    expect(parseLegacySocketBridgeEvent({ type: "socket:hint", event: "deliver", at: 123, body: "x".repeat(20_000) })).toBeNull();
     expect(parseLegacySocketBridgeEvent({ type: "socket:close", code: 1000, reason: "server leaked private reason", wasClean: true })).toBeNull();
   });
 });
@@ -120,6 +123,11 @@ describe("legacy media schemas and executor", () => {
     expect(decodeLegacyAttachmentDataUrl({ mimeType: "image/jpeg", dataUrl: pngDataUrl })).toEqual({
       ok: false,
       error: "ATTACHMENT_TYPE_MISMATCH",
+      retryable: false,
+    });
+    expect(decodeLegacyAttachmentDataUrl({ mimeType: "image/png", dataUrl: "data:image/png;base64," })).toEqual({
+      ok: false,
+      error: "INVALID_ATTACHMENT",
       retryable: false,
     });
   });
@@ -148,6 +156,7 @@ describe("legacy media schemas and executor", () => {
       retryable: true,
       rawBody: "private",
     })).toBeNull();
+    expect(parseLegacyMediaUploadOutcome({ ok: true, media: { mediaId: 5, mimeType: "image/png" } })).toBeNull();
   });
 
   it("uploads and confirms without returning the legacy token or raw response bodies", async () => {
@@ -164,15 +173,16 @@ describe("legacy media schemas and executor", () => {
         headers: { "content-type": "application/json" },
       }));
 
-    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock });
+    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
 
     expect(result).toEqual({
       ok: true,
       media: { mediaId: 42, mimeType: "image/png", url: "https://www.remilia.net/media/42.png", width: 2, height: 3 },
     });
     expect(JSON.stringify(result)).not.toContain("private-upload-token");
-    expect(fetchMock).toHaveBeenNthCalledWith(1, LEGACY_MEDIA_UPLOAD_URL, expect.objectContaining({ credentials: "include", redirect: "error" }));
-    expect(fetchMock).toHaveBeenNthCalledWith(2, LEGACY_MEDIA_CONFIRM_URL, expect.objectContaining({ credentials: "include", redirect: "error" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(1, LEGACY_MEDIA_UPLOAD_URL, expect.objectContaining({ credentials: "omit", redirect: "error", referrerPolicy: "no-referrer" }));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, LEGACY_MEDIA_CONFIRM_URL, expect.objectContaining({ credentials: "omit", redirect: "error", referrerPolicy: "no-referrer" }));
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ Authorization: "Bearer private-access-token" });
   });
 
   it("redacts rejected legacy response bodies", async () => {
@@ -184,7 +194,7 @@ describe("legacy media schemas and executor", () => {
       headers: { "content-type": "application/json" },
     }));
 
-    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock });
+    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
     expect(result).toEqual({ ok: false, error: "LEGACY_UPLOAD_REJECTED", retryable: true });
     expect(JSON.stringify(result)).not.toContain("private-token");
     expect(JSON.stringify(result)).not.toContain("private caption");
@@ -195,9 +205,37 @@ describe("legacy media schemas and executor", () => {
     const fetchMock = vi.fn<typeof fetch>((_url, init) => new Promise<Response>((_resolve, reject) => {
       init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
     }));
-    const pending = executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock });
+    const pending = executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
     await vi.advanceTimersByTimeAsync(30_000);
     await expect(pending).resolves.toEqual({ ok: false, error: "LEGACY_UPLOAD_TIMEOUT", retryable: true });
+  });
+
+  it("aborts a stalled confirmation at its independent typed deadline", async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ success: true, token: "private-upload-token" }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }))
+      .mockImplementationOnce((_url, init) => new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+      }));
+    const pending = executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
+    await vi.advanceTimersByTimeAsync(12_000);
+    await expect(pending).resolves.toEqual({ ok: false, error: "LEGACY_CONFIRM_TIMEOUT", retryable: true });
+  });
+
+  it("rejects oversized JSON without retaining its contents", async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({
+      success: true,
+      token: `private-${"x".repeat(70 * 1024)}`,
+    }), {
+      status: 200,
+      headers: { "content-type": "application/json" },
+    }));
+    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
+    expect(result).toEqual({ ok: false, error: "LEGACY_UPLOAD_RESPONSE_INVALID", retryable: false });
+    expect(JSON.stringify(result)).not.toContain("private-");
   });
 
   it("redacts a broken response stream behind a stable adapter failure", async () => {
@@ -210,7 +248,7 @@ describe("legacy media schemas and executor", () => {
       headers: { "content-type": "application/json" },
     }));
 
-    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock });
+    const result = await executeLegacyMediaUpload({ mimeType: "image/png", dataUrl: pngDataUrl }, { fetch: fetchMock, accessToken: "private-access-token" });
     expect(result).toEqual({ ok: false, error: "LEGACY_UPLOAD_REJECTED", retryable: true });
     expect(JSON.stringify(result)).not.toContain("private-token");
   });

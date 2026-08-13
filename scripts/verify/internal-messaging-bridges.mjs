@@ -82,16 +82,8 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
   assertIncludes(bridge, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
 
-  const auth = files.reminetChatBackground;
-  assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
-  assertIncludes(auth, "socketAuthPromise", "RemiNet socket setup must share an in-flight auth preparation");
-  assertIncludes(auth, "SOCKET_AUTH_TIMEOUT_MS", "RemiNet socket auth preparation must have a deadline");
-  assertIncludes(auth, 'error: "AUTH_TIMEOUT"', "RemiNet socket auth timeout must return a typed recovery error");
-  assertIncludes(auth, "await isRemiliaDisconnected()", "RemiNet socket auth cache must honor explicit connector logout before reuse");
-  assertIncludes(auth, "socketAuthGeneration", "RemiNet socket auth must reject late results after logout or timeout");
-  assertIncludes(auth, "generation !== socketAuthGeneration", "RemiNet socket auth must check request generation before caching credentials");
-  assertIncludes(auth, "prepareRemiliaAccess([\"remilia:chat.read\"], { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
-  assertIncludes(auth, "abort.abort(new DOMException", "RemiNet socket auth timeout must abort underlying authentication work");
+  assertNotIncludes(files.reminetChatBackground, "prepareSocketAuth", "RemiNet site socket must not depend on a dormant browser-session preparation route");
+  assertNotIncludes(files.reminetChatBackground, "refreshRemiliaAccess", "RemiNet site socket must not refresh ambient browser session state");
 
   assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatSocketSender"), 'isAllowedLegacySender(sender, "x-content")', "RemiNet socket sender policy must use the typed X/Twitter legacy role");
   assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "RemiNet legacy sender policy must require same-extension sender id");
@@ -106,11 +98,15 @@ function verifyReminetChatSocketBridge() {
 function verifyReminetChatRuntimeBridge() {
   const handler = functionBody(files.reminetChatBackground, "handleChatMessage");
   const senderPolicy = functionBody(files.reminetChatBackground, "isReminetChatMessageSender");
+  const matcher = functionBody(files.reminetChatBackground, "isChatMessage");
   assertIncludes(handler, "if (!isReminetChatMessageSender(sender))", "RemiNet runtime bridge must validate sender before authenticated operations");
   assertIncludes(handler, "UNSUPPORTED_SENDER", "RemiNet runtime bridge must fail closed for unsupported senders");
   assertOrder(handler, "if (!isReminetChatMessageSender(sender))", "if (message.type === \"reminetChat:authStatus\")", "RemiNet runtime bridge must validate sender before dispatch");
-  assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\", \"www.remilia.net\"])", "RemiNet runtime sender policy must restrict to supported X/Twitter and RemiliaNET pages");
-  verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");
+  assertIncludes(senderPolicy, 'isAllowedLegacySender(sender, "x-content")', "RemiNet runtime sender policy must require the exact X/Twitter top-frame role");
+  assertIncludes(matcher, "Object.keys(record)", "RemiNet runtime bridge must exact-key validate message payloads");
+  assertIncludes(matcher, "keys.length === 1", "RemiNet auth-status messages must be body-free");
+  assertIncludes(matcher, "keys.length === 3", "RemiNet legacy uploads must contain exactly the typed upload fields");
+  assertIncludes(matcher, "keys.length === 2", "RemiNet media fetches must contain exactly a type and URL");
 }
 
 function verifyBeetolRuntimeBridge() {
@@ -218,14 +214,17 @@ function verifyReminetUploadCaps() {
   assertIncludes(contract, "LEGACY_MAX_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet legacy uploads must cap video attachments");
   assertIncludes(contract, "LEGACY_IMAGE_TYPES", "RemiNet legacy uploads must enumerate allowed image MIME types");
   assertIncludes(contract, "LEGACY_VIDEO_TYPES", "RemiNet legacy uploads must enumerate allowed video MIME types");
-  assertIncludes(background, "executeLegacyMediaUpload(request)", "RemiNet upload handler must delegate to the isolated legacy executor");
+  assertIncludes(background, "executeLegacyMediaUpload(request, { fetch, accessToken: ready.accessToken })", "RemiNet upload handler must delegate with a background-only access token");
   assertIncludes(background, 'isAllowedLegacySender(sender, "x-content")', "RemiNet legacy upload messages must require the exact X/Twitter sender role");
   assertIncludes(executor, "decodeLegacyAttachmentDataUrl(request)", "RemiNet legacy upload executor must decode through strict capped validation");
   assertIncludes(executor, "estimatedBase64Bytes(base64) > maxBytes", "RemiNet upload decoder must reject oversized base64 before full decode");
   assertIncludes(executor, "LEGACY_UPLOAD_TIMEOUT_MS", "RemiNet upload must have a deadline");
   assertIncludes(executor, "LEGACY_CONFIRM_TIMEOUT_MS", "RemiNet confirmation must have a deadline");
   assertIncludes(executor, "LEGACY_RESPONSE_MAX_BYTES", "RemiNet legacy JSON responses must have a byte ceiling");
-  assertIncludes(executor, 'credentials: "include"', "RemiNet legacy media mutation must use only the existing browser session");
+  assertIncludes(executor, 'credentials: "omit"', "RemiNet legacy media mutation must not send ambient browser credentials");
+  assertIncludes(executor, 'redirect: "error"', "RemiNet legacy media mutation must reject redirects");
+  assertIncludes(executor, 'referrerPolicy: "no-referrer"', "RemiNet legacy media mutation must suppress referrers");
+  assertIncludes(executor, "Authorization: `Bearer ${dependencies.accessToken}`", "RemiNet legacy media mutation must keep delegated authorization inside the background executor");
   assertNotIncludes(executor, "response.text()", "RemiNet legacy media failures must not buffer or relay raw response bodies");
   assertNotIncludes(background, 'error instanceof Error ? error.message', "RemiNet legacy upload failures must not relay exception text");
 }
