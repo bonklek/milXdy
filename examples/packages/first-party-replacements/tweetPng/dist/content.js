@@ -2591,6 +2591,51 @@ function getTerminalLetterSpacing(prepared, startSegmentIndex, startGraphemeInde
 function finalizeLinePaintWidth(prepared, width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex) {
   return width + getTerminalLetterSpacing(prepared, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex);
 }
+function findChunkIndexForStart(prepared, segmentIndex) {
+  let lo = 0;
+  let hi = prepared.chunks.length;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (segmentIndex < prepared.chunks[mid].consumedEndSegmentIndex) {
+      hi = mid;
+    } else {
+      lo = mid + 1;
+    }
+  }
+  return lo < prepared.chunks.length ? lo : -1;
+}
+function normalizeLineStartInChunk(prepared, chunkIndex, cursor) {
+  let segmentIndex = cursor.segmentIndex;
+  if (cursor.graphemeIndex > 0)
+    return chunkIndex;
+  const chunk = prepared.chunks[chunkIndex];
+  if (chunk.startSegmentIndex === chunk.endSegmentIndex && segmentIndex === chunk.startSegmentIndex) {
+    cursor.segmentIndex = segmentIndex;
+    cursor.graphemeIndex = 0;
+    return chunkIndex;
+  }
+  if (segmentIndex < chunk.startSegmentIndex)
+    segmentIndex = chunk.startSegmentIndex;
+  segmentIndex = normalizeLineStartSegmentIndex(prepared, segmentIndex, chunk.endSegmentIndex);
+  if (segmentIndex < chunk.endSegmentIndex) {
+    cursor.segmentIndex = segmentIndex;
+    cursor.graphemeIndex = 0;
+    return chunkIndex;
+  }
+  if (chunk.consumedEndSegmentIndex >= prepared.widths.length)
+    return -1;
+  cursor.segmentIndex = chunk.consumedEndSegmentIndex;
+  cursor.graphemeIndex = 0;
+  return chunkIndex + 1;
+}
+function normalizePreparedLineStart(prepared, cursor) {
+  if (cursor.segmentIndex >= prepared.widths.length)
+    return -1;
+  const chunkIndex = findChunkIndexForStart(prepared, cursor.segmentIndex);
+  if (chunkIndex < 0)
+    return -1;
+  return normalizeLineStartInChunk(prepared, chunkIndex, cursor);
+}
 function walkPreparedLinesSimple(prepared, maxWidth, onLine) {
   const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared;
   if (widths.length === 0)
@@ -2956,6 +3001,301 @@ function walkPreparedLinesRaw(prepared, maxWidth, onLine) {
     }
   }
   return lineCount;
+}
+function stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth) {
+  const chunk = prepared.chunks[chunkIndex];
+  if (chunk.startSegmentIndex === chunk.endSegmentIndex) {
+    cursor.segmentIndex = chunk.consumedEndSegmentIndex;
+    cursor.graphemeIndex = 0;
+    return 0;
+  }
+  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks, discretionaryHyphenWidth } = prepared;
+  const engineProfile = getEngineProfile();
+  const lineFitEpsilon = engineProfile.lineFitEpsilon;
+  const fitLimit = maxWidth + lineFitEpsilon;
+  const lineStartSegmentIndex = cursor.segmentIndex;
+  const lineStartGraphemeIndex = cursor.graphemeIndex;
+  let lineW = 0;
+  let hasContent = false;
+  let lineEndSegmentIndex = cursor.segmentIndex;
+  let lineEndGraphemeIndex = cursor.graphemeIndex;
+  let pendingBreakSegmentIndex = -1;
+  let pendingBreakFitWidth = 0;
+  let pendingBreakPaintWidth = 0;
+  let pendingBreakKind = null;
+  function getCurrentLinePaintWidth() {
+    return pendingBreakKind === "soft-hyphen" && pendingBreakSegmentIndex === lineEndSegmentIndex && lineEndGraphemeIndex === 0 ? pendingBreakPaintWidth : lineW;
+  }
+  function finishLine(endSegmentIndex = lineEndSegmentIndex, endGraphemeIndex = lineEndGraphemeIndex, width = getCurrentLinePaintWidth()) {
+    if (!hasContent)
+      return null;
+    cursor.segmentIndex = endSegmentIndex;
+    cursor.graphemeIndex = endGraphemeIndex;
+    return finalizeLinePaintWidth(prepared, width, lineStartSegmentIndex, lineStartGraphemeIndex, endSegmentIndex, endGraphemeIndex);
+  }
+  function startLineAtSegment(segmentIndex, width) {
+    hasContent = true;
+    lineEndSegmentIndex = segmentIndex + 1;
+    lineEndGraphemeIndex = 0;
+    lineW = width;
+  }
+  function startLineAtGrapheme(segmentIndex, graphemeIndex, width) {
+    hasContent = true;
+    lineEndSegmentIndex = segmentIndex;
+    lineEndGraphemeIndex = graphemeIndex + 1;
+    lineW = width;
+  }
+  function appendWholeSegment(segmentIndex, advance) {
+    if (!hasContent) {
+      startLineAtSegment(segmentIndex, advance);
+      return;
+    }
+    lineW += advance;
+    lineEndSegmentIndex = segmentIndex + 1;
+    lineEndGraphemeIndex = 0;
+  }
+  function updatePendingBreakForWholeSegment(kind, breakAfter, segmentIndex, segmentWidth, leadingSpacing, advance) {
+    if (!breakAfter)
+      return;
+    const fitAdvance = getBreakOpportunityFitContribution(prepared, kind, segmentIndex, leadingSpacing);
+    const paintAdvance = getLineEndPaintContribution(prepared, kind, segmentIndex, leadingSpacing, segmentWidth);
+    pendingBreakSegmentIndex = segmentIndex + 1;
+    pendingBreakFitWidth = lineW - advance + fitAdvance;
+    pendingBreakPaintWidth = lineW - advance + paintAdvance;
+    pendingBreakKind = kind;
+  }
+  function appendBreakableSegmentFrom(segmentIndex, startGraphemeIndex) {
+    const fitAdvances = breakableFitAdvances[segmentIndex];
+    const preferredBreaks = breakablePreferredBreaks[segmentIndex] ?? null;
+    let preferredBreakIndex = preferredBreaks === null ? -1 : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1);
+    let lastPreferredBreakEnd = -1;
+    let lastPreferredBreakWidth = 0;
+    for (let g = startGraphemeIndex; g < fitAdvances.length; g++) {
+      const baseGw = fitAdvances[g];
+      if (!hasContent) {
+        startLineAtGrapheme(segmentIndex, g, baseGw);
+      } else {
+        const gw = getBreakableGraphemeAdvance(prepared, true, baseGw);
+        const candidatePaintWidth = lineW + gw;
+        if (getBreakableCandidateFitWidth(prepared, candidatePaintWidth) > fitLimit) {
+          if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
+            return finishLine(segmentIndex, lastPreferredBreakEnd, lastPreferredBreakWidth);
+          }
+          return finishLine();
+        }
+        lineW = candidatePaintWidth;
+        lineEndSegmentIndex = segmentIndex;
+        lineEndGraphemeIndex = g + 1;
+      }
+      const graphemeEnd = g + 1;
+      if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === graphemeEnd) {
+        lastPreferredBreakEnd = graphemeEnd;
+        lastPreferredBreakWidth = lineW;
+        preferredBreakIndex++;
+      }
+    }
+    if (hasContent && lineEndSegmentIndex === segmentIndex && lineEndGraphemeIndex === fitAdvances.length) {
+      lineEndSegmentIndex = segmentIndex + 1;
+      lineEndGraphemeIndex = 0;
+    }
+    return null;
+  }
+  function maybeFinishAtSoftHyphen() {
+    if (pendingBreakKind !== "soft-hyphen" || pendingBreakSegmentIndex < 0)
+      return null;
+    if (pendingBreakFitWidth <= fitLimit) {
+      return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth);
+    }
+    return null;
+  }
+  for (let i = cursor.segmentIndex; i < chunk.endSegmentIndex; i++) {
+    const kind = kinds[i];
+    const breakAfter = breaksAfter(kind);
+    const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0;
+    const leadingSpacing = getLeadingLetterSpacing(prepared, hasContent, i);
+    const w = kind === "tab" ? getTabAdvance(lineW + leadingSpacing, prepared.tabStopAdvance) : widths[i];
+    const advance = leadingSpacing + w;
+    const fitAdvance = getWholeSegmentFitContribution(prepared, kind, i, leadingSpacing, w);
+    if (kind === "soft-hyphen" && startGraphemeIndex === 0) {
+      if (hasContent) {
+        lineEndSegmentIndex = i + 1;
+        lineEndGraphemeIndex = 0;
+        pendingBreakSegmentIndex = i + 1;
+        pendingBreakFitWidth = lineW + discretionaryHyphenWidth;
+        pendingBreakPaintWidth = lineW + discretionaryHyphenWidth;
+        pendingBreakKind = kind;
+      }
+      continue;
+    }
+    if (!hasContent) {
+      if (startGraphemeIndex > 0) {
+        const line = appendBreakableSegmentFrom(i, startGraphemeIndex);
+        if (line !== null)
+          return line;
+      } else if (fitAdvance > fitLimit && breakableFitAdvances[i] !== null) {
+        const line = appendBreakableSegmentFrom(i, 0);
+        if (line !== null)
+          return line;
+      } else {
+        startLineAtSegment(i, w);
+      }
+      updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance);
+      continue;
+    }
+    const newFitW = lineW + fitAdvance;
+    if (newFitW > fitLimit) {
+      const currentBreakFitWidth = lineW + getBreakOpportunityFitContribution(prepared, kind, i, leadingSpacing);
+      const currentBreakPaintWidth = lineW + getLineEndPaintContribution(prepared, kind, i, leadingSpacing, w);
+      if (pendingBreakKind === "soft-hyphen" && engineProfile.preferEarlySoftHyphenBreak && pendingBreakFitWidth <= fitLimit) {
+        return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth);
+      }
+      const softBreakLine = maybeFinishAtSoftHyphen();
+      if (softBreakLine !== null)
+        return softBreakLine;
+      if (breakAfter && currentBreakFitWidth <= fitLimit) {
+        appendWholeSegment(i, advance);
+        return finishLine(i + 1, 0, currentBreakPaintWidth);
+      }
+      if (pendingBreakSegmentIndex >= 0 && pendingBreakFitWidth <= fitLimit) {
+        if (lineEndSegmentIndex > pendingBreakSegmentIndex || lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0) {
+          return finishLine();
+        }
+        return finishLine(pendingBreakSegmentIndex, 0, pendingBreakPaintWidth);
+      }
+      if (fitAdvance > fitLimit && breakableFitAdvances[i] !== null) {
+        const currentLine = finishLine();
+        if (currentLine !== null)
+          return currentLine;
+        const line = appendBreakableSegmentFrom(i, 0);
+        if (line !== null)
+          return line;
+      }
+      return finishLine();
+    }
+    appendWholeSegment(i, advance);
+    updatePendingBreakForWholeSegment(kind, breakAfter, i, w, leadingSpacing, advance);
+  }
+  if (pendingBreakSegmentIndex === chunk.consumedEndSegmentIndex && lineEndGraphemeIndex === 0) {
+    return finishLine(chunk.consumedEndSegmentIndex, 0, pendingBreakPaintWidth);
+  }
+  return finishLine(chunk.consumedEndSegmentIndex, 0, lineW);
+}
+function stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth) {
+  const { widths, kinds, breakableFitAdvances, breakablePreferredBreaks } = prepared;
+  const engineProfile = getEngineProfile();
+  const lineFitEpsilon = engineProfile.lineFitEpsilon;
+  const fitLimit = maxWidth + lineFitEpsilon;
+  let lineW = 0;
+  let hasContent = false;
+  let lineEndSegmentIndex = cursor.segmentIndex;
+  let lineEndGraphemeIndex = cursor.graphemeIndex;
+  let pendingBreakSegmentIndex = -1;
+  let pendingBreakPaintWidth = 0;
+  for (let i = cursor.segmentIndex; i < widths.length; i++) {
+    const kind = kinds[i];
+    const breakAfter = breaksAfter(kind);
+    const startGraphemeIndex = i === cursor.segmentIndex ? cursor.graphemeIndex : 0;
+    const breakableFitAdvance = breakableFitAdvances[i];
+    const w = widths[i];
+    if (!hasContent) {
+      if (startGraphemeIndex > 0 || w > fitLimit && breakableFitAdvance !== null) {
+        const fitAdvances = breakableFitAdvance;
+        const preferredBreaks = breakablePreferredBreaks[i] ?? null;
+        let preferredBreakIndex = preferredBreaks === null ? -1 : getNextPreferredBreakIndex(preferredBreaks, 0, startGraphemeIndex + 1);
+        let lastPreferredBreakEnd = -1;
+        let lastPreferredBreakWidth = 0;
+        const firstGraphemeWidth = fitAdvances[startGraphemeIndex];
+        hasContent = true;
+        lineW = firstGraphemeWidth;
+        lineEndSegmentIndex = i;
+        lineEndGraphemeIndex = startGraphemeIndex + 1;
+        if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
+          lastPreferredBreakEnd = lineEndGraphemeIndex;
+          lastPreferredBreakWidth = lineW;
+          preferredBreakIndex++;
+        }
+        for (let g = startGraphemeIndex + 1; g < fitAdvances.length; g++) {
+          const gw = fitAdvances[g];
+          if (lineW + gw > fitLimit) {
+            if (preferredBreaks !== null && lastPreferredBreakEnd > startGraphemeIndex) {
+              cursor.segmentIndex = i;
+              cursor.graphemeIndex = lastPreferredBreakEnd;
+              return lastPreferredBreakWidth;
+            }
+            cursor.segmentIndex = lineEndSegmentIndex;
+            cursor.graphemeIndex = lineEndGraphemeIndex;
+            return lineW;
+          }
+          lineW += gw;
+          lineEndSegmentIndex = i;
+          lineEndGraphemeIndex = g + 1;
+          if (preferredBreaks !== null && preferredBreaks[preferredBreakIndex] === lineEndGraphemeIndex) {
+            lastPreferredBreakEnd = lineEndGraphemeIndex;
+            lastPreferredBreakWidth = lineW;
+            preferredBreakIndex++;
+          }
+        }
+        if (lineEndSegmentIndex === i && lineEndGraphemeIndex === fitAdvances.length) {
+          lineEndSegmentIndex = i + 1;
+          lineEndGraphemeIndex = 0;
+        }
+      } else {
+        hasContent = true;
+        lineW = w;
+        lineEndSegmentIndex = i + 1;
+        lineEndGraphemeIndex = 0;
+      }
+      if (breakAfter) {
+        pendingBreakSegmentIndex = i + 1;
+        pendingBreakPaintWidth = lineW - w;
+      }
+      continue;
+    }
+    if (lineW + w > fitLimit) {
+      if (breakAfter) {
+        cursor.segmentIndex = i + 1;
+        cursor.graphemeIndex = 0;
+        return lineW;
+      }
+      if (pendingBreakSegmentIndex >= 0) {
+        if (lineEndSegmentIndex > pendingBreakSegmentIndex || lineEndSegmentIndex === pendingBreakSegmentIndex && lineEndGraphemeIndex > 0) {
+          cursor.segmentIndex = lineEndSegmentIndex;
+          cursor.graphemeIndex = lineEndGraphemeIndex;
+          return lineW;
+        }
+        cursor.segmentIndex = pendingBreakSegmentIndex;
+        cursor.graphemeIndex = 0;
+        return pendingBreakPaintWidth;
+      }
+      cursor.segmentIndex = lineEndSegmentIndex;
+      cursor.graphemeIndex = lineEndGraphemeIndex;
+      return lineW;
+    }
+    lineW += w;
+    lineEndSegmentIndex = i + 1;
+    lineEndGraphemeIndex = 0;
+    if (breakAfter) {
+      pendingBreakSegmentIndex = i + 1;
+      pendingBreakPaintWidth = lineW - w;
+    }
+  }
+  if (!hasContent)
+    return null;
+  cursor.segmentIndex = lineEndSegmentIndex;
+  cursor.graphemeIndex = lineEndGraphemeIndex;
+  return lineW;
+}
+function stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth) {
+  if (prepared.simpleLineWalkFastPath) {
+    return stepPreparedSimpleLineGeometry(prepared, cursor, maxWidth);
+  }
+  return stepPreparedChunkLineGeometry(prepared, cursor, chunkIndex, maxWidth);
+}
+function stepPreparedLineGeometry(prepared, cursor, maxWidth) {
+  const chunkIndex = normalizePreparedLineStart(prepared, cursor);
+  if (chunkIndex < 0)
+    return null;
+  return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth);
 }
 
 // node_modules/@chenglou/pretext/dist/line-text.js
@@ -3359,6 +3699,14 @@ function createLayoutLine(prepared, cache, width, startSegmentIndex, startGraphe
     }
   };
 }
+function measureNaturalWidth(prepared) {
+  let maxWidth = 0;
+  walkPreparedLinesRaw(getInternalPrepared(prepared), Number.POSITIVE_INFINITY, (width) => {
+    if (width > maxWidth)
+      maxWidth = width;
+  });
+  return maxWidth;
+}
 function layoutWithLines(prepared, maxWidth, lineHeight) {
   const lines = [];
   if (prepared.widths.length === 0)
@@ -3368,6 +3716,256 @@ function layoutWithLines(prepared, maxWidth, lineHeight) {
     lines.push(createLayoutLine(prepared, graphemeCache, width, startSegmentIndex, startGraphemeIndex, endSegmentIndex, endGraphemeIndex));
   });
   return { lineCount, height: lineCount * lineHeight, lines };
+}
+
+// node_modules/@chenglou/pretext/dist/rich-inline.js
+var COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+/;
+var LEADING_COLLAPSIBLE_BOUNDARY_RE = /^[ \t\n\f\r]+/;
+var TRAILING_COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+$/;
+var EMPTY_LAYOUT_CURSOR = { segmentIndex: 0, graphemeIndex: 0 };
+var RICH_INLINE_START_CURSOR = {
+  itemIndex: 0,
+  segmentIndex: 0,
+  graphemeIndex: 0
+};
+function getInternalPreparedRichInline(prepared) {
+  return prepared;
+}
+function cloneCursor(cursor) {
+  return {
+    segmentIndex: cursor.segmentIndex,
+    graphemeIndex: cursor.graphemeIndex
+  };
+}
+function isLineStartCursor(cursor) {
+  return cursor.segmentIndex === 0 && cursor.graphemeIndex === 0;
+}
+function getCollapsedSpaceWidth(font, letterSpacing, cache) {
+  const cacheKey = `${font}\0${letterSpacing}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== void 0)
+    return cached;
+  const options = letterSpacing === 0 ? void 0 : { letterSpacing };
+  const joinedWidth = measureNaturalWidth(prepareWithSegments("A A", font, options));
+  const compactWidth = measureNaturalWidth(prepareWithSegments("AA", font, options));
+  const collapsedWidth = Math.max(0, joinedWidth - compactWidth);
+  cache.set(cacheKey, collapsedWidth);
+  return collapsedWidth;
+}
+function prepareWholeItemLine(prepared) {
+  const end = { segmentIndex: 0, graphemeIndex: 0 };
+  const width = stepPreparedLineGeometry(prepared, end, Number.POSITIVE_INFINITY);
+  if (width === null)
+    return null;
+  return {
+    endGraphemeIndex: end.graphemeIndex,
+    endSegmentIndex: end.segmentIndex,
+    width
+  };
+}
+function endsInsideFirstSegment(segmentIndex, graphemeIndex) {
+  return segmentIndex === 0 && graphemeIndex > 0;
+}
+function prepareRichInline(items) {
+  const preparedItems = [];
+  const itemsBySourceItemIndex = Array.from({ length: items.length });
+  const collapsedSpaceWidthCache = /* @__PURE__ */ new Map();
+  let pendingGapWidth = 0;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const letterSpacing = item.letterSpacing ?? 0;
+    const hasLeadingWhitespace = LEADING_COLLAPSIBLE_BOUNDARY_RE.test(item.text);
+    const hasTrailingWhitespace = TRAILING_COLLAPSIBLE_BOUNDARY_RE.test(item.text);
+    const trimmedText = item.text.replace(LEADING_COLLAPSIBLE_BOUNDARY_RE, "").replace(TRAILING_COLLAPSIBLE_BOUNDARY_RE, "");
+    if (trimmedText.length === 0) {
+      if (COLLAPSIBLE_BOUNDARY_RE.test(item.text) && pendingGapWidth === 0) {
+        pendingGapWidth = getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache);
+      }
+      continue;
+    }
+    const gapBefore = pendingGapWidth > 0 ? pendingGapWidth : hasLeadingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+    const prepared = prepareWithSegments(trimmedText, item.font, letterSpacing === 0 ? void 0 : { letterSpacing });
+    const wholeLine = prepareWholeItemLine(prepared);
+    if (wholeLine === null) {
+      pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+      continue;
+    }
+    const preparedItem = {
+      break: item.break ?? "normal",
+      endGraphemeIndex: wholeLine.endGraphemeIndex,
+      endSegmentIndex: wholeLine.endSegmentIndex,
+      extraWidth: item.extraWidth ?? 0,
+      gapBefore,
+      naturalWidth: wholeLine.width,
+      prepared,
+      sourceItemIndex: index
+    };
+    preparedItems.push(preparedItem);
+    itemsBySourceItemIndex[index] = preparedItem;
+    pendingGapWidth = hasTrailingWhitespace ? getCollapsedSpaceWidth(item.font, letterSpacing, collapsedSpaceWidthCache) : 0;
+  }
+  return {
+    items: preparedItems,
+    itemsBySourceItemIndex
+  };
+}
+function stepRichInlineLine(flow, maxWidth, cursor, collectFragment) {
+  if (flow.items.length === 0 || cursor.itemIndex >= flow.items.length)
+    return null;
+  const safeWidth = Math.max(1, maxWidth);
+  let lineWidth = 0;
+  let remainingWidth = safeWidth;
+  let itemIndex = cursor.itemIndex;
+  lineLoop: while (itemIndex < flow.items.length) {
+    const item = flow.items[itemIndex];
+    if (!isLineStartCursor(cursor) && cursor.segmentIndex === item.endSegmentIndex && cursor.graphemeIndex === item.endGraphemeIndex) {
+      itemIndex++;
+      cursor.segmentIndex = 0;
+      cursor.graphemeIndex = 0;
+      continue;
+    }
+    const gapBefore = lineWidth === 0 ? 0 : item.gapBefore;
+    const atItemStart = isLineStartCursor(cursor);
+    if (item.break === "never") {
+      if (!atItemStart) {
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+      const occupiedWidth = item.naturalWidth + item.extraWidth;
+      const totalWidth = gapBefore + occupiedWidth;
+      if (lineWidth > 0 && totalWidth > remainingWidth)
+        break lineLoop;
+      collectFragment?.(item, gapBefore, occupiedWidth, cloneCursor(EMPTY_LAYOUT_CURSOR), {
+        segmentIndex: item.endSegmentIndex,
+        graphemeIndex: item.endGraphemeIndex
+      });
+      lineWidth += totalWidth;
+      remainingWidth = Math.max(0, safeWidth - lineWidth);
+      itemIndex++;
+      cursor.segmentIndex = 0;
+      cursor.graphemeIndex = 0;
+      continue;
+    }
+    const reservedWidth = gapBefore + item.extraWidth;
+    if (lineWidth > 0 && reservedWidth >= remainingWidth)
+      break lineLoop;
+    if (atItemStart) {
+      const totalWidth = reservedWidth + item.naturalWidth;
+      if (totalWidth <= remainingWidth) {
+        collectFragment?.(item, gapBefore, item.naturalWidth + item.extraWidth, cloneCursor(EMPTY_LAYOUT_CURSOR), {
+          segmentIndex: item.endSegmentIndex,
+          graphemeIndex: item.endGraphemeIndex
+        });
+        lineWidth += totalWidth;
+        remainingWidth = Math.max(0, safeWidth - lineWidth);
+        itemIndex++;
+        cursor.segmentIndex = 0;
+        cursor.graphemeIndex = 0;
+        continue;
+      }
+    }
+    const availableWidth = Math.max(1, remainingWidth - reservedWidth);
+    const lineEnd = {
+      segmentIndex: cursor.segmentIndex,
+      graphemeIndex: cursor.graphemeIndex
+    };
+    const lineWidthForItem = stepPreparedLineGeometry(item.prepared, lineEnd, availableWidth);
+    if (lineWidthForItem === null) {
+      itemIndex++;
+      cursor.segmentIndex = 0;
+      cursor.graphemeIndex = 0;
+      continue;
+    }
+    if (cursor.segmentIndex === lineEnd.segmentIndex && cursor.graphemeIndex === lineEnd.graphemeIndex) {
+      itemIndex++;
+      cursor.segmentIndex = 0;
+      cursor.graphemeIndex = 0;
+      continue;
+    }
+    const itemOccupiedWidth = lineWidthForItem + item.extraWidth;
+    const lineWidthContribution = gapBefore + itemOccupiedWidth;
+    if (lineWidth > 0 && atItemStart && lineWidthContribution > remainingWidth)
+      break lineLoop;
+    if (lineWidth > 0 && atItemStart && gapBefore > 0 && endsInsideFirstSegment(lineEnd.segmentIndex, lineEnd.graphemeIndex)) {
+      const freshLineEnd = { segmentIndex: 0, graphemeIndex: 0 };
+      const freshLineWidth = stepPreparedLineGeometry(item.prepared, freshLineEnd, Math.max(1, safeWidth - item.extraWidth));
+      if (freshLineWidth !== null && (freshLineEnd.segmentIndex > lineEnd.segmentIndex || freshLineEnd.segmentIndex === lineEnd.segmentIndex && freshLineEnd.graphemeIndex > lineEnd.graphemeIndex)) {
+        break lineLoop;
+      }
+    }
+    collectFragment?.(item, gapBefore, itemOccupiedWidth, cloneCursor(cursor), {
+      segmentIndex: lineEnd.segmentIndex,
+      graphemeIndex: lineEnd.graphemeIndex
+    });
+    lineWidth += lineWidthContribution;
+    remainingWidth = Math.max(0, safeWidth - lineWidth);
+    if (lineEnd.segmentIndex === item.endSegmentIndex && lineEnd.graphemeIndex === item.endGraphemeIndex) {
+      itemIndex++;
+      cursor.segmentIndex = 0;
+      cursor.graphemeIndex = 0;
+      continue;
+    }
+    cursor.segmentIndex = lineEnd.segmentIndex;
+    cursor.graphemeIndex = lineEnd.graphemeIndex;
+    break;
+  }
+  if (lineWidth === 0)
+    return null;
+  cursor.itemIndex = itemIndex;
+  return lineWidth;
+}
+function layoutNextRichInlineLineRange(prepared, maxWidth, start = RICH_INLINE_START_CURSOR) {
+  const flow = getInternalPreparedRichInline(prepared);
+  const end = {
+    itemIndex: start.itemIndex,
+    segmentIndex: start.segmentIndex,
+    graphemeIndex: start.graphemeIndex
+  };
+  const fragments = [];
+  const width = stepRichInlineLine(flow, maxWidth, end, (item, gapBefore, occupiedWidth, fragmentStart, fragmentEnd) => {
+    fragments.push({
+      itemIndex: item.sourceItemIndex,
+      gapBefore,
+      occupiedWidth,
+      start: fragmentStart,
+      end: fragmentEnd
+    });
+  });
+  if (width === null)
+    return null;
+  return {
+    fragments,
+    width,
+    end
+  };
+}
+function materializeFragmentText(item, fragment) {
+  return buildLineTextFromRange(item.prepared, getLineTextCache(item.prepared), fragment.start.segmentIndex, fragment.start.graphemeIndex, fragment.end.segmentIndex, fragment.end.graphemeIndex);
+}
+function materializeRichInlineLineRange(prepared, line) {
+  const flow = getInternalPreparedRichInline(prepared);
+  const fragments = [];
+  for (let i = 0; i < line.fragments.length; i++) {
+    const fragment = line.fragments[i];
+    const item = flow.itemsBySourceItemIndex[fragment.itemIndex];
+    if (item === void 0)
+      throw new Error("Missing rich-text inline item for fragment");
+    fragments.push({
+      itemIndex: fragment.itemIndex,
+      text: materializeFragmentText(item, fragment),
+      gapBefore: fragment.gapBefore,
+      occupiedWidth: fragment.occupiedWidth,
+      start: fragment.start,
+      end: fragment.end
+    });
+  }
+  return {
+    fragments,
+    width: line.width,
+    end: line.end
+  };
 }
 
 // examples/packages/first-party-replacements/tweetPng/src/text-layout.ts
@@ -3418,6 +4016,23 @@ function layoutTweetPngPlainText(context, text, options) {
     style: resolved.baseStyle
   });
 }
+function layoutTweetPngRichInlineBlocks(context, blocks, options) {
+  const resolved = resolveOptions(options);
+  const fallbackFont = tweetPngTextFont(resolved.fontFamily, resolved.fontSize, resolved.baseStyle);
+  const lines = [];
+  for (const block of blocks) {
+    const logicalLines = splitRunsAtHardBreaks(block.runs);
+    for (let index = 0; index < logicalLines.length; index++) {
+      const bullet = index === 0 ? block.bullet : void 0;
+      lines.push(...layoutRichLogicalLine(context, logicalLines[index], resolved, bullet));
+    }
+  }
+  if (!lines.length) lines.push(blankLine());
+  return limitTweetPngTextLayout(context, { lines, truncated: false, safeWidth: resolved.safeWidth }, resolved.maxLines, {
+    font: fallbackFont,
+    style: resolved.baseStyle
+  });
+}
 function limitTweetPngTextLayout(context, layout, maxLines, fallback) {
   const limit = Math.max(0, Math.floor(maxLines));
   if (layout.lines.length <= limit) {
@@ -3431,6 +4046,89 @@ function limitTweetPngTextLayout(context, layout, maxLines, fallback) {
   const lines = layout.lines.slice(0, limit).map(cloneLine);
   lines[lines.length - 1] = ellipsizeLine(context, lines[lines.length - 1], layout.safeWidth, fallback);
   return { lines, truncated: true, safeWidth: layout.safeWidth };
+}
+function layoutRichLogicalLine(context, runs, options, bullet) {
+  const resolvedRuns = coalesceRuns(runs, options.baseStyle, options.fontFor);
+  const markerStyle = options.baseStyle;
+  const markerFont = tweetPngTextFont(options.fontFamily, options.fontSize, markerStyle);
+  const markerWidth = bullet ? measureCanvasText(context, bullet.marker, markerFont) : 0;
+  const defaultIndent = bullet ? markerWidth + (bullet.gap ?? Math.max(8, options.fontSize * 0.35)) : 0;
+  const firstIndent = Math.max(0, bullet?.firstLineIndent ?? defaultIndent);
+  const restIndent = Math.max(0, bullet?.restLineIndent ?? defaultIndent);
+  if (!resolvedRuns.length || resolvedRuns.every((run) => /^[\t\f ]*$/u.test(run.text))) {
+    const fragments = bullet ? [bulletFragment(bullet.marker, markerWidth, markerFont, markerStyle)] : [];
+    return [{
+      width: fragments.length ? markerWidth : 0,
+      fragments,
+      truncated: false,
+      textStartX: firstIndent
+    }];
+  }
+  const prepared = prepareRichInline(resolvedRuns.map((run) => ({
+    text: run.text,
+    font: run.font
+  })));
+  const lines = [];
+  let cursor;
+  let lineIndex = 0;
+  while (true) {
+    const indent = lineIndex === 0 ? firstIndent : restIndent;
+    const range = layoutNextRichInlineLineRange(prepared, Math.max(1, options.safeWidth - indent), cursor);
+    if (range === null) break;
+    const materialized = materializeRichInlineLineRange(prepared, range);
+    const fragments = [];
+    if (lineIndex === 0 && bullet) {
+      fragments.push(bulletFragment(bullet.marker, markerWidth, markerFont, markerStyle));
+    }
+    let x = indent;
+    for (const fragment of materialized.fragments) {
+      const run = resolvedRuns[fragment.itemIndex];
+      x += fragment.gapBefore;
+      fragments.push({
+        text: fragment.text,
+        x,
+        width: fragment.occupiedWidth,
+        font: run.font,
+        style: run.style,
+        role: "text"
+      });
+      x += fragment.occupiedWidth;
+    }
+    lines.push({
+      width: Math.max(lineIndex === 0 && bullet ? markerWidth : 0, indent + materialized.width),
+      fragments,
+      truncated: false,
+      textStartX: indent
+    });
+    cursor = range.end;
+    lineIndex++;
+  }
+  return lines.length ? lines : [blankLine()];
+}
+function coalesceRuns(runs, baseStyle, fontFor) {
+  const resolved = [];
+  for (const run of runs) {
+    if (!run.text) continue;
+    const style = resolveStyle(run.style, baseStyle);
+    const previous = resolved[resolved.length - 1];
+    if (previous && stylesEqual(previous.style, style)) {
+      previous.text += run.text;
+      continue;
+    }
+    resolved.push({ text: run.text, style, font: fontFor(style) });
+  }
+  return resolved;
+}
+function splitRunsAtHardBreaks(runs) {
+  const lines = [[]];
+  for (const run of runs) {
+    const parts = normalizeHardBreaks(run.text).split("\n");
+    for (let index = 0; index < parts.length; index++) {
+      if (parts[index]) lines[lines.length - 1].push({ text: parts[index], style: run.style });
+      if (index < parts.length - 1) lines.push([]);
+    }
+  }
+  return lines;
 }
 function resolveOptions(options) {
   const baseStyle = resolveStyle(options.baseStyle, DEFAULT_STYLE);
@@ -3449,6 +4147,9 @@ function resolveStyle(style, base) {
     fontStyle: style?.fontStyle ?? base.fontStyle,
     strikethrough: style?.strikethrough ?? base.strikethrough
   };
+}
+function stylesEqual(left, right) {
+  return left.fontWeight === right.fontWeight && left.fontStyle === right.fontStyle && left.strikethrough === right.strikethrough;
 }
 function ellipsizeLine(context, line, maxWidth, fallback) {
   const fragments = line.fragments.map(cloneFragment);
@@ -3521,11 +4222,229 @@ function normalizeHardBreaks(text) {
 function blankLine() {
   return { width: 0, fragments: [], truncated: false, textStartX: 0 };
 }
+function bulletFragment(marker, width, font, style) {
+  return { text: marker, x: 0, width, font, style, role: "bullet" };
+}
 function cloneLine(line) {
   return { ...line, fragments: line.fragments.map(cloneFragment) };
 }
 function cloneFragment(fragment) {
   return { ...fragment, style: { ...fragment.style } };
+}
+
+// examples/packages/first-party-replacements/tweetPng/src/rich-text.ts
+var STYLE_BITS = {
+  bold: 1,
+  italic: 2,
+  strikethrough: 4
+};
+function createTweetPngRichText(text) {
+  return {
+    text: normalizeEditorText(text),
+    spans: [],
+    bulletLineStarts: []
+  };
+}
+function toggleTweetPngInlineStyle(value, selectionStart, selectionEnd, style) {
+  const range = effectiveInlineRange(value.text, selectionStart, selectionEnd);
+  if (range.start === range.end) return value;
+  const masks = styleMasks(value);
+  const bit = STYLE_BITS[style];
+  const indexes = selectedTextIndexes(value.text, range.start, range.end);
+  if (!indexes.length) return value;
+  const remove = indexes.every((index) => Boolean(masks[index] & bit));
+  for (const index of indexes) {
+    masks[index] = remove ? masks[index] & ~bit : masks[index] | bit;
+  }
+  return { ...value, spans: spansFromStyleMasks(masks) };
+}
+function selectionHasTweetPngInlineStyle(value, selectionStart, selectionEnd, style) {
+  const range = effectiveInlineRange(value.text, selectionStart, selectionEnd);
+  const indexes = selectedTextIndexes(value.text, range.start, range.end);
+  if (!indexes.length) return false;
+  const masks = styleMasks(value);
+  const bit = STYLE_BITS[style];
+  return indexes.every((index) => Boolean(masks[index] & bit));
+}
+function toggleTweetPngBullets(value, selectionStart, selectionEnd) {
+  const starts = selectedLineStarts(value.text, selectionStart, selectionEnd);
+  const bullets = new Set(value.bulletLineStarts);
+  const remove = starts.every((start) => bullets.has(start));
+  for (const start of starts) {
+    if (remove) bullets.delete(start);
+    else bullets.add(start);
+  }
+  return { ...value, bulletLineStarts: sortedValidLineStarts(value.text, bullets) };
+}
+function selectionHasTweetPngBullets(value, selectionStart, selectionEnd) {
+  const bullets = new Set(value.bulletLineStarts);
+  const starts = selectedLineStarts(value.text, selectionStart, selectionEnd);
+  return starts.length > 0 && starts.every((start) => bullets.has(start));
+}
+function clearTweetPngFormatting(value, selectionStart, selectionEnd) {
+  const range = normalizedRange(value.text, selectionStart, selectionEnd);
+  const clearStart = range.start === range.end ? lineStartAt(value.text, range.start) : range.start;
+  const clearEnd = range.start === range.end ? lineEndAt(value.text, range.end) : range.end;
+  const masks = styleMasks(value);
+  for (let index = clearStart; index < clearEnd; index += 1) masks[index] = 0;
+  const selectedLines = new Set(selectedLineStarts(value.text, clearStart, clearEnd));
+  return {
+    ...value,
+    spans: spansFromStyleMasks(masks),
+    bulletLineStarts: value.bulletLineStarts.filter((start) => !selectedLines.has(start))
+  };
+}
+function reconcileTweetPngRichText(value, nextText) {
+  const normalized = normalizeEditorText(nextText);
+  if (normalized === value.text) return value;
+  const previous = value.text;
+  let prefix = 0;
+  while (prefix < previous.length && prefix < normalized.length && previous[prefix] === normalized[prefix]) prefix += 1;
+  let suffix = 0;
+  while (suffix < previous.length - prefix && suffix < normalized.length - prefix && previous[previous.length - 1 - suffix] === normalized[normalized.length - 1 - suffix]) suffix += 1;
+  const oldSuffixStart = previous.length - suffix;
+  const newSuffixStart = normalized.length - suffix;
+  const oldMasks = styleMasks(value);
+  const inheritedMask = insertionStyleMask(oldMasks, previous, prefix, oldSuffixStart);
+  const insertedMasks = Array.from({ length: newSuffixStart - prefix }, (_, offset) => normalized[prefix + offset] === "\n" ? 0 : inheritedMask);
+  const nextMasks = [
+    ...oldMasks.slice(0, prefix),
+    ...insertedMasks,
+    ...oldMasks.slice(oldSuffixStart)
+  ];
+  const oldBullets = new Set(value.bulletLineStarts);
+  const nextBullets = lineStarts(normalized).filter((start) => {
+    let oldProbe;
+    if (start <= prefix) oldProbe = start;
+    else if (start >= newSuffixStart) oldProbe = start - (normalized.length - previous.length);
+    else oldProbe = prefix;
+    return oldBullets.has(lineStartAt(previous, oldProbe));
+  });
+  return {
+    text: normalized,
+    spans: spansFromStyleMasks(nextMasks),
+    bulletLineStarts: nextBullets
+  };
+}
+function tweetPngRichTextLines(value) {
+  const masks = styleMasks(value);
+  const bullets = new Set(value.bulletLineStarts);
+  return lineStarts(value.text).map((start, index, starts) => {
+    const rawEnd = index + 1 < starts.length ? starts[index + 1] - 1 : value.text.length;
+    const end = Math.max(start, rawEnd);
+    const runs = [];
+    let cursor = start;
+    while (cursor < end) {
+      const mask = masks[cursor] || 0;
+      let runEnd = cursor + 1;
+      while (runEnd < end && (masks[runEnd] || 0) === mask) runEnd += 1;
+      runs.push(runFromMask(value.text.slice(cursor, runEnd), mask));
+      cursor = runEnd;
+    }
+    if (!runs.length) runs.push(runFromMask("", 0));
+    return { bullet: bullets.has(start), runs };
+  });
+}
+function isTweetPngRichTextPristine(value, originalText) {
+  return value.text === normalizeEditorText(originalText) && value.spans.length === 0 && value.bulletLineStarts.length === 0;
+}
+function normalizeEditorText(text) {
+  return text.replace(/\r\n?/g, "\n");
+}
+function normalizedRange(text, start, end) {
+  const boundedStart = Math.max(0, Math.min(text.length, Math.trunc(start) || 0));
+  const boundedEnd = Math.max(0, Math.min(text.length, Math.trunc(end) || 0));
+  return boundedStart <= boundedEnd ? { start: boundedStart, end: boundedEnd } : { start: boundedEnd, end: boundedStart };
+}
+function effectiveInlineRange(text, start, end) {
+  const range = normalizedRange(text, start, end);
+  if (range.start !== range.end) return range;
+  if (!text || /^\s$/u.test(text[range.start] || "") && /^\s$/u.test(text[range.start - 1] || "")) return range;
+  let wordStart = range.start;
+  if (wordStart === text.length || /^\s$/u.test(text[wordStart] || "")) wordStart -= 1;
+  while (wordStart > 0 && !/^\s$/u.test(text[wordStart - 1])) wordStart -= 1;
+  let wordEnd = Math.max(range.end, wordStart);
+  while (wordEnd < text.length && !/^\s$/u.test(text[wordEnd])) wordEnd += 1;
+  return { start: Math.max(0, wordStart), end: wordEnd };
+}
+function selectedTextIndexes(text, start, end) {
+  const indexes = [];
+  for (let index = start; index < end; index += 1) {
+    if (text[index] !== "\n") indexes.push(index);
+  }
+  return indexes;
+}
+function selectedLineStarts(text, start, end) {
+  const range = normalizedRange(text, start, end);
+  const first = lineStartAt(text, range.start);
+  const selectionLast = range.end > range.start && text[range.end - 1] === "\n" ? range.end - 1 : range.end;
+  const last = lineStartAt(text, selectionLast);
+  return lineStarts(text).filter((lineStart) => lineStart >= first && lineStart <= last);
+}
+function lineStarts(text) {
+  const starts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\n") starts.push(index + 1);
+  }
+  return starts;
+}
+function lineStartAt(text, position) {
+  const bounded = Math.max(0, Math.min(text.length, position));
+  return text.lastIndexOf("\n", Math.max(0, bounded - 1)) + 1;
+}
+function lineEndAt(text, position) {
+  const next = text.indexOf("\n", Math.max(0, Math.min(text.length, position)));
+  return next === -1 ? text.length : next;
+}
+function sortedValidLineStarts(text, values) {
+  const valid = new Set(lineStarts(text));
+  return Array.from(values).filter((value) => valid.has(value)).sort((a, b) => a - b);
+}
+function styleMasks(value) {
+  const masks = Array.from({ length: value.text.length }, () => 0);
+  for (const span of value.spans) {
+    const range = normalizedRange(value.text, span.start, span.end);
+    const mask = (span.bold ? STYLE_BITS.bold : 0) | (span.italic ? STYLE_BITS.italic : 0) | (span.strikethrough ? STYLE_BITS.strikethrough : 0);
+    for (let index = range.start; index < range.end; index += 1) masks[index] |= mask;
+  }
+  return masks;
+}
+function spansFromStyleMasks(masks) {
+  const spans = [];
+  let start = 0;
+  while (start < masks.length) {
+    const mask = masks[start] || 0;
+    let end = start + 1;
+    while (end < masks.length && (masks[end] || 0) === mask) end += 1;
+    if (mask) {
+      spans.push({
+        start,
+        end,
+        ...mask & STYLE_BITS.bold ? { bold: true } : {},
+        ...mask & STYLE_BITS.italic ? { italic: true } : {},
+        ...mask & STYLE_BITS.strikethrough ? { strikethrough: true } : {}
+      });
+    }
+    start = end;
+  }
+  return spans;
+}
+function insertionStyleMask(masks, text, prefix, oldSuffixStart) {
+  if (oldSuffixStart > prefix) {
+    const selected = masks.slice(prefix, oldSuffixStart).filter((_, offset) => text[prefix + offset] !== "\n");
+    if (selected.length && selected.every((mask) => mask === selected[0])) return selected[0] || 0;
+  }
+  if (prefix > 0 && text[prefix - 1] !== "\n") return masks[prefix - 1] || 0;
+  if (oldSuffixStart < text.length && text[oldSuffixStart] !== "\n") return masks[oldSuffixStart] || 0;
+  return 0;
+}
+function runFromMask(text, mask) {
+  return {
+    text,
+    bold: Boolean(mask & STYLE_BITS.bold),
+    italic: Boolean(mask & STYLE_BITS.italic),
+    strikethrough: Boolean(mask & STYLE_BITS.strikethrough)
+  };
 }
 
 // examples/packages/first-party-replacements/tweetPng/src/content.ts
@@ -3692,7 +4611,8 @@ function extractTweetPngData(tweet, statusUrl) {
     linkCard,
     cashtag,
     quote: quote ? { author: quote.author, handle: quote.handle, text: quote.text, images: quote.images } : null,
-    stats
+    stats,
+    richText: createTweetPngRichText(text)
   };
 }
 function extractTweetPngDate(tweet) {
@@ -3873,9 +4793,22 @@ async function renderTweetPng(data) {
   );
   const mediaRegions = [];
   const bodyFont = tweetPngTextFont(TWEET_PNG_FONT_FALLBACK, TWEET_PNG_BODY_FONT_SIZE, TWEET_PNG_PLAIN_TEXT_STYLE);
-  const textLayout = layoutTweetPngPlainText(
+  const richTextBlocks = tweetPngRichTextLines(data.richText).map((line) => ({
+    runs: line.runs.map((run) => ({
+      text: run.text,
+      style: {
+        fontWeight: run.bold ? 700 : 400,
+        fontStyle: run.italic ? "italic" : "normal",
+        strikethrough: run.strikethrough
+      }
+    })),
+    ...line.bullet ? { bullet: { marker: "\u2022" } } : {}
+  }));
+  const textLayout = layoutTweetPngRichInlineBlocks(
     context,
-    data.text || data.date || data.handle,
+    richTextBlocks.length && data.richText.text ? richTextBlocks : [{
+      runs: [{ text: data.date || data.handle }]
+    }],
     {
       fontFamily: TWEET_PNG_FONT_FALLBACK,
       fontSize: TWEET_PNG_BODY_FONT_SIZE,
@@ -4241,6 +5174,19 @@ function drawTweetPngTextLine(context, line, x, baselineY) {
   for (const fragment of line.fragments) {
     context.font = fragment.font;
     context.fillText(fragment.text, x + fragment.x, baselineY);
+    if (fragment.role === "text" && fragment.style.strikethrough && fragment.text) {
+      const metrics = context.measureText("M");
+      const ascent = metrics.actualBoundingBoxAscent || TWEET_PNG_BODY_FONT_SIZE * 0.72;
+      const strikeY = baselineY - Math.max(2, ascent * 0.38);
+      context.save();
+      context.strokeStyle = context.fillStyle;
+      context.lineWidth = Math.max(2, ascent / 12);
+      context.beginPath();
+      context.moveTo(x + fragment.x, strikeY);
+      context.lineTo(x + fragment.x + fragment.width, strikeY);
+      context.stroke();
+      context.restore();
+    }
   }
 }
 function drawTweetPngMediaGrid(context, images, x, y, width, height, palette, scope, regions) {
@@ -4393,6 +5339,8 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   let currentBlob = result.blob;
   let currentData = data;
   let currentResult = result;
+  const originalEditorText = data.text;
+  let editorState = data.richText;
   let url = URL.createObjectURL(result.blob);
   let renderVersion = 0;
   let previewUpdateTimer = null;
@@ -4415,6 +5363,21 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
       </header>
+      <section class="milxdy-tweet-png-editor" aria-labelledby="milxdy-tweet-png-editor-label">
+        <div class="milxdy-tweet-png-editor-heading">
+          <label id="milxdy-tweet-png-editor-label" for="milxdy-tweet-png-editor-input">Post text</label>
+          <div class="milxdy-tweet-png-formatting" role="toolbar" aria-label="Post text formatting">
+            <button type="button" data-format="bullet" aria-label="Toggle bulleted list" aria-pressed="false" title="Bulleted list">&#8226; List</button>
+            <button type="button" data-format="bold" aria-label="Toggle bold" aria-pressed="false" aria-keyshortcuts="Control+B Meta+B" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" data-format="italic" aria-label="Toggle italic" aria-pressed="false" aria-keyshortcuts="Control+I Meta+I" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" data-format="strikethrough" aria-label="Toggle strikethrough" aria-pressed="false" aria-keyshortcuts="Control+Shift+X Meta+Shift+X" title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
+            <button type="button" data-action="clear-formatting">Clear formatting</button>
+            <button type="button" data-action="reset-text">Reset text</button>
+          </div>
+        </div>
+        <textarea id="milxdy-tweet-png-editor-input" rows="4" spellcheck="true" aria-describedby="milxdy-tweet-png-editor-help"></textarea>
+        <p id="milxdy-tweet-png-editor-help">Select text to combine styles. List formatting applies to each selected line. Edits stay in this export.</p>
+      </section>
       <section id="milxdy-tweet-png-settings" class="milxdy-tweet-png-settings" aria-label="Share Kit settings" hidden>
         <div class="milxdy-tweet-png-presets" role="group" aria-label="Color presets">
           <span>Colors</span>
@@ -4439,6 +5402,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     </div>
   `;
   const preview = modal.querySelector(".milxdy-tweet-png-preview");
+  const editor = modal.querySelector("#milxdy-tweet-png-editor-input");
   const mediaControls = modal.querySelector(".milxdy-tweet-png-media-controls");
   const settings = modal.querySelector("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector('[data-action="settings"]');
@@ -4446,8 +5410,23 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
   const disconnectedControls = modal.querySelector("[data-reminet-disconnected]");
   const shareToRemiNetButton = modal.querySelector('[data-action="reminet"]');
   const status = modal.querySelector(".milxdy-tweet-png-status");
+  if (editor) editor.value = editorState.text;
   const setStatus = (message) => {
     if (status) status.textContent = message;
+  };
+  const editorSelection = () => ({
+    start: editor?.selectionStart ?? 0,
+    end: editor?.selectionEnd ?? 0
+  });
+  const renderFormattingControls = () => {
+    const selection = editorSelection();
+    for (const button of Array.from(modal.querySelectorAll("[data-format]"))) {
+      const format = button.dataset.format;
+      const pressed = format === "bullet" ? selectionHasTweetPngBullets(editorState, selection.start, selection.end) : selectionHasTweetPngInlineStyle(editorState, selection.start, selection.end, format);
+      button.setAttribute("aria-pressed", String(pressed));
+    }
+    const reset = modal.querySelector('[data-action="reset-text"]');
+    if (reset) reset.disabled = isTweetPngRichTextPristine(editorState, originalEditorText);
   };
   const excludedMedia = /* @__PURE__ */ new Set();
   const renderMediaControls = (nextData, nextResult) => {
@@ -4523,7 +5502,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
       return;
     }
     if (event.key !== "Tab") return;
-    const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.offsetParent !== null);
+    const focusable = Array.from(modal.querySelectorAll('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter((element) => element.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0];
     const last = focusable[focusable.length - 1];
@@ -4611,7 +5590,12 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     const version = ++renderVersion;
     setStatus("Updating preview...");
     await saveVisualTheme();
-    const nextData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
+    const extractedData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
+    const nextData = {
+      ...extractedData,
+      text: editorState.text,
+      richText: editorState
+    };
     const nextResult = await renderTweetPng(nextData);
     if (version !== renderVersion || !modal.isConnected) return;
     const nextUrl = URL.createObjectURL(nextResult.blob);
@@ -4622,6 +5606,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
     currentResult = nextResult;
     if (preview) preview.src = nextUrl;
     renderMediaControls(nextData, nextResult);
+    renderFormattingControls();
     setStatus(successMessage);
   };
   mediaControls?.addEventListener("click", (event) => {
@@ -4638,6 +5623,64 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     }, 75);
   };
+  const commitEditorState = (nextState, selection, message) => {
+    if (nextState === editorState) {
+      setStatus("Select text or place the cursor in a word to apply inline formatting.");
+      editor?.focus();
+      return;
+    }
+    editorState = nextState;
+    currentData = { ...currentData, text: editorState.text, richText: editorState };
+    if (editor) {
+      if (editor.value !== editorState.text) editor.value = editorState.text;
+      editor.focus();
+      editor.setSelectionRange(
+        Math.min(selection.start, editorState.text.length),
+        Math.min(selection.end, editorState.text.length)
+      );
+    }
+    renderFormattingControls();
+    setStatus(message);
+    schedulePreviewUpdate();
+  };
+  const applyFormattingAction = (format) => {
+    if (format !== "bullet" && format !== "bold" && format !== "italic" && format !== "strikethrough") return;
+    const selection = editorSelection();
+    const nextState = format === "bullet" ? toggleTweetPngBullets(editorState, selection.start, selection.end) : toggleTweetPngInlineStyle(editorState, selection.start, selection.end, format);
+    const label = format === "bullet" ? "List formatting updated." : `${format[0].toUpperCase()}${format.slice(1)} formatting updated.`;
+    commitEditorState(nextState, selection, label);
+  };
+  for (const button of Array.from(modal.querySelectorAll("[data-format]"))) {
+    button.addEventListener("click", () => applyFormattingAction(button.dataset.format || ""));
+  }
+  modal.querySelector('[data-action="clear-formatting"]')?.addEventListener("click", () => {
+    const selection = editorSelection();
+    commitEditorState(
+      clearTweetPngFormatting(editorState, selection.start, selection.end),
+      selection,
+      "Formatting cleared."
+    );
+  });
+  modal.querySelector('[data-action="reset-text"]')?.addEventListener("click", () => {
+    commitEditorState(createTweetPngRichText(originalEditorText), { start: 0, end: 0 }, "Original post text restored.");
+  });
+  editor?.addEventListener("input", () => {
+    editorState = reconcileTweetPngRichText(editorState, editor.value);
+    currentData = { ...currentData, text: editorState.text, richText: editorState };
+    renderFormattingControls();
+    schedulePreviewUpdate();
+  });
+  editor?.addEventListener("select", renderFormattingControls);
+  editor?.addEventListener("keyup", renderFormattingControls);
+  editor?.addEventListener("click", renderFormattingControls);
+  editor?.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    const format = key === "b" && !event.shiftKey ? "bold" : key === "i" && !event.shiftKey ? "italic" : key === "x" && event.shiftKey ? "strikethrough" : null;
+    if (!format) return;
+    event.preventDefault();
+    applyFormattingAction(format);
+  });
   for (const input of Array.from(modal.querySelectorAll("[data-setting]"))) {
     input.addEventListener(input.type === "color" ? "input" : "change", () => {
       const key = input.dataset.setting;
@@ -4666,6 +5709,7 @@ function showTweetPngModal(tweet, statusUrl, result, data) {
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     });
   }
+  renderFormattingControls();
   renderMediaControls(currentData, currentResult);
   document.body.appendChild(modal);
   void probeRemiNetConnection().catch(() => setRemiNetConnected(false));
@@ -4801,9 +5845,15 @@ function injectTweetPngStyles() {
     }
     .milxdy-tweet-png-dialog button:focus-visible,
     .milxdy-tweet-png-action-link:focus-visible,
-    .milxdy-tweet-png-dialog input:focus-visible {
+    .milxdy-tweet-png-dialog input:focus-visible,
+    .milxdy-tweet-png-dialog textarea:focus-visible {
       outline: 2px solid #7b2cff;
       outline-offset: 2px;
+    }
+    .milxdy-tweet-png-dialog button[aria-pressed="true"] {
+      background: #7b2cff;
+      border-color: #5e19c5;
+      color: #ffffff;
     }
     .milxdy-tweet-png-dialog button:disabled {
       background: #ece8ef;
@@ -4811,6 +5861,45 @@ function injectTweetPngStyles() {
       color: #8b8492;
       cursor: not-allowed;
       opacity: 0.72;
+    }
+    .milxdy-tweet-png-editor {
+      background: #f6efff;
+      border: 1px solid #d7b8ff;
+      border-radius: 6px;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .milxdy-tweet-png-editor-heading {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+    }
+    .milxdy-tweet-png-editor-heading > label {
+      font: 700 13px/1.3 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .milxdy-tweet-png-formatting {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .milxdy-tweet-png-formatting button {
+      min-width: 32px;
+    }
+    #milxdy-tweet-png-editor-input {
+      background: #ffffff;
+      border: 1px solid #bfa5dd;
+      border-radius: 5px;
+      box-sizing: border-box;
+      color: #20122f;
+      font: 15px/1.45 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 92px;
+      padding: 8px 10px;
+      resize: vertical;
+      width: 100%;
     }
     .milxdy-tweet-png-settings {
       align-items: center;
