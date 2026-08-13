@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import {
   clearTweetPngFormatting,
   createTweetPngRichText,
@@ -11,6 +11,30 @@ import {
   toggleTweetPngInlineStyle,
   tweetPngRichTextLines,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/rich-text";
+import { layoutTweetPngRichInlineBlocks } from "../../examples/packages/first-party-replacements/tweetPng/src/text-layout";
+
+class RichTextTestCanvasContext {
+  font = "16px Arial";
+
+  measureText(text: string): TextMetrics {
+    const fontSize = Number(this.font.match(/(\d+(?:\.\d+)?)px/u)?.[1] || 16);
+    const width = Array.from(new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)).length * fontSize * 0.56;
+    return { width, actualBoundingBoxLeft: 0, actualBoundingBoxRight: width } as TextMetrics;
+  }
+}
+
+class RichTextTestOffscreenCanvas {
+  getContext(): RichTextTestCanvasContext {
+    return new RichTextTestCanvasContext();
+  }
+}
+
+beforeAll(() => {
+  Object.defineProperty(globalThis, "OffscreenCanvas", {
+    configurable: true,
+    value: RichTextTestOffscreenCanvas,
+  });
+});
 
 describe("Share Kit rich-text editor", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
@@ -83,6 +107,40 @@ describe("Share Kit rich-text editor", () => {
     expect(source.bulletLineStarts).toEqual([]);
   });
 
+  it("preserves combined styles and bullets through the shared drawable layout", () => {
+    let value = createTweetPngRichText("styled line");
+    value = toggleTweetPngInlineStyle(value, 0, 6, "bold");
+    value = toggleTweetPngInlineStyle(value, 0, 6, "italic");
+    value = toggleTweetPngInlineStyle(value, 0, 6, "strikethrough");
+    value = toggleTweetPngBullets(value, 0, value.text.length);
+    const context = new RichTextTestCanvasContext() as unknown as CanvasRenderingContext2D;
+    const blocks = tweetPngRichTextLines(value).map((line) => ({
+      runs: line.runs.map((run) => ({
+        text: run.text,
+        style: {
+          fontWeight: run.bold ? 700 as const : 400 as const,
+          fontStyle: run.italic ? "italic" as const : "normal" as const,
+          strikethrough: run.strikethrough,
+        },
+      })),
+      ...(line.bullet ? { bullet: { marker: "\u2022" } } : {}),
+    }));
+
+    const layout = layoutTweetPngRichInlineBlocks(context, blocks, {
+      fontFamily: "Arial, sans-serif",
+      fontSize: 34,
+      maxWidth: 800,
+      maxLines: 4,
+      safetyPx: 16,
+    });
+    expect(layout.truncated).toBe(false);
+    expect(layout.lines[0].fragments[0]).toMatchObject({ role: "bullet", text: "\u2022" });
+    expect(layout.lines[0].fragments.find((fragment) => fragment.text.includes("styled"))).toMatchObject({
+      role: "text",
+      style: { fontWeight: 700, fontStyle: "italic", strikethrough: true },
+    });
+  });
+
   it("exposes labelled native controls and keeps formatting local to the review", () => {
     expect(packageSource).toContain('role="toolbar" aria-label="Post text formatting"');
     expect(packageSource).toContain('aria-label="Toggle bulleted list"');
@@ -93,6 +151,8 @@ describe("Share Kit rich-text editor", () => {
     expect(packageSource).toContain('data-action="clear-formatting"');
     expect(packageSource).toContain('data-action="reset-text"');
     expect(packageSource).toContain("Edits stay in this export.");
+    expect(packageSource).toContain("layoutTweetPngRichInlineBlocks(");
+    expect(packageSource).toContain("fragment.style.strikethrough");
     expect(packageSource).not.toContain("milxdy.settings.tweetPngRichText");
   });
 });

@@ -10,6 +10,7 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 - Reserves Reader Voice as the public theme while candidate issue scope, acceptance criteria, and manual QA remain subject to maintainer approval.
 - Does not represent any deferred 0.2.4 issue or historical release-branch implementation as shipped or accepted.
 - Updates the Share Kit candidate to use exact-pinned Pretext 0.0.8 for Unicode-aware local Canvas layout across post, quoted-post, and link-card text, with a formatted-run seam for the separately owned rich-text editor.
+- Adds local Share Kit post-text editing with bullets, bold, italic, strikethrough, combined styles, clear/reset controls, accessible labels and shortcuts, and reviewed preview/export parity.
 
 ## 0.2.4
 

@@ -31,6 +31,14 @@ Use the settings-wheel button in the preview header to change:
 
 Visible external links can render as themed link cards, and quoted-post context
 remains part of the preview rather than being flattened into the main post.
+
+The **Post text** editor is local to the open review. Select text (or place the
+cursor in a word) to combine bold, italic, and strikethrough styles; select one
+or more lines to toggle bullets. **Clear formatting** removes styles from the
+selection, while **Reset text** restores the extracted post text and clears all
+local formatting. The reviewed preview is the same PNG blob used by Copy,
+Download, and user-initiated sharing; editor state is not saved to a profile or
+sent back to X.
 Post text, quoted-post text, and link-card titles use the exact-pinned Pretext
 0.0.8 layout adapter for Unicode-aware local Canvas line breaking. This improves
 CJK punctuation, Thai/Khmer and other no-space scripts, emoji/grapheme clusters,

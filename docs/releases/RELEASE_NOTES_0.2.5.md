@@ -35,8 +35,12 @@ without an explicit scope decision and deliberate integration.
   Arabic and mixed bidirectional text, combining marks, emoji/ZWJ sequences,
   hard breaks, repeated whitespace, and long URLs/hashtags/handles.
 - The adapter remains local-only and user-invoked, preserves layout caps and
-  ellipsis contracts, and exposes positioned formatted fragments for #222
-  without including that issue's editor/state/accessibility slice.
+  ellipsis contracts, and exposes positioned formatted fragments consumed by
+  the separately reviewable #222 editor/state/accessibility slice.
+- Share Kit now consumes that formatted-fragment seam for local post-text
+  editing: bullets, bold, italic, strikethrough, combined styles, clear/reset,
+  keyboard and screen-reader controls all update the reviewed PNG used by Copy,
+  Download, and user-initiated sharing without persisting editor state.
 
 ## Known limitations
 
