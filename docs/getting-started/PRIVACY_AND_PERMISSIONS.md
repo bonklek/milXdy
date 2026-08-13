@@ -145,6 +145,9 @@ selected files are not persisted.
 - A refresh response can rotate the refresh token. An expired or revoked grant
   returns to an explicit reconnect state; milXdy does not open a hidden tab or
   adopt an existing RemiliaNET web session.
+- OIDC discovery, token, JWKS, and revoke/logout requests reject HTTP redirects
+  and omit the referrer. Redirected authorization-code, refresh/revocation, or
+  trust-bootstrap material is never followed to another location.
 - Disconnect and revoke clear local credentials without deleting unrelated
   settings. Remote logout/revocation is best effort and is described separately
   from local credential deletion.
@@ -206,6 +209,8 @@ after the user selects it. REST history and text
 posting must remain usable without the socket; an upload failure must not send
 unconfirmed media or expose local paths, credentials, or private bodies, and
 the pending attachment remains available for user-controlled retry.
+The legacy `/api/chats/1/messages` history route and public socket-preparation
+message are removed; the socket supplies body-free reconciliation hints only.
 
 ## RemiStats Images
 

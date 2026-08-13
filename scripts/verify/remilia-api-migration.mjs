@@ -86,6 +86,11 @@ for (const required of [
   "unacknowledgeable errors",
   "rejected before status lookup",
   "never connected identity, granted/missing scopes",
+  "reject redirects",
+  "send no referrer",
+  "Official API-v1 REST is the only chat history authority",
+  "`/api/chats/1/messages`",
+  "body-free reconciliation hints",
 ]) {
   assert(normalizedMigration.includes(required), `migration contract must include ${JSON.stringify(required)}`);
 }

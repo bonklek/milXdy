@@ -28,7 +28,7 @@ pass. Record only observed results from the exact integrated candidate.
 | --- | --- | --- | --- |
 | `migration-prompt` | Existing browser-session installation | Required | One-time prompt; explicit **Delete old login data** removes known legacy auth and ends disconnected; deletion does not connect; unrelated settings remain |
 | `connect-pkce` | Connect and callback validation | Required | Visible Remilia consent; exact callback; success returns connected identity; cancel/deny stays disconnected |
-| `connect-fail-closed` | State, redirect, code, timeout, and concurrent-login failures | Required | Mismatch/replay/timeout fails closed without credential or log leakage |
+| `connect-fail-closed` | State, redirect, code, timeout, and concurrent-login failures | Required | Mismatch/replay/timeout fails closed; OIDC discovery/token/JWKS/revoke HTTP redirects are rejected with no referrer or credential/log leakage |
 | `scope-status` | Granted and missing abilities | Required | Granted scopes are understandable; missing scope is distinct and reconnectable |
 | `disconnect-revoke` | Disconnect, local revoke, remote failure | Required | Credentials clear; unrelated settings remain; no cookie-auth rollback |
 | `restart-refresh` | Popup reopen, worker restart, extension reload, browser-session end, and token rotation | Required | Popup reopen and MV3 worker restart within the same browser session preserve custody; extension reload and full browser-session end expose no credential/identity and return expired/disconnected with explicit Reconnect while durable migration completion prevents a legacy prompt; no silent reconnect or retired fallback |
@@ -42,7 +42,7 @@ pass. Record only observed results from the exact integrated candidate.
 | `beetle-legacy-actions` | Catch/hunt/claim/faucet/craft/trophy adapters | Required | UI labels legacy failure separately; official reads still work when an adapter is unavailable |
 | `chat-history-post` | REST history, older paging, replies, edits, media metadata, text post | Required | Ordering/deduplication correct; 8,192-byte and two-second limits enforced |
 | `chat-reconnect` | Visibility polling, offline, restart | Required | Polls never overlap; reconnect/restart restores REST source of truth |
-| `chat-legacy-realtime` | WebSocket disabled/failing | Required | REST history and text posting continue; socket is acceleration only |
+| `chat-legacy-realtime` | WebSocket disabled/failing | Required | REST history and text posting continue; no legacy `/api/chats/1/messages`/public socket-preparation handler is registered; socket emits body-free reconciliation hints only |
 | `chat-legacy-media` | Media upload/confirm failure | Required | No unconfirmed message/media send; error/log contains no path, token, or private body |
 | `post-factory-isolation` | Reviewed package capability use | Required | Public-profile declaration works; raw router has no production response; sender/document/package/grant mismatch fails; write requires active per-invocation gesture; recursive credential isolation and composer trust gates reject bypasses |
 | `error-separation` | 401, 403 scope, 403 user, 429 cooldown/rate, offline, unauthorized sender | Required | Authorized UI states remain distinct; unauthorized content/page/package caller gets generic rejection with no status lookup, identity, scopes, or migration data; diagnostics stay redacted |

@@ -29,6 +29,11 @@ unauthorized sender must be rejected before status lookup and receive only a
 generic bounded error—never connected identity, granted/missing scopes,
 migration details, or other auth state.
 
+OIDC discovery, token, JWKS, and revocation/logout HTTP requests are pinned to
+their allowed endpoint classes, reject redirects, and send no referrer. A 3xx
+response is a hard failure; authorization codes, refresh/revocation material,
+or trust-bootstrap data must never follow a redirect.
+
 The official API client accepts only fixed API-v1 route classes. It injects the
 bearer token in the trusted background, makes at most one refresh retry after an
 authentication failure, preserves `insufficient_scope`, `requires_user`,
@@ -100,6 +105,11 @@ as an API-v1 response.
 | Beetle `craft` | API v1 does not document equivalent user-delegated crafting | Official state/cards remain functional; craft failures are typed and separate | Remove when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
 | Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
 | Public RemiStats X badge/profile lookup at `https://api.remistats.net/user/{x-handle}` | Official delegated `/me/stats` describes only the token user, not arbitrary visible X accounts | Request is unauthenticated and separately labeled; no Remilia credential enters the request | Remove when an official documented public lookup covers equivalent arbitrary-user badge/profile data and parity QA passes, or retire the badge surface |
+
+Official API-v1 REST is the only chat history authority. The retired legacy
+`/api/chats/1/messages` history handler and public socket-preparation runtime
+message are not registered fallback routes. The retained socket carries only
+validated, body-free reconciliation hints; it does not supply message history.
 
 Browser-session adoption, cookie mutation, hidden-tab refresh, and silent
 session reuse are removed migration mechanisms, not retained legacy adapters.
