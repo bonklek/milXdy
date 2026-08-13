@@ -51,10 +51,12 @@ hidden tabs, or browser-session reuse.
 - **Revoke** requests remote revocation or logout when the service supports it,
   then clears local credentials even if the remote request is unavailable.
 
-After a browser or extension restart, milXdy may refresh an existing grant in
-trusted background code. It never opens a hidden RemiliaNET tab or adopts a web
-session. If refresh is rejected or revoked, the popup returns to a disconnected
-or reconnect-required state.
+Access, refresh, and ID tokens plus connected identity/scopes live only in
+trusted `chrome.storage.session`. They survive Manifest V3 worker suspension but
+end with the browser session. After a full browser restart, milXdy returns to a
+disconnected/reconnect-required state; it never opens a hidden RemiliaNET tab or
+adopts a web session. Within one browser session, trusted background code may
+rotate a refresh token when the official service returns one.
 
 ## Abilities And Errors
 

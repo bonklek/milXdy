@@ -133,6 +133,10 @@ selected files are not persisted.
 - Credentials are not sent to X/Twitter pages, content scripts, the DOM, local
   packages, App SDK context, sync storage, exported settings, profile packs,
   diagnostics, or logs.
+- Access, refresh, and ID tokens plus expiry, connected identity, and granted
+  scopes live only in trusted-context `chrome.storage.session`. They survive an
+  MV3 worker restart but end when the browser session ends. Token-free
+  control/migration/error metadata alone may use local storage.
 - A refresh response can rotate the refresh token. An expired or revoked grant
   returns to an explicit reconnect state; milXdy does not open a hidden tab or
   adopt an existing RemiliaNET web session.
@@ -176,10 +180,13 @@ The incoming "poked you!" flag reads recent RemiliaNET notifications through the
 
 RemiNet Chat is off by default. When enabled, official API-v1 REST history and
 text/reply posting are the source of truth. A temporary legacy WebSocket adapter
-can accelerate live updates, and a separately typed temporary legacy adapter
-can upload/confirm media after the user selects it. REST history and text
+at `wss://www.remilia.net/api/ws` can accelerate live updates, and a separately
+typed temporary legacy adapter can upload/confirm media through fixed
+`https://www.remilia.net/media/upload/` and `/media/upload/confirm` endpoints
+after the user selects it. REST history and text
 posting must remain usable without the socket; an upload failure must not send
-unconfirmed media or expose local paths, credentials, or private bodies.
+unconfirmed media or expose local paths, credentials, or private bodies, and
+the pending attachment remains available for user-controlled retry.
 
 ## RemiStats Images
 
@@ -197,10 +204,11 @@ MusicBrainz lookup sends track metadata needed for candidate search. AcoustID lo
 
 ## Local Persistence
 
-Settings and Remilia grant state persist only while the browser keeps the same
-extension identity and storage. Removing the extension, loading a different
-unpacked identity, clearing extension storage, or browser profile cleanup can
-reset local state.
+Settings persist while the browser keeps the same extension identity and local
+storage. Remilia credentials and connected state are session-only and end with
+the browser session. Removing the extension, loading a different unpacked
+identity, clearing extension storage, or browser profile cleanup can reset
+other local state.
 
 The Add-ons settings tab stores a user-selected `local-app-packages` directory
 handle in extension IndexedDB when the browser allows it. Scanning is

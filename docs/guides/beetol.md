@@ -20,7 +20,8 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 
 Beetol uses the same official Remilia account connection as RemiStats pokes and
 RemiNet Chat. API-v1 state and card reads are official coverage. Hunt, craft,
-trophy, and other actions that do not yet have documented API-v1 endpoints use
+the `catchBeetle`, `beetleHunt`, `claimUBC`, `junkFaucet`, `craft`, and public
+trophy-shelf operations that do not yet have documented API-v1 equivalents use
 separately labeled temporary legacy adapters and run only after user action.
 
 Beetle state and discovered cards are read through the documented Remilia API v1 endpoints using the delegated `remilia:beetle.read` scope. milXdy normalizes missing inventory, hammer, charge, card, and cooldown fields locally so a partial response does not invent a ready action or discard a persisted cooldown.

@@ -56,7 +56,9 @@ for (const required of [
   "remilia:directory.read",
   "RemiNet WebSocket acceleration",
   "RemiNet media upload/confirm",
-  "Beetle hunt, craft, trophy",
+  "`catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet`",
+  "equivalent user-delegated craft including per-recipe failures",
+  "documented public shelf asset/read",
   "Browser-session adoption, cookie mutation, hidden-tab refresh",
   "App SDK Capability Broker",
 ]) {

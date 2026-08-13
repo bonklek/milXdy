@@ -14,7 +14,10 @@ Official references:
 
 ## Trusted Host Boundary
 
-The extension background is the credential-owning host. It performs OIDC
+The extension background is the credential-owning host. Access/refresh/ID
+tokens, expiry, connected identity, and granted scopes live only in trusted
+`chrome.storage.session`; token-free control, migration, and error metadata may
+use local storage. It performs OIDC
 discovery, PKCE authorization, code exchange, refresh rotation, logout/revoke,
 scope checks, and authenticated API requests. Bearer tokens, refresh tokens,
 authorization codes, PKCE verifiers, and OIDC state must not cross into page
@@ -40,7 +43,7 @@ All official paths are relative to `https://www.remilia.net/api/v1`.
 | Capability | Official endpoint | Required grant | Source of truth |
 | --- | --- | --- | --- |
 | Public profile | `GET /users/{username}` | Public | API v1 |
-| Connected profile | `GET /me` | User-delegated `openid` | API v1 |
+| Connected profile | `GET /me` | Any user token (`openid` is protocol-only) | API v1 |
 | Account statistics | `GET /me/stats` | `remilia:stats.read` | API v1 |
 | Notifications | `GET /me/notifications` | `remilia:notifications.read` | API v1 |
 | Beetle state and cards | `GET /me/beetle`, `GET /me/beetle/cards` | `remilia:beetle.read` | API v1 |
@@ -62,13 +65,18 @@ as an API-v1 response.
 
 | Adapter | Why retained | Required fallback | Removal condition |
 | --- | --- | --- | --- |
-| RemiNet WebSocket acceleration | API v1 documents REST history and posting, not realtime delivery | REST history/polling and text posting remain functional with the socket disabled | Remove when an official documented realtime API reaches parity and passes reconnect/restart QA |
-| RemiNet media upload/confirm | API v1 documents media metadata on reads but not upload/confirm | Text/reply posting remains functional; failed upload sends no message or undisclosed media | Remove when an official documented upload flow covers validation, limits, consent, and confirmation |
-| Beetle hunt, craft, trophy, and other actions | API v1 documents Beetle state/cards reads but not these actions | Official reads remain functional and identify legacy action failures separately | Remove each action when a documented API-v1 endpoint reaches behavior and cooldown parity |
+| RemiNet WebSocket acceleration at `wss://www.remilia.net/api/ws` | API v1 documents REST history and posting, not realtime delivery | REST history/polling and text posting remain functional with the socket disabled; reconnect/worker restart requests official REST reconciliation | Remove only after an official scoped stream covers deliver/edit/delete/reaction, passes reconnect, worker-restart, payload, and privacy parity, then ships one release cycle with the legacy adapter disabled by default |
+| RemiNet media upload/confirm at `https://www.remilia.net/media/upload/` and `https://www.remilia.net/media/upload/confirm` | API v1 documents media metadata on reads but not upload/confirm | Text/reply posting remains functional; failed upload sends no message or undisclosed media and preserves the pending attachment for retry | Remove after official scoped upload plus media-bearing post (or an explicit official unsupported declaration), type/size/timeout/retry/privacy/confirmation parity, and tests proving pending attachments survive failure with no callers of legacy upload, confirm, or media-socket submit |
+| `catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet` actions | API v1 documents Beetle state/cards reads but not these user actions | Official state/cards remain functional and identify each legacy failure separately | Remove each adapter when API v1 documents an equivalent user-delegated operation and milXdy ships and live-verifies it |
+| Beetle `craft` | API v1 does not document equivalent user-delegated crafting | Official state/cards remain functional; craft failures are typed and separate | Remove when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
+| Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
 
 Browser-session adoption, cookie mutation, hidden-tab refresh, and silent
 session reuse are removed migration mechanisms, not retained legacy adapters.
 No rollback switch may restore them.
+
+Explicit `completeMigration` deletes the four known legacy token keys and ends
+disconnected. Status reads do not silently delete or adopt credentials.
 
 ## App SDK Capability Broker
 

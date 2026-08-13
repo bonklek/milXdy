@@ -24,7 +24,8 @@ Official API-v1 REST history and text/reply posting are the source of truth.
 The WebSocket is a temporary legacy acceleration adapter: disabling or losing
 it must not break REST history or text posting. Media upload/confirm remains a
 separately labeled legacy adapter until Remilia publishes an equivalent API-v1
-contract. Media and avatar previews are limited to allowlisted HTTPS
+contract. A failed upload sends neither the message nor undisclosed media and
+keeps the pending attachment available for retry. Media and avatar previews are limited to allowlisted HTTPS
 RemiliaNET media and `pfp.remilia.net` URLs.
 
 On RemiliaNET global chat, hover or keyboard-focus **Last read** or **Jump to present** to reveal its dismissal control. Dismissing either removes only that marker kind for the current page document; it does not hide messages, change read history, send a request, or persist across a page navigation/reload.
