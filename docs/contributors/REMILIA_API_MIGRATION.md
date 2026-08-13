@@ -70,6 +70,16 @@ Poke success does not invent a cooldown. Only a normalized
 unexpired prior authoritative deadline may disable the target only as a
 visible `offline-fallback`; missing or expired state never fabricates history.
 
+Directory resolution sends at most 50 identifiers per wire request while
+preserving ordered logical results and deduplicating repeated inputs. Positive
+results cache for six hours; explicit misses cache for 15 minutes, bounded to
+600 entries per cache (300 public-profile misses). Transport failures, omitted
+results, invalid payloads, and conflicting duplicates are never negative
+cached. An authoritative handle rebind replaces stale identity association
+without corrupting the former Remilia-handle record. Returned profile context
+may include normalized `friendsDisplayed`, `viewerContext`, and `connections`;
+raw service responses and viewer identifiers remain outside diagnostics.
+
 ## Temporary Legacy Adapters
 
 Legacy means “not present in the published API-v1 endpoint contract.” A legacy

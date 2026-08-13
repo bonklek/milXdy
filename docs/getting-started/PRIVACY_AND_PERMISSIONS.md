@@ -173,6 +173,14 @@ user-delegated grant. Missing scope, requires-user, cooldown, rate-limit,
 revoked/expired, and offline outcomes remain distinct in the UI and redacted
 diagnostics.
 
+Public profile and directory caches retain normalized identity results, not
+bearer tokens or raw responses. Positive results expire after six hours;
+explicit misses after 15 minutes. Caches are bounded to 600 entries each (300
+public-profile misses). Network errors, omitted/invalid entries, and conflicting
+duplicates are not stored as misses. Viewer/profile context exposed to features
+is normalized; viewer identifiers and raw private responses are excluded from
+diagnostics.
+
 ## Incoming Poke Flags
 
 The incoming "poked you!" flag reads official Remilia notifications through the

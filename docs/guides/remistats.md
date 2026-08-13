@@ -32,6 +32,13 @@ identities, while delegated stats, notifications, and poke endpoints use the
 connected account. API-provided cooldowns and `next_allowed_at` are
 authoritative; local cooldown state is only a labeled offline fallback.
 
+Directory lookups preserve visible order, deduplicate repeated identities, and
+split requests into at most 50 identifiers. Confirmed results cache for six
+hours; explicit misses for 15 minutes. Network failures, omitted/invalid
+results, and conflicting duplicates are retried rather than cached as misses.
+An authoritative refresh can rebind a changed X handle without overwriting the
+old Remilia identity record.
+
 Notification pages use 50 results and stop after at most 100 pages. milXdy does
 not store notification response bodies: it retains only bounded opaque read
 keys (up to 500, for at most 90 days) so incoming-poke flags do not replay.
