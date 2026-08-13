@@ -205,7 +205,10 @@ text/reply posting are the source of truth. A temporary legacy WebSocket adapter
 at `wss://www.remilia.net/api/ws` can accelerate live updates, and a separately
 typed temporary legacy adapter can upload/confirm media through fixed
 `https://www.remilia.net/media/upload/` and `/media/upload/confirm` endpoints
-after the user selects it. REST history and text
+after the user selects it. The trusted background supplies the delegated token;
+browser cookies/credentials are omitted, redirects are rejected, and no
+referrer is sent. Inline media follows the same boundary and its final URL is
+revalidated against the media allowlist. REST history and text
 posting must remain usable without the socket; an upload failure must not send
 unconfirmed media or expose local paths, credentials, or private bodies, and
 the pending attachment remains available for user-controlled retry.

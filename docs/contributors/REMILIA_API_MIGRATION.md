@@ -100,7 +100,7 @@ as an API-v1 response.
 | Adapter | Why retained | Required fallback | Removal condition |
 | --- | --- | --- | --- |
 | RemiNet WebSocket acceleration at `wss://www.remilia.net/api/ws` | API v1 documents REST history and posting, not realtime delivery | REST history/polling and text posting remain functional with the socket disabled; reconnect/worker restart requests official REST reconciliation | Remove only after an official scoped stream covers deliver/edit/delete/reaction, passes reconnect, worker-restart, payload, and privacy parity, then ships one release cycle with the legacy adapter disabled by default |
-| RemiNet media upload/confirm at `https://www.remilia.net/media/upload/` and `https://www.remilia.net/media/upload/confirm` | API v1 documents media metadata on reads but not upload/confirm | Text/reply posting remains functional; failed upload sends no message or undisclosed media and preserves the pending attachment for retry | Remove after official scoped upload plus media-bearing post (or an explicit official unsupported declaration), type/size/timeout/retry/privacy/confirmation parity, and tests proving pending attachments survive failure with no callers of legacy upload, confirm, or media-socket submit |
+| RemiNet media upload/confirm at `https://www.remilia.net/media/upload/` and `https://www.remilia.net/media/upload/confirm` | API v1 documents media metadata on reads but not upload/confirm | Background injects the delegated token; browser credentials are omitted; redirects are rejected with no referrer; text/reply posting remains functional; failed upload sends no message or undisclosed media and preserves the pending attachment for retry | Remove after official scoped upload plus media-bearing post (or an explicit official unsupported declaration), type/size/timeout/retry/privacy/confirmation parity, and tests proving pending attachments survive failure with no callers of legacy upload, confirm, or media-socket submit |
 | `catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet` actions | API v1 documents Beetle state/cards reads but not these user actions | Official state/cards remain functional and identify each legacy failure separately | Remove each adapter when API v1 documents an equivalent user-delegated operation and milXdy ships and live-verifies it |
 | Beetle `craft` | API v1 does not document equivalent user-delegated crafting | Official state/cards remain functional; craft failures are typed and separate | Remove when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
 | Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
@@ -110,6 +110,9 @@ Official API-v1 REST is the only chat history authority. The retired legacy
 `/api/chats/1/messages` history handler and public socket-preparation runtime
 message are not registered fallback routes. The retained socket carries only
 validated, body-free reconciliation hints; it does not supply message history.
+Inline media fetches use the same no-cookie/no-redirect/no-referrer boundary and
+revalidate the final URL against the fixed media allowlist before accepting
+bytes. Page context cannot widen the upload, confirmation, or media-read hosts.
 
 Browser-session adoption, cookie mutation, hidden-tab refresh, and silent
 session reuse are removed migration mechanisms, not retained legacy adapters.

@@ -91,6 +91,9 @@ for (const required of [
   "Official API-v1 REST is the only chat history authority",
   "`/api/chats/1/messages`",
   "body-free reconciliation hints",
+  "Background injects the delegated token",
+  "browser credentials are omitted",
+  "revalidate the final URL",
 ]) {
   assert(normalizedMigration.includes(required), `migration contract must include ${JSON.stringify(required)}`);
 }
