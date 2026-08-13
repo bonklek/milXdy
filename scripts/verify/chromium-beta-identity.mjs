@@ -17,6 +17,7 @@ const firstOutput = resolve(testRoot, "first");
 const secondOutput = resolve(testRoot, "second");
 const productionOutput = resolve(testRoot, "production");
 const qaOutput = resolve(testRoot, "qa");
+const betaQaOutput = resolve(testRoot, "beta-qa");
 const reinstallOutput = resolve(testRoot, "reinstalled-elsewhere");
 
 assert.equal(profile.schemaVersion, 1);
@@ -34,7 +35,7 @@ assert.equal(
 );
 assert.equal(Object.hasOwn(templateManifest, "key"), false, "production manifest template must stay keyless");
 assert.equal((templateManifest.permissions || []).includes("identity"), false, "production manifest template must not inherit beta permissions");
-assert.match(qaBuilder, /"--channel=production"/u, "QA builds must explicitly select the production base before QA identity injection");
+assert.match(qaBuilder, /`--channel=\$\{buildChannel\}`/u, "QA builds must pass an explicit selected channel to the extension builder");
 
 await rm(testRoot, { recursive: true, force: true });
 try {
@@ -43,6 +44,12 @@ try {
   await runBuild("production", productionOutput);
   await buildQaOnce({
     outputDir: relative(resolve("."), qaOutput).replaceAll("\\", "/"),
+    quiet: true,
+    replaceForeignOutput: true,
+  });
+  await buildQaOnce({
+    outputDir: relative(resolve("."), betaQaOutput).replaceAll("\\", "/"),
+    buildChannel: "beta",
     quiet: true,
     replaceForeignOutput: true,
   });
@@ -67,9 +74,19 @@ try {
   assert.notEqual(qaProvenance.extensionId, profile.extensionId, "QA and beta extension ids must remain distinct");
   assert.equal(await exists(resolve(qaOutput, "remilia-login-client.json")), false, "QA artifact must not carry the beta Login client");
 
+  const betaQaManifest = JSON.parse(await readFile(resolve(betaQaOutput, "manifest.json"), "utf8"));
+  const betaQaProvenance = JSON.parse(await readFile(resolve(betaQaOutput, "qa-build.json"), "utf8"));
+  const betaQaLogin = JSON.parse(await readFile(resolve(betaQaOutput, "remilia-login-client.json"), "utf8"));
+  assert.equal(betaQaManifest.name, "milXdy Beta QA");
+  assert.equal(betaQaManifest.key, profile.manifestKey, "beta QA must retain the registered beta manifest identity");
+  assert.equal(betaQaProvenance.extensionId, profile.extensionId, "beta QA must run under the registered beta extension id");
+  assert.equal(betaQaProvenance.build.channel, "beta");
+  assert.deepEqual(betaQaLogin, first.login, "beta QA must retain the public Login client contract");
+
   await scanArtifact(firstOutput);
   await scanArtifact(secondOutput);
   await scanArtifact(reinstallOutput);
+  await scanArtifact(betaQaOutput);
 } finally {
   await rm(testRoot, { recursive: true, force: true });
 }
@@ -84,7 +101,7 @@ async function runBuild(channel, outputDir) {
       "--profile=full",
       `--channel=${channel}`,
       `--output-dir=${relative(resolve("."), outputDir).replaceAll("\\", "/")}`,
-    ], { cwd: resolve("."), stdio: "ignore", windowsHide: true });
+    ], { cwd: resolve("."), stdio: "inherit", windowsHide: true });
     child.once("error", reject);
     child.once("exit", (code, signal) => code === 0
       ? resolvePromise()

@@ -1,7 +1,10 @@
-export const releaseBuilds = [
+export const buildProfiles = [
+  { dir: "dist/chromium", target: "chromium", profile: "full", channel: "production" },
   { dir: "dist/chromium-beta", target: "chromium", profile: "full", channel: "beta" },
   { dir: "dist/firefox", target: "firefox", profile: "full", channel: "production" },
 ];
+
+export const releaseBuilds = buildProfiles.filter((build) => build.channel === "beta" || build.target === "firefox");
 
 export const coreHostPermissions = [
   "https://api.github.com/*",
