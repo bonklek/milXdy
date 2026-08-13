@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.3",
+  "packageVersion": "0.2.0-sdk.4",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/76-audio-export-external",
+  "sourceBranch": "codex/issue-135-dm-read-aloud-external",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
     "minVersion": "0.2.5",
@@ -14,6 +14,8 @@
   "supported": [
     "runtime lifecycle",
     "shared X surface delivery",
+    "native X Article extraction and route reset",
+    "explicit-action browser-local X direct-message reading",
     "bounded rescan requests",
     "shared scheduler and cancellation",
     "routed post-reading background messages",

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.3",
+  "packageVersion": "0.2.0-sdk.4",
   "appSdkVersion": "0.2.5",
   "browserTarget": "chromium",
   "scenarios": [
@@ -22,8 +22,13 @@
     },
     {
       "id": "launch-navigation",
-      "automated": "The package exports boot, onSurface, open, and close and declares tweet and X Article delivery.",
-      "manual": "Launch from a post and an X Article, navigate routes, rescan repeated surfaces, and confirm only one working control per surface."
+      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; and shares article extraction/highlight containers.",
+      "manual": "Launch from a post and an X Article, navigate routes, rescan repeated surfaces, and confirm only one working control per surface and that active speech resets."
+    },
+    {
+      "id": "direct-message-read-aloud",
+      "automated": "DM reading requires the conversation action, uses stable route/message identity, queues visible bubbles chronologically across virtualization, forces browser Web Speech, and clears transient state on stop, completion, navigation, disable, or disposal.",
+      "manual": "Open an X DM conversation, choose Read conversation aloud, verify incoming/outgoing announcements and shared controls, virtualize and add bubbles without repeats or skips, then switch conversations and confirm speech/highlight state clears."
     },
     {
       "id": "settings-migration",
@@ -52,8 +57,8 @@
     },
     {
       "id": "privacy-consent",
-      "automated": "Permissions, remote services, privacy labels, consent, and package API scans are enforced by the composer.",
-      "manual": "Confirm no companion service, voice/model download, OCR, or custom TTS transmission starts without the corresponding user choice."
+      "automated": "Permissions, remote services, privacy labels, consent, and package API scans are enforced by the composer; DM text is excluded from custom TTS, audio export, OCR, full-quote, background routes, diagnostics, and persistent storage.",
+      "manual": "With custom TTS selected, start DM reading and confirm browser Web Speech is used with no custom endpoint/background request; stop and navigate away, then confirm the old conversation is not retained."
     },
     {
       "id": "theme-layout-accessibility",
