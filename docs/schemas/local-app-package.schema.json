@@ -372,7 +372,22 @@
               }
             }
           },
+          "loadTriggers": {
+            "type": "array",
+            "items": { "enum": ["startup", "surface", "dockOpen", "idle", "userAction"] },
+            "minItems": 1
+          },
           "presentation": { "enum": ["sideRailOverlay", "hostRouteOverlay", "userAction"] },
+          "fallback": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "note"],
+            "properties": {
+              "mode": { "enum": ["nativeSite", "externalPage", "none"] },
+              "url": { "type": "string", "pattern": "^https://" },
+              "note": { "type": "string", "minLength": 1 }
+            }
+          },
           "notes": { "$ref": "#/$defs/stringArray" }
         }
       }
@@ -493,7 +508,7 @@
       "items": { "type": "string" }
     },
     "surface": {
-      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]
+      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "document", "route", "overlayApp", "composerAction", "replyAction"]
     },
     "setting": {
       "type": "object",

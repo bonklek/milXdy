@@ -151,7 +151,7 @@ function postToSiteSocketBridge(message: LegacySocketBridgeCommand): void {
 
 function isReminetChatSocketSender(sender: chrome.runtime.MessageSender | undefined): boolean {
   if (!sender || sender.id !== chrome.runtime.id) return false;
-  return isAllowedLegacySender(sender, "x-content");
+  return isAllowedLegacySender(sender, "runtime-content");
 }
 
 function isReminetChatMessageSender(sender: chrome.runtime.MessageSender | undefined): boolean {

@@ -297,7 +297,7 @@ setupBackgroundMessageRouter([
   {
     type: "milxdy:openAddonsCatalog",
     matches: isOpenAddonsCatalogMessage,
-    handle: openAddonsCatalogWindow,
+    handle: (_message, sender) => openAddonsCatalogWindow(sender),
   },
   {
     type: "milxdy:openRemiNetSession",
@@ -466,7 +466,8 @@ async function openRemiNetSession(sender: chrome.runtime.MessageSender): Promise
   return { ok: true };
 }
 
-async function openAddonsCatalogWindow(): Promise<Record<string, unknown>> {
+async function openAddonsCatalogWindow(sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isApprovedRuntimeContentSender(sender)) return unsupportedSender();
   if (addOnsCatalogLaunch) return addOnsCatalogLaunch;
   addOnsCatalogLaunch = (async () => {
     const target = parseAllowedUrl(MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES)
@@ -1782,12 +1783,12 @@ async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>
 }
 
 async function fetchMiladychanJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  if (!isMiladychanPortalSender(sender)) return unsupportedSender();
   return fetchMiladychanJson(url);
 }
 
 async function postMiladychanTextForSender(message: MiladychanPostTextMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  if (!isMiladychanPortalSender(sender)) return unsupportedSender();
   return postMiladychanText(message);
 }
 
@@ -1935,6 +1936,21 @@ function isWikiImageSender(sender: chrome.runtime.MessageSender): boolean {
 
 function isXContentScriptSender(sender: chrome.runtime.MessageSender): boolean {
   return isSameExtensionTopFrameHttpsSender(sender, ["x.com", "twitter.com"]);
+}
+
+function isApprovedRuntimeContentSender(sender: chrome.runtime.MessageSender): boolean {
+  return isSameExtensionTopFrameHttpsSender(sender, [
+    "x.com",
+    "twitter.com",
+    "www.remilia.net",
+    "remilia.wiki",
+    "wiki.remilia.org",
+    "boards.miladychan.org",
+  ]);
+}
+
+function isMiladychanPortalSender(sender: chrome.runtime.MessageSender): boolean {
+  return isSameExtensionTopFrameHttpsSender(sender, ["x.com", "twitter.com", "boards.miladychan.org"]);
 }
 
 function isSameExtensionTopFrameHttpsSender(sender: chrome.runtime.MessageSender, allowedHosts: readonly string[]): boolean {

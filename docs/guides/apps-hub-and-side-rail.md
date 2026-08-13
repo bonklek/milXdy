@@ -1,6 +1,6 @@
 # Apps & Features And Side Rail User Guide
 
-Apps & Features and the side rail manage first-party milXdy apps and feature modules on X/Twitter.
+Apps & Features and the side rail manage first-party milXdy apps and feature modules. X/Twitter shows the full registry; approved non-X hosts show only matching site-scoped apps.
 
 ## Where To Find It
 

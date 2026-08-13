@@ -10,6 +10,7 @@
 ## Guides
 
 - [Apps & Features and side rail](guides/apps-hub-and-side-rail.md)
+- [Multi-site runtime](guides/multi-site-runtime.md)
 - [Beetol](guides/beetol.md)
 - [Post-Factory](guides/composer-kit.md)
 - [Composer Tools](guides/composer-tools.md)

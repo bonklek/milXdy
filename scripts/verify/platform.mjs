@@ -155,7 +155,8 @@ async function verifyRuntimeOwnership() {
   assert(remistats.includes("const confirmedUsername = cleanUsername(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetUsername)"), "RemiStats reused profile slots must derive poke eligibility from the confirmed badge, not the X handle");
 
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
-  assert(contentRoot.includes("createContentRuntime(FIRST_PARTY_APPS)"), "root content script must bootstrap the shared runtime");
+  assert(contentRoot.includes("appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)"), "root content script must filter apps by the validated runtime site");
+  assert(contentRoot.includes("createContentRuntime(runtimeApps, runtimeSite)"), "root content script must bootstrap the shared runtime with site context");
   assert(!contentRoot.includes("import("), "root content script must not directly import feature bundles");
 
   for (const file of featureContentFiles("src/apps")) {

@@ -23,7 +23,14 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 
 ## Site Runtime Scope
 
-The main milXdy content runtime currently runs on X/Twitter pages. RemiliaNET, Remilia Wiki, and Miladychan host permissions support declared background services, validated embedded Wiki frames, user-opened overlay apps, and web-accessible assets; they do not by themselves mean the full app runtime injects into those sites.
+milXdy injects its shared runtime only on these reviewed HTTPS hosts:
+
+- `x.com` and `twitter.com`: full side rail, Apps & Features, X route service, and the shared Twitter surface scanner.
+- `www.remilia.net`: a filtered launcher for RemiNet Chat and Beetol. Existing RemiliaNET session/auth and socket bridges remain separately validated.
+- `remilia.wiki` and `wiki.remilia.org`: a feature-only runtime for direct Post-reading article controls and route handling; the existing validated embedded-Wiki bridge remains separate.
+- `boards.miladychan.org`: a filtered Miladychan Portal launcher. Public JSON and explicit text-only posting still use the fixed background allowlist with credentials omitted.
+
+X-only apps are absent from non-X launchers and are never imported there. Host permissions for background services or embedded frames do not opt an app into top-level injection. Unlisted related hosts receive no milXdy content runtime until their exact origin, app metadata, privacy disclosure, fallback, and permissions are reviewed.
 
 A separate minimal bridge runs only on
 `https://bonklek.github.io/milXdy/*`. It accepts the catalog's explicit folder

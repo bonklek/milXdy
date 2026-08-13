@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Composer Tools, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
+milXdy is an unpacked browser extension for improving X/Twitter workflows and providing explicitly scoped surfaces on RemiliaNET, Remilia Wiki, and Miladychan. Open the extension icon for popup settings; the in-page rail is full on X/Twitter and filtered to relevant apps on approved non-X hosts.
 
 ## Updating The Extension
 
@@ -31,7 +31,7 @@ Use the Main tab for whole-extension controls, the in-page **Apps** rail item fo
 
 ### Apps & Features And Side Rail
 
-The shared side rail appears on X/Twitter and opens Apps & Features. This menu separates full app surfaces from smaller feature modules.
+The shared side rail appears in full on X/Twitter. Approved non-X hosts show only apps and features explicitly declared for that site; see [Multi-site runtime](multi-site-runtime.md).
 
 - Click **Apps** to open Apps & Features.
 - Full apps include docked or windowed surfaces such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, Wiki, and Maxxer.

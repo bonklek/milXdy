@@ -57,6 +57,7 @@ describe("RemiNet Chat legacy adapter boundary", () => {
     expect(background).not.toContain("reminetChat:prepareSocket");
     expect(background).not.toContain("prepareSocketAuth");
     expect(background).not.toContain("refreshRemiliaAccess");
+    expect(background).toContain('isAllowedLegacySender(sender, "runtime-content")');
     expect(background).toContain('isAllowedLegacySender(sender, "x-content")');
     expect(background).toContain("Object.keys(record)");
   });

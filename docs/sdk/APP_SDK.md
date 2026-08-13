@@ -5,7 +5,8 @@ custom Chromium distributions of milXdy. Apps declare their lifecycle,
 surfaces, settings, storage, assets, permissions, privacy effects, performance
 cost, background messages, and dock behavior through a versioned manifest.
 
-The shared runtime supplies X/Twitter route and surface delivery, scheduling,
+The shared runtime supplies site-aware route and surface delivery, X/Twitter
+scanning, scheduling,
 cancellation, diagnostics, guarded storage and assets, app-scoped messaging,
 Apps & Features integration, side-rail registration, and overlay UI patterns.
 The deterministic composer accepts app folders and ZIP archives, enforces the
@@ -60,7 +61,7 @@ Required fields:
 - `contentEntry` for the lazy-loaded content bundle
 - optional `pageContextActions` for explicit HTTP/HTTPS active-tab actions backed by a packaged secondary JavaScript entry
 - `defaultEnabled` plus `storageKeys` used for enablement changes; adapters read `defaultEnabled` as the fallback when no stored user choice exists
-- `surfaces` such as `tweet`, `userCell`, `profile`, `notification`, `directMessage`, `route`, or `overlayApp`
+- `surfaces` such as `tweet`, `userCell`, `profile`, `notification`, `directMessage`, `document`, `route`, or `overlayApp`
 - `package` asset hints for build and app-store presentation
 - `cost` for startup, per-surface, network, worker, and DOM-write expense
 - `loadTriggers` such as `startup`, `surface`, `dockOpen`, `idle`, or `userAction`
@@ -86,7 +87,7 @@ Lifecycle metadata distinguishes runtime-owned packages from user-invoked tools:
 - `mode: "runtime"` means the shared content runtime owns imports, `boot()`, route/surface delivery, dock open/close, disable, dispose, abort signals, and diagnostics.
 - `mode: "invoked"` means the package is loaded only from a declared user action. It should use `loadTriggers: ["userAction"]`, avoid runtime delivery `surfaces`, declare `invokedBy: "userAction"` plus the platform load `reason`, and should not add a fake `boot()` export.
 
-Site scopes describe where an app integrates with a host site without overloading broad surface names. A scope declares `site`, host permission-style `hosts`, an `integration` mode, relevant `surfaces`, optional `routes` with `exact` or `prefix` path matching, and optional `presentation` such as `sideRailOverlay`, `hostRouteOverlay`, or `userAction`.
+Site scopes describe where an app integrates with a host site without overloading broad surface names. A scope declares `site`, host permission-style `hosts`, an `integration` mode, relevant `surfaces`, optional `routes` with `exact` or `prefix` path matching, optional site-specific `loadTriggers`, and optional `presentation` such as `sideRailOverlay`, `hostRouteOverlay`, or `userAction`. Non-X content-script scopes also declare `fallback.mode`, an optional HTTPS fallback URL, and a user-facing note.
 
 Supported site IDs are currently `x`, `remiliaNet`, `remiliaWiki`, and `miladychan`. Supported integration modes are:
 
@@ -95,7 +96,7 @@ Supported site IDs are currently `x`, `remiliaNet`, `remiliaWiki`, and `miladych
 - `embeddedFrame` for behavior inside a validated embedded frame, such as the Wiki sidebar frame
 - `overlayApp` for a local overlay surface whose host relationship is user-initiated or service-backed rather than injected
 
-The shared content runtime operates on X/Twitter. RemiliaNET, Remilia Wiki, and Miladychan declarations describe background-service, embedded-frame, or overlay integrations. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
+The shared content runtime operates only on reviewed HTTPS origins. X/Twitter gets the full rail and Twitter scanner. RemiliaNET and Miladychan get a lighter launcher containing only apps with matching `contentScript` scopes. Remilia Wiki gets direct document/route services for explicitly scoped features such as Post-reading. Background and embedded-frame scopes never authorize top-level runtime loading by themselves. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
 
 ## Settings Schema
 
@@ -156,10 +157,10 @@ Import flows must preview the sections and changes before writing storage, allow
 
 ## Content Runtime
 
-`src/platform/runtime/content-runtime.ts` owns content app lifecycle:
+`src/platform/runtime/content-runtime.ts` owns content app lifecycle after `site-runtime.ts` resolves an approved origin and filters the registry:
 
-- one shared Twitter surface scanner
-- SPA route and visibility detection
+- one shared Twitter surface scanner on X/Twitter only
+- site-aware SPA route and visibility detection on every approved runtime host
 - lazy app import based on manifest enablement
 - global Performance mode budgets independent of Appearance profiles
 - stylesheet injection
@@ -172,7 +173,7 @@ The root content entry should stay a tiny bootstrap. Shared page-wide visual sta
 
 Use `onSurface(surface)` for Twitter/X surfaces. The runtime performs visibility gating, import decisions, diagnostics, and idle scheduling before invoking the hook, so apps should not subscribe directly to the scanner or install broad page observers for routine surface work.
 
-Use `context.requestSurfaceRescan()` after a user-visible setting change invalidates already-rendered surface decorations. The runtime coalesces the request through its shared scanner. External packages must not import scanner internals; `scheduleScan` remains only as a deprecated first-party compatibility alias while bundled apps migrate.
+Use `context.site` to inspect the already-validated site ID, origin, and runtime mode. Use `context.requestSurfaceRescan()` after an X/Twitter setting change invalidates rendered scanner surfaces; it is intentionally a no-op on hosts without the Twitter scanner. External packages must not import scanner internals; `scheduleScan` remains only as a deprecated first-party compatibility alias while bundled apps migrate.
 
 Use `context.storage.local` and `context.storage.sync` for app persistence. Each
 area exposes `get`, `set`, `remove`, and `onChanged`, but only for keys declared
@@ -292,7 +293,7 @@ First-party apps and feature packages should satisfy this checklist:
 | --- | --- |
 | Manifest metadata | `src/platform/app-sdk/first-party-apps.json` declares IDs, package kind, content entry, enablement storage, surfaces, cost, load triggers, Hub category, rail support, presets, storage/data/privacy notes, chrome compatibility, settings metadata, and background metadata where applicable. |
 | Lifecycle exports | Content bundles export `boot()` when runtime-loaded, plus `onSurface()`, `onRouteChange()`, `open()`, `close()`, `disable()`, and `dispose()` when their declared surfaces require those hooks. Invoked-only tools declare `lifecycle.mode: "invoked"`, stay `userAction`-only, and do not add fake `boot()` hooks. |
-| Site and route scopes | Packages that claim site-specific behavior declare `siteScopes` with site ID, host patterns, integration mode, surfaces, presentation, and supported route patterns. Direct-message route integrations on X must declare `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` instead of relying on verifier inference. Non-X site scopes must distinguish background services and embedded frames from true content-script runtime loading. |
+| Site and route scopes | Packages that claim site-specific behavior declare `siteScopes` with site ID, exact host patterns, integration mode, surfaces, presentation, supported route patterns, optional site load triggers, and non-X fallback behavior. Direct-message route integrations on X must declare `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...`. Background/embedded scopes do not authorize top-level runtime loading. |
 | No self-booting bundles | Runtime-loaded app bundles must not call `boot()` themselves. The shared runtime owns import timing, enablement, lifecycle calls, abort signals, and diagnostics. |
 | Shared scanner and scheduler | X/Twitter surface work flows through the shared scanner and runtime delivery queue. Routine delays, idle work, and cancellation should use `context.scheduler`; app-owned observers, intervals, or idle callbacks need a narrow feature reason, explicit bounds, and cleanup. Short user-action observers may be accepted when scheduler-capped and disposable, while broad body-subtree observers remain platform debt. |
 | Shared overlay chrome | Docked apps use the shared overlay frame/chrome/layout helpers and declare chrome compatibility instead of owning side-rail, drag, resize, pinning, or theme-detection primitives. |
@@ -306,13 +307,13 @@ First-party platform examples:
 
 | Package | Integration | Notes |
 | --- | --- | --- |
-| RemiNet Chat | Official REST plus isolated legacy adapters | Uses official REST as history and text/reply authority. The undocumented `wss://www.remilia.net/api/ws` bridge is optional acceleration plus legacy media/reaction mutation, while `https://www.remilia.net/media/upload/` and `https://www.remilia.net/media/upload/confirm` are restricted to explicit attachment sends. All three transports remain trusted first-party internals between validated same-extension top-frame X/Twitter and RemiliaNET senders; absence never disables official text chat. |
+| RemiNet Chat | Multi-site launcher with official REST and isolated legacy adapters | Uses shared dock chrome and App SDK routed background messages on X/Twitter and the scoped RemiliaNET launcher. Official REST remains history and text/reply authority. The undocumented `wss://www.remilia.net/api/ws` bridge is optional acceleration plus legacy media/reaction mutation, while the exact upload/confirm endpoints are restricted to explicit attachment sends. These transports remain trusted first-party internals between validated same-extension top-frame X/Twitter and RemiliaNET senders; their absence never disables official text chat. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
-| Miladychan Portal | Aligned | Uses shared overlay chrome, route through background router, and declares remote-service/privacy metadata. Keep public board fetches on allowlisted routes. |
+| Miladychan Portal | Multi-site launcher | Uses shared overlay chrome on X/Twitter and the native Miladychan host. Public board and text-only posting calls remain on allowlisted, credential-omitting background routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
 | Remilia Wiki hyperlinks | Shared surface feature | Inline delivery and manifest-generated Apps & Features preferences with storage-compatible popup mirrors. |
 | Remilia Wiki sidebar | Aligned with internal iframe bridge | Uses shared overlay chrome and declares its wiki sidebar background routes. Frame-local observers and frame-to-background messages are sidebar-frame implementation details; background handlers validate same-extension non-top wiki frame senders before forwarding navigation, history, open-tab, or read-aloud messages. |
-| Post-reading | Shared reader and OCR services | Uses shared scanner delivery, overlay player chrome, App SDK routed full-quote fetches, and the background fetch router. The packaged OCR frame accepts parent requests from allowed X/Twitter/wiki origins only when they carry a content-issued frame authentication token, and its background helper validates the packaged `ocr.html` sender. Voice selection declares dynamic Web Speech options, so saved voice URIs remain browser-profile dependent. |
+| Post-reading | Shared X and Wiki reader | Uses scanner delivery on X/Twitter and a direct `document` surface on approved Remilia Wiki hosts. The packaged OCR frame accepts parent requests from allowed X/Twitter/wiki origins only when they carry a content-issued frame authentication token, and its background helper validates the packaged `ocr.html` sender. |
 | RemiStats and Pokes | Shared surface and background services | Uses shared surface delivery, routed background work, generated settings metadata, and declared storage ownership. |
 | Milady Maxxer | Worker-heavy overlay app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work with explicit model, remote identity, and cache disclosures. |
 | Share Kit | Invoked-only external replacement | Retains the compatibility ID `tweetPng`, declares a `contextualPostActions` share-menu action, and owns Tweet PNG rendering/review UI entirely inside the reviewed package. The base client supplies only the generic host contract. |
@@ -325,7 +326,7 @@ The realtime adapter accepts 256 KiB maximum raw frames at the RemiliaNET page b
 
 Platform boundaries:
 
-- Lifecycle and site metadata covers invoked-only tools, X direct-message routes, and RemiliaNET, Wiki, and Miladychan service/frame integrations. The shared content runtime is X-specific; non-X scopes use their declared background, frame, or overlay integration.
+- Lifecycle and site metadata gates the full X runtime, the RemiliaNET/Miladychan launchers, and the Wiki document runtime. A host permission or non-content integration scope alone never opts an app into page injection.
 - Background route metadata is checked against shared router registrations, with first-party app message patterns declared in the registry.
 - Package work uses the shared scheduler unless a bounded, disposable app-specific mechanism is required.
 - Apps & Features owns enable/open/reset controls and disclosure; detailed preferences belong to app surfaces.
@@ -896,7 +897,7 @@ Shared-service expectations:
 - Overlay packages use `overlayDock`, `overlayAppFrame`, and `overlayPanelBase` behavior instead of custom drag/resize/layout primitives.
 - Background work declares `background.messageTypes`, `background.services`, `permissions.hosts`, privacy notes, and URL allowlists before the router enables it.
 - Settings use the manifest settings schema and storage metadata so Apps & Features, profile packs, reset, and import/export flows can reason about them without importing the app bundle.
-- Packages that declare non-X sites must distinguish `contentScript`, `backgroundService`, `embeddedFrame`, and `overlayApp` integrations; a host permission alone does not mean the full content runtime should inject there.
+- Packages that declare non-X sites must distinguish `contentScript`, `backgroundService`, `embeddedFrame`, and `overlayApp` integrations; only an exact reviewed `contentScript` scope can enter that site's filtered runtime, and it must declare fallback behavior.
 
 Security and trust safeguards:
 

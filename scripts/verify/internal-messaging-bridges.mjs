@@ -85,7 +85,8 @@ function verifyReminetChatSocketBridge() {
   assertNotIncludes(files.reminetChatBackground, "prepareSocketAuth", "RemiNet site socket must not depend on a dormant browser-session preparation route");
   assertNotIncludes(files.reminetChatBackground, "refreshRemiliaAccess", "RemiNet site socket must not refresh ambient browser session state");
 
-  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatSocketSender"), 'isAllowedLegacySender(sender, "x-content")', "RemiNet socket sender policy must use the typed X/Twitter legacy role");
+  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatSocketSender"), 'isAllowedLegacySender(sender, "runtime-content")', "RemiNet socket sender policy must use the typed multi-site runtime role");
+  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatMessageSender"), 'isAllowedLegacySender(sender, "x-content")', "RemiNet privileged runtime messages must retain the typed X/Twitter-only role");
   assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "RemiNet legacy sender policy must require same-extension sender id");
   assertIncludes(senderPolicy, 'typeof sender.tab?.id !== "number"', "RemiNet legacy sender policy must require tab context");
   assertIncludes(senderPolicy, "sender.frameId !== undefined && sender.frameId !== 0", "RemiNet legacy sender policy must reject non-top frames");
@@ -93,6 +94,7 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(senderPolicy, 'url.protocol !== "https:"', "RemiNet legacy sender policy must reject non-HTTPS senders");
   assertIncludes(senderPolicy, 'url.origin === LEGACY_SOCKET_ORIGIN', "RemiNet site sender policy must require the exact RemiliaNET origin");
   assertIncludes(senderPolicy, 'url.origin === "https://x.com" || url.origin === "https://twitter.com"', "RemiNet client sender policy must require exact X/Twitter origins");
+  assertIncludes(senderPolicy, 'role === "runtime-content"', "RemiNet runtime sender policy must use an explicit typed role");
 }
 
 function verifyReminetChatRuntimeBridge() {
@@ -102,7 +104,7 @@ function verifyReminetChatRuntimeBridge() {
   assertIncludes(handler, "if (!isReminetChatMessageSender(sender))", "RemiNet runtime bridge must validate sender before authenticated operations");
   assertIncludes(handler, "UNSUPPORTED_SENDER", "RemiNet runtime bridge must fail closed for unsupported senders");
   assertOrder(handler, "if (!isReminetChatMessageSender(sender))", "if (message.type === \"reminetChat:authStatus\")", "RemiNet runtime bridge must validate sender before dispatch");
-  assertIncludes(senderPolicy, 'isAllowedLegacySender(sender, "x-content")', "RemiNet runtime sender policy must require the exact X/Twitter top-frame role");
+  assertIncludes(senderPolicy, 'isAllowedLegacySender(sender, "x-content")', "RemiNet runtime sender policy must retain the exact X/Twitter top-frame role");
   assertIncludes(matcher, "Object.keys(record)", "RemiNet runtime bridge must exact-key validate message payloads");
   assertIncludes(matcher, "keys.length === 1", "RemiNet auth-status messages must be body-free");
   assertIncludes(matcher, "keys.length === 3", "RemiNet legacy uploads must contain exactly the typed upload fields");
@@ -240,6 +242,12 @@ function verifyMiladyLevelUpSender() {
 
 function verifyCentralRoutedBridgePolicies() {
   const router = files.background;
+  const catalogWrapper = functionBody(router, "openAddonsCatalogWindow");
+  const runtimeSenderPolicy = functionBody(router, "isApprovedRuntimeContentSender");
+  assertIncludes(catalogWrapper, "if (!isApprovedRuntimeContentSender(sender)) return unsupportedSender();", "Add-ons catalog launch must validate approved runtime content senders");
+  for (const host of ["x.com", "twitter.com", "www.remilia.net", "remilia.wiki", "wiki.remilia.org", "boards.miladychan.org"]) {
+    assertIncludes(runtimeSenderPolicy, `"${host}"`, `approved runtime sender policy must include ${host}`);
+  }
   for (const [type, wrapper] of [
     ["milxdy:fetchImageDataUrl", "fetchImageDataUrlForSender"],
     ["miladychan:fetchJson", "fetchMiladychanJsonForSender"],
@@ -257,8 +265,6 @@ function verifyCentralRoutedBridgePolicies() {
 
   for (const wrapper of [
     "fetchImageDataUrlForSender",
-    "fetchMiladychanJsonForSender",
-    "postMiladychanTextForSender",
     "fetchMusicJsonForSender",
     "postMusicFormForSender",
     "fetchMusicImageDataUrlForSender",
@@ -268,6 +274,13 @@ function verifyCentralRoutedBridgePolicies() {
     const body = functionBody(files.background, wrapper);
     assertIncludes(body, "if (!isXContentScriptSender(sender)) return unsupportedSender();", `${wrapper} must require same-extension top-frame X/Twitter sender policy`);
   }
+
+  for (const wrapper of ["fetchMiladychanJsonForSender", "postMiladychanTextForSender"]) {
+    const body = functionBody(files.background, wrapper);
+    assertIncludes(body, "if (!isMiladychanPortalSender(sender)) return unsupportedSender();", `${wrapper} must require the scoped Miladychan portal sender policy`);
+  }
+  const miladychanPolicy = functionBody(files.background, "isMiladychanPortalSender");
+  assertIncludes(miladychanPolicy, '"x.com", "twitter.com", "boards.miladychan.org"', "Miladychan sender policy must allow only X/Twitter and the approved native board host");
 
   const wikiWrapper = functionBody(files.background, "fetchWikiImageDataUrlForSender");
   assertIncludes(wikiWrapper, "if (!isWikiImageSender(sender)) return unsupportedSender();", "wiki image fetches must use the wiki image sender policy");

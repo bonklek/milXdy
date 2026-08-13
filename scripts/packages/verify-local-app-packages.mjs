@@ -12,7 +12,7 @@ const failures = [];
 const notes = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "document", "route", "overlayApp", "composerAction", "replyAction"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validLoadTriggers = new Set(["startup", "surface", "dockOpen", "idle", "userAction"]);
@@ -342,6 +342,16 @@ async function verifyLifecycleAndSites(label, packageDir, manifest) {
       }
     }
     if (scope.presentation !== undefined && !validSitePresentations.has(scope.presentation)) fail(`${label}: invalid site presentation ${scope.presentation}`);
+    if (scope.loadTriggers !== undefined && (!Array.isArray(scope.loadTriggers) || scope.loadTriggers.length === 0)) fail(`${label}: site scope loadTriggers must be a non-empty array`);
+    for (const trigger of scope.loadTriggers || []) {
+      if (!validLoadTriggers.has(trigger)) fail(`${label}: site scope declares unsupported load trigger ${trigger}`);
+    }
+    if (scope.site !== "x" && scope.integration === "contentScript") {
+      if (!scope.fallback || !["nativeSite", "externalPage", "none"].includes(scope.fallback.mode) || typeof scope.fallback.note !== "string" || !scope.fallback.note.trim()) {
+        fail(`${label}: non-X content-script scope must declare fallback mode and note`);
+      }
+      if (scope.fallback?.url !== undefined && !/^https:\/\//.test(scope.fallback.url)) fail(`${label}: site fallback URL must use HTTPS`);
+    }
     for (const route of scope.routes || []) {
       if (!validRouteMatchTypes.has(route.type)) fail(`${label}: invalid route match type ${route.type}`);
       if (typeof route.path !== "string" || !route.path.startsWith("/")) fail(`${label}: route paths must start with /`);

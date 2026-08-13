@@ -196,7 +196,7 @@ export function isExactLegacyHttpEndpoint(value: string, expected: string): bool
 
 export function isAllowedLegacySender(
   sender: chrome.runtime.MessageSender | undefined,
-  role: "x-content" | "remilia-bridge",
+  role: "x-content" | "remilia-bridge" | "runtime-content",
 ): boolean {
   if (!sender || sender.id !== chrome.runtime.id || typeof sender.tab?.id !== "number") return false;
   if (sender.frameId !== undefined && sender.frameId !== 0) return false;
@@ -205,6 +205,11 @@ export function isAllowedLegacySender(
     const url = new URL(source);
     if (url.protocol !== "https:" || url.username || url.password) return false;
     if (role === "remilia-bridge") return url.origin === LEGACY_SOCKET_ORIGIN;
+    if (role === "runtime-content") {
+      return url.origin === LEGACY_SOCKET_ORIGIN
+        || url.origin === "https://x.com"
+        || url.origin === "https://twitter.com";
+    }
     return url.origin === "https://x.com" || url.origin === "https://twitter.com";
   } catch {
     return false;

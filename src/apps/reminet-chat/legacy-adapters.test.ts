@@ -61,6 +61,13 @@ describe("legacy sender and socket schemas", () => {
     });
     expect(isAllowedLegacySender(sender("https://x.com/messages"), "x-content")).toBe(true);
     expect(isAllowedLegacySender(sender("https://twitter.com/i/chat"), "x-content")).toBe(true);
+    expect(isAllowedLegacySender(sender("https://x.com/messages"), "runtime-content")).toBe(true);
+    expect(isAllowedLegacySender(sender("https://twitter.com/i/chat"), "runtime-content")).toBe(true);
+    expect(isAllowedLegacySender(sender("https://www.remilia.net/global-chat"), "runtime-content")).toBe(true);
+    expect(isAllowedLegacySender(sender("https://remilia.net/global-chat"), "runtime-content")).toBe(false);
+    expect(isAllowedLegacySender(sender("https://wiki.remilia.org/"), "runtime-content")).toBe(false);
+    expect(isAllowedLegacySender(sender("http://www.remilia.net/"), "runtime-content")).toBe(false);
+    expect(isAllowedLegacySender(sender("https://www.remilia.net/", 2), "runtime-content")).toBe(false);
     expect(isAllowedLegacySender(sender("https://www.remilia.net/global-chat"), "remilia-bridge")).toBe(true);
     expect(isAllowedLegacySender(sender("https://www.remilia.net.evil.example/"), "remilia-bridge")).toBe(false);
     expect(isAllowedLegacySender(sender("http://www.remilia.net/"), "remilia-bridge")).toBe(false);

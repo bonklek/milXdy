@@ -9,6 +9,7 @@ const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
 const externalHandoffContract = await readFile("src/platform/app-sdk/external-handoff.ts", "utf8");
 const contentRuntime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+const siteRuntime = await readFile("src/platform/runtime/site-runtime.ts", "utf8");
 const backgroundMessagePolicy = await readFile("src/platform/runtime/background-message-policy.ts", "utf8");
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
 const background = await readFile("src/extension/background/index.ts", "utf8");
@@ -29,7 +30,8 @@ const failures = [];
 const warnings = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "document", "route", "overlayApp", "composerAction", "replyAction"]);
+const validLoadTriggers = new Set(["startup", "surface", "dockOpen", "idle", "userAction"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validSites = new Set(["x", "remiliaNet", "remiliaWiki", "miladychan"]);
@@ -216,15 +218,19 @@ function verifyLocalPackageShapeContract() {
 }
 
 function verifyRootAndRuntimeOwnership() {
-  requireIncludes(contentRoot, "createContentRuntime(FIRST_PARTY_APPS)", "content root must bootstrap the shared content runtime");
+  requireIncludes(contentRoot, "appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)", "content root must filter the registry for the resolved runtime site");
+  requireIncludes(contentRoot, "createContentRuntime(runtimeApps, runtimeSite)", "content root must bootstrap the shared content runtime with validated site context");
   if (/from\s+["']\.\/features\//.test(contentRoot) || /import\s*\([^)]*features\//.test(contentRoot)) {
     fail("src/extension/content/index.ts must not import feature bundles directly");
   }
   requireIncludes(contentRuntime, "observeHubGeneratedSettings()", "runtime must own generated settings observation");
   requireIncludes(contentRuntime, "hubGeneratedFeatureSettings", "runtime must own generated feature settings selection");
   requireIncludes(contentRuntime, "subscribeTwitterSurfaces(handleSurface)", "runtime must own shared Twitter/X scanner subscription");
-  requireIncludes(contentRuntime, "currentAppSiteId()", "runtime route scope loading must resolve the current site");
-  requireIncludes(contentRuntime, "siteScopeMatchesCurrentHost", "runtime route scope loading must check host-aware site metadata");
+  requireIncludes(contentRuntime, "routeScopeMatches(app, state.site, route.pathname)", "runtime route scope loading must check validated site metadata");
+  requireIncludes(siteRuntime, "scope.integration === \"contentScript\"", "site runtime must require an explicit content-script integration scope");
+  for (const origin of ["https://x.com", "https://twitter.com", "https://www.remilia.net", "https://remilia.wiki", "https://wiki.remilia.org", "https://boards.miladychan.org"]) {
+    requireIncludes(siteRuntime, origin, `site runtime must declare approved origin ${origin}`);
+  }
   requireIncludes(contentRuntime, "scheduler,", "runtime must provide shared scheduling through context.scheduler");
   requireIncludes(backgroundMessagePolicy, "extractBackgroundMessageType", "runtime policy must extract App SDK background message types before sending");
   requireIncludes(contentRuntime, "dispatchAuthorizedBackgroundMessage", "runtime must enforce App SDK background message capability metadata before queueing");
@@ -328,6 +334,20 @@ function verifyLifecycleAndSiteMetadata(app) {
     }
     if (scope.presentation !== undefined && !validSitePresentations.has(scope.presentation)) {
       fail(`${app.id}: unsupported site presentation ${scope.presentation}`);
+    }
+    if (scope.loadTriggers !== undefined && (!Array.isArray(scope.loadTriggers) || scope.loadTriggers.length === 0)) {
+      fail(`${app.id}: site scope loadTriggers must be a non-empty array`);
+    }
+    for (const trigger of scope.loadTriggers || []) {
+      if (!validLoadTriggers.has(trigger)) fail(`${app.id}: site scope declares unsupported load trigger ${trigger}`);
+    }
+    if (scope.site !== "x" && scope.integration === "contentScript") {
+      if (!scope.fallback || !["nativeSite", "externalPage", "none"].includes(scope.fallback.mode) || typeof scope.fallback.note !== "string" || !scope.fallback.note.trim()) {
+        fail(`${app.id}: non-X content-script scope must declare fallback mode and note`);
+      }
+      if (scope.fallback?.url !== undefined && !/^https:\/\//.test(scope.fallback.url)) {
+        fail(`${app.id}: site fallback URL must use HTTPS`);
+      }
     }
     if (scope.routes !== undefined && !Array.isArray(scope.routes)) fail(`${app.id}: site scope routes must be an array`);
     for (const route of Array.isArray(scope.routes) ? scope.routes : []) {
@@ -509,7 +529,7 @@ async function verifyContentModules() {
     if (app.surfaces?.includes("route") && !exports.has("onRouteChange")) {
       warn(`${app.id}: route surface is inferred from runtime behavior but onRouteChange() is not exported`);
     }
-    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["overlayApp", "route", "directMessage", "composerAction", "replyAction"].includes(surface));
+    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["document", "overlayApp", "route", "directMessage", "composerAction", "replyAction"].includes(surface));
     if (twitterSurfaces.length > 0 && !exports.has("onSurface")) {
       fail(`${app.id}: declares Twitter/X delivery surfaces but does not export onSurface()`);
     }
@@ -761,7 +781,7 @@ function directRuntimeBridgeWarning(appId, file, source, kind) {
   }
   if (!/chrome\.runtime\.connect\s*\(/.test(source)) return null;
   if (normalized.endsWith("src/apps/reminet-chat/content.ts")) {
-    return `${file}: intentionally internal RemiNet Chat socket bridge; background restricts runtime.connect to same-extension top-frame X/Twitter senders`;
+    return `${file}: intentionally internal RemiNet Chat socket bridge; background restricts runtime.connect to same-extension top-frame X/Twitter and RemiliaNET senders`;
   }
   const label = appId || file;
   return `${label}: transitional/internal chrome.runtime.connect port bypasses App SDK message metadata; keep scoped to documented streaming bridges`;

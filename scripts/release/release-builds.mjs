@@ -24,13 +24,13 @@ export const coreHostPermissions = [
 export const contentScriptMatches = [
   "https://x.com/*",
   "https://twitter.com/*",
-];
-
-export const webAccessibleMatches = [
-  ...contentScriptMatches,
+  "https://www.remilia.net/*",
   "https://remilia.wiki/*",
   "https://wiki.remilia.org/*",
+  "https://boards.miladychan.org/*",
 ];
+
+export const webAccessibleMatches = [...contentScriptMatches];
 
 export const commonAssetDirs = [
   "brand",

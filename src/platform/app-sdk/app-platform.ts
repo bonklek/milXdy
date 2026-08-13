@@ -12,7 +12,7 @@ export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageCh
 
 export type MilxdyAppId = string;
 
-export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp" | "composerAction" | "replyAction";
+export type MilxdyAppSurface = TwitterSurfaceKind | "document" | "route" | "overlayApp" | "composerAction" | "replyAction";
 export type AppCostLevel = "cheap" | "moderate" | "heavy";
 export type AppNetworkCost = "none" | "batched" | "eager";
 export type AppWorkerCost = "none" | "optional" | "heavy";
@@ -29,6 +29,8 @@ export type AppSiteId = "x" | "remiliaNet" | "remiliaWiki" | "miladychan";
 export type AppRouteMatchType = "exact" | "prefix";
 export type AppSiteIntegration = "contentScript" | "backgroundService" | "embeddedFrame" | "overlayApp";
 export type AppSitePresentation = "sideRailOverlay" | "hostRouteOverlay" | "userAction";
+export type AppSiteRuntimeMode = "fullRail" | "appLauncher" | "featureOnly";
+export type AppSiteFallbackMode = "nativeSite" | "externalPage" | "none";
 export type AppSettingStorageArea = "local" | "sync";
 export type AppSettingScope = "global" | "app" | "feature";
 export type AppSettingLocation = "appearance" | "appsAndFeatures" | "appSurface" | "advanced";
@@ -210,8 +212,20 @@ export type AppSiteScope = {
   integration: AppSiteIntegration;
   surfaces: MilxdyAppSurface[];
   routes?: AppRoutePattern[];
+  loadTriggers?: AppLoadTrigger[];
   presentation?: AppSitePresentation;
+  fallback?: {
+    mode: AppSiteFallbackMode;
+    url?: string;
+    note: string;
+  };
   notes?: string[];
+};
+
+export type MilxdyRuntimeSite = {
+  id: AppSiteId;
+  origin: string;
+  mode: AppSiteRuntimeMode;
 };
 
 export type MilxdyAppManifest = {
@@ -376,6 +390,7 @@ export type AppRuntimeScheduler = {
 
 export type MilxdyContentAppContext = {
   manifest: MilxdyAppManifest;
+  site: MilxdyRuntimeSite;
   signal: AbortSignal;
   requestSurfaceRescan: () => void;
   /** @deprecated Internal compatibility alias. External packages use requestSurfaceRescan. */
@@ -523,6 +538,8 @@ export type MilxdyContentAppModule = {
 };
 
 export type MilxdyRouteChange = {
+  site: AppSiteId;
+  origin: string;
   href: string;
   pathname: string;
   previousHref: string | null;
