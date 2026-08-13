@@ -120,6 +120,9 @@ type StoredPokeCooldownState = {
 };
 
 export class RemiStatsOfficialService {
+  private notificationReadWriteQueue: Promise<void> = Promise.resolve();
+  private pokeCooldownWriteQueue: Promise<void> = Promise.resolve();
+
   constructor(
     private readonly client: RemiliaApiClient,
     private readonly storage: RemiStatsStorage,
@@ -251,15 +254,19 @@ export class RemiStatsOfficialService {
   async markNotificationsRead(keys: readonly string[]): Promise<{ ok: true; marked: number }> {
     const accepted = [...new Set(keys.filter(isNotificationKey))];
     if (accepted.length === 0) return { ok: true, marked: 0 };
-    const state = await this.readNotificationReadState();
-    const byKey = new Map(state.entries.map((entry) => [entry.key, entry]));
-    const readAt = this.now();
-    for (const key of accepted) byKey.set(key, { key, readAt });
-    const entries = [...byKey.values()]
-      .filter((entry) => readAt - entry.readAt <= NOTIFICATION_READ_RETENTION_MS)
-      .sort((left, right) => right.readAt - left.readAt || left.key.localeCompare(right.key))
-      .slice(0, MAX_NOTIFICATION_READ_ENTRIES);
-    await this.storage.set(REMISTATS_NOTIFICATION_READ_STATE_KEY, { schemaVersion: 1, entries } satisfies StoredNotificationReadState);
+    const write = this.notificationReadWriteQueue.then(async () => {
+      const state = await this.readNotificationReadState();
+      const byKey = new Map(state.entries.map((entry) => [entry.key, entry]));
+      const readAt = this.now();
+      for (const key of accepted) byKey.set(key, { key, readAt });
+      const entries = [...byKey.values()]
+        .filter((entry) => readAt - entry.readAt <= NOTIFICATION_READ_RETENTION_MS)
+        .sort((left, right) => right.readAt - left.readAt || left.key.localeCompare(right.key))
+        .slice(0, MAX_NOTIFICATION_READ_ENTRIES);
+      await this.storage.set(REMISTATS_NOTIFICATION_READ_STATE_KEY, { schemaVersion: 1, entries } satisfies StoredNotificationReadState);
+    });
+    this.notificationReadWriteQueue = write.catch(() => undefined);
+    await write;
     return { ok: true, marked: accepted.length };
   }
 
@@ -365,18 +372,20 @@ export class RemiStatsOfficialService {
   }
 
   private async storePokeCooldown(handle: string, until: number): Promise<void> {
-    const state = await this.readPokeCooldownState();
-    state.targets[handle.toLowerCase()] = { until, observedAt: this.now(), source: "official" };
-    await this.storage.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, state);
+    await this.mutatePokeCooldownState((state) => {
+      state.targets[handle.toLowerCase()] = { until, observedAt: this.now(), source: "official" };
+      return true;
+    });
   }
 
   private async removePokeCooldown(handle: string): Promise<void> {
     const key = handle.toLowerCase();
     if (!key) return;
-    const state = await this.readPokeCooldownState();
-    if (!Object.hasOwn(state.targets, key)) return;
-    delete state.targets[key];
-    await this.storage.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, state);
+    await this.mutatePokeCooldownState((state) => {
+      if (!Object.hasOwn(state.targets, key)) return false;
+      delete state.targets[key];
+      return true;
+    });
   }
 
   private async getStoredPokeCooldown(handle: string): Promise<StoredPokeCooldown | null> {
@@ -391,6 +400,15 @@ export class RemiStatsOfficialService {
       ...diagnostic,
       updatedAt: this.now(),
     });
+  }
+
+  private async mutatePokeCooldownState(mutator: (state: StoredPokeCooldownState) => boolean): Promise<void> {
+    const write = this.pokeCooldownWriteQueue.then(async () => {
+      const state = await this.readPokeCooldownState();
+      if (mutator(state)) await this.storage.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, state);
+    });
+    this.pokeCooldownWriteQueue = write.catch(() => undefined);
+    await write;
   }
 }
 

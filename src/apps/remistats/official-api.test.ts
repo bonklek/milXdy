@@ -147,6 +147,22 @@ describe("RemiStats official API service", () => {
     expect(storage.values.has(REMISTATS_NOTIFICATION_READ_STATE_KEY)).toBe(false);
   });
 
+  it("serializes concurrent local read updates from multiple tabs", async () => {
+    const listMyNotifications = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { notifications: [notification("alice", 20), notification("bob", 10)], page: 1, limit: 50, has_more: false },
+    });
+    const storage = new MemoryStorage();
+    const service = new RemiStatsOfficialService(apiClient({ listMyNotifications } as Partial<RemiliaApiClient>), storage, () => 1_800_000_000_000);
+    const incoming = await service.getIncomingPokes();
+    if (!incoming.ok) throw new Error("expected notifications");
+
+    await Promise.all(incoming.pokes.map((poke) => service.markNotificationsRead([poke.key])));
+    const state = storage.values.get(REMISTATS_NOTIFICATION_READ_STATE_KEY) as { entries: Array<{ key: string }> };
+    expect(state.entries.map((entry) => entry.key).sort()).toEqual(incoming.pokes.map((poke) => poke.key).sort());
+  });
+
   it("does not invent a fixed cooldown after a successful poke", async () => {
     const pokeUser = vi.fn().mockResolvedValue({
       ok: true,
