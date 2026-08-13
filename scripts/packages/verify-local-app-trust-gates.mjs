@@ -858,7 +858,7 @@ try {
   const absolutePlan = await composeBuildPlan("absolute-package-plan", { packagePath: path.resolve("examples/packages/first-party-replacements/tweetPng") });
   assertGeneratedCopyTargets(absolutePlan);
   assertGeneratedRuntimeMetadata(absolutePlan);
-  if (path.isAbsolute(absolutePlan.packageSources[0].root)) {
+  if (absolutePlan && path.isAbsolute(absolutePlan.packageSources[0].root)) {
     fail("absolute package input should be recorded as a build-plan-safe relative root for workspace-contained packages");
   }
   await runBuildPlanCase("workspace absolute package input composes into a buildable relative plan", absolutePlan, (plan) => {

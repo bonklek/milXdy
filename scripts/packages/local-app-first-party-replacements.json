@@ -9,7 +9,7 @@
         "catalog/tweetPng",
         "catalog-staging/tweetPng"
       ],
-      "packageSha256": "f88683aed02a28f9c80e667af5782a36d9306a6286d3f46a5950652d02e91d7a",
+      "packageSha256": "3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9",
       "reason": "Reviewed Share Kit replacement preserving the stable tweetPng identity and settings, with exact-pinned Pretext 0.0.8 Unicode layout."
     },
     {

@@ -19,11 +19,18 @@ import {
 
 describe("Share Kit package compatibility", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
+  const packageBundle = readFileSync("examples/packages/first-party-replacements/tweetPng/dist/content.js", "utf8");
   const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
   const packageIcon = readFileSync("examples/packages/first-party-replacements/tweetPng/assets/tweet-png-icon.svg", "utf8");
   const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
   const chatSource = readFileSync("src/apps/reminet-chat/content.ts", "utf8");
   const backgroundSource = readFileSync("src/extension/background/index.ts", "utf8");
+
+  it("keeps dependency labels independent of the dependency install path", () => {
+    expect(packageBundle).toContain("// node_modules/@chenglou/pretext/");
+    expect(packageBundle).not.toMatch(/^\/\/ (?:\.\.\/|\/|[A-Za-z]:[\\/])/mu);
+    expect(packageBundle).not.toMatch(/(?:\.codex|worktrees[\\/])/u);
+  });
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({

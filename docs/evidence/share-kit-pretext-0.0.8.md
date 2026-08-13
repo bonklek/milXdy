@@ -14,13 +14,13 @@ long-run, and Unicode-symbol fixes through `0.0.8`.
 - npm tarball SHA-1: `e8cac3533b7229816c3c8a11401d8e8b14bda9a5`
 - npm integrity: `sha512-yqm2GMxnPI7VHcHwe84P8ZF0JK/2d2DMKPqMN+s95jQhwDMYYXKVFVJUMEaVWckQStdsjdLav/0Vu+d9YbtGxA==`
 - License: MIT, Copyright (c) 2026 Pretext contributors
-- Share Kit package/content SHA-256: `bc9a45a7b1659e17c75e69f323a1619b1d6c24dbadea72c093f65e3831f62ee1`
+- Share Kit package/content SHA-256: `3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9`
 - Share Kit manifest SHA-256: `8bff62a878e857dc1cfd25e80a292fd7790d0d41fc2236d033a51596868d86ed`
-- Share Kit content-entry SHA-256: `9db9b6fc5e18271fdf4cef19b772d3e2d5c2740b570bd904ad7690f3d9d5ce5e`
-- Canonical post-#74 composition fingerprint: `0e2292b63ccb301828ab9b5480e9699fd56365106736bcbadf761050ab75c774`
+- Share Kit content-entry SHA-256: `1e4c9cae7551252c264addb5439f5be157d6e1aa56adc94faa5be33a86102245`
+- Canonical release-candidate composition fingerprint: `a6f64ffa2dd14ef460e591cbfaba129be69216c25e02a9c372fadb552a6976a8`
   for `post-reading` (`01ca79910d26266ca4b89681ea5998da454c140aa7e4e776ae008123bb2b9fa3`),
   `tweet-composer-kit` (`99b316f54c2fb350f3a02dd5bea21b797b2f280afe6f6db2c1826ee54a8a8985`),
-  and `tweetPng` (`bc9a45a7b1659e17c75e69f323a1619b1d6c24dbadea72c093f65e3831f62ee1`)
+  and `tweetPng` (`3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9`)
 - Bundled use: local multiline Canvas layout for Share Kit post, quoted-post,
   link-card, and future formatted-run text after explicit user invocation
 

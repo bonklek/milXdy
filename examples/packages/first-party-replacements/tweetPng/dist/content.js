@@ -1,4 +1,4 @@
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/generated/bidi-data.js
+// node_modules/@chenglou/pretext/dist/generated/bidi-data.js
 var latin1BidiTypes = [
   "BN",
   "BN",
@@ -974,7 +974,7 @@ var nonLatin1BidiRanges = [
   [1114110, 1114111, "BN"]
 ];
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/bidi.js
+// node_modules/@chenglou/pretext/dist/bidi.js
 function classifyCodePoint(codePoint) {
   if (codePoint <= 255)
     return latin1BidiTypes[codePoint];
@@ -1132,7 +1132,7 @@ function computeSegmentLevels(normalized, segStarts) {
   return segLevels;
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/analysis.js
+// node_modules/@chenglou/pretext/dist/analysis.js
 var collapsibleWhitespaceRunRe = /[ \t\n\r\f]+/g;
 var needsWhitespaceNormalizationRe = /[\t\n\r\f]| {2,}|^ | $/;
 function getWhiteSpaceProfile(whiteSpace) {
@@ -2314,7 +2314,7 @@ function analyzeText(text, profile, whiteSpace = "normal", wordBreak = "normal")
   };
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/measurement.js
+// node_modules/@chenglou/pretext/dist/measurement.js
 var measureContext = null;
 var segmentMetricCaches = /* @__PURE__ */ new Map();
 var cachedEngineProfile = null;
@@ -2508,7 +2508,7 @@ function getFontMeasurementState(font, needsEmojiCorrection) {
   return { cache, fontSize, emojiCorrection };
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/line-break.js
+// node_modules/@chenglou/pretext/dist/line-break.js
 function consumesAtLineStart(kind) {
   return kind === "space" || kind === "zero-width-break" || kind === "soft-hyphen";
 }
@@ -3298,7 +3298,7 @@ function stepPreparedLineGeometry(prepared, cursor, maxWidth) {
   return stepPreparedLineGeometryFromChunk(prepared, cursor, chunkIndex, maxWidth);
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/line-text.js
+// node_modules/@chenglou/pretext/dist/line-text.js
 var sharedGraphemeSegmenter2 = null;
 var sharedLineTextCaches = /* @__PURE__ */ new WeakMap();
 function getSharedGraphemeSegmenter2() {
@@ -3360,7 +3360,7 @@ function buildLineTextFromRange(prepared, cache, startSegmentIndex, startGraphem
   return text;
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/layout.js
+// node_modules/@chenglou/pretext/dist/layout.js
 var sharedGraphemeSegmenter3 = null;
 function getSharedGraphemeSegmenter3() {
   if (sharedGraphemeSegmenter3 === null) {
@@ -3718,7 +3718,7 @@ function layoutWithLines(prepared, maxWidth, lineHeight) {
   return { lineCount, height: lineCount * lineHeight, lines };
 }
 
-// ../../6796/milXdy-browser/node_modules/@chenglou/pretext/dist/rich-inline.js
+// node_modules/@chenglou/pretext/dist/rich-inline.js
 var COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+/;
 var LEADING_COLLAPSIBLE_BOUNDARY_RE = /^[ \t\n\f\r]+/;
 var TRAILING_COLLAPSIBLE_BOUNDARY_RE = /[ \t\n\f\r]+$/;
