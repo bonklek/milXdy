@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.2",
+  "packageVersion": "0.2.0-sdk.3",
   "appSdkVersion": "0.2.5",
   "browserTarget": "chromium",
   "scenarios": [
@@ -34,6 +34,11 @@
       "id": "messaging-boundaries",
       "automated": "Direct runtime messaging and undeclared browser storage/asset access are rejected; the reviewed post-reading namespace is declared.",
       "manual": "Exercise full-quote requests and confirm success and failure stay within the visible reader flow without leaking unrelated host capabilities."
+    },
+    {
+      "id": "audio-export",
+      "automated": "The package declares one explicit HTTP/HTTPS active-tab page action, ships its secondary entry, rejects direct browser APIs in that entry, and verifies extraction, loopback-only TTS, cancellation, object-URL cleanup, and standalone parity.",
+      "manual": "Invoke Review and download audio on an X Article and a non-X article, edit title/metadata/text, select local TTS, preview, cancel once, retry, and download preferred audio plus the adjacent metadata sidecar; confirm unsupported pages are rejected and closing the panel discards temporary data."
     },
     {
       "id": "tts-fallback",

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.2",
+  "packageVersion": "0.2.0-sdk.3",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/issue-18-sdk-sync",
+  "sourceBranch": "codex/76-audio-export-external",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
     "minVersion": "0.2.5",
@@ -18,14 +18,15 @@
     "shared scheduler and cancellation",
     "routed post-reading background messages",
     "diagnostics",
-    "existing settings compatibility"
+    "existing settings compatibility",
+    "manifest-declared active-tab page context actions"
   ],
   "reviewedExceptions": [
     "host-provided OCR frame and worker assets",
     "host-provided post-reading background handlers"
   ],
   "unsupported": [
-    "package-owned background module registration",
+    "ambient or package-owned arbitrary-tab injection",
     "public shared overlay/dock primitives",
     "runtime installation into an already-installed extension"
   ]

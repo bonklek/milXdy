@@ -6,9 +6,9 @@ declaration, and acceptance matrix live in `bonklek/post-reading`. milXdy owns
 the public SDK runtime, shared services, trust policy, pinned source commit and
 package hash, and mirrors used to detect contract drift.
 
-The current pair is Post-reading `0.2.0-sdk.2` at commit
-`034ccface59fe4993f5d0c24b13551e32e75e5e0` with App SDK `0.2.5` and package
-SHA-256 `76eb4e1bf37d7d3c8cc67bbab150389ecdccff95b404eb3e8172b223c2b3059f`.
+The current pair is Post-reading `0.2.0-sdk.3` at commit
+`10febd3b62616138ba18a6c198d74009af09fd46` with App SDK `0.2.5` and package
+SHA-256 `f5683c3181f3ac5f865444b778aa6c845ff2577c3a7c7ce963dcc55d326ad7df`.
 
 Run the complete cross-repository proof from this repository with:
 
@@ -47,6 +47,7 @@ version pair, mirrored contracts, and pin.
 | Scheduler and cancellation | Supported | Uses the public scheduler, abort signal, and disposable registration. |
 | Bounded surface rescan | Supported | Uses `context.requestSurfaceRescan()`; private scanner access is not exposed. |
 | Background requests | Supported through host routes | Uses `context.sendMessage()` and the declared `post-reading:*` namespace. |
+| Explicit page actions | Supported | A reviewed manifest entry receives only its declared sync keys after an HTTP/HTTPS active-tab context-menu invocation. |
 | Diagnostics | Supported | Uses the public diagnostics callback. |
 | Settings compatibility | Supported | The replacement retains declared built-in keys and defaults. |
 | Storage facade | Supported | Uses declared-key `context.storage` areas; undeclared access fails before browser storage. |
@@ -79,7 +80,8 @@ The machine-readable matrix is mirrored at
 candidate across install/connect, update and version mismatch, enable/disable,
 post and X Article launch/navigation, settings persistence/reset/migration,
 message boundaries, browser and custom TTS, offline/error/timeout/cancellation,
-privacy/consent, theme/layout/accessibility, and uninstall/cleanup.
+privacy/consent, theme/layout/accessibility, long-form audio export, and
+uninstall/cleanup.
 
 Automated verification proves the exact source, contracts, package contents,
 trust policy, lifecycle exports, public SDK type compatibility, negative tamper

@@ -67,7 +67,7 @@ assert(referenceCompatibility.appSdk?.targetVersion === packageJson.appSdkVersio
 assert(referenceAcceptance.packageId === referenceCompatibility.packageId, "external acceptance mirror must identify the compatibility package");
 assert(referenceAcceptance.packageVersion === referenceCompatibility.packageVersion, "external acceptance mirror must match the compatibility package version");
 assert(referenceAcceptance.appSdkVersion === packageJson.appSdkVersion, "external acceptance mirror must target the current App SDK");
-for (const id of ["install-connect", "update-version-mismatch", "enable-disable", "launch-navigation", "settings-migration", "messaging-boundaries", "tts-fallback", "error-offline-timeout-cancellation", "privacy-consent", "theme-layout-accessibility", "uninstall-cleanup"]) {
+for (const id of ["install-connect", "update-version-mismatch", "enable-disable", "launch-navigation", "settings-migration", "messaging-boundaries", "audio-export", "tts-fallback", "error-offline-timeout-cancellation", "privacy-consent", "theme-layout-accessibility", "uninstall-cleanup"]) {
   const scenario = referenceAcceptance.scenarios?.find((candidate) => candidate.id === id);
   assert(scenario?.automated && scenario?.manual, `external acceptance mirror must define ${id}`);
 }
