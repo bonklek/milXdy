@@ -51,11 +51,42 @@ describe("Post-reading audio export broker", () => {
     }, sender);
 
     await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenCalledWith("http://127.0.0.1:8787/tts", expect.objectContaining({
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    }));
     expect(transportSignal?.aborted).toBe(false);
     await expect(handlePostReadingBackgroundMessage({ type: "post-reading:cancelAudioExport", requestId }, sender))
       .resolves.toMatchObject({ ok: true, canceled: true });
     expect(transportSignal?.aborted).toBe(true);
     await expect(pending).resolves.toMatchObject({ ok: false, error: "Audio generation canceled." });
+  });
+
+  it("fails a redirect response without attempting a redirected request", async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 302, headers: { location: "http://localhost:9999/tts" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const response = await handlePostReadingBackgroundMessage({
+      type: "post-reading:generateAudioExport",
+      requestId: "request-redirect-1",
+      endpoint: "http://localhost:8787/tts",
+      text: "Reviewed text",
+      rate: 1,
+      volume: 1,
+      voiceURI: null,
+    }, {
+      id: "milxdy-test",
+      tab: { id: 23, url: "https://example.com/article" },
+      frameId: 0,
+      url: "https://example.com/article",
+    } as chrome.runtime.MessageSender);
+    expect(response).toMatchObject({ ok: false, error: "Custom TTS endpoint returned HTTP 302." });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:8787/tts", expect.objectContaining({
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+    }));
   });
 
   it("rejects remote endpoints before network access", async () => {

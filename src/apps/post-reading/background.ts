@@ -65,6 +65,8 @@ async function fetchPostReadingResource(message: FetchResourceMessage, sender: c
     const response = await runNetworkTask(
       (signal) => fetch(message.url, {
         credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
         signal: AbortSignal.any([signal, createBackgroundNetworkDeadlineSignal()]),
       }),
       message.type,
@@ -124,6 +126,8 @@ async function generateAudioExport(message: GenerateAudioExportMessage, sender: 
     const audioUrl = normalizeLoopbackUrl(payload.audioUrl, "Custom TTS audio URL");
     const response = await runNetworkTask((signal) => fetch(audioUrl, {
       credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
       signal: AbortSignal.any([signal, abort.signal, createBackgroundNetworkDeadlineSignal()]),
     }), "post-reading:audioExportResult");
     if (!response.ok) return { ok: false, error: `Custom TTS audio URL returned HTTP ${response.status}.` };
@@ -168,6 +172,8 @@ async function fetchAudioExportEnvelope(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
     body: JSON.stringify({ text: message.text, rate: message.rate, volume: message.volume, voiceURI: message.voiceURI }),
     signal: AbortSignal.any([signal, cancelSignal, createBackgroundNetworkDeadlineSignal()]),
   }), "post-reading:generateAudioExport");
