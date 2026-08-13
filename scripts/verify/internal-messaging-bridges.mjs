@@ -77,7 +77,7 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(auth, "await isRemiliaDisconnected()", "RemiNet socket auth cache must honor explicit connector logout before reuse");
   assertIncludes(auth, "socketAuthGeneration", "RemiNet socket auth must reject late results after logout or timeout");
   assertIncludes(auth, "generation !== socketAuthGeneration", "RemiNet socket auth must check request generation before caching credentials");
-  assertIncludes(auth, "prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
+  assertIncludes(auth, "prepareRemiliaAccess([\"remilia:chat.read\"], { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
   assertIncludes(auth, "abort.abort(new DOMException", "RemiNet socket auth timeout must abort underlying authentication work");
 
   assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\"])", "RemiNet socket sender policy must restrict to X/Twitter hosts");

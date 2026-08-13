@@ -1,132 +1,480 @@
+import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const CLIENT_ID = "milxdy-beta-test";
+const REDIRECT_URI = "https://abcdefghijklmnopabcdefghijklmnop.chromiumapp.org/remilia-oauth";
+const ISSUER = "https://www.remilia.net/oidc/realms/remilia";
+const DISCOVERY_URL = `${ISSUER}/.well-known/openid-configuration`;
+const AUTHORIZATION_ENDPOINT = `${ISSUER}/protocol/openid-connect/auth`;
+const TOKEN_ENDPOINT = `${ISSUER}/protocol/openid-connect/token`;
+const REVOCATION_ENDPOINT = `${ISSUER}/protocol/openid-connect/revoke`;
+const JWKS_ENDPOINT = `${ISSUER}/protocol/openid-connect/certs`;
+const SIGNING_KEY_ID = "milxdy-test-key";
+const TEST_KEYS = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const TEST_PUBLIC_JWK = TEST_KEYS.publicKey.export({ format: "jwk" });
+
+type StorageFixture = {
+  local: Map<string, unknown>;
+  session: Map<string, unknown>;
+  localArea: ReturnType<typeof storageArea>;
+  sessionArea: ReturnType<typeof storageArea> & { setAccessLevel: ReturnType<typeof vi.fn> };
+};
 
 beforeEach(() => {
   vi.resetModules();
+  vi.useRealTimers();
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
 });
 
-describe("Remilia auth logout boundary", () => {
-  it("does not let delayed session adoption restore credentials after logout begins", async () => {
-    const stored = new Map<string, unknown>();
-    let resolveCookie: ((value: { value: string }) => void) | undefined;
-    const delayedCookie = new Promise<{ value: string }>((resolve) => {
-      resolveCookie = resolve;
+describe("Remilia OIDC PKCE", () => {
+  it("uses discovery, exact callback/state, S256 PKCE, and nonce-bound ID tokens", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    const launchWebAuthFlow = vi.mocked(chrome.identity.launchWebAuthFlow);
+    launchWebAuthFlow.mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=one-use-code&state=${state}&iss=${encodeURIComponent(ISSUER)}`;
     });
+    const fetchMock = installSuccessfulFetch(() => authorizationUrl);
 
-    vi.stubGlobal("chrome", {
-      storage: {
-        local: {
-          get: vi.fn(async (keys: string[]) => Object.fromEntries(keys.map((key) => [key, stored.get(key)]))),
-          set: vi.fn(async (values: Record<string, unknown>) => {
-            for (const [key, value] of Object.entries(values)) stored.set(key, value);
-          }),
-          remove: vi.fn(async (keys: string[]) => {
-            for (const key of keys) stored.delete(key);
-          }),
-        },
-      },
-      cookies: {
-        get: vi.fn(() => delayedCookie),
-        set: vi.fn(async () => undefined),
-        remove: vi.fn(async () => undefined),
-      },
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+    const result = await auth.connectRemiliaAuth();
+
+    expect(result).toMatchObject({ ok: true, accessToken: "access-one", tokenType: "Bearer" });
+    const authorization = new URL(authorizationUrl);
+    expect(authorization.origin + authorization.pathname).toBe(AUTHORIZATION_ENDPOINT);
+    expect(authorization.searchParams.get("client_id")).toBe(CLIENT_ID);
+    expect(authorization.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
+    expect(authorization.searchParams.get("scope")).toBe("openid");
+    expect(authorization.searchParams.get("code_challenge_method")).toBe("S256");
+    expect(authorization.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+    expect(authorization.searchParams.get("nonce")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
+
+    const tokenCall = fetchMock.mock.calls.find(([input]) => String(input) === TOKEN_ENDPOINT);
+    const body = new URLSearchParams(String((tokenCall?.[1] as RequestInit)?.body));
+    const verifier = body.get("code_verifier") || "";
+    const expectedChallenge = createHash("sha256").update(verifier).digest("base64url");
+    expect(authorization.searchParams.get("code_challenge")).toBe(expectedChallenge);
+    expect(body.get("redirect_uri")).toBe(REDIRECT_URI);
+    expect(body.get("client_id")).toBe(CLIENT_ID);
+
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain("access-one");
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain("refresh-one");
+    expect(JSON.stringify([...fixture.session.values()])).toContain("access-one");
+    expect(fixture.sessionArea.setAccessLevel).toHaveBeenCalledWith({ accessLevel: "TRUSTED_CONTEXTS" });
+    expect(await auth.getRemiliaAuthStatus()).toMatchObject({
+      phase: "connected",
+      identity: { id: "user-1", username: "milady" },
+      grantedScopes: expect.arrayContaining(["openid", "remilia:beetle.read"]),
     });
-    vi.stubGlobal("fetch", vi.fn(async () => ({
-      ok: true,
-      json: async () => ({ id: "session-user" }),
-    })));
+    expect(JSON.stringify(await auth.getRemiliaAuthStatus())).not.toContain("access-one");
+  });
 
-    const auth = await import("./remilia-auth");
-    const adoption = auth.adoptRemiliaBrowserSession("/api/profile/whoami");
-    await vi.waitFor(() => expect(chrome.cookies.get).toHaveBeenCalledOnce());
+  it("fails closed on callback state mismatch", async () => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockResolvedValue(`${REDIRECT_URI}?code=code&state=wrong` as never);
+    const fetchMock = installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
 
-    await auth.clearRemiliaAuth();
-    resolveCookie?.({ value: "stale-access-token" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "STATE_MISMATCH" });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === TOKEN_ENDPOINT)).toHaveLength(0);
+    expect(fixture.session.size).toBe(0);
+  });
 
-    await expect(adoption).rejects.toMatchObject({ name: "AbortError" });
-    expect(stored.get(auth.REMILIA_DISCONNECTED_KEY)).toBe(true);
-    expect(stored.get(auth.REMILIA_ACCESS_TOKEN_KEY)).toBeUndefined();
-    expect(chrome.cookies.set).not.toHaveBeenCalled();
+  it("fails closed on redirect mismatch", async () => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `https://attacker.example/remilia-oauth?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "REDIRECT_MISMATCH" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("fails closed when the returned ID token nonce does not match", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, { nonce: "wrong-nonce" });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "NONCE_MISMATCH" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("maps user denial without exposing the browser error", async () => {
+    installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockRejectedValue(new Error("The user did not approve access."));
+    installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ACCESS_DENIED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ACCESS_DENIED" });
+  });
+
+  it("times out an abandoned interactive flow", async () => {
+    installChrome();
+    let authorizationStarted = false;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(() => {
+      authorizationStarted = true;
+      return new Promise(() => undefined);
+    });
+    installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    vi.useFakeTimers();
+    const pending = auth.connectRemiliaAuth({ timeoutMs: 1_000 });
+    await vi.waitFor(() => expect(authorizationStarted).toBe(true));
+    await vi.advanceTimersByTimeAsync(1_000);
+    await expect(pending).resolves.toMatchObject({ ok: false, error: "AUTH_TIMEOUT" });
   });
 });
 
-describe("Remilia auth token custody", () => {
-  it("keeps issued bearer credentials out of extension storage", async () => {
-    const stored = new Map<string, unknown>([
-      ["beetol.accessToken", "legacy-access"],
-      ["beetol.refreshToken", "legacy-refresh"],
-    ]);
-    const set = vi.fn(async (values: Record<string, unknown>) => {
-      for (const [key, value] of Object.entries(values)) stored.set(key, value);
+describe("Remilia credential lifecycle", () => {
+  it("rotates refresh tokens once for concurrent refresh callers", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
     });
-    const remove = vi.fn(async (keys: string[]) => {
-      for (const key of keys) stored.delete(key);
-    });
-    vi.stubGlobal("chrome", {
-      storage: { local: { get: vi.fn(async (keys: string[]) => Object.fromEntries(keys.map((key) => [key, stored.get(key)]))), set, remove } },
-      cookies: { get: vi.fn(async () => null), set: vi.fn(async () => undefined), remove: vi.fn(async () => undefined) },
-    });
-    vi.stubGlobal("fetch", vi.fn(async (input: string | URL) => {
-      if (String(input).includes("/token")) {
-        return { ok: true, json: async () => ({ access_token: "new-access", refresh_token: "new-refresh" }) };
+    let resolveRefresh: ((value: Response) => void) | undefined;
+    let refreshCalls = 0;
+    const baseFetch = successfulFetchImplementation(() => authorizationUrl);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === TOKEN_ENDPOINT && new URLSearchParams(String(init?.body)).get("grant_type") === "refresh_token") {
+        refreshCalls += 1;
+        return new Promise<Response>((resolve) => { resolveRefresh = resolve; });
       }
-      return { ok: true, json: async () => ({ id: "session-user" }) };
+      return baseFetch(input, init);
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+    expect((await auth.connectRemiliaAuth()).ok).toBe(true);
+
+    const first = auth.refreshRemiliaAccess(["remilia:beetle.read"]);
+    const second = auth.refreshRemiliaAccess(["remilia:beetle.read"]);
+    await vi.waitFor(() => expect(refreshCalls).toBe(1));
+    resolveRefresh?.(jsonResponse({
+      access_token: "access-two",
+      refresh_token: "refresh-two",
+      id_token: jwt({
+        iss: ISSUER,
+        aud: CLIENT_ID,
+        sub: "user-1",
+        preferred_username: "milady",
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      }),
+      token_type: "Bearer",
+      expires_in: 3600,
+      scope: "openid remilia:beetle.read",
     }));
 
-    const auth = await import("./remilia-auth");
-    await auth.migrateRemiliaAuth();
-    await auth.renewRemiliaAuth("/api/profile/whoami");
+    await expect(first).resolves.toMatchObject({ ok: true, accessToken: "access-two" });
+    await expect(second).resolves.toMatchObject({ ok: true, accessToken: "access-two" });
+    expect(JSON.stringify([...fixture.session.values()])).toContain("refresh-two");
+    expect(JSON.stringify([...fixture.session.values()])).not.toContain("refresh-one");
+  });
 
-    expect(stored.get(auth.REMILIA_ACCESS_TOKEN_KEY)).toBeUndefined();
-    expect(stored.get(auth.REMILIA_REFRESH_TOKEN_KEY)).toBeUndefined();
-    expect(set).not.toHaveBeenCalledWith(expect.objectContaining({ [auth.REMILIA_ACCESS_TOKEN_KEY]: expect.anything() }));
-    expect(remove).toHaveBeenCalledWith(expect.arrayContaining([auth.REMILIA_ACCESS_TOKEN_KEY, auth.REMILIA_REFRESH_TOKEN_KEY]));
+  it("clears credentials when refresh is rejected as expired or revoked", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      return `${REDIRECT_URI}?code=code&state=${new URL(url).searchParams.get("state")}`;
+    });
+    const baseFetch = successfulFetchImplementation(() => authorizationUrl);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      const body = new URLSearchParams(String(init?.body));
+      if (String(input) === TOKEN_ENDPOINT && body.get("grant_type") === "refresh_token") {
+        return jsonResponse({ error: "invalid_grant" }, 400);
+      }
+      return baseFetch(input, init);
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+    expect((await auth.connectRemiliaAuth()).ok).toBe(true);
+
+    await expect(auth.refreshRemiliaAccess()).resolves.toMatchObject({ ok: false, error: "REFRESH_REJECTED" });
+    expect(fixture.session.size).toBe(0);
+    expect((await auth.getRemiliaAuthStatus()).phase).toBe("expired");
+  });
+
+  it("restores session-vault credentials after a service-worker module restart", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      return `${REDIRECT_URI}?code=code&state=${new URL(url).searchParams.get("state")}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl);
+    let auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+    expect((await auth.connectRemiliaAuth()).ok).toBe(true);
+
+    vi.resetModules();
+    auth = await loadAuth();
+    await expect(auth.prepareRemiliaAccess(["remilia:beetle.read"])).resolves.toMatchObject({
+      ok: true,
+      accessToken: "access-one",
+    });
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain("access-one");
+  });
+
+  it("rejects concurrent login and disconnect cancels the in-flight attempt", async () => {
+    const fixture = installChrome();
+    let authorizationStarted = false;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(() => {
+      authorizationStarted = true;
+      return new Promise(() => undefined);
+    });
+    installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    const first = auth.connectRemiliaAuth();
+    await vi.waitFor(() => expect(authorizationStarted).toBe(true));
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "CONCURRENT_LOGIN" });
+    await auth.disconnectRemiliaAuth();
+    await expect(first).resolves.toMatchObject({ ok: false, error: "CANCELLED" });
+    expect(fixture.session.size).toBe(0);
+    expect((await auth.getRemiliaAuthStatus()).phase).toBe("disconnected");
+  });
+
+  it("revokes refresh and access credentials then always clears local custody", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      return `${REDIRECT_URI}?code=code&state=${new URL(url).searchParams.get("state")}`;
+    });
+    const fetchMock = installSuccessfulFetch(() => authorizationUrl);
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+    expect((await auth.connectRemiliaAuth()).ok).toBe(true);
+
+    await expect(auth.revokeRemiliaAuth()).resolves.toEqual({ remoteRevoked: true });
+    const revokedBodies = fetchMock.mock.calls
+      .filter(([input]) => String(input) === REVOCATION_ENDPOINT)
+      .map(([, init]) => new URLSearchParams(String((init as RequestInit)?.body)));
+    expect(revokedBodies).toHaveLength(2);
+    expect(revokedBodies.map((body) => body.get("token_type_hint"))).toEqual(["refresh_token", "access_token"]);
+    expect(fixture.session.size).toBe(0);
+    expect((await auth.getRemiliaAuthStatus()).phase).toBe("disconnected");
   });
 });
 
-describe("Remilia session refresh tab boundary", () => {
-  it("marks only the temporary Remilia session-refresh URL", async () => {
+describe("Remilia migration and scope boundaries", () => {
+  it("keeps keyless Firefox-compatible builds token-free and noninteractive", async () => {
+    const fixture = installChrome({
+      local: {
+        "beetol.accessToken": "legacy-access",
+        "beetol.refreshToken": "legacy-refresh",
+      },
+    });
     const auth = await import("./remilia-auth");
 
-    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/?milxdy_session_refresh=1")).toBe(true);
-    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/anything?milxdy_session_refresh=1")).toBe(true);
-    expect(auth.isRemiliaSessionRefreshUrl("https://www.remilia.net/")).toBe(false);
-    expect(auth.isRemiliaSessionRefreshUrl("https://x.com/?milxdy_session_refresh=1")).toBe(false);
-    expect(auth.isRemiliaSessionRefreshUrl(undefined)).toBe(false);
+    await expect(auth.getRemiliaAuthStatus()).resolves.toMatchObject({
+      phase: "unsupported",
+      grantedScopes: [],
+      lastError: { code: "UNSUPPORTED" },
+    });
+    await expect(auth.prepareRemiliaAccess(["remilia:beetle.read"]))
+      .resolves.toMatchObject({ ok: false, error: "UNSUPPORTED", missingScopes: ["remilia:beetle.read"] });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "UNSUPPORTED" });
+
+    expect(chrome.identity.launchWebAuthFlow).not.toHaveBeenCalled();
+    expect(fixture.session.size).toBe(0);
+    expect(fixture.local.get("beetol.accessToken")).toBe("legacy-access");
+    expect(fixture.local.get("beetol.refreshToken")).toBe("legacy-refresh");
   });
 
-  it("opens the hidden auth refresh tab with the marker and still removes it", async () => {
-    const create = vi.fn(async () => ({ id: 42 }));
-    const remove = vi.fn(async () => undefined);
-    vi.stubGlobal("chrome", {
-      tabs: {
-        create,
-        get: vi.fn(async () => ({ id: 42, status: "complete" })),
-        remove,
-        onUpdated: { addListener: vi.fn(), removeListener: vi.fn() },
+  it("requires explicit update migration and deletes only legacy auth material on consent", async () => {
+    const fixture = installChrome({
+      local: {
+        "beetol.accessToken": "legacy-access",
+        "beetol.refreshToken": "legacy-refresh",
+        "bextol.accessToken": "older-access",
+        "bextol.refreshToken": "older-refresh",
+        "unrelated.setting": "keep-me",
       },
-      storage: {
-        local: {
-          get: vi.fn(async () => ({})),
-          set: vi.fn(async () => undefined),
-          remove: vi.fn(async () => undefined),
-        },
-      },
-      cookies: { get: vi.fn(async () => null) },
     });
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, json: async () => ({ id: "session-user" }) })));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("update");
 
-    const auth = await import("./remilia-auth");
-    await auth.refreshRemiliaBrowserSessionTab("/api/profile/whoami", { timeoutMs: 1_000 });
+    expect((await auth.getRemiliaAuthStatus()).phase).toBe("migration-required");
+    await expect(auth.prepareRemiliaAccess()).resolves.toMatchObject({ ok: false, error: "MIGRATION_REQUIRED" });
+    expect(fixture.local.get("beetol.refreshToken")).toBe("legacy-refresh");
 
-    expect(create).toHaveBeenCalledWith({
-      url: "https://www.remilia.net/?milxdy_session_refresh=1",
-      active: false,
+    await auth.completeRemiliaAuthMigration();
+    expect(fixture.local.get("beetol.accessToken")).toBeUndefined();
+    expect(fixture.local.get("bextol.refreshToken")).toBeUndefined();
+    expect(fixture.local.get("unrelated.setting")).toBe("keep-me");
+    expect(await auth.getRemiliaAuthStatus()).toMatchObject({
+      phase: "disconnected",
+      migration: { version: 1, required: false, legacyDeleted: true },
     });
-    expect(remove).toHaveBeenCalledWith(42);
+  });
+
+  it("checks delegated scopes using exact case-sensitive set membership", async () => {
+    installChrome();
+    const auth = await loadAuth();
+    expect(auth.hasRequiredRemiliaScopes(["remilia:beetle.read"], ["remilia:beetle.read"])).toBe(true);
+    expect(auth.hasRequiredRemiliaScopes(["remilia:beetle.read.extra"], ["remilia:beetle.read"])).toBe(false);
+    expect(auth.hasRequiredRemiliaScopes(["Remilia:beetle.read"], ["remilia:beetle.read"])).toBe(false);
+  });
+
+  it("rejects discovery endpoints outside the fixed issuer origin", async () => {
+    const fixture = installChrome();
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === DISCOVERY_URL) {
+        return jsonResponse({
+          ...discovery(),
+          token_endpoint: "https://attacker.example/token",
+        });
+      }
+      if (String(input) === JWKS_ENDPOINT) return jsonResponse({ keys: [] });
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "DISCOVERY_FAILED" });
+    expect(fixture.session.size).toBe(0);
   });
 });
+
+async function loadAuth() {
+  const auth = await import("./remilia-auth");
+  auth.configureRemiliaAuthClient({ clientId: CLIENT_ID, redirectPath: "remilia-oauth" });
+  return auth;
+}
+
+function installChrome(initial: { local?: Record<string, unknown>; session?: Record<string, unknown> } = {}): StorageFixture {
+  const local = new Map(Object.entries(initial.local || {}));
+  const session = new Map(Object.entries(initial.session || {}));
+  const localArea = storageArea(local);
+  const sessionArea = Object.assign(storageArea(session), { setAccessLevel: vi.fn(async () => undefined) });
+  vi.stubGlobal("chrome", {
+    runtime: {
+      id: "abcdefghijklmnopabcdefghijklmnop",
+      getURL: vi.fn((path = "") => `chrome-extension://abcdefghijklmnopabcdefghijklmnop/${path}`),
+    },
+    identity: {
+      getRedirectURL: vi.fn(() => REDIRECT_URI),
+      launchWebAuthFlow: vi.fn(),
+    },
+    storage: { local: localArea, session: sessionArea },
+  });
+  return { local, session, localArea, sessionArea };
+}
+
+function storageArea(store: Map<string, unknown>) {
+  return {
+    get: vi.fn(async (keys?: string | string[] | Record<string, unknown> | null) => {
+      if (keys == null) return Object.fromEntries(store);
+      if (typeof keys === "string") return { [keys]: store.get(keys) };
+      if (Array.isArray(keys)) return Object.fromEntries(keys.map((key) => [key, store.get(key)]));
+      return Object.fromEntries(Object.entries(keys).map(([key, fallback]) => [key, store.has(key) ? store.get(key) : fallback]));
+    }),
+    set: vi.fn(async (values: Record<string, unknown>) => {
+      for (const [key, value] of Object.entries(values)) store.set(key, value);
+    }),
+    remove: vi.fn(async (keys: string | string[]) => {
+      for (const key of Array.isArray(keys) ? keys : [keys]) store.delete(key);
+    }),
+  };
+}
+
+function installSuccessfulFetch(
+  getAuthorizationUrl: () => string,
+  overrides: { nonce?: string } = {},
+) {
+  const mock = vi.fn(successfulFetchImplementation(getAuthorizationUrl, overrides));
+  vi.stubGlobal("fetch", mock);
+  return mock;
+}
+
+function successfulFetchImplementation(
+  getAuthorizationUrl: () => string,
+  overrides: { nonce?: string } = {},
+) {
+  return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+    const url = String(input);
+    if (url === DISCOVERY_URL) return jsonResponse(discovery());
+    if (url === JWKS_ENDPOINT) return jsonResponse({ keys: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }] });
+    if (url === REVOCATION_ENDPOINT) return jsonResponse({});
+    if (url === TOKEN_ENDPOINT) {
+      const body = new URLSearchParams(String(init?.body));
+      const authorization = new URL(getAuthorizationUrl());
+      const nonce = overrides.nonce ?? authorization.searchParams.get("nonce");
+      return jsonResponse({
+        access_token: "access-one",
+        refresh_token: "refresh-one",
+        id_token: jwt({
+          iss: ISSUER,
+          aud: CLIENT_ID,
+          sub: "user-1",
+          preferred_username: "milady",
+          name: "Milady",
+          nonce,
+          exp: Math.floor(Date.now() / 1000) + 3600,
+        }),
+        token_type: "Bearer",
+        expires_in: 3600,
+        scope: body.get("grant_type") === "refresh_token"
+          ? "openid remilia:beetle.read"
+          : "openid remilia:stats.read remilia:notifications.read remilia:pokes.write remilia:beetle.read remilia:chat.read remilia:chat.write remilia:directory.read",
+      });
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+}
+
+function discovery() {
+  return {
+    issuer: ISSUER,
+    authorization_endpoint: AUTHORIZATION_ENDPOINT,
+    token_endpoint: TOKEN_ENDPOINT,
+    jwks_uri: JWKS_ENDPOINT,
+    revocation_endpoint: REVOCATION_ENDPOINT,
+    end_session_endpoint: `${ISSUER}/protocol/openid-connect/logout`,
+    userinfo_endpoint: `${ISSUER}/protocol/openid-connect/userinfo`,
+    code_challenge_methods_supported: ["S256"],
+    id_token_signing_alg_values_supported: ["RS256"],
+  };
+}
+
+function jwt(claims: Record<string, unknown>): string {
+  const encode = (value: Record<string, unknown>) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const signingInput = `${encode({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })}.${encode(claims)}`;
+  const signature = sign("RSA-SHA256", Buffer.from(signingInput), TEST_KEYS.privateKey).toString("base64url");
+  return `${signingInput}.${signature}`;
+}
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}

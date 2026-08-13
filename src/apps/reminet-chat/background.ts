@@ -2,11 +2,11 @@ import { registerBackgroundMessageHandlers } from "../../platform/background/rou
 import { isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import {
   REMILIA_BASE_URL,
-  prepareRemiliaAuth,
-  renewRemiliaAuth,
-  adoptRemiliaBrowserSession,
+  prepareRemiliaAccess,
+  refreshRemiliaAccess,
+  getRemiliaAuthStatus,
   isRemiliaDisconnected,
-  isRemiliaSessionRefreshUrl,
+  type RemiliaAuthGrant,
 } from "../../platform/auth/remilia-auth";
 import { resolveSocketAuthCredential } from "./socket-auth-policy";
 import { confirmedMediaFromResponse } from "./media-upload-contract";
@@ -15,7 +15,6 @@ const BASE_URL = REMILIA_BASE_URL;
 const CHAT_ID = 1;
 const SOCKET_PORT_NAME = "reminetChat:socket";
 const SITE_SOCKET_PORT_NAME = "reminetChat:site-socket";
-const SESSION_PROBE_PATH = "/api/profile/whoami";
 const SOCKET_AUTH_TIMEOUT_MS = 12_000;
 const SOCKET_AUTH_CACHE_MS = 45_000;
 const MAX_INLINE_MEDIA_BYTES = 8 * 1024 * 1024;
@@ -105,8 +104,7 @@ chrome.runtime.onConnect.addListener((port) => {
 });
 
 function registerSiteSocketBridge(port: chrome.runtime.Port): void {
-  const sourceUrl = port.sender?.url || port.sender?.tab?.url;
-  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"]) || isRemiliaSessionRefreshUrl(sourceUrl)) {
+  if (!isAllowedReminetChatSender(port.sender, ["www.remilia.net"])) {
     port.disconnect();
     return;
   }
@@ -226,8 +224,14 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? value as Record<string, unknown> : {};
 }
 
+function socketCredential(result: RemiliaAuthGrant): { ok: boolean; token?: string; error?: string } {
+  return result.ok
+    ? { ok: true, token: result.accessToken }
+    : { ok: false, error: result.error };
+}
+
 async function refreshAccessToken(): Promise<boolean> {
-  const result = await renewRemiliaAuth(SESSION_PROBE_PATH);
+  const result = await refreshRemiliaAccess(["remilia:chat.read"]);
   return result.ok;
 }
 
@@ -244,8 +248,8 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
   const abort = new AbortController();
   const pending = withDeadline(
     resolveSocketAuthCredential(
-      () => prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
-      () => renewRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal }),
+      () => prepareRemiliaAccess(["remilia:chat.read"], { signal: abort.signal }).then(socketCredential),
+      () => refreshRemiliaAccess(["remilia:chat.read"], { signal: abort.signal }).then(socketCredential),
     ).then(async (auth) => {
       if (generation !== socketAuthGeneration || await isRemiliaDisconnected()) {
         return { ok: false, signedIn: false, error: "AUTH_REQUIRED" };
@@ -270,27 +274,17 @@ async function prepareSocketAuth(): Promise<{ ok: boolean; signedIn: boolean; er
 }
 
 async function authStatus(): Promise<Record<string, unknown>> {
-  const ready = await prepareSocketAuth();
-  if (!ready.ok) return { ok: true, signedIn: false };
-  const whoami = await remiliaRequest("GET", "/api/profile/whoami", null);
-  if (whoami.ok) return { ok: true, signedIn: true, user: whoami.data };
-  const adopted = await adoptRemiliaBrowserSession(SESSION_PROBE_PATH);
-  return { ok: true, signedIn: adopted.ok, user: adopted.ok ? adopted.user ?? null : null };
+  const status = await getRemiliaAuthStatus();
+  return { ok: true, signedIn: status.phase === "connected", user: status.identity || null };
 }
 
 async function remiliaAuthedFetch(method: string, path: string): Promise<Record<string, unknown>> {
-  const ready = await prepareSocketAuth();
-  if (!ready.ok) return { ok: false, authRequired: true };
-  const result = await remiliaRequest(method, path, null);
+  const prepared = await prepareRemiliaAccess(["remilia:chat.read"]);
+  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
+  const result = await remiliaRequest(method, path, null, prepared.accessToken);
   if ((result.status === 401 || result.status === 403) && await refreshAccessToken()) {
-    socketAuthReadyUntil = 0;
-    await prepareSocketAuth();
-    return remiliaRequest(method, path, null);
-  }
-  if (result.status === 401 || result.status === 403) {
-    socketAuthReadyUntil = 0;
-    const adopted = await adoptRemiliaBrowserSession(SESSION_PROBE_PATH);
-    if (adopted.ok) return remiliaRequest(method, path, null);
+    const refreshed = await prepareRemiliaAccess(["remilia:chat.read"]);
+    if (refreshed.ok) return remiliaRequest(method, path, null, refreshed.accessToken);
   }
   return result;
 }
@@ -312,12 +306,13 @@ async function withDeadline<T>(promise: Promise<T>, timeoutMs: number, fallback:
   }
 }
 
-async function remiliaRequest(method: string, path: string, body: unknown): Promise<Record<string, unknown>> {
+async function remiliaRequest(method: string, path: string, body: unknown, accessToken: string): Promise<Record<string, unknown>> {
   const response = await fetch(`${BASE_URL}${path}`, {
     method,
-    credentials: "include",
+    credentials: "omit",
     headers: {
       Accept: "application/json",
+      Authorization: `Bearer ${accessToken}`,
       ...(body == null ? {} : { "Content-Type": "application/json" }),
     },
     body: body == null ? undefined : JSON.stringify(body),
@@ -329,8 +324,8 @@ async function remiliaRequest(method: string, path: string, body: unknown): Prom
 }
 
 async function uploadAttachment(name: unknown, mimeType: unknown, dataUrl: unknown): Promise<Record<string, unknown>> {
-  const ready = await prepareSocketAuth();
-  if (!ready.ok) return { ok: false, authRequired: true };
+  const prepared = await prepareRemiliaAccess(["remilia:chat.write"]);
+  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
   if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:")) return { ok: false, error: "INVALID_ATTACHMENT" };
 
   const declaredMimeType = typeof mimeType === "string" ? mimeType.toLowerCase() : "";
@@ -348,12 +343,12 @@ async function uploadAttachment(name: unknown, mimeType: unknown, dataUrl: unkno
   const form = new FormData();
   form.append("file", file);
 
-  const uploaded = await remiliaMultipart("/media/upload/", form);
+  const uploaded = await remiliaMultipart("/media/upload/", form, prepared.accessToken);
   if (!uploaded.ok) return uploaded;
   const token = stringFrom(uploaded.data, "token");
   if (!token) return { ok: false, error: "UPLOAD_TOKEN_MISSING", data: uploaded.data };
 
-  const confirmed = await remiliaRequest("POST", "/media/upload/confirm", { tokens: [token] });
+  const confirmed = await remiliaRequest("POST", "/media/upload/confirm", { tokens: [token] }, prepared.accessToken);
   if (!confirmed.ok) return confirmed;
   const media = confirmedMediaFromResponse(confirmed.data);
   if (!media) return { ok: false, error: "UPLOAD_CONFIRMATION_MISSING_MEDIA", data: confirmed.data };
@@ -396,11 +391,11 @@ function estimatedBase64Bytes(value: string): number {
   return Math.floor((value.length * 3) / 4) - padding;
 }
 
-async function remiliaMultipart(path: string, body: FormData): Promise<Record<string, unknown>> {
+async function remiliaMultipart(path: string, body: FormData, accessToken: string): Promise<Record<string, unknown>> {
   const response = await fetch(`${BASE_URL}${path}`, {
     method: "POST",
-    credentials: "include",
-    headers: { Accept: "application/json" },
+    credentials: "omit",
+    headers: { Accept: "application/json", Authorization: `Bearer ${accessToken}` },
     body,
   });
   const text = await response.text().catch(() => "");
@@ -411,7 +406,7 @@ async function remiliaMultipart(path: string, body: FormData): Promise<Record<st
 
 async function fetchMediaDataUrl(url: unknown): Promise<Record<string, unknown>> {
   if (typeof url !== "string" || !isAllowedMediaUrl(url)) return { ok: false, error: "INVALID_MEDIA_URL" };
-  const response = await fetch(url, { credentials: shouldSendRemiliaMediaCredentials(url) ? "include" : "omit" });
+  const response = await fetch(url, { credentials: "omit" });
   if (!response.ok) return { ok: false, status: response.status };
   const contentType = response.headers.get("content-type") || "application/octet-stream";
   if (!contentType.startsWith("image/") && !contentType.startsWith("video/")) return { ok: false, error: "UNSUPPORTED_MEDIA_TYPE", contentType };
@@ -450,14 +445,6 @@ async function readCappedResponseBlob(response: Response, maxBytes: number, cont
 
 function isAllowedMediaUrl(value: string): boolean {
   return isRemiliaMediaUrl(value);
-}
-
-function shouldSendRemiliaMediaCredentials(value: string): boolean {
-  try {
-    return new URL(value).hostname.toLowerCase() === "www.remilia.net";
-  } catch {
-    return false;
-  }
 }
 
 async function blobToDataUrl(blob: Blob, contentType: string): Promise<string> {

@@ -1,12 +1,24 @@
 const BASE_URL = "https://www.remilia.net";
-const OIDC_AUTH_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/auth`;
-const OIDC_TOKEN_URL = `${BASE_URL}/oidc/realms/remilia/protocol/openid-connect/token`;
-const OIDC_CLIENT_ID = "profile";
-const OIDC_REDIRECT_URI = `${BASE_URL}/`;
-const OIDC_SCOPE = "openid profile email offline_access";
-const AUTH_COOKIE_NAME = "authToken";
-const SESSION_REFRESH_MARKER = "milxdy_session_refresh";
-const AUTH_COOKIE_TTL_SECONDS = 900;
+const OIDC_ISSUER = `${BASE_URL}/oidc/realms/remilia`;
+const OIDC_DISCOVERY_URL = `${OIDC_ISSUER}/.well-known/openid-configuration`;
+const OIDC_SCOPE = "openid";
+const DEFAULT_AUTH_TIMEOUT_MS = 120_000;
+const DISCOVERY_TIMEOUT_MS = 10_000;
+const ACCESS_TOKEN_SKEW_MS = 30_000;
+
+declare const MILXDY_REMILIA_CLIENT_ID: string | undefined;
+declare const MILXDY_REMILIA_ISSUER_URI: string | undefined;
+declare const MILXDY_REMILIA_REDIRECT_PATH: string | undefined;
+declare const MILXDY_REMILIA_REDIRECT_URI: string | undefined;
+
+// Ticket #226 owns these build-time values. Non-beta artifacts intentionally
+// leave them empty so they cannot impersonate the durable public login client.
+let authClientId = "";
+let authRedirectPath = "remilia-oauth";
+let registeredRedirectUri = "";
+
+const CREDENTIALS_KEY = "milxdy.remiliaAuth.credentials.v1";
+const CONTROL_KEY = "milxdy.remiliaAuth.control.v1";
 const ACCESS_TOKEN_KEY = "beetol.accessToken";
 const REFRESH_TOKEN_KEY = "beetol.refreshToken";
 const DISCONNECTED_KEY = "beetol.disconnected";
@@ -14,366 +26,951 @@ const LEGACY_PREFIX = "bex" + "tol";
 const LEGACY_ACCESS_TOKEN_KEY = `${LEGACY_PREFIX}.accessToken`;
 const LEGACY_REFRESH_TOKEN_KEY = `${LEGACY_PREFIX}.refreshToken`;
 
-// Bearer credentials stay in the background context. When an MV3 worker
-// restarts, callers re-adopt the authenticated browser session instead of
-// persisting tokens where extension content can read them.
-let memoryAccessToken = "";
-let memoryRefreshToken = "";
-let authGeneration = 0;
-let disconnectRequested = false;
-let authMutationQueue: Promise<void> = Promise.resolve();
-
-export type RemiliaAuthResult = {
-  ok: boolean;
-  token?: string;
-  method?: "session" | "stored" | "refresh" | "silent-sso";
-  user?: unknown;
-  error?: string;
-};
-
-type RemiliaAuthOptions = {
-  ignoreDisconnect?: boolean;
-  signal?: AbortSignal;
-  generation?: number;
-};
-
 export const REMILIA_BASE_URL = BASE_URL;
-export const REMILIA_ACCESS_TOKEN_KEY = ACCESS_TOKEN_KEY;
-export const REMILIA_REFRESH_TOKEN_KEY = REFRESH_TOKEN_KEY;
-export const REMILIA_DISCONNECTED_KEY = DISCONNECTED_KEY;
-export const REMILIA_AUTH_COOKIE_NAME = AUTH_COOKIE_NAME;
-export const REMILIA_AUTH_COOKIE_TTL_SECONDS = AUTH_COOKIE_TTL_SECONDS;
-export const REMILIA_LEGACY_TOKEN_KEYS = [LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY] as const;
-export const REMILIA_TOKEN_KEYS = [ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY] as const;
-const REMILIA_ALL_TOKEN_KEYS = [...REMILIA_TOKEN_KEYS, ...REMILIA_LEGACY_TOKEN_KEYS] as const;
+export const REMILIA_AUTH_STATE_VERSION = 1;
+export const REMILIA_AUTH_MIGRATION_VERSION = 1;
+export const REMILIA_REQUIRED_SCOPES = [
+  "remilia:stats.read",
+  "remilia:notifications.read",
+  "remilia:pokes.write",
+  "remilia:beetle.read",
+  "remilia:chat.read",
+  "remilia:chat.write",
+  "remilia:directory.read",
+] as const;
+export const REMILIA_LEGACY_TOKEN_KEYS = [
+  ACCESS_TOKEN_KEY,
+  REFRESH_TOKEN_KEY,
+  LEGACY_ACCESS_TOKEN_KEY,
+  LEGACY_REFRESH_TOKEN_KEY,
+] as const;
 
-async function getStored(keys: string[]): Promise<Record<string, unknown>> {
-  return chrome.storage.local.get(keys);
+export type RemiliaAuthErrorCode =
+  | "AUTH_REQUIRED"
+  | "MIGRATION_REQUIRED"
+  | "ACCESS_DENIED"
+  | "CANCELLED"
+  | "AUTH_TIMEOUT"
+  | "CONCURRENT_LOGIN"
+  | "REDIRECT_MISMATCH"
+  | "STATE_MISMATCH"
+  | "NONCE_MISMATCH"
+  | "DISCOVERY_FAILED"
+  | "TOKEN_EXCHANGE_FAILED"
+  | "TOKEN_EXPIRED"
+  | "REFRESH_REJECTED"
+  | "MISSING_SCOPE"
+  | "OFFLINE"
+  | "REVOKED"
+  | "UNSUPPORTED"
+  | "UNKNOWN";
+
+export type RemiliaUiErrorCode =
+  | "ACCESS_DENIED"
+  | "TOKEN_EXPIRED"
+  | "MISSING_SCOPE"
+  | "RATE_LIMITED"
+  | "OFFLINE"
+  | "CANCELLED"
+  | "CONCURRENT_LOGIN"
+  | "AUTH_TIMEOUT"
+  | "REVOKED"
+  | "UNSUPPORTED"
+  | "UNKNOWN";
+
+export type RemiliaAuthIdentity = {
+  id: string;
+  displayName?: string;
+  username?: string;
+  avatarUrl?: string;
+};
+
+export type RemiliaAuthGrant =
+  | {
+    ok: true;
+    accessToken: string;
+    tokenType: "Bearer";
+    expiresAt: number;
+    grantedScopes: string[];
+  }
+  | {
+    ok: false;
+    error: RemiliaAuthErrorCode;
+    grantedScopes: string[];
+    missingScopes: string[];
+  };
+
+export type RemiliaAuthStatus = {
+  phase: "unsupported" | "migration-required" | "disconnected" | "connecting" | "connected" | "expired" | "missing-scope" | "rate-limited" | "offline" | "error";
+  identity?: RemiliaAuthIdentity;
+  grantedScopes: string[];
+  requiredScopes: string[];
+  migration: {
+    version: 1;
+    required: boolean;
+    legacyDeleted: boolean;
+  };
+  lastError?: {
+    code: RemiliaUiErrorCode;
+    retryAfterSeconds?: number;
+  };
+};
+
+export interface RemiliaAuthProvider {
+  prepare(requiredScopes?: readonly string[], options?: { signal?: AbortSignal }): Promise<RemiliaAuthGrant>;
+  refresh(requiredScopes?: readonly string[], options?: { signal?: AbortSignal }): Promise<RemiliaAuthGrant>;
 }
 
-async function setStored(values: Record<string, unknown>): Promise<void> {
-  await chrome.storage.local.set(values);
+type StoredCredentials = {
+  version: 1;
+  accessToken: string;
+  refreshToken: string;
+  idToken: string;
+  expiresAt: number;
+  grantedScopes: string[];
+  identity: RemiliaAuthIdentity;
+};
+
+type AuthControl = {
+  version: 1;
+  disconnected: boolean;
+  migration: {
+    version: 1;
+    required: boolean;
+    legacyDeleted: boolean;
+  };
+  lastError?: {
+    code: RemiliaUiErrorCode;
+    retryAfterSeconds?: number;
+  };
+};
+
+type OidcDiscovery = {
+  issuer: string;
+  authorization_endpoint: string;
+  token_endpoint: string;
+  jwks_uri: string;
+  revocation_endpoint?: string;
+  end_session_endpoint?: string;
+  userinfo_endpoint?: string;
+  code_challenge_methods_supported?: string[];
+  id_token_signing_alg_values_supported?: string[];
+};
+
+type TokenResponse = {
+  access_token?: unknown;
+  refresh_token?: unknown;
+  id_token?: unknown;
+  token_type?: unknown;
+  expires_in?: unknown;
+  scope?: unknown;
+  error?: unknown;
+};
+
+class AuthProtocolError extends Error {
+  readonly code: RemiliaAuthErrorCode;
+
+  constructor(code: RemiliaAuthErrorCode) {
+    super(code);
+    this.name = "AuthProtocolError";
+    this.code = code;
+  }
 }
 
-async function removeStored(keys: readonly string[]): Promise<void> {
-  await chrome.storage.local.remove([...keys]);
+let authGeneration = 0;
+let activeLogin: Promise<RemiliaAuthGrant> | null = null;
+let activeLoginAbort: AbortController | null = null;
+let activeRefresh: Promise<RemiliaAuthGrant> | null = null;
+let activeRefreshAbort: AbortController | null = null;
+let discoveryPromise: Promise<OidcDiscovery> | null = null;
+let jwksPromise: Promise<JsonWebKey[]> | null = null;
+let sessionAccessConfigured = false;
+
+export function configureRemiliaAuthClient(config: { clientId: string; redirectPath?: string; redirectUri?: string }): void {
+  const clientId = config.clientId.trim();
+  const redirectPath = (config.redirectPath || "remilia-oauth").trim().replace(/^\/+/, "");
+  if (!clientId || !redirectPath || redirectPath.includes("?") || redirectPath.includes("#")) {
+    throw new Error("Invalid Remilia login client contract");
+  }
+  authClientId = clientId;
+  authRedirectPath = redirectPath;
+  registeredRedirectUri = config.redirectUri?.trim() || "";
 }
 
-export async function migrateRemiliaAuth(signal?: AbortSignal, generation = authGeneration): Promise<void> {
-  throwIfAuthAborted(signal);
-  const stored = await getStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  await mutateRemiliaAuth(generation, signal, async () => {
-    if (!memoryRefreshToken && typeof stored[REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[REFRESH_TOKEN_KEY];
-    if (!memoryRefreshToken && typeof stored[LEGACY_REFRESH_TOKEN_KEY] === "string") memoryRefreshToken = stored[LEGACY_REFRESH_TOKEN_KEY];
-    await removeStored(REMILIA_ALL_TOKEN_KEYS);
+export function configureRemiliaAuthClientFromBuild(): void {
+  const clientId = typeof MILXDY_REMILIA_CLIENT_ID === "string" ? MILXDY_REMILIA_CLIENT_ID : "";
+  const issuer = typeof MILXDY_REMILIA_ISSUER_URI === "string" ? MILXDY_REMILIA_ISSUER_URI : "";
+  const redirectPath = typeof MILXDY_REMILIA_REDIRECT_PATH === "string" ? MILXDY_REMILIA_REDIRECT_PATH : "";
+  const redirectUri = typeof MILXDY_REMILIA_REDIRECT_URI === "string" ? MILXDY_REMILIA_REDIRECT_URI : "";
+  if (!clientId && !issuer && !redirectPath && !redirectUri) return;
+  if (issuer !== OIDC_ISSUER || !redirectUri) throw new Error("Invalid built Remilia login client contract");
+  configureRemiliaAuthClient({ clientId, redirectPath, redirectUri });
+}
+
+export function hasRequiredRemiliaScopes(granted: readonly string[], required: readonly string[]): boolean {
+  const grantedSet = new Set(granted);
+  return required.every((scope) => grantedSet.has(scope));
+}
+
+export const remiliaAuthProvider: RemiliaAuthProvider = {
+  prepare: prepareRemiliaAccess,
+  refresh: refreshRemiliaAccess,
+};
+
+export async function prepareRemiliaAccess(
+  requiredScopes: readonly string[] = [],
+  options: { signal?: AbortSignal } = {},
+): Promise<RemiliaAuthGrant> {
+  throwIfAborted(options.signal);
+  if (!authClientId) return failure("UNSUPPORTED", [], requiredScopes);
+  const control = await readControl();
+  if (control.migration.required) return failure("MIGRATION_REQUIRED", [], requiredScopes);
+  if (control.disconnected) return failure("AUTH_REQUIRED", [], requiredScopes);
+
+  const credentials = await readCredentials();
+  if (!credentials) return failure("AUTH_REQUIRED", [], requiredScopes);
+  if (!hasRequiredRemiliaScopes(credentials.grantedScopes, requiredScopes)) {
+    await setLastError("MISSING_SCOPE");
+    return failure("MISSING_SCOPE", credentials.grantedScopes, requiredScopes);
+  }
+  if (credentials.expiresAt > Date.now() + ACCESS_TOKEN_SKEW_MS) return grant(credentials);
+  if (!credentials.refreshToken) {
+    await clearCredentials();
+    await setLastError("TOKEN_EXPIRED");
+    return failure("TOKEN_EXPIRED", credentials.grantedScopes, requiredScopes);
+  }
+  return refreshRemiliaAccess(requiredScopes, options);
+}
+
+export async function refreshRemiliaAccess(
+  requiredScopes: readonly string[] = [],
+  options: { signal?: AbortSignal } = {},
+): Promise<RemiliaAuthGrant> {
+  throwIfAborted(options.signal);
+  if (!authClientId) return failure("UNSUPPORTED", [], requiredScopes);
+  const control = await readControl();
+  if (control.migration.required) return failure("MIGRATION_REQUIRED", [], requiredScopes);
+  if (control.disconnected) return failure("AUTH_REQUIRED", [], requiredScopes);
+
+  if (!activeRefresh) {
+    const generation = authGeneration;
+    const abort = new AbortController();
+    activeRefreshAbort = abort;
+    const pending = performRefresh(generation, abort.signal);
+    activeRefresh = pending;
+    void pending.finally(() => {
+      if (activeRefresh === pending) activeRefresh = null;
+      if (activeRefreshAbort === abort) activeRefreshAbort = null;
+    }).catch(() => undefined);
+  }
+  const refreshed = await raceWithAbort(activeRefresh, options.signal);
+  if (!refreshed.ok) return refreshed;
+  if (!hasRequiredRemiliaScopes(refreshed.grantedScopes, requiredScopes)) {
+    await setLastError("MISSING_SCOPE");
+    return failure("MISSING_SCOPE", refreshed.grantedScopes, requiredScopes);
+  }
+  return refreshed;
+}
+
+export async function connectRemiliaAuth(options: { signal?: AbortSignal; timeoutMs?: number } = {}): Promise<RemiliaAuthGrant> {
+  throwIfAborted(options.signal);
+  if (!authClientId) return failure("UNSUPPORTED");
+  const control = await readControl();
+  if (control.migration.required) return failure("MIGRATION_REQUIRED");
+  if (activeLogin) return failure("CONCURRENT_LOGIN");
+
+  const generation = ++authGeneration;
+  const abort = new AbortController();
+  activeLoginAbort = abort;
+  const combinedSignal = combineSignals(options.signal, abort.signal);
+  const pending = performInteractiveLogin(generation, combinedSignal, options.timeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS);
+  activeLogin = pending;
+  try {
+    return await pending;
+  } finally {
+    if (activeLogin === pending) activeLogin = null;
+    if (activeLoginAbort === abort) activeLoginAbort = null;
+  }
+}
+
+export async function disconnectRemiliaAuth(): Promise<void> {
+  invalidateActiveAuth();
+  await clearCredentials();
+  const control = await readControl();
+  await writeControl({ ...control, disconnected: true, lastError: undefined });
+}
+
+export async function revokeRemiliaAuth(): Promise<{ remoteRevoked: boolean }> {
+  const credentials = await readCredentials();
+  invalidateActiveAuth();
+  await clearCredentials();
+  const control = await readControl();
+  await writeControl({ ...control, disconnected: true, lastError: undefined });
+  if (!credentials) return { remoteRevoked: true };
+
+  let remoteRevoked = false;
+  try {
+    const discovery = await discoverOidc();
+    if (!discovery.revocation_endpoint) throw new AuthProtocolError("UNSUPPORTED");
+    const tokens = [
+      [credentials.refreshToken, "refresh_token"],
+      [credentials.accessToken, "access_token"],
+    ] as const;
+    const results = await Promise.all(tokens.filter(([token]) => token).map(async ([token, hint]) => {
+      const response = await fetch(discovery.revocation_endpoint!, {
+        method: "POST",
+        credentials: "omit",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ client_id: authClientId, token, token_type_hint: hint }),
+      });
+      return response.ok;
+    }));
+    remoteRevoked = results.every(Boolean);
+  } catch {
+    remoteRevoked = false;
+  }
+  if (!remoteRevoked) await setLastError("OFFLINE");
+  return { remoteRevoked };
+}
+
+export async function completeRemiliaAuthMigration(): Promise<void> {
+  invalidateActiveAuth();
+  await clearCredentials();
+  await chrome.storage.local.remove([...REMILIA_LEGACY_TOKEN_KEYS, DISCONNECTED_KEY]);
+  await writeControl({
+    version: 1,
+    disconnected: true,
+    migration: { version: 1, required: false, legacyDeleted: true },
   });
 }
 
-export async function clearRemiliaAuth(): Promise<void> {
-  authGeneration += 1;
-  disconnectRequested = true;
-  await queueAuthMutation(async () => {
-    memoryAccessToken = "";
-    memoryRefreshToken = "";
-    await clearRemiliaAuthCookieRaw();
-    await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-    await setStored({ [DISCONNECTED_KEY]: true });
+export async function noteRemiliaAuthInstalled(reason: string): Promise<void> {
+  const stored = await chrome.storage.local.get(CONTROL_KEY);
+  const existing = normalizeControl(stored[CONTROL_KEY]);
+  if (existing) return;
+  await clearCredentials();
+  await writeControl({
+    version: 1,
+    disconnected: true,
+    migration: {
+      version: 1,
+      required: reason !== "install",
+      legacyDeleted: reason === "install",
+    },
   });
 }
 
-export async function clearStoredRemiliaAuth(): Promise<void> {
-  authGeneration += 1;
-  await queueAuthMutation(async () => {
-    memoryAccessToken = "";
-    memoryRefreshToken = "";
-    await removeStored([ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY, LEGACY_ACCESS_TOKEN_KEY, LEGACY_REFRESH_TOKEN_KEY]);
-  });
+export async function getRemiliaAuthStatus(): Promise<RemiliaAuthStatus> {
+  const control = await readControl();
+  const requiredScopes = [...REMILIA_REQUIRED_SCOPES];
+  if (!authClientId) {
+    return {
+      phase: "unsupported",
+      grantedScopes: [],
+      requiredScopes,
+      migration: control.migration,
+      lastError: { code: "UNSUPPORTED" },
+    };
+  }
+  if (control.migration.required) {
+    return {
+      phase: "migration-required",
+      grantedScopes: [],
+      requiredScopes,
+      migration: control.migration,
+      lastError: control.lastError,
+    };
+  }
+  if (activeLogin) {
+    return {
+      phase: "connecting",
+      grantedScopes: [],
+      requiredScopes,
+      migration: control.migration,
+      lastError: control.lastError,
+    };
+  }
+  if (control.disconnected) {
+    return {
+      phase: "disconnected",
+      grantedScopes: [],
+      requiredScopes,
+      migration: control.migration,
+      lastError: control.lastError,
+    };
+  }
+
+  const credentials = await readCredentials();
+  if (!credentials) {
+    return {
+      phase: "expired",
+      grantedScopes: [],
+      requiredScopes,
+      migration: control.migration,
+      lastError: control.lastError || { code: "TOKEN_EXPIRED" },
+    };
+  }
+  const missingScope = !hasRequiredRemiliaScopes(credentials.grantedScopes, requiredScopes);
+  return {
+    phase: missingScope ? "missing-scope" : "connected",
+    identity: credentials.identity,
+    grantedScopes: [...credentials.grantedScopes],
+    requiredScopes,
+    migration: control.migration,
+    lastError: missingScope ? { code: "MISSING_SCOPE" } : control.lastError,
+  };
 }
 
 export async function isRemiliaDisconnected(): Promise<boolean> {
-  if (disconnectRequested) return true;
-  const stored = await getStored([DISCONNECTED_KEY]);
-  if (stored[DISCONNECTED_KEY] === true) disconnectRequested = true;
-  return disconnectRequested;
+  const control = await readControl();
+  return control.disconnected || control.migration.required;
 }
 
-export async function allowRemiliaSessionAuth(signal?: AbortSignal): Promise<void> {
-  const generation = authGeneration;
-  await mutateRemiliaAuth(generation, signal, () => allowRemiliaSessionAuthRaw(generation));
-}
-
-export async function setRemiliaAuthCookie(accessToken: string, signal?: AbortSignal): Promise<void> {
-  const generation = authGeneration;
-  await mutateRemiliaAuth(generation, signal, () => setRemiliaAuthCookieRaw(accessToken));
-}
-
-async function setRemiliaAuthCookieRaw(accessToken: string): Promise<void> {
-  if (!accessToken || !chrome.cookies?.set) return;
-  await chrome.cookies.set({
-    url: BASE_URL,
-    name: AUTH_COOKIE_NAME,
-    value: accessToken,
-    path: "/",
-    secure: true,
-    sameSite: "no_restriction",
-    expirationDate: Math.floor(Date.now() / 1000) + AUTH_COOKIE_TTL_SECONDS,
-  });
-}
-
-export async function clearRemiliaAuthCookie(): Promise<void> {
-  await queueAuthMutation(clearRemiliaAuthCookieRaw);
-}
-
-async function clearRemiliaAuthCookieRaw(): Promise<void> {
-  if (!chrome.cookies?.remove) return;
-  await chrome.cookies.remove({ url: BASE_URL, name: AUTH_COOKIE_NAME }).catch(() => undefined);
-}
-
-export async function getRemiliaAuthCookie(): Promise<string> {
-  if (!chrome.cookies?.get) return "";
-  const cookie = await chrome.cookies.get({ url: BASE_URL, name: AUTH_COOKIE_NAME }).catch(() => null);
-  return typeof cookie?.value === "string" ? cookie.value : "";
-}
-
-export async function refreshRemiliaBrowserSessionTab(
-  sessionPath: string,
-  options: { timeoutMs?: number } = {},
-): Promise<RemiliaAuthResult> {
-  if (!chrome.tabs?.create || !chrome.tabs?.remove) return { ok: false, error: "TABS_UNAVAILABLE" };
-  if (await isRemiliaDisconnected()) return { ok: false, error: "DISCONNECTED" };
-
-  const timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1000, Number(options.timeoutMs)) : 12000;
-  let tabId = 0;
+async function performInteractiveLogin(generation: number, signal: AbortSignal, timeoutMs: number): Promise<RemiliaAuthGrant> {
   try {
-    const refreshUrl = new URL(BASE_URL);
-    refreshUrl.searchParams.set(SESSION_REFRESH_MARKER, "1");
-    const tab = await chrome.tabs.create({ url: refreshUrl.toString(), active: false });
-    tabId = typeof tab.id === "number" ? tab.id : 0;
-    if (!tabId) return { ok: false, error: "TAB_CREATE_FAILED" };
-    await waitForTabLoad(tabId, timeoutMs);
-  } finally {
-    if (tabId) await chrome.tabs.remove(tabId).catch(() => undefined);
-  }
+    if (!chrome.identity?.launchWebAuthFlow || !chrome.identity?.getRedirectURL) {
+      throw new AuthProtocolError("UNSUPPORTED");
+    }
+    const discovery = await discoverOidc(signal);
+    const redirectUri = chrome.identity.getRedirectURL(authRedirectPath);
+    validateRedirectContract(redirectUri);
+    const state = randomBase64Url(32);
+    const nonce = randomBase64Url(32);
+    const verifier = randomBase64Url(64);
+    const challenge = await sha256Base64Url(verifier);
+    const authUrl = new URL(discovery.authorization_endpoint);
+    authUrl.search = new URLSearchParams({
+      client_id: authClientId,
+      redirect_uri: redirectUri,
+      response_type: "code",
+      scope: OIDC_SCOPE,
+      state,
+      nonce,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    }).toString();
 
-  return adoptRemiliaBrowserSession(sessionPath);
+    const callbackUrl = await withTimeout(
+      chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true }),
+      timeoutMs,
+      signal,
+    );
+    const code = validateAuthorizationCallback(callbackUrl, redirectUri, state, discovery.issuer);
+    const tokenResponse = await exchangeToken(discovery.token_endpoint, {
+      grant_type: "authorization_code",
+      client_id: authClientId,
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: verifier,
+    }, signal);
+    const credentials = await credentialsFromTokenResponse(tokenResponse, discovery, nonce);
+    throwIfInvalidated(generation, signal);
+    await writeCredentials(credentials);
+    throwIfInvalidated(generation, signal);
+    const control = await readControl();
+    await writeControl({ ...control, disconnected: false, lastError: undefined });
+    return grant(credentials);
+  } catch (error) {
+    const code = normalizeAuthError(error);
+    await setLastError(toUiError(code));
+    return failure(code);
+  }
 }
 
-export function isRemiliaSessionRefreshUrl(value: string | undefined): boolean {
-  if (!value) return false;
+async function performRefresh(generation: number, signal: AbortSignal): Promise<RemiliaAuthGrant> {
+  const credentials = await readCredentials();
+  if (!credentials?.refreshToken) return failure("TOKEN_EXPIRED", credentials?.grantedScopes || []);
+  try {
+    const discovery = await discoverOidc(signal);
+    const tokenResponse = await exchangeToken(discovery.token_endpoint, {
+      grant_type: "refresh_token",
+      client_id: authClientId,
+      refresh_token: credentials.refreshToken,
+    }, signal);
+    const rotated = await credentialsFromTokenResponse(tokenResponse, discovery, undefined, credentials, signal);
+    throwIfInvalidated(generation);
+    await writeCredentials(rotated);
+    throwIfInvalidated(generation);
+    await setLastError(undefined);
+    return grant(rotated);
+  } catch (error) {
+    const code = normalizeAuthError(error);
+    if (code === "REFRESH_REJECTED" || code === "TOKEN_EXPIRED") {
+      await clearCredentials();
+      await setLastError("TOKEN_EXPIRED");
+      return failure("REFRESH_REJECTED", credentials.grantedScopes);
+    }
+    await setLastError(toUiError(code));
+    return failure(code, credentials.grantedScopes);
+  }
+}
+
+async function discoverOidc(signal?: AbortSignal): Promise<OidcDiscovery> {
+  if (!discoveryPromise) {
+    const pending = fetchDiscovery();
+    discoveryPromise = pending;
+    void pending.catch(() => {
+      if (discoveryPromise === pending) discoveryPromise = null;
+    });
+  }
+  return raceWithAbort(discoveryPromise, signal);
+}
+
+async function fetchDiscovery(): Promise<OidcDiscovery> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(new DOMException("OIDC discovery timed out", "TimeoutError")), DISCOVERY_TIMEOUT_MS);
+  try {
+    const response = await fetch(OIDC_DISCOVERY_URL, {
+      credentials: "omit",
+      headers: { Accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new AuthProtocolError("DISCOVERY_FAILED");
+    const value = await response.json() as Partial<OidcDiscovery>;
+    const discovery: OidcDiscovery = {
+      issuer: String(value.issuer || ""),
+      authorization_endpoint: String(value.authorization_endpoint || ""),
+      token_endpoint: String(value.token_endpoint || ""),
+      jwks_uri: String(value.jwks_uri || ""),
+      revocation_endpoint: typeof value.revocation_endpoint === "string" ? value.revocation_endpoint : undefined,
+      end_session_endpoint: typeof value.end_session_endpoint === "string" ? value.end_session_endpoint : undefined,
+      userinfo_endpoint: typeof value.userinfo_endpoint === "string" ? value.userinfo_endpoint : undefined,
+      code_challenge_methods_supported: Array.isArray(value.code_challenge_methods_supported)
+        ? value.code_challenge_methods_supported.map(String)
+        : [],
+      id_token_signing_alg_values_supported: Array.isArray(value.id_token_signing_alg_values_supported)
+        ? value.id_token_signing_alg_values_supported.map(String)
+        : [],
+    };
+    if (discovery.issuer !== OIDC_ISSUER
+      || !isTrustedOidcEndpoint(discovery.authorization_endpoint)
+      || !isTrustedOidcEndpoint(discovery.token_endpoint)
+      || !isTrustedOidcEndpoint(discovery.jwks_uri)
+      || (discovery.revocation_endpoint && !isTrustedOidcEndpoint(discovery.revocation_endpoint))
+      || (discovery.end_session_endpoint && !isTrustedOidcEndpoint(discovery.end_session_endpoint))
+      || (discovery.userinfo_endpoint && !isTrustedOidcEndpoint(discovery.userinfo_endpoint))
+      || !discovery.code_challenge_methods_supported?.includes("S256")
+      || !discovery.id_token_signing_alg_values_supported?.includes("RS256")) {
+      throw new AuthProtocolError("DISCOVERY_FAILED");
+    }
+    return discovery;
+  } catch (error) {
+    if (error instanceof AuthProtocolError) throw error;
+    throw new AuthProtocolError("DISCOVERY_FAILED");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function isTrustedOidcEndpoint(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.origin === BASE_URL && url.searchParams.get(SESSION_REFRESH_MARKER) === "1";
+    return url.protocol === "https:"
+      && url.origin === BASE_URL
+      && url.pathname.startsWith("/oidc/realms/remilia/")
+      && !url.username
+      && !url.password
+      && !url.search
+      && !url.hash;
   } catch {
     return false;
   }
 }
 
-export async function adoptRemiliaBrowserSession(
-  sessionPath: string,
-  options: RemiliaAuthOptions = {},
-): Promise<RemiliaAuthResult> {
-  const generation = options.generation ?? authGeneration;
-  options = { ...options, generation };
-  throwIfAuthAborted(options.signal);
-  if (!options.ignoreDisconnect && await isRemiliaDisconnected()) return { ok: false, error: "DISCONNECTED" };
-  throwIfAuthAborted(options.signal);
-
-  const session = await remiliaSessionProbe(sessionPath, options.signal);
-  if (!session.ok) return { ok: false, error: "NO_BROWSER_SESSION" };
-
-  const cookieToken = await getRemiliaAuthCookie();
-  await mutateRemiliaAuth(generation, options.signal, async () => {
-    if (cookieToken) {
-      memoryAccessToken = cookieToken;
+async function exchangeToken(endpoint: string, params: Record<string, string>, signal?: AbortSignal): Promise<TokenResponse> {
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      credentials: "omit",
+      headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
+      body: new URLSearchParams(params),
+      signal,
+    });
+    const data = await response.json().catch(() => ({})) as TokenResponse;
+    if (!response.ok) {
+      if (data.error === "invalid_grant" && params.grant_type === "refresh_token") {
+        throw new AuthProtocolError("REFRESH_REJECTED");
+      }
+      throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
     }
-    await allowRemiliaSessionAuthRaw(generation);
-  });
-  return { ok: true, token: cookieToken, user: session.data, method: cookieToken ? "session" : "session" };
-}
-
-export async function prepareRemiliaAuth(sessionPath: string, options: RemiliaAuthOptions = {}): Promise<RemiliaAuthResult> {
-  const generation = options.generation ?? authGeneration;
-  options = { ...options, generation };
-  throwIfAuthAborted(options.signal);
-  if (await isRemiliaDisconnected()) return { ok: false, error: "AUTH_REQUIRED" };
-  await migrateRemiliaAuth(options.signal, options.generation);
-
-  const adopted = await adoptRemiliaBrowserSession(sessionPath, options);
-  if (adopted.ok && adopted.token) return adopted;
-
-  if (memoryAccessToken) {
-    await mutateRemiliaAuth(generation, options.signal, () => setRemiliaAuthCookieRaw(memoryAccessToken));
-    return { ok: true, token: memoryAccessToken, method: "stored" };
+    return data;
+  } catch (error) {
+    if (error instanceof AuthProtocolError) throw error;
+    if (isAbortError(error)) throw error;
+    throw new AuthProtocolError("OFFLINE");
   }
-
-  const renewed = await renewRemiliaAuth(sessionPath, options);
-  if (renewed.ok) return renewed;
-  return adopted.ok ? adopted : { ok: false, error: "AUTH_REQUIRED" };
 }
 
-export async function renewRemiliaAuth(sessionPath: string, options: RemiliaAuthOptions = {}): Promise<RemiliaAuthResult> {
-  options = { ...options, generation: options.generation ?? authGeneration };
-  throwIfAuthAborted(options.signal);
-  if (await isRemiliaDisconnected()) return { ok: false, error: "AUTH_REQUIRED" };
-  await migrateRemiliaAuth(options.signal, options.generation);
+async function credentialsFromTokenResponse(
+  data: TokenResponse,
+  discovery: OidcDiscovery,
+  expectedNonce?: string,
+  previous?: StoredCredentials,
+  signal?: AbortSignal,
+): Promise<StoredCredentials> {
+  if (typeof data.access_token !== "string" || !data.access_token
+    || (data.token_type !== undefined && String(data.token_type).toLowerCase() !== "bearer")) {
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
+  const returnedIdToken = typeof data.id_token === "string" && data.id_token ? data.id_token : "";
+  const idToken = returnedIdToken || previous?.idToken || "";
+  if (!idToken) throw new AuthProtocolError(expectedNonce ? "NONCE_MISMATCH" : "TOKEN_EXCHANGE_FAILED");
+  const claims = returnedIdToken
+    ? await validateIdToken(idToken, discovery, expectedNonce, signal)
+    : previous ? { sub: previous.identity.id } : null;
+  if (!claims) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  const expiresIn = Number(data.expires_in);
+  if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  const grantedScopes = normalizeScopes(data.scope, previous?.grantedScopes);
+  return {
+    version: 1,
+    accessToken: data.access_token,
+    refreshToken: typeof data.refresh_token === "string" && data.refresh_token
+      ? data.refresh_token
+      : previous?.refreshToken || "",
+    idToken,
+    expiresAt: Date.now() + Math.floor(expiresIn * 1000),
+    grantedScopes,
+    identity: returnedIdToken ? identityFromClaims(claims) : previous!.identity,
+  };
+}
 
-  if (memoryRefreshToken) {
-    const refreshed = await oidcToken({ grant_type: "refresh_token", refresh_token: memoryRefreshToken }, "refresh", options);
-    if (refreshed.ok) return refreshed;
-    await mutateRemiliaAuth(options.generation ?? authGeneration, options.signal, async () => {
-      memoryRefreshToken = "";
+async function validateIdToken(
+  idToken: string,
+  discovery: OidcDiscovery,
+  expectedNonce?: string,
+  signal?: AbortSignal,
+): Promise<Record<string, unknown>> {
+  const parts = idToken.split(".");
+  if (parts.length !== 3) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  const header = decodeJwtPart(parts[0]);
+  if (!header || header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) {
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
+  const keys = await readJwks(discovery.jwks_uri, signal);
+  const jwk = keys.find((candidate) => (candidate as JsonWebKey & { kid?: string }).kid === header.kid
+    && candidate.kty === "RSA"
+    && (!candidate.use || candidate.use === "sig")
+    && (!candidate.alg || candidate.alg === "RS256"));
+  if (!jwk) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  try {
+    const key = await crypto.subtle.importKey(
+      "jwk",
+      jwk,
+      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+      false,
+      ["verify"],
+    );
+    const valid = await crypto.subtle.verify(
+      "RSASSA-PKCS1-v1_5",
+      key,
+      base64UrlBytes(parts[2]).buffer as ArrayBuffer,
+      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+    );
+    if (!valid) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  } catch (error) {
+    if (error instanceof AuthProtocolError) throw error;
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
+  return validateIdTokenClaims(idToken, discovery.issuer, expectedNonce);
+}
+
+async function readJwks(uri: string, signal?: AbortSignal): Promise<JsonWebKey[]> {
+  if (!jwksPromise) {
+    const pending = fetch(uri, { credentials: "omit", headers: { Accept: "application/json" } })
+      .then(async (response) => {
+        if (!response.ok) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+        const data = await response.json() as { keys?: unknown };
+        if (!Array.isArray(data.keys)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+        return data.keys.filter((key): key is JsonWebKey => Boolean(key && typeof key === "object"));
+      });
+    jwksPromise = pending;
+    void pending.catch(() => {
+      if (jwksPromise === pending) jwksPromise = null;
     });
   }
-
-  const bootstrapped = await bootstrapRemiliaAuth(options);
-  if (bootstrapped.ok) return bootstrapped;
-
-  return adoptRemiliaBrowserSession(sessionPath, options);
+  return raceWithAbort(jwksPromise, signal);
 }
 
-async function bootstrapRemiliaAuth(options: RemiliaAuthOptions): Promise<RemiliaAuthResult> {
-  const { signal } = options;
-  throwIfAuthAborted(signal);
-  const verifier = randomBase64Url(32);
-  const challenge = await sha256Base64Url(verifier);
-  const state = randomBase64Url(16);
-  const authUrl = new URL(OIDC_AUTH_URL);
-  authUrl.search = new URLSearchParams({
-    client_id: OIDC_CLIENT_ID,
-    redirect_uri: OIDC_REDIRECT_URI,
-    response_type: "code",
-    scope: OIDC_SCOPE,
-    prompt: "none",
-    code_challenge: challenge,
-    code_challenge_method: "S256",
-    state,
-  }).toString();
-
-  const response = await fetch(authUrl.toString(), {
-    credentials: "include",
-    redirect: "manual",
-    signal,
-  }).catch(() => null);
-  throwIfAuthAborted(signal);
-  if (!response) return { ok: false, error: "SILENT_AUTH_FAILED" };
-
-  const location = response.headers.get("location") || response.url;
-  const code = extractAuthCode(location, state);
-  if (!code) return { ok: false, error: "SILENT_AUTH_NO_CODE" };
-
-  return oidcToken({
-    grant_type: "authorization_code",
-    code,
-    redirect_uri: OIDC_REDIRECT_URI,
-    code_verifier: verifier,
-  }, "silent-sso", options);
+function validateIdTokenClaims(idToken: string, issuer: string, expectedNonce?: string): Record<string, unknown> {
+  const claims = decodeJwtPayload(idToken);
+  if (!claims || claims.iss !== issuer) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  const audience = Array.isArray(claims.aud) ? claims.aud.map(String) : [String(claims.aud || "")];
+  if (!audience.includes(authClientId)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (expectedNonce !== undefined && claims.nonce !== expectedNonce) throw new AuthProtocolError("NONCE_MISMATCH");
+  const expiresAt = Number(claims.exp) * 1000;
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new AuthProtocolError("TOKEN_EXPIRED");
+  if (typeof claims.sub !== "string" || !claims.sub) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  return claims;
 }
 
-async function oidcToken(params: Record<string, string>, method: RemiliaAuthResult["method"], options: RemiliaAuthOptions): Promise<RemiliaAuthResult> {
-  const { signal } = options;
-  const generation = options.generation ?? authGeneration;
-  throwIfAuthAborted(signal);
-  const response = await fetch(OIDC_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ client_id: OIDC_CLIENT_ID, ...params }),
-    signal,
-  }).catch(() => null);
-  const data = await response?.json().catch(() => ({})) ?? {};
-  throwIfAuthAborted(signal);
-  if (!response?.ok || typeof data.access_token !== "string") {
-    return { ok: false, error: typeof data.error === "string" ? data.error : "TOKEN_EXCHANGE_FAILED" };
-  }
-
-  await mutateRemiliaAuth(generation, signal, async () => {
-    memoryAccessToken = data.access_token;
-    memoryRefreshToken = typeof data.refresh_token === "string" ? data.refresh_token : memoryRefreshToken;
-    await setRemiliaAuthCookieRaw(data.access_token);
-    await removeStored(REMILIA_ALL_TOKEN_KEYS);
-    await allowRemiliaSessionAuthRaw(generation);
-  });
-  return { ok: true, token: data.access_token, method };
-}
-
-async function remiliaSessionProbe(path: string, signal?: AbortSignal): Promise<{ ok: boolean; data?: unknown }> {
-  throwIfAuthAborted(signal);
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method: "GET",
-    credentials: "include",
-    headers: { Accept: "application/json" },
-    signal,
-  }).catch(() => null);
-  throwIfAuthAborted(signal);
-  if (!response?.ok) return { ok: false };
-  const data = await response.json().catch(() => null);
-  throwIfAuthAborted(signal);
-  return { ok: true, data };
-}
-
-function throwIfAuthAborted(signal?: AbortSignal): void {
-  if (!signal?.aborted) return;
-  if (signal.reason instanceof Error) throw signal.reason;
-  throw new DOMException("Remilia authentication was cancelled", "AbortError");
-}
-
-function throwIfAuthInvalidated(generation: number, signal?: AbortSignal): void {
-  throwIfAuthAborted(signal);
-  if (generation !== authGeneration) throw new DOMException("Remilia authentication was invalidated", "AbortError");
-}
-
-async function mutateRemiliaAuth(generation: number, signal: AbortSignal | undefined, mutation: () => Promise<void>): Promise<void> {
-  await queueAuthMutation(async () => {
-    throwIfAuthInvalidated(generation, signal);
-    await mutation();
+function identityFromClaims(claims: Record<string, unknown>): RemiliaAuthIdentity {
+  return compactObject({
+    id: String(claims.sub),
+    displayName: optionalString(claims.name),
+    username: optionalString(claims.preferred_username),
+    avatarUrl: optionalHttpsUrl(claims.picture),
   });
 }
 
-async function queueAuthMutation(mutation: () => Promise<void>): Promise<void> {
-  const pending = authMutationQueue.then(mutation, mutation);
-  authMutationQueue = pending.then(() => undefined, () => undefined);
-  await pending;
-}
-
-async function allowRemiliaSessionAuthRaw(generation: number): Promise<void> {
-  await chrome.storage.local.remove([DISCONNECTED_KEY]);
-  if (generation === authGeneration) disconnectRequested = false;
-}
-
-async function waitForTabLoad(tabId: number, timeoutMs: number): Promise<void> {
-  await new Promise<void>((resolve) => {
-    let done = false;
-    let settleTimer: ReturnType<typeof setTimeout> | null = null;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      if (settleTimer) clearTimeout(settleTimer);
-      clearTimeout(timeoutTimer);
-      chrome.tabs.onUpdated.removeListener(listener);
-      resolve();
-    };
-    const settle = () => {
-      if (done || settleTimer) return;
-      settleTimer = setTimeout(finish, 750);
-    };
-    const listener = (updatedTabId: number, changeInfo: { status?: string }) => {
-      if (updatedTabId === tabId && changeInfo.status === "complete") settle();
-    };
-    const timeoutTimer = setTimeout(finish, timeoutMs);
-    chrome.tabs.onUpdated.addListener(listener);
-    chrome.tabs.get(tabId).then((tab) => {
-      if (tab.status === "complete") settle();
-    }).catch(() => undefined);
-  });
-}
-
-function extractAuthCode(location: string, expectedState: string): string {
+function validateAuthorizationCallback(callback: string | undefined, redirectUri: string, state: string, issuer: string): string {
+  if (!callback) throw new AuthProtocolError("CANCELLED");
+  let actual: URL;
+  let expected: URL;
   try {
-    const url = new URL(location, BASE_URL);
-    if (url.searchParams.get("state") !== expectedState) return "";
-    return url.searchParams.get("code") || "";
+    actual = new URL(callback);
+    expected = new URL(redirectUri);
   } catch {
-    return "";
+    throw new AuthProtocolError("REDIRECT_MISMATCH");
   }
+  if (actual.origin !== expected.origin
+    || actual.pathname !== expected.pathname
+    || actual.username
+    || actual.password
+    || actual.hash) {
+    throw new AuthProtocolError("REDIRECT_MISMATCH");
+  }
+  const callbackIssuer = actual.searchParams.get("iss");
+  if (callbackIssuer && callbackIssuer !== issuer) throw new AuthProtocolError("REDIRECT_MISMATCH");
+  const oauthError = actual.searchParams.get("error");
+  if (oauthError) throw new AuthProtocolError(oauthError === "access_denied" ? "ACCESS_DENIED" : "CANCELLED");
+  if (actual.searchParams.get("state") !== state) throw new AuthProtocolError("STATE_MISMATCH");
+  const code = actual.searchParams.get("code");
+  if (!code) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  return code;
+}
+
+function validateRedirectContract(redirectUri: string): void {
+  try {
+    const url = new URL(redirectUri);
+    if (url.protocol !== "https:"
+      || !url.hostname.endsWith(".chromiumapp.org")
+      || url.pathname !== `/${authRedirectPath}`
+      || url.search
+      || url.hash
+      || url.username
+      || url.password) {
+      throw new Error("mismatch");
+    }
+    if (registeredRedirectUri && redirectUri !== registeredRedirectUri) throw new Error("mismatch");
+  } catch {
+    throw new AuthProtocolError("REDIRECT_MISMATCH");
+  }
+}
+
+async function readCredentials(): Promise<StoredCredentials | null> {
+  await configureSessionAccess();
+  const session = chrome.storage.session;
+  if (!session) throw new AuthProtocolError("UNSUPPORTED");
+  const stored = await session.get(CREDENTIALS_KEY);
+  const credentials = normalizeCredentials(stored[CREDENTIALS_KEY]);
+  if (!credentials && stored[CREDENTIALS_KEY] !== undefined) await session.remove(CREDENTIALS_KEY);
+  return credentials;
+}
+
+async function writeCredentials(credentials: StoredCredentials): Promise<void> {
+  await configureSessionAccess();
+  if (!chrome.storage.session) throw new AuthProtocolError("UNSUPPORTED");
+  await chrome.storage.session.set({ [CREDENTIALS_KEY]: credentials });
+}
+
+async function clearCredentials(): Promise<void> {
+  await configureSessionAccess();
+  await chrome.storage.session?.remove(CREDENTIALS_KEY);
+}
+
+async function configureSessionAccess(): Promise<void> {
+  if (sessionAccessConfigured) return;
+  if (!chrome.storage.session) throw new AuthProtocolError("UNSUPPORTED");
+  await chrome.storage.session.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" }).catch(() => undefined);
+  sessionAccessConfigured = true;
+}
+
+async function readControl(): Promise<AuthControl> {
+  const stored = await chrome.storage.local.get(CONTROL_KEY);
+  return normalizeControl(stored[CONTROL_KEY]) || {
+    version: 1,
+    disconnected: true,
+    migration: { version: 1, required: false, legacyDeleted: false },
+  };
+}
+
+async function writeControl(control: AuthControl): Promise<void> {
+  await chrome.storage.local.set({ [CONTROL_KEY]: control });
+}
+
+async function setLastError(code?: RemiliaUiErrorCode): Promise<void> {
+  const control = await readControl();
+  await writeControl({ ...control, lastError: code ? { code } : undefined });
+}
+
+function normalizeCredentials(value: unknown): StoredCredentials | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Partial<StoredCredentials>;
+  if (raw.version !== 1
+    || typeof raw.accessToken !== "string"
+    || typeof raw.refreshToken !== "string"
+    || typeof raw.idToken !== "string"
+    || typeof raw.expiresAt !== "number"
+    || !Array.isArray(raw.grantedScopes)
+    || !raw.identity
+    || typeof raw.identity.id !== "string") return null;
+  return {
+    version: 1,
+    accessToken: raw.accessToken,
+    refreshToken: raw.refreshToken,
+    idToken: raw.idToken,
+    expiresAt: raw.expiresAt,
+    grantedScopes: normalizeScopes(raw.grantedScopes.join(" ")),
+    identity: raw.identity,
+  };
+}
+
+function normalizeControl(value: unknown): AuthControl | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = value as Partial<AuthControl>;
+  if (raw.version !== 1 || typeof raw.disconnected !== "boolean"
+    || !raw.migration || raw.migration.version !== 1
+    || typeof raw.migration.required !== "boolean"
+    || typeof raw.migration.legacyDeleted !== "boolean") return null;
+  return raw as AuthControl;
+}
+
+function normalizeScopes(value: unknown, fallback: readonly string[] = []): string[] {
+  const entries = typeof value === "string" ? value.split(/\s+/) : [...fallback];
+  return Array.from(new Set(entries.filter((scope): scope is string => typeof scope === "string" && scope.length > 0))).sort();
+}
+
+function grant(credentials: StoredCredentials): RemiliaAuthGrant {
+  return {
+    ok: true,
+    accessToken: credentials.accessToken,
+    tokenType: "Bearer",
+    expiresAt: credentials.expiresAt,
+    grantedScopes: [...credentials.grantedScopes],
+  };
+}
+
+function failure(
+  error: RemiliaAuthErrorCode,
+  grantedScopes: readonly string[] = [],
+  requiredScopes: readonly string[] = [],
+): RemiliaAuthGrant {
+  const granted = [...grantedScopes];
+  const grantedSet = new Set(granted);
+  return {
+    ok: false,
+    error,
+    grantedScopes: granted,
+    missingScopes: requiredScopes.filter((scope) => !grantedSet.has(scope)),
+  };
+}
+
+function invalidateActiveAuth(): void {
+  authGeneration += 1;
+  activeLoginAbort?.abort(new DOMException("Remilia authentication cancelled", "AbortError"));
+  activeLoginAbort = null;
+  activeRefreshAbort?.abort(new DOMException("Remilia refresh cancelled", "AbortError"));
+  activeRefreshAbort = null;
+}
+
+function throwIfInvalidated(generation: number, signal?: AbortSignal): void {
+  throwIfAborted(signal);
+  if (generation !== authGeneration) throw new AuthProtocolError("CANCELLED");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (!signal?.aborted) return;
+  throw signal.reason instanceof Error ? signal.reason : new DOMException("Remilia authentication cancelled", "AbortError");
+}
+
+function normalizeAuthError(error: unknown): RemiliaAuthErrorCode {
+  if (error instanceof AuthProtocolError) return error.code;
+  if (isTimeoutError(error)) return "AUTH_TIMEOUT";
+  if (isAbortError(error)) return "CANCELLED";
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("user did not approve") || message.includes("access denied")) return "ACCESS_DENIED";
+  if (message.includes("canceled") || message.includes("cancelled") || message.includes("closed")) return "CANCELLED";
+  return "UNKNOWN";
+}
+
+function toUiError(code: RemiliaAuthErrorCode): RemiliaUiErrorCode {
+  if (code === "ACCESS_DENIED" || code === "TOKEN_EXPIRED" || code === "MISSING_SCOPE"
+    || code === "OFFLINE" || code === "CANCELLED" || code === "CONCURRENT_LOGIN"
+    || code === "AUTH_TIMEOUT" || code === "REVOKED" || code === "UNSUPPORTED") return code;
+  if (code === "REFRESH_REJECTED") return "TOKEN_EXPIRED";
+  return "UNKNOWN";
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function isTimeoutError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "TimeoutError";
+}
+
+function combineSignals(...signals: Array<AbortSignal | undefined>): AbortSignal {
+  const present = signals.filter((signal): signal is AbortSignal => Boolean(signal));
+  if (typeof AbortSignal.any === "function") return AbortSignal.any(present);
+  const controller = new AbortController();
+  const abort = (signal: AbortSignal) => controller.abort(signal.reason);
+  for (const signal of present) {
+    if (signal.aborted) {
+      abort(signal);
+      break;
+    }
+    signal.addEventListener("abort", () => abort(signal), { once: true });
+  }
+  return controller.signal;
+}
+
+async function raceWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise;
+  throwIfAborted(signal);
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+    }),
+  ]);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal?: AbortSignal): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await raceWithAbort(Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new DOMException("Remilia authentication timed out", "TimeoutError")), Math.max(1_000, timeoutMs));
+      }),
+    ]), signal);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+function decodeJwtPayload(value: string): Record<string, unknown> | null {
+  try {
+    const encoded = value.split(".")[1];
+    return encoded ? decodeJwtPart(encoded) : null;
+  } catch {
+    return null;
+  }
+}
+
+function decodeJwtPart(value: string): Record<string, unknown> | null {
+  try {
+    const decoded = JSON.parse(new TextDecoder().decode(base64UrlBytes(value)));
+    return decoded && typeof decoded === "object" && !Array.isArray(decoded) ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function base64UrlBytes(value: string): Uint8Array {
+  const base64 = value.replace(/-/g, "+").replace(/_/g, "/").padEnd(Math.ceil(value.length / 4) * 4, "=");
+  return Uint8Array.from(atob(base64), (character) => character.charCodeAt(0));
 }
 
 function randomBase64Url(byteLength: number): string {
@@ -392,4 +989,22 @@ function bytesToBase64Url(bytes: Uint8Array): string {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+}
+
+function optionalString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function optionalHttpsUrl(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function compactObject<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 }

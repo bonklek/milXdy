@@ -1,14 +1,11 @@
 import { registerBackgroundMessageHandlers } from "../../platform/background/router";
 import {
   REMILIA_BASE_URL,
-  prepareRemiliaAuth,
-  renewRemiliaAuth,
-  clearRemiliaAuth,
-  clearStoredRemiliaAuth,
+  prepareRemiliaAccess,
+  refreshRemiliaAccess,
+  disconnectRemiliaAuth,
+  getRemiliaAuthStatus,
   isRemiliaDisconnected,
-  adoptRemiliaBrowserSession,
-  migrateRemiliaAuth,
-  refreshRemiliaBrowserSessionTab,
 } from "../../platform/auth/remilia-auth";
 
 const BASE_URL = REMILIA_BASE_URL;
@@ -17,8 +14,6 @@ const INCOMING_POKE_WINDOW_MS = POKE_COOLDOWN_MS;
 const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
 const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
-const SESSION_PROBE_PATH = '/api/beetle/user';
-const AUTH_SESSION_PROBE_PATH = '/api/profile/whoami';
 const CRUNCH_STEP_MS = 717;
 const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
@@ -63,35 +58,28 @@ async function setStored(values) {
   return chrome.storage.local.set(values);
 }
 
-const migrateAuth = migrateRemiliaAuth;
-
 async function clearAuth() {
-  return clearRemiliaAuth();
+  return disconnectRemiliaAuth();
 }
 
 async function clearStoredAuth() {
-  return clearStoredRemiliaAuth();
-}
-
-async function adoptBrowserSession(options = {}) {
-  return adoptRemiliaBrowserSession(AUTH_SESSION_PROBE_PATH, options);
+  return disconnectRemiliaAuth();
 }
 
 async function refreshAccessToken() {
-  const result = await renewRemiliaAuth(AUTH_SESSION_PROBE_PATH);
+  const result = await refreshRemiliaAccess();
   return result.ok;
 }
 
 async function remiliaFetch(method, path, body, retry = true) {
   if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true };
-  await migrateAuth();
-  const prepared = await prepareRemiliaAuth(AUTH_SESSION_PROBE_PATH);
-  const accessToken = prepared.token;
-  if (!accessToken) return { ok: false, authRequired: true };
+  const prepared = await prepareRemiliaAccess();
+  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
 
   const result = await remiliaRequest(method, path, body, {
-    credentials: 'include',
-    authMethod: 'cookie',
+    credentials: 'omit',
+    authMethod: 'bearer',
+    accessToken: prepared.accessToken,
   });
 
   if ((result.status === 401 || result.status === 403) && retry) {
@@ -133,30 +121,8 @@ async function readResponseBody(response) {
   }
 }
 
-async function remiliaSessionFetch(method, path, body) {
-  const response = await fetch(`${BASE_URL}${path}`, {
-    method,
-    credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...(body == null ? {} : { 'Content-Type': 'application/json' }),
-    },
-    body: body == null ? undefined : JSON.stringify(body),
-  });
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    return { ok: false, status: response.status, data };
-  }
-  return { ok: true, data, session: true };
-}
-
 async function remiliaAuthedFetch(method, path, body, retry = true) {
-  const tokenResult = await remiliaFetch(method, path, body, retry);
-  if (tokenResult.ok) return tokenResult;
-  // A failed mutation may already have reached the server. Only retry using
-  // browser-session auth when the token path definitively rejected auth.
-  if (!tokenResult.authRequired) return tokenResult;
-  return remiliaSessionFetch(method, path, body);
+  return remiliaFetch(method, path, body, retry);
 }
 
 async function getState() {
@@ -450,39 +416,25 @@ function normalizeUsername(value) {
 
 async function remiliaPokeFetch(username) {
   if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true, error: 'REMILIA_LOGIN_REQUIRED' };
-  await migrateAuth();
-  const prepared = await prepareRemiliaAuth(SESSION_PROBE_PATH);
-  if (!prepared.ok) {
-    const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH);
-    if (!refreshed.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED', sessionRefresh: refreshed };
-    return remiliaPokeFetchWithPrepared(username, refreshed);
-  }
+  const prepared = await prepareRemiliaAccess(['remilia:pokes.write']);
+  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
 
   const firstResult = await remiliaPokeFetchWithPrepared(username, prepared);
   if (!pokeResultNeedsSessionRefresh(firstResult)) return firstResult;
 
-  await clearStoredAuth();
-  const refreshed = await refreshRemiliaBrowserSessionTab(SESSION_PROBE_PATH);
-  if (!refreshed.ok) return firstResult;
+  const refreshed = await refreshRemiliaAccess(['remilia:pokes.write']);
+  if (!refreshed.ok) {
+    await clearStoredAuth();
+    return firstResult;
+  }
 
   const retryResult = await remiliaPokeFetchWithPrepared(username, refreshed);
-  if (!retryResult.ok && retryResult.authRequired) {
-    return { ...retryResult, sessionRefresh: { ok: true } };
-  }
-  return { ...retryResult, sessionRefresh: { ok: true } };
+  return { ...retryResult, authRefresh: { ok: true } };
 }
 
 async function remiliaPokeFetchWithPrepared(username, prepared) {
-  const accessToken = prepared?.token || '';
-  if (!accessToken && !prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
-
-  const attempts = [
-    { authMethod: 'cookie', credentials: 'include' },
-    ...(accessToken ? [
-      { authMethod: 'bearer', credentials: 'omit', accessToken },
-      { authMethod: 'cookie+bearer', credentials: 'include', accessToken },
-    ] : []),
-  ];
+  if (!prepared?.ok) return { ok: false, authRequired: true, error: 'REMILIA_LOGIN_REQUIRED' };
+  const attempts = [{ authMethod: 'bearer', credentials: 'omit', accessToken: prepared.accessToken }];
   const results = [];
   for (const attempt of attempts) {
     const result = await remiliaRequest('POST', '/api/pokeUser', { username }, attempt);
@@ -722,11 +674,11 @@ async function handleBeetolMessage(message, sender) {
     return getAuthStatus();
   }
   if (message?.type === 'beetol:sessionStatus') {
-    const adopted = await adoptBrowserSession({ ignoreDisconnect: true });
+    const status = await getRemiliaAuthStatus();
     return {
       ok: true,
-      signedIn: Boolean(adopted.ok),
-      method: adopted.ok ? (adopted.token ? 'sso' : 'session') : null,
+      signedIn: status.phase === 'connected',
+      method: status.phase === 'connected' ? 'oidc' : null,
     };
   }
   if (message?.type === 'beetol:getState') {
@@ -794,23 +746,12 @@ function isBeetolContentScriptSender(sender) {
 }
 
 async function getAuthStatus() {
-  await migrateAuth();
-  const adopted = await adoptBrowserSession();
-  if (adopted.ok) {
-    return {
-      ok: true,
-      signedIn: true,
-      method: adopted.token ? 'sso' : 'session',
-    };
-  }
-  const renewed = await renewRemiliaAuth(AUTH_SESSION_PROBE_PATH);
-  if (renewed.ok) {
-    return authStatusFromWhoami(renewed.method || 'token');
-  }
+  const status = await getRemiliaAuthStatus();
   return {
     ok: true,
-    signedIn: false,
-    method: null,
+    signedIn: status.phase === 'connected',
+    method: status.phase === 'connected' ? 'oidc' : null,
+    user: status.identity || null,
   };
 }
 
