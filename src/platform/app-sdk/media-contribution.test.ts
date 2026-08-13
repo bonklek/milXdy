@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "./media-contribution";
+import { isSupportedMediaContributionMime, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags } from "./media-contribution";
 
 describe("opaque media handles", () => {
   it("are one-use, app/action-bound, and expire", () => {
@@ -20,6 +20,9 @@ describe("opaque media handles", () => {
   it("validates bounded unique tags and upload size telemetry", () => {
     expect(validateMediaContributionTags(["reaction", "milady"], 2, 16)).toEqual(["reaction", "milady"]);
     expect(validateMediaContributionTags(["same", "same"], 2, 16)).toBeNull();
+    expect(validateMediaContributionTags(["Same", "same"], 2, 16)).toBeNull();
+    expect(validateMediaContributionTags(["reaction   image"], 2, 16)).toEqual(["reaction image"]);
+    expect(validateMediaContributionTags([], 2, 16)).toBeNull();
     expect(validateMediaContributionTags(["bad/tag"], 2, 16)).toBeNull();
     expect(remibooruUploadSizeBucket(1024)).toBe("under_1_mb");
   });
@@ -51,13 +54,22 @@ describe("opaque media handles", () => {
     expect(isSupportedMediaContributionMime("application/pdf")).toBe(false);
   });
 
-  it("keeps common contribution failures understandable and retryable", () => {
-    expect(mediaContributionFailureMessage(401)).toContain("Sign in");
+  it("keeps auth, CAPTCHA, moderation, validation, duplicate, rate, and upstream failures recoverable", () => {
+    expect(mediaContributionFailureMessage(401)).toContain("native uploader");
     expect(mediaContributionFailureMessage(403)).toContain("contributor access");
+    expect(mediaContributionFailureMessage(403, "Turnstile CAPTCHA required")).toContain("will not bypass");
+    expect(mediaContributionFailureMessage(404)).toContain("direct contribution service is unavailable");
     expect(mediaContributionFailureMessage(409)).toContain("already exists");
     expect(mediaContributionFailureMessage(422)).toContain("media or tags");
     expect(mediaContributionFailureMessage(429)).toContain("rate limiting");
     expect(mediaContributionFailureMessage(503)).toContain("temporarily unavailable");
-    expect(mediaContributionFailureMessage(422, "Tag is not allowed")).toBe("Tag is not allowed");
+    expect(mediaContributionFailureMessage(422, "internal moderation trace 123")).not.toContain("trace 123");
+  });
+
+  it("keeps preparation failures privacy-safe and directs users to recovery", () => {
+    expect(mediaContributionPreparationFailureMessage(new Error("IMAGE_TOO_LARGE"))).toContain("5 MiB");
+    expect(mediaContributionPreparationFailureMessage(new Error("request timed out"))).toContain("in time");
+    expect(mediaContributionPreparationFailureMessage(new Error("private upstream detail"))).not.toContain("private upstream detail");
+    expect(mediaContributionPreparationFailureMessage(new Error("private upstream detail"))).toContain("native uploader");
   });
 });

@@ -54,7 +54,7 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, withExternalHandoffTimeout, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
-import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
+import { isSupportedMediaContributionMime, MEDIA_CONTRIBUTION_MAX_BYTES, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 
 // `attributeDisplay` is the reviewed maker's own top-level renderer. This
 // declaration is used only by `world: "MAIN"` injected code; the extension
@@ -624,13 +624,13 @@ async function clearPersistedContextMedia(): Promise<void> {
 async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender) || !contributionDeclaration(message.appId, message.actionId)) return unsupportedSender();
   const parsed = parseAllowedUrl(message.sourceUrl, X_CONTEXT_MEDIA_RULES);
-  if (!parsed) return { ok: false, error: "Only visible X-hosted images can be contributed." };
+  if (!parsed) return { ok: false, error: "Only visible X-hosted images can use direct contribution. Use Remibooru's native uploader for other media." };
   try {
     const response = await budgetedFetch(parsed.href, { credentials: "omit" }, "remibooru:prepareMedia");
-    if (!response.ok) return { ok: false, error: `The selected image returned HTTP ${response.status}.` };
+    if (!response.ok) return { ok: false, error: `The selected image could not be retrieved from X (HTTP ${response.status}). Retry or use Remibooru's native uploader.` };
     const mimeType = (response.headers.get("content-type") || "").split(";", 1)[0].toLowerCase();
-    if (!isSupportedMediaContributionMime(mimeType)) return { ok: false, error: "The selected media is not a supported image." };
-    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
+    if (!isSupportedMediaContributionMime(mimeType)) return { ok: false, error: "The selected media is not a supported image or GIF. Choose different media or use Remibooru's native uploader." };
+    const bytes = await readCappedResponseBytes(response, MEDIA_CONTRIBUTION_MAX_BYTES);
     let width = message.width;
     let height = message.height;
     if (!width || !height) {
@@ -646,7 +646,7 @@ async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: 
     await persistContextMedia(mediaHandle, mediaRecord);
     return { ok: true, mediaHandle, media: { mimeType, width, height, altAvailable: message.altAvailable } };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: mediaContributionPreparationFailureMessage(error) };
   }
 }
 
@@ -663,19 +663,21 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     await restoreContextMedia(message.mediaHandle);
     media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
   }
-  if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again." };
+  if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again, or use Remibooru's native uploader." };
   const form = new FormData();
   const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType.slice("image/".length);
   const uploadBytes = media.bytes.slice().buffer as ArrayBuffer;
   form.set("file", new Blob([uploadBytes], { type: media.mimeType }), `upload.${extension}`);
   if (!media.width || !media.height) {
     contextMediaHandles.release(message.mediaHandle);
-    return { ok: false, error: "The selected image dimensions could not be verified." };
+    return { ok: false, error: "The selected image dimensions could not be verified. Select it again, or use Remibooru's native uploader." };
   }
   form.set("metadata", JSON.stringify({ width: media.width, height: media.height, globalTags: tags, spatialTags: [], authorUrls: [], mediaType: "image", pageCount: 1 }));
   try {
-    const response = await fetch(REMIBOORU_MEMBER_POSTS_URL, { method: "POST", credentials: "include", headers: { accept: "application/json", "x-upload-incident-id": crypto.randomUUID(), "x-upload-media-type": "image", "x-upload-size-bucket": remibooruUploadSizeBucket(media.bytes.byteLength), "x-upload-page-count": "1", "x-upload-browser-family": "chrome" }, body: form });
-    const payload = (response.headers.get("content-type") || "").includes("application/json") ? await response.json() as Record<string, unknown> : null;
+    const response = await budgetedFetch(REMIBOORU_MEMBER_POSTS_URL, { method: "POST", credentials: "include", headers: { accept: "application/json", "x-upload-incident-id": crypto.randomUUID(), "x-upload-media-type": "image", "x-upload-size-bucket": remibooruUploadSizeBucket(media.bytes.byteLength), "x-upload-page-count": "1", "x-upload-browser-family": "chrome" }, body: form }, "remibooru:contributeMedia");
+    const payload = (response.headers.get("content-type") || "").includes("application/json")
+      ? await response.json().catch(() => null) as Record<string, unknown> | null
+      : null;
     if (!response.ok) {
       contextMediaHandles.release(message.mediaHandle);
       return { ok: false, error: mediaContributionFailureMessage(response.status, payload?.error) };
@@ -683,16 +685,14 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     const post = payload?.post as Record<string, unknown> | undefined;
     if (typeof post?.id !== "string") {
       contextMediaHandles.release(message.mediaHandle);
-      return { ok: false, error: "Remibooru returned an unsupported contribution result." };
+      return { ok: false, error: "Remibooru returned an unsupported contribution result. The selected-media session is preserved; retry or use the native uploader." };
     }
     contextMediaHandles.consume(message.mediaHandle);
     await discardPersistedContextMedia(message.mediaHandle);
     return { ok: true, canonicalUrl: `https://remibooru.com/posts/${encodeURIComponent(post.id)}` };
-  } catch (error) {
+  } catch {
     contextMediaHandles.release(message.mediaHandle);
-    return { ok: false, error: error instanceof Error && error.message
-      ? `Remibooru could not be reached: ${error.message}`
-      : "Remibooru could not be reached. Check your connection and try again." };
+    return { ok: false, error: "Remibooru could not be reached. Check your connection, then retry or use the native uploader." };
   }
 }
 

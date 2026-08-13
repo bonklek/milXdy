@@ -1666,20 +1666,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     currentClose()?.();
     const module = await loadApp(app, `userAction:contextMedia:${actionId}`);
     if (!isCurrent() || !module?.onContextMediaAction) return;
-    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
-      type: "milxdy:contextMediaPrepare",
-      appId: app.id,
-      actionId,
-      sourceUrl: selected.sourceUrl,
-      width: selected.width,
-      height: selected.height,
-      altAvailable: selected.altAvailable,
-    });
-    if (!isCurrent()) return;
-    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
-      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: prepared?.error || "The selected image could not be prepared." });
-      return;
-    }
     const controller = new AbortController();
     const panel = document.createElement("section");
     panel.className = "milxdy-context-media-panel";
@@ -1689,7 +1675,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     panel.style.cssText = `color-scheme:light dark;position:fixed;z-index:2147483646;left:${Math.max(8, Math.min(selected.x, window.innerWidth - 380))}px;top:${Math.max(8, Math.min(selected.y, window.innerHeight - 440))}px;max-width:360px;max-height:calc(100vh - 16px);overflow:auto;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px`;
     const shadow = panel.attachShadow({ mode: "open" });
     const hostStyle = document.createElement("style");
-    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
+    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.preparation-status{margin:0 0 8px}.native-fallback{color:LinkText;font-weight:700}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
     const preview = document.createElement("img");
     preview.className = "preview";
     preview.alt = "Selected X image preview";
@@ -1741,6 +1727,40 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     setClose(close);
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", escape, true);
+    const preparing = document.createElement("p");
+    preparing.className = "preparation-status";
+    preparing.setAttribute("role", "status");
+    preparing.textContent = "Preparing the selected media for public Remibooru review...";
+    surface.replaceChildren(preparing);
+    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
+      type: "milxdy:contextMediaPrepare",
+      appId: app.id,
+      actionId,
+      sourceUrl: selected.sourceUrl,
+      width: selected.width,
+      height: selected.height,
+      altAvailable: selected.altAvailable,
+    });
+    if (!isCurrent() || controller.signal.aborted) {
+      close();
+      return;
+    }
+    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
+      const error = prepared?.error || "The selected image could not be prepared for direct contribution.";
+      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error });
+      const message = document.createElement("p");
+      message.className = "preparation-status";
+      message.setAttribute("role", "alert");
+      message.textContent = error;
+      const fallback = document.createElement("a");
+      fallback.className = "native-fallback";
+      fallback.href = "https://remibooru.com/upload";
+      fallback.target = "_blank";
+      fallback.rel = "noopener noreferrer";
+      fallback.textContent = "Open Remibooru's native uploader";
+      surface.replaceChildren(message, fallback);
+      return;
+    }
     try {
       await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onContextMediaAction({

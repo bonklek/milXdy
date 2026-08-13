@@ -604,6 +604,14 @@ releases the claim so the same visible panel can report the failure and retry;
 a successful request consumes the handle and returns only the canonical post
 URL. Nothing is posted to X.
 
+Direct contribution remains fail-closed around the upstream member contract.
+Missing authentication, contributor/moderation restrictions, CAPTCHA or other
+anti-abuse changes, validation, duplicates, rate limits, unsupported media,
+network failures, and unsupported upstream responses must leave the selected
+media handle retryable while it remains valid. Packages keep Remibooru's native
+uploader visibly available for recovery; the host never attempts to solve or
+bypass an upstream verification challenge.
+
 `openVisibleAssistantPrompt("remibooru-tags")` may show a host-owned visible
 prompt helper after another explicit click. The helper visibly includes the
 selected X image URL so X's own Grok surface can inspect that image; packages
