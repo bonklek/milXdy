@@ -37,8 +37,6 @@ const TROPHY_BANNER_CACHE_LIMIT = 50;
 const BANNERS_NFT_SUPPLY = 2000;
 const BANNERS_NFT_CONTRACT = '0x1352149Cd78D686043B504e7e7D96C5946b0C39c';
 const BANNER_MODES = ['original', 'shelf', 'nft'];
-const POKE_COOLDOWN_STORAGE_KEY = 'milxdy.remistats.pokeCooldowns';
-const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 // Cache for user scores
 const scoreCache = new Map();
@@ -231,8 +229,10 @@ let removeRemiStatsDelegation = null;
 let activeTooltipBadge = null;
 let tooltipHideTimer = null;
 const pokeCooldowns = new Map();
+const pokeCooldownSources = new Map();
 const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
+const pokeEligibilityChecked = new Set();
 const confirmedPokeIdentities = new Set();
 let incomingPokeCache = null;
 let visualTheme = DEFAULT_VISUAL_THEME;
@@ -552,6 +552,7 @@ function createPokeButton(username, standalone = false, xHandle = '') {
   }, true);
   registerPokeButton(button, clean);
   applyKnownPokeCooldown(button, clean);
+  void refreshPokeEligibility(clean);
   return button;
 }
 
@@ -591,59 +592,21 @@ function applyKnownPokeCooldown(button, username) {
   const key = clean.toLowerCase();
   const cooldownUntil = pokeCooldowns.get(key) || 0;
   if (cooldownUntil > Date.now()) {
-    startPokeCooldown(button, clean, cooldownUntil - Date.now());
+    startPokeCooldown(button, clean, cooldownUntil - Date.now(), pokeCooldownSources.get(key));
   }
 }
 
-async function loadStoredPokeCooldowns() {
-  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
-  const records = stored[POKE_COOLDOWN_STORAGE_KEY];
-  if (!records || typeof records !== 'object') return;
-
-  const now = Date.now();
-  const next = {};
-  let changed = false;
-  for (const [rawUsername, rawUntil] of Object.entries(records)) {
-    const clean = cleanUsername(rawUsername);
-    const until = Number(rawUntil);
-    if (!clean || !Number.isFinite(until) || until <= now) {
-      changed = true;
-      continue;
-    }
-    const key = clean.toLowerCase();
-    pokeCooldowns.set(key, until);
-    next[key] = until;
-    if (key !== rawUsername || until !== rawUntil) changed = true;
+async function refreshPokeEligibility(username) {
+  const clean = cleanUsername(username);
+  if (!clean) return;
+  const key = clean.toLowerCase();
+  if (pokeEligibilityChecked.has(key)) return;
+  pokeEligibilityChecked.add(key);
+  const response = await runtimeSendMessage({ type: 'beetol:pokeEligibility', username: clean }, 'beetol:pokeEligibility');
+  const cooldownMs = extractPokeCooldownMs(response);
+  if (response?.ok && cooldownMs > 0) {
+    startPokeCooldownForUsername(clean, cooldownMs, response.cooldownSource);
   }
-  if (changed) {
-    await chrome.storage.local.set({ [POKE_COOLDOWN_STORAGE_KEY]: next });
-  }
-}
-
-async function persistPokeCooldown(username, until) {
-  const key = cleanUsername(username).toLowerCase();
-  if (!key || !Number.isFinite(until)) return;
-  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
-  const records = stored[POKE_COOLDOWN_STORAGE_KEY] && typeof stored[POKE_COOLDOWN_STORAGE_KEY] === 'object'
-    ? stored[POKE_COOLDOWN_STORAGE_KEY]
-    : {};
-  await chrome.storage.local.set({
-    [POKE_COOLDOWN_STORAGE_KEY]: {
-      ...records,
-      [key]: until,
-    },
-  });
-}
-
-async function removeStoredPokeCooldown(username) {
-  const key = cleanUsername(username).toLowerCase();
-  if (!key) return;
-  const stored = await chrome.storage.local.get({ [POKE_COOLDOWN_STORAGE_KEY]: {} });
-  const records = stored[POKE_COOLDOWN_STORAGE_KEY];
-  if (!records || typeof records !== 'object' || !(key in records)) return;
-  const next = { ...records };
-  delete next[key];
-  await chrome.storage.local.set({ [POKE_COOLDOWN_STORAGE_KEY]: next });
 }
 
 function ensureStandalonePokeButton(badge, username) {
@@ -1241,35 +1204,39 @@ async function handlePokeClick(button) {
   delete button.dataset.reminetPokeShaking;
 
   if (response?.authRequired) {
-    setPokeButtonState(button, 'error', 'Sign in to remilia.net to poke');
+    setPokeButtonState(button, 'error', 'Reconnect Remilia to poke');
+    return;
+  }
+
+  if (response?.scopeRequired) {
+    setPokeButtonState(button, 'error', 'Reconnect Remilia with poke permission');
     return;
   }
 
   if (response?.ok && isSuccessfulPokeResponse(response)) {
     notifyMiladymaxxerPokeCredit(button, username);
     maybeLikePokedTweet(button);
-    startPokeCooldownForUsername(username, extractPokeCooldownMs(response) || DEFAULT_POKE_COOLDOWN_MS);
+    clearPokeCooldownForUsername(username);
+    setPokeButtonState(button, 'idle', `Poked ${username}`);
     return;
   }
 
   const cooldownMs = extractPokeCooldownMs(response);
   if (cooldownMs > 0 || isExplicitPokeCooldownResponse(response)) {
     if (cooldownMs > 0) {
-      startPokeCooldownForUsername(username, cooldownMs);
+      startPokeCooldownForUsername(username, cooldownMs, response?.cooldownSource);
     } else {
-      const message = response?.data?.error || response?.data?.message || response?.error || `Already poked ${username}`;
-      setPokeButtonState(button, 'error', message);
+      setPokeButtonState(button, 'error', response?.message || `Already poked ${username}`);
     }
     return;
   }
 
-  const details = [
-    response?.authMethod,
-    response?.status ? `HTTP ${response.status}` : '',
-  ].filter(Boolean).join(' ');
-  const message = response?.data?.error || response?.data?.message || response?.error || `Could not poke ${username}`;
-  console.warn('RemiNet poke failed', { username, response });
-  setPokeButtonState(button, 'error', details ? `${message} (${details})` : message);
+  console.warn('RemiNet poke failed', {
+    category: String(response?.category || 'unknown'),
+    code: String(response?.code || 'unknown_error'),
+    status: Number(response?.status) || 0,
+  });
+  setPokeButtonState(button, 'error', response?.message || `Could not poke ${username}`);
 }
 
 function setPokeButtonState(button, state, label) {
@@ -1411,6 +1378,7 @@ function extractPokeCooldownMs(response) {
 
 function isExplicitPokeCooldownResponse(response) {
   if (!response || response.authRequired) return false;
+  if (response.code === 'poke_cooldown') return true;
   const data = response?.data || {};
   const nested = data?.data || {};
   const fields = [
@@ -1457,16 +1425,20 @@ function normalizeCooldownMs(value) {
   return 0;
 }
 
-function startPokeCooldown(button, username, cooldownMs) {
+function startPokeCooldown(button, username, cooldownMs, source = 'official') {
   if (!lifecycleActive()) return;
   const normalizedMs = Math.max(1000, Number(cooldownMs) || 0);
   const until = Date.now() + normalizedMs;
   const key = username.toLowerCase();
   pokeCooldowns.set(key, until);
-  void persistPokeCooldown(username, until);
+  pokeCooldownSources.set(key, source);
 
   clearPokeCountdown(button);
-  setPokeButtonState(button, 'cooldown', `Already poked ${username}`);
+  setPokeButtonState(
+    button,
+    'cooldown',
+    source === 'offline-fallback' ? `Poke cooldown for ${username} (offline fallback)` : `Already poked ${username}`,
+  );
 
   let cancelNextTick = null;
   const update = () => {
@@ -1479,13 +1451,14 @@ function startPokeCooldown(button, username, cooldownMs) {
     if (remaining <= 0) {
       clearPokeCountdown(button);
       pokeCooldowns.delete(key);
-      void removeStoredPokeCooldown(username);
+      pokeCooldownSources.delete(key);
       setPokeButtonState(button, 'idle', 'Poke');
       return;
     }
     const label = formatPokeCooldown(remaining);
     button.textContent = label;
-    button.title = `Poke ${username} again in ${label}`;
+    const fallbackLabel = source === 'offline-fallback' ? ' (offline fallback)' : '';
+    button.title = `Poke ${username} again in ${label}${fallbackLabel}`;
     button.setAttribute('aria-label', button.title);
     cancelNextTick = runtimeScheduler.timeout(update, 1000);
     pokeCountdownTimers.set(button, cancelNextTick);
@@ -1495,14 +1468,14 @@ function startPokeCooldown(button, username, cooldownMs) {
   if (cancelNextTick) pokeCountdownTimers.set(button, cancelNextTick);
 }
 
-function startPokeCooldownForUsername(username, cooldownMs) {
+function startPokeCooldownForUsername(username, cooldownMs, source = 'official') {
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
-  void persistPokeCooldown(clean, until);
+  pokeCooldownSources.set(clean.toLowerCase(), source);
   for (const button of pokeButtonsForUsername(clean)) {
-    startPokeCooldown(button, clean, until - Date.now());
+    startPokeCooldown(button, clean, until - Date.now(), source);
   }
 }
 
@@ -1510,7 +1483,7 @@ function clearPokeCooldownForUsername(username) {
   const clean = cleanUsername(username);
   if (!clean) return;
   pokeCooldowns.delete(clean.toLowerCase());
-  void removeStoredPokeCooldown(clean);
+  pokeCooldownSources.delete(clean.toLowerCase());
   for (const button of pokeButtonsForUsername(clean)) {
     clearPokeCountdown(button);
     setPokeButtonState(button, 'idle', 'Poke');
@@ -1529,6 +1502,9 @@ function clearAllPokeCountdowns() {
   }
   pokeCountdownTimers.clear();
   pokeButtonsByUsername.clear();
+  pokeCooldowns.clear();
+  pokeCooldownSources.clear();
+  pokeEligibilityChecked.clear();
   confirmedPokeIdentities.clear();
 }
 
@@ -1589,6 +1565,7 @@ async function updateIncomingPokeFlag(group, username) {
   flag.title = `${clean} poked you on RemiliaNET`;
   flag.setAttribute('aria-label', flag.title);
   row.appendChild(flag);
+  void markIncomingPokesRead(clean);
 }
 
 function incomingPokeFlagContainer(group) {
@@ -1640,8 +1617,23 @@ async function getIncomingPokeHandles() {
       ? response.pokers.map(handle => cleanUsername(handle).toLowerCase()).filter(Boolean)
       : []
   );
-  incomingPokeCache = { fetchedAt: Date.now(), handles };
+  const keysByHandle = new Map();
+  for (const poke of Array.isArray(response?.pokes) ? response.pokes : []) {
+    const handle = cleanUsername(poke?.handle).toLowerCase();
+    const key = typeof poke?.key === 'string' ? poke.key : '';
+    if (!handle || !key) continue;
+    if (!keysByHandle.has(handle)) keysByHandle.set(handle, []);
+    keysByHandle.get(handle).push(key);
+  }
+  incomingPokeCache = { fetchedAt: Date.now(), handles, keysByHandle };
   return handles;
+}
+
+async function markIncomingPokesRead(username) {
+  const handle = cleanUsername(username).toLowerCase();
+  const keys = incomingPokeCache?.keysByHandle?.get(handle) || [];
+  if (keys.length === 0) return;
+  await runtimeSendMessage({ type: 'remistats:markNotificationsRead', keys }, 'remistats:markNotificationsRead');
 }
 
 function patchExistingBadges() {
@@ -2774,7 +2766,6 @@ export function boot(context = {}) {
 function init() {
   Promise.all([
     chrome.storage.sync.get({ 'milxdy.remistats.enabled': true }),
-    loadStoredPokeCooldowns(),
     loadIconSettings(),
     loadPokeAutoLikeSetting(),
     loadPokeThemeSettings(),

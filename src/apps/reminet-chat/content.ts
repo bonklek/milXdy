@@ -49,7 +49,6 @@ const REACTION_ALIASES = new Map([
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const POKE_ICON = "\u{1faf5}";
-const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const REMINET_CHAT_ICON = chrome.runtime.getURL("remistats/star.svg");
 const mediaDataUrlCache = new Map<string, string>();
 const mediaDataUrlPending = new Set<string>();
@@ -57,6 +56,8 @@ const xHandleByRemiliaHandle = new Map<string, string>();
 const profileLookupPending = new Set<string>();
 const profileLookupDone = new Set<string>();
 const pokeCooldowns = new Map<string, number>();
+const pokeCooldownSources = new Map<string, string>();
+const pokeEligibilityChecked = new Set<string>();
 const pokeCountdownTimers = new Map<HTMLElement, () => void>();
 const pokeButtonsByUsername = new Map<string, Set<HTMLElement>>();
 const hiddenNativeDmElements = new Set<HTMLElement>();
@@ -464,6 +465,9 @@ function destroy(): void {
   for (const cancelTimer of pokeCountdownTimers.values()) cancelTimer();
   pokeCountdownTimers.clear();
   pokeButtonsByUsername.clear();
+  pokeCooldowns.clear();
+  pokeCooldownSources.clear();
+  pokeEligibilityChecked.clear();
   removePseudoChatRow();
   restoreNativeDmPane();
   state.messages = [];
@@ -2425,7 +2429,8 @@ function renderPokeButton(username: string): string {
   if (!clean) return "";
   const cooldownUntil = pokeCooldowns.get(clean.toLowerCase()) || 0;
   if (cooldownUntil > Date.now()) {
-    return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="cooldown" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} again in ${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}" aria-label="Poke ${escapeHtml(clean)} again later">${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}</button>`;
+    const fallback = pokeCooldownSources.get(clean.toLowerCase()) === "offline-fallback" ? " (offline fallback)" : "";
+    return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="cooldown" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} again in ${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}${fallback}" aria-label="Poke ${escapeHtml(clean)} again later${fallback}">${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}</button>`;
   }
   return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="idle" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} on RemiliaNET" aria-label="Poke ${escapeHtml(clean)} on RemiliaNET">${POKE_ICON}</button>`;
 }
@@ -2447,33 +2452,42 @@ async function pokeUser(username: string): Promise<void> {
   const response = await runtimeSendMessage({ type: "beetol:poke", username: clean }, "beetol:poke").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
   if (!lifecycleActive()) return;
   const cooldownMs = extractPokeCooldownMs(response);
-  if (response.ok || cooldownMs > 0) {
-    startPokeCooldownForUser(clean, cooldownMs || DEFAULT_POKE_COOLDOWN_MS);
+  if (response.ok) {
+    pokeCooldowns.delete(key);
+    pokeCooldownSources.delete(key);
+    if (button) setPokeButtonState(button, "idle", `Poked ${clean}`);
     renderStatus("Poke sent.");
     return;
   }
-  if (isExplicitPokeCooldownResponse(response)) {
-    const message = stringOrUndefined(response.error) || stringOrUndefined(asRecord(response.data).error) || stringOrUndefined(asRecord(response.data).message) || "Already poked.";
+  if (cooldownMs > 0 || isExplicitPokeCooldownResponse(response)) {
+    if (cooldownMs > 0) startPokeCooldownForUser(clean, cooldownMs, stringOrUndefined(response.cooldownSource));
+    const message = stringOrUndefined(response.message) || "Already poked.";
     if (button) setPokeButtonState(button, "error", message);
     renderStatus(message);
     return;
   }
-  if (button) setPokeButtonState(button, "error", String(response.error || "Poke failed."));
-  renderStatus("Poke failed.");
+  const message = response.scopeRequired
+    ? "Reconnect Remilia with poke permission."
+    : response.authRequired
+      ? "Reconnect Remilia to poke."
+      : stringOrUndefined(response.message) || "Poke failed.";
+  if (button) setPokeButtonState(button, "error", message);
+  renderStatus(message);
 }
 
-function startPokeCooldownForUser(username: string, cooldownMs: number): void {
+function startPokeCooldownForUser(username: string, cooldownMs: number, source = "official"): void {
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
+  pokeCooldownSources.set(clean.toLowerCase(), source);
   const buttons = pokeButtonsForUsername(clean);
   if (!buttons.length) {
     render();
     return;
   }
   for (const button of buttons) {
-    startPokeCooldown(button, clean, until - Date.now(), until);
+    startPokeCooldown(button, clean, until - Date.now(), until, source);
   }
 }
 
@@ -2483,7 +2497,7 @@ function syncPokeCooldownButtons(root: HTMLElement): void {
     if (!username) continue;
     registerPokeButton(button, username);
     const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
-    if (cooldownUntil > Date.now()) startPokeCooldown(button, username, cooldownUntil - Date.now(), cooldownUntil);
+    if (cooldownUntil > Date.now()) startPokeCooldown(button, username, cooldownUntil - Date.now(), cooldownUntil, pokeCooldownSources.get(username.toLowerCase()));
   }
 }
 
@@ -2497,6 +2511,18 @@ function registerPokeButton(button: HTMLElement, username: string): void {
     pokeButtonsByUsername.set(key, buttons);
   }
   buttons.add(button);
+  if (!pokeEligibilityChecked.has(key)) {
+    pokeEligibilityChecked.add(key);
+    void refreshPokeEligibility(clean);
+  }
+}
+
+async function refreshPokeEligibility(username: string): Promise<void> {
+  const response = await runtimeSendMessage({ type: "beetol:pokeEligibility", username }, "beetol:pokeEligibility").then(asRecord).catch(() => asRecord({}));
+  const cooldownMs = extractPokeCooldownMs(response);
+  if (response.ok && cooldownMs > 0) {
+    startPokeCooldownForUser(username, cooldownMs, stringOrUndefined(response.cooldownSource));
+  }
 }
 
 function pokeButtonsForUsername(username: string): HTMLElement[] {
@@ -2517,13 +2543,14 @@ function pokeButtonsForUsername(username: string): HTMLElement[] {
   return connected;
 }
 
-function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: number, knownUntil?: number): void {
+function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: number, knownUntil?: number, source = "official"): void {
   if (!lifecycleActive()) return;
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = knownUntil || Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   if (button.dataset.pokeCooldownUntil === String(until) && pokeCountdownTimers.has(button)) return;
   pokeCooldowns.set(clean.toLowerCase(), until);
+  pokeCooldownSources.set(clean.toLowerCase(), source);
   clearPokeCountdown(button);
   setPokeButtonState(button, "cooldown", `Already poked ${clean}`);
   button.dataset.pokeCooldownUntil = String(until);
@@ -2539,6 +2566,7 @@ function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: nu
     if (remaining <= 0) {
       clearPokeCountdown(button);
       pokeCooldowns.delete(clean.toLowerCase());
+      pokeCooldownSources.delete(clean.toLowerCase());
       delete button.dataset.pokeCooldownUntil;
       setPokeButtonState(button, "idle", `Poke ${clean} on RemiliaNET`);
       button.textContent = POKE_ICON;
@@ -2546,7 +2574,8 @@ function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: nu
     }
     const label = formatPokeCooldown(remaining);
     button.textContent = label;
-    button.title = `Poke ${clean} again in ${label}`;
+    const fallback = source === "offline-fallback" ? " (offline fallback)" : "";
+    button.title = `Poke ${clean} again in ${label}${fallback}`;
     button.setAttribute("aria-label", button.title);
     cancelNextTick = runtimeScheduler.timeout(update, 1000);
     pokeCountdownTimers.set(button, cancelNextTick);
@@ -2630,6 +2659,7 @@ function extractPokeCooldownMs(response: RuntimeRecord): number {
 
 function isExplicitPokeCooldownResponse(response: RuntimeRecord): boolean {
   if (!response || response.authRequired) return false;
+  if (response.code === "poke_cooldown") return true;
   const data = asRecord(response.data);
   const nested = asRecord(data.data);
   return [
