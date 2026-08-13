@@ -40,39 +40,50 @@ assert.match(qaBuilder, /`--channel=\$\{buildChannel\}`/u, "QA builds must pass 
 await rm(testRoot, { recursive: true, force: true });
 try {
   await runBuild("beta", firstOutput);
+  const first = await readIdentity(firstOutput);
+  assertBetaIdentity(first);
+  await scanArtifact(firstOutput);
+  await cp(firstOutput, reinstallOutput, { recursive: true });
+  const reinstalled = await readIdentity(reinstallOutput);
+  assertBetaIdentity(reinstalled);
+  assert.deepEqual(reinstalled, first, "copying the unpacked beta to another directory must retain its identity and redirect URI");
+  await scanArtifact(reinstallOutput);
+  await rm(firstOutput, { recursive: true, force: true });
+  await rm(reinstallOutput, { recursive: true, force: true });
+
   await runBuild("beta", secondOutput);
+  const second = await readIdentity(secondOutput);
+  assertBetaIdentity(second);
+  assert.deepEqual(second, first, "repeated beta builds must emit the exact same identity and Login contract");
+  await scanArtifact(secondOutput);
+  await rm(secondOutput, { recursive: true, force: true });
+
   await runBuild("production", productionOutput);
+  const productionManifest = JSON.parse(await readFile(resolve(productionOutput, "manifest.json"), "utf8"));
+  assert.equal(Object.hasOwn(productionManifest, "key"), false, "production artifact must not carry the beta key");
+  assert.equal((productionManifest.permissions || []).includes("identity"), false, "production artifact must not carry the beta-only identity permission");
+  assert.equal(await exists(resolve(productionOutput, "remilia-login-client.json")), false, "production artifact must not carry the beta Login client");
+  await rm(productionOutput, { recursive: true, force: true });
+
   await buildQaOnce({
     outputDir: relative(resolve("."), qaOutput).replaceAll("\\", "/"),
     quiet: true,
     replaceForeignOutput: true,
   });
-  await buildQaOnce({
-    outputDir: relative(resolve("."), betaQaOutput).replaceAll("\\", "/"),
-    buildChannel: "beta",
-    quiet: true,
-    replaceForeignOutput: true,
-  });
-  await cp(firstOutput, reinstallOutput, { recursive: true });
-
-  const first = await readIdentity(firstOutput);
-  const second = await readIdentity(secondOutput);
-  const reinstalled = await readIdentity(reinstallOutput);
-  for (const candidate of [first, second, reinstalled]) assertBetaIdentity(candidate);
-  assert.deepEqual(second, first, "repeated beta builds must emit the exact same identity and Login contract");
-  assert.deepEqual(reinstalled, first, "copying the unpacked beta to another directory must retain its identity and redirect URI");
-
-  const productionManifest = JSON.parse(await readFile(resolve(productionOutput, "manifest.json"), "utf8"));
-  assert.equal(Object.hasOwn(productionManifest, "key"), false, "production artifact must not carry the beta key");
-  assert.equal((productionManifest.permissions || []).includes("identity"), false, "production artifact must not carry the beta-only identity permission");
-  assert.equal(await exists(resolve(productionOutput, "remilia-login-client.json")), false, "production artifact must not carry the beta Login client");
-
   const qaManifest = JSON.parse(await readFile(resolve(qaOutput, "manifest.json"), "utf8"));
   const qaProvenance = JSON.parse(await readFile(resolve(qaOutput, "qa-build.json"), "utf8"));
   assert.equal(qaManifest.name, "milXdy QA");
   assert.notEqual(qaManifest.key, profile.manifestKey, "QA and beta identities must remain distinct");
   assert.notEqual(qaProvenance.extensionId, profile.extensionId, "QA and beta extension ids must remain distinct");
   assert.equal(await exists(resolve(qaOutput, "remilia-login-client.json")), false, "QA artifact must not carry the beta Login client");
+  await rm(qaOutput, { recursive: true, force: true });
+
+  await buildQaOnce({
+    outputDir: relative(resolve("."), betaQaOutput).replaceAll("\\", "/"),
+    buildChannel: "beta",
+    quiet: true,
+    replaceForeignOutput: true,
+  });
 
   const betaQaManifest = JSON.parse(await readFile(resolve(betaQaOutput, "manifest.json"), "utf8"));
   const betaQaProvenance = JSON.parse(await readFile(resolve(betaQaOutput, "qa-build.json"), "utf8"));
@@ -83,9 +94,6 @@ try {
   assert.equal(betaQaProvenance.build.channel, "beta");
   assert.deepEqual(betaQaLogin, first.login, "beta QA must retain the public Login client contract");
 
-  await scanArtifact(firstOutput);
-  await scanArtifact(secondOutput);
-  await scanArtifact(reinstallOutput);
   await scanArtifact(betaQaOutput);
 } finally {
   await rm(testRoot, { recursive: true, force: true });
