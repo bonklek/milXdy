@@ -1,0 +1,14 @@
+{
+  "green": {
+    "discovered": true,
+    "count": 3,
+    "display_name": "Green Beetle",
+    "rarity": "common"
+  },
+  "goliath": {
+    "discovered": true,
+    "count": 1,
+    "display_name": "Goliath Beetle",
+    "rarity": "rare"
+  }
+}

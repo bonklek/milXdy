@@ -1,5 +1,9 @@
 import { registerBackgroundMessageHandlers } from "../../platform/background/router";
 import {
+  createLegacyBeetleActionsAdapter,
+  isLegacyBeetleAction,
+} from "./legacy-beetle-actions";
+import {
   REMILIA_BASE_URL,
   prepareRemiliaAccess,
   refreshRemiliaAccess,
@@ -15,7 +19,6 @@ const INCOMING_POKE_CACHE_MS = 2 * 60 * 1000;
 const LAST_POKE_DIAGNOSTIC_KEY = 'milxdy.remistats.lastPokeDiagnostic';
 const INCOMING_POKE_CACHE_KEY = 'milxdy.remistats.incomingPokeCache';
 const CRUNCH_STEP_MS = 717;
-const ACTIONS = new Set(['catchBeetle', 'beetleHunt', 'claimUBC', 'junkFaucet']);
 const MESSAGE_TYPES = new Set([
   'beetol:logout',
   'beetol:authStatus',
@@ -49,6 +52,10 @@ const KNOWN_ITEM_KEYS = new Set([
   'trophy_remilianet_id', 'trophy_deck_of_cards', 'trophy_d20', 'trophy_engraved_lighter',
   'trophy_joystick',
 ]);
+
+const legacyBeetleActions = createLegacyBeetleActionsAdapter(({ method, path, body }) => (
+  remiliaAuthedFetch(method, path, body)
+));
 
 async function getStored(keys) {
   return chrome.storage.local.get(keys);
@@ -137,7 +144,7 @@ async function getState() {
 }
 
 async function runAction(action) {
-  if (!ACTIONS.has(action)) return { ok: false, error: 'UNKNOWN_ACTION' };
+  if (!isLegacyBeetleAction(action)) return { ok: false, error: 'UNKNOWN_ACTION' };
   // Do not surround the mutation with two state reads. The shared runtime
   // deadline applies to the whole message handler, and a successful action
   // used to time out while waiting for the trailing GET. Use the last known
@@ -145,7 +152,7 @@ async function runAction(action) {
   // state in a separate, non-blocking request after it receives this result.
   const stored = await getStored({ lastUser: null });
   const inventoryBefore = stored.lastUser?.inventory || {};
-  const result = await remiliaAuthedFetch('POST', `/api/beetle/action/${action}`, {});
+  const result = await legacyBeetleActions.runAction(action);
 
   if (!result.ok) return result;
   const cooldownMs = extractActionCooldownMs(result.data, action);
@@ -227,11 +234,7 @@ async function crunchJunk({ runId, onProgress } = {}) {
       skipped,
       phase: 'processing',
     });
-    const result = await remiliaFetch('POST', '/api/beetle/action/craft', {
-      type: 1,
-      slot1: pool[i],
-      slot2: pool[i + 1],
-    });
+    const result = await legacyBeetleActions.craftJunk(pool[i], pool[i + 1]);
     if (!result.ok) return { ...result, made, skipped, pairs };
     if (result.data?.success !== false) {
       made += 1;

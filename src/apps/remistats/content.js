@@ -1,6 +1,7 @@
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
 import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../platform/visuals/reskin-profile";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
+import { legacyBeetleTrophyShelfUrl } from "../beetol/legacy-beetle-actions";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -1977,7 +1978,9 @@ async function renderTrophyBanner(remiliaUsername) {
     const row = firstShelfRow(user);
     if (!row.length) return null;
 
-    const texture = await loadImage(`${REMILIA_BASE_URL}/api/beetle/trophy/~${encodeURIComponent(clean)}/shelf`);
+    const trophyShelfUrl = legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL);
+    if (!trophyShelfUrl) return null;
+    const texture = await loadImage(trophyShelfUrl);
     const icons = await Promise.all(row.map((trophy) => loadImage(remiliaUrl(trophy.icon))));
 
     const canvas = document.createElement('canvas');
