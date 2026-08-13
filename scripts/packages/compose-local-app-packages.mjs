@@ -82,6 +82,17 @@ const supportedRemoteQueryAdapters = new Map([
     resources: new Set(["posts", "facets"]),
   }],
 ]);
+const remiliaCapabilityContracts = new Map([
+  ["remilia.profile.public", { operations: ["getUserProfile"], scopes: [], consent: "enablement" }],
+  ["remilia.profile.me", { operations: ["getMe"], scopes: [], consent: "enablement" }],
+  ["remilia.directory.read", { operations: ["resolveDirectory", "listDirectoryUsers"], scopes: ["remilia:directory.read"], consent: "enablement" }],
+  ["remilia.stats.read", { operations: ["getMyStats"], scopes: ["remilia:stats.read"], consent: "enablement" }],
+  ["remilia.notifications.read", { operations: ["listMyNotifications"], scopes: ["remilia:notifications.read"], consent: "enablement" }],
+  ["remilia.pokes.write", { operations: ["pokeUser"], scopes: ["remilia:pokes.write"], consent: "perInvocation" }],
+  ["remilia.beetle.read", { operations: ["getMyBeetle", "getMyBeetleCards"], scopes: ["remilia:beetle.read"], consent: "enablement" }],
+  ["remilia.chat.read", { operations: ["listGlobalChatMessages"], scopes: ["remilia:chat.read"], consent: "enablement" }],
+  ["remilia.chat.write", { operations: ["postGlobalChatMessage"], scopes: ["remilia:chat.write"], consent: "perInvocation" }],
+]);
 const sensitiveStorageNeedles = [
   "auth",
   "cache",
@@ -126,6 +137,10 @@ const nonAcknowledgeablePackageApiRuleIds = new Set([
   "computed-extension-api-global-from-char-code",
   "computed-extension-api-global-from-reflect",
   "computed-runtime-api-property",
+  "direct-fetch",
+  "direct-xhr",
+  "direct-websocket",
+  "credential-material",
 ]);
 const staticSensitiveStringValues = Object.freeze([
   "chrome",
@@ -230,6 +245,30 @@ const sensitivePackageApiRules = [
     severity: "warning",
     pattern: /\b(?:chrome-extension|moz-extension):\/\//g,
     message: "references extension-origin internals directly; use declared package assets and reviewed platform APIs",
+  },
+  {
+    id: "direct-fetch",
+    severity: "error",
+    pattern: /\bfetch\s*\(/g,
+    message: "uses fetch directly; reviewed packages must use typed host capabilities and cannot issue authenticated or arbitrary network requests",
+  },
+  {
+    id: "direct-xhr",
+    severity: "error",
+    pattern: /\b(?:new\s+)?XMLHttpRequest\b/g,
+    message: "uses XMLHttpRequest directly; reviewed packages must use typed host capabilities",
+  },
+  {
+    id: "direct-websocket",
+    severity: "error",
+    pattern: /\b(?:new\s+)?WebSocket\b/g,
+    message: "uses WebSocket directly; Remilia realtime remains a trusted first-party legacy adapter",
+  },
+  {
+    id: "credential-material",
+    severity: "error",
+    pattern: /(?:\bAuthorization\b\s*:|\bBearer\s+[A-Za-z0-9._~+/-]+|\b(?:accessToken|refreshToken|clientSecret)\b|\bdocument\s*\.\s*cookie\b|\bcredentials\s*:\s*["']include["'])/gi,
+    message: "references credential material; package code cannot access OAuth tokens, cookies, authorization headers, or credentialed fetch",
   },
 ];
 
@@ -540,6 +579,7 @@ async function analyzePackage(source, manifest) {
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
   verifyRemoteQueries(id, manifest, errors);
+  verifyRemiliaCapabilities(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -773,6 +813,7 @@ function toGeneratedRegistryApp(record) {
       contentSha256: record.contentSha256,
       manifestSha256: record.manifestSha256,
       archiveSha256: record.source.archiveSha256,
+      packageConsentAcknowledged: record.trustDecision.packageConsentAcknowledged === true,
     },
   };
 }
@@ -1203,7 +1244,52 @@ function packageRequiresExplicitEnablement(manifest) {
     || (manifest.permissions?.optional || []).length > 0
     || (manifest.background?.messageTypes || []).length > 0
     || (manifest.background?.services || []).length > 0
+    || (manifest.remiliaCapabilities || []).length > 0
     || (manifest.privacy?.remoteServices || []).length > 0;
+}
+
+function verifyRemiliaCapabilities(id, manifest, errors) {
+  const declarations = manifest.remiliaCapabilities;
+  if (declarations === undefined) return;
+  if (!Array.isArray(declarations) || declarations.length < 1 || declarations.length > remiliaCapabilityContracts.size) {
+    errors.push(`${id}: remiliaCapabilities must contain between one and ${remiliaCapabilityContracts.size} declarations`);
+    return;
+  }
+  if (manifest.review?.status !== "reviewed") errors.push(`${id}: Remilia capabilities require review.status reviewed`);
+  if (manifest.privacy?.consentRequired !== true) errors.push(`${id}: Remilia capabilities require privacy.consentRequired true`);
+  if (!manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: Remilia capabilities require the remote-api privacy label`);
+  const disclosure = [...(manifest.privacy?.permissionNotes || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.permissionNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.hub?.remoteServices || [])].join(" ").toLowerCase();
+  if (!/credential|token|cookie|authorization/.test(disclosure) || !/remilia/.test(disclosure)) {
+    errors.push(`${id}: Remilia capabilities require explicit Remilia credential-isolation privacy disclosure`);
+  }
+  const ids = new Set();
+  for (const declaration of declarations) {
+    if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) {
+      errors.push(`${id}: each Remilia capability declaration must be an object`);
+      continue;
+    }
+    for (const field of Object.keys(declaration)) {
+      if (!["id", "operations", "scopes", "consent", "reason"].includes(field)) errors.push(`${id}: Remilia capability ${declaration.id || "<unknown>"} includes unsupported field ${field}`);
+    }
+    const contract = remiliaCapabilityContracts.get(declaration.id);
+    if (!contract) {
+      errors.push(`${id}: unsupported Remilia capability ${declaration.id}`);
+      continue;
+    }
+    if (ids.has(declaration.id)) errors.push(`${id}: duplicate Remilia capability ${declaration.id}`);
+    ids.add(declaration.id);
+    if (!Array.isArray(declaration.operations) || declaration.operations.length === 0 || new Set(declaration.operations).size !== declaration.operations.length
+      || !declaration.operations.every((operation) => contract.operations.includes(operation))) {
+      errors.push(`${id}: Remilia capability ${declaration.id} must declare only its exact reviewed operations`);
+    }
+    if (!sameStringSet(declaration.scopes, contract.scopes)) errors.push(`${id}: Remilia capability ${declaration.id} must declare its exact official scopes`);
+    if (declaration.consent !== contract.consent) errors.push(`${id}: Remilia capability ${declaration.id} consent must be ${contract.consent}`);
+    if (typeof declaration.reason !== "string" || declaration.reason.trim().length < 8 || declaration.reason.length > 280) errors.push(`${id}: Remilia capability ${declaration.id} requires a bounded review reason`);
+  }
+}
+
+function sameStringSet(value, expected) {
+  return Array.isArray(value) && value.length === expected.length && new Set(value).size === value.length && value.every((item) => expected.includes(item));
 }
 
 function verifyBackgroundCapabilities(id, manifest, errors) {
@@ -1399,6 +1485,11 @@ function privilegedSurfacesFor(manifest, files, webAccessibleAssets) {
   for (const permission of manifest.permissions?.optional || []) surfaces.push(`optionalPermission:${permission}`);
   for (const type of manifest.background?.messageTypes || []) surfaces.push(`backgroundMessage:${type}`);
   for (const service of manifest.background?.services || []) surfaces.push(`backgroundService:${service}`);
+  for (const capability of manifest.remiliaCapabilities || []) {
+    surfaces.push(`remiliaCapability:${capability.id}`);
+    for (const operation of capability.operations || []) surfaces.push(`remiliaOperation:${operation}`);
+    for (const scope of capability.scopes || []) surfaces.push(`remiliaScope:${scope}`);
+  }
   for (const scope of manifest.siteScopes || []) {
     surfaces.push(`siteScope:${scope.site}:${scope.integration}`);
     for (const host of scope.hosts || []) surfaces.push(`siteHost:${host}`);

@@ -1,6 +1,12 @@
 import type { TwitterSurface, TwitterSurfaceKind } from "../scanner/twitter-scanner";
 import type { Disposable } from "../runtime/disposables";
 import type { AppStorageFacade } from "./app-storage";
+import type {
+  AppRemiliaCapabilityDeclaration,
+  RemiliaCapabilityBrokerResult,
+  RemiliaCapabilityOperation,
+  RemiliaCapabilityParams,
+} from "./remilia-capabilities";
 
 export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageChanges, AppStorageFacade } from "./app-storage";
 
@@ -231,6 +237,8 @@ export type MilxdyAppManifest = {
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
   remoteQueries?: AppRemoteQuery[];
+  /** Reviewed host-owned Remilia operations. Packages never receive credentials, URLs, or fetch. */
+  remiliaCapabilities?: AppRemiliaCapabilityDeclaration[];
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];
@@ -279,7 +287,17 @@ export type MilxdyAppManifest = {
   assets?: string[];
   requiredOutputs?: string[];
   hostAssetAccess?: string[];
-  localPackage?: Record<string, unknown>;
+  localPackage?: {
+    root?: string;
+    sourceType?: string;
+    reviewStatus?: MilxdyLocalPackageReviewStatus;
+    sourceVersion?: string;
+    packageSha256?: string;
+    contentSha256?: string;
+    manifestSha256?: string;
+    archiveSha256?: string;
+    packageConsentAcknowledged?: boolean;
+  };
   isEnabled: () => Promise<boolean>;
   setEnabled?: (enabled: boolean) => Promise<void>;
 };
@@ -347,6 +365,12 @@ export type MilxdyContentAppContext = {
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
+  /** Host-filtered declarations; exact operation and scope checks run again in the background broker. */
+  remiliaCapabilities?: ReadonlyArray<AppRemiliaCapabilityDeclaration>;
+  invokeRemiliaCapability?: <Operation extends RemiliaCapabilityOperation>(
+    operation: Operation,
+    params: RemiliaCapabilityParams[Operation],
+  ) => Promise<RemiliaCapabilityBrokerResult>;
   recordDiagnostic: (key: string, value: unknown) => void;
   addDisposable: (disposable: Disposable) => void;
 };

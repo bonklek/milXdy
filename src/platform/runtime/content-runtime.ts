@@ -17,6 +17,7 @@ import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions
 import { resolveReplyActionPanelPosition } from "./reply-action-position";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
+import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClient } from "./remilia-capability-client";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
@@ -98,6 +99,7 @@ type RuntimeState = {
   unloadingApps: Set<MilxdyAppId>;
   appDisposables: Map<MilxdyAppId, DisposableStore>;
   appAbortControllers: Map<MilxdyAppId, AbortController>;
+  remiliaCapabilityClients: Map<MilxdyAppId, PackageRemiliaCapabilityClient>;
   diagnostics: Map<MilxdyAppId, AppDiagnostics>;
   route: MilxdyRouteChange;
   disposed: boolean;
@@ -290,6 +292,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     unloadingApps: new Set(),
     appDisposables: new Map(),
     appAbortControllers: new Map(),
+    remiliaCapabilityClients: new Map(),
     diagnostics: new Map(apps.map((app) => [app.id, appDiagnosticsBase(app, "pending")])),
     route: currentRoute(null),
     disposed: false,
@@ -497,6 +500,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const abortController = new AbortController();
       state.appDisposables.set(app.id, disposables);
       state.appAbortControllers.set(app.id, abortController);
+      const remiliaCapabilityClient = getRemiliaCapabilityClient(app);
       const lifecycle = new ContentAppLifecycleOwner(module, {
         manifest: app,
         signal: abortController.signal,
@@ -507,6 +511,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         storage: createRuntimeAppStorage(app),
         resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
+        remiliaCapabilities: remiliaCapabilityClient.declarations,
+        invokeRemiliaCapability: (operation, params) => remiliaCapabilityClient.invoke(operation, params),
         recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
         addDisposable: (disposable) => disposables.add(disposable),
       }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id), () => abortAppWork(app.id));
@@ -641,6 +647,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
     for (const appId of Array.from(state.appAbortControllers.keys())) abortAppWork(appId);
+    await Promise.allSettled(Array.from(state.remiliaCapabilityClients.values(), (client) => client.revoke()));
+    state.remiliaCapabilityClients.clear();
     const teardownResults = await Promise.allSettled(Array.from(state.appLifecycles.entries()).map(async ([appId, lifecycle]) => {
       await lifecycle.dispose();
       return appId;
@@ -852,6 +860,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.pendingSurfaceImports.delete(app.id);
     clearSurfaceDeliveryQueueForApp(app.id);
     cancelNetworkQueueForApp(app.id);
+    void revokeRemiliaCapabilityClient(app.id);
     const module = state.loaded.get(app.id);
     const lifecycle = state.appLifecycles.get(app.id);
     if (state.unloadingApps.has(app.id)) return;
@@ -890,6 +899,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.appLifecycles.delete(appId);
     state.loaded.delete(appId);
     state.unloadingApps.delete(appId);
+  }
+
+  function getRemiliaCapabilityClient(app: MilxdyAppManifest): PackageRemiliaCapabilityClient {
+    const existing = state.remiliaCapabilityClients.get(app.id);
+    if (existing) return existing;
+    const client = createPackageRemiliaCapabilityClient(app, async (message) => {
+      if (state.disposed || !state.enabledApps.has(app.id) || !hasExtensionRuntime()) return null;
+      return chrome.runtime.sendMessage(message).catch(() => null);
+    });
+    state.remiliaCapabilityClients.set(app.id, client);
+    return client;
+  }
+
+  async function revokeRemiliaCapabilityClient(appId: MilxdyAppId): Promise<void> {
+    const client = state.remiliaCapabilityClients.get(appId);
+    if (!client) return;
+    state.remiliaCapabilityClients.delete(appId);
+    await client.revoke();
   }
 
   function resetRuntimeCounters(): void {

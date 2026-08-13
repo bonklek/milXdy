@@ -46,6 +46,42 @@ try {
     "--acknowledge-package-consent",
     "--acknowledge-first-party-replacement",
   ], 0, "first-party-id-replacement");
+
+  runCase("reviewed Post-Factory Remilia capability passes exact declarations and consent", [
+    "--check",
+    "--package=examples/packages/local-dev/tweet-composer-kit",
+    "--acknowledge-package-consent",
+  ], 0, "remiliaCapability:remilia.profile.public");
+
+  const remiliaScopeDriftPackage = await copyLocalPackage("tweet-composer-kit", "remilia-scope-drift");
+  const remiliaScopeDriftManifest = await readManifest(remiliaScopeDriftPackage);
+  remiliaScopeDriftManifest.remiliaCapabilities[0].scopes = ["remilia:directory.read"];
+  await writeManifest(remiliaScopeDriftPackage, remiliaScopeDriftManifest);
+  runCase("Remilia capability scope drift fails closed", [
+    "--check",
+    `--package=${remiliaScopeDriftPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "must declare its exact official scopes");
+
+  const unreviewedRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "unreviewed-remilia-capability");
+  const unreviewedRemiliaManifest = await readManifest(unreviewedRemiliaPackage);
+  unreviewedRemiliaManifest.review = { status: "local", notes: ["Synthetic unreviewed Remilia capability fixture."] };
+  await writeManifest(unreviewedRemiliaPackage, unreviewedRemiliaManifest);
+  runCase("unreviewed Remilia capability package fails closed", [
+    "--check",
+    `--package=${unreviewedRemiliaPackage}`,
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ], 1, "Remilia capabilities require review.status reviewed");
+
+  const directFetchRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "direct-fetch-remilia-capability");
+  const directFetchEntry = path.join(directFetchRemiliaPackage, "dist", "content.js");
+  await writeFile(directFetchEntry, `${await readFile(directFetchEntry, "utf8")}\nexport const forbiddenDirectFetch = () => fetch("https://www.remilia.net/api/v1/me");\n`);
+  runCase("Remilia capability package cannot add direct authenticated or arbitrary fetch", [
+    "--check",
+    `--package=${directFetchRemiliaPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "direct-fetch");
   runCase("composer handoff includes required local-app build acknowledgements", [
     "--packages-dir=examples/packages/first-party-replacements",
     "--acknowledge-package-consent",

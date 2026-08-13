@@ -9,7 +9,18 @@ var makers = [
 ];
 function boot(nextContext) {
   context = nextContext;
-  context.recordDiagnostic("tweet-composer-kit.ready", { capability: "composer-adjacent-panel" });
+  const remiliaProfileAvailable = Array.isArray(context.remiliaCapabilities) && context.remiliaCapabilities.some((declaration) => declaration?.id === "remilia.profile.public" && Array.isArray(declaration.operations) && declaration.operations.includes("getUserProfile"));
+  context.recordDiagnostic("tweet-composer-kit.ready", {
+    capability: "composer-adjacent-panel",
+    remiliaProfileCapability: remiliaProfileAvailable
+  });
+}
+async function resolvePublicRemiliaProfile(username) {
+  const normalized = String(username || "").trim().replace(/^~/u, "");
+  if (!normalized || normalized.length > 128 || typeof context?.invokeRemiliaCapability !== "function") {
+    return { ok: false, error: { category: "broker", code: "invalid_request", message: "A public Remilia username is required.", status: 400 } };
+  }
+  return context.invokeRemiliaCapability("getUserProfile", { username: normalized });
 }
 async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
   if (!context || signal.aborted) return;
@@ -447,5 +458,6 @@ export {
   boot,
   onComposerAction,
   onContextMediaAction,
-  onReplyAction
+  onReplyAction,
+  resolvePublicRemiliaProfile
 };

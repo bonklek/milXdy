@@ -203,6 +203,68 @@
         }
       }
     },
+    "remiliaCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "operations", "scopes", "consent", "reason"],
+        "properties": {
+          "id": {
+            "enum": [
+              "remilia.profile.public",
+              "remilia.profile.me",
+              "remilia.directory.read",
+              "remilia.stats.read",
+              "remilia.notifications.read",
+              "remilia.pokes.write",
+              "remilia.beetle.read",
+              "remilia.chat.read",
+              "remilia.chat.write"
+            ]
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "getUserProfile",
+                "getMe",
+                "getMyStats",
+                "listMyNotifications",
+                "getMyBeetle",
+                "getMyBeetleCards",
+                "pokeUser",
+                "listGlobalChatMessages",
+                "postGlobalChatMessage",
+                "resolveDirectory",
+                "listDirectoryUsers"
+              ]
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "remilia:stats.read",
+                "remilia:notifications.read",
+                "remilia:pokes.write",
+                "remilia:beetle.read",
+                "remilia:chat.read",
+                "remilia:chat.write",
+                "remilia:directory.read"
+              ]
+            }
+          },
+          "consent": { "enum": ["enablement", "perInvocation"] },
+          "reason": { "type": "string", "minLength": 8, "maxLength": 280 }
+        }
+      }
+    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
