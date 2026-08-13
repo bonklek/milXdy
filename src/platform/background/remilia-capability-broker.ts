@@ -33,6 +33,7 @@ export type RemiliaCapabilityGrantMessage = {
   packageId: string;
   grantId: string;
   manifestSha256: string;
+  packageSource: "firstParty" | "reviewedLocal";
   reviewStatus: "reviewed";
   consentAcknowledged: true;
   declarations: AppRemiliaCapabilityDeclaration[];
@@ -145,11 +146,12 @@ export function createRemiliaCapabilityBrokerHandlers(
 }
 
 export function isRemiliaCapabilityGrantMessage(value: unknown): value is RemiliaCapabilityGrantMessage {
-  if (!isRecord(value) || !hasOnlyKeys(value, ["type", "packageId", "grantId", "manifestSha256", "reviewStatus", "consentAcknowledged", "declarations"])) return false;
+  if (!isRecord(value) || !hasOnlyKeys(value, ["type", "packageId", "grantId", "manifestSha256", "packageSource", "reviewStatus", "consentAcknowledged", "declarations"])) return false;
   return value.type === REMILIA_CAPABILITY_GRANT_MESSAGE_TYPE
     && isSafePackageId(value.packageId)
     && isGrantId(value.grantId)
     && typeof value.manifestSha256 === "string" && /^[a-f0-9]{64}$/u.test(value.manifestSha256)
+    && (value.packageSource === "firstParty" || value.packageSource === "reviewedLocal")
     && value.reviewStatus === "reviewed"
     && value.consentAcknowledged === true
     && validateRemiliaCapabilityDeclarations(value.declarations);

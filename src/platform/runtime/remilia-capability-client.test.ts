@@ -3,8 +3,9 @@ import { createPackageRemiliaCapabilityClient } from "./remilia-capability-clien
 import type { MilxdyAppManifest } from "../app-sdk/app-platform";
 
 describe("package Remilia capability client", () => {
+  const subtle = globalThis.crypto.subtle;
   beforeEach(() => {
-    vi.stubGlobal("crypto", { getRandomValues: (bytes: Uint8Array) => bytes.fill(7) });
+    vi.stubGlobal("crypto", { getRandomValues: (bytes: Uint8Array) => bytes.fill(7), subtle });
   });
 
   it("injects package identity and grant metadata without exposing them to operation params", async () => {
@@ -18,6 +19,26 @@ describe("package Remilia capability client", () => {
     expect(messages[0]).toMatchObject({ type: "milxdy:remiliaCapability:grant", packageId: "tweet-composer-kit", consentAcknowledged: true });
     expect(messages[1]).toMatchObject({ type: "milxdy:remiliaCapability:invoke", packageId: "tweet-composer-kit", operation: "getUserProfile", params: { username: "milady" } });
     expect(JSON.stringify(client.declarations)).not.toContain("token");
+  });
+
+  it("grants repo-owned first-party apps with a host-derived manifest fingerprint", async () => {
+    const app = reviewedApp();
+    delete app.localPackage;
+    app.id = "reminetChat";
+    const messages: unknown[] = [];
+    const client = createPackageRemiliaCapabilityClient(app, async (message) => {
+      messages.push(message);
+      return { ok: true, data: {}, status: 200 };
+    });
+    await client.invoke("getUserProfile", { username: "milady" });
+    expect(messages[0]).toMatchObject({
+      type: "milxdy:remiliaCapability:grant",
+      packageId: "reminetChat",
+      packageSource: "firstParty",
+      reviewStatus: "reviewed",
+      consentAcknowledged: true,
+    });
+    expect((messages[0] as Record<string, unknown>).manifestSha256).toMatch(/^[a-f0-9]{64}$/u);
   });
 
   it("fails closed before transport for unreviewed packages and undeclared operations", async () => {

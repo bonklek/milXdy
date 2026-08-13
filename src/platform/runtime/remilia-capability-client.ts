@@ -41,16 +41,19 @@ export function createPackageRemiliaCapabilityClient(
     if (revoked) return localFailure("grant_revoked", "The capability grant is no longer active.");
     if (granted) return null;
     if (declarations.length === 0) return localFailure("capability_not_declared", "The package did not declare a Remilia capability.");
-    if (packageMetadata?.reviewStatus !== "reviewed") return localFailure("package_not_reviewed", "The package is not reviewed for Remilia capabilities.");
-    if (packageMetadata.packageConsentAcknowledged !== true) return localFailure("consent_required", "Package capability consent was not acknowledged.");
-    if (typeof packageMetadata.manifestSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(packageMetadata.manifestSha256)) {
-      return localFailure("package_not_granted", "The reviewed package identity is unavailable.");
-    }
+    const packageSource = packageMetadata ? "reviewedLocal" : "firstParty";
+    if (packageSource === "reviewedLocal" && packageMetadata?.reviewStatus !== "reviewed") return localFailure("package_not_reviewed", "The package is not reviewed for Remilia capabilities.");
+    if (packageSource === "reviewedLocal" && packageMetadata?.packageConsentAcknowledged !== true) return localFailure("consent_required", "Package capability consent was not acknowledged.");
+    const manifestSha256 = packageSource === "reviewedLocal"
+      ? packageMetadata?.manifestSha256
+      : await firstPartyManifestFingerprint(app, declarations);
+    if (typeof manifestSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(manifestSha256)) return localFailure("package_not_granted", "The reviewed package identity is unavailable.");
     const result = await transport({
       type: REMILIA_CAPABILITY_GRANT_MESSAGE_TYPE,
       packageId: app.id,
       grantId,
-      manifestSha256: packageMetadata.manifestSha256,
+      manifestSha256,
+      packageSource,
       reviewStatus: "reviewed",
       consentAcknowledged: true,
       declarations,
@@ -107,6 +110,13 @@ function randomGrantId(): string {
   const bytes = new Uint8Array(16);
   globalThis.crypto.getRandomValues(bytes);
   return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+async function firstPartyManifestFingerprint(app: MilxdyAppManifest, declarations: readonly AppRemiliaCapabilityDeclaration[]): Promise<string | null> {
+  if (!globalThis.crypto?.subtle) return null;
+  const canonical = JSON.stringify({ id: app.id, version: app.version, remiliaCapabilities: declarations });
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

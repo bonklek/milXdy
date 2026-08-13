@@ -111,6 +111,7 @@ function grantMessage(declarations: AppRemiliaCapabilityDeclaration[]) {
     packageId: "tweet-composer-kit",
     grantId,
     manifestSha256,
+    packageSource: "reviewedLocal",
     reviewStatus: "reviewed",
     consentAcknowledged: true,
     declarations,
