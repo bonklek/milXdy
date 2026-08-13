@@ -37,7 +37,7 @@
     },
     {
       "id": "audio-export",
-      "automated": "The package declares one explicit HTTP/HTTPS active-tab page action, ships its secondary entry, rejects direct browser APIs in that entry, and verifies extraction, loopback-only TTS, cancellation, object-URL cleanup, and standalone parity.",
+      "automated": "The package declares one explicit HTTP/HTTPS active-tab page action, ships its secondary entry, rejects direct browser and network APIs in both entries, and verifies extraction, loopback-only routed TTS, request-scoped active transport cancellation, object-URL cleanup, and standalone parity.",
       "manual": "Invoke Review and download audio on an X Article and a non-X article, edit title/metadata/text, select local TTS, preview, cancel once, retry, and download preferred audio plus the adjacent metadata sidecar; confirm unsupported pages are rejected and closing the panel discards temporary data."
     },
     {
@@ -47,7 +47,7 @@
     },
     {
       "id": "error-offline-timeout-cancellation",
-      "automated": "Lifecycle cancellation, bounded scheduling, routed-message failure, and OCR timeout contracts are included in package verification.",
+      "automated": "Lifecycle cancellation, bounded scheduling, request-id generation/cancel routing, routed-message failure, and OCR timeout contracts are included in package verification.",
       "manual": "Test offline quote/OCR/custom-TTS failure, cancel active work, navigate away, and confirm actionable status plus clean recovery."
     },
     {

@@ -17,13 +17,14 @@
     "bounded rescan requests",
     "shared scheduler and cancellation",
     "routed post-reading background messages",
+    "request-scoped routed audio transport with active cancellation",
     "diagnostics",
     "existing settings compatibility",
     "manifest-declared active-tab page context actions"
   ],
   "reviewedExceptions": [
     "host-provided OCR frame and worker assets",
-    "host-provided post-reading background handlers"
+    "host-provided post-reading background handlers for quote, OCR, and bounded loopback audio transport"
   ],
   "unsupported": [
     "ambient or package-owned arbitrary-tab injection",

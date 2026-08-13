@@ -7,8 +7,8 @@ the public SDK runtime, shared services, trust policy, pinned source commit and
 package hash, and mirrors used to detect contract drift.
 
 The current pair is Post-reading `0.2.0-sdk.3` at commit
-`10febd3b62616138ba18a6c198d74009af09fd46` with App SDK `0.2.5` and package
-SHA-256 `f5683c3181f3ac5f865444b778aa6c845ff2577c3a7c7ce963dcc55d326ad7df`.
+`497334396aaaec722468a597c23d5d640d1ab6aa` with App SDK `0.2.5` and package
+SHA-256 `5f3a2dc845bdfa1fcb0627536413f56f9fed0ee4766b41d5ea25ae78554e4ba9`.
 
 Run the complete cross-repository proof from this repository with:
 
