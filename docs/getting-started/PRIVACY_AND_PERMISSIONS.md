@@ -174,7 +174,13 @@ diagnostics.
 
 ## Incoming Poke Flags
 
-The incoming "poked you!" flag reads recent RemiliaNET notifications through the same connector login. It is based on notification sender handles with timestamps inside the active poke window, not all-time poke history.
+The incoming "poked you!" flag reads official Remilia notifications through the
+same account connection. Notification response bodies are never persisted.
+Local read state contains at most 500 opaque SHA-256 event keys with read
+timestamps and 90-day retention; the former incoming-poke payload cache is
+removed. Poke diagnostics store only operation, success, timestamp, bounded
+status/category/code, and cooldown source—never target handle, URL, token,
+header, or raw body.
 
 ## RemiNet Chat
 
@@ -225,5 +231,8 @@ resolution/listing. The only temporary legacy adapters are RemiNet realtime,
 RemiNet media upload/confirm, and Beetle actions such as hunt, craft, and trophy
 flows that have no documented API-v1 equivalent. Each adapter is separately
 classified, bounded, redacted, independently disableable, and removed when an
-official documented endpoint reaches parity. See the
+official documented endpoint reaches parity. The unauthenticated public
+`api.remistats.net/user/{x-handle}` badge/profile lookup is also separately
+labeled legacy coverage because delegated `/me/stats` is connected-user-only;
+it receives no Remilia credential. See the
 [contributor migration contract](../contributors/REMILIA_API_MIGRATION.md).

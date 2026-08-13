@@ -36,8 +36,8 @@ pass. Record only observed results from the exact integrated candidate.
 | `connected-profile` | Connected `/me` profile | Required | Own profile loads with no credential exposed outside background |
 | `directory-resolution` | Remilia, X, GitHub, Discord resolution and batching | Required | 1/50/>50 inputs, misses, duplicates, handle changes, cache expiry are deterministic |
 | `stats` | Account statistics | Required | Stats load with granted scope; missing scope/offline/expired states remain distinct |
-| `notifications` | Notification paging and incoming poke state | Required | Paging/deduplication stable; only local read state persists; private payload absent from diagnostics |
-| `poke-cooldown` | Poke success and cooldown | Required | API response controls cooldown/`next_allowed_at`; no assumed fixed local duration |
+| `notifications` | Notification paging and incoming poke state | Required | One-based limit-50 paging stops by 100 pages; opaque dedupe ordering is stable; only ≤500 opaque read keys/90-day timestamps persist; private payload absent from storage/diagnostics |
+| `poke-cooldown` | Poke success and cooldown | Required | Success invents no timer; `next_allowed_at`/`Retry-After` controls cooldown; prior unexpired deadline is visibly `offline-fallback` only after network/timeout |
 | `beetle-reads` | Beetle state and cards | Required | Ready, cooldown, exhausted, and partial responses normalize without invented values |
 | `beetle-legacy-actions` | Catch/hunt/claim/faucet/craft/trophy adapters | Required | UI labels legacy failure separately; official reads still work when an adapter is unavailable |
 | `chat-history-post` | REST history, older paging, replies, edits, media metadata, text post | Required | Ordering/deduplication correct; 8,192-byte and two-second limits enforced |

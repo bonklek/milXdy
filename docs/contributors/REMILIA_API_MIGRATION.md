@@ -47,7 +47,7 @@ All official paths are relative to `https://www.remilia.net/api/v1`.
 | Public profile | `GET /users/{username}` | Public | API v1 |
 | Connected profile | `GET /me` | Any user token (`openid` is protocol-only) | API v1 |
 | Account statistics | `GET /me/stats` | `remilia:stats.read` | API v1 |
-| Notifications | `GET /me/notifications` | `remilia:notifications.read` | API v1 |
+| Notifications | `GET /me/notifications?limit=50&page=N` | `remilia:notifications.read` | API v1 |
 | Beetle state and cards | `GET /me/beetle`, `GET /me/beetle/cards` | `remilia:beetle.read` | API v1 |
 | Poke | `POST /users/{handle}/poke` | `remilia:pokes.write` | API v1 |
 | Chat history | `GET /global-chat/messages` | `remilia:chat.read` | API v1 |
@@ -57,6 +57,18 @@ All official paths are relative to `https://www.remilia.net/api/v1`.
 API-v1 cooldowns, cursors, paging, and `next_allowed_at` are authoritative.
 Local cooldown or read-state data is only a labeled offline presentation
 fallback and must never override a newer service response.
+
+Notification paging is one-based with `limit=50` and a hard 100-page bound;
+non-advancing/excess pagination fails as `invalid_response`. Duplicate events
+use opaque SHA-256 keys and deterministic newest-first ordering, with a
+server-read duplicate winning. No notification body is persisted: local read
+state is limited to 500 opaque keys with timestamps and 90-day retention.
+
+Poke success does not invent a cooldown. Only a normalized
+`429 poke_cooldown` deadline from `next_allowed_at` (preferred) or
+`Retry-After` becomes authoritative. After network/timeout failure, an
+unexpired prior authoritative deadline may disable the target only as a
+visible `offline-fallback`; missing or expired state never fabricates history.
 
 ## Temporary Legacy Adapters
 
@@ -72,6 +84,7 @@ as an API-v1 response.
 | `catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet` actions | API v1 documents Beetle state/cards reads but not these user actions | Official state/cards remain functional and identify each legacy failure separately | Remove each adapter when API v1 documents an equivalent user-delegated operation and milXdy ships and live-verifies it |
 | Beetle `craft` | API v1 does not document equivalent user-delegated crafting | Official state/cards remain functional; craft failures are typed and separate | Remove when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
 | Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
+| Public RemiStats X badge/profile lookup at `https://api.remistats.net/user/{x-handle}` | Official delegated `/me/stats` describes only the token user, not arbitrary visible X accounts | Request is unauthenticated and separately labeled; no Remilia credential enters the request | Remove when an official documented public lookup covers equivalent arbitrary-user badge/profile data and parity QA passes, or retire the badge surface |
 
 Browser-session adoption, cookie mutation, hidden-tab refresh, and silent
 session reuse are removed migration mechanisms, not retained legacy adapters.
