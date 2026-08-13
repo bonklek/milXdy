@@ -11,8 +11,13 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - RemiNet identity cache may call `https://ethereum.publicnode.com` to resolve the current owner of a verified PFP NFT.
 - Remilia Wiki previews and the docked Wiki sidebar call `https://wiki.remilia.org` and `https://remilia.wiki`.
 - Grok wiki prompts are pasted into X's native Grok interface from the current X/Twitter page.
-- Beetol Game, RemiNet pokes, and RemiNet Chat call `https://www.remilia.net`; RemiNet Chat may also load allowlisted avatars from `https://pfp.remilia.net`.
-- RemiNet Chat live updates use `wss://www.remilia.net` when the chat setting is enabled.
+- Official Remilia profile, directory, stats, notifications, poke, Beetle, and
+  global-chat operations call fixed routes under
+  `https://www.remilia.net/api/v1`. RemiNet Chat may also load allowlisted
+  avatars from `https://pfp.remilia.net`.
+- RemiNet Chat live updates may use the temporary legacy
+  `wss://www.remilia.net` adapter when chat is enabled. Official REST history
+  and text posting continue when that adapter is unavailable.
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
 - Post-Factory queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
 - Pets Maker contacts `https://maker.remilia.org` only after the user clicks **Fetch**; it sends the selected public Maker family and NFT number and receives public trait metadata.
@@ -49,14 +54,20 @@ Firefox builds declare required data collection categories for the documented
 flows that can send data outside the extension or local browser:
 authentication/session information, personal communications, personally
 identifying information, website activity, and website content. These categories
-cover RemiliaNET session reuse, RemiNet Chat messages and attachments,
+cover Remilia Login credentials, RemiNet Chat messages and attachments,
 public/profile identity lookups, selected X/Twitter context, and requested media
 or metadata sent to the remote services listed above. milXdy should not declare
 `required: ["none"]` while those flows exist.
 
 ## Future Local App Packages (Now Available)
 
-Local app packages must declare host permissions, background message capabilities, background services, remote APIs, browser-session use, local-file access, workers, WASM, storage keys, and retention notes before the platform enables them. Local packages are privileged reviewed custom-build inputs, not sandboxed runtime plugins. Copied packages stay disabled until validation and any required permission/data-use consent succeeds. Reviewed catalog entries and unreviewed local packages remain visibly distinct.
+Local app packages must declare host permissions, background message
+capabilities, background services, remote APIs, Remilia capabilities, local-file
+access, workers, WASM, storage keys, and retention notes before the platform
+enables them. Local packages are privileged reviewed custom-build inputs, not
+sandboxed runtime plugins. Copied packages stay disabled until validation and
+any required permission/data-use consent succeeds. Reviewed catalog entries and
+unreviewed local packages remain visibly distinct.
 
 Current custom local builds also fail closed at composition time. Missing or
 local review status requires an explicit developer acknowledgement, privileged
@@ -110,18 +121,47 @@ form and are not cached. The package creates a local two-file ZIP and does not
 upload the selected image, post, publish, or invoke Codex. Form state and
 selected files are not persisted.
 
-## RemiNet And Beetol Login
+## Remilia Account And Credential Custody
 
-- milXdy uses the user's RemiliaNET browser session for connector login. Direct username/password login is no longer supported by RemiliaNET for this extension path.
-- milXdy may silently renew a short-lived RemiliaNET access token through the site's existing Keycloak/OIDC browser session. It does not ask users to copy Keycloak cookies and does not store Keycloak SSO cookies.
-- If a RemiliaNET connector action fails because stored auth appears stale, milXdy may briefly open `https://www.remilia.net/` in an inactive tab, wait for the browser session to settle, close that tab, and retry the connector session check.
-- RemiNet access and refresh tokens are kept only in extension background memory, never in content-readable extension local storage. Legacy token keys are removed during auth migration.
-- After a browser or extension-worker restart, milXdy re-adopts the authenticated RemiliaNET browser session before connector actions continue.
-- Browser-session SSO depends on RemiliaNET cookies in the user's browser profile.
+- milXdy uses the official public Remilia Login client and OIDC Authorization
+  Code with PKCE S256. Login is visible and requires explicit user consent.
+- The registered callback must match the installed beta identity exactly.
+  Callback state, PKCE verifier/challenge, authorization code, access token,
+  refresh token, and ID token are handled only by the trusted extension
+  background.
+- Credentials are not sent to X/Twitter pages, content scripts, the DOM, local
+  packages, App SDK context, sync storage, exported settings, profile packs,
+  diagnostics, or logs.
+- A refresh response can rotate the refresh token. An expired or revoked grant
+  returns to an explicit reconnect state; milXdy does not open a hidden tab or
+  adopt an existing RemiliaNET web session.
+- Disconnect and revoke clear local credentials without deleting unrelated
+  settings. Remote logout/revocation is best effort and is described separately
+  from local credential deletion.
+- Existing installations receive a one-time migration notice. Legacy connector
+  credentials are deleted, and no migration or rollback path restores cookie
+  mutation or silent session reuse.
+- milXdy does not use the browser `cookies` permission for Remilia
+  authentication. Any retained permission must have a separate documented
+  consumer and security disposition.
 
-## Cookies Permission
+## Remilia Delegated Scopes
 
-The RemiNet connector uses the browser `cookies` permission only for RemiliaNET requests that require the user's RemiliaNET session.
+The connected account grants only named abilities approved for the public
+client:
+
+- `remilia:stats.read` reads the connected account's statistics.
+- `remilia:notifications.read` reads the connected account's notifications.
+- `remilia:pokes.write` sends an explicit user-attributed poke.
+- `remilia:beetle.read` reads Beetle state and discovered cards.
+- `remilia:chat.read` reads global chat history.
+- `remilia:chat.write` posts user-reviewed text or replies to global chat.
+- `remilia:directory.read` resolves and lists public directory identities.
+
+Public `GET /users/{username}` needs no token; connected `GET /me` needs a
+user-delegated grant. Missing scope, requires-user, cooldown, rate-limit,
+revoked/expired, and offline outcomes remain distinct in the UI and redacted
+diagnostics.
 
 ## Incoming Poke Flags
 
@@ -129,7 +169,12 @@ The incoming "poked you!" flag reads recent RemiliaNET notifications through the
 
 ## RemiNet Chat
 
-RemiNet Chat is off by default. When enabled, it fetches recent chat messages, opens a RemiliaNET WebSocket, fetches allowlisted RemiliaNET media and pfp.remilia.net avatars for previews, and uploads attachments only after the user selects a file in the chat composer.
+RemiNet Chat is off by default. When enabled, official API-v1 REST history and
+text/reply posting are the source of truth. A temporary legacy WebSocket adapter
+can accelerate live updates, and a separately typed temporary legacy adapter
+can upload/confirm media after the user selects it. REST history and text
+posting must remain usable without the socket; an upload failure must not send
+unconfirmed media or expose local paths, credentials, or private bodies.
 
 ## RemiStats Images
 
@@ -147,7 +192,10 @@ MusicBrainz lookup sends track metadata needed for candidate search. AcoustID lo
 
 ## Local Persistence
 
-Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.
+Settings and Remilia grant state persist only while the browser keeps the same
+extension identity and storage. Removing the extension, loading a different
+unpacked identity, clearing extension storage, or browser profile cleanup can
+reset local state.
 
 The Add-ons settings tab stores a user-selected `local-app-packages` directory
 handle in extension IndexedDB when the browser allows it. Scanning is
@@ -156,8 +204,13 @@ dates in the settings UI. Folder access requires an explicit picker choice and
 can be revoked through browser site or extension storage controls. ZIP contents
 are not uploaded or passed through the public catalog bridge.
 
-## RemiliaNET Client Support
+## Official And Legacy Remilia Coverage
 
-Accounts should use **Open RemiliaNET** and **Retry session**. After the user starts login from remilia.net and finishes any 2FA step in the browser tab, milXdy checks that browser session and may reuse or silently renew the RemiliaNET `authToken` cookie for Beetol, RemiStats pokes, and RemiNet Chat connector requests. Full 2FA-native extension login depends on RemiliaNET supporting milXdy as an approved client.
-
-The popup **Log out** action disconnects milXdy's connector auth state and prevents automatic browser-session reuse until the user clicks **Retry session** again. It does not necessarily sign the user out of remilia.net in the browser.
+Official API v1 covers public/connected profiles, stats, notifications, pokes,
+Beetle state/cards, global chat REST history/text posting, and directory
+resolution/listing. The only temporary legacy adapters are RemiNet realtime,
+RemiNet media upload/confirm, and Beetle actions such as hunt, craft, and trophy
+flows that have no documented API-v1 equivalent. Each adapter is separately
+classified, bounded, redacted, independently disableable, and removed when an
+official documented endpoint reaches parity. See the
+[contributor migration contract](../contributors/REMILIA_API_MIGRATION.md).

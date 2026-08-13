@@ -279,6 +279,29 @@ Per-app overrides build on that manifest metadata instead of creating app-local 
 
 App SDK `context.sendMessage()` calls are app-scoped. The content runtime extracts object message `type` values and only forwards messages covered by the sender app's manifest `background.messageTypes` entries. Entries may be exact types such as `wikiSidebar:openTab` or trailing wildcards such as `beetol:*`; shared routes such as `reminetIdentity:getProfile` must be declared by each sender that uses them.
 
+### Remilia Capability Broker
+
+Authenticated Remilia work uses the host-owned Remilia capability broker. A
+reviewed package declares each profile, directory, stats, notifications, poke,
+Beetle, or chat operation it needs plus the corresponding data-use and consent
+metadata. The trusted background validates the same-extension sender, package
+and composition identity, capability declaration, user grant, delegated scope,
+fixed route class, input bounds, and cancellation before making a request.
+
+The broker returns normalized results and redacted error classes. It does not
+provide authenticated arbitrary fetch, OAuth endpoints, authorization headers,
+cookies, authorization codes, raw private responses, or a bearer or refresh
+token. Package code must not declare or probe direct authentication storage,
+send login messages, or proxy an unrecognized URL through a broad background
+message. Missing package declaration, consent, sender identity, scope, or route
+fails closed before network activity.
+
+Post-Factory and other reviewed packages use only the capabilities present in
+the installed App SDK host. A package must treat missing capability support as
+an unavailable optional integration and preserve its non-Remilia behavior.
+See the [migration contract](../contributors/REMILIA_API_MIGRATION.md) for the
+official endpoint/scope map and the narrowly retained legacy adapters.
+
 Use `src/platform/browser/url-allowlist.ts` for background fetch URL policy checks. Service handlers should declare small rule sets near the service they protect, then call `parseAllowedUrl()` or `isAllowedUrl()` before any fetch that uses a URL supplied by content scripts, app UI, remote payloads, QR imports, or user-controlled metadata.
 
 Shared services register through the router. Direct `safeRuntimeMessage`, `chrome.runtime.sendMessage`, and `chrome.runtime.connect` bridges are reserved for documented internal surfaces that cannot receive App SDK context, such as packaged frames or stateful streaming ports. These internal privileged bridges are not local package APIs and not sandbox boundaries: each bridge validates senders in its background handler and remains covered by compliance verification. RemiNet legacy adapters are restricted further to same-extension top-frame X/Twitter and RemiliaNET senders, exact service origins, typed bounded payloads, and redacted public failures; packages cannot invoke them.

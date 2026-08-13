@@ -4,8 +4,8 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, download `milXdy-0.2.4-chromium.zip`. Firefox and
-Waterfox use `milXdy-0.2.4-firefox.zip`.
+For Chrome, Brave, or Edge, download `milXdy-0.2.5-chromium.zip`. Firefox and
+Waterfox use `milXdy-0.2.5-firefox.zip`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
@@ -16,7 +16,7 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-## Optional 0.2.4 add-ons
+## Optional 0.2.5 add-ons
 
 The normal release archive contains the base extension. The checked-in
 [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) prepares a separate
@@ -26,7 +26,7 @@ Chromium custom build from reviewed local package sources:
 - **Share Kit** is a selectable reviewed first-party replacement that preserves the existing Tweet PNG identity and settings.
 - **Post-Factory** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
 
-Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.4 source
+Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.5 source
 checkout. Load `dist/chromium-local-apps/` once and reload that same extension
 card after later successful rebuilds. Do not load the custom build alongside the
 normal build as a second extension.
@@ -73,7 +73,12 @@ When an update is available:
 6. Click **Reload** in the milXdy popup or reload the existing extension card.
 7. Refresh open X/Twitter tabs.
 
-Keeping the same loaded folder preserves extension storage, including settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state. Removing the extension, loading a different folder, or clearing extension storage can reset local data.
+Keeping the same loaded folder preserves extension storage, including settings,
+Maxxer stats, diagnostics, and the Remilia account grant owned by the trusted
+extension background. Removing the extension, loading a different folder, or
+clearing extension storage can reset local data. After updating from 0.2.4 or
+earlier, follow the one-time [Remilia account migration](REMILIA_ACCOUNT.md);
+milXdy does not reuse the old browser-session connector.
 
 ## Source Updates
 

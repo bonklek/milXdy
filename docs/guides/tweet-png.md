@@ -2,7 +2,7 @@
 
 Share Kit owns the reviewed local Tweet PNG workflow. The base milXdy client owns only the generic contextual post-action, lifecycle, storage, and package-review seams.
 
-Share Kit is a selectable reviewed first-party replacement in the 0.2.4
+Share Kit is a selectable reviewed first-party replacement in the 0.2.5
 Add-ons Catalog. Selecting it preserves the stable `tweetPng` identity; review
 the replacement acknowledgement during the local Prepare/Apply workflow.
 
@@ -12,9 +12,10 @@ the replacement acknowledgement during the local Prepare/Apply workflow.
 2. Review the rendered PNG. Video posts use the available thumbnail with a play icon overlay; the export never embeds or starts a video.
 3. Use **Copy PNG** or **Download** from the top action row.
 
-When the RemiNet browser session is offline, **Reconnect** opens the fixed
-RemiliaNET session page in an inactive tab and **Refresh** only retests that
-session. Once connected, those controls are replaced by **Share to RemiNet**.
+When the official Remilia account connection is unavailable, **Reconnect**
+starts a visible Remilia authorization flow and **Refresh** only retests the
+token-free host status. Once connected with the required chat abilities, those
+controls are replaced by **Share to RemiNet**.
 That action stages the reviewed PNG as a pending local attachment and opens the
 existing RemiNet Chat rail app. The image is not uploaded until the user
 explicitly presses Send in Chat.

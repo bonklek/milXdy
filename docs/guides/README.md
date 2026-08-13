@@ -216,26 +216,32 @@ Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/T
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
 
-If the chat does not connect, confirm RemiNet login status first, then refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
+If the chat does not connect, check **Remilia account** first, then refresh the
+X/Twitter tab. Missing `remilia:chat.read` or `remilia:chat.write`, expiry,
+revocation, rate limiting, and offline state are reported separately.
 
-## Beetol Game Login
+## Remilia Account Connection
 
-The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunter panel.
+One official Remilia Login grant powers RemiStats stats/notifications/pokes,
+Beetle reads, directory resolution, and RemiNet Chat according to the abilities
+the user approves.
 
-- Click **Open RemiliaNET** to open remilia.net.
-- Click **Log in** on RemiliaNET so the site can start its current OIDC login flow.
-- Finish RemiliaNET login in the opened tab, including any 2FA step.
-- Return to milXdy and click **Retry session**.
-- Non-sensitive RemiNet connector state is stored in Chrome extension local storage. RemiNet access and refresh tokens stay only in extension background memory and are not intentionally persisted.
-- Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
+- Open **Remilia account** and review the requested abilities.
+- Choose **Connect** and finish the visible RemiliaNET authorization flow.
+- Confirm the connected identity and granted abilities in milXdy.
+- Use **Reconnect** after an unrecoverable expiry, revocation, or missing scope.
+- Use **Disconnect** to clear local credentials without erasing unrelated settings.
 
-After **Retry session**, milXdy checks the RemiliaNET browser session and reuses or silently renews the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
+0.2.5 migrates older connector installations explicitly. It removes legacy
+connector credentials and leaves the user disconnected until **Connect** is
+chosen. It does not adopt browser cookies, open a hidden refresh tab, or ask for
+a password, authorization code, client secret, or token.
 
-When a poke request fails because the stored connector auth appears stale, milXdy may briefly open RemiliaNET in an inactive tab, wait for the site session to settle, close that tab, and retry using the refreshed browser session.
+Tokens and PKCE material stay in the trusted extension background and never
+enter X/Twitter pages, content scripts, local packages, exported settings, or
+diagnostics. See [Connect a Remilia account](../getting-started/REMILIA_ACCOUNT.md).
 
-Clicking **Log out** disconnects milXdy from the RemiNet connector session. It does not necessarily sign the browser out of remilia.net; click **Retry session** again when you want milXdy to reuse the browser session.
-
-milXdy requests the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
+The browser `cookies` permission is not used for Remilia authentication.
 
 ## Beetol Hunter Panel
 
@@ -315,6 +321,8 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.
-- RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
+- Official Remilia account actions use OIDC Authorization Code with PKCE and
+  fixed API-v1 endpoints. Credentials stay in the trusted extension background;
+  local packages receive only approved normalized capabilities.
 
 Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.

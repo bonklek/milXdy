@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "release": "0.2.5",
+  "sourceCommit": null,
+  "browsers": {
+    "chromium": {
+      "browserVersion": null,
+      "buildId": null,
+      "testedAt": null,
+      "tester": null
+    },
+    "firefox": {
+      "browserVersion": null,
+      "buildId": null,
+      "testedAt": null,
+      "tester": null
+    }
+  },
+  "results": [
+    { "id": "migration-prompt", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "connect-pkce", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "connect-fail-closed", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "scope-status", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "disconnect-revoke", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "restart-refresh", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "public-profile", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "connected-profile", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "directory-resolution", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "stats", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "notifications", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "poke-cooldown", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "beetle-reads", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "beetle-legacy-actions", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "chat-history-post", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "chat-reconnect", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "chat-legacy-realtime", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "chat-legacy-media", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "post-factory-isolation", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "error-separation", "chromium": "pending", "firefox": "pending", "note": null },
+    { "id": "keyboard-screen-reader", "chromium": "pending", "firefox": "pending", "note": null }
+  ]
+}

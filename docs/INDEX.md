@@ -6,6 +6,7 @@
 - [User guide](guides/README.md)
 - [Troubleshooting](getting-started/TROUBLESHOOTING.md)
 - [Privacy and permissions](getting-started/PRIVACY_AND_PERMISSIONS.md)
+- [Connect or migrate a Remilia account](getting-started/REMILIA_ACCOUNT.md)
 
 ## Guides
 
@@ -56,6 +57,8 @@
 - [Developer QA reload](contributors/DEVELOPER_QA_RELOAD.md)
 - [Documentation maintenance](contributors/DOCS_MAINTENANCE.md)
 - [Firefox and Waterfox](contributors/FIREFOX_QA.md)
+- [Remilia API migration contract](contributors/REMILIA_API_MIGRATION.md)
+- [Remilia API Chromium/Firefox QA](contributors/REMILIA_API_QA.md)
 - [Localization](contributors/LOCALIZATION.md)
 
 ## Project history and reference
@@ -64,7 +67,8 @@
 - [Identifier media post schema](roadmap/IDENTIFIER_MEDIA_POST_SCHEMA.md)
 - [Custom Pet pipeline provenance (planned 0.2.5)](provenance/custom-pet-pipeline.md)
 - [Releases](releases/RELEASES.md)
-- [Latest release notes (0.2.4)](releases/RELEASE_NOTES_0.2.4.md)
+- [Candidate release notes (0.2.5)](releases/RELEASE_NOTES_0.2.5.md)
+- [Latest released notes (0.2.4)](releases/RELEASE_NOTES_0.2.4.md)
 - [0.2.3 release notes](releases/RELEASE_NOTES_0.2.3.md)
 - [0.2.2 release notes](releases/RELEASE_NOTES_0.2.2.md)
 - [0.2.1 release notes](releases/RELEASE_NOTES_0.2.1.md)

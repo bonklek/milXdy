@@ -2,7 +2,7 @@
 
 ## 0.2.5
 
-Status: candidate; feature scope is not yet approved.
+Status: candidate; integrated browser acceptance is pending.
 
 See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 
@@ -11,6 +11,20 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 - Does not represent any deferred 0.2.4 issue or historical release-branch implementation as shipped or accepted.
 - Updates the Share Kit candidate to use exact-pinned Pretext 0.0.8 for Unicode-aware local Canvas layout across post, quoted-post, and link-card text, with a formatted-run seam for the separately owned rich-text editor.
 - Adds local Share Kit post-text editing with bullets, bold, italic, strikethrough, combined styles, clear/reset controls, accessible labels and shortcuts, and reviewed preview/export parity.
+- Replaces RemiliaNET browser-session/cookie adoption with an explicit official
+  Remilia Login public-client PKCE flow and background-only credential custody.
+- Migrates profiles, directory resolution, stats, notifications, pokes, Beetle
+  reads, and global-chat REST behavior to typed, scope-gated API-v1 services.
+- Separates temporary RemiNet realtime/media and Beetle-action adapters from
+  official coverage and records exact removal conditions.
+- Adds a host-owned Remilia App SDK capability broker that exposes normalized
+  operations, never tokens, cookies, OAuth, or authenticated arbitrary fetch.
+- Adds explicit existing-installation migration, connection/scope/revoke UI,
+  complete Chromium/Firefox acceptance evidence, and deterministic artifact
+  leakage scans to the release gates.
+- Retains Reader Voice and the other accepted 0.2.5 work under the Speaking
+  Special release theme; no candidate item is represented as shipped before
+  integrated manual acceptance.
 
 ## 0.2.4
 

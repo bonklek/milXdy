@@ -5,6 +5,7 @@ const gates = [
   ["TypeScript", ["node_modules/typescript/bin/tsc", "--noEmit"]],
   ["Current release docs/contracts", ["scripts/release/verify-release-current.mjs"]],
   ["Chromium beta identity", ["scripts/verify/chromium-beta-identity.mjs"]],
+  ["Remilia migration docs/evidence contracts", ["scripts/verify/remilia-api-migration.mjs"]],
   ["Build Chromium/Firefox profiles", ["scripts/build/build-profiles.mjs"]],
   ["Filesystem layout", ["scripts/verify/filesystem-layout.mjs"]],
   ["Localization metadata", ["scripts/verify/locales.mjs"]],
@@ -28,6 +29,7 @@ const gates = [
   ["Extension smoke", ["scripts/smoke/extension-smoke-020.mjs"]],
   ["App smoke", ["scripts/smoke/app-smoke.mjs"]],
   ["Package release archives", ["scripts/release/package-release.mjs"]],
+  ["Remilia migration artifact scan", ["scripts/release/verify-remilia-migration-artifacts.mjs"]],
   ["Release archive checksums", ["scripts/release/verify-release-checksums.mjs"]],
   ["Release archive reproducibility", ["scripts/release/verify-reproducible-release.mjs"]],
 ];

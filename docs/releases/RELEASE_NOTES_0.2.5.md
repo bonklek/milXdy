@@ -1,30 +1,51 @@
 # milXdy 0.2.5 Release Notes
 
-milXdy `0.2.5` is the **Reader Voice** candidate release. This document is an
-initialization placeholder, not a statement that candidate features have
-shipped or passed manual browser QA.
+milXdy `0.2.5` is the **Speaking Special** candidate release. Candidate features
+listed here are not represented as shipped until the integrated Chromium and
+Firefox evidence matrix, release gates, and maintainer acceptance are complete.
 
-## Candidate direction
+## Official Remilia account connection
 
-The proposed release theme is explicit, review-first listening for supported
-long-form content. The exact feature boundary and acceptance criteria remain
-subject to maintainer approval before implementation begins.
+- Replaces browser-session adoption, cookie mutation, hidden-tab refresh, and
+  silent session reuse with the official public Remilia Login client and OIDC
+  Authorization Code with PKCE S256.
+- Keeps authorization codes, PKCE material, access/refresh tokens, and
+  authenticated requests inside trusted extension background code. Content
+  scripts, pages, local packages, exported settings, profile packs, and
+  diagnostics receive no credentials.
+- Gives existing installations a one-time migration prompt. Legacy credentials
+  are removed, ordinary settings remain, and the user stays disconnected until
+  choosing Connect.
+- Adds explicit Connect, granted-ability status, Reconnect, Disconnect, and
+  local/remote revoke behavior with distinct cancellation, expiry, missing
+  scope, rate-limit, cooldown, offline, and revocation states.
 
-## Initialization state
+## Official API v1 coverage
 
-- Package, extension, and App SDK declarations target `0.2.5`.
-- Fresh Chromium and Firefox baseline artifacts must be generated from the
-  version-alignment commit and verified by checksum and reproducibility checks.
-- A dedicated 0.2.5 QA host and one persistent Chrome QA output must be created
-  from that exact commit.
-- A successful build is not manual QA. Browser acceptance requires matching
-  Running and On-disk build identities plus maintainer-observed behavior.
+- Uses official API-v1 public and connected profiles plus directory resolution
+  for Remilia, X, GitHub, and Discord identifiers.
+- Uses delegated API-v1 stats, notifications, poke, Beetle state/cards, global
+  chat history, and global chat text/reply posting.
+- Treats service paging, cursors, posting limits, cooldowns, and
+  `next_allowed_at` as authoritative. Local read/cooldown state is only a labeled
+  offline presentation fallback.
+- Adds a typed, scope-gated background API client with fixed route classes,
+  timeout/abort behavior, one refresh retry, rate-limit separation, and redacted
+  diagnostics.
 
-## Scope boundary
+## Official versus temporary legacy behavior
 
-Open milestone issues and work deferred from 0.2.4 remain candidates only.
-Historical commits, archives, and QA evidence are not accepted into 0.2.5
-without an explicit scope decision and deliberate integration.
+- Official REST history and text/reply posting are RemiNet Chat's source of
+  truth. The WebSocket remains a temporary acceleration adapter, and chat must
+  remain usable when it is disabled or unavailable.
+- Media upload/confirm remains a separately typed temporary adapter until a
+  documented official API reaches consent, validation, size-limit, and
+  confirmation parity.
+- Beetle state and card reads are official. Hunt, craft, trophy, and other
+  undocumented actions remain separately labeled temporary adapters with
+  explicit removal conditions.
+- Retired browser-session authentication is not a legacy fallback and cannot be
+  restored by rollback.
 
 ## Share Kit Unicode layout candidate
 
@@ -42,10 +63,39 @@ without an explicit scope decision and deliberate integration.
   keyboard and screen-reader controls all update the reviewed PNG used by Copy,
   Download, and user-initiated sharing without persisting editor state.
 
-## Known limitations
+## App SDK and package safety
+
+- Adds a host-owned Remilia capability broker for reviewed profile, directory,
+  stats, notifications, poke, Beetle, and chat operations.
+- Validates package identity, composition, declarations, user consent, scope,
+  sender, route class, and input bounds before privileged work.
+- Does not expose OAuth, tokens, cookies, raw private responses, or
+  authenticated arbitrary fetch to Post-Factory or another package.
+
+## Migration and release evidence
+
+- Updates installation, account migration, privacy, troubleshooting, RemiStats,
+  Beetol, RemiNet Chat, contributor, SDK, roadmap, and release documentation.
+- Adds one complete Chromium/Firefox migration matrix covering account
+  lifecycle, profiles, directory, stats, notifications, poke cooldown, Beetle,
+  chat, restart/reconnect, accessibility, and Post-Factory isolation.
+- Adds a static migration contract verifier, a strict live-evidence verifier,
+  and a deterministic extracted-archive scan for credentials and
+  machine-specific paths.
+- Final release preparation builds both browsers, runs Firefox lint, packages
+  deterministic archives, verifies checksums, and reproduces both archives from
+  the same integrated source tree.
+
+The public migration guide is available at
+https://github.com/bonklek/milXdy/blob/main/docs/getting-started/REMILIA_ACCOUNT.md.
+The contributor coverage and removal contract is available at
+https://github.com/bonklek/milXdy/blob/main/docs/contributors/REMILIA_API_MIGRATION.md.
+
+## Candidate limitations
 
 - milXdy remains an unpacked GitHub beta.
-- No 0.2.5 feature behavior is represented as accepted at release
-  initialization.
-- Chromium and Firefox baseline packages demonstrate reproducible transport,
-  not user-observed browser behavior.
+- Temporary RemiNet realtime/media and Beetle-action adapters remain only where
+  the published API v1 has no equivalent, with the removal conditions above.
+- A successful automated gate or QA build proves transport and reproducibility,
+  not user-observed browser behavior. Final acceptance requires the committed
+  Chromium and Firefox results for the exact integrated candidate.

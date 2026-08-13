@@ -56,6 +56,7 @@ npm run verify:post-reading:standalone
 npm run verify:smoke:020
 npm run verify:app-smoke
 npm run verify:app-smoke:020
+npm run verify:remilia-migration
 ```
 
 For the maintainer-only unpacked Chrome rebuild/reload loop, see

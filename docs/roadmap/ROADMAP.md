@@ -27,13 +27,27 @@ Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker inte
 - App SDK 0.2.4 ships reviewed external and multi-package composition, explicit host callbacks, catalog selection, transactional recovery, and sanitized provenance.
 - RemiNet/Beetol, side-rail, visual, lifecycle, security, and documentation refinements complete the release.
 
-## Planned: 0.2.5 - Reader Voice
+## Planned: 0.2.5 - Speaking Special
+
+- Migrate Remilia integrations to the official API v1 and Remilia Login PKCE
+  flow ([#225](https://github.com/bonklek/milXdy/issues/225)).
+  - keep credentials in the trusted background and replace browser-session,
+    cookie, and hidden-tab authentication
+  - migrate official profile, directory, stats, notifications, poke, Beetle
+    reads, and global-chat REST behavior through typed scope-gated services
+  - keep only explicitly classified temporary realtime/media/Beetle action
+    adapters where the published API has no equivalent
+  - expose reviewed package behavior through a host capability broker without
+    tokens or authenticated arbitrary fetch
+  - complete user/privacy/SDK/contributor docs, Chromium live QA, Firefox
+    compatibility, deterministic artifact scans, and release evidence
 
 - Add reviewed Remibooru contribution from Post-Factory (#24).
 - Publish the rights-compatible App SDK visual-elements repository and author guide (#183).
 - Complete the Maker pet-import adapter, reusable motion templates, envelope QA, and cache/resume (#192/#193).
 
-Theme: Post-reading companion voice experiments and long-form audio export.
+Theme: official Remilia connection and API migration, reader voice experiments,
+and long-form audio export.
 
 - Multi-site app runtime ([#74](https://github.com/bonklek/milXdy/issues/74)).
   - define site-aware app metadata, routes, surfaces, permissions, privacy notes, load triggers, and fallback behavior for RemiliaNET, Miladychan, Remilia Wiki, X/Twitter, and explicitly reviewed related hosts
@@ -73,7 +87,8 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - distinguish local-only possibilities from anything requiring an external service
 - RemiNet friend affordances on X profiles.
   - show whether the viewed profile is already a RemiNet friend when the identity can be resolved
-  - offer an explicit add-friend action only after RemiNet endpoint and browser-session behavior are confirmed
+  - offer an explicit add-friend action only after a documented Remilia endpoint,
+    delegated scope, and consent behavior are confirmed
   - keep RemiNet friendship visually distinct from native X following and avoid automatic relationship changes
 
 ## Planned: 0.2.7 - Activity Arcade

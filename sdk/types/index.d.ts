@@ -210,7 +210,7 @@ export interface MilxdyContextualPostActionContext {
   readonly signal: AbortSignal;
   readonly storage: AppStorageFacade;
   resolveAssetUrl(path: string): string;
-  /** Retests the host-owned RemiNet authorization without reloading the page. */
+  /** Requests a token-free retest of the host-owned Remilia connection without reloading the page. */
   probeRemiNetConnection(): Promise<{ connected: boolean }>;
   /** Stages a reviewed PNG locally in RemiNet Chat. Upload still requires Send. */
   stageRemiNetChatPng(input: {

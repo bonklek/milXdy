@@ -72,6 +72,14 @@ npm.cmd run verify:release:gates
 
 `verify:release:gates` rebuilds the profile matrix, runs the project checks, packages both browser archives, verifies checksums, and confirms reproducible output. Version-specific commands such as `verify:release:gates:020` are retained only for compatibility with their historical release line.
 
+For releases that include the Remilia API migration, the current gate also
+verifies the migration documentation/evidence schema and scans the extracted
+contents of both archives twice in deterministic order. The scan fails on
+private-key material, JWT/bearer-like credentials, client-secret assignments,
+machine-specific user paths, Codex worktree paths, and retired session-login UI
+copy. Its ignored local report contains only archive/file paths, byte counts,
+SHA-256 hashes, and the reproducible report hash.
+
 Also verify:
 
 - `git status --short`
@@ -85,6 +93,10 @@ Also verify:
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
 - no local browser caches or machine-specific test output in source or release archives
+- `npm.cmd run verify:remilia-migration:live` passes against the exact integrated
+  source commit after both browser matrices are observed and recorded
+- `npm.cmd run verify:remilia-migration:artifacts` passes after release archives
+  are packaged
 - `.gitignore` contains secret-file rules for `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`, `*.p12`, and `*.pfx`
 - GitHub release state matches the intended update channel: normal published releases for the normal updater, prereleases only for experimental tester builds
 
