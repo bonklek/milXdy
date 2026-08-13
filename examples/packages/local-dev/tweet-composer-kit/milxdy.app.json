@@ -313,14 +313,14 @@
         "path": "assets/composer-factory-light.svg",
         "kind": "icon",
         "webAccessible": true,
-        "sha256": "767d773f1b3938665602f7536d69c8b83dd7eb24ecdd907e17a536fc55c77c8b"
+        "sha256": "734a8c643fc28635b61d02f8254226021c3c0ee624f704140045a999bb03eb67"
       },
       {
         "id": "tweet-composer-kit.composer-factory-dark",
         "path": "assets/composer-factory-dark.svg",
         "kind": "icon",
         "webAccessible": true,
-        "sha256": "445cc7a1bde2e9f900b069560bb908372e8b29dd4cf0a7a0c2cfa6db0ed283a6"
+        "sha256": "2df108a717d1530ee4a4f720163bdeda75ca88e5d60ed87dee969e853c44b22f"
       },
       {
         "id": "tweet-composer-kit.maker-cheeseworld",
