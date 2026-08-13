@@ -78,7 +78,7 @@ describe("Remilia auth background router", () => {
     expect(JSON.stringify([statusResponse, connectResponse])).not.toMatch(/accessToken|refreshToken|idToken/u);
   });
 
-  it("rejects content-script senders before invoking an auth action", async () => {
+  it("rejects unauthorized senders without exposing auth status or invoking an auth action", async () => {
     mocks.status.mockResolvedValue({
       phase: "disconnected",
       grantedScopes: [],
@@ -86,13 +86,22 @@ describe("Remilia auth background router", () => {
       migration: { version: 1, required: false, legacyDeleted: true },
     });
     const handler = await loadHandler();
-    const response = await handler.handle(
-      { type: "remilia-auth:connect", consentVersion: 1 },
+    const rejectedSenders = [
+      { id: "other-extension", url: "chrome-extension://other-extension/popup.html" },
+      { id: "extension-id", url: "chrome-extension://other-extension/popup.html" },
+      { id: "extension-id", url: "https://x.com/home" },
+      { id: "extension-id" },
       { id: "extension-id", url: "https://x.com/home", tab: { id: 1 } },
-    );
+    ];
+    const responses = await Promise.all(rejectedSenders.map((sender) => handler.handle(
+      { type: "remilia-auth:connect", consentVersion: 1 },
+      sender,
+    )));
 
-    expect(response).toMatchObject({ ok: false, error: "UNKNOWN" });
+    expect(responses).toEqual(rejectedSenders.map(() => ({ ok: false, authStateVersion: 1, error: "UNKNOWN" })));
+    expect(mocks.status).not.toHaveBeenCalled();
     expect(mocks.connect).not.toHaveBeenCalled();
+    expect(JSON.stringify(responses)).not.toMatch(/status|identity|scope|migration|accessToken|refreshToken|idToken/u);
   });
 });
 

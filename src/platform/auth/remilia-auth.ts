@@ -2,9 +2,21 @@ const BASE_URL = "https://www.remilia.net";
 const OIDC_ISSUER = `${BASE_URL}/oidc/realms/remilia`;
 const OIDC_DISCOVERY_URL = `${OIDC_ISSUER}/.well-known/openid-configuration`;
 const OIDC_SCOPE = "openid";
+const OIDC_PROTOCOL_BASE = `${OIDC_ISSUER}/protocol/openid-connect`;
+const OIDC_ENDPOINTS = {
+  authorization_endpoint: `${OIDC_PROTOCOL_BASE}/auth`,
+  token_endpoint: `${OIDC_PROTOCOL_BASE}/token`,
+  jwks_uri: `${OIDC_PROTOCOL_BASE}/certs`,
+  revocation_endpoint: `${OIDC_PROTOCOL_BASE}/revoke`,
+  end_session_endpoint: `${OIDC_PROTOCOL_BASE}/logout`,
+  userinfo_endpoint: `${OIDC_PROTOCOL_BASE}/userinfo`,
+} as const;
 const DEFAULT_AUTH_TIMEOUT_MS = 120_000;
 const DISCOVERY_TIMEOUT_MS = 10_000;
+const OIDC_NETWORK_TIMEOUT_MS = 10_000;
+const OIDC_JSON_MAX_BYTES = 256 * 1024;
 const ACCESS_TOKEN_SKEW_MS = 30_000;
+const ID_TOKEN_CLOCK_SKEW_MS = 5 * 60_000;
 
 declare const MILXDY_REMILIA_CLIENT_ID: string | undefined;
 declare const MILXDY_REMILIA_ISSUER_URI: string | undefined;
@@ -317,9 +329,11 @@ export async function revokeRemiliaAuth(): Promise<{ remoteRevoked: boolean }> {
       [credentials.accessToken, "access_token"],
     ] as const;
     const results = await Promise.all(tokens.filter(([token]) => token).map(async ([token, hint]) => {
-      const response = await fetch(discovery.revocation_endpoint!, {
+      const response = await fetchWithTimeout(discovery.revocation_endpoint!, {
         method: "POST",
         credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: new URLSearchParams({ client_id: authClientId, token, token_type_hint: hint }),
       });
@@ -522,11 +536,13 @@ async function fetchDiscovery(): Promise<OidcDiscovery> {
   try {
     const response = await fetch(OIDC_DISCOVERY_URL, {
       credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
       headers: { Accept: "application/json" },
       signal: controller.signal,
     });
     if (!response.ok) throw new AuthProtocolError("DISCOVERY_FAILED");
-    const value = await response.json() as Partial<OidcDiscovery>;
+    const value = await readBoundedOidcJson<Partial<OidcDiscovery>>(response, OIDC_JSON_MAX_BYTES, "DISCOVERY_FAILED");
     const discovery: OidcDiscovery = {
       issuer: String(value.issuer || ""),
       authorization_endpoint: String(value.authorization_endpoint || ""),
@@ -543,12 +559,12 @@ async function fetchDiscovery(): Promise<OidcDiscovery> {
         : [],
     };
     if (discovery.issuer !== OIDC_ISSUER
-      || !isTrustedOidcEndpoint(discovery.authorization_endpoint)
-      || !isTrustedOidcEndpoint(discovery.token_endpoint)
-      || !isTrustedOidcEndpoint(discovery.jwks_uri)
-      || (discovery.revocation_endpoint && !isTrustedOidcEndpoint(discovery.revocation_endpoint))
-      || (discovery.end_session_endpoint && !isTrustedOidcEndpoint(discovery.end_session_endpoint))
-      || (discovery.userinfo_endpoint && !isTrustedOidcEndpoint(discovery.userinfo_endpoint))
+      || discovery.authorization_endpoint !== OIDC_ENDPOINTS.authorization_endpoint
+      || discovery.token_endpoint !== OIDC_ENDPOINTS.token_endpoint
+      || discovery.jwks_uri !== OIDC_ENDPOINTS.jwks_uri
+      || (discovery.revocation_endpoint && discovery.revocation_endpoint !== OIDC_ENDPOINTS.revocation_endpoint)
+      || (discovery.end_session_endpoint && discovery.end_session_endpoint !== OIDC_ENDPOINTS.end_session_endpoint)
+      || (discovery.userinfo_endpoint && discovery.userinfo_endpoint !== OIDC_ENDPOINTS.userinfo_endpoint)
       || !discovery.code_challenge_methods_supported?.includes("S256")
       || !discovery.id_token_signing_alg_values_supported?.includes("RS256")) {
       throw new AuthProtocolError("DISCOVERY_FAILED");
@@ -562,31 +578,19 @@ async function fetchDiscovery(): Promise<OidcDiscovery> {
   }
 }
 
-function isTrustedOidcEndpoint(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return url.protocol === "https:"
-      && url.origin === BASE_URL
-      && url.pathname.startsWith("/oidc/realms/remilia/")
-      && !url.username
-      && !url.password
-      && !url.search
-      && !url.hash;
-  } catch {
-    return false;
-  }
-}
-
 async function exchangeToken(endpoint: string, params: Record<string, string>, signal?: AbortSignal): Promise<TokenResponse> {
   try {
-    const response = await fetch(endpoint, {
+    const response = await fetchWithTimeout(endpoint, {
       method: "POST",
       credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: new URLSearchParams(params),
       signal,
     });
-    const data = await response.json().catch(() => ({})) as TokenResponse;
+    const data = await readBoundedOidcJson<TokenResponse>(response, OIDC_JSON_MAX_BYTES, "TOKEN_EXCHANGE_FAILED")
+      .catch(() => ({} as TokenResponse));
     if (!response.ok) {
       if (data.error === "invalid_grant" && params.grant_type === "refresh_token") {
         throw new AuthProtocolError("REFRESH_REJECTED");
@@ -677,10 +681,15 @@ async function validateIdToken(
 
 async function readJwks(uri: string, signal?: AbortSignal): Promise<JsonWebKey[]> {
   if (!jwksPromise) {
-    const pending = fetch(uri, { credentials: "omit", headers: { Accept: "application/json" } })
+    const pending = fetchWithTimeout(uri, {
+      credentials: "omit",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+      headers: { Accept: "application/json" },
+    })
       .then(async (response) => {
         if (!response.ok) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
-        const data = await response.json() as { keys?: unknown };
+        const data = await readBoundedOidcJson<{ keys?: unknown }>(response, OIDC_JSON_MAX_BYTES, "TOKEN_EXCHANGE_FAILED");
         if (!Array.isArray(data.keys)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
         return data.keys.filter((key): key is JsonWebKey => Boolean(key && typeof key === "object"));
       });
@@ -696,10 +705,17 @@ function validateIdTokenClaims(idToken: string, issuer: string, expectedNonce?: 
   const claims = decodeJwtPayload(idToken);
   if (!claims || claims.iss !== issuer) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   const audience = Array.isArray(claims.aud) ? claims.aud.map(String) : [String(claims.aud || "")];
-  if (!audience.includes(authClientId)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (audience.length !== 1 || audience[0] !== authClientId) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (claims.azp !== undefined && claims.azp !== authClientId) {
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
   if (expectedNonce !== undefined && claims.nonce !== expectedNonce) throw new AuthProtocolError("NONCE_MISMATCH");
   const expiresAt = Number(claims.exp) * 1000;
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new AuthProtocolError("TOKEN_EXPIRED");
+  const issuedAt = Number(claims.iat) * 1000;
+  if (!Number.isFinite(issuedAt) || issuedAt <= 0 || issuedAt > Date.now() + ID_TOKEN_CLOCK_SKEW_MS) {
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
   if (typeof claims.sub !== "string" || !claims.sub) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   return claims;
 }
@@ -730,11 +746,18 @@ function validateAuthorizationCallback(callback: string | undefined, redirectUri
     || actual.hash) {
     throw new AuthProtocolError("REDIRECT_MISMATCH");
   }
+  if (actual.searchParams.getAll("iss").length > 1
+    || actual.searchParams.getAll("error").length > 1) {
+    throw new AuthProtocolError("REDIRECT_MISMATCH");
+  }
   const callbackIssuer = actual.searchParams.get("iss");
   if (callbackIssuer && callbackIssuer !== issuer) throw new AuthProtocolError("REDIRECT_MISMATCH");
   const oauthError = actual.searchParams.get("error");
   if (oauthError) throw new AuthProtocolError(oauthError === "access_denied" ? "ACCESS_DENIED" : "CANCELLED");
-  if (actual.searchParams.get("state") !== state) throw new AuthProtocolError("STATE_MISMATCH");
+  if (actual.searchParams.getAll("state").length !== 1 || actual.searchParams.get("state") !== state) {
+    throw new AuthProtocolError("STATE_MISMATCH");
+  }
+  if (actual.searchParams.getAll("code").length !== 1) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   const code = actual.searchParams.get("code");
   if (!code) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   return code;
@@ -947,6 +970,65 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, signal?: A
     ]), signal);
   } finally {
     if (timer) clearTimeout(timer);
+  }
+}
+
+async function fetchWithTimeout(input: RequestInfo | URL, init: RequestInit = {}): Promise<Response> {
+  const timeout = new AbortController();
+  const signal = combineSignals(init.signal || undefined, timeout.signal);
+  const timer = setTimeout(() => timeout.abort(new DOMException("OIDC request timed out", "TimeoutError")), OIDC_NETWORK_TIMEOUT_MS);
+  try {
+    return await raceWithAbort(fetch(input, { ...init, signal }), signal);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function readBoundedOidcJson<T>(
+  response: Response,
+  maxBytes: number,
+  errorCode: RemiliaAuthErrorCode,
+): Promise<T> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    throw new AuthProtocolError(errorCode);
+  }
+  if (!response.body) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > maxBytes) throw new AuthProtocolError(errorCode);
+    try {
+      return JSON.parse(text) as T;
+    } catch {
+      throw new AuthProtocolError(errorCode);
+    }
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => undefined);
+        throw new AuthProtocolError(errorCode);
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes)) as T;
+  } catch {
+    throw new AuthProtocolError(errorCode);
   }
 }
 

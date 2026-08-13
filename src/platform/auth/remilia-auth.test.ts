@@ -64,6 +64,14 @@ describe("Remilia OIDC PKCE", () => {
     expect(authorization.searchParams.get("code_challenge")).toBe(expectedChallenge);
     expect(body.get("redirect_uri")).toBe(REDIRECT_URI);
     expect(body.get("client_id")).toBe(CLIENT_ID);
+    for (const endpoint of [DISCOVERY_URL, TOKEN_ENDPOINT, JWKS_ENDPOINT]) {
+      const call = fetchMock.mock.calls.find(([input]) => String(input) === endpoint);
+      expect(call?.[1]).toMatchObject({
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+      });
+    }
 
     expect(JSON.stringify([...fixture.local.values()])).not.toContain("access-one");
     expect(JSON.stringify([...fixture.local.values()])).not.toContain("refresh-one");
@@ -80,6 +88,21 @@ describe("Remilia OIDC PKCE", () => {
   it("fails closed on callback state mismatch", async () => {
     const fixture = installChrome();
     vi.mocked(chrome.identity.launchWebAuthFlow).mockResolvedValue(`${REDIRECT_URI}?code=code&state=wrong` as never);
+    const fetchMock = installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "STATE_MISMATCH" });
+    expect(fetchMock.mock.calls.filter(([input]) => String(input) === TOKEN_ENDPOINT)).toHaveLength(0);
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("fails closed on duplicated callback security parameters", async () => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=one&code=two&state=${state}&state=${state}`;
+    });
     const fetchMock = installSuccessfulFetch(() => "");
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
@@ -119,6 +142,58 @@ describe("Remilia OIDC PKCE", () => {
     expect(fixture.session.size).toBe(0);
   });
 
+  it("fails closed when the ID token authorized party does not match this client", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, {
+      claims: { azp: "other-client" },
+    });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("fails closed when the ID token contains an additional untrusted audience", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, {
+      claims: { aud: [CLIENT_ID, "other-client"], azp: CLIENT_ID },
+    });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("fails closed when the ID token has no issued-at claim", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, { claims: { iat: undefined } });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    expect(fixture.session.size).toBe(0);
+  });
+
   it("maps user denial without exposing the browser error", async () => {
     installChrome();
     vi.mocked(chrome.identity.launchWebAuthFlow).mockRejectedValue(new Error("The user did not approve access."));
@@ -146,6 +221,53 @@ describe("Remilia OIDC PKCE", () => {
     await vi.waitFor(() => expect(authorizationStarted).toBe(true));
     await vi.advanceTimersByTimeAsync(1_000);
     await expect(pending).resolves.toMatchObject({ ok: false, error: "AUTH_TIMEOUT" });
+  });
+
+  it("bounds a stalled token exchange independently of the browser auth flow", async () => {
+    installChrome();
+    let tokenExchangeStarted = false;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === DISCOVERY_URL) return jsonResponse(discovery());
+      if (String(input) === TOKEN_ENDPOINT) {
+        tokenExchangeStarted = true;
+        return new Promise<Response>(() => undefined);
+      }
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    vi.useFakeTimers();
+    const pending = auth.connectRemiliaAuth();
+    await vi.waitFor(() => expect(tokenExchangeStarted).toBe(true));
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(pending).resolves.toMatchObject({ ok: false, error: "OFFLINE" });
+  });
+
+  it("rejects oversized OIDC JSON before storing credentials", async () => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === DISCOVERY_URL) return jsonResponse(discovery());
+      if (String(input) === TOKEN_ENDPOINT) {
+        return new Response(JSON.stringify({ access_token: "x".repeat(300_000) }), {
+          headers: { "Content-Type": "application/json", "Content-Length": "300000" },
+        });
+      }
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    expect(fixture.session.size).toBe(0);
   });
 });
 
@@ -279,6 +401,13 @@ describe("Remilia credential lifecycle", () => {
       .map(([, init]) => new URLSearchParams(String((init as RequestInit)?.body)));
     expect(revokedBodies).toHaveLength(2);
     expect(revokedBodies.map((body) => body.get("token_type_hint"))).toEqual(["refresh_token", "access_token"]);
+    for (const [, init] of fetchMock.mock.calls.filter(([input]) => String(input) === REVOCATION_ENDPOINT)) {
+      expect(init).toMatchObject({
+        credentials: "omit",
+        redirect: "error",
+        referrerPolicy: "no-referrer",
+      });
+    }
     expect(fixture.session.size).toBe(0);
     expect((await auth.getRemiliaAuthStatus()).phase).toBe("disconnected");
   });
@@ -362,6 +491,24 @@ describe("Remilia migration and scope boundaries", () => {
     await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "DISCOVERY_FAILED" });
     expect(fixture.session.size).toBe(0);
   });
+
+  it("rejects unexpected discovery paths on the fixed issuer origin", async () => {
+    const fixture = installChrome();
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === DISCOVERY_URL) {
+        return jsonResponse({
+          ...discovery(),
+          token_endpoint: `${ISSUER}/protocol/openid-connect/token/alternate`,
+        });
+      }
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "DISCOVERY_FAILED" });
+    expect(fixture.session.size).toBe(0);
+  });
 });
 
 async function loadAuth() {
@@ -408,7 +555,7 @@ function storageArea(store: Map<string, unknown>) {
 
 function installSuccessfulFetch(
   getAuthorizationUrl: () => string,
-  overrides: { nonce?: string } = {},
+  overrides: { nonce?: string; claims?: Record<string, unknown> } = {},
 ) {
   const mock = vi.fn(successfulFetchImplementation(getAuthorizationUrl, overrides));
   vi.stubGlobal("fetch", mock);
@@ -417,7 +564,7 @@ function installSuccessfulFetch(
 
 function successfulFetchImplementation(
   getAuthorizationUrl: () => string,
-  overrides: { nonce?: string } = {},
+  overrides: { nonce?: string; claims?: Record<string, unknown> } = {},
 ) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -439,6 +586,7 @@ function successfulFetchImplementation(
           name: "Milady",
           nonce,
           exp: Math.floor(Date.now() / 1000) + 3600,
+          ...overrides.claims,
         }),
         token_type: "Bearer",
         expires_in: 3600,
@@ -467,7 +615,10 @@ function discovery() {
 
 function jwt(claims: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const signingInput = `${encode({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })}.${encode(claims)}`;
+  const signingInput = `${encode({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })}.${encode({
+    iat: Math.floor(Date.now() / 1000),
+    ...claims,
+  })}`;
   const signature = sign("RSA-SHA256", Buffer.from(signingInput), TEST_KEYS.privateKey).toString("base64url");
   return `${signingInput}.${signature}`;
 }

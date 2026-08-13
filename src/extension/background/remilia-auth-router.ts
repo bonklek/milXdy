@@ -42,7 +42,13 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 async function handleAuthMessage(message: AuthMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isExtensionPageSender(sender)) return response(false, await getRemiliaAuthStatus(), "UNKNOWN");
+  if (!isExtensionPageSender(sender)) {
+    return {
+      ok: false,
+      authStateVersion: REMILIA_AUTH_STATE_VERSION,
+      error: "UNKNOWN",
+    };
+  }
   const currentStatus = await getRemiliaAuthStatus();
   if (message.type === "remilia-auth:status") return response(true, currentStatus);
   if (currentStatus.phase === "unsupported") return response(false, currentStatus, "UNSUPPORTED");
@@ -105,7 +111,10 @@ function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
   try {
     const expected = new URL(chrome.runtime.getURL(""));
     const actual = new URL(source);
-    return actual.origin === expected.origin;
+    return actual.protocol === expected.protocol
+      && actual.host === expected.host
+      && !actual.username
+      && !actual.password;
   } catch {
     return false;
   }
