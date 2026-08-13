@@ -1,4 +1,11 @@
 import type { MilxdyContextualPostActionContext, MilxdyRouteChange } from "../../../../../sdk/types/index";
+import {
+  layoutTweetPngPlainText,
+  limitTweetPngTextLayout,
+  tweetPngTextFont,
+  type RichInlineRunStyle,
+  type TweetPngTextLine,
+} from "./text-layout";
 
 const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
@@ -298,6 +305,11 @@ const TWEET_PNG_QUOTE_LINE_HEIGHT = 38;
 const TWEET_PNG_WRAP_SAFETY_PX = 16;
 const TWEET_PNG_MAX_ASPECT_RATIO = 2.25;
 const TWEET_PNG_CASHTAG_HEIGHT = 570;
+const TWEET_PNG_PLAIN_TEXT_STYLE: RichInlineRunStyle = {
+  fontWeight: 400,
+  fontStyle: "normal",
+  strikethrough: false,
+};
 
 function extractTweetPngData(tweet: HTMLElement, statusUrl: string | null): TweetPngData {
   const settings = visualTheme;
@@ -564,17 +576,27 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   );
   const mediaRegions: TweetPngMediaRegion[] = [];
 
-  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const textLines = wrapCanvasText(
+  const bodyFont = tweetPngTextFont(TWEET_PNG_FONT_FALLBACK, TWEET_PNG_BODY_FONT_SIZE, TWEET_PNG_PLAIN_TEXT_STYLE);
+  const textLayout = layoutTweetPngPlainText(
     context,
     data.text || data.date || data.handle,
-    bodyWidth,
-    Math.ceil(maxHeight / TWEET_PNG_BODY_LINE_HEIGHT),
+    {
+      fontFamily: TWEET_PNG_FONT_FALLBACK,
+      fontSize: TWEET_PNG_BODY_FONT_SIZE,
+      maxWidth: bodyWidth,
+      maxLines: Math.ceil(maxHeight / TWEET_PNG_BODY_LINE_HEIGHT),
+      safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+    },
   );
-  context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const quoteTextLines = data.quote?.text
-    ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT))
-    : [];
+  const quoteTextLayout = data.quote?.text
+    ? layoutTweetPngPlainText(context, data.quote.text, {
+        fontFamily: TWEET_PNG_FONT_FALLBACK,
+        fontSize: TWEET_PNG_QUOTE_FONT_SIZE,
+        maxWidth: bodyWidth - 48,
+        maxLines: Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT),
+        safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+      })
+    : { lines: [], truncated: false, safeWidth: Math.max(1, bodyWidth - 48 - TWEET_PNG_WRAP_SAFETY_PX) };
   const mediaImages = await Promise.all(data.images.map(loadTweetPngMedia));
   const linkCard = data.linkCard ? await loadTweetPngLinkCard(data.linkCard) : null;
   const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadTweetPngMedia)) : [];
@@ -585,8 +607,8 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   const linkCardHeight = linkCard ? (linkCard.image?.image ? 420 : 120) : 0;
   const cashtagHeight = cashtag?.chart ? TWEET_PNG_CASHTAG_HEIGHT : 0;
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
-  const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
-  const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLines.length, quoteMediaHeight) : 0;
+  const textHeight = textLayout.lines.length * TWEET_PNG_BODY_LINE_HEIGHT;
+  const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLayout.lines.length, quoteMediaHeight) : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
     86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0)
@@ -632,7 +654,6 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   drawTweetPngHeaderStats(context, data.stats, assets, bodyX, padding + 34, bodyWidth);
 
   context.fillStyle = visualTheme.tweetPngFontColor;
-  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
   const maxContentY = data.date ? footerY - footerHeight : height - padding;
@@ -641,9 +662,14 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
     + (linkCardHeight ? linkCardHeight + 28 : 0)
     + (quoteHeight ? quoteHeight + 22 : 0);
   const textAreaBottom = maxContentY - reservedAfterText;
-  const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT);
-  for (const line of drawableTextLines) {
-    context.fillText(line, bodyX, y);
+  const drawableTextLayout = limitTweetPngTextLayout(
+    context,
+    textLayout,
+    tweetPngVisibleLineCount(y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT),
+    { font: bodyFont, style: TWEET_PNG_PLAIN_TEXT_STYLE },
+  );
+  for (const line of drawableTextLayout.lines) {
+    drawTweetPngTextLine(context, line, bodyX, y);
     y += TWEET_PNG_BODY_LINE_HEIGHT;
   }
 
@@ -681,7 +707,7 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
     y = drawTweetPngQuote(context, {
       quote: data.quote,
       images: quoteImages,
-      textLines: quoteTextLines,
+      textLines: quoteTextLayout.lines,
       x: bodyX,
       y,
       width: bodyWidth,
@@ -782,112 +808,6 @@ async function waitForTweetPngFonts(): Promise<void> {
   ]);
 }
 
-function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
-  const safeWidth = Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX);
-  const paragraphs = text.replace(/\r\n?/g, "\n").split("\n");
-  const lines: string[] = [];
-  let truncated = false;
-
-  for (const paragraph of paragraphs) {
-    if (lines.length >= maxLines) {
-      truncated = true;
-      break;
-    }
-    const words = paragraph.replace(/[^\S\n]+/g, " ").trim().split(" ").filter(Boolean);
-    if (!words.length) {
-      lines.push("");
-      continue;
-    }
-
-    let line = "";
-    for (const word of words) {
-      if (lines.length >= maxLines) {
-        truncated = true;
-        break;
-      }
-      const next = line ? `${line} ${word}` : word;
-      if (canvasTextWidth(context, next) <= safeWidth) {
-        line = next;
-        continue;
-      }
-      if (line) {
-        lines.push(line);
-        line = "";
-      }
-      if (lines.length >= maxLines) {
-        truncated = true;
-        break;
-      }
-      if (canvasTextWidth(context, word) <= safeWidth) {
-        line = word;
-        continue;
-      }
-      const segments = splitCanvasTextByWidth(context, word, safeWidth);
-      for (const segment of segments) {
-        if (lines.length >= maxLines) {
-          truncated = true;
-          break;
-        }
-        lines.push(segment);
-      }
-    }
-    if (line && lines.length < maxLines) lines.push(line);
-  }
-
-  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  if (truncated && lines.length) {
-    lines[lines.length - 1] = ellipsizeCanvasText(context, lines[lines.length - 1], safeWidth);
-  }
-  return lines.length ? lines : [""];
-}
-
-function splitCanvasTextByWidth(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const segment of canvasTextSegments(text)) {
-    const next = line + segment;
-    if (!line || canvasTextWidth(context, next) <= maxWidth) {
-      line = next;
-      continue;
-    }
-    lines.push(line);
-    line = segment;
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function ellipsizeCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  const ellipsis = "...";
-  const segments = canvasTextSegments(text.trim());
-  while (segments.length > 0 && canvasTextWidth(context, `${segments.join("")}${ellipsis}`) > maxWidth) {
-    segments.pop();
-  }
-  return `${segments.join("").trim()}${ellipsis}`;
-}
-
-function canvasTextWidth(context: CanvasRenderingContext2D, text: string): number {
-  const metrics = context.measureText(text);
-  const bounds = Math.abs(metrics.actualBoundingBoxLeft || 0) + Math.abs(metrics.actualBoundingBoxRight || 0);
-  return Math.max(metrics.width, bounds);
-}
-
-function visibleCanvasTextLines(
-  context: CanvasRenderingContext2D,
-  lines: readonly string[],
-  maxWidth: number,
-  startY: number,
-  maxY: number,
-  lineHeight: number,
-): string[] {
-  const availableLines = tweetPngVisibleLineCount(startY, maxY, lineHeight);
-  if (lines.length <= availableLines) return [...lines];
-  if (availableLines <= 0) return [];
-  const visible = lines.slice(0, availableLines);
-  visible[visible.length - 1] = ellipsizeCanvasText(context, visible[visible.length - 1], Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX));
-  return visible;
-}
-
 export function tweetPngVisibleLineCount(startY: number, maxY: number, lineHeight: number): number {
   if (maxY < startY || lineHeight <= 0) return 0;
   return Math.floor((maxY - startY) / lineHeight) + 1;
@@ -954,21 +874,12 @@ function drawTweetPngCashtag(
   context.fillText(cashtag.currentPrice, x + padding + 68, y + height - 20);
 }
 
-function canvasTextSegments(text: string): string[] {
-  const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl
-    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-    : null;
-  return segmenter
-    ? Array.from(segmenter.segment(text), (part) => part.segment)
-    : Array.from(text);
-}
-
 function drawTweetPngQuote(
   context: CanvasRenderingContext2D,
   options: {
     quote: TweetPngQuoteData;
     images: LoadedTweetPngMedia[];
-    textLines: string[];
+    textLines: TweetPngTextLine[];
     x: number;
     y: number;
     width: number;
@@ -1007,10 +918,19 @@ function drawTweetPngQuote(
 
   y += 38;
   context.fillStyle = quoteTextColor;
-  context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
-  for (const line of options.textLines) {
-    if (y + lineHeight > options.y + cardHeight - padding) break;
-    context.fillText(line, options.x + padding, y);
+  const quoteFont = tweetPngTextFont(TWEET_PNG_FONT_FALLBACK, TWEET_PNG_QUOTE_FONT_SIZE, TWEET_PNG_PLAIN_TEXT_STYLE);
+  const quoteLayout = limitTweetPngTextLayout(
+    context,
+    {
+      lines: options.textLines,
+      truncated: false,
+      safeWidth: Math.max(1, options.width - padding * 2 - TWEET_PNG_WRAP_SAFETY_PX),
+    },
+    Math.max(0, Math.floor((options.y + cardHeight - padding - y) / lineHeight)),
+    { font: quoteFont, style: TWEET_PNG_PLAIN_TEXT_STYLE },
+  );
+  for (const line of quoteLayout.lines) {
+    drawTweetPngTextLine(context, line, options.x + padding, y);
     y += lineHeight;
   }
 
@@ -1085,15 +1005,34 @@ function drawTweetPngLinkCard(
   }
   let textY = y + imageHeight + 34;
   context.fillStyle = visualTheme.tweetPngFontColor;
-  context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
-  for (const line of wrapCanvasText(context, card.title, width - 48, 2)) {
-    context.fillText(line, x + 24, textY);
+  const cardTitleLayout = layoutTweetPngPlainText(context, card.title, {
+    fontFamily: TWEET_PNG_FONT_FALLBACK,
+    fontSize: 24,
+    maxWidth: width - 48,
+    maxLines: 2,
+    safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+    baseStyle: { fontWeight: 700 },
+  });
+  for (const line of cardTitleLayout.lines) {
+    drawTweetPngTextLine(context, line, x + 24, textY);
     textY += 30;
   }
   if (card.source && textY <= y + height - 12) {
     context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
     context.font = `20px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(card.source, x + 24, Math.min(y + height - 22, textY + 4));
+  }
+}
+
+function drawTweetPngTextLine(
+  context: CanvasRenderingContext2D,
+  line: TweetPngTextLine,
+  x: number,
+  baselineY: number,
+): void {
+  for (const fragment of line.fragments) {
+    context.font = fragment.font;
+    context.fillText(fragment.text, x + fragment.x, baselineY);
   }
 }
 

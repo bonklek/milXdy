@@ -2,7 +2,7 @@
   "manifestVersion": 1,
   "id": "tweetPng",
   "name": "Share Kit",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Reviews and exports local PNGs from declared X post share actions.",
   "packageKind": "feature",
   "sdk": {
@@ -246,9 +246,10 @@
   "review": {
     "status": "reviewed",
     "reviewedBy": "milxdy-first-party-share-kit",
-    "reviewedAt": "2026-07-30",
+    "reviewedAt": "2026-08-13",
     "notes": [
-      "First-party replacement preserving the stable tweetPng package and setting IDs."
+      "First-party replacement preserving the stable tweetPng package and setting IDs.",
+      "Bundles exact-pinned @chenglou/pretext 0.0.8 under MIT for local Unicode-aware Canvas text layout."
     ]
   }
 }

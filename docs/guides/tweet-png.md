@@ -31,6 +31,10 @@ Use the settings-wheel button in the preview header to change:
 
 Visible external links can render as themed link cards, and quoted-post context
 remains part of the preview rather than being flattened into the main post.
+Post text, quoted-post text, and link-card titles use the exact-pinned Pretext
+0.0.8 layout adapter for Unicode-aware local Canvas line breaking. This improves
+CJK punctuation, Thai/Khmer and other no-space scripts, emoji/grapheme clusters,
+and mixed bidirectional text without sending content to a layout service.
 
 Changes update the preview and save as defaults. The watermark setting is preserved with visual/profile packs. Existing date, RemiStats, border, palette, and tall-image settings remain available in Apps & Features and remain part of visual/profile packs.
 

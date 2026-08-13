@@ -93,6 +93,7 @@
     "package:release": "node scripts/release/package-release.mjs"
   },
   "dependencies": {
+    "@chenglou/pretext": "0.0.8",
     "@tesseract.js-data/eng": "^1.0.0",
     "@unimusic/chromaprint": "^0.1.4",
     "jsqr": "^1.4.0",

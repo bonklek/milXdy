@@ -26,6 +26,18 @@ Open milestone issues and work deferred from 0.2.4 remain candidates only.
 Historical commits, archives, and QA evidence are not accepted into 0.2.5
 without an explicit scope decision and deliberate integration.
 
+## Share Kit Unicode layout candidate
+
+- Post, quoted-post, and link-card title wrapping uses exact-pinned Pretext
+  0.0.8 after the existing font wait, with the same named TwitterChirp fallback
+  stack used for final Canvas drawing.
+- International fixtures cover CJK punctuation, Thai/Khmer no-space text,
+  Arabic and mixed bidirectional text, combining marks, emoji/ZWJ sequences,
+  hard breaks, repeated whitespace, and long URLs/hashtags/handles.
+- The adapter remains local-only and user-invoked, preserves layout caps and
+  ellipsis contracts, and exposes positioned formatted fragments for #222
+  without including that issue's editor/state/accessibility slice.
+
 ## Known limitations
 
 - milXdy remains an unpacked GitHub beta.

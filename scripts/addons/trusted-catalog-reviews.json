@@ -10,10 +10,10 @@
     },
     {
       "id": "tweetPng",
-      "version": "0.2.4",
-      "packageSha256": "ce59d98c76589cd8f5830829440a5e2adb2bda515429f4452aa4bb5b5f005ba5",
+      "version": "0.2.5",
+      "packageSha256": "bc9a45a7b1659e17c75e69f323a1619b1d6c24dbadea72c093f65e3831f62ee1",
       "reviewedBy": "milxdy-first-party-share-kit",
-      "reviewedAt": "2026-08-06"
+      "reviewedAt": "2026-08-13"
     }
   ]
 }

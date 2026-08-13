@@ -6,6 +6,7 @@ components themselves and are not replaced by milXdy's VPL.
 
 | Component | Version | Use in distributed builds | License |
 | --- | --- | --- | --- |
+| `@chenglou/pretext` | 0.0.8 | Unicode-aware multiline Canvas layout in the user-invoked Share Kit package | MIT (`third_party/licenses/pretext-MIT.txt`) |
 | `qrcode` | 1.5.4 | QR-code generation | MIT (`third_party/licenses/qrcode-MIT.txt`) |
 | `dijkstrajs` | 1.0.3 | QR-code generation dependency | MIT (`third_party/licenses/dijkstrajs-MIT.txt`) |
 | `jsqr` | 1.4.0 | QR-code recognition | Apache-2.0 (`third_party/licenses/Apache-2.0.txt`) |
