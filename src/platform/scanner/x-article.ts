@@ -36,7 +36,10 @@ export function extractXArticleTextContainers(article: HTMLElement): HTMLElement
 
   const richText = article.querySelector<HTMLElement>(X_ARTICLE_RICH_TEXT);
   const editor = richText?.querySelector<HTMLElement>(X_ARTICLE_EDITOR) || null;
-  const blockHost = (editor?.firstElementChild as HTMLElement | null) || editor;
+  // Chromium currently wraps the readable blocks in the editor test id. Keep
+  // the rich-text view as a conservative fallback for Firefox or an X rollout
+  // that omits that wrapper while retaining the stable read-view contract.
+  const blockHost = (editor?.firstElementChild as HTMLElement | null) || editor || richText;
   if (!blockHost) return containers;
 
   for (const block of Array.from(blockHost.children)) {

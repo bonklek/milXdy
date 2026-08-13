@@ -76,6 +76,47 @@ describe("X Article readable DOM contract", () => {
     expect(isXArticleSurface(article as unknown as HTMLElement, "/reader_name/article/123456")).toBe(true);
     expect(isXArticleSurface(article as unknown as HTMLElement, "/home")).toBe(false);
   });
+
+  it("falls back to direct rich-text blocks when the editor wrapper is absent", () => {
+    const title = fixture("h1", "Fallback article title", "twitter-article-title");
+    const heading = fixture("h2", "Fallback heading");
+    const paragraph = fixture("p", "Fallback paragraph with an inline link.");
+    const list = fixture("ul", "First item\nSecond item");
+    const caption = fixture("figcaption", "Fallback image caption.");
+    const mediaSection = fixture("section", "Fallback image caption. Share", undefined, [
+      caption,
+      fixture("button", "Share"),
+    ]);
+    const embedText = fixture("div", "Fallback embedded post body.", "tweetText");
+    const embedSection = fixture("section", "Fallback embedded post body. Reply Repost Like", undefined, [
+      embedText,
+      fixture("button", "Reply Repost Like"),
+    ]);
+    const chromeSection = fixture("section", "Recommendations Follow Subscribe", undefined, [
+      fixture("button", "Follow"),
+    ]);
+    const richText = fixture("div", "", "twitterArticleRichTextView", [
+      heading,
+      paragraph,
+      list,
+      mediaSection,
+      embedSection,
+      chromeSection,
+    ]);
+    const article = fixture("div", "", "twitterArticleReadView", [title, richText]);
+
+    const containers = extractXArticleTextContainers(article as unknown as HTMLElement);
+
+    expect(containers).toEqual([title, heading, paragraph, list, caption, embedText]);
+    expect(containers.map((element) => element.innerText)).toEqual([
+      "Fallback article title",
+      "Fallback heading",
+      "Fallback paragraph with an inline link.",
+      "First item\nSecond item",
+      "Fallback image caption.",
+      "Fallback embedded post body.",
+    ]);
+  });
 });
 
 class FixtureElement {
