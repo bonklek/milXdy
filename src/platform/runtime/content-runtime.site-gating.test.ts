@@ -2,6 +2,17 @@ import { readFile } from "node:fs/promises";
 import { describe, expect, it } from "vitest";
 
 describe("site-aware content bootstrap", () => {
+  it("keeps the shared rail runtime off exact RemiliaNET while retaining bridge-only cleanup", async () => {
+    const source = await readFile(new URL("../../extension/content/index.ts", import.meta.url), "utf8");
+    expect(source).toContain("startsMilxdyUiRuntime(runtimeSite)");
+    expect(source).toContain('runtimeSite?.mode === "bridgeOnly"');
+    expect(source).toContain('dataset.milxdyRuntimeState = "bridge-only"');
+    expect(source).toContain('"milxdy-overlay-dock-root"');
+    expect(source).toContain('"milxdy-reminet-chat-root"');
+    expect(source).toContain('"beetol-hunter-root"');
+    expect(source.indexOf('runtimeSite?.mode === "bridgeOnly"')).toBeLessThan(source.indexOf("bootFeaturesWithRecovery()"));
+  });
+
   it("keeps X-only page services behind the X runtime boundary", async () => {
     const source = await readFile(new URL("./content-runtime.ts", import.meta.url), "utf8");
     for (const service of [

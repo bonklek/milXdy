@@ -2909,28 +2909,6 @@
         "notes": [
           "Uses the browser RemiliaNET session through routed background services after user interaction."
         ]
-      },
-      {
-        "site": "remiliaNet",
-        "hosts": [
-          "https://www.remilia.net/*"
-        ],
-        "integration": "contentScript",
-        "surfaces": [
-          "overlayApp"
-        ],
-        "loadTriggers": [
-          "dockOpen"
-        ],
-        "presentation": "sideRailOverlay",
-        "fallback": {
-          "mode": "nativeSite",
-          "url": "https://www.remilia.net/",
-          "note": "The RemiliaNET site remains the native game and session surface when the overlay is unavailable."
-        },
-        "notes": [
-          "Appears in the scoped RemiliaNET app launcher and loads only after the user opens it."
-        ]
       }
     ],
     "cost": {
@@ -3218,28 +3196,6 @@
         "presentation": "sideRailOverlay",
         "notes": [
           "Uses the official Remilia API for authoritative chat REST behavior. A same-extension RemiliaNET top-frame bridge retains the undocumented WebSocket only as optional acceleration, and explicit media sends retain isolated legacy upload/confirm behavior until official equivalents exist."
-        ]
-      },
-      {
-        "site": "remiliaNet",
-        "hosts": [
-          "https://www.remilia.net/*"
-        ],
-        "integration": "contentScript",
-        "surfaces": [
-          "overlayApp"
-        ],
-        "loadTriggers": [
-          "dockOpen"
-        ],
-        "presentation": "sideRailOverlay",
-        "fallback": {
-          "mode": "nativeSite",
-          "url": "https://www.remilia.net/",
-          "note": "The native RemiliaNET chat/session surface remains available if the milXdy overlay cannot connect."
-        },
-        "notes": [
-          "Appears in the scoped RemiliaNET app launcher and reuses official REST, the validated site bridge, and isolated legacy media/reaction adapters through the background router."
         ]
       }
     ],

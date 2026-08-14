@@ -29,6 +29,13 @@ function contentApps(registry: RegistryApp[], site: string): string[] {
     .sort();
 }
 
+function backgroundApps(registry: RegistryApp[], site: string): string[] {
+  return registry
+    .filter((app) => app.siteScopes?.some((scope) => scope.site === site && scope.integration === "backgroundService"))
+    .map((app) => app.id)
+    .sort();
+}
+
 describe("multi-site manifest contract", () => {
   it("omits ambient browser-session and broad tab metadata permissions", async () => {
     const { manifest } = await fixtures();
@@ -45,6 +52,14 @@ describe("multi-site manifest contract", () => {
     for (const block of manifest.web_accessible_resources || []) {
       expect(block.matches).toEqual(APPROVED_RUNTIME_MATCHES);
     }
+  });
+
+  it("keeps RemiliaNET helpers separate from the shared UI content entry", async () => {
+    const { manifest } = await fixtures();
+    const bridge = manifest.content_scripts?.find((entry) => entry.js?.includes("reminetChatBridge.js"));
+    const fastPath = manifest.content_scripts?.find((entry) => entry.js?.includes("reminetCraftFastPath.js"));
+    expect(bridge?.matches).toEqual(["https://www.remilia.net/*"]);
+    expect(fastPath?.matches).toEqual(["https://www.remilia.net/*"]);
   });
 
   it("keeps each non-X runtime limited to the accepted app set", async () => {
@@ -64,7 +79,8 @@ describe("multi-site manifest contract", () => {
       "wiki",
       "wikiSidebar",
     ]);
-    expect(contentApps(registry, "remiliaNet")).toEqual(["beetol", "reminetChat"]);
+    expect(contentApps(registry, "remiliaNet")).toEqual([]);
+    expect(backgroundApps(registry, "remiliaNet")).toEqual(["beetol", "reminetChat", "remistats"]);
     expect(contentApps(registry, "remiliaWiki")).toEqual(["post-reading"]);
     expect(contentApps(registry, "miladychan")).toEqual(["miladychanSpotlight"]);
   });

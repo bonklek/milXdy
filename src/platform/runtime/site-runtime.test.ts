@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import type { MilxdyAppManifest } from "../app-sdk/app-platform";
 import {
   APPROVED_RUNTIME_MATCHES,
+  APPROVED_RUNTIME_SITES,
   appsForRuntimeSite,
   loadTriggersForApp,
   resolveRuntimeSite,
   routeScopeMatches,
+  startsMilxdyUiRuntime,
   surfacesForApp,
 } from "./site-runtime";
 
@@ -44,12 +46,19 @@ function app(overrides: Partial<MilxdyAppManifest> = {}): MilxdyAppManifest {
 describe("site runtime policy", () => {
   it("recognizes only the reviewed HTTPS origins", () => {
     expect(resolveRuntimeSite(location("https://x.com/home"))).toMatchObject({ id: "x", mode: "fullRail" });
-    expect(resolveRuntimeSite(location("https://www.remilia.net/chat"))).toMatchObject({ id: "remiliaNet", mode: "appLauncher" });
+    expect(resolveRuntimeSite(location("https://www.remilia.net/chat"))).toMatchObject({ id: "remiliaNet", mode: "bridgeOnly" });
     expect(resolveRuntimeSite(location("https://remilia.wiki/Test"))).toMatchObject({ id: "remiliaWiki", mode: "featureOnly" });
     expect(resolveRuntimeSite(location("https://boards.miladychan.org/milady/1"))).toMatchObject({ id: "miladychan", mode: "appLauncher" });
     expect(resolveRuntimeSite(location("https://remilia.net/"))).toBeNull();
     expect(resolveRuntimeSite(location("http://www.remilia.net/"))).toBeNull();
     expect(resolveRuntimeSite(location("https://related.remilia.net/"))).toBeNull();
+  });
+
+  it("starts shared UI only for reviewed UI runtime roles", () => {
+    expect(startsMilxdyUiRuntime(resolveRuntimeSite(location("https://x.com/home"))!)).toBe(true);
+    expect(startsMilxdyUiRuntime(resolveRuntimeSite(location("https://www.remilia.net/global-chat"))!)).toBe(false);
+    expect(startsMilxdyUiRuntime(resolveRuntimeSite(location("https://remilia.wiki/Test"))!)).toBe(true);
+    expect(startsMilxdyUiRuntime(resolveRuntimeSite(location("https://boards.miladychan.org/milady/1"))!)).toBe(true);
   });
 
   it("keeps the manifest match list exact and least privilege", () => {
@@ -61,6 +70,13 @@ describe("site runtime policy", () => {
       "https://wiki.remilia.org/*",
       "https://boards.miladychan.org/*",
     ]);
+  });
+
+  it("assigns the full rail role only to X and Twitter", () => {
+    expect(APPROVED_RUNTIME_SITES
+      .filter((site) => site.mode === "fullRail")
+      .flatMap((site) => site.origins))
+      .toEqual(["https://x.com", "https://twitter.com"]);
   });
 
   it("selects only explicit content-script scopes for the current site", () => {

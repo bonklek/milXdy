@@ -18,7 +18,7 @@ type SiteDefinition = {
 
 export const APPROVED_RUNTIME_SITES: readonly SiteDefinition[] = [
   { id: "x", mode: "fullRail", origins: ["https://x.com", "https://twitter.com"] },
-  { id: "remiliaNet", mode: "appLauncher", origins: ["https://www.remilia.net"] },
+  { id: "remiliaNet", mode: "bridgeOnly", origins: ["https://www.remilia.net"] },
   { id: "remiliaWiki", mode: "featureOnly", origins: ["https://remilia.wiki", "https://wiki.remilia.org"] },
   { id: "miladychan", mode: "appLauncher", origins: ["https://boards.miladychan.org"] },
 ] as const;
@@ -26,6 +26,10 @@ export const APPROVED_RUNTIME_SITES: readonly SiteDefinition[] = [
 export const APPROVED_RUNTIME_MATCHES = APPROVED_RUNTIME_SITES.flatMap((site) => (
   site.origins.map((origin) => `${origin}/*`)
 ));
+
+export function startsMilxdyUiRuntime(site: MilxdyRuntimeSite): boolean {
+  return site.mode !== "bridgeOnly";
+}
 
 export function resolveRuntimeSite(location: LocationLike): MilxdyRuntimeSite | null {
   if (location.protocol !== "https:") return null;
