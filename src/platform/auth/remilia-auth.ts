@@ -1,7 +1,16 @@
 const BASE_URL = "https://www.remilia.net";
 const OIDC_ISSUER = `${BASE_URL}/oidc/realms/remilia`;
 const OIDC_DISCOVERY_URL = `${OIDC_ISSUER}/.well-known/openid-configuration`;
-const OIDC_SCOPE = "openid";
+export const REMILIA_REQUIRED_SCOPES = [
+  "remilia:stats.read",
+  "remilia:notifications.read",
+  "remilia:pokes.write",
+  "remilia:beetle.read",
+  "remilia:chat.read",
+  "remilia:chat.write",
+  "remilia:directory.read",
+] as const;
+const OIDC_SCOPE = ["openid", ...REMILIA_REQUIRED_SCOPES].join(" ");
 const OIDC_PROTOCOL_BASE = `${OIDC_ISSUER}/protocol/openid-connect`;
 const OIDC_ENDPOINTS = {
   authorization_endpoint: `${OIDC_PROTOCOL_BASE}/auth`,
@@ -41,15 +50,6 @@ const LEGACY_REFRESH_TOKEN_KEY = `${LEGACY_PREFIX}.refreshToken`;
 export const REMILIA_BASE_URL = BASE_URL;
 export const REMILIA_AUTH_STATE_VERSION = 1;
 export const REMILIA_AUTH_MIGRATION_VERSION = 1;
-export const REMILIA_REQUIRED_SCOPES = [
-  "remilia:stats.read",
-  "remilia:notifications.read",
-  "remilia:pokes.write",
-  "remilia:beetle.read",
-  "remilia:chat.read",
-  "remilia:chat.write",
-  "remilia:directory.read",
-] as const;
 export const REMILIA_LEGACY_TOKEN_KEYS = [
   ACCESS_TOKEN_KEY,
   REFRESH_TOKEN_KEY,
@@ -705,7 +705,10 @@ function validateIdTokenClaims(idToken: string, issuer: string, expectedNonce?: 
   const claims = decodeJwtPayload(idToken);
   if (!claims || claims.iss !== issuer) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   const audience = Array.isArray(claims.aud) ? claims.aud.map(String) : [String(claims.aud || "")];
-  if (audience.length !== 1 || audience[0] !== authClientId) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (!audience.includes(authClientId)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (audience.length > 1 && claims.azp !== authClientId) {
+    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  }
   if (claims.azp !== undefined && claims.azp !== authClientId) {
     throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
   }

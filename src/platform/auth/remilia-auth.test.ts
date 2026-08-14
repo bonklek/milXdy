@@ -9,6 +9,15 @@ const AUTHORIZATION_ENDPOINT = `${ISSUER}/protocol/openid-connect/auth`;
 const TOKEN_ENDPOINT = `${ISSUER}/protocol/openid-connect/token`;
 const REVOCATION_ENDPOINT = `${ISSUER}/protocol/openid-connect/revoke`;
 const JWKS_ENDPOINT = `${ISSUER}/protocol/openid-connect/certs`;
+const REQUIRED_SCOPES = [
+  "remilia:stats.read",
+  "remilia:notifications.read",
+  "remilia:pokes.write",
+  "remilia:beetle.read",
+  "remilia:chat.read",
+  "remilia:chat.write",
+  "remilia:directory.read",
+] as const;
 const SIGNING_KEY_ID = "milxdy-test-key";
 const TEST_KEYS = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const TEST_PUBLIC_JWK = TEST_KEYS.publicKey.export({ format: "jwk" });
@@ -52,7 +61,7 @@ describe("Remilia OIDC PKCE", () => {
     expect(authorization.origin + authorization.pathname).toBe(AUTHORIZATION_ENDPOINT);
     expect(authorization.searchParams.get("client_id")).toBe(CLIENT_ID);
     expect(authorization.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
-    expect(authorization.searchParams.get("scope")).toBe("openid");
+    expect(authorization.searchParams.get("scope")?.split(" ")).toEqual(["openid", ...REQUIRED_SCOPES]);
     expect(authorization.searchParams.get("code_challenge_method")).toBe("S256");
     expect(authorization.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
     expect(authorization.searchParams.get("nonce")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
@@ -160,7 +169,7 @@ describe("Remilia OIDC PKCE", () => {
     expect(fixture.session.size).toBe(0);
   });
 
-  it("fails closed when the ID token contains an additional untrusted audience", async () => {
+  it("accepts a multi-audience ID token only when this client is the authorized party", async () => {
     const fixture = installChrome();
     let authorizationUrl = "";
     vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
@@ -170,6 +179,24 @@ describe("Remilia OIDC PKCE", () => {
     });
     installSuccessfulFetch(() => authorizationUrl, {
       claims: { aud: [CLIENT_ID, "other-client"], azp: CLIENT_ID },
+    });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: true, accessToken: "access-one" });
+    expect(fixture.session.size).toBe(1);
+  });
+
+  it("fails closed when a multi-audience ID token omits the authorized party", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, {
+      claims: { aud: [CLIENT_ID, "other-client"], azp: undefined },
     });
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
