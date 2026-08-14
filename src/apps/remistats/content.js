@@ -440,6 +440,37 @@ function transformSharedIdentityProfile(profile, fallbackHandle = '') {
   };
 }
 
+async function fetchOfficialSelfProfileScore(xHandle) {
+  const exactXHandle = cleanExactXHandle(xHandle);
+  if (!exactXHandle) return null;
+  try {
+    const response = await runtimeSendMessage({
+      type: 'remistats:getMyStatsForXProfile',
+      xHandle: exactXHandle,
+    }, 'remistats:getMyStatsForXProfile');
+    if (!response?.ok || response.matched !== true || !response.data) return null;
+    const remiliaUsername = cleanUsername(response.data.remiliaUsername);
+    if (!remiliaUsername) return null;
+    confirmPokeIdentity(remiliaUsername);
+    return {
+      username: remiliaUsername,
+      remiliaUsername,
+      twitterHandle: exactXHandle,
+      displayName: response.data.displayName,
+      score: response.data.score,
+      beetleCount: response.data.beetleCount,
+      followers: response.data.followers,
+      pfpProject: null,
+      pfpId: null,
+    };
+  } catch (error) {
+    if (!/extension context/i.test(String(error?.message || error))) {
+      console.debug('Official self-profile stats skipped:', error.message);
+    }
+    return null;
+  }
+}
+
 // Transform API response to extension format
 function transformApiResponse(apiUser, fallbackHandle = '', allowLegacyIdentityFields = false) {
   const explicitRemiliaUsername = cleanUsername(
@@ -470,6 +501,12 @@ function cleanUsername(value) {
   if (typeof value !== 'string') return '';
   const match = value.replace(/^@/, '').trim().match(/[A-Za-z0-9_]{1,32}/);
   return match ? match[0] : '';
+}
+
+function cleanExactXHandle(value) {
+  if (typeof value !== 'string') return '';
+  const candidate = value.trim().replace(/^@/, '');
+  return /^[A-Za-z0-9_]{1,15}$/.test(candidate) ? candidate : '';
 }
 
 // Fetch user score with batching
@@ -2386,10 +2423,12 @@ async function insertProfileBadge() {
   // deciding whether an existing badge is still valid. X reuses header DOM
   // during SPA navigation, so stale profile badges can remain attached.
   let username = null;
+  let exactProfileXHandle = '';
 
   const urlMatch = window.location.pathname.match(/^\/([^\/\?]+)/);
   if (urlMatch && urlMatch[1] && !ROUTE_BLOCKLIST.has(urlMatch[1])) {
-    username = cleanUsername(urlMatch[1]);
+    exactProfileXHandle = cleanExactXHandle(urlMatch[1]);
+    username = exactProfileXHandle;
   }
 
   if (!username) {
@@ -2460,7 +2499,11 @@ async function insertProfileBadge() {
   
   // Create a unique key for this profile + location
   if (processedProfiles.has(profileKey)) {
-    const cached = cachedScoreData(username);
+    const cachedPublicScore = cachedScoreData(username);
+    const officialSelfScore = exactProfileXHandle
+      ? await fetchOfficialSelfProfileScore(exactProfileXHandle)
+      : null;
+    const cached = officialSelfScore || cachedPublicScore;
     if (cached) {
       const profileBadgeSlot = createBadgeSlot(username, { profile: true });
       const profilePokeSlot = ensureProfileActionPokeSlot(userNameSection, username);
@@ -2488,7 +2531,11 @@ async function insertProfileBadge() {
   attachProfileBadgeGroup(userNameSection, profileBadgeGroup);
 
   try {
-    const scoreData = await fetchUserScore(username);
+    const publicScoreData = await fetchUserScore(username);
+    const officialSelfScoreData = exactProfileXHandle
+      ? await fetchOfficialSelfProfileScore(exactProfileXHandle)
+      : null;
+    const scoreData = officialSelfScoreData || publicScoreData;
 
     if (scoreData === null) {
       processedProfiles.add(profileKey);

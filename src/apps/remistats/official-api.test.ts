@@ -94,6 +94,159 @@ describe("RemiStats official API service", () => {
     expect(getMyStats).toHaveBeenCalledOnce();
   });
 
+  it("returns self-profile stats only after exact auth, directory, and stats identity agreement", async () => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        results: [{
+          query: { type: "x_handle", value: "Alice_X" },
+          identity: { handle: "Alice.Remilia", display_name: "Alice", avatar_url: "https://example.invalid/a.png" },
+        }],
+      },
+    });
+    const getMyStats = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: {
+        handle: "alice.remilia",
+        display_name: "Alice",
+        stats: {
+          beetle_game: { beetles: 42, cheese: 7 },
+          twitter: { followers_count: 123 },
+        },
+        aggregate_scores: { total: 9001 },
+      },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, getMyStats } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "@Alice.Remilia" } }),
+    );
+
+    await expect(service.getMyStatsForXProfile("@Alice_X")).resolves.toEqual({
+      ok: true,
+      source: "official",
+      matched: true,
+      scope: "remilia:stats.read",
+      status: 200,
+      data: {
+        xHandle: "alice_x",
+        remiliaUsername: "alice.remilia",
+        displayName: "Alice",
+        score: 9001,
+        beetleCount: 42,
+        followers: 123,
+      },
+    });
+    expect(resolveDirectory).toHaveBeenCalledWith([{ type: "x_handle", value: "alice_x" }]);
+    expect(getMyStats).toHaveBeenCalledOnce();
+  });
+
+  it("does not resolve a profile or fetch self stats without a connected authoritative identity", async () => {
+    const resolveDirectory = vi.fn();
+    const getMyStats = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, getMyStats } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "disconnected" }),
+    );
+
+    await expect(service.getMyStatsForXProfile("alice_x")).resolves.toEqual({
+      ok: true,
+      source: "official",
+      matched: false,
+      data: null,
+    });
+    expect(resolveDirectory).not.toHaveBeenCalled();
+    expect(getMyStats).not.toHaveBeenCalled();
+  });
+
+  it("rejects partial or non-X profile handles before any identity or stats lookup", async () => {
+    const getAuthStatus = vi.fn();
+    const resolveDirectory = vi.fn();
+    const getMyStats = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, getMyStats } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      getAuthStatus,
+    );
+
+    await expect(service.getMyStatsForXProfile("alice/with-extra-path")).resolves.toMatchObject({
+      ok: true,
+      matched: false,
+      data: null,
+    });
+    expect(getAuthStatus).not.toHaveBeenCalled();
+    expect(resolveDirectory).not.toHaveBeenCalled();
+    expect(getMyStats).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "an arbitrary X profile mapped to another Remilia account",
+      directoryResults: [{
+        query: { type: "x_handle", value: "bob_x" },
+        identity: { handle: "bob.remilia", display_name: "Bob", avatar_url: "https://example.invalid/b.png" },
+      }],
+    },
+    { label: "an unresolved X profile", directoryResults: [{ query: { type: "x_handle", value: "bob_x" }, identity: null }] },
+    { label: "an ambiguous directory response", directoryResults: [] },
+  ])("does not fetch or leak self stats for $label", async ({ directoryResults }) => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: directoryResults },
+    });
+    const getMyStats = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, getMyStats } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    await expect(service.getMyStatsForXProfile("bob_x")).resolves.toMatchObject({
+      ok: true,
+      matched: false,
+      data: null,
+    });
+    expect(getMyStats).not.toHaveBeenCalled();
+  });
+
+  it("fails closed when /me/stats disagrees with the matched authenticated account", async () => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: [{
+        query: { type: "x_handle", value: "alice_x" },
+        identity: { handle: "alice.remilia", display_name: "Alice", avatar_url: "https://example.invalid/a.png" },
+      }] },
+    });
+    const getMyStats = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { handle: "mallory", display_name: "Mallory", stats: {}, aggregate_scores: { total: 999 } },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, getMyStats } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    const result = await service.getMyStatsForXProfile("alice_x");
+    expect(result).toMatchObject({
+      ok: true,
+      matched: false,
+      data: null,
+    });
+    expect(JSON.stringify(result)).not.toContain("999");
+  });
+
   it("pages notifications, deduplicates deterministically, and persists only opaque local read keys", async () => {
     const duplicate = notification("alice", 1_754_870_400);
     const older = notification("bob", 1_754_870_300);

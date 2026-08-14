@@ -8,6 +8,7 @@ import {
   type RemiliaApiPoke,
   type RemiliaApiStats,
 } from "../../platform/auth/remilia-api";
+import { normalizeRemiliaUsername, normalizeXHandle } from "../../platform/auth/reminet-identity";
 
 export const REMISTATS_OFFICIAL_SCOPES = [
   REMILIA_SCOPE_STATS_READ,
@@ -56,6 +57,34 @@ export type RemiStatsStatsResult = {
   scope: typeof REMILIA_SCOPE_STATS_READ;
   status: number;
   data: RemiliaApiStats;
+} | RemiStatsOfficialFailure;
+
+export type RemiStatsAuthStatus = {
+  phase: string;
+  identity?: { username?: string };
+};
+
+export type RemiStatsSelfProfileData = {
+  xHandle: string;
+  remiliaUsername: string;
+  displayName: string;
+  score: number | null;
+  beetleCount: number | null;
+  followers: number | null;
+};
+
+export type RemiStatsSelfProfileResult = {
+  ok: true;
+  source: "official";
+  matched: true;
+  scope: typeof REMILIA_SCOPE_STATS_READ;
+  status: number;
+  data: RemiStatsSelfProfileData;
+} | {
+  ok: true;
+  source: "official";
+  matched: false;
+  data: null;
 } | RemiStatsOfficialFailure;
 
 export type RemiStatsNotificationItem = RemiliaApiNotification & {
@@ -127,6 +156,7 @@ export class RemiStatsOfficialService {
     private readonly client: RemiliaApiClient,
     private readonly storage: RemiStatsStorage,
     private readonly now: () => number = Date.now,
+    private readonly getAuthStatus: () => Promise<RemiStatsAuthStatus> = async () => ({ phase: "disconnected" }),
   ) {}
 
   async getMyStats(): Promise<RemiStatsStatsResult> {
@@ -138,6 +168,52 @@ export class RemiStatsOfficialService {
       scope: REMILIA_SCOPE_STATS_READ,
       status: result.status,
       data: result.data,
+    };
+  }
+
+  async getMyStatsForXProfile(xHandleInput: string): Promise<RemiStatsSelfProfileResult> {
+    const xHandle = normalizeExactXHandle(xHandleInput);
+    if (!xHandle) return unmatchedSelfProfile();
+
+    const authStatus = await this.getAuthStatus();
+    const authUsername = authStatus.phase === "connected"
+      ? normalizeRemiliaUsername(authStatus.identity?.username)
+      : "";
+    if (!authUsername) return unmatchedSelfProfile();
+
+    const directory = await this.client.resolveDirectory([{ type: "x_handle", value: xHandle }]);
+    if (!directory.ok) return officialFailure(directory.error);
+    if (directory.data.results.length !== 1) return unmatchedSelfProfile();
+
+    const resolved = directory.data.results[0];
+    const directoryXHandle = resolved.query.type === "x_handle"
+      ? normalizeExactXHandle(resolved.query.value)
+      : "";
+    const directoryUsername = normalizeRemiliaUsername(resolved.identity?.handle);
+    if (directoryXHandle !== xHandle || directoryUsername !== authUsername) {
+      return unmatchedSelfProfile();
+    }
+
+    const stats = await this.client.getMyStats();
+    if (!stats.ok) return officialFailure(stats.error);
+    if (normalizeRemiliaUsername(stats.data.handle) !== authUsername) {
+      return unmatchedSelfProfile();
+    }
+
+    return {
+      ok: true,
+      source: "official",
+      matched: true,
+      scope: REMILIA_SCOPE_STATS_READ,
+      status: stats.status,
+      data: {
+        xHandle,
+        remiliaUsername: authUsername,
+        displayName: stats.data.display_name,
+        score: finiteNumberOrNull(stats.data.aggregate_scores.total),
+        beetleCount: nestedFiniteNumberOrNull(stats.data.stats, "beetle_game", "beetles"),
+        followers: nestedFiniteNumberOrNull(stats.data.stats, "twitter", "followers_count"),
+      },
     };
   }
 
@@ -435,6 +511,30 @@ function invalidPaginationFailure(): RemiStatsOfficialFailure {
     message: "The Remilia API returned an invalid response.",
     status: 0,
   });
+}
+
+function unmatchedSelfProfile(): RemiStatsSelfProfileResult {
+  return { ok: true, source: "official", matched: false, data: null };
+}
+
+function normalizeExactXHandle(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const candidate = value.trim().replace(/^@/, "");
+  if (!/^[A-Za-z0-9_]{1,15}$/.test(candidate)) return "";
+  return normalizeXHandle(candidate);
+}
+
+function nestedFiniteNumberOrNull(
+  value: Record<string, unknown>,
+  group: string,
+  field: string,
+): number | null {
+  const nested = value[group];
+  return isRecord(nested) ? finiteNumberOrNull(nested[field]) : null;
+}
+
+function finiteNumberOrNull(value: unknown): number | null {
+  return isFiniteNumber(value) ? value : null;
 }
 
 function authoritativeCooldownUntil(error: RemiliaApiError, now: number): number {

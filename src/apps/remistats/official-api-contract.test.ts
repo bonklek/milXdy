@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 const remiStatsContent = readFileSync(new URL("./content.js", import.meta.url), "utf8");
+const remiStatsBackground = readFileSync(new URL("./background.ts", import.meta.url), "utf8");
 const chatContent = readFileSync(new URL("../reminet-chat/content.ts", import.meta.url), "utf8");
 const beetolBackground = readFileSync(new URL("../beetol/background.js", import.meta.url), "utf8");
 const popup = readFileSync(new URL("../../extension/popup/index.ts", import.meta.url), "utf8");
@@ -24,5 +25,12 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("code: String(response?.code || 'unknown_error')");
     expect(remiStatsContent).not.toContain("console.warn('RemiNet poke failed', { username, response })");
     expect(popup).not.toContain("Target: ${String(diagnostic.username");
+  });
+
+  it("routes official stats to the X profile UI through the background identity gate", () => {
+    expect(remiStatsContent).toContain("type: 'remistats:getMyStatsForXProfile'");
+    expect(remiStatsContent).toContain("await fetchOfficialSelfProfileScore(exactProfileXHandle)");
+    expect(remiStatsBackground).toContain("getRemiliaAuthStatus");
+    expect(remiStatsBackground).toContain("remiStatsOfficialService.getMyStatsForXProfile(message.xHandle)");
   });
 });
