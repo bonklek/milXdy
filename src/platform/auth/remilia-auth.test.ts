@@ -172,7 +172,8 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -208,7 +209,8 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -224,7 +226,8 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -356,8 +359,79 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_EXCHANGE_FAILED" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_RESPONSE_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "TOKEN_RESPONSE_INVALID" });
     expect(fixture.session.size).toBe(0);
+  });
+
+  it("reports a bounded token-request rejection without retaining the provider response", async () => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
+      if (String(input) === DISCOVERY_URL) return jsonResponse(discovery());
+      if (String(input) === TOKEN_ENDPOINT) {
+        return jsonResponse({ error: "fixture-provider-detail" }, 400);
+      }
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "TOKEN_REQUEST_REJECTED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "TOKEN_REQUEST_REJECTED" });
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain("fixture-provider-detail");
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("reports unavailable signing keys without storing the returned tokens", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    const baseFetch = successfulFetchImplementation(() => authorizationUrl);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === JWKS_ENDPOINT) return jsonResponse({}, 503);
+      return baseFetch(input, init);
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "SIGNING_KEYS_UNAVAILABLE" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "SIGNING_KEYS_UNAVAILABLE" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("refreshes signing keys once when the returned key id is not in the cached set", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    let jwksCalls = 0;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    const baseFetch = successfulFetchImplementation(() => authorizationUrl);
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === JWKS_ENDPOINT) {
+        jwksCalls += 1;
+        return jwksCalls === 1
+          ? jsonResponse({ keys: [] })
+          : jsonResponse({ keys: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }] });
+      }
+      return baseFetch(input, init);
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: true, accessToken: "access-one" });
+    expect(jwksCalls).toBe(2);
+    expect(fixture.session.size).toBe(1);
   });
 });
 

@@ -127,6 +127,8 @@ function uiError(code: RemiliaAuthErrorCode): RemiliaUiErrorCode {
     || code === "AUTH_SETUP_FAILED" || code === "AUTH_PAGE_LOAD_FAILED"
     || code === "AUTH_WINDOW_UNAVAILABLE" || code === "AUTH_WINDOW_FAILED"
     || code === "AUTH_RESPONSE_INVALID" || code === "TOKEN_EXCHANGE_FAILED"
+    || code === "TOKEN_REQUEST_REJECTED" || code === "TOKEN_RESPONSE_INVALID"
+    || code === "SIGNING_KEYS_UNAVAILABLE" || code === "ID_TOKEN_INVALID"
     || code === "AUTH_STORAGE_FAILED") return code;
   if (code === "REFRESH_REJECTED") return "TOKEN_EXPIRED";
   if (code === "DISCOVERY_FAILED" || code === "REDIRECT_MISMATCH") return "AUTH_SETUP_FAILED";

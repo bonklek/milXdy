@@ -40,6 +40,10 @@ export type RemiliaAuthErrorCode =
   | "AUTH_WINDOW_FAILED"
   | "AUTH_RESPONSE_INVALID"
   | "TOKEN_EXCHANGE_FAILED"
+  | "TOKEN_REQUEST_REJECTED"
+  | "TOKEN_RESPONSE_INVALID"
+  | "SIGNING_KEYS_UNAVAILABLE"
+  | "ID_TOKEN_INVALID"
   | "AUTH_STORAGE_FAILED"
   | "BACKGROUND_UNAVAILABLE"
   | "REVOKED"
@@ -126,6 +130,10 @@ const KNOWN_ERRORS = new Set<RemiliaAuthErrorCode>([
   "AUTH_WINDOW_FAILED",
   "AUTH_RESPONSE_INVALID",
   "TOKEN_EXCHANGE_FAILED",
+  "TOKEN_REQUEST_REJECTED",
+  "TOKEN_RESPONSE_INVALID",
+  "SIGNING_KEYS_UNAVAILABLE",
+  "ID_TOKEN_INVALID",
   "AUTH_STORAGE_FAILED",
   "BACKGROUND_UNAVAILABLE",
   "REVOKED",
@@ -264,6 +272,10 @@ export function remiliaErrorMessage(error: RemiliaAuthError | null): string {
     AUTH_WINDOW_FAILED: "Chrome could not start Remilia Login. Close any other Remilia Login window, then try again.",
     AUTH_RESPONSE_INVALID: "Remilia Login returned an invalid authorization response. Nothing was stored; try again.",
     TOKEN_EXCHANGE_FAILED: "Remilia Login finished, but the secure connection could not be completed. Nothing was stored; try again.",
+    TOKEN_REQUEST_REJECTED: "Remilia Login returned, but Remilia rejected the secure connection request. Nothing was stored; try once more. If it repeats, the Login client needs review.",
+    TOKEN_RESPONSE_INVALID: "Remilia returned an incomplete secure connection response. Nothing was stored; try again.",
+    SIGNING_KEYS_UNAVAILABLE: "milXdy could not load Remilia's identity verification keys. Nothing was stored; check your connection and try again.",
+    ID_TOKEN_INVALID: "Remilia returned identity proof that did not pass secure validation. Nothing was stored; try again.",
     AUTH_STORAGE_FAILED: "milXdy could not safely store the connection for this browser session. Nothing was connected; reload the extension and try again.",
     BACKGROUND_UNAVAILABLE: "The milXdy connection service did not respond. Reload the extension, reopen the popup, and try again.",
     REVOKED: "This authorization was revoked. Reconnect if you want to use Remilia features again.",

@@ -75,6 +75,10 @@ export type RemiliaAuthErrorCode =
   | "NONCE_MISMATCH"
   | "DISCOVERY_FAILED"
   | "TOKEN_EXCHANGE_FAILED"
+  | "TOKEN_REQUEST_REJECTED"
+  | "TOKEN_RESPONSE_INVALID"
+  | "SIGNING_KEYS_UNAVAILABLE"
+  | "ID_TOKEN_INVALID"
   | "TOKEN_EXPIRED"
   | "REFRESH_REJECTED"
   | "MISSING_SCOPE"
@@ -98,6 +102,10 @@ export type RemiliaUiErrorCode =
   | "AUTH_WINDOW_FAILED"
   | "AUTH_RESPONSE_INVALID"
   | "TOKEN_EXCHANGE_FAILED"
+  | "TOKEN_REQUEST_REJECTED"
+  | "TOKEN_RESPONSE_INVALID"
+  | "SIGNING_KEYS_UNAVAILABLE"
+  | "ID_TOKEN_INVALID"
   | "AUTH_STORAGE_FAILED"
   | "REVOKED"
   | "UNSUPPORTED"
@@ -617,13 +625,13 @@ async function exchangeToken(endpoint: string, params: Record<string, string>, s
       body: new URLSearchParams(params),
       signal,
     });
-    const data = await readBoundedOidcJson<TokenResponse>(response, OIDC_JSON_MAX_BYTES, "TOKEN_EXCHANGE_FAILED")
+    const data = await readBoundedOidcJson<TokenResponse>(response, OIDC_JSON_MAX_BYTES, "TOKEN_RESPONSE_INVALID")
       .catch(() => ({} as TokenResponse));
     if (!response.ok) {
       if (data.error === "invalid_grant" && params.grant_type === "refresh_token") {
         throw new AuthProtocolError("REFRESH_REJECTED");
       }
-      throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+      throw new AuthProtocolError("TOKEN_REQUEST_REJECTED");
     }
     return data;
   } catch (error) {
@@ -642,17 +650,17 @@ async function credentialsFromTokenResponse(
 ): Promise<StoredCredentials> {
   if (typeof data.access_token !== "string" || !data.access_token
     || (data.token_type !== undefined && String(data.token_type).toLowerCase() !== "bearer")) {
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("TOKEN_RESPONSE_INVALID");
   }
   const returnedIdToken = typeof data.id_token === "string" && data.id_token ? data.id_token : "";
   const idToken = returnedIdToken || previous?.idToken || "";
-  if (!idToken) throw new AuthProtocolError(expectedNonce ? "NONCE_MISMATCH" : "TOKEN_EXCHANGE_FAILED");
+  if (!idToken) throw new AuthProtocolError("ID_TOKEN_INVALID");
   const claims = returnedIdToken
     ? await validateIdToken(idToken, discovery, expectedNonce, signal)
     : previous ? { sub: previous.identity.id } : null;
-  if (!claims) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (!claims) throw new AuthProtocolError("ID_TOKEN_INVALID");
   const expiresIn = Number(data.expires_in);
-  if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (!Number.isFinite(expiresIn) || expiresIn <= 0) throw new AuthProtocolError("TOKEN_RESPONSE_INVALID");
   const grantedScopes = normalizeScopes(data.scope, previous?.grantedScopes);
   return {
     version: 1,
@@ -674,40 +682,58 @@ async function validateIdToken(
   signal?: AbortSignal,
 ): Promise<Record<string, unknown>> {
   const parts = idToken.split(".");
-  if (parts.length !== 3) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (parts.length !== 3) throw new AuthProtocolError("ID_TOKEN_INVALID");
   const header = decodeJwtPart(parts[0]);
   if (!header || header.alg !== "RS256" || typeof header.kid !== "string" || !header.kid) {
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("ID_TOKEN_INVALID");
   }
-  const keys = await readJwks(discovery.jwks_uri, signal);
-  const jwk = keys.find((candidate) => (candidate as JsonWebKey & { kid?: string }).kid === header.kid
-    && candidate.kty === "RSA"
-    && (!candidate.use || candidate.use === "sig")
-    && (!candidate.alg || candidate.alg === "RS256"));
-  if (!jwk) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  let keys = await readJwks(discovery.jwks_uri, signal);
+  let jwk = findSigningKey(keys, header.kid);
+  if (!jwk) {
+    keys = await readJwks(discovery.jwks_uri, signal, true);
+    jwk = findSigningKey(keys, header.kid);
+  }
+  if (!jwk) throw new AuthProtocolError("ID_TOKEN_INVALID");
   try {
-    const key = await crypto.subtle.importKey(
-      "jwk",
-      jwk,
-      { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-    const valid = await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5",
-      key,
-      base64UrlBytes(parts[2]).buffer as ArrayBuffer,
-      new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
-    );
-    if (!valid) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    let valid = await verifyIdTokenSignature(parts, jwk);
+    if (!valid) {
+      keys = await readJwks(discovery.jwks_uri, signal, true);
+      const refreshed = findSigningKey(keys, header.kid);
+      valid = Boolean(refreshed && await verifyIdTokenSignature(parts, refreshed));
+    }
+    if (!valid) throw new AuthProtocolError("ID_TOKEN_INVALID");
   } catch (error) {
     if (error instanceof AuthProtocolError) throw error;
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("ID_TOKEN_INVALID");
   }
   return validateIdTokenClaims(idToken, discovery.issuer, expectedNonce);
 }
 
-async function readJwks(uri: string, signal?: AbortSignal): Promise<JsonWebKey[]> {
+function findSigningKey(keys: JsonWebKey[], kid: string): JsonWebKey | undefined {
+  return keys.find((candidate) => (candidate as JsonWebKey & { kid?: string }).kid === kid
+    && candidate.kty === "RSA"
+    && (!candidate.use || candidate.use === "sig")
+    && (!candidate.alg || candidate.alg === "RS256"));
+}
+
+async function verifyIdTokenSignature(parts: string[], jwk: JsonWebKey): Promise<boolean> {
+  const key = await crypto.subtle.importKey(
+    "jwk",
+    jwk,
+    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  return crypto.subtle.verify(
+    "RSASSA-PKCS1-v1_5",
+    key,
+    base64UrlBytes(parts[2]).buffer as ArrayBuffer,
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+}
+
+async function readJwks(uri: string, signal?: AbortSignal, forceRefresh = false): Promise<JsonWebKey[]> {
+  if (forceRefresh) jwksPromise = null;
   if (!jwksPromise) {
     const pending = fetchWithTimeout(uri, {
       credentials: "omit",
@@ -716,10 +742,14 @@ async function readJwks(uri: string, signal?: AbortSignal): Promise<JsonWebKey[]
       headers: { Accept: "application/json" },
     })
       .then(async (response) => {
-        if (!response.ok) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
-        const data = await readBoundedOidcJson<{ keys?: unknown }>(response, OIDC_JSON_MAX_BYTES, "TOKEN_EXCHANGE_FAILED");
-        if (!Array.isArray(data.keys)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+        if (!response.ok) throw new AuthProtocolError("SIGNING_KEYS_UNAVAILABLE");
+        const data = await readBoundedOidcJson<{ keys?: unknown }>(response, OIDC_JSON_MAX_BYTES, "SIGNING_KEYS_UNAVAILABLE");
+        if (!Array.isArray(data.keys)) throw new AuthProtocolError("SIGNING_KEYS_UNAVAILABLE");
         return data.keys.filter((key): key is JsonWebKey => Boolean(key && typeof key === "object"));
+      })
+      .catch((error) => {
+        if (error instanceof AuthProtocolError || isAbortError(error)) throw error;
+        throw new AuthProtocolError("SIGNING_KEYS_UNAVAILABLE");
       });
     jwksPromise = pending;
     void pending.catch(() => {
@@ -731,23 +761,23 @@ async function readJwks(uri: string, signal?: AbortSignal): Promise<JsonWebKey[]
 
 function validateIdTokenClaims(idToken: string, issuer: string, expectedNonce?: string): Record<string, unknown> {
   const claims = decodeJwtPayload(idToken);
-  if (!claims || claims.iss !== issuer) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (!claims || claims.iss !== issuer) throw new AuthProtocolError("ID_TOKEN_INVALID");
   const audience = Array.isArray(claims.aud) ? claims.aud.map(String) : [String(claims.aud || "")];
-  if (!audience.includes(authClientId)) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (!audience.includes(authClientId)) throw new AuthProtocolError("ID_TOKEN_INVALID");
   if (audience.length > 1 && claims.azp !== authClientId) {
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("ID_TOKEN_INVALID");
   }
   if (claims.azp !== undefined && claims.azp !== authClientId) {
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("ID_TOKEN_INVALID");
   }
   if (expectedNonce !== undefined && claims.nonce !== expectedNonce) throw new AuthProtocolError("NONCE_MISMATCH");
   const expiresAt = Number(claims.exp) * 1000;
   if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) throw new AuthProtocolError("TOKEN_EXPIRED");
   const issuedAt = Number(claims.iat) * 1000;
   if (!Number.isFinite(issuedAt) || issuedAt <= 0 || issuedAt > Date.now() + ID_TOKEN_CLOCK_SKEW_MS) {
-    throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+    throw new AuthProtocolError("ID_TOKEN_INVALID");
   }
-  if (typeof claims.sub !== "string" || !claims.sub) throw new AuthProtocolError("TOKEN_EXCHANGE_FAILED");
+  if (typeof claims.sub !== "string" || !claims.sub) throw new AuthProtocolError("ID_TOKEN_INVALID");
   return claims;
 }
 
@@ -968,6 +998,8 @@ function toUiError(code: RemiliaAuthErrorCode): RemiliaUiErrorCode {
     || code === "AUTH_SETUP_FAILED" || code === "AUTH_PAGE_LOAD_FAILED"
     || code === "AUTH_WINDOW_UNAVAILABLE" || code === "AUTH_WINDOW_FAILED"
     || code === "AUTH_RESPONSE_INVALID" || code === "TOKEN_EXCHANGE_FAILED"
+    || code === "TOKEN_REQUEST_REJECTED" || code === "TOKEN_RESPONSE_INVALID"
+    || code === "SIGNING_KEYS_UNAVAILABLE" || code === "ID_TOKEN_INVALID"
     || code === "AUTH_STORAGE_FAILED") return code;
   if (code === "REFRESH_REJECTED") return "TOKEN_EXPIRED";
   if (code === "DISCOVERY_FAILED" || code === "REDIRECT_MISMATCH") return "AUTH_SETUP_FAILED";
