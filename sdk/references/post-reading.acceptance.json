@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.4",
+  "packageVersion": "0.2.0-sdk.5",
   "appSdkVersion": "0.2.5",
   "browserTarget": "chromium",
   "scenarios": [
@@ -62,8 +62,8 @@
     },
     {
       "id": "theme-layout-accessibility",
-      "automated": "The package declares reader chrome and composes through the public host surface.",
-      "manual": "Check light/dark theme, keyboard controls, focus, zoom/reflow, reduced motion, and forced colors in the reader player."
+      "automated": "The package emits compact rounded player chrome, a host-resolved logo, bounded pointer dragging, and persisted nearest-corner positioning through the existing setting.",
+      "manual": "Check light/dark theme, keyboard controls, focus, zoom/reflow, reduced motion, and forced colors; drag the compact player to every viewport edge, reload to confirm its nearest corner persists, and reset player position to confirm the default returns."
     },
     {
       "id": "uninstall-cleanup",

@@ -34,8 +34,14 @@ const outDir = explicitOutputDir
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const localAddonBuildId = localAppPlan?.buildId ?? `standard-${target}-${buildProfile}-${extensionVersion}`;
-const registryApps = localAppPlan?.apps ?? JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const builtInRegistryApps = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const registryApps = localAppPlan?.apps ?? builtInRegistryApps;
 const firstPartyApps = registryApps;
+const selectedLocalPackageIds = new Set(localAppPlan?.selectedPackageIds || []);
+const replacementHostAssetApps = localAppPlan
+  ? builtInRegistryApps.filter((app) => selectedLocalPackageIds.has(app.id))
+  : [];
+const hostAssetApps = [...firstPartyApps, ...replacementHostAssetApps];
 const sourceBuiltApps = firstPartyApps.filter((app) => app.entryName && app.entryPoint);
 const require = createRequire(import.meta.url);
 const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
@@ -61,7 +67,7 @@ if (appEnabled("miladymaxxer") && existsSync("assets/apps/milady-maxxer/milady-l
 
 for (const dir of unique([
   ...commonAssetDirs,
-  ...firstPartyApps.flatMap((app) => app.assets || []),
+  ...hostAssetApps.flatMap((app) => app.assets || []),
 ])) {
   await copyAssetDirectory(dir);
 }
@@ -591,8 +597,8 @@ function buildWebAccessibleResources(existing) {
     "icons/*",
     "remilia-fonts/*",
     "features/*.js",
-    ...firstPartyApps.flatMap((app) => app.assets || []).filter((dir) => !nonWebAccessibleAssetDirs.has(dir)).map((dir) => `${dir}/*`),
-    ...firstPartyApps.flatMap((app) => app.requiredOutputs || []),
+    ...hostAssetApps.flatMap((app) => app.assets || []).filter((dir) => !nonWebAccessibleAssetDirs.has(dir)).map((dir) => `${dir}/*`),
+    ...hostAssetApps.flatMap((app) => app.requiredOutputs || []),
   ]);
   if (appEnabled("post-reading")) {
     resources.push("ocr/*");
@@ -810,7 +816,7 @@ if (!watch) {
     `${outDir}/reminetChatBridge.js`,
     `${outDir}/reminetCraftFastPath.js`,
     ...sourceBuiltApps.map((app) => `${outDir}/${app.entryName}.js`),
-    ...firstPartyApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
+    ...hostAssetApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
     ...(localAppPlan?.packageCopyMap || []).map((item) => `${outDir}/${item.to}`),
   ];
   const missing = required.filter((file) => !existsSync(file));

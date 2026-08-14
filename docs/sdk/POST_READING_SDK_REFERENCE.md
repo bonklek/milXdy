@@ -6,9 +6,9 @@ declaration, and acceptance matrix live in `bonklek/post-reading`. milXdy owns
 the public SDK runtime, shared services, trust policy, pinned source commit and
 package hash, and mirrors used to detect contract drift.
 
-The current pair is Post-reading `0.2.0-sdk.4` at commit
-`6bcc722269694020390946f5fbd93394a09c364a` with App SDK `0.2.5` and package
-SHA-256 `01ca79910d26266ca4b89681ea5998da454c140aa7e4e776ae008123bb2b9fa3`.
+The current pair is Post-reading `0.2.0-sdk.5` at commit
+`79f2ff878af99e24fd765b4d15c4cb45c98587b9` with App SDK `0.2.5` and package
+SHA-256 `6a5e129ee632fd39b47ea827345ccac287535af92ca6a61807c093fd72f27455`.
 
 Run the complete cross-repository proof from this repository with:
 
@@ -53,7 +53,7 @@ version pair, mirrored contracts, and pin.
 | Storage facade | Supported | Uses declared-key `context.storage` areas; undeclared access fails before browser storage. |
 | Asset URL facade | Supported | `context.resolveAssetUrl()` authorizes package paths and policy-granted host assets. |
 | OCR and background handlers | Host service | Uses milXdy's declared OCR assets and typed Post-reading handlers. |
-| Reader UI | App-owned surface | Uses its own floating player through the public lifecycle and asset facade. |
+| Reader UI | App-owned surface | Uses its compact draggable floating player through the public lifecycle and host asset facade. |
 | Distribution | Reviewed custom build | The verified package is incorporated into the generated extension. |
 | Host runtime | X surfaces | Receives X route and surface delivery from the shared runtime. |
 

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.4",
+  "packageVersion": "0.2.0-sdk.5",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/issue-135-dm-read-aloud-external",
+  "sourceBranch": "codex/18-player-regression",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
     "minVersion": "0.2.5",
@@ -22,6 +22,7 @@
     "request-scoped routed audio transport with active cancellation",
     "diagnostics",
     "existing settings compatibility",
+    "compact draggable player chrome with host-resolved assets",
     "manifest-declared active-tab page context actions"
   ],
   "reviewedExceptions": [

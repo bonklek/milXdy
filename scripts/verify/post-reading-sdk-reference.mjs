@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -90,6 +90,13 @@ try {
     `--local-app-plan=${planInput}`,
   ], workspace);
   const builtContent = await readFile(path.join(workspace, plan.outputDir, "content.js"), "utf8");
+  const builtPackageContent = await readFile(path.join(workspace, plan.outputDir, "local-apps", "post-reading", "dist", "content.js"), "utf8");
+  const builtManifest = JSON.parse(await readFile(path.join(workspace, plan.outputDir, "manifest.json"), "utf8"));
+  await stat(path.join(workspace, plan.outputDir, "post-reading", "post-reading-logo.png"));
+  const builtWebAccessibleResources = (builtManifest.web_accessible_resources || []).flatMap((entry) => entry.resources || []);
+  if (!builtWebAccessibleResources.includes("post-reading/*")) {
+    throw new Error("Built Post-reading runtime omitted the host-owned logo asset exposure");
+  }
   for (const expected of [
     POST_READING_RAIL_DEFAULT_MIGRATION_KEY,
     "post-reading",
@@ -97,6 +104,18 @@ try {
   ]) {
     if (!builtContent.includes(expected)) {
       throw new Error(`Built Post-reading runtime omitted default rail migration evidence: ${expected}`);
+    }
+  }
+  for (const expected of [
+    'header.className = "post-reading-panel-header"',
+    'postReadingAssetUrl("post-reading/post-reading-logo.png")',
+    'window.addEventListener("pointermove", move)',
+    "nearestPlayerPosition(",
+    "width: min(340px, calc(100vw - 32px))",
+    "border-radius: 10px",
+  ]) {
+    if (!builtPackageContent.includes(expected)) {
+      throw new Error(`Built Post-reading package omitted compact player evidence: ${expected}`);
     }
   }
 
