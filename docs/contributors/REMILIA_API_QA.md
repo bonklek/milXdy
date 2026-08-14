@@ -125,16 +125,23 @@ copy.
 | Post-reading external sdk.4 package | `01ca79910d26266ca4b89681ea5998da454c140aa7e4e776ae008123bb2b9fa3` |
 | Post-Factory package/content | `99b316f54c2fb350f3a02dd5bea21b797b2f280afe6f6db2c1826ee54a8a8985` |
 | Final combined pet skill ZIP | `9e4f54212af30502be6156c0cb3204f5d4e19bddb1b4d1078ac437c760e2c915` |
-| Reproducible Chromium archive | `33afd55be0baaf9747833281de6c92e01100a07d0f817f83e1f7e2b2f28fad21` |
-| Reproducible Firefox archive | `82ac3b4adb8f976976aeb64d6aaf947595d81df052a4e0f10536a86fb1533b62` |
-| Deterministic Remilia migration artifact report | `d3b329993318c9e164869d213f628a4294bfffb2a21dcdbd33ff96ca2e52d910` |
+| Reproducible Chromium archive | `08012dad1de7dff08f96077c83bdb41b48a83843a78f611e2ebb96b9c19a1768` |
+| Reproducible Firefox archive | `8f6371c43cd717d85872e63c8143a6fce5e603d1ca429d70195c84e82593db1a` |
+| Deterministic Remilia migration artifact report | `3ce5a5461abc4746093e0da763f785d7ba5228540f094f77ecfa028fc1baa725` |
 
 The composition result is three accepted, zero rejected, and zero sensitive.
 The final combined pet ZIP contains 15 deterministic entries with no duplicate
 or unsafe path and supersedes the earlier #192-only SHA
 `179cd2149e12f005704bde402ba1a39b958fac3bc197df81a7b47cc46d25228a`.
-The archive and report values were regenerated locally from the exact corrected
-runtime parent without touching the shared Chromium output. The package and
-composition identities remain unchanged. QA must reproduce the same identities
-after mapping this documentation/gate-only follow-up; none of these automated
+The archive and report values above are the canonical results from mapped
+cumulative candidate `4fb90c22cde835d218c0510f17aba53e9430dcb2`; the package and
+composition identities remain unchanged. Earlier source-worktree-only evidence
+(`33afd55be0baaf9747833281de6c92e01100a07d0f817f83e1f7e2b2f28fad21`,
+`82ac3b4adb8f976976aeb64d6aaf947595d81df052a4e0f10536a86fb1533b62`, and
+`d3b329993318c9e164869d213f628a4294bfffb2a21dcdbd33ff96ca2e52d910`) is
+superseded. QA verified that the source-worktree difference is confined to
+`.pnpm` versus canonical `node_modules` module labels in the emitted music,
+OCR host, and worker bundles; normalized bytes are identical, which proves
+runtime equivalence but not ZIP/report identity. QA must reproduce the mapped
+identities after this documentation/gate-only follow-up; none of these automated
 results constitutes live browser acceptance.
