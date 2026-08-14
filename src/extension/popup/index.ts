@@ -392,8 +392,6 @@ async function setupOnboarding(): Promise<void> {
   if (!active) return;
 
   const applyFull = document.getElementById("onboardingApplyFull") as HTMLButtonElement | null;
-  const openRemilia = document.getElementById("onboardingOpenRemilia") as HTMLButtonElement | null;
-  const retryRemilia = document.getElementById("onboardingRetryRemilia") as HTMLButtonElement | null;
   const pinToolbar = document.getElementById("onboardingPinToolbar") as HTMLButtonElement | null;
   const openX = document.getElementById("onboardingOpenX") as HTMLButtonElement | null;
   const dismiss = document.getElementById("onboardingDismiss") as HTMLButtonElement | null;
@@ -404,17 +402,6 @@ async function setupOnboarding(): Promise<void> {
     applyFull.disabled = true;
     void applyFullStartSetup().finally(() => {
       applyFull.disabled = false;
-    });
-  });
-  openRemilia?.addEventListener("click", () => {
-    activatePanel("remistats");
-    document.getElementById("remiliaConnection")?.focus({ preventScroll: false });
-    showOnboardingMessage("Review the requested abilities, then connect when you are ready.");
-  });
-  retryRemilia?.addEventListener("click", () => {
-    retryRemilia.disabled = true;
-    void renderOnboarding().finally(() => {
-      retryRemilia.disabled = false;
     });
   });
   pinToolbar?.addEventListener("click", () => {
@@ -449,33 +436,27 @@ async function shouldShowOnboarding(): Promise<boolean> {
 async function renderOnboarding(): Promise<void> {
   const tasksRoot = document.getElementById("onboardingTasks");
   const progress = document.getElementById("onboardingProgress");
-  const retryRemilia = document.getElementById("onboardingRetryRemilia") as HTMLButtonElement | null;
   if (!tasksRoot || !progress) return;
 
-  const [local, remiliaAuth, hasXTab, toolbarPinnedByBrowser] = await Promise.all([
+  const [local, hasXTab, toolbarPinnedByBrowser] = await Promise.all([
     chrome.storage.local.get([
       PERFORMANCE_MODE_KEY,
       RESKIN_PROFILE_KEY,
       RAIL_PIN_KEY,
       ONBOARDING_TOOLBAR_PINNED_KEY,
     ]),
-    chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status }).catch(() => null),
     hasOpenXTab(),
     isToolbarPinned(),
   ]);
-  const connection = normalizeRemiliaAuthResponse(remiliaAuth);
-  const signedIn = connection.phase === "connected";
   const fullSetup = await isFullStartSetup(local);
   const toolbarPinned = toolbarPinnedByBrowser || local[ONBOARDING_TOOLBAR_PINNED_KEY] === true;
   const tasks = [
     ["Full suite enabled", fullSetup, "Max appearance, app enablement, audio defaults, and rail pins."],
-    ["Remilia connected", signedIn, signedIn ? "Official account connection active." : "Needed for Beetol, RemiStats pokes, and chat."],
     ["Toolbar pinned", toolbarPinned, "Keep milXdy one click away after install."],
     ["X opened or refreshed", hasXTab, "Open X so the side rail and enabled apps can mount."],
   ] as const;
   const done = tasks.filter(([, complete]) => complete).length;
   progress.textContent = `${done}/${tasks.length} ready`;
-  if (retryRemilia) retryRemilia.textContent = signedIn ? "Connection ready" : "Check connection";
   tasksRoot.textContent = "";
   for (const [label, complete, detail] of tasks) {
     const item = document.createElement("li");
@@ -2833,11 +2814,12 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
     if (announceError && showError) error!.focus({ preventScroll: false });
 
     if (authStatus.phase === "connected") pokeDiagnostic!.hidden = true;
-    else await renderPokeDiagnostic(pokeDiagnostic!);
+    else await renderPokeDiagnostic(pokeDiagnostic!).catch(() => { pokeDiagnostic!.hidden = true; });
   };
 
   const fetchStatus = async (announceError = false): Promise<RemiliaAuthStatus> => {
-    const response = await chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status }).catch(() => null);
+    const response = await chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status })
+      .catch(() => ({ error: { code: "BACKGROUND_UNAVAILABLE" } }));
     const authStatus = normalizeRemiliaAuthResponse(response);
     await renderStatus(authStatus, announceError);
     return authStatus;
@@ -2851,17 +2833,18 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
     setBusy(true);
     setMessage(pendingText);
     try {
-      const response = await chrome.runtime.sendMessage(request).catch(() => null);
+      const response = await chrome.runtime.sendMessage(request)
+        .catch(() => ({ error: { code: "BACKGROUND_UNAVAILABLE" } }));
       const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
       if (!record || record.ok === false) {
         const failure = normalizeRemiliaAuthResponse(response);
         await renderStatus(failure, true);
-        setMessage(remiliaErrorMessage(failure.lastError), "error");
+        setMessage("");
         return;
       }
       const latest = await fetchStatus(true);
       if (latest.phase === "error" || latest.lastError) {
-        setMessage(remiliaErrorMessage(latest.lastError), "error");
+        setMessage("");
         return;
       }
       setMessage(typeof successText === "function" ? successText(record) : successText, "success");

@@ -64,6 +64,12 @@ export type RemiliaAuthErrorCode =
   | "CANCELLED"
   | "AUTH_TIMEOUT"
   | "CONCURRENT_LOGIN"
+  | "AUTH_SETUP_FAILED"
+  | "AUTH_PAGE_LOAD_FAILED"
+  | "AUTH_WINDOW_UNAVAILABLE"
+  | "AUTH_WINDOW_FAILED"
+  | "AUTH_RESPONSE_INVALID"
+  | "AUTH_STORAGE_FAILED"
   | "REDIRECT_MISMATCH"
   | "STATE_MISMATCH"
   | "NONCE_MISMATCH"
@@ -86,6 +92,13 @@ export type RemiliaUiErrorCode =
   | "CANCELLED"
   | "CONCURRENT_LOGIN"
   | "AUTH_TIMEOUT"
+  | "AUTH_SETUP_FAILED"
+  | "AUTH_PAGE_LOAD_FAILED"
+  | "AUTH_WINDOW_UNAVAILABLE"
+  | "AUTH_WINDOW_FAILED"
+  | "AUTH_RESPONSE_INVALID"
+  | "TOKEN_EXCHANGE_FAILED"
+  | "AUTH_STORAGE_FAILED"
   | "REVOKED"
   | "UNSUPPORTED"
   | "UNKNOWN";
@@ -289,19 +302,31 @@ export async function connectRemiliaAuth(options: { signal?: AbortSignal; timeou
   if (!authClientId) return failure("UNSUPPORTED");
   const control = await readControl();
   if (control.migration.required) return failure("MIGRATION_REQUIRED");
-  if (activeLogin) return failure("CONCURRENT_LOGIN");
+  if (activeLogin) {
+    await setLastError("CONCURRENT_LOGIN");
+    return failure("CONCURRENT_LOGIN");
+  }
 
   const generation = ++authGeneration;
   const abort = new AbortController();
   activeLoginAbort = abort;
   const combinedSignal = combineSignals(options.signal, abort.signal);
-  const pending = performInteractiveLogin(generation, combinedSignal, options.timeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS);
+  const pending = performInteractiveLogin(generation, combinedSignal);
   activeLogin = pending;
-  try {
-    return await pending;
-  } finally {
+  void pending.finally(() => {
     if (activeLogin === pending) activeLogin = null;
     if (activeLoginAbort === abort) activeLoginAbort = null;
+  }).catch(() => undefined);
+  try {
+    return await withTimeout(pending, options.timeoutMs ?? DEFAULT_AUTH_TIMEOUT_MS, combinedSignal);
+  } catch (error) {
+    const code = normalizeAuthError(error);
+    if (code === "AUTH_TIMEOUT" && activeLoginAbort === abort) {
+      abort.abort(error);
+      activeLoginAbort = null;
+    }
+    await setLastError(toUiError(code));
+    return failure(code);
   }
 }
 
@@ -395,7 +420,7 @@ export async function getRemiliaAuthStatus(): Promise<RemiliaAuthStatus> {
       lastError: control.lastError,
     };
   }
-  if (activeLogin) {
+  if (activeLogin && activeLoginAbort) {
     return {
       phase: "connecting",
       grantedScopes: [],
@@ -440,19 +465,19 @@ export async function isRemiliaDisconnected(): Promise<boolean> {
   return control.disconnected || control.migration.required;
 }
 
-async function performInteractiveLogin(generation: number, signal: AbortSignal, timeoutMs: number): Promise<RemiliaAuthGrant> {
+async function performInteractiveLogin(generation: number, signal: AbortSignal): Promise<RemiliaAuthGrant> {
+  let stage: "setup" | "launch" | "response" | "exchange" | "custody" = "setup";
   try {
     if (!chrome.identity?.launchWebAuthFlow || !chrome.identity?.getRedirectURL) {
       throw new AuthProtocolError("UNSUPPORTED");
     }
-    const discovery = await discoverOidc(signal);
     const redirectUri = chrome.identity.getRedirectURL(authRedirectPath);
     validateRedirectContract(redirectUri);
     const state = randomBase64Url(32);
     const nonce = randomBase64Url(32);
     const verifier = randomBase64Url(64);
     const challenge = await sha256Base64Url(verifier);
-    const authUrl = new URL(discovery.authorization_endpoint);
+    const authUrl = new URL(OIDC_ENDPOINTS.authorization_endpoint);
     authUrl.search = new URLSearchParams({
       client_id: authClientId,
       redirect_uri: redirectUri,
@@ -465,12 +490,12 @@ async function performInteractiveLogin(generation: number, signal: AbortSignal, 
       code_challenge_method: "S256",
     }).toString();
 
-    const callbackUrl = await withTimeout(
-      chrome.identity.launchWebAuthFlow({ url: authUrl.toString(), interactive: true }),
-      timeoutMs,
-      signal,
-    );
-    const code = validateAuthorizationCallback(callbackUrl, redirectUri, state, discovery.issuer);
+    stage = "launch";
+    const callbackUrl = await launchIdentityWebAuthFlow(authUrl.toString());
+    stage = "response";
+    const code = validateAuthorizationCallback(callbackUrl, redirectUri, state, OIDC_ISSUER);
+    stage = "exchange";
+    const discovery = await discoverOidc(signal);
     const tokenResponse = await exchangeToken(discovery.token_endpoint, {
       grant_type: "authorization_code",
       client_id: authClientId,
@@ -479,6 +504,7 @@ async function performInteractiveLogin(generation: number, signal: AbortSignal, 
       code_verifier: verifier,
     }, signal);
     const credentials = await credentialsFromTokenResponse(tokenResponse, discovery, nonce);
+    stage = "custody";
     throwIfInvalidated(generation, signal);
     await writeCredentials(credentials);
     throwIfInvalidated(generation, signal);
@@ -486,7 +512,8 @@ async function performInteractiveLogin(generation: number, signal: AbortSignal, 
     await writeControl({ ...control, disconnected: false, lastError: undefined });
     return grant(credentials);
   } catch (error) {
-    const code = normalizeAuthError(error);
+    const normalized = normalizeAuthError(error);
+    const code = normalized === "UNKNOWN" ? authErrorForStage(stage) : normalized;
     await setLastError(toUiError(code));
     return failure(code);
   }
@@ -918,15 +945,73 @@ function normalizeAuthError(error: unknown): RemiliaAuthErrorCode {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
   if (message.includes("user did not approve") || message.includes("access denied")) return "ACCESS_DENIED";
   if (message.includes("canceled") || message.includes("cancelled") || message.includes("closed")) return "CANCELLED";
+  if (message.includes("only one web auth flow") || (message.includes("web auth flow") && message.includes("in progress"))) {
+    return "CONCURRENT_LOGIN";
+  }
+  if (message.includes("authorization page could not be loaded") || message.includes("authorization page load timed out")) {
+    return "AUTH_PAGE_LOAD_FAILED";
+  }
+  if (message.includes("identity api is disabled in incognito")
+    || message.includes("couldn't create a browser window")
+    || message.includes("browser context has been shut down")
+    || message.includes("auth url has an invalid scheme")
+    || message.includes("did not redirect to the right url")) {
+    return "AUTH_WINDOW_UNAVAILABLE";
+  }
   return "UNKNOWN";
 }
 
 function toUiError(code: RemiliaAuthErrorCode): RemiliaUiErrorCode {
   if (code === "ACCESS_DENIED" || code === "TOKEN_EXPIRED" || code === "MISSING_SCOPE"
     || code === "OFFLINE" || code === "CANCELLED" || code === "CONCURRENT_LOGIN"
-    || code === "AUTH_TIMEOUT" || code === "REVOKED" || code === "UNSUPPORTED") return code;
+    || code === "AUTH_TIMEOUT" || code === "REVOKED" || code === "UNSUPPORTED"
+    || code === "AUTH_SETUP_FAILED" || code === "AUTH_PAGE_LOAD_FAILED"
+    || code === "AUTH_WINDOW_UNAVAILABLE" || code === "AUTH_WINDOW_FAILED"
+    || code === "AUTH_RESPONSE_INVALID" || code === "TOKEN_EXCHANGE_FAILED"
+    || code === "AUTH_STORAGE_FAILED") return code;
   if (code === "REFRESH_REJECTED") return "TOKEN_EXPIRED";
+  if (code === "DISCOVERY_FAILED" || code === "REDIRECT_MISMATCH") return "AUTH_SETUP_FAILED";
+  if (code === "STATE_MISMATCH" || code === "NONCE_MISMATCH") return "AUTH_RESPONSE_INVALID";
   return "UNKNOWN";
+}
+
+function authErrorForStage(stage: "setup" | "launch" | "response" | "exchange" | "custody"): RemiliaAuthErrorCode {
+  if (stage === "launch") return "AUTH_WINDOW_FAILED";
+  if (stage === "response") return "AUTH_RESPONSE_INVALID";
+  if (stage === "exchange") return "TOKEN_EXCHANGE_FAILED";
+  if (stage === "custody") return "AUTH_STORAGE_FAILED";
+  return "AUTH_SETUP_FAILED";
+}
+
+function launchIdentityWebAuthFlow(url: string): Promise<string | undefined> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const succeed = (callbackUrl?: string) => {
+      if (settled) return;
+      settled = true;
+      resolve(callbackUrl);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      const code = normalizeAuthError(error);
+      reject(new AuthProtocolError(code === "UNKNOWN" ? "AUTH_WINDOW_FAILED" : code));
+    };
+    const callback = (callbackUrl?: string) => {
+      const nativeMessage = chrome.runtime.lastError?.message;
+      if (nativeMessage) fail(new Error(nativeMessage));
+      else succeed(callbackUrl);
+    };
+    try {
+      const returned = chrome.identity.launchWebAuthFlow(
+        { url, interactive: true },
+        callback,
+      ) as Promise<string | undefined> | undefined;
+      if (returned && typeof returned.then === "function") returned.then(succeed, fail);
+    } catch (error) {
+      fail(error);
+    }
+  });
 }
 
 function isAbortError(error: unknown): boolean {

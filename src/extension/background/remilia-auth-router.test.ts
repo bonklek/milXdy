@@ -78,6 +78,39 @@ describe("Remilia auth background router", () => {
     expect(JSON.stringify([statusResponse, connectResponse])).not.toMatch(/accessToken|refreshToken|idToken/u);
   });
 
+  it.each([
+    ["AUTH_SETUP_FAILED", "AUTH_SETUP_FAILED"],
+    ["DISCOVERY_FAILED", "AUTH_SETUP_FAILED"],
+    ["REDIRECT_MISMATCH", "AUTH_SETUP_FAILED"],
+    ["AUTH_RESPONSE_INVALID", "AUTH_RESPONSE_INVALID"],
+    ["STATE_MISMATCH", "AUTH_RESPONSE_INVALID"],
+    ["NONCE_MISMATCH", "AUTH_RESPONSE_INVALID"],
+    ["TOKEN_EXCHANGE_FAILED", "TOKEN_EXCHANGE_FAILED"],
+    ["AUTH_PAGE_LOAD_FAILED", "AUTH_PAGE_LOAD_FAILED"],
+    ["AUTH_WINDOW_UNAVAILABLE", "AUTH_WINDOW_UNAVAILABLE"],
+    ["AUTH_WINDOW_FAILED", "AUTH_WINDOW_FAILED"],
+    ["AUTH_STORAGE_FAILED", "AUTH_STORAGE_FAILED"],
+  ])("maps %s to the bounded popup error %s", async (runtimeError, uiError) => {
+    const disconnected = {
+      phase: "disconnected",
+      grantedScopes: [],
+      requiredScopes: ["openid"],
+      migration: { version: 1, required: false, legacyDeleted: true },
+      lastError: { code: uiError },
+    };
+    mocks.status.mockResolvedValue(disconnected);
+    mocks.connect.mockResolvedValue({ ok: false, error: runtimeError });
+    const handler = await loadHandler();
+
+    const result = await handler.handle(
+      { type: "remilia-auth:connect", consentVersion: 1 },
+      { id: "extension-id", url: "chrome-extension://extension-id/popup.html" },
+    );
+
+    expect(result).toEqual({ ok: false, authStateVersion: 1, status: disconnected, error: uiError });
+    expect(JSON.stringify(result)).not.toMatch(/https?:|accessToken|refreshToken|idToken|state|nonce|code=/u);
+  });
+
   it("rejects unauthorized senders without exposing auth status or invoking an auth action", async () => {
     mocks.status.mockResolvedValue({
       phase: "disconnected",

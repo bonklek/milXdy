@@ -57,6 +57,11 @@ describe("Remilia OIDC PKCE", () => {
     const result = await auth.connectRemiliaAuth();
 
     expect(result).toMatchObject({ ok: true, accessToken: "access-one", tokenType: "Bearer" });
+    expect(launchWebAuthFlow).toHaveBeenCalledWith(
+      expect.objectContaining({ interactive: true }),
+      expect.any(Function),
+    );
+    expect(launchWebAuthFlow.mock.invocationCallOrder[0]).toBeLessThan(fetchMock.mock.invocationCallOrder[0]);
     const authorization = new URL(authorizationUrl);
     expect(authorization.origin + authorization.pathname).toBe(AUTHORIZATION_ENDPOINT);
     expect(authorization.searchParams.get("client_id")).toBe(CLIENT_ID);
@@ -103,6 +108,7 @@ describe("Remilia OIDC PKCE", () => {
     await auth.noteRemiliaAuthInstalled("install");
 
     await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "STATE_MISMATCH" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "AUTH_RESPONSE_INVALID" });
     expect(fetchMock.mock.calls.filter(([input]) => String(input) === TOKEN_ENDPOINT)).toHaveLength(0);
     expect(fixture.session.size).toBe(0);
   });
@@ -233,7 +239,31 @@ describe("Remilia OIDC PKCE", () => {
     expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ACCESS_DENIED" });
   });
 
-  it("times out an abandoned interactive flow", async () => {
+  it.each([
+    ["Authorization page could not be loaded.", "AUTH_PAGE_LOAD_FAILED"],
+    ["Authorization page load timed out.", "AUTH_PAGE_LOAD_FAILED"],
+    ["Couldn't create a browser window to display an authorization page.", "AUTH_WINDOW_UNAVAILABLE"],
+    ["Identity API is disabled in incognito windows.", "AUTH_WINDOW_UNAVAILABLE"],
+    ["Only one web auth flow is allowed at a time.", "CONCURRENT_LOGIN"],
+    ["A future native identity failure.", "AUTH_WINDOW_FAILED"],
+  ])("captures and bounds native launch rejection %s", async (nativeMessage, expectedCode) => {
+    const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(((_details: chrome.identity.WebAuthFlowDetails, callback?: (responseUrl?: string) => void) => {
+      (chrome.runtime as typeof chrome.runtime & { lastError?: { message: string } }).lastError = { message: nativeMessage };
+      callback?.();
+      delete (chrome.runtime as typeof chrome.runtime & { lastError?: { message: string } }).lastError;
+      return undefined;
+    }) as never);
+    installSuccessfulFetch(() => "");
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: expectedCode });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: expectedCode });
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain(nativeMessage);
+  });
+
+  it("reports a timeout but retains the native attempt so retries cannot orphan or duplicate it", async () => {
     installChrome();
     let authorizationStarted = false;
     vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(() => {
@@ -249,6 +279,38 @@ describe("Remilia OIDC PKCE", () => {
     await vi.waitFor(() => expect(authorizationStarted).toBe(true));
     await vi.advanceTimersByTimeAsync(1_000);
     await expect(pending).resolves.toMatchObject({ ok: false, error: "AUTH_TIMEOUT" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "CONCURRENT_LOGIN" });
+    expect(chrome.identity.launchWebAuthFlow).toHaveBeenCalledTimes(1);
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "CONCURRENT_LOGIN" });
+  });
+
+  it("maps an unexpected setup failure to an actionable setup stage", async () => {
+    installChrome();
+    vi.mocked(chrome.identity.getRedirectURL).mockImplementation(() => { throw new Error("unexpected setup failure"); });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "AUTH_SETUP_FAILED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "AUTH_SETUP_FAILED" });
+    expect(chrome.identity.launchWebAuthFlow).not.toHaveBeenCalled();
+  });
+
+  it("maps session custody failure without exposing storage details", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl);
+    fixture.sessionArea.set.mockRejectedValueOnce(new Error("sensitive storage implementation detail"));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "AUTH_STORAGE_FAILED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "AUTH_STORAGE_FAILED" });
+    expect(JSON.stringify([...fixture.local.values()])).not.toContain("sensitive storage implementation detail");
   });
 
   it("bounds a stalled token exchange independently of the browser auth flow", async () => {
@@ -503,6 +565,10 @@ describe("Remilia migration and scope boundaries", () => {
 
   it("rejects discovery endpoints outside the fixed issuer origin", async () => {
     const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       if (String(input) === DISCOVERY_URL) {
         return jsonResponse({
@@ -517,11 +583,16 @@ describe("Remilia migration and scope boundaries", () => {
     await auth.noteRemiliaAuthInstalled("install");
 
     await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "DISCOVERY_FAILED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "AUTH_SETUP_FAILED" });
     expect(fixture.session.size).toBe(0);
   });
 
   it("rejects unexpected discovery paths on the fixed issuer origin", async () => {
     const fixture = installChrome();
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
     vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request) => {
       if (String(input) === DISCOVERY_URL) {
         return jsonResponse({
@@ -535,6 +606,7 @@ describe("Remilia migration and scope boundaries", () => {
     await auth.noteRemiliaAuthInstalled("install");
 
     await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "DISCOVERY_FAILED" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "AUTH_SETUP_FAILED" });
     expect(fixture.session.size).toBe(0);
   });
 });

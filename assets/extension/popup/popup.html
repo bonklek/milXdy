@@ -51,13 +51,11 @@
               <strong id="onboardingTitle">Light Start</strong>
               <small>Fresh install setup for the full milXdy experience.</small>
             </div>
-            <span id="onboardingProgress">0/4 ready</span>
+            <span id="onboardingProgress">0/3 ready</span>
           </div>
           <ul class="onboarding-tasks" id="onboardingTasks"></ul>
           <div class="onboarding-actions">
             <button class="secondary-button primary-action" id="onboardingApplyFull" type="button">Enable full setup</button>
-            <button class="secondary-button" id="onboardingOpenRemilia" type="button">Review Remilia connection</button>
-            <button class="secondary-button" id="onboardingRetryRemilia" type="button">Check connection</button>
             <button class="secondary-button" id="onboardingOpenX" type="button">Open or refresh X</button>
             <button class="secondary-button" id="onboardingPinToolbar" type="button">Pinned in toolbar</button>
             <button class="secondary-button" id="onboardingAppearance" type="button">Review appearance</button>
@@ -370,7 +368,7 @@
             <div class="remilia-connection-heading">
               <div>
                 <h4 id="remiliaConnectionTitle">Official Remilia connection</h4>
-                <p>Connect through Remilia Login. milXdy does not reuse your website cookies or silently reconnect an old browser session.</p>
+                <p>Authorization uses official Remilia Login. milXdy never reuses website cookies or silently reconnects a browser session.</p>
               </div>
               <span class="remilia-auth-version" aria-label="Connection state version 1">Auth v1</span>
             </div>
@@ -396,8 +394,8 @@
               </ul>
             </div>
             <div class="remilia-actions" id="remiliaActions">
-              <button class="primary-button" id="remiliaConnect" type="button" hidden>Connect with Remilia</button>
-              <button class="primary-button" id="remiliaReconnect" type="button" hidden>Reconnect</button>
+              <button class="primary-button" id="remiliaConnect" type="button" hidden>Connect to RemiliaNET</button>
+              <button class="primary-button" id="remiliaReconnect" type="button" hidden>Reconnect to RemiliaNET</button>
               <button class="secondary-button" id="remiliaDisconnect" type="button" hidden>Disconnect</button>
               <button class="secondary-button danger-button" id="remiliaRevoke" type="button" hidden>Revoke authorization</button>
             </div>

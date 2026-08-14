@@ -34,6 +34,14 @@ export type RemiliaAuthErrorCode =
   | "CANCELLED"
   | "CONCURRENT_LOGIN"
   | "AUTH_TIMEOUT"
+  | "AUTH_SETUP_FAILED"
+  | "AUTH_PAGE_LOAD_FAILED"
+  | "AUTH_WINDOW_UNAVAILABLE"
+  | "AUTH_WINDOW_FAILED"
+  | "AUTH_RESPONSE_INVALID"
+  | "TOKEN_EXCHANGE_FAILED"
+  | "AUTH_STORAGE_FAILED"
+  | "BACKGROUND_UNAVAILABLE"
   | "REVOKED"
   | "UNSUPPORTED"
   | "UNKNOWN";
@@ -112,6 +120,14 @@ const KNOWN_ERRORS = new Set<RemiliaAuthErrorCode>([
   "CANCELLED",
   "CONCURRENT_LOGIN",
   "AUTH_TIMEOUT",
+  "AUTH_SETUP_FAILED",
+  "AUTH_PAGE_LOAD_FAILED",
+  "AUTH_WINDOW_UNAVAILABLE",
+  "AUTH_WINDOW_FAILED",
+  "AUTH_RESPONSE_INVALID",
+  "TOKEN_EXCHANGE_FAILED",
+  "AUTH_STORAGE_FAILED",
+  "BACKGROUND_UNAVAILABLE",
   "REVOKED",
   "UNSUPPORTED",
   "UNKNOWN",
@@ -191,7 +207,7 @@ export function remiliaConnectionView(status: RemiliaAuthStatus): RemiliaConnect
   const reconnect = status.phase === "expired" || status.phase === "missing-scope" || status.phase === "rate-limited" || status.phase === "offline";
   const copy: Record<RemiliaAuthPhase, Pick<RemiliaConnectionView, "title" | "detail" | "tone">> = {
     "migration-required": { title: "Review the connection update", detail: "Delete old login data before connecting.", tone: "warning" },
-    disconnected: { title: "Not connected", detail: "Review the requested abilities, then connect through the official Remilia Login page.", tone: "neutral" },
+    disconnected: { title: "Not connected", detail: "No RemiliaNET account is connected. The requested abilities are listed below.", tone: "neutral" },
     connecting: { title: "Waiting for Remilia Login", detail: "Finish the official authorization window. You can safely cancel and try again.", tone: "neutral" },
     connected: { title: "Connected", detail: "milXdy can use only the abilities listed below for this Remilia account.", tone: "success" },
     expired: { title: "Connection expired", detail: "Reconnect to renew the official authorization. No browser session will be reused.", tone: "warning" },
@@ -242,6 +258,14 @@ export function remiliaErrorMessage(error: RemiliaAuthError | null): string {
     CANCELLED: "The connection window was closed. Nothing was connected.",
     CONCURRENT_LOGIN: "Another connection attempt is already open. Finish or close it before trying again.",
     AUTH_TIMEOUT: "Remilia Login took too long to respond. Nothing was connected; try again.",
+    AUTH_SETUP_FAILED: "milXdy could not prepare Remilia Login. Check your connection and try again.",
+    AUTH_PAGE_LOAD_FAILED: "Remilia Login could not load its authorization page. Check your connection and try again.",
+    AUTH_WINDOW_UNAVAILABLE: "Chrome could not open the Remilia Login window. Use a regular Chrome window, then try again.",
+    AUTH_WINDOW_FAILED: "Chrome could not start Remilia Login. Close any other Remilia Login window, then try again.",
+    AUTH_RESPONSE_INVALID: "Remilia Login returned an invalid authorization response. Nothing was stored; try again.",
+    TOKEN_EXCHANGE_FAILED: "Remilia Login finished, but the secure connection could not be completed. Nothing was stored; try again.",
+    AUTH_STORAGE_FAILED: "milXdy could not safely store the connection for this browser session. Nothing was connected; reload the extension and try again.",
+    BACKGROUND_UNAVAILABLE: "The milXdy connection service did not respond. Reload the extension, reopen the popup, and try again.",
     REVOKED: "This authorization was revoked. Reconnect if you want to use Remilia features again.",
     UNSUPPORTED: "Remilia connection is unavailable in this intentionally keyless Firefox build.",
     UNKNOWN: "The connection could not be completed. Reload the popup and try again.",

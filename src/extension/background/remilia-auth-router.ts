@@ -123,7 +123,13 @@ function isExtensionPageSender(sender: chrome.runtime.MessageSender): boolean {
 function uiError(code: RemiliaAuthErrorCode): RemiliaUiErrorCode {
   if (code === "ACCESS_DENIED" || code === "TOKEN_EXPIRED" || code === "MISSING_SCOPE"
     || code === "OFFLINE" || code === "CANCELLED" || code === "CONCURRENT_LOGIN"
-    || code === "AUTH_TIMEOUT" || code === "REVOKED" || code === "UNSUPPORTED") return code;
+    || code === "AUTH_TIMEOUT" || code === "REVOKED" || code === "UNSUPPORTED"
+    || code === "AUTH_SETUP_FAILED" || code === "AUTH_PAGE_LOAD_FAILED"
+    || code === "AUTH_WINDOW_UNAVAILABLE" || code === "AUTH_WINDOW_FAILED"
+    || code === "AUTH_RESPONSE_INVALID" || code === "TOKEN_EXCHANGE_FAILED"
+    || code === "AUTH_STORAGE_FAILED") return code;
   if (code === "REFRESH_REJECTED") return "TOKEN_EXPIRED";
+  if (code === "DISCOVERY_FAILED" || code === "REDIRECT_MISMATCH") return "AUTH_SETUP_FAILED";
+  if (code === "STATE_MISMATCH" || code === "NONCE_MISMATCH") return "AUTH_RESPONSE_INVALID";
   return "UNKNOWN";
 }

@@ -120,8 +120,17 @@ describe("Remilia connection UI contract", () => {
     ["CANCELLED", "closed"],
     ["CONCURRENT_LOGIN", "already open"],
     ["AUTH_TIMEOUT", "too long"],
+    ["AUTH_SETUP_FAILED", "prepare Remilia Login"],
+    ["AUTH_PAGE_LOAD_FAILED", "authorization page"],
+    ["AUTH_WINDOW_UNAVAILABLE", "regular Chrome window"],
+    ["AUTH_WINDOW_FAILED", "could not start Remilia Login"],
+    ["AUTH_RESPONSE_INVALID", "invalid authorization response"],
+    ["TOKEN_EXCHANGE_FAILED", "secure connection"],
+    ["AUTH_STORAGE_FAILED", "safely store"],
+    ["BACKGROUND_UNAVAILABLE", "connection service did not respond"],
     ["REVOKED", "revoked"],
     ["UNSUPPORTED", "Firefox"],
+    ["UNKNOWN", "could not be completed"],
   ])("maps %s to actionable accessible copy", (code, expected) => {
     const status = normalizeRemiliaAuthResponse({ error: { code, retryAfterSeconds: 30 } });
     expect(remiliaErrorMessage(status.lastError)).toContain(expected);
@@ -176,6 +185,34 @@ describe("Remilia connection UI contract", () => {
     expect(source).toContain("REMILIA_AUTH_MESSAGE.completeMigration");
     expect(source).toContain("decision: \"delete-legacy\"");
     expect(source).toContain("response.remoteRevoked === false");
+    expect(source).not.toContain("onboardingOpenRemilia");
+    expect(source).not.toContain("onboardingRetryRemilia");
+    expect(source).not.toContain("Check connection");
+    expect(source).not.toContain("setMessage(remiliaErrorMessage");
+  });
+
+  it("renders one primary connection action when the account is known disconnected", () => {
+    const html = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.html"), "utf8");
+    expect(html.match(/>Connect to RemiliaNET<\/button>/gu)).toHaveLength(1);
+    expect(html.match(/class="remilia-auth-error"/gu)).toHaveLength(1);
+    expect(html).not.toContain("Review Remilia connection");
+    expect(html).not.toContain("Check connection");
+    expect(html).not.toContain("Recheck");
+
+    const disconnected = normalizeRemiliaAuthResponse({
+      authStateVersion: 1,
+      status: {
+        phase: "disconnected",
+        requiredScopes: ["openid", "remilia:stats.read"],
+        migration: { version: 1, required: false, legacyDeleted: true },
+      },
+    });
+    expect(remiliaConnectionView(disconnected)).toMatchObject({
+      showConnect: true,
+      showReconnect: false,
+      showDisconnect: false,
+      showRevoke: false,
+    });
   });
 
   it("ships labeled live status, alert, scope, migration, and rollback controls", () => {
