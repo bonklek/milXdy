@@ -1,4 +1,10 @@
 import { startReminetLegacySocketBridge } from "./reminet-chat-legacy-socket";
+import {
+  createBeetleReducedMotionCss,
+  nativeBeetleActionButtonFor,
+  nativeBeetleActionFor,
+  type NativeBeetleAction,
+} from "./reminet-beetle-fast-controls";
 
 const BEETLE_REDUCED_MOTION_KEY = "milxdy.reminet.beetleReducedMotion";
 const BEETLE_INSTANT_RESULTS_KEY = "milxdy.reminet.beetleInstantResults";
@@ -156,44 +162,7 @@ function applyBeetleReducedMotion(enabled: boolean): void {
   if (!shouldReduce || document.getElementById(BEETLE_REDUCED_MOTION_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = BEETLE_REDUCED_MOTION_STYLE_ID;
-  style.textContent = `
-    /* Remilia changes class names often and nests most movement inside the
-       cartridge tree. The explicit setting is intentionally route-wide. */
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}],
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *::before,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] *::after {
-      animation-duration: 0.001ms !important;
-      animation-delay: 0ms !important;
-      animation-iteration-count: 1 !important;
-      transition-duration: 0.001ms !important;
-      transition-delay: 0ms !important;
-    }
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] :is(
-      .beetle-console, .beetleModule, .beetle-catch-module,
-      .beetle-catch-module__buttons-container, .beetle-catch-module__beetle-item,
-      .beetle-header, .beetle-tab, .beetle-logo, .beetle-vignette,
-      .beetle-game-nav, .crafting-module, .carousel, .claim-button,
-      .crafting-module__beetle-item, .cheeseman,
-      .toggle-bar, .toggle-knob, .toggle-text,
-      [class*="rarity-shadow" i]) {
-      animation: none !important;
-      transition: none !important;
-    }
-    /* Crafting and assembly render their result layer in a sibling main screen,
-       rather than inside .crafting-module. Keep that result layer immediate too. */
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .carousel,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .beetleModule,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .crafting-module,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .crafting-module *,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .module-main-screen.crafting-main-screen,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .module-main-screen.crafting-main-screen *,
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] .crafting-logo {
-      animation: none !important;
-      transition: none !important;
-    }
-    html[${BEETLE_REDUCED_MOTION_ATTRIBUTE}] { scroll-behavior: auto !important; }
-  `;
+  style.textContent = createBeetleReducedMotionCss(BEETLE_REDUCED_MOTION_ATTRIBUTE);
   root.append(style);
 }
 
@@ -296,20 +265,13 @@ function applyInstantBeetleResults(enabled: boolean): void {
   }
 }
 
-function instantResultActionFor(target: EventTarget | null): "catchBeetle" | "beetleHunt" | null {
-  if (!(target instanceof Element)) return null;
-  const button = target.closest<HTMLButtonElement>(".beetle-catch-module__catch-button, .beetle-catch-module__hunt-button");
-  if (!button) return null;
-  return button.classList.contains("beetle-catch-module__catch-button") ? "catchBeetle" : "beetleHunt";
-}
-
 function nativeActionButtons(): HTMLButtonElement[] {
   return Array.from(document.querySelectorAll<HTMLButtonElement>(
     ".beetle-catch-module__catch-button, .beetle-catch-module__hunt-button",
   ));
 }
 
-function actionForNativeButton(button: HTMLButtonElement): "catchBeetle" | "beetleHunt" {
+function actionForNativeButton(button: HTMLButtonElement): NativeBeetleAction {
   return button.classList.contains("beetle-catch-module__catch-button") ? "catchBeetle" : "beetleHunt";
 }
 
@@ -489,11 +451,9 @@ function installInstantResultListener(): void {
   instantResultListenerInstalled = true;
   document.addEventListener("click", (event) => {
     if (!instantResultsEnabled || !isBeetleRoute() || !event.isTrusted) return;
-    const action = instantResultActionFor(event.target);
+    const action = nativeBeetleActionFor(event.target);
     if (!action) return;
-    const button = event.target instanceof Element
-      ? event.target.closest<HTMLButtonElement>(".beetle-catch-module__catch-button, .beetle-catch-module__hunt-button")
-      : null;
+    const button = nativeBeetleActionButtonFor(event.target);
     if (button?.disabled && !button.dataset.milxdyInstantResultLocked) return;
     event.preventDefault();
     event.stopImmediatePropagation();

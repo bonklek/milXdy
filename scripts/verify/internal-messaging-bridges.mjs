@@ -10,6 +10,7 @@ const files = {
   reminetLegacyAdapters: await readFile("src/apps/reminet-chat/legacy-adapters.ts", "utf8"),
   reminetLegacyMediaUpload: await readFile("src/apps/reminet-chat/legacy-media-upload.ts", "utf8"),
   reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
+  reminetBeetleFastControls: await readFile("src/extension/frames/reminet-beetle-fast-controls.ts", "utf8"),
   reminetLegacySocket: await readFile("src/extension/frames/reminet-chat-legacy-socket.ts", "utf8"),
   reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
   extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
@@ -45,6 +46,7 @@ function verifyReminetChatSocketBridge() {
   const senderPolicy = functionBody(files.reminetLegacyAdapters, "isAllowedLegacySender");
   const registerSiteBridge = functionBody(files.reminetChatBackground, "registerSiteSocketBridge");
   const bridge = files.reminetChatBridge;
+  const beetleFastControls = files.reminetBeetleFastControls;
   const socketTransport = files.reminetLegacySocket;
   assertIncludes(onConnect, "if (port.name !== SOCKET_PORT_NAME) return;", "RemiNet socket bridge must ignore unrelated port names");
   assertIncludes(onConnect, "if (!isReminetChatSocketSender(port.sender))", "RemiNet socket bridge must validate sender before socket setup");
@@ -80,7 +82,17 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(files.extensionManifest, '"world": "MAIN"', "RemiNet crafting fast path must run in the page world");
   assertIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must limit acceleration to known staged timers");
   assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
-  assertIncludes(bridge, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
+  assertIncludes(bridge, "createBeetleReducedMotionCss", "RemiNet bridge must use the completion-safe Beetle motion policy");
+  assertIncludes(beetleFastControls, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
+  assertIncludes(beetleFastControls, 'candidate.nodeType === 1 && typeof candidate.closest === "function"', "RemiNet fast Beetle actions must resolve cross-realm click targets without instanceof");
+  assertIncludes(bridge, "!event.isTrusted", "RemiNet fast Beetle actions must remain limited to trusted user clicks");
+  assertNotIncludes(bridge, "event.target instanceof Element", "RemiNet fast Beetle actions must not discard isolated-world click targets");
+  const animationNoneSelectors = Array.from(beetleFastControls.matchAll(/([^{}]+)\{[^{}]*animation:\s*none/gi))
+    .map((match) => match[1])
+    .join("\n");
+  for (const selector of [".beetle-console", ".beetleModule", ".beetle-catch-module", ".carousel", ".claim-button"]) {
+    assertNotIncludes(animationNoneSelectors, selector, `RemiNet fast motion must preserve ${selector} completion events`);
+  }
 
   assertNotIncludes(files.reminetChatBackground, "prepareSocketAuth", "RemiNet site socket must not depend on a dormant browser-session preparation route");
   assertNotIncludes(files.reminetChatBackground, "refreshRemiliaAccess", "RemiNet site socket must not refresh ambient browser session state");
