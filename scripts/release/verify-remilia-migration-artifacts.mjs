@@ -11,6 +11,30 @@ const version = String(packageJson.extensionVersion || packageJson.version || ""
 const reportPath = `tmp/release-evidence/remilia-migration-artifact-scan-${version}.json`;
 const MAX_ARCHIVE_ENTRY_BYTES = 256 * 1024 * 1024;
 const MAX_TEXT_SCAN_BYTES = 16 * 1024 * 1024;
+const MAX_ANCHOR_ENTITIES = 4096;
+const MAX_ANCHORS = 32_768;
+const MAX_TOTAL_ANCHOR_ENTITIES = 65_536;
+const MAX_ENTITY_NAME_LENGTH = 32;
+const MAX_NUMERIC_ENTITY_DIGITS = 8;
+const MAX_EMSCRIPTEN_PATH_CANDIDATES = 32_768;
+// Unicode Default_Ignorable_Code_Point ranges are explicit so scanner behavior is
+// bounded and reviewable rather than changing with the JavaScript runtime's Unicode data.
+const DEFAULT_IGNORABLE_CODE_POINTS = /[\u00ad\u034f\u061c\u115f-\u1160\u17b4-\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb\u{1bca0}-\u{1bca3}\u{1d173}-\u{1d17a}\u{e0000}-\u{e0fff}]/gu;
+const tesseractVariants = ["core", "core-lstm", "core-relaxedsimd", "core-relaxedsimd-lstm", "core-simd", "core-simd-lstm"];
+const reviewedEmscriptenTextEntries = new Set([
+  "features/music.js",
+  "worker.js",
+  "ort/ort-wasm-simd-threaded.jsep.mjs",
+  ...tesseractVariants.flatMap((variant) => [
+    `ocr/core/tesseract-${variant}.js`,
+    `ocr/core/tesseract-${variant}.wasm.js`,
+  ]),
+]);
+const reviewedRuntimeEntries = new Set([
+  ...reviewedEmscriptenTextEntries,
+  "ort/ort-wasm-simd-threaded.jsep.wasm",
+  ...tesseractVariants.map((variant) => `ocr/core/tesseract-${variant}.wasm`),
+]);
 const crcTable = new Uint32Array(256);
 for (let index = 0; index < crcTable.length; index += 1) {
   let value = index;
@@ -61,8 +85,20 @@ async function scanArchives() {
 }
 
 export function scanContent(archivePath, entryName, content) {
+  if (isReviewedRuntimeLookalike(entryName)) {
+    throw new Error(`${archivePath}:${entryName}: unreviewed runtime lookalike detected`);
+  }
   if (!isTextCandidate(entryName, content)) return;
   const text = content.toString("utf8");
+  let normalizedText;
+  try {
+    normalizedText = normalizeAnchorVisibleText(text);
+  } catch {
+    throw new Error(`${archivePath}:${entryName}: malformed anchor text detected`);
+  }
+  assertNoRetiredSessionUi(archivePath, entryName, normalizedText);
+  assertNoAmbiguousRemiliaNavigation(archivePath, entryName, text);
+  const scanText = maskAllowedContent(entryName, text);
   const prohibited = [
     [/-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i, "private key"],
     [/(?:^|[^A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{12,}\.[A-Za-z0-9_-]{12,}(?:$|[^A-Za-z0-9_-])/i, "JWT-like credential"],
@@ -72,15 +108,406 @@ export function scanContent(archivePath, entryName, content) {
     [/\\\\[^\\/\s]+\\[^\\/\s]+(?:\\|$)/, "UNC machine path"],
     [/\bfile:\/\/(?:\/?[A-Za-z]:[\\/]|\/(?:Users|home)\/[^/\s]+\/|\/~[\\/]|[^/"'`\s]+\/[^/"'`\s]+(?:[\\/]|$))/i, "file URL"],
     [/(?:^|[\s"'`(=])~[\\/][^\\/\s]+(?:[\\/]|$)/, "user-home path"],
-    [/\/Users\/[^/\s]+\//, "macOS machine path"],
-    [/\/home\/[^/\s]+\//, "Linux machine path"],
+    [/\/Users\/[^/\s]+/, "macOS machine path"],
+    [/\/home\/[^/\s]+/, "Linux machine path"],
     [/(?:^|[\\/])\.codex[\\/]worktrees[\\/]/i, "Codex worktree path"],
-    [/\bRetry session\b/i, "retired browser-session UI"],
     [/\bOpen RemiliaNET\b/i, "retired browser-session UI"],
   ];
   for (const [pattern, label] of prohibited) {
-    if (pattern.test(text)) throw new Error(`${archivePath}:${entryName}: ${label} detected`);
+    if (pattern.test(scanText)) throw new Error(`${archivePath}:${entryName}: ${label} detected`);
   }
+}
+
+function assertNoRetiredSessionUi(archivePath, entryName, text) {
+  const clause = String.raw`[^.;!?\n<>\u2028\u2029]`;
+  const safePatterns = [
+    String.raw`\bbrowser-session authentication is (?:removed|disabled|retired|unsupported)\b`,
+    String.raw`\b(?:removes?|deletes?)\b${clause}{0,100}\bbrowser-session login (?:data|state)\b`,
+    String.raw`\bbrowser-session login (?:data|state)\b${clause}{0,80}\b(?:must be|is|was) (?:deleted|removed|disabled|retired|unsupported)\b`,
+    String.raw`\bdoes not\b${clause}{0,40}\b(?:reuse|adopt|detect|restore|refresh)\b${clause}{0,140}\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b`,
+    String.raw`\bno (?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b${clause}{0,60}\bwill (?:be )?(?:reused|adopted|detected|restored|refreshed)\b`,
+    String.raw`\b(?:does not|do not|never|no longer)\b${clause}{0,180}\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b${clause}{0,100}\b(?:sign[- ]?in|log[- ]?in)\b`,
+    String.raw`\b(?:does not|do not|never|no longer)\b${clause}{0,180}\b(?:sign[- ]?in|log[- ]?in)\b${clause}{0,100}\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b`,
+    String.raw`\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b${clause}{0,100}\b(?:sign[- ]?in|log[- ]?in)\b${clause}{0,60}\b(?:is|was|has been) (?:removed|deleted|disabled|retired|unsupported)\b`,
+    String.raw`\b(?:sign[- ]?in|log[- ]?in)\b${clause}{0,100}\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b${clause}{0,60}\b(?:is|was|has been) (?:removed|deleted|disabled|retired|unsupported)\b`,
+    String.raw`\b(?:does not|do not|never|no longer)\b${clause}{0,180}\b(?:sign[- ]?in|log[- ]?in)\b${clause}{0,80}\b(?:on|through|with)\s+RemiliaNET\b${clause}{0,120}\b(?:return|back)\b${clause}{0,120}\b(?:milXdy|session)\b`,
+  ];
+  const safeSessionExplanations = safePatterns.reduce(
+    (value, pattern) => value.replace(new RegExp(pattern, "gi"), "<safe-session-explanation>"),
+    text,
+  );
+  const retired = [
+    /\bRetry session\b/i,
+    /(?<![A-Za-z0-9_-])retry-session(?![A-Za-z0-9_-])/i,
+    /\b(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b[^.\n<>]{0,140}\b(?:auth(?:entication)?|login|sign[- ]?in|log[- ]?in|reuse[ds]?|adopt(?:ion|s|ed)?|detect(?:ion|s|ed)?|restore[ds]?|refresh(?:es|ed)?)\b/i,
+    /\b(?:sign[- ]?in|log[- ]?in|reuse[ds]?|adopt(?:s|ed)?|detect(?:s|ed)?|restore[ds]?|refresh(?:es|ed)?)\b[^.\n<>]{0,140}\b(?:existing\s+)?(?:browser[- ]session|RemiliaNET\s+(?:browser\s+)?session)\b/i,
+    /\b(?:sign[- ]?in|log[- ]?in)\b[^.\n<>]{0,80}\b(?:on|through|with)\s+RemiliaNET\b[^.\n<>]{0,120}\b(?:return|back)\b[^.\n<>]{0,120}\b(?:milXdy|(?:existing\s+)?session)\b/i,
+    /\bRemiliaNET\b[^.\n<>]{0,120}\b(?:authToken\s+cookie|cookie\s+(?:login|authentication|session|reuse))\b/i,
+    /\b(?:background|hidden|inactive)\s+tab\b[^.\n<>]{0,100}\b(?:session|login|authentication)\b/i,
+    /\bOpen RemiliaNET\b[^.\n<>]{0,120}\b(?:background|hidden|inactive)\s+tab\b/i,
+    /\bOpen RemiliaNET\b[^.\n<>]{0,160}\b(?:retry|reuse|restore|detect|adopt|sign[- ]?in|log[- ]?in)\b[^.\n<>]{0,100}\b(?:session|login|authentication)\b/i,
+  ];
+  if (retired.some((pattern) => pattern.test(safeSessionExplanations))) {
+    throw new Error(`${archivePath}:${entryName}: retired browser-session UI detected`);
+  }
+}
+
+function maskAllowedContent(entryName, text) {
+  const allowedLabel = "<allowed-remilia-navigation>";
+  let masked = text
+    .replaceAll("Open RemiliaNET Chat in milXdy", allowedLabel)
+    .replaceAll("Open RemiliaNET profile", allowedLabel);
+  masked = maskReviewedEmscriptenPaths(entryName, masked);
+  const matches = findAnchors(masked);
+  const replacements = [];
+  for (const match of matches) {
+    if (match.text !== "Open RemiliaNET") continue;
+    const index = match.index;
+    const openingTag = match.openingTag;
+    const hrefs = parseAnchorAttributes(openingTag).filter((attribute) => attribute.name === "href");
+    const officialHref = hrefs.length === 1
+      && hrefs[0].quoted
+      && hrefs[0].value === "https://www.remilia.net/";
+    const context = masked.slice(Math.max(0, index - 500), Math.min(masked.length, index + 500));
+    const currentRecovery = /(?:retry-connection|Reconnect Chat)/i.test(context)
+      && /(?:Remilia Chat authorization|authorization is required|Checking Remilia Chat authorization|\bConnect\b|\bReconnect\b)/i.test(context);
+    if (officialHref && currentRecovery) {
+      replacements.push({
+        start: index,
+        end: match.end,
+        value: `${openingTag}${allowedLabel}${match.closingTag}`,
+      });
+    }
+  }
+  return replaceIntervals(masked, replacements);
+}
+
+function replaceIntervals(text, replacements) {
+  if (replacements.length === 0) return text;
+  const chunks = [];
+  let cursor = 0;
+  for (const replacement of replacements) {
+    if (replacement.start < cursor || replacement.end < replacement.start || replacement.end > text.length) {
+      throw new Error("overlapping or invalid replacement interval");
+    }
+    chunks.push(text.slice(cursor, replacement.start), replacement.value);
+    cursor = replacement.end;
+  }
+  chunks.push(text.slice(cursor));
+  return chunks.join("");
+}
+
+function maskReviewedEmscriptenPaths(entryName, text) {
+  if (!reviewedEmscriptenTextEntries.has(entryName)) return text;
+  const candidates = [];
+  const placeholder = "/home/web_user";
+  for (let pathIndex = text.indexOf(placeholder); pathIndex !== -1; pathIndex = text.indexOf(placeholder, pathIndex + placeholder.length)) {
+    if (candidates.length >= MAX_EMSCRIPTEN_PATH_CANDIDATES) throw new Error(`${entryName}: Emscripten path candidate limit exceeded`);
+    const contextStart = Math.max(0, pathIndex - 260);
+    const prefix = text.slice(contextStart, pathIndex);
+    const suffix = text.slice(pathIndex + placeholder.length);
+    const environment = prefix.match(/(?:^|[{,])\s*USER\s*:\s*"web_user"\s*,\s*LOGNAME\s*:\s*"web_user"\s*,\s*PATH\s*:\s*"\/"\s*,\s*PWD\s*:\s*"\/"\s*,\s*HOME\s*:\s*"$/);
+    if (environment && /^"(?=\s*[,};)\]])/.test(suffix)) {
+      candidates.push({
+        codeIndex: contextStart + environment.index + environment[0].indexOf("USER"),
+        start: pathIndex,
+        end: pathIndex + placeholder.length,
+      });
+      continue;
+    }
+    const virtualDirectory = prefix.match(/([A-Za-z_$][\w$]*)\.mkdir\("\/home"\)\s*;\s*\1\.mkdir\("$/);
+    if (virtualDirectory && /^"(?=\s*\))/.test(suffix)) {
+      candidates.push({
+        codeIndex: contextStart + virtualDirectory.index,
+        start: pathIndex,
+        end: pathIndex + placeholder.length,
+      });
+    }
+  }
+  const { codeOffsets, malformedTemplate } = findJavaScriptCodeOffsets(text, candidates.map((candidate) => candidate.codeIndex));
+  if (malformedTemplate) throw new Error(`${entryName}: malformed JavaScript template nesting`);
+  const ranges = candidates
+    .filter((candidate) => codeOffsets.has(candidate.codeIndex))
+    .map(({ start, end }) => [start, end])
+    .sort((a, b) => a[0] - b[0]);
+  if (ranges.length > 0) {
+    const parts = [];
+    let cursor = 0;
+    for (const [start, end] of ranges) {
+      parts.push(text.slice(cursor, start), "<emscripten-home>");
+      cursor = end;
+    }
+    parts.push(text.slice(cursor));
+    text = parts.join("");
+  }
+  return text;
+}
+
+function isReviewedRuntimeLookalike(entryName) {
+  const normalized = entryName.replace(/\\/g, "/").toLowerCase();
+  const basename = normalized.slice(normalized.lastIndexOf("/") + 1);
+  const reviewedPrefix = basename.startsWith("ort-wasm-")
+    || basename.startsWith("tesseract-core");
+  return reviewedPrefix && !reviewedRuntimeEntries.has(entryName);
+}
+
+function findJavaScriptCodeOffsets(text, offsets) {
+  const targets = new Set(offsets);
+  const codeOffsets = new Set();
+  let state = "code";
+  let regexCharacterClass = false;
+  let previousSignificant = "";
+  const templateExpressionDepths = [];
+  for (let index = 0; index < text.length; index += 1) {
+    if (targets.has(index) && state === "code") codeOffsets.add(index);
+    const character = text[index];
+    const next = text[index + 1];
+    if (state === "line-comment") {
+      if (character === "\n" || character === "\r" || character === "\u2028" || character === "\u2029") state = "code";
+    } else if (state === "block-comment") {
+      if (character === "*" && next === "/") {
+        state = "code";
+        index += 1;
+      }
+    } else if (state === "single-quote" || state === "double-quote") {
+      if (character === "\\") index += 1;
+      else if ((state === "single-quote" && character === "'")
+        || (state === "double-quote" && character === '"')) state = "code";
+    } else if (state === "template") {
+      if (character === "\\") index += 1;
+      else if (character === "`") state = "code";
+      else if (character === "$" && next === "{") {
+        templateExpressionDepths.push(1);
+        state = "code";
+        previousSignificant = "{";
+        index += 1;
+      }
+    } else if (state === "regex") {
+      if (character === "\\") index += 1;
+      else if (character === "[") regexCharacterClass = true;
+      else if (character === "]") regexCharacterClass = false;
+      else if (character === "/" && !regexCharacterClass) {
+        state = "code";
+        while (isAsciiLetter(text[index + 1])) index += 1;
+        previousSignificant = "/";
+      }
+    } else if (character === "/" && next === "/") {
+      state = "line-comment";
+      index += 1;
+    } else if (character === "/" && next === "*") {
+      state = "block-comment";
+      index += 1;
+    } else if (character === "/" && canStartJavaScriptRegex(previousSignificant)) {
+      state = "regex";
+      regexCharacterClass = false;
+    } else if (character === "'") state = "single-quote";
+    else if (character === '"') state = "double-quote";
+    else if (character === "`") state = "template";
+    else if (templateExpressionDepths.length > 0 && character === "{") {
+      templateExpressionDepths[templateExpressionDepths.length - 1] += 1;
+      previousSignificant = character;
+    } else if (templateExpressionDepths.length > 0 && character === "}") {
+      const last = templateExpressionDepths.length - 1;
+      templateExpressionDepths[last] -= 1;
+      if (templateExpressionDepths[last] === 0) {
+        templateExpressionDepths.pop();
+        state = "template";
+      }
+      previousSignificant = character;
+    }
+    else if (!isJavaScriptWhitespace(character)) previousSignificant = character;
+  }
+  return {
+    codeOffsets,
+    malformedTemplate: state === "template" || templateExpressionDepths.length > 0,
+  };
+}
+
+function canStartJavaScriptRegex(previousSignificant) {
+  return previousSignificant === "" || "({[=,:;!?&|+*%~<>-".includes(previousSignificant);
+}
+
+function isAsciiLetter(value) {
+  if (!value) return false;
+  const code = value.charCodeAt(0);
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function isJavaScriptWhitespace(value) {
+  return value === " " || value === "\t" || value === "\n" || value === "\r" || value === "\f" || value === "\v" || value === "\u00a0";
+}
+
+function assertNoAmbiguousRemiliaNavigation(archivePath, entryName, text) {
+  const entityBudget = { count: 0 };
+  for (const anchor of findAnchors(text)) {
+    let visibleText;
+    try {
+      visibleText = decodeVisibleAnchorText(anchor.text, entityBudget);
+    } catch {
+      throw new Error(`${archivePath}:${entryName}: malformed anchor text detected`);
+    }
+    if (/^Open RemiliaNET$/i.test(visibleText) && anchor.text !== "Open RemiliaNET") {
+      throw new Error(`${archivePath}:${entryName}: retired browser-session UI detected`);
+    }
+  }
+}
+
+function normalizeAnchorVisibleText(text) {
+  const anchors = findAnchors(text);
+  const chunks = [];
+  const entityBudget = { count: 0 };
+  let cursor = 0;
+  for (const anchor of anchors) {
+    if (anchor.index < cursor || anchor.end < anchor.index || anchor.end > text.length) {
+      throw new Error("overlapping or invalid anchor interval");
+    }
+    chunks.push(
+      text.slice(cursor, anchor.index),
+      anchor.openingTag,
+      decodeVisibleAnchorText(anchor.text, entityBudget),
+      anchor.closingTag,
+    );
+    cursor = anchor.end;
+  }
+  chunks.push(text.slice(cursor));
+  return chunks.join("");
+}
+
+function decodeVisibleAnchorText(value, globalBudget = { count: 0 }) {
+  const namedWhitespace = new Map([
+    ["nbsp", "\u00a0"], ["NonBreakingSpace", "\u00a0"], ["Tab", "\t"], ["NewLine", "\n"],
+    ["ensp", "\u2002"], ["emsp", "\u2003"], ["emsp13", "\u2004"], ["emsp14", "\u2005"],
+    ["numsp", "\u2007"], ["puncsp", "\u2008"], ["thinsp", "\u2009"], ["ThinSpace", "\u2009"],
+    ["hairsp", "\u200a"], ["VeryThinSpace", "\u200a"], ["MediumSpace", "\u205f"], ["ThickSpace", "\u205f\u200a"],
+    ["ZeroWidthSpace", "\u200b"],
+    ["NegativeThinSpace", "\u200b"], ["NegativeMediumSpace", "\u200b"],
+    ["NegativeThickSpace", "\u200b"], ["NegativeVeryThinSpace", "\u200b"],
+    ["zwnj", "\u200c"], ["zwj", "\u200d"], ["lrm", "\u200e"], ["rlm", "\u200f"],
+    ["shy", "\u00ad"],
+    ["NoBreak", "\u2060"], ["ApplyFunction", "\u2061"], ["af", "\u2061"],
+    ["InvisibleTimes", "\u2062"], ["it", "\u2062"], ["InvisibleComma", "\u2063"], ["ic", "\u2063"],
+  ]);
+  const withoutMarkup = value.replace(/<[^>]*>/g, "");
+  let decoded = "";
+  let entityCount = 0;
+  for (let index = 0; index < withoutMarkup.length; index += 1) {
+    if (withoutMarkup[index] !== "&") {
+      decoded += withoutMarkup[index];
+      continue;
+    }
+    entityCount += 1;
+    if (entityCount > MAX_ANCHOR_ENTITIES) throw new Error("too many HTML entities");
+    globalBudget.count += 1;
+    if (globalBudget.count > MAX_TOTAL_ANCHOR_ENTITIES) throw new Error("global HTML entity limit exceeded");
+    if (withoutMarkup[index + 1] === "#") {
+      const hexadecimal = withoutMarkup[index + 2] === "x" || withoutMarkup[index + 2] === "X";
+      const digitStart = index + (hexadecimal ? 3 : 2);
+      let digitEnd = digitStart;
+      const digitPattern = hexadecimal ? /[0-9a-f]/i : /[0-9]/;
+      while (digitEnd < withoutMarkup.length && digitPattern.test(withoutMarkup[digitEnd])) digitEnd += 1;
+      const digits = withoutMarkup.slice(digitStart, digitEnd);
+      if (!digits || digits.length > MAX_NUMERIC_ENTITY_DIGITS || withoutMarkup[digitEnd] !== ";") {
+        throw new Error("invalid numeric HTML entity");
+      }
+      decoded += decodeNumericEntity(Number.parseInt(digits, hexadecimal ? 16 : 10));
+      index = digitEnd;
+      continue;
+    }
+    let nameEnd = index + 1;
+    while (nameEnd < withoutMarkup.length && /[A-Za-z0-9]/.test(withoutMarkup[nameEnd])) nameEnd += 1;
+    const name = withoutMarkup.slice(index + 1, nameEnd);
+    if (name.length > MAX_ENTITY_NAME_LENGTH) throw new Error("HTML entity name too long");
+    if (name && withoutMarkup[nameEnd] === ";") {
+      decoded += namedWhitespace.get(name) ?? withoutMarkup.slice(index, nameEnd + 1);
+      index = nameEnd;
+      continue;
+    }
+    decoded += "&";
+  }
+  return decoded
+    .replace(DEFAULT_IGNORABLE_CODE_POINTS, "")
+    .replace(/[\s\u00a0\u2002-\u200b\u205f]+/g, " ")
+    .trim();
+}
+
+function decodeNumericEntity(codePoint) {
+  if (!Number.isInteger(codePoint)
+    || codePoint < 0
+    || codePoint > 0x10ffff
+    || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+    throw new Error("invalid numeric HTML entity");
+  }
+  return String.fromCodePoint(codePoint);
+}
+
+function findAnchors(text) {
+  const anchors = [];
+  const lower = text.toLowerCase();
+  const startPattern = /<a(?=[\t\n\f\r >])/gi;
+  for (let start = startPattern.exec(text); start; start = startPattern.exec(text)) {
+    let quote = "";
+    let openingEnd = -1;
+    for (let index = start.index + 2; index < text.length; index += 1) {
+      const character = text[index];
+      if (quote) {
+        if (character === quote) quote = "";
+      } else if (character === '"' || character === "'") {
+        quote = character;
+      } else if (character === ">") {
+        openingEnd = index + 1;
+        break;
+      }
+    }
+    if (openingEnd === -1) continue;
+    const closingStart = lower.indexOf("</a>", openingEnd);
+    if (closingStart === -1) continue;
+    anchors.push({
+      index: start.index,
+      openingTag: text.slice(start.index, openingEnd),
+      text: text.slice(openingEnd, closingStart),
+      closingTag: text.slice(closingStart, closingStart + 4),
+      end: closingStart + 4,
+    });
+    if (anchors.length > MAX_ANCHORS) throw new Error("anchor count limit exceeded");
+    startPattern.lastIndex = closingStart + 4;
+  }
+  return anchors;
+}
+
+function parseAnchorAttributes(openingTag) {
+  const attributes = [];
+  let index = 2;
+  while (index < openingTag.length - 1) {
+    while (/[\t\n\f\r ]/.test(openingTag[index])) index += 1;
+    if (index >= openingTag.length - 1 || openingTag[index] === ">") break;
+    if (openingTag[index] === "/") {
+      index += 1;
+      continue;
+    }
+    const nameStart = index;
+    while (index < openingTag.length && !/[\t\n\f\r =>/]/.test(openingTag[index])) index += 1;
+    const name = openingTag.slice(nameStart, index).toLowerCase();
+    while (/[\t\n\f\r ]/.test(openingTag[index])) index += 1;
+    if (openingTag[index] !== "=") {
+      attributes.push({ name, quoted: false, value: "" });
+      continue;
+    }
+    index += 1;
+    while (/[\t\n\f\r ]/.test(openingTag[index])) index += 1;
+    const delimiter = openingTag[index];
+    if (delimiter === '"' || delimiter === "'") {
+      index += 1;
+      const valueStart = index;
+      while (index < openingTag.length && openingTag[index] !== delimiter) index += 1;
+      attributes.push({ name, quoted: true, value: openingTag.slice(valueStart, index) });
+      if (openingTag[index] === delimiter) index += 1;
+    } else {
+      const valueStart = index;
+      while (index < openingTag.length && !/[\t\n\f\r >]/.test(openingTag[index])) index += 1;
+      attributes.push({ name, quoted: false, value: openingTag.slice(valueStart, index) });
+    }
+  }
+  return attributes;
 }
 
 function isTextCandidate(fileName, content) {
