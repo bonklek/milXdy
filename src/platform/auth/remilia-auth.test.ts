@@ -62,6 +62,7 @@ describe("Remilia OIDC PKCE", () => {
     expect(authorization.searchParams.get("client_id")).toBe(CLIENT_ID);
     expect(authorization.searchParams.get("redirect_uri")).toBe(REDIRECT_URI);
     expect(authorization.searchParams.get("scope")?.split(" ")).toEqual(["openid", ...REQUIRED_SCOPES]);
+    expect(authorization.searchParams.get("prompt")).toBe("consent");
     expect(authorization.searchParams.get("code_challenge_method")).toBe("S256");
     expect(authorization.searchParams.get("state")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
     expect(authorization.searchParams.get("nonce")).toMatch(/^[A-Za-z0-9_-]{40,}$/);
