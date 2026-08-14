@@ -789,7 +789,9 @@ function toGeneratedRegistryApp(record) {
     id: sheet.id,
     path: sheet.target,
   }));
-  manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  if (manifest.dock) manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  else delete manifest.dock;
+  manifest.hub = preserveFirstPartyRail(firstParty?.hub, manifest.hub);
   manifest.composerAction = rewriteComposerActionIcon(manifest.composerAction, record.id);
   manifest.contextualPostActions = rewriteContextualPostActionIcons(manifest.contextualPostActions, record.id);
   manifest.available = true;
@@ -825,6 +827,14 @@ function toGeneratedRegistryApp(record) {
       archiveSha256: record.source.archiveSha256,
       packageConsentAcknowledged: record.trustDecision.packageConsentAcknowledged === true,
     },
+  };
+}
+
+function preserveFirstPartyRail(firstPartyHub, packageHub) {
+  if (!firstPartyHub?.rail) return packageHub;
+  return {
+    ...(packageHub || {}),
+    rail: structuredClone(firstPartyHub.rail),
   };
 }
 

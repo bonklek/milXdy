@@ -19,6 +19,7 @@ import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counte
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClient } from "./remilia-capability-client";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
+import { migratePostReadingRailDefault, POST_READING_RAIL_DEFAULT_MIGRATION_KEY } from "./post-reading-rail-default";
 import { diagnosticStorageEntry } from "./reminet-chat-diagnostics";
 import { contentScriptScopeForApp, loadTriggersForApp, routeScopeMatches, surfacesForApp } from "./site-runtime";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
@@ -138,6 +139,7 @@ type RuntimeState = {
   railPinnedApps: Set<MilxdyAppId>;
   railUnpinnedApps: Set<MilxdyAppId>;
   railPinsExplicit: boolean;
+  postReadingRailDefaultMigrated: boolean;
   idlePreloadTimer: number | null;
   routeSurfaceImports: number;
   pendingSurfaceImports: Set<MilxdyAppId>;
@@ -328,6 +330,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     railPinnedApps: new Set(),
     railUnpinnedApps: new Set(),
     railPinsExplicit: false,
+    postReadingRailDefaultMigrated: false,
     idlePreloadTimer: null,
     routeSurfaceImports: 0,
     pendingSurfaceImports: new Set(),
@@ -420,6 +423,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
       app,
       enabled: app.available !== false && await app.isEnabled(),
     })));
+    const postReadingEnablement = enablement.find(({ app }) => app.id === "post-reading");
+    if (postReadingEnablement) {
+      await applyPostReadingRailDefault(postReadingEnablement.app, postReadingEnablement.enabled);
+    }
     const startupApps: MilxdyAppManifest[] = [];
     const metadataStartedAt = performance.now();
     for (const { app, enabled } of enablement) {
@@ -792,9 +799,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
       for (const app of state.apps) {
         const keys = area === "local" ? app.storageKeys.local : area === "sync" ? app.storageKeys.sync : undefined;
         if (!keys?.some((key) => changes[key])) continue;
-        void app.isEnabled().then((enabled) => {
+        void app.isEnabled().then(async (enabled) => {
           if (enabled) {
             state.enabledApps.add(app.id);
+            await applyPostReadingRailDefault(app, true);
+            ensureDefaultRailPin(app);
             updateScannerConfiguration();
             updateDockRegistration(app);
             if (shouldLoadForRoute(app, state.route)) void loadApp(app, "enablementRoute");
@@ -2841,9 +2850,39 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
   }
 
   async function loadRailPins(): Promise<void> {
-    const stored = await safeLocalGet({ [RAIL_PIN_KEY]: null, [RAIL_UNPIN_KEY]: [] });
+    const stored = await safeLocalGet({
+      [RAIL_PIN_KEY]: null,
+      [RAIL_UNPIN_KEY]: [],
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: false,
+    });
     applyStoredRailPins(stored?.[RAIL_PIN_KEY]);
     applyStoredRailUnpins(stored?.[RAIL_UNPIN_KEY]);
+    state.postReadingRailDefaultMigrated = stored?.[POST_READING_RAIL_DEFAULT_MIGRATION_KEY] === true;
+  }
+
+  async function applyPostReadingRailDefault(app: MilxdyAppManifest, enabled: boolean): Promise<void> {
+    const migration = migratePostReadingRailDefault({
+      appId: app.id,
+      enabled,
+      available: app.available !== false,
+      hasDock: Boolean(app.dock),
+      railSupported: app.hub?.rail.supported !== false,
+      railDefaultPinned: app.hub?.rail.defaultPinned === true,
+      alreadyMigrated: state.postReadingRailDefaultMigrated,
+      pinnedAppIds: state.railPinnedApps,
+      unpinnedAppIds: state.railUnpinnedApps,
+    });
+    if (!migration.changed) return;
+    state.railPinnedApps = new Set(migration.pinnedAppIds as Set<MilxdyAppId>);
+    state.railUnpinnedApps = new Set(migration.unpinnedAppIds as Set<MilxdyAppId>);
+    state.railPinsExplicit = true;
+    state.postReadingRailDefaultMigrated = migration.migrated;
+    const persisted = await safeLocalSet({
+      [RAIL_PIN_KEY]: Array.from(state.railPinnedApps),
+      [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: true,
+    });
+    if (!persisted) state.postReadingRailDefaultMigrated = false;
   }
 
   async function loadFirstRunState(): Promise<void> {
@@ -2953,9 +2992,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     const startedAt = performance.now();
     void app.setEnabled(enabled)
       .then(() => app.isEnabled())
-      .then((isEnabled) => {
+      .then(async (isEnabled) => {
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);
@@ -2999,6 +3039,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
         const isEnabled = await app.isEnabled();
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);

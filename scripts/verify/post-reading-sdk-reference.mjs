@@ -12,6 +12,7 @@ const planPath = path.join(compositionRoot, "build-plan.json");
 const packageInput = "tmp/post-reading-sdk-reference/post-reading";
 const compositionInput = "tmp/post-reading-sdk-reference/composition";
 const planInput = "tmp/post-reading-sdk-reference/composition/build-plan.json";
+const POST_READING_RAIL_DEFAULT_MIGRATION_KEY = "milxdy.apps.postReadingRailDefault.v1";
 const replacementPolicies = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const referencePolicy = replacementPolicies.replacements?.find((candidate) => candidate.id === "post-reading");
 if (!referencePolicy?.sourceUrl || !referencePolicy?.sourceCommit) {
@@ -73,6 +74,14 @@ try {
   }
 
   const plan = JSON.parse(await readFile(planPath, "utf8"));
+  const composedPostReading = plan.apps?.find((candidate) => candidate.id === "post-reading");
+  if (!composedPostReading?.defaultEnabled
+    || !composedPostReading?.dock
+    || composedPostReading?.hub?.rail?.supported !== true
+    || composedPostReading?.hub?.rail?.defaultPinned !== true
+    || !composedPostReading?.hostAssetAccess?.includes("post-reading")) {
+    throw new Error("Composed Post-reading must retain the host-owned default-enabled X rail launcher and packaged host assets");
+  }
   plan.outputDir = "tmp/post-reading-sdk-reference/chromium";
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
   run(process.execPath, [
@@ -80,6 +89,16 @@ try {
     "--target=chromium",
     `--local-app-plan=${planInput}`,
   ], workspace);
+  const builtContent = await readFile(path.join(workspace, plan.outputDir, "content.js"), "utf8");
+  for (const expected of [
+    POST_READING_RAIL_DEFAULT_MIGRATION_KEY,
+    "post-reading",
+    "railDefaultPinned",
+  ]) {
+    if (!builtContent.includes(expected)) {
+      throw new Error(`Built Post-reading runtime omitted default rail migration evidence: ${expected}`);
+    }
+  }
 
   console.log(`Post-reading external App SDK reference verified from ${referenceRepo}`);
 } finally {
