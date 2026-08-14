@@ -19,6 +19,7 @@ import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counte
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
 import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClient } from "./remilia-capability-client";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
+import { diagnosticStorageEntry } from "./reminet-chat-diagnostics";
 import { contentScriptScopeForApp, loadTriggersForApp, routeScopeMatches, surfacesForApp } from "./site-runtime";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
@@ -5329,7 +5330,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
   function recordRuntimeDiagnostic(key: string, value: unknown): void {
     void safeLocalGet({ "milxdy.diagnostics.enabled": false }).then((stored) => {
       if (stored?.["milxdy.diagnostics.enabled"] !== true) return;
-      void safeLocalSet({ [`milxdy.diagnostics.${key}`]: value });
+      void safeLocalSet(diagnosticStorageEntry(key, value));
     });
   }
 

@@ -11,6 +11,7 @@ import {
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } from "../../platform/app-sdk/app-platform";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
+import { sanitizeReminetChatDiagnostic } from "../../platform/runtime/reminet-chat-diagnostics";
 import { absoluteRemiliaMediaUrl, isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import { canMountRemiNetChatRoute } from "./route-policy";
 import {
@@ -1205,7 +1206,7 @@ function upsertMessage(message: ApiMessage): void {
 function connectSocket(): void {
   if (!lifecycleActive() || document.hidden || state.socketState === "open" || state.socketState === "connecting") return;
   state.reconnectAttempts += 1;
-  recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts, route: location.pathname });
+  recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts });
   if (!state.socketPort) {
     try {
       state.socketPort = chrome.runtime.connect({ name: SOCKET_PORT_NAME });
@@ -1630,8 +1631,9 @@ function renderReconnectState(): string {
 }
 
 function recordChatDiagnostic(key: string, value: Record<string, unknown>): void {
+  const sanitized = sanitizeReminetChatDiagnostic(key, value);
   recordDiagnostic(key, {
-    ...value,
+    ...sanitized,
     socketState: state.socketState,
     signedIn: state.signedIn,
     visibleState: state.recoveryVisibleState,
@@ -2759,8 +2761,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
       if (profileResponse.ok && enriched) {
         if (profileResponse.partial === true) {
           recordChatDiagnostic("profileLookupPartial", {
-            handle: cacheKey,
-            warnings: Array.isArray(profileResponse.warnings) ? profileResponse.warnings : [],
+            warningCount: Array.isArray(profileResponse.warnings) ? profileResponse.warnings.length : 0,
           });
         }
         const enrichedXHandle = connectedXHandle(enriched);
@@ -2771,8 +2772,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
         return;
       }
       recordChatDiagnostic("profileLookupFailed", {
-        handle: cacheKey,
-        error: String(profileResponse.error || "PROFILE_LOOKUP_FAILED"),
+        code: "PROFILE_LOOKUP_FAILED",
       });
       profileLookupDone.add(cacheKey);
     } finally {

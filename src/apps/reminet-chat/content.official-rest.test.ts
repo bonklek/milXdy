@@ -68,4 +68,25 @@ describe("RemiNet Chat official REST wiring", () => {
     expect(source).toContain("&& state.signedIn");
     expect(source).toContain('kind === "auth-expired" || kind === "missing-scope"');
   });
+
+  it("redacts route, handle, warnings, and raw profile errors before diagnostic persistence", async () => {
+    const source = await readFile(new URL("./content.ts", import.meta.url), "utf8");
+    const runtime = await readFile(new URL("../../platform/runtime/content-runtime.ts", import.meta.url), "utf8");
+    const background = await readFile(new URL("../../extension/background/index.ts", import.meta.url), "utf8");
+    const socketConnect = source.slice(source.indexOf("function connectSocket"), source.indexOf("function closeSocket"));
+    const profileLookup = source.slice(source.indexOf("function queueProfileLookup"), source.indexOf("function profileUserFromResponse"));
+    const diagnostic = source.slice(source.indexOf("function recordChatDiagnostic"), source.indexOf("function renderLoadOlderButton"));
+    const persistence = runtime.slice(runtime.indexOf("function recordRuntimeDiagnostic"), runtime.indexOf("function loadedAppsByCost"));
+
+    expect(socketConnect).toContain('recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts })');
+    expect(socketConnect).not.toContain("location.pathname");
+    expect(profileLookup).toContain("warningCount:");
+    expect(profileLookup).toContain('code: "PROFILE_LOOKUP_FAILED"');
+    expect(profileLookup).not.toMatch(/recordChatDiagnostic\("profileLookup(?:Partial|Failed)"[\s\S]{0,160}(?:handle:|warnings:|error:)/u);
+    expect(diagnostic).toContain("sanitizeReminetChatDiagnostic(key, value)");
+    expect(diagnostic.indexOf("sanitizeReminetChatDiagnostic(key, value)")).toBeLessThan(diagnostic.indexOf("recordDiagnostic(key"));
+    expect(persistence).toContain("safeLocalSet(diagnosticStorageEntry(key, value))");
+    expect(background).toContain("removeLegacyReminetChatDiagnostics(chrome.storage.local)");
+    expect(background.match(/removePersistedLegacyReminetChatDiagnostics\(\);/gu)).toHaveLength(3);
+  });
 });

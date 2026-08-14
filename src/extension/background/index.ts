@@ -73,6 +73,7 @@ import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultSt
 import { isSupportedMediaContributionMime, MEDIA_CONTRIBUTION_MAX_BYTES, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 import { registerPageContextActions, type PageContextActionApp } from "../../platform/background/page-context-actions";
 import { renderRemiliaMakerImage } from "./external-handoff-page-adapters";
+import { removeLegacyReminetChatDiagnostics } from "../../platform/runtime/reminet-chat-diagnostics";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -401,6 +402,7 @@ setupBackgroundMessageRouter([
   },
 ]);
 void initializeBackgroundNetworkBudget();
+removePersistedLegacyReminetChatDiagnostics();
 
 function isRemiStatsMessage(message: unknown): message is RemiStatsMessage {
   if (!message || typeof message !== "object") return false;
@@ -1968,6 +1970,7 @@ function combineAbortSignals(existing: AbortSignal | null | undefined, deadline:
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
+  removePersistedLegacyReminetChatDiagnostics();
   scheduleUpdateChecks();
   void runUpdateCheck();
   // Chrome reports an unpacked-extension reload as an update. Re-arm the
@@ -1990,6 +1993,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  removePersistedLegacyReminetChatDiagnostics();
   scheduleUpdateChecks();
   void runUpdateCheck();
 });
@@ -2020,6 +2024,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 void scheduleUpdateChecks();
+
+function removePersistedLegacyReminetChatDiagnostics(): void {
+  void removeLegacyReminetChatDiagnostics(chrome.storage.local).catch(() => undefined);
+}
 
 function scheduleUpdateChecks(): void {
   void chrome.alarms.create(UPDATE_ALARM_NAME, {

@@ -79,6 +79,8 @@ function verifyRuntimeBundle(build, content, background) {
   assert(content.includes("milxdy.performance.mode"), `${build.dir}: Performance mode state missing`);
   assert(content.includes("isRailDiscoverableWhenDisabled"), `${build.dir}: disabled RemiNet Chat rail discovery missing`);
   assert(content.includes("railLauncher"), `${build.dir}: RemiNet Chat rail activation enablement missing`);
+  assert(content.includes("diagnosticStorageEntry") && content.includes("sanitizeReminetChatDiagnostic") && content.includes("reminetChat."), `${build.dir}: RemiNet Chat diagnostic persistence boundary missing`);
+  assert(content.includes("PROFILE_LOOKUP_FAILED"), `${build.dir}: RemiNet Chat stable diagnostic failure code missing`);
   assert(content.includes("milxdyVersion") && content.includes("milxdyBuildProfile") && content.includes("milxdyBuildTarget"), `${build.dir}: runtime build markers missing from content bundle`);
   assert(content.includes(JSON.stringify(expectedVersion)), `${build.dir}: runtime version marker value missing from content bundle`);
   assert(content.includes(`"${build.profile}"`), `${build.dir}: runtime build profile marker value missing from content bundle`);
@@ -86,6 +88,10 @@ function verifyRuntimeBundle(build, content, background) {
   assert(background.includes("Unsupported music lookup URL"), `${build.dir}: music allowlist rejection missing`);
   assert(background.includes("Unsupported Miladychan URL"), `${build.dir}: Miladychan allowlist rejection missing`);
   assert(background.includes("UNSUPPORTED_IMAGE_URL"), `${build.dir}: image proxy allowlist rejection missing`);
+  assert(background.includes("removeLegacyReminetChatDiagnostics"), `${build.dir}: legacy RemiNet Chat diagnostic migration missing`);
+  for (const key of ["socket.connect", "profileLookupPartial", "profileLookupFailed"]) {
+    assert(background.includes(`milxdy.diagnostics.reminetChat.${key}`), `${build.dir}: legacy RemiNet Chat diagnostic key migration missing ${key}`);
+  }
 }
 
 async function verifyFeatureBundles(build) {
@@ -103,6 +109,9 @@ async function verifyFeatureBundles(build) {
     assert(chat.includes("Remilia connection") && chat.includes("Connect/Reconnect"), `${build.dir}: RemiNet Chat connection-control guidance missing`);
     assert(chat.includes("Recheck Chat"), `${build.dir}: RemiNet Chat REST recheck action missing`);
     assert(!chat.includes(">Open RemiliaNET</a>"), `${build.dir}: RemiNet Chat must not expose website-session recovery`);
+    assert(!chat.includes("route:location.pathname"), `${build.dir}: RemiNet Chat socket diagnostics must not retain route paths`);
+    assert(!/profileLookupPartial.{0,240}(?:handle:|warnings:)/su.test(chat), `${build.dir}: RemiNet Chat partial-profile diagnostics retain sensitive values`);
+    assert(!/profileLookupFailed.{0,240}(?:handle:|error:)/su.test(chat), `${build.dir}: RemiNet Chat failed-profile diagnostics retain sensitive values`);
   }
 }
 
