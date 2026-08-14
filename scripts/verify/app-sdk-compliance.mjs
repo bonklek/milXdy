@@ -13,6 +13,7 @@ const siteRuntime = await readFile("src/platform/runtime/site-runtime.ts", "utf8
 const backgroundMessagePolicy = await readFile("src/platform/runtime/background-message-policy.ts", "utf8");
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
 const background = await readFile("src/extension/background/index.ts", "utf8");
+const externalHandoffPageAdapters = await readFile("src/extension/background/external-handoff-page-adapters.ts", "utf8");
 const composerSource = await readFile("scripts/packages/compose-local-app-packages.mjs", "utf8");
 const postReadingDefaults = await readFile("src/apps/post-reading/shared/defaults.ts", "utf8");
 const postReadingContent = await readFile("src/apps/post-reading/content.ts", "utf8");
@@ -168,9 +169,13 @@ function verifyPlatformContract() {
   requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
   requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
   requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
-  requireIncludes(background, "#randomMemeButton", "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
-  requireIncludes(background, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
-  requireIncludes(background, "randomMeme.click();\n    await waitForRender();", "Random-meme handoffs must wait for an asynchronous preset render before capture");
+  requireIncludes(externalHandoffPageAdapters, '"#randomButton"', "External maker handoffs must use the maker's reviewed random-token control");
+  requireIncludes(externalHandoffPageAdapters, '"#tokenIDDisplay"', "External maker handoffs must bind completion to the selected token");
+  requireIncludes(externalHandoffPageAdapters, "selectedTokenId !== previousTokenId", "External maker handoffs must not accept the maker's pre-request idle state");
+  requireIncludes(externalHandoffPageAdapters, "display?.currentlyDisplaying === false", "External maker handoffs must wait for the selected token render to finish");
+  requireIncludes(externalHandoffPageAdapters, '"#randomMemeButton"', "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
+  requireIncludes(externalHandoffPageAdapters, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
+  requireIncludes(externalHandoffPageAdapters, "await display.drawSelectedLayers(false, true);", "Random-meme handoffs must render the selected preset before capture");
   requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
   requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
   requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");

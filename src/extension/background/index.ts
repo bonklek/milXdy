@@ -72,15 +72,7 @@ import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, 
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
 import { isSupportedMediaContributionMime, MEDIA_CONTRIBUTION_MAX_BYTES, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
 import { registerPageContextActions, type PageContextActionApp } from "../../platform/background/page-context-actions";
-
-// `attributeDisplay` is the reviewed maker's own top-level renderer. This
-// declaration is used only by `world: "MAIN"` injected code; the extension
-// never reads or writes the maker page outside the explicit reviewed handoff.
-declare const attributeDisplay: {
-  currentlyDisplaying?: boolean;
-  canvas?: HTMLCanvasElement;
-  drawSelectedLayers?: (full?: boolean, canvas?: boolean) => Promise<void>;
-} | undefined;
+import { renderRemiliaMakerImage } from "./external-handoff-page-adapters";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -909,8 +901,8 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
     if (!isSafeMakerImageDataUrl(result.imageDataUrl)) return { ok: false, error: "The maker did not return a usable image." };
     return { ok: true, imageDataUrl: result.imageDataUrl };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } catch {
+    return { ok: false, error: "The maker image could not be generated." };
   } finally {
     if (generatedMakerTabId !== null) await chrome.tabs.remove(generatedMakerTabId).catch(() => undefined);
   }
@@ -1026,56 +1018,6 @@ async function renderCheeseWorldImage(sourceDataUrl: string, contentType: string
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : String(error) };
   }
-}
-
-/** Runs only in the reviewed maker tab after an explicit package gesture. */
-async function renderRemiliaMakerImage(topText: string, bottomText: string, mode: "captioned" | "randomMeme"): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
-  // `chrome.scripting.executeScript` serializes only this function, so the
-  // wait helper must remain inside it rather than closing over extension code.
-  const waitForRender = async (): Promise<void> => {
-    const deadline = Date.now() + 15_000;
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
-    while (Date.now() < deadline) {
-      const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
-      if (display && display.currentlyDisplaying === false && display.canvas?.width && display.canvas.height) return;
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
-    }
-    throw new Error("The maker did not finish rendering in time.");
-  };
-  const top = document.querySelector<HTMLInputElement>("#topText");
-  const bottom = document.querySelector<HTMLInputElement>("#bottomText");
-  const randomToken = document.querySelector<HTMLElement>("#randomButton");
-  const randomMeme = document.querySelector<HTMLElement>("#randomMemeButton");
-  if (!top || !bottom || !randomToken || !randomMeme) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
-  // The token button selects the maker base; the separate Meme Maker control
-  // supplies its reviewed random caption/preset. They are deliberately not
-  // interchangeable, even though both are labelled "Random" in the maker UI.
-  randomToken.click();
-  await waitForRender();
-  const setInput = (input: HTMLInputElement, value: string) => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  };
-  if (mode === "captioned") {
-    setInput(top, topText);
-    setInput(bottom, bottomText);
-  } else {
-    // The maker applies a random meme preset asynchronously.  Do not capture
-    // the already-rendered base token while its new preset is still pending;
-    // this is especially visible when both package caption fields are empty.
-    randomMeme.click();
-    await waitForRender();
-  }
-  // The reviewed maker exposes its complete renderer only from its own main
-  // world. Rendering there preserves its selected layers, text treatment, and
-  // pixel-art settings instead of trying to recreate its DOM in the extension.
-  const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
-  if (!display?.drawSelectedLayers) return { ok: false, error: "This maker no longer exposes its reviewed renderer." };
-  await display.drawSelectedLayers(false, true);
-  const image = document.querySelector<HTMLImageElement>("#downloadable");
-  if (!image?.src.startsWith("data:image/png;base64,")) return { ok: false, error: "The maker did not render a PNG." };
-  return { ok: true, imageDataUrl: image.src };
 }
 
 function isMiladychanFetchJsonMessage(message: unknown): message is MiladychanFetchJsonMessage {

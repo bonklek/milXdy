@@ -390,11 +390,17 @@ function buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInp
             setMakerStatus(status, "success", `${maker.label} replaced the initiating composer image.`);
           }
         } else {
-          await launchExternalHandoff(maker.handoffId, {
-            mode: random.checked ? "randomMeme" : "captioned",
+          const mode = random.checked || !topInput.value.trim() && !bottomInput.value.trim() ? "randomMeme" : "captioned";
+          const { ok, error } = await launchExternalHandoff(maker.handoffId, {
+            mode,
             captions: { topText: topInput.value, bottomText: bottomInput.value }
           });
-          if (!signal.aborted) setMakerStatus(status, "success", `${maker.label} handoff complete. Check the active composer.`);
+          if (!signal.aborted && !ok) {
+            const detail = typeof error === "string" && error.trim() ? ` ${error.trim().slice(0, 160)}` : " Try again.";
+            setMakerStatus(status, "error", `${maker.label} could not generate an image.${detail}`);
+          } else if (!signal.aborted) {
+            setMakerStatus(status, "success", `${maker.label} added the generated image to the active composer.`);
+          }
         }
       } catch (error) {
         if (!signal.aborted) {
