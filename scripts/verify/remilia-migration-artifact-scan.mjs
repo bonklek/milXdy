@@ -105,6 +105,10 @@ try {
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&thinsp;RemiliaNET</a>'],
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&MediumSpace;RemiliaNET</a>'],
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&VeryThinSpace;RemiliaNET</a>'],
+    ["retired Beetol retry-session UI", '<button id="beetol-retry-session">Retry</button>'],
+    ["retired Beetol auth operation", 'chrome.runtime.sendMessage({type:"beetol:logout"})'],
+    ["retired Beetol auth operation", 'chrome.runtime.sendMessage({type:"beetol:sessionStatus"})'],
+    ["retired Beetol website-sign-in instruction", '<a href="https://www.remilia.net/">Sign in</a> to RemiliaNET, then retry Beetol.'],
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&zwj; RemiliaNET</a>'],
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&zwnj; RemiliaNET</a>'],
     ["retired browser-session UI", '<span>Remilia Chat authorization is required</span><button data-chat-action="retry-connection">Reconnect Chat</button><a href="https://www.remilia.net/">Open&NoBreak; RemiliaNET</a>'],
@@ -233,6 +237,58 @@ try {
     () => scanContent("built.zip", "background.js", Buffer.from(safeAnchor.repeat(32_769))),
     /malformed anchor text detected/,
     "anchor normalization must fail closed at the global anchor cap",
+  );
+
+  const releaseArchive = "release/milXdy-0.2.5-chromium.zip";
+  const builtBeetolContent = "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect. beetol:authStatus";
+  scanContent(releaseArchive, "features/beetol.js", Buffer.from(builtBeetolContent));
+  for (const directAuth of [
+    'chrome.runtime.sendMessage({type:"remilia-auth:connect"})',
+    'chrome.runtime.sendMessage({type:"remilia-auth:"+operation})',
+    'chrome.runtime.sendMessage({type:`remilia-auth:${operation}`})',
+  ]) {
+    assert.throws(
+      () => scanContent(releaseArchive, "features/beetol.js", Buffer.from(`${builtBeetolContent}${"x".repeat(2_000)}${directAuth}`)),
+      /direct Remilia auth operation detected in Beetol content/,
+      `expected emitted Beetol direct auth prefix to fail: ${directAuth}`,
+    );
+  }
+  const builtBeetolTransport = `beetol:authStatus
+    credentials: "omit",
+    result.status === 401 && retry
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    INVALID_RESPONSE_URL`;
+  const builtBeetolBackground = (moduleSuffix = "", nextModule = "") => `// src/apps/beetol/background.js
+${builtBeetolTransport}
+${moduleSuffix}
+// src/apps/remistats/background.ts
+${nextModule}`;
+  scanContent(releaseArchive, "background.js", Buffer.from(builtBeetolBackground()));
+  for (const residue of ["result.status === 403", "disconnectRemiliaAuth", "clearRemiliaAuth"]) {
+    assert.throws(
+      () => scanContent(releaseArchive, "background.js", Buffer.from(builtBeetolBackground(`${"x".repeat(2_000)}${residue}`))),
+      /Beetol 403 refresh or implicit disconnect residue detected/,
+      `expected distant Beetol ${residue} residue to fail within the emitted module`,
+    );
+  }
+  scanContent(
+    releaseArchive,
+    "background.js",
+    Buffer.from(builtBeetolBackground("", "async function disconnectRemiliaAuth() {}\nclearRemiliaAuth();\nresult.status === 403")),
+  );
+  const builtFullQuote = `const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    signal,
+  });
+  if (!response.ok) throw new Error(\`Text fetch failed: \${response.status}\`);
+  return await response.text();`;
+  scanContent(releaseArchive, "features/post-reading.js", Buffer.from(builtFullQuote));
+  assert.throws(
+    () => scanContent(releaseArchive, "features/post-reading.js", Buffer.from(builtFullQuote.replace('    redirect: "error",\n', ""))),
+    /direct full-quote omit\/error\/no-referrer\/status\/text contract missing/,
   );
 
   const source = join(root, "source");

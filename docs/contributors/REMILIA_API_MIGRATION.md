@@ -106,6 +106,17 @@ as an API-v1 response.
 | Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
 | Public RemiStats X badge/profile lookup at `https://api.remistats.net/user/{x-handle}` | Official delegated `/me/stats` describes only the token user, not arbitrary visible X accounts | Request is unauthenticated and separately labeled; no Remilia credential enters the request | Remove when an official documented public lookup covers equivalent arbitrary-user badge/profile data and parity QA passes, or retire the badge surface |
 
+Beetol content receives only token-free `beetol:authStatus`. When disconnected,
+it passively directs the user to open the milXdy extension popup and use
+**Remilia connection → Connect/Reconnect**; it never opens RemiliaNET, adopts a
+website session, or invokes disconnect/logout. Retired `beetol:logout`,
+`beetol:sessionStatus`, and retry-session routes are not registered. Legacy
+Beetle mutations retry at most once after the first HTTP 401, never refresh on
+403, and never clear the trusted connection after an action failure. Their
+fixed background fetches use `credentials: "omit"`, `redirect: "error"`, and
+`referrerPolicy: "no-referrer"`, then require the final response URL to equal
+the fixed requested endpoint.
+
 Official API-v1 REST is the only chat history authority. The retired legacy
 `/api/chats/1/messages` history handler and public socket-preparation runtime
 message are not registered fallback routes. The retained socket carries only
@@ -117,6 +128,13 @@ bytes. Page context cannot widen the upload, confirmation, or media-read hosts.
 Browser-session adoption, cookie mutation, hidden-tab refresh, and silent
 session reuse are removed migration mechanisms, not retained legacy adapters.
 No rollback switch may restore them.
+
+Post-reading's optional direct public-HTML fallback is also credentialless. In
+the host source and emitted bundle it preserves the exact fetch boundary:
+`credentials: "omit"`, `redirect: "error"`, `referrerPolicy: "no-referrer"`,
+the caller's abort signal, HTTP-status rejection, and the existing
+`response.text()` read. The external sdk.4 package remains byte-unchanged and
+fail-closed without runtime messaging.
 
 Explicit `completeMigration` deletes the four known legacy token keys and ends
 disconnected. Status reads do not silently delete or adopt credentials.

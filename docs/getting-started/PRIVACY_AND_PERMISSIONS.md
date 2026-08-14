@@ -23,7 +23,7 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Pets Maker contacts `https://maker.remilia.org` only after the user clicks **Fetch**; it sends the selected public Maker family and NFT number and receives public trait metadata.
 - Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
-- Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens.
+- Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens. The direct public-HTML fallback omits credentials, rejects redirects, sends no referrer, honors cancellation, rejects non-success HTTP status, and reads only the returned text.
 - Post-reading custom HTTP TTS is optional and local-only. When selected, milXdy sends the text being read plus speed, volume, and voice metadata only to a loopback endpoint such as `http://localhost`, `http://127.0.0.1`, or `http://[::1]`; remote custom TTS endpoints and returned remote audio URLs are rejected.
 - Direct-message read-aloud is a stricter local boundary: it always uses the
   browser's Web Speech engine, even when custom HTTP TTS is selected. DM text is
@@ -41,6 +41,15 @@ milXdy injects its shared runtime only on these reviewed HTTPS hosts:
 - `www.remilia.net`: a filtered launcher for RemiNet Chat and Beetol. The
   temporary socket bridge remains separately validated; it does not adopt the
   website session or provide Remilia authentication.
+
+Beetol reads only token-free connection status in content code. When an
+official account connection is required, it passively tells the user to open
+the milXdy extension popup and choose **Remilia connection →
+Connect/Reconnect**. It cannot open a login/session tab, disconnect the account,
+or call retired logout/session-status routes. Legacy Beetle action requests
+stay in trusted background code, retry only after the first HTTP 401 (never
+403), do not clear the connection on action failure, omit browser credentials,
+reject redirects, send no referrer, and reject a changed final response URL.
 - `remilia.wiki` and `wiki.remilia.org`: a feature-only runtime for direct Post-reading article controls and route handling; the existing validated embedded-Wiki bridge remains separate.
 - `boards.miladychan.org`: a filtered Miladychan Portal launcher. Public JSON and explicit text-only posting still use the fixed background allowlist with credentials omitted.
 

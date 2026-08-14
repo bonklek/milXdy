@@ -10,7 +10,10 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 
 ## Common Tasks
 
-- Open **Remilia account**, review the requested abilities, and use **Connect**.
+- Open the milXdy extension popup, find **Remilia connection**, review the
+  requested abilities, and use **Connect** or **Reconnect**. Beetol's panel only
+  shows this passive instruction; it does not open or reuse a RemiliaNET website
+  session.
 - Beetle state and cards require the `remilia:beetle.read` ability. If it is
   missing or expired, use **Reconnect** and review consent again.
 - Enable **Show Beetol hunt panel** when you want the hover panel.
@@ -23,6 +26,8 @@ RemiNet Chat. API-v1 state and card reads are official coverage. Hunt, craft,
 the `catchBeetle`, `beetleHunt`, `claimUBC`, `junkFaucet`, `craft`, and public
 trophy-shelf operations that do not yet have documented API-v1 equivalents use
 separately labeled temporary legacy adapters and run only after user action.
+Beetol content reads token-free connection status only. It cannot disconnect
+the account or invoke retired logout/session-status operations.
 
 Beetle state and discovered cards are read through the documented Remilia API v1 endpoints using the delegated `remilia:beetle.read` scope. milXdy normalizes missing inventory, hammer, charge, card, and cooldown fields locally so a partial response does not invent a ready action or discard a persisted cooldown.
 

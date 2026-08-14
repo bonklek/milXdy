@@ -84,6 +84,13 @@ This record binds the 0.2.5 evidence to public release base
 security parent `a7b3caedf5d7f94d3a4fb8af45e0f6185a687e9f`. It does not convert an
 automated result into live acceptance.
 
+The final audited runtime parent is
+`0b2376e66ac3a8f302ca71831dc871052165ae58`: Beetol's official-auth boundary
+mapped first at `7d1495b9302a24b7461e70568b1a21a5e0a88833`, followed by the host-only
+Post-reading direct-fetch hardening. All 29 browser rows remain pending until
+the exact packaged candidate is observed; strict-live verification continues
+to fail closed while `sourceCommit` and browser/build evidence are null.
+
 | Shipped source slice | Cumulative public release ancestry |
 | --- | --- |
 | #24 Post-Factory/Remibooru and initial Post-reading fallback | `7cf7d19a28760acdee757f6ac6f4a968e2bdde71`â†’`f05cf3c963831d55b58910f9f19cec72144f8d8a`â†’`a1a3733d08a5605868f8e74212cee5696020e03c` |
@@ -97,6 +104,9 @@ automated result into live acceptance.
 | #224/#222 Share Kit | `ae87dd92eaf50761d17ac606b09ce03b514e976b`â†’`6d85dd3909ad67f2b1828f03dc10f645b50c0c60` |
 | #192/#193 pet pipeline | `3ce160ac7bbe2e18955fbceabd4655773c4b56ef`â†’`55491b9551f3831bdc6544741470b99eb19c2850` |
 | #236 remediation and approved reproducibility follow-up | `f6f679fb5150383989815af1981b60c068020681`â†’`cbf7ded56390db36cf85a69bd32a357ff04bf1c2`â†’`7dcb6e9e9637be2d573c0fae434c293c77e78a2b`â†’`a7b3caedf5d7f94d3a4fb8af45e0f6185a687e9f` |
+
+| #231 final Beetol auth/transport cleanup | `7d1495b9302a24b7461e70568b1a21a5e0a88833` |
+| #18 host-only full-quote transport hardening | `0b2376e66ac3a8f302ca71831dc871052165ae58` |
 
 All entries are cumulative public release ancestry; no private-history tree is
 imported. Public changelog, roadmap, and prior release notes remain as the
@@ -112,14 +122,19 @@ copy.
 | Share Kit package/content | `3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9` |
 | Share Kit manifest | `8bff62a878e857dc1cfd25e80a292fd7790d0d41fc2236d033a51596868d86ed` |
 | Three-package composition | `a6f64ffa2dd14ef460e591cbfaba129be69216c25e02a9c372fadb552a6976a8` |
+| Post-reading external sdk.4 package | `01ca79910d26266ca4b89681ea5998da454c140aa7e4e776ae008123bb2b9fa3` |
+| Post-Factory package/content | `99b316f54c2fb350f3a02dd5bea21b797b2f280afe6f6db2c1826ee54a8a8985` |
 | Final combined pet skill ZIP | `9e4f54212af30502be6156c0cb3204f5d4e19bddb1b4d1078ac437c760e2c915` |
-| Reproducible Chromium archive | `6c2d63aa8af9ac391a79b4d9fd236640f3648776a2e016d59cf1d1cd80a99ca1` |
-| Reproducible Firefox archive | `6431524956daf49fc90e5c9592ba646defd803ec529ef6b5903a4380153d75c5` |
+| Reproducible Chromium archive | `33afd55be0baaf9747833281de6c92e01100a07d0f817f83e1f7e2b2f28fad21` |
+| Reproducible Firefox archive | `82ac3b4adb8f976976aeb64d6aaf947595d81df052a4e0f10536a86fb1533b62` |
+| Deterministic Remilia migration artifact report | `d3b329993318c9e164869d213f628a4294bfffb2a21dcdbd33ff96ca2e52d910` |
 
 The composition result is three accepted, zero rejected, and zero sensitive.
 The final combined pet ZIP contains 15 deterministic entries with no duplicate
 or unsafe path and supersedes the earlier #192-only SHA
 `179cd2149e12f005704bde402ba1a39b958fac3bc197df81a7b47cc46d25228a`.
-These are inherited machine results from the exact pre-documentation candidate.
-#237 does not rebuild or mutate the shared Chromium output; QA must prove the
-post-#237 documentation-only candidate retains the same artifact/build identity.
+The archive and report values were regenerated locally from the exact corrected
+runtime parent without touching the shared Chromium output. The package and
+composition identities remain unchanged. QA must reproduce the same identities
+after mapping this documentation/gate-only follow-up; none of these automated
+results constitutes live browser acceptance.

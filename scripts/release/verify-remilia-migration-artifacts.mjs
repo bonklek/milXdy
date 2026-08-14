@@ -90,6 +90,7 @@ export function scanContent(archivePath, entryName, content) {
   }
   if (!isTextCandidate(entryName, content)) return;
   const text = content.toString("utf8");
+  assertRequiredMigrationRuntimeContracts(archivePath, entryName, text);
   let normalizedText;
   try {
     normalizedText = normalizeAnchorVisibleText(text);
@@ -111,11 +112,66 @@ export function scanContent(archivePath, entryName, content) {
     [/\/Users\/[^/\s]+/, "macOS machine path"],
     [/\/home\/[^/\s]+/, "Linux machine path"],
     [/(?:^|[\\/])\.codex[\\/]worktrees[\\/]/i, "Codex worktree path"],
+    [/(?<![A-Za-z0-9_-])beetol-retry-session(?![A-Za-z0-9_-])/i, "retired Beetol retry-session UI"],
+    [/beetol:(?:logout|sessionStatus)\b/i, "retired Beetol auth operation"],
+    [/Sign in[^.\n<>]{0,120}RemiliaNET[^.\n<>]{0,120}(?:return|retry)[^.\n<>]{0,120}Beetol|RemiliaNET[^.\n<>]{0,120}(?:return|retry)[^.\n<>]{0,120}Beetol/i, "retired Beetol website-sign-in instruction"],
     [/\bOpen RemiliaNET\b/i, "retired browser-session UI"],
   ];
   for (const [pattern, label] of prohibited) {
     if (pattern.test(scanText)) throw new Error(`${archivePath}:${entryName}: ${label} detected`);
   }
+}
+
+function assertRequiredMigrationRuntimeContracts(archivePath, entryName, text) {
+  if (!/(?:^|[\\/])milXdy-0\.2\.5-(?:chromium|firefox)\.zip$/i.test(archivePath)) return;
+  if (entryName === "features/beetol.js") {
+    requireArtifactText(archivePath, entryName, text, "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.", "passive popup guidance");
+    requireArtifactText(archivePath, entryName, text, "beetol:authStatus", "token-free auth-status operation");
+    if (/remilia-auth:/i.test(text)) {
+      throw new Error(`${archivePath}:${entryName}: direct Remilia auth operation detected in Beetol content`);
+    }
+  }
+  if (entryName === "background.js") {
+    const beetolModule = extractBundledAppModule(archivePath, entryName, text, "src/apps/beetol/background.js");
+    requireArtifactText(archivePath, entryName, beetolModule, "beetol:authStatus", "Beetol auth-status registration");
+    const retryIndex = beetolModule.indexOf("result.status === 401 && retry");
+    const invalidUrlIndex = beetolModule.indexOf("INVALID_RESPONSE_URL", Math.max(0, retryIndex));
+    if (retryIndex < 0 || invalidUrlIndex < retryIndex) {
+      throw new Error(`${archivePath}:${entryName}: Beetol first-401-only retry contract missing`);
+    }
+    const transport = beetolModule.slice(Math.max(0, retryIndex - 1_500), Math.min(beetolModule.length, invalidUrlIndex + 500));
+    requireArtifactText(archivePath, entryName, transport, 'credentials: "omit"', "Beetol credentials omission");
+    requireArtifactText(archivePath, entryName, transport, 'redirect: "error"', "Beetol redirect rejection");
+    requireArtifactText(archivePath, entryName, transport, 'referrerPolicy: "no-referrer"', "Beetol no-referrer policy");
+    requireArtifactText(archivePath, entryName, transport, "INVALID_RESPONSE_URL", "Beetol final-URL rejection");
+    if (/result\.status === 403|disconnectRemiliaAuth|clearRemiliaAuth/.test(beetolModule)) {
+      throw new Error(`${archivePath}:${entryName}: Beetol 403 refresh or implicit disconnect residue detected`);
+    }
+  }
+  if (entryName === "features/post-reading.js") {
+    const directFetch = /const\s+response\d*\s*=\s*await\s+fetch\(url,\s*\{\s*credentials:\s*"omit",\s*redirect:\s*"error",\s*referrerPolicy:\s*"no-referrer",\s*signal\s*,?\s*\}\);\s*if\s*\(!response\d*\.ok\)\s*throw\s+new\s+Error\(`Text fetch failed: \$\{response\d*\.status\}`\);\s*return\s+await\s+response\d*\.text\(\);/;
+    if (!directFetch.test(text)) {
+      throw new Error(`${archivePath}:${entryName}: direct full-quote omit/error/no-referrer/status/text contract missing`);
+    }
+  }
+}
+
+function extractBundledAppModule(archivePath, entryName, text, sourcePath) {
+  const marker = `// ${sourcePath}`;
+  const markerIndex = text.indexOf(marker);
+  if (markerIndex < 0) {
+    throw new Error(`${archivePath}:${entryName}: ${sourcePath} module boundary missing`);
+  }
+  const remainder = text.slice(markerIndex + marker.length);
+  const nextAppModule = /(?:\r?\n)[ \t]*\/\/ src\/apps\/(?!beetol\/)[^\r\n]+/.exec(remainder);
+  if (!nextAppModule) {
+    throw new Error(`${archivePath}:${entryName}: ${sourcePath} next module boundary missing`);
+  }
+  return text.slice(markerIndex, markerIndex + marker.length + nextAppModule.index);
+}
+
+function requireArtifactText(archivePath, entryName, text, required, label) {
+  if (!text.includes(required)) throw new Error(`${archivePath}:${entryName}: ${label} missing`);
 }
 
 function assertNoRetiredSessionUi(archivePath, entryName, text) {

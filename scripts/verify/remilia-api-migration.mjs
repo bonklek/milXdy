@@ -28,6 +28,11 @@ const currentGuides = [
 
 const files = new Map(await Promise.all(currentGuides.map(async (path) => [path, await readFile(path, "utf8")])));
 const allCurrentGuides = Array.from(files, ([path, text]) => `\n--- ${path} ---\n${text}`).join("");
+const [beetolContent, beetolBackground, postReadingFullQuote] = await Promise.all([
+  readFile("src/apps/beetol/content.js", "utf8"),
+  readFile("src/apps/beetol/background.js", "utf8"),
+  readFile("src/apps/post-reading/fullQuote.ts", "utf8"),
+]);
 
 const staleInstructions = [
   [/\bRetry session\b/i, "Retry session instruction"],
@@ -46,6 +51,40 @@ for (const [pattern, label] of staleInstructions) {
   const match = pattern.exec(allCurrentGuides);
   assert(!match, `${label} remains in current documentation near: ${context(allCurrentGuides, match?.index)}`);
 }
+
+for (const [source, pattern, label] of [
+  [beetolContent, /beetol-retry-session|beetol:sessionStatus|beetol:logout|remilia-auth:/i, "retired Beetol content auth operation"],
+  [beetolContent, /Sign in[\s\S]{0,120}RemiliaNET[\s\S]{0,120}(?:return|retry)|RemiliaNET[\s\S]{0,120}(?:return|retry)[\s\S]{0,120}Beetol/i, "website-sign-in/return/retry Beetol instruction"],
+  [beetolBackground, /beetol:sessionStatus|beetol:logout|disconnectRemiliaAuth|clearRemiliaAuth/i, "retired Beetol background auth operation"],
+]) {
+  assert(!pattern.test(source), `${label} remains in source`);
+}
+for (const required of [
+  "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.",
+  "type: 'beetol:authStatus'",
+]) {
+  assert(beetolContent.includes(required), `Beetol content must retain passive popup/auth-status boundary ${JSON.stringify(required)}`);
+}
+for (const required of [
+  "if (result.status === 401 && retry)",
+  "credentials: 'omit'",
+  "redirect: 'error'",
+  "referrerPolicy: 'no-referrer'",
+  "isExactResponseUrl(response.url, endpoint)",
+]) {
+  assert(beetolBackground.includes(required), `Beetol legacy transport must include ${JSON.stringify(required)}`);
+}
+assert(!/result\.status\s*===\s*403[\s\S]{0,160}refreshAccessToken|refreshAccessToken[\s\S]{0,160}result\.status\s*===\s*403/.test(beetolBackground), "Beetol legacy transport must never refresh after 403");
+
+const directFullQuoteContract = `const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    signal,
+  });
+  if (!response.ok) throw new Error(\`Text fetch failed: \${response.status}\`);
+  return await response.text();`;
+assert(postReadingFullQuote.includes(directFullQuoteContract), "Post-reading direct full-quote fallback must omit credentials, reject redirects, suppress referrers, honor abort, check status, and return text");
 
 const migration = files.get("docs/contributors/REMILIA_API_MIGRATION.md");
 const normalizedMigration = migration.replace(/\s+/g, " ");
@@ -210,13 +249,17 @@ const requiredFirefoxCaseIds = [
 const candidateEvidence = files.get("docs/contributors/REMILIA_API_QA.md").replace(/\s+/g, " ");
 for (const required of [
   "a7b3caedf5d7f94d3a4fb8af45e0f6185a687e9f",
+  "0b2376e66ac3a8f302ca71831dc871052165ae58",
   "1e4c9cae7551252c264addb5439f5be157d6e1aa56adc94faa5be33a86102245",
   "3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9",
   "8bff62a878e857dc1cfd25e80a292fd7790d0d41fc2236d033a51596868d86ed",
   "a6f64ffa2dd14ef460e591cbfaba129be69216c25e02a9c372fadb552a6976a8",
+  "01ca79910d26266ca4b89681ea5998da454c140aa7e4e776ae008123bb2b9fa3",
+  "99b316f54c2fb350f3a02dd5bea21b797b2f280afe6f6db2c1826ee54a8a8985",
   "9e4f54212af30502be6156c0cb3204f5d4e19bddb1b4d1078ac437c760e2c915",
-  "6c2d63aa8af9ac391a79b4d9fd236640f3648776a2e016d59cf1d1cd80a99ca1",
-  "6431524956daf49fc90e5c9592ba646defd803ec529ef6b5903a4380153d75c5",
+  "33afd55be0baaf9747833281de6c92e01100a07d0f817f83e1f7e2b2f28fad21",
+  "82ac3b4adb8f976976aeb64d6aaf947595d81df052a4e0f10536a86fb1533b62",
+  "d3b329993318c9e164869d213f628a4294bfffb2a21dcdbd33ff96ca2e52d910",
   "browser-local Web Speech only",
   "Public changelog, roadmap, and prior release notes remain",
   "does not convert an automated result into live acceptance",
