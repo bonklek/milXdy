@@ -10,6 +10,15 @@ const fullQuoteSource = await readFile("src/apps/post-reading/fullQuote.ts", "ut
 const postReadingBackgroundSource = await readFile("src/apps/post-reading/background.ts", "utf8");
 const postReadingUrlPolicySource = await readFile("src/apps/post-reading/urlPolicy.ts", "utf8");
 const chromiumOutput = path.join("dist", "post-reading-chromium");
+const directFetchContract = `const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    signal,
+  });
+  if (!response.ok) throw new Error(\`Text fetch failed: \${response.status}\`);
+  return await response.text();`;
+const emittedDirectFetchContract = /const\s+response\s*=\s*await\s+fetch\(url,\s*\{\s*credentials:\s*"omit",\s*redirect:\s*"error",\s*referrerPolicy:\s*"no-referrer",\s*signal\s*,?\s*\}\);\s*if\s*\(!response\.ok\)\s*throw\s+new\s+Error\(`Text fetch failed: \$\{response\.status\}`\);\s*return\s+await\s+response\.text\(\);/;
 
 assert(typeof packageJson.scripts?.["build:post-reading"] === "string", "package scripts must include build:post-reading");
 assert(typeof packageJson.scripts?.["verify:post-reading:distribution"] === "string", "package scripts must include verify:post-reading:distribution");
@@ -24,6 +33,7 @@ assert(!/extractBearerToken|authorization:\s*`?Bearer|Bearer\s+\[/.test(fullQuot
 assert(!/getLikelyXScriptUrls|fetchSameOriginText|responsive-web\/client-web/.test(fullQuoteSource), "Post-reading full quotes must not scan X/Twitter app scripts for session API material");
 assert(!/createElement\(["']iframe["']\)|frame\.src\s*=/.test(fullQuoteSource), "Post-reading full quotes must not load hidden X/Twitter frames with browser session state");
 assert(!/credentials:\s*"include"/.test(fullQuoteSource), "Post-reading full quote content fetches must not include ambient browser credentials");
+assert(fullQuoteSource.includes(directFetchContract), "Post-reading direct full-quote source must preserve its URL, response, and abort behavior while omitting credentials/referrer and rejecting redirects");
 assert(!/fetch\s*\(\s*endpoint\.toString\(\)/.test(fullQuoteSource), "Post-reading oEmbed fallback must not fetch publish.twitter.com directly from content code");
 assert(fullQuoteSource.includes("const data = await fetchJson(endpoint.toString(), signal)"), "Post-reading oEmbed fallback must use the background JSON bridge");
 assert(!/credentials:\s*message\.type\s*===\s*"post-reading:fetchText"\s*\?\s*"include"/.test(postReadingBackgroundSource), "Post-reading background text fetches must not include ambient browser credentials");
@@ -51,6 +61,7 @@ for (const permission of [
 
 if (existsSync(chromiumOutput)) {
   const manifest = JSON.parse(await readFile(path.join(chromiumOutput, "manifest.json"), "utf8"));
+  const contentBundle = await readFile(path.join(chromiumOutput, "content.js"), "utf8");
   assert(manifest.version === extensionVersion, "Post-reading distribution manifest version must match the browser extension version");
   assert(manifest.name === "Post-reading", "Post-reading distribution manifest must keep the Post-reading product name");
   assert(manifest.permissions?.includes("storage"), "Post-reading distribution manifest must include storage permission");
@@ -58,6 +69,7 @@ if (existsSync(chromiumOutput)) {
   for (const permission of ["http://localhost/*", "http://127.0.0.1/*", "http://[::1]/*", "https://publish.twitter.com/*", "https://cdn.syndication.twimg.com/*"]) {
     assert(manifest.host_permissions?.includes(permission), `Post-reading distribution output missing host permission ${permission}`);
   }
+  assert(emittedDirectFetchContract.test(contentBundle), "Post-reading distribution must emit the complete hardened direct full-quote fetch contract");
 }
 
 console.log(`Post-reading distribution contract verification passed for ${extensionVersion}.`);

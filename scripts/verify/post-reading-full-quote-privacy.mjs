@@ -12,6 +12,14 @@ const standaloneBuilder = await readFile("scripts/build/build-post-reading-distr
 const privacyDocs = await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8");
 const userGuide = await readFile("docs/guides/README.md", "utf8");
 const postReadingGuide = await readFile("docs/guides/post-reading.md", "utf8");
+const directFetchContract = `const response = await fetch(url, {
+    credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
+    signal,
+  });
+  if (!response.ok) throw new Error(\`Text fetch failed: \${response.status}\`);
+  return await response.text();`;
 
 const failures = [];
 
@@ -26,7 +34,7 @@ forbid(fullQuote, /\bqueryId\b/, "fullQuote must not discover X GraphQL query ID
 forbid(fullQuote, /\bfetchGraphQl|\bdiscoverGraphQl|\bextractGraphQl|\bgraphQlFeatures\b|\bgraphQlFieldToggles\b/i, "fullQuote must not keep the credentialed GraphQL fetch path");
 forbid(fullQuote, /credentials:\s*["']include["']/, "fullQuote direct fetches must not include browser credentials");
 forbid(fullQuote, /createElement\(["']iframe["']\)|frame\.src\s*=/, "fullQuote must not load hidden X/Twitter frames that can carry ambient browser credentials");
-requireIncludes(fullQuote, 'credentials: "omit"', "fullQuote public HTML/oEmbed fetches must omit credentials");
+requireIncludes(fullQuote, directFetchContract, "fullQuote direct public HTML fetch must preserve its URL, response, and abort behavior while omitting credentials/referrer and rejecting redirects");
 requireIncludes(fullQuote, 'type: "post-reading:fetchJson"', "fullQuote should keep public syndication JSON fallback");
 requireIncludes(fullQuote, 'type: "post-reading:fetchText"', "fullQuote should keep public text fallback through the background bridge");
 requireIncludes(fullQuote, 'const data = await fetchJson(endpoint.toString(), signal)', "fullQuote oEmbed fallback must use the background JSON bridge");
