@@ -12,7 +12,6 @@ import {
   REMILIA_BASE_URL,
   prepareRemiliaAccess,
   refreshRemiliaAccess,
-  disconnectRemiliaAuth,
   getRemiliaAuthStatus,
   isRemiliaDisconnected,
   remiliaAuthProvider,
@@ -22,9 +21,7 @@ const BASE_URL = REMILIA_BASE_URL;
 const officialBeetleReads = new RemiliaApiClient({ auth: remiliaAuthProvider });
 const CRUNCH_STEP_MS = 717;
 const MESSAGE_TYPES = new Set([
-  'beetol:logout',
   'beetol:authStatus',
-  'beetol:sessionStatus',
   'beetol:getState',
   'beetol:action',
   'beetol:crunchJunk',
@@ -64,14 +61,6 @@ async function setStored(values) {
   return chrome.storage.local.set(values);
 }
 
-async function clearAuth() {
-  return disconnectRemiliaAuth();
-}
-
-async function clearStoredAuth() {
-  return disconnectRemiliaAuth();
-}
-
 async function refreshAccessToken() {
   const result = await refreshRemiliaAccess();
   return result.ok;
@@ -88,9 +77,8 @@ async function remiliaFetch(method, path, body, retry = true) {
     accessToken: prepared.accessToken,
   });
 
-  if ((result.status === 401 || result.status === 403) && retry) {
+  if (result.status === 401 && retry) {
     if (await refreshAccessToken()) return remiliaFetch(method, path, body, false);
-    await clearStoredAuth();
     return { ok: false, authRequired: true, status: result.status, data: result.data, authMethod: result.authMethod };
   }
 
@@ -98,23 +86,37 @@ async function remiliaFetch(method, path, body, retry = true) {
 }
 
 async function remiliaRequest(method, path, body, options = {}) {
+  const endpoint = new URL(path, BASE_URL).href;
   const headers = {
     Accept: 'application/json',
     ...(body == null ? {} : { 'Content-Type': 'application/json' }),
     ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
   };
-  const response = await fetch(`${BASE_URL}${path}`, {
+  const response = await fetch(endpoint, {
     method,
-    credentials: options.credentials || 'omit',
+    credentials: 'omit',
+    redirect: 'error',
+    referrerPolicy: 'no-referrer',
     headers,
     body: body == null ? undefined : JSON.stringify(body),
   });
 
+  if (!isExactResponseUrl(response.url, endpoint)) {
+    return { ok: false, status: 0, data: { message: 'INVALID_RESPONSE_URL' }, authMethod: options.authMethod };
+  }
   const data = await readResponseBody(response);
   if (!response.ok) {
     return { ok: false, status: response.status, data, authMethod: options.authMethod };
   }
   return { ok: true, status: response.status, data, authMethod: options.authMethod };
+}
+
+function isExactResponseUrl(actual, expected) {
+  try {
+    return new URL(actual).href === new URL(expected).href;
+  } catch {
+    return false;
+  }
 }
 
 async function readResponseBody(response) {
@@ -395,20 +397,8 @@ async function handleBeetolMessage(message, sender) {
   if (!isBeetolMessageSender(message, sender)) {
     return { ok: false, status: 0, error: 'UNSUPPORTED_SENDER' };
   }
-  if (message?.type === 'beetol:logout') {
-    await clearAuth();
-    return { ok: true };
-  }
   if (message?.type === 'beetol:authStatus') {
     return getAuthStatus();
-  }
-  if (message?.type === 'beetol:sessionStatus') {
-    const status = await getRemiliaAuthStatus();
-    return {
-      ok: true,
-      signedIn: status.phase === 'connected',
-      method: status.phase === 'connected' ? 'oidc' : null,
-    };
   }
   if (message?.type === 'beetol:getState') {
     return getState();
@@ -432,9 +422,7 @@ async function handleBeetolMessage(message, sender) {
 function isBeetolMessageSender(message, sender) {
   if (!sender || sender.id !== chrome.runtime.id) return false;
   if (isBeetolExtensionPageSender(sender)) {
-    return message?.type === 'beetol:authStatus'
-      || message?.type === 'beetol:sessionStatus'
-      || message?.type === 'beetol:logout';
+    return message?.type === 'beetol:authStatus';
   }
   return isBeetolContentScriptSender(sender);
 }

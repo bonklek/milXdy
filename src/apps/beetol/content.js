@@ -154,9 +154,7 @@ function mountBeetolGame(context = {}) {
           <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
         </div>
         <div id="beetol-signed-out" class="beetol-signed-out-msg">
-          <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
-          <span>to RemiliaNET, then retry Beetol.</span>
-          <button id="beetol-retry-session" type="button">Reconnect Remilia</button>
+          <span>Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.</span>
         </div>
         <div id="beetol-actions" class="beetol-actions"></div>
         <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
@@ -182,7 +180,6 @@ function mountBeetolGame(context = {}) {
     next: root.querySelector('#beetol-next'),
     user: root.querySelector('#beetol-user'),
     signedOut: root.querySelector('#beetol-signed-out'),
-    retrySession: root.querySelector('#beetol-retry-session'),
     actions: root.querySelector('#beetol-actions'),
     crunchJunk: root.querySelector('#beetol-crunch-junk'),
     crunchProgress: root.querySelector('#beetol-crunch-progress'),
@@ -837,8 +834,8 @@ function mountBeetolGame(context = {}) {
     }
 
     if (!state.signedIn) {
-      els.user.textContent = 'Not signed in';
-      els.next.textContent = 'Sign in';
+      els.user.textContent = 'Remilia connection required';
+      els.next.textContent = 'Connect';
     } else {
       const name = state.user?.username || state.user?.name || state.user?.displayName || 'Signed in';
       els.user.textContent = name;
@@ -880,7 +877,7 @@ function mountBeetolGame(context = {}) {
     els.message.className = state.messageKind ? `beetol-${state.messageKind}` : '';
     state.appFrame?.updateDock({
       badgeText: dockBadgeText(),
-      title: state.signedIn ? `Beetol Game: ${els.next.textContent || ''}` : 'Beetol Game: sign in',
+      title: state.signedIn ? `Beetol Game: ${els.next.textContent || ''}` : 'Beetol Game: connect in extension popup',
     });
   }
 
@@ -1105,13 +1102,6 @@ function mountBeetolGame(context = {}) {
     playActionSound();
     if (state.signedIn) refreshState();
     else checkAuthStatus();
-  });
-
-  els.retrySession?.addEventListener('click', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    playActionSound();
-    checkAuthStatus();
   });
 
   els.minimize?.addEventListener('click', () => {

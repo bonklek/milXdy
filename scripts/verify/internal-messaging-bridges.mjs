@@ -118,12 +118,13 @@ function verifyBeetolRuntimeBridge() {
   const contentScriptPolicy = functionBody(files.beetolBackground, "isBeetolContentScriptSender");
   assertIncludes(handler, "if (!isBeetolMessageSender(message, sender))", "Beetol runtime bridge must validate sender before authenticated operations");
   assertIncludes(handler, "UNSUPPORTED_SENDER", "Beetol runtime bridge must fail closed for unsupported senders");
-  assertOrder(handler, "if (!isBeetolMessageSender(message, sender))", "if (message?.type === 'beetol:logout')", "Beetol runtime bridge must validate sender before dispatch");
+  assertOrder(handler, "if (!isBeetolMessageSender(message, sender))", "if (message?.type === 'beetol:authStatus')", "Beetol runtime bridge must validate sender before dispatch");
   assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "Beetol sender policy must require same-extension sender id");
   assertIncludes(senderPolicy, "isBeetolExtensionPageSender(sender)", "Beetol sender policy must recognize popup/extension-page senders");
   assertIncludes(senderPolicy, "message?.type === 'beetol:authStatus'", "Beetol extension-page policy must allow popup auth status");
-  assertIncludes(senderPolicy, "message?.type === 'beetol:sessionStatus'", "Beetol extension-page policy must allow popup session status");
-  assertIncludes(senderPolicy, "message?.type === 'beetol:logout'", "Beetol extension-page policy must allow popup logout");
+  assertNotIncludes(files.beetolBackground, "beetol:sessionStatus", "Beetol must not retain the retired browser-session status operation");
+  assertNotIncludes(files.beetolBackground, "beetol:logout", "Beetol must not retain a non-popup auth-disconnect operation");
+  assertNotIncludes(files.beetolBackground, "disconnectRemiliaAuth", "Beetol action failures must not destroy trusted auth state");
   assertIncludes(senderPolicy, "return isBeetolContentScriptSender(sender);", "Beetol sender policy must use a separate content-script policy for page actions");
   assertIncludes(extensionPagePolicy, "if (sender.tab) return false;", "Beetol extension-page policy must reject tab senders");
   assertIncludes(extensionPagePolicy, "chrome.runtime.getURL('')", "Beetol extension-page policy must compare against the packaged extension origin");
@@ -131,6 +132,19 @@ function verifyBeetolRuntimeBridge() {
   assertIncludes(contentScriptPolicy, "url.hostname === 'x.com'", "Beetol content-script sender policy must allow supported X pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'twitter.com'", "Beetol content-script sender policy must allow supported Twitter pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'www.remilia.net'", "Beetol content-script sender policy must allow supported RemiliaNET pages");
+  assertNotIncludes(files.beetolContent, "beetol-retry-session", "Beetol content must not retain retry-session UI or action naming");
+  assertNotIncludes(files.beetolContent, "https://www.remilia.net/", "Beetol disconnected UI must not send users through website login");
+  assertNotIncludes(files.beetolContent, "beetol:sessionStatus", "Beetol content must not invoke retired browser-session status");
+  assertNotIncludes(files.beetolContent, "remilia-auth:", "Beetol content must not invoke extension-page-only auth actions");
+  assertIncludes(files.beetolContent, "Open the milXdy extension popup", "Beetol disconnected UI must direct users to the official extension connection surface");
+
+  const legacyFetch = functionBody(files.beetolBackground, "remiliaFetch");
+  assertIncludes(legacyFetch, "result.status === 401 && retry", "Beetol legacy actions may refresh only after the first 401");
+  assertNotIncludes(legacyFetch, "result.status === 403", "Beetol legacy actions must not refresh after 403");
+  assertIncludes(files.beetolBackground, "credentials: 'omit'", "Beetol legacy actions must omit ambient credentials");
+  assertIncludes(files.beetolBackground, "redirect: 'error'", "Beetol legacy actions must reject redirects");
+  assertIncludes(files.beetolBackground, "referrerPolicy: 'no-referrer'", "Beetol legacy actions must suppress referrers");
+  assertIncludes(files.beetolBackground, "isExactResponseUrl(response.url, endpoint)", "Beetol legacy actions must validate the final response URL");
 
   const action = functionBody(files.beetolBackground, "runAction");
   assertIncludes(action, "legacyBeetleActions.runAction(action)", "Beetol actions must submit through the typed legacy authenticated adapter");
