@@ -21,6 +21,7 @@ const postReadingBackground = await readFile("src/apps/post-reading/background.t
 const postReadingFullQuote = await readFile("src/apps/post-reading/fullQuote.ts", "utf8");
 const postReadingTtsEngines = await readFile("src/apps/post-reading/ttsEngines.ts", "utf8");
 const reminetChatBackground = await readFile("src/apps/reminet-chat/background.ts", "utf8");
+const reminetChatContent = await readFile("src/apps/reminet-chat/content.ts", "utf8");
 const beetolBackground = await readFile("src/apps/beetol/background.js", "utf8");
 const appSdkDocs = await readFile("docs/sdk/APP_SDK.md", "utf8");
 const publicSdkTypes = await readFile("sdk/types/index.d.ts", "utf8");
@@ -156,6 +157,14 @@ function verifyPlatformContract() {
   requireIncludes(contentRuntime, "root.dataset.theme = currentHubTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
   requireIncludes(contentRuntime, "function currentHubTheme", "Apps & Features must resolve distinct light, dim, and dark host palettes");
   requireIncludes(contentRuntime, "function appHubLifecycle", "Apps & Features must present package lifecycle state without package-owned UI code");
+  requireIncludes(contentRuntime, "function isRailDiscoverableWhenDisabled", "RemiNet Chat must remain discoverable in the X rail before enablement");
+  requireIncludes(contentRuntime, 'app.id === "reminetChat"', "Disabled rail discovery must remain limited to RemiNet Chat");
+  requireIncludes(contentRuntime, "await app.setEnabled(true)", "Selecting the disabled Chat rail launcher must explicitly enable it before load");
+  requireIncludes(reminetChatContent, "Open the milXdy popup", "Disconnected Chat must direct users to the extension popup");
+  requireIncludes(reminetChatContent, "Remilia connection → Connect/Reconnect", "Disconnected Chat must name the popup connection control");
+  requireIncludes(reminetChatContent, 'data-chat-action="retry-connection"', "Disconnected Chat must offer a REST-only recheck action");
+  requireNotIncludes(reminetChatContent, '>Open RemiliaNET</a>', "Disconnected Chat must not offer website-session recovery");
+  requireNotIncludes(reminetChatContent, "remilia-auth:", "Chat content must not invoke popup-only Remilia auth messages");
   requireIncludes(contentRuntime, "Ready in composer + reply", "Composer/reply packages must receive a generic ready lifecycle state");
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
   requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");

@@ -428,7 +428,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
         if (shouldLoadAtStartup(app)) startupApps.push(app);
         else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
       }
-      else updateAppDiagnostics(app, "disabled");
+      else {
+        updateAppDiagnostics(app, "disabled");
+        updateDockRegistration(app);
+      }
     }
     if (isXRuntime()) syncContextMediaMenuState();
     registerAddOnsCatalogDockItem();
@@ -595,6 +598,43 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     const lifecycle = state.appLifecycles.get(app.id);
     if (!lifecycle) return;
     await invokeAppLifecycleHook(app, "open", () => lifecycle.open());
+  }
+
+  async function openRailApp(app: MilxdyAppManifest): Promise<void> {
+    if (!state.enabledApps.has(app.id)) {
+      if (!isRailDiscoverableWhenDisabled(app) || !app.setEnabled) return;
+      const performanceBlock = appEnableBlockedByPerformance(app);
+      if (performanceBlock) {
+        window.alert(performanceBlock);
+        return;
+      }
+      try {
+        await app.setEnabled(true);
+        if (!await app.isEnabled()) return;
+        state.enabledApps.add(app.id);
+        ensureDefaultRailPin(app);
+        updateScannerConfiguration();
+        updateDockRegistration(app);
+        updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
+        refreshComposerActionButtons();
+        syncContextMediaMenuState();
+        syncHiddenRailItems();
+        renderHubPanel();
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          enabled: true,
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+      } catch (error) {
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          error: errorMessage(error),
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+    }
+    await openApp(app, "dockOpen");
   }
 
   async function closeApp(app: MilxdyAppManifest): Promise<void> {
@@ -870,7 +910,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     const module = state.loaded.get(app.id);
     const lifecycle = state.appLifecycles.get(app.id);
     if (state.unloadingApps.has(app.id)) return;
-    if (!module || !lifecycle) return;
+    if (!module || !lifecycle) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return;
+    }
     state.unloadingApps.add(app.id);
     abortAppWork(app.id);
     void lifecycle.deactivate()
@@ -884,7 +929,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
   }
 
   function reconcileAppAfterUnload(app: MilxdyAppManifest): void {
-    if (state.disposed || !state.enabledApps.has(app.id)) return;
+    if (state.disposed) return;
+    if (!state.enabledApps.has(app.id)) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return;
+    }
     updateDockRegistration(app);
     if (shouldLoadAtStartup(app)) void loadApp(app, "reenableAfterUnload");
     else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
@@ -2761,7 +2812,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
       title: app.name,
       active: false,
       onActivate: () => {
-        void openApp(app, "dockOpen");
+        void openRailApp(app);
       },
       onDeactivate: () => {
         void closeApp(app);
@@ -2780,7 +2831,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
 
   function updateDockRegistration(app: MilxdyAppManifest): void {
     if (!app.dock) return;
-    if (state.enabledApps.has(app.id) && isRailPinned(app)) {
+    if (isRailPinned(app)) {
       registerDockMetadata(app);
       return;
     }
@@ -2820,8 +2871,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
   function isRailPinned(app: MilxdyAppManifest): boolean {
     if (!app.dock || app.available === false || app.hub?.rail.supported === false) return false;
     if (state.railUnpinnedApps.has(app.id)) return false;
+    if (!state.enabledApps.has(app.id) && !isRailDiscoverableWhenDisabled(app)) return false;
     if (state.railPinnedApps.has(app.id)) return true;
-    return state.enabledApps.has(app.id) && app.hub?.rail.defaultPinned === true;
+    return app.hub?.rail.defaultPinned === true;
+  }
+
+  function isRailDiscoverableWhenDisabled(app: MilxdyAppManifest): boolean {
+    return state.site.id === "x"
+      && app.id === "reminetChat"
+      && app.defaultEnabled === false
+      && app.hub?.rail.defaultPinned === true;
   }
 
   function currentRailPins(): MilxdyAppId[] {

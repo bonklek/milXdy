@@ -25,7 +25,7 @@ async function verifyBuild(build) {
   verifyManifest(build, manifest);
   verifyPopup(build, popupHtml, popupJs);
   verifyRuntimeBundle(build, content, background);
-  verifyFeatureBundles(build);
+  await verifyFeatureBundles(build);
   verifyAppAssets(build);
 }
 
@@ -77,6 +77,8 @@ function verifyRuntimeBundle(build, content, background) {
   assert(content.includes("milxdy-overlay-dock-root"), `${build.dir}: overlay dock missing from content bundle`);
   assert(content.includes("milxdy.apps.firstRun.status"), `${build.dir}: first-run Apps Hub state missing`);
   assert(content.includes("milxdy.performance.mode"), `${build.dir}: Performance mode state missing`);
+  assert(content.includes("isRailDiscoverableWhenDisabled"), `${build.dir}: disabled RemiNet Chat rail discovery missing`);
+  assert(content.includes("railLauncher"), `${build.dir}: RemiNet Chat rail activation enablement missing`);
   assert(content.includes("milxdyVersion") && content.includes("milxdyBuildProfile") && content.includes("milxdyBuildTarget"), `${build.dir}: runtime build markers missing from content bundle`);
   assert(content.includes(JSON.stringify(expectedVersion)), `${build.dir}: runtime version marker value missing from content bundle`);
   assert(content.includes(`"${build.profile}"`), `${build.dir}: runtime build profile marker value missing from content bundle`);
@@ -86,7 +88,7 @@ function verifyRuntimeBundle(build, content, background) {
   assert(background.includes("UNSUPPORTED_IMAGE_URL"), `${build.dir}: image proxy allowlist rejection missing`);
 }
 
-function verifyFeatureBundles(build) {
+async function verifyFeatureBundles(build) {
   const featuresDir = path.join(build.dir, "features");
   assert(existsSync(featuresDir), `${build.dir}: features directory missing`);
   const actual = readdirSync(featuresDir).filter((file) => file.endsWith(".js")).sort();
@@ -94,6 +96,13 @@ function verifyFeatureBundles(build) {
   assertEqualList(actual, expected, `${build.dir}: feature bundle set mismatch`);
   if (build.profile !== "lite") {
     assert(actual.includes("wikiSidebar.js"), `${build.dir}: Wiki sidebar bundle missing from non-lite build`);
+  }
+  if (actual.includes("reminetChat.js")) {
+    const chat = await readFile(path.join(featuresDir, "reminetChat.js"), "utf8");
+    assert(chat.includes("Open the milXdy popup"), `${build.dir}: RemiNet Chat disconnected popup guidance missing`);
+    assert(chat.includes("Remilia connection") && chat.includes("Connect/Reconnect"), `${build.dir}: RemiNet Chat connection-control guidance missing`);
+    assert(chat.includes("Recheck Chat"), `${build.dir}: RemiNet Chat REST recheck action missing`);
+    assert(!chat.includes(">Open RemiliaNET</a>"), `${build.dir}: RemiNet Chat must not expose website-session recovery`);
   }
 }
 

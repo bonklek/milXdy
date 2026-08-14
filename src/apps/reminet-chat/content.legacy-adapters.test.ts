@@ -44,8 +44,12 @@ describe("RemiNet Chat legacy adapter boundary", () => {
     const source = await readFile(new URL("./content.ts", import.meta.url), "utf8");
 
     expect(source).toContain("Checking Remilia Chat authorization...");
-    expect(source).toContain("Remilia Chat authorization is required.");
+    expect(source).toContain("Open the milXdy popup");
+    expect(source).toContain("Remilia connection → Connect/Reconnect");
+    expect(source).toContain("Recheck Chat");
     expect(source).toContain('data-chat-action="retry-connection"');
+    expect(source).not.toContain('>Open RemiliaNET</a>');
+    expect(source).not.toContain("remilia-auth:");
     expect(source).not.toMatch(/Retry session|browser session|retry-session/iu);
   });
 

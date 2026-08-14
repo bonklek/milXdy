@@ -1122,11 +1122,11 @@ function handleOfficialChatFailure(error: RemiliaApiError, kind: ChatRestFailure
     updateOfficialPolling();
   }
   if (kind === "auth-expired") {
-    setRecoveryVisibleState("auth-required", "Reconnect Remilia");
-    state.composerError = "Reconnect your Remilia account.";
+    setRecoveryVisibleState("auth-required", "Recheck Chat");
+    state.composerError = "Reconnect Remilia from the milXdy popup, then recheck Chat.";
   } else if (kind === "missing-scope") {
-    setRecoveryVisibleState("auth-required", "Reconnect with Chat access");
-    state.composerError = "Reconnect Remilia and grant Chat access.";
+    setRecoveryVisibleState("auth-required", "Recheck Chat");
+    state.composerError = "Reconnect Remilia with Chat access from the milXdy popup, then recheck Chat.";
   } else if (kind === "rate-limited") {
     renderStatus("Chat is rate limited.");
     state.composerError = "Wait before trying Chat again.";
@@ -1614,18 +1614,17 @@ function setRecoveryVisibleState(next: ChatState["recoveryVisibleState"], messag
 }
 
 function renderReconnectState(): string {
-  const label = state.recoveryMessage || "Reconnect Chat";
+  const label = state.recoveryMessage || "Recheck Chat";
   const copy = state.recoveryVisibleState === "recovering"
     ? "Checking Remilia Chat authorization..."
     : state.recoveryVisibleState === "failed"
-      ? state.composerError || "The Chat connection stalled. Reconnect Chat to continue."
-      : "Remilia Chat authorization is required. Connect Remilia with Chat access, then reconnect.";
+      ? state.composerError || "Chat could not reconnect. Open the milXdy popup, then use Remilia connection → Connect/Reconnect."
+      : "Remilia connection is required. Open the milXdy popup, then use Remilia connection → Connect/Reconnect. Return here and recheck Chat.";
   const disabled = state.recoveryVisibleState === "recovering" ? " disabled" : "";
   return `
     <div class="milxdy-chat-empty milxdy-chat-reconnect">
       <span>${escapeHtml(copy)}</span>
       <button type="button" data-chat-action="retry-connection"${disabled}>${escapeHtml(label)}</button>
-      <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Open RemiliaNET</a>
     </div>
   `;
 }
