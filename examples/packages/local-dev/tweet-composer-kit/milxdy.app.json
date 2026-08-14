@@ -148,7 +148,7 @@
       }
     ]
   },
-  "defaultEnabled": false,
+  "defaultEnabled": true,
   "storageKeys": {
     "local": [
       "milxdy.local.tweet-composer-kit.enabled",
@@ -167,7 +167,7 @@
         "area": "local",
         "key": "milxdy.local.tweet-composer-kit.enabled"
       },
-      "defaultValue": false,
+      "defaultValue": true,
       "control": { "type": "toggle" },
       "reset": { "behavior": "restoreDefault" },
       "presets": ["firstRun"]

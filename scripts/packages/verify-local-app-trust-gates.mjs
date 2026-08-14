@@ -49,9 +49,16 @@ try {
 
   runCase("reviewed Post-Factory Remilia capability passes exact declarations and consent", [
     "--check",
+    "--json",
     "--package=examples/packages/local-dev/tweet-composer-kit",
     "--acknowledge-package-consent",
-  ], 0, "remiliaCapability:remilia.profile.public");
+  ], 0, "Maintainer-approved default-on reviewed Post-Factory composition");
+
+  const copiedDefaultOnPackage = await copyLocalPackage("tweet-composer-kit", "copied-default-on-post-factory");
+  await runRejectedComposerCaseWithoutPlan("copied Post-Factory cannot inherit default-on approval", [
+    `--package=${copiedDefaultOnPackage}`,
+    "--acknowledge-package-consent",
+  ], "does not match policy root");
 
   const remiliaScopeDriftPackage = await copyLocalPackage("tweet-composer-kit", "remilia-scope-drift");
   const remiliaScopeDriftManifest = await readManifest(remiliaScopeDriftPackage);

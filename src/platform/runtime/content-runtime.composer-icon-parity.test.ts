@@ -16,10 +16,18 @@ describe("composer companion icon parity", () => {
     const manifest = JSON.parse(await readFile(
       new URL("../../../examples/packages/local-dev/tweet-composer-kit/milxdy.app.json", import.meta.url),
       "utf8",
-    )) as { name?: string; composerAction?: { label?: string }; hostComposerActions?: string[] };
+    )) as {
+      name?: string;
+      composerAction?: { label?: string };
+      hostComposerActions?: string[];
+      defaultEnabled?: boolean;
+      settings?: Array<{ role?: string; defaultValue?: unknown }>;
+    };
 
     expect(manifest.name).toBe("Post-Factory");
     expect(manifest.composerAction?.label).toBe("Factory");
     expect(manifest.hostComposerActions).toContain("nativeDrafts");
+    expect(manifest.defaultEnabled).toBe(true);
+    expect(manifest.settings?.find((setting) => setting.role === "enablement")?.defaultValue).toBe(true);
   });
 });

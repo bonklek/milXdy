@@ -2648,7 +2648,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
     window.addEventListener("resize", scheduleComposerActionPosition);
     try {
-      await installComposerActionPackageStyles(app, shadow);
+      void installComposerActionPackageStyles(app, shadow).catch((error) => {
+        recordRuntimeDiagnostic(`packageStyles.${app.id}`, {
+          error: errorMessage(error),
+          fallback: "host-style",
+        });
+      });
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       await Promise.resolve(module.onComposerAction({
         kind: currentButton().closest('[role="dialog"]') ? "reply" : "post",

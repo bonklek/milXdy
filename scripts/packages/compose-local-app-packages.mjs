@@ -45,8 +45,10 @@ const extractionDir = checkOnly
 const registryApps = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const publicManifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 const firstPartyReplacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
+const defaultEnablementPolicy = JSON.parse(await readFile("scripts/packages/local-app-default-enablement.json", "utf8"));
 const firstPartyById = new Map(registryApps.map((app) => [app.id, app]));
 const firstPartyReplacementPolicyById = new Map((firstPartyReplacementPolicy.replacements || []).map((item) => [item.id, item]));
+const defaultEnablementPolicyById = new Map((defaultEnablementPolicy.packages || []).map((item) => [item.id, item]));
 const baseHostPermissions = publicManifest.host_permissions ?? [];
 const builtInStorageKeys = builtInRegistryStorageKeys(registryApps);
 
@@ -543,9 +545,6 @@ async function analyzePackage(source, manifest) {
   if (source.type === "folder" && manifest.id !== path.basename(root)) warnings.push(`${id}: package folder name does not match manifest id; folder packages should be renamed before distribution`);
   if (firstPartyById.has(id)) warnings.push(`${id}: local package declares a built-in app id; replacement requires reviewed status and explicit acknowledgement`);
   verifyNovelPackageEnablement(id, manifest, errors);
-  if (!firstPartyById.has(id) && manifest.defaultEnabled === true && packageRequiresExplicitEnablement(manifest)) {
-    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false`);
-  }
   verifyReviewStatus(id, manifest, errors, warnings);
   verifySdk(id, manifest, errors, warnings);
   verifyExecutableContentEntry(id, manifest, errors);
@@ -602,8 +601,11 @@ async function analyzePackage(source, manifest) {
   const contentSha256 = sha256Files(root, packageFiles);
   const manifestSha256 = sha256File(path.join(root, "milxdy.app.json"));
   const packageSha256 = source.archiveSha256 ?? contentSha256;
+  const defaultEnablementTrust = reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256);
+  verifyPrivilegedDefaultEnablement(id, manifest, defaultEnablementTrust, errors);
   const payloadScan = scanPackagePayloads(id, root, packageFiles);
   const trust = evaluatePackageTrust(id, source, manifest, packageFiles, webAccessibleAssets, payloadScan, packageSha256);
+  trust.trustDecision.defaultEnablementPolicy = defaultEnablementTrust;
   verifySensitivePresetParticipation(id, manifest, errors);
   verifyStorageDeclarations(id, manifest, errors, {
     allowBuiltInStorageKeys: trust.trustDecision.firstPartyReplacementPolicy.allowed
@@ -1276,6 +1278,60 @@ function packageRequiresExplicitEnablement(manifest) {
     || (manifest.background?.services || []).length > 0
     || (manifest.remiliaCapabilities || []).length > 0
     || (manifest.privacy?.remoteServices || []).length > 0;
+}
+
+function reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256) {
+  const requested = manifest.defaultEnabled === true
+    || (manifest.settings || []).some((setting) => setting.role === "enablement" && setting.defaultValue === true);
+  const policy = defaultEnablementPolicyById.get(id);
+  const base = {
+    requested,
+    allowed: false,
+    packageConsentAcknowledged: acknowledgePackageConsent,
+  };
+  if (!requested) return { ...base, reason: "default-on enablement not requested" };
+  if (firstPartyById.has(id)) return { ...base, allowed: true, reason: "built-in app defaults are governed by the first-party registry or replacement policy" };
+  if (!packageRequiresExplicitEnablement(manifest)) return { ...base, allowed: true, reason: "package does not declare a privileged or consent-required surface" };
+  if (!policy) return { ...base, reason: "no repo-owned default-enablement policy entry" };
+
+  const expectedRoot = normalizeInputPath(policy.root);
+  const actualRoot = normalizeInputPath(source.root);
+  if (policy.sourceType && policy.sourceType !== source.type) {
+    return { ...base, root: expectedRoot, reason: `source type ${source.type} does not match policy sourceType ${policy.sourceType}` };
+  }
+  if (expectedRoot !== actualRoot) {
+    return { ...base, root: expectedRoot, reason: `source root ${actualRoot} does not match policy root ${expectedRoot}` };
+  }
+  if (manifest.review?.status !== "reviewed") {
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages require review.status reviewed" };
+  }
+  if (manifest.privacy?.consentRequired !== true) {
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages must retain privacy.consentRequired true" };
+  }
+  if (policy.packageSha256 !== packageSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, reason: `package SHA-256 ${packageSha256} does not match policy hash` };
+  }
+  if (policy.manifestSha256 !== manifestSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, manifestSha256: policy.manifestSha256, reason: `manifest SHA-256 ${manifestSha256} does not match policy hash` };
+  }
+  return {
+    ...base,
+    allowed: true,
+    root: expectedRoot,
+    packageSha256: policy.packageSha256,
+    manifestSha256: policy.manifestSha256,
+    reason: policy.reason || "repo-owned default-enablement policy matched",
+  };
+}
+
+function verifyPrivilegedDefaultEnablement(id, manifest, trust, errors) {
+  if (firstPartyById.has(id) || !packageRequiresExplicitEnablement(manifest) || trust.allowed) return;
+  if (manifest.defaultEnabled === true) {
+    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
+  }
+  for (const setting of (manifest.settings || []).filter((candidate) => candidate.role === "enablement" && candidate.defaultValue === true)) {
+    errors.push(`${id}:${setting.id || "<unknown>"}: privileged or consent-required local packages must not default enablement settings to true unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
+  }
 }
 
 function verifyRemiliaCapabilities(id, manifest, errors) {
@@ -2122,10 +2178,6 @@ function verifyNovelPackageEnablement(id, manifest, errors) {
     }
     if (!declared[setting.storage.area]?.includes(setting.storage.key)) {
       errors.push(`${id}:${settingId}: enablement storage key must be declared in storageKeys.${setting.storage.area}`);
-      continue;
-    }
-    if (packageRequiresExplicitEnablement(manifest) && setting.defaultValue === true) {
-      errors.push(`${id}:${settingId}: privileged or consent-required local packages must not default enablement settings to true`);
       continue;
     }
     hasValidEnablement = true;
