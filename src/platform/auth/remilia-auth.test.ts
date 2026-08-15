@@ -172,8 +172,8 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
-    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_AUDIENCE_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_AUDIENCE_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -209,8 +209,8 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
-    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_AUDIENCE_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_AUDIENCE_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -226,8 +226,32 @@ describe("Remilia OIDC PKCE", () => {
     const auth = await loadAuth();
     await auth.noteRemiliaAuthInstalled("install");
 
-    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_INVALID" });
-    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_INVALID" });
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_TIME_INVALID" });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: "ID_TOKEN_TIME_INVALID" });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it.each([
+    ["ID_TOKEN_FORMAT_INVALID", () => "not-a-jwt", {}],
+    ["ID_TOKEN_ALGORITHM_INVALID", (claims: Record<string, unknown>) => jwtWithHeader({ alg: "HS256", kid: SIGNING_KEY_ID }, claims), {}],
+    ["ID_TOKEN_SIGNING_KEY_INVALID", (claims: Record<string, unknown>) => jwtWithHeader({ alg: "RS256", kid: "unknown-key" }, claims), {}],
+    ["ID_TOKEN_SIGNATURE_INVALID", (claims: Record<string, unknown>) => `${jwt(claims)}A`, {}],
+    ["ID_TOKEN_ISSUER_INVALID", undefined, { iss: "https://issuer.invalid" }],
+    ["ID_TOKEN_SUBJECT_INVALID", undefined, { sub: undefined }],
+  ] as const)("reports %s without storing identity material", async (expectedCode, idToken, claims) => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, { claims, ...(idToken ? { idToken } : {}) });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: expectedCode });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: expectedCode });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -729,7 +753,11 @@ function storageArea(store: Map<string, unknown>) {
 
 function installSuccessfulFetch(
   getAuthorizationUrl: () => string,
-  overrides: { nonce?: string; claims?: Record<string, unknown> } = {},
+  overrides: {
+    nonce?: string;
+    claims?: Record<string, unknown>;
+    idToken?: (claims: Record<string, unknown>) => string;
+  } = {},
 ) {
   const mock = vi.fn(successfulFetchImplementation(getAuthorizationUrl, overrides));
   vi.stubGlobal("fetch", mock);
@@ -738,7 +766,11 @@ function installSuccessfulFetch(
 
 function successfulFetchImplementation(
   getAuthorizationUrl: () => string,
-  overrides: { nonce?: string; claims?: Record<string, unknown> } = {},
+  overrides: {
+    nonce?: string;
+    claims?: Record<string, unknown>;
+    idToken?: (claims: Record<string, unknown>) => string;
+  } = {},
 ) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
@@ -749,19 +781,20 @@ function successfulFetchImplementation(
       const body = new URLSearchParams(String(init?.body));
       const authorization = new URL(getAuthorizationUrl());
       const nonce = overrides.nonce ?? authorization.searchParams.get("nonce");
+      const claims = {
+        iss: ISSUER,
+        aud: CLIENT_ID,
+        sub: "user-1",
+        preferred_username: "milady",
+        name: "Milady",
+        nonce,
+        exp: Math.floor(Date.now() / 1000) + 3600,
+        ...overrides.claims,
+      };
       return jsonResponse({
         access_token: "access-one",
         refresh_token: "refresh-one",
-        id_token: jwt({
-          iss: ISSUER,
-          aud: CLIENT_ID,
-          sub: "user-1",
-          preferred_username: "milady",
-          name: "Milady",
-          nonce,
-          exp: Math.floor(Date.now() / 1000) + 3600,
-          ...overrides.claims,
-        }),
+        id_token: overrides.idToken ? overrides.idToken(claims) : jwt(claims),
         token_type: "Bearer",
         expires_in: 3600,
         scope: body.get("grant_type") === "refresh_token"
@@ -788,8 +821,12 @@ function discovery() {
 }
 
 function jwt(claims: Record<string, unknown>): string {
+  return jwtWithHeader({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID }, claims);
+}
+
+function jwtWithHeader(header: Record<string, unknown>, claims: Record<string, unknown>): string {
   const encode = (value: Record<string, unknown>) => Buffer.from(JSON.stringify(value)).toString("base64url");
-  const signingInput = `${encode({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID })}.${encode({
+  const signingInput = `${encode(header)}.${encode({
     iat: Math.floor(Date.now() / 1000),
     ...claims,
   })}`;

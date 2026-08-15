@@ -44,6 +44,14 @@ export type RemiliaAuthErrorCode =
   | "TOKEN_RESPONSE_INVALID"
   | "SIGNING_KEYS_UNAVAILABLE"
   | "ID_TOKEN_INVALID"
+  | "ID_TOKEN_FORMAT_INVALID"
+  | "ID_TOKEN_ALGORITHM_INVALID"
+  | "ID_TOKEN_SIGNING_KEY_INVALID"
+  | "ID_TOKEN_SIGNATURE_INVALID"
+  | "ID_TOKEN_ISSUER_INVALID"
+  | "ID_TOKEN_AUDIENCE_INVALID"
+  | "ID_TOKEN_TIME_INVALID"
+  | "ID_TOKEN_SUBJECT_INVALID"
   | "AUTH_STORAGE_FAILED"
   | "BACKGROUND_UNAVAILABLE"
   | "REVOKED"
@@ -134,6 +142,14 @@ const KNOWN_ERRORS = new Set<RemiliaAuthErrorCode>([
   "TOKEN_RESPONSE_INVALID",
   "SIGNING_KEYS_UNAVAILABLE",
   "ID_TOKEN_INVALID",
+  "ID_TOKEN_FORMAT_INVALID",
+  "ID_TOKEN_ALGORITHM_INVALID",
+  "ID_TOKEN_SIGNING_KEY_INVALID",
+  "ID_TOKEN_SIGNATURE_INVALID",
+  "ID_TOKEN_ISSUER_INVALID",
+  "ID_TOKEN_AUDIENCE_INVALID",
+  "ID_TOKEN_TIME_INVALID",
+  "ID_TOKEN_SUBJECT_INVALID",
   "AUTH_STORAGE_FAILED",
   "BACKGROUND_UNAVAILABLE",
   "REVOKED",
@@ -276,6 +292,14 @@ export function remiliaErrorMessage(error: RemiliaAuthError | null): string {
     TOKEN_RESPONSE_INVALID: "Remilia returned an incomplete secure connection response. Nothing was stored; try again.",
     SIGNING_KEYS_UNAVAILABLE: "milXdy could not load Remilia's identity verification keys. Nothing was stored; check your connection and try again.",
     ID_TOKEN_INVALID: "Remilia returned identity proof that did not pass secure validation. Nothing was stored; try again.",
+    ID_TOKEN_FORMAT_INVALID: "Remilia returned incomplete identity proof. Nothing was stored; the Login client response needs review.",
+    ID_TOKEN_ALGORITHM_INVALID: "Remilia returned identity proof using an unsupported signing algorithm. Nothing was stored; the Login client signing configuration needs review.",
+    ID_TOKEN_SIGNING_KEY_INVALID: "Remilia's identity proof did not match a published RS256 signing key. Nothing was stored; the Login signing keys need review.",
+    ID_TOKEN_SIGNATURE_INVALID: "Remilia's identity-proof signature could not be verified. Nothing was stored; the Login signing configuration needs review.",
+    ID_TOKEN_ISSUER_INVALID: "Remilia's identity proof named an unexpected issuer. Nothing was stored; the Login issuer configuration needs review.",
+    ID_TOKEN_AUDIENCE_INVALID: "Remilia's identity proof was not issued for this milXdy Login client. Nothing was stored; the Login client audience configuration needs review.",
+    ID_TOKEN_TIME_INVALID: "Remilia's identity proof contained an invalid issue time. Nothing was stored; check the system clock and Login server time.",
+    ID_TOKEN_SUBJECT_INVALID: "Remilia's identity proof did not identify an account. Nothing was stored; the Login claim configuration needs review.",
     AUTH_STORAGE_FAILED: "milXdy could not safely store the connection for this browser session. Nothing was connected; reload the extension and try again.",
     BACKGROUND_UNAVAILABLE: "The milXdy connection service did not respond. Reload the extension, reopen the popup, and try again.",
     REVOKED: "This authorization was revoked. Reconnect if you want to use Remilia features again.",
