@@ -2,7 +2,8 @@ import { recordFeatureTiming } from "../../platform/diagnostics/performance-diag
 import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../platform/visuals/reskin-profile";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { legacyBeetleTrophyShelfUrl } from "../beetol/legacy-beetle-actions";
-import { findExactProfileBannerRoot } from "./profile-page";
+import { exactXProfileHandle, findExactProfileBannerRoot } from "./profile-page";
+import { exactDirectoryProfileIdentity } from "./profile-identity";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -241,6 +242,7 @@ const pokeButtonsByUsername = new Map();
 const pokeEligibilityChecked = new Set();
 const confirmedPokeTargets = new Map();
 const confirmedProfileIdentities = new Map();
+const profileIdentityPending = new Map();
 const profileIdentityLatestRequests = new Map();
 let profileIdentityRequestGeneration = 0;
 let incomingPokeCache = null;
@@ -627,8 +629,11 @@ function fetchPokeTarget(xHandle) {
 async function fetchProfileIdentity(xHandle) {
   const cleanXHandle = cleanExactXHandle(xHandle).toLowerCase();
   if (!cleanXHandle) return null;
+  const cachedUsername = confirmedProfileIdentities.get(cleanXHandle);
+  if (cachedUsername) return { xHandle: cleanXHandle, remiliaUsername: cachedUsername };
+  if (profileIdentityPending.has(cleanXHandle)) return profileIdentityPending.get(cleanXHandle);
+
   const requestGeneration = ++profileIdentityRequestGeneration;
-  confirmedProfileIdentities.delete(cleanXHandle);
   if (profileIdentityLatestRequests.has(cleanXHandle)) profileIdentityLatestRequests.delete(cleanXHandle);
   profileIdentityLatestRequests.set(cleanXHandle, requestGeneration);
   while (profileIdentityLatestRequests.size > SCORE_CACHE_LIMIT) {
@@ -637,21 +642,31 @@ async function fetchProfileIdentity(xHandle) {
     profileIdentityLatestRequests.delete(oldest);
   }
 
-  try {
-    const response = await runtimeSendMessage({
-      type: 'remistats:resolveProfileIdentity',
-      xHandle: cleanXHandle,
-    }, 'remistats:resolveProfileIdentity');
-    if (!response?.ok || profileIdentityLatestRequests.get(cleanXHandle) !== requestGeneration) return null;
-    const responseXHandle = cleanExactXHandle(response.identity?.xHandle).toLowerCase();
-    if (responseXHandle !== cleanXHandle) return null;
-    return setConfirmedProfileIdentity(cleanXHandle, response.identity?.remiliaUsername);
-  } catch (error) {
-    if (!/extension context/i.test(String(error?.message || error))) {
-      console.debug('RemiStats profile identity lookup skipped:', error.message);
+  let pending;
+  pending = (async () => {
+    try {
+      const response = await runtimeSendMessage({
+        type: 'reminetIdentity:resolve',
+        identifiers: [{ type: 'x_handle', value: cleanXHandle }],
+      }, 'reminetIdentity:resolve');
+      if (profileIdentityLatestRequests.get(cleanXHandle) !== requestGeneration) return null;
+      const identity = exactDirectoryProfileIdentity(response, cleanXHandle);
+      if (!identity) {
+        confirmedProfileIdentities.delete(cleanXHandle);
+        return null;
+      }
+      return setConfirmedProfileIdentity(identity.xHandle, identity.remiliaUsername);
+    } catch (error) {
+      if (!/extension context/i.test(String(error?.message || error))) {
+        console.debug('RemiStats profile identity lookup skipped:', error.message);
+      }
+      return null;
+    } finally {
+      if (profileIdentityPending.get(cleanXHandle) === pending) profileIdentityPending.delete(cleanXHandle);
     }
-    return null;
-  }
+  })();
+  profileIdentityPending.set(cleanXHandle, pending);
+  return pending;
 }
 
 // Fetch user score with batching
@@ -1740,6 +1755,7 @@ function clearAllPokeCountdowns() {
   confirmedPokeTargets.clear();
   confirmedProfileIdentities.clear();
   profileIdentityRequestGeneration += 1;
+  profileIdentityPending.clear();
   profileIdentityLatestRequests.clear();
   pokeTargetRequestGeneration += 1;
   pokeTargetLatestRequests.clear();
@@ -2554,7 +2570,25 @@ function ensureBannerCycleButton(root) {
   root.appendChild(button);
 }
 
+let profileTrophyReconcileGeneration = 0;
 let profileTrophyRequestGeneration = 0;
+
+async function reconcileProfileTrophy(xHandleInput = profileUsernameFromUrl(), profilePath = window.location.pathname) {
+  const cleanXHandle = exactXProfileHandle(xHandleInput);
+  if (!cleanXHandle || exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle) return;
+  const reconcileGeneration = ++profileTrophyReconcileGeneration;
+  const identity = await fetchProfileIdentity(cleanXHandle);
+  if (
+    reconcileGeneration !== profileTrophyReconcileGeneration
+    || profilePath !== window.location.pathname
+    || exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle
+  ) return;
+  if (!identity) {
+    resetProfileTrophyBanner();
+    return;
+  }
+  await upgradeProfileTrophyBanner(identity.remiliaUsername, cleanXHandle, profilePath);
+}
 
 function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle) {
   return requestGeneration === profileTrophyRequestGeneration
@@ -2572,6 +2606,7 @@ function clearProfileTrophyBannerRoot(root) {
 }
 
 function resetProfileTrophyBanner() {
+  profileTrophyReconcileGeneration += 1;
   profileTrophyRequestGeneration += 1;
   for (const root of document.querySelectorAll('[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]')) {
     clearProfileTrophyBannerRoot(root);
@@ -2703,17 +2738,10 @@ async function insertProfileBadge() {
       const group = existingBadge.closest('[data-reminet-profile-badge-group]');
       (group || existingBadge).remove();
     } else {
-      const [profileIdentity, existingTarget] = exactProfileXHandle
-        ? await Promise.all([fetchProfileIdentity(exactProfileXHandle), fetchPokeTarget(exactProfileXHandle)])
-        : [null, null];
+      const existingTarget = exactProfileXHandle ? await fetchPokeTarget(exactProfileXHandle) : null;
       const existingUsername = cleanRemiliaUsername(existingTarget?.remiliaUsername);
       const group = existingBadge.closest('[data-reminet-profile-badge-group]');
       if (group) attachProfileBadgeGroup(userNameSection, group);
-      if (profileIdentity) {
-        void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
-      } else {
-        resetProfileTrophyBanner();
-      }
       if (!normalizeProfilePokeGroup(existingBadge, existingUsername)) {
         ensureStandalonePokeButton(existingBadge, existingUsername);
       }
@@ -2736,14 +2764,10 @@ async function insertProfileBadge() {
         const group = existingSlot.closest('[data-reminet-profile-badge-group]');
         const slotXHandle = cleanExactXHandle(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetXHandle || exactProfileXHandle || username);
         if (group) attachProfileBadgeGroup(userNameSection, group);
-        const [profileIdentity, slotTarget] = slotXHandle
-          ? await Promise.all([fetchProfileIdentity(slotXHandle), fetchPokeTarget(slotXHandle)])
-          : [null, null];
+        const slotTarget = slotXHandle ? await fetchPokeTarget(slotXHandle) : null;
         const existingPokeSlot = ensureProfileActionPokeSlot(userNameSection, slotXHandle);
         const confirmedUsername = cleanRemiliaUsername(slotTarget?.remiliaUsername);
         if (confirmedUsername) fillProfilePokeSlot(existingPokeSlot, confirmedUsername, slotXHandle);
-        if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, slotXHandle, window.location.pathname);
-        else resetProfileTrophyBanner();
         return;
       }
     }
@@ -2757,11 +2781,7 @@ async function insertProfileBadge() {
   
   // Create a unique key for this profile + location
   if (processedProfiles.has(profileKey)) {
-    const [profileIdentity, cachedTarget] = exactProfileXHandle
-      ? await Promise.all([fetchProfileIdentity(exactProfileXHandle), fetchPokeTarget(exactProfileXHandle)])
-      : [null, null];
-    if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
-    else resetProfileTrophyBanner();
+    const cachedTarget = exactProfileXHandle ? await fetchPokeTarget(exactProfileXHandle) : null;
     const cachedPublicScore = cachedScoreData(username);
     const officialSelfScore = exactProfileXHandle
       ? await fetchOfficialSelfProfileScore(exactProfileXHandle)
@@ -2794,13 +2814,10 @@ async function insertProfileBadge() {
   attachProfileBadgeGroup(userNameSection, profileBadgeGroup);
 
   try {
-    const [publicScoreData, profileIdentity, profileTarget] = await Promise.all([
+    const [publicScoreData, profileTarget] = await Promise.all([
       fetchUserScore(username),
-      exactProfileXHandle ? fetchProfileIdentity(exactProfileXHandle) : Promise.resolve(null),
       exactProfileXHandle ? fetchPokeTarget(exactProfileXHandle) : Promise.resolve(null),
     ]);
-    if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
-    else resetProfileTrophyBanner();
     const officialSelfScoreData = exactProfileXHandle
       ? await fetchOfficialSelfProfileScore(exactProfileXHandle)
       : null;
@@ -3100,6 +3117,7 @@ function init() {
     if (remistatsEnabled) {
       runtimeScheduleScan();
       scheduleSurfaceReconciliation();
+      void reconcileProfileTrophy();
       insertProfileBadge();
       scheduleGroupChatAvatars();
     } else {
@@ -3118,6 +3136,7 @@ function init() {
         if (!lifecycleActive() || !remistatsEnabled) return;
         runtimeScheduleScan();
         scheduleSurfaceReconciliation([300, 2200]);
+        void reconcileProfileTrophy();
         void insertProfileBadge();
       });
       return;
@@ -3128,6 +3147,7 @@ function init() {
       if (remistatsEnabled) {
         runtimeScheduleScan();
         scheduleSurfaceReconciliation();
+        void reconcileProfileTrophy();
         insertProfileBadge();
         scheduleGroupChatAvatars();
       } else {
@@ -3146,6 +3166,7 @@ function init() {
         if (!lifecycleActive() || !remistatsEnabled) return;
         runtimeScheduleScan();
         scheduleSurfaceReconciliation([100, 1000]);
+        void reconcileProfileTrophy();
         void insertProfileBadge();
       });
     }
@@ -3163,6 +3184,7 @@ export function onSurface(surface) {
     void processSurfaceElement(surface.element, surface.handle);
   }
   if (surface.kind === 'profile') {
+    void reconcileProfileTrophy(surface.handle || profileUsernameFromUrl());
     void insertProfileBadge();
   }
   if (surface.kind === 'directMessage') {
@@ -3182,6 +3204,7 @@ export function onRouteChange(route) {
   routeProfileTimer = runtimeScheduler.timeout(() => {
     routeProfileTimer = null;
     if (!lifecycleActive()) return;
+    void reconcileProfileTrophy();
     void insertProfileBadge();
   }, 350);
   scheduleGroupChatAvatars(350);
@@ -3229,6 +3252,7 @@ function lifecycleActive() {
 }
 
 function clearRemiStatsBadges() {
+  resetProfileTrophyBanner();
   for (const node of document.querySelectorAll('[data-reminet-profile-badge-group], [data-reminet-profile-action-poke-slot], [data-reminet-action-poke-group], [data-reminet-badge-slot], [data-reminet-badge], [data-reminet-tooltip], [data-reminet-standalone-poke]')) {
     node.remove();
   }

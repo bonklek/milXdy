@@ -358,55 +358,6 @@ describe("RemiStats official API service", () => {
     await expect(service.resolvePokeTargets(["alice_x"])).resolves.toMatchObject({ targets: [] });
   });
 
-  it("resolves an exact verified self identity for profile enhancement without enabling self Poke", async () => {
-    const resolveDirectory = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      data: { results: [{
-        query: { type: "x_handle", value: "alice_x" },
-        identity: { handle: "alice.remilia", display_name: "Alice", avatar_url: "https://example.invalid/a.png" },
-      }] },
-    });
-    const service = new RemiStatsOfficialService(
-      apiClient({ resolveDirectory } as Partial<RemiliaApiClient>),
-      new MemoryStorage(),
-      Date.now,
-      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
-    );
-
-    await expect(service.resolveProfileIdentity("alice_x")).resolves.toEqual({
-      ok: true,
-      source: "official",
-      identity: { xHandle: "alice_x", remiliaUsername: "alice.remilia" },
-    });
-    await expect(service.resolvePokeTargets(["alice_x"])).resolves.toMatchObject({ targets: [] });
-  });
-
-  it("fails profile identity closed while disconnected or when the directory is ambiguous", async () => {
-    const disconnectedDirectory = vi.fn();
-    const disconnected = new RemiStatsOfficialService(
-      apiClient({ resolveDirectory: disconnectedDirectory } as Partial<RemiliaApiClient>),
-      new MemoryStorage(),
-      Date.now,
-      async () => ({ phase: "disconnected" }),
-    );
-    await expect(disconnected.resolveProfileIdentity("alice_x")).resolves.toMatchObject({ identity: null });
-    expect(disconnectedDirectory).not.toHaveBeenCalled();
-
-    const ambiguousDirectory = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      data: { results: [] },
-    });
-    const ambiguous = new RemiStatsOfficialService(
-      apiClient({ resolveDirectory: ambiguousDirectory } as Partial<RemiliaApiClient>),
-      new MemoryStorage(),
-      Date.now,
-      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
-    );
-    await expect(ambiguous.resolveProfileIdentity("alice_x")).resolves.toMatchObject({ identity: null });
-  });
-
   it("returns no Poke targets while disconnected and makes no directory request", async () => {
     const resolveDirectory = vi.fn();
     const service = new RemiStatsOfficialService(

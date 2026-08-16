@@ -55,4 +55,9 @@ describe("live-equivalent X profile targeting", () => {
     const banner = findExactProfileBannerRoot(fixtureRoot(selfFixtureHtml), "MiladyBonkle") as unknown as { id: string };
     expect(banner.id).toBe("self-banner");
   });
+
+  it("normalizes the lowercase scanner handle and mixed-case owner route to the same exact identity", () => {
+    expect(exactXProfileHandle("miladybonkle")).toBe(exactXProfileHandle("MiladyBonkle"));
+    expect(exactXProfileHandle("MiladyBonkle")).toBe("miladybonkle");
+  });
 });

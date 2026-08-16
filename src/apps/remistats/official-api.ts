@@ -143,12 +143,6 @@ export type RemiStatsPokeTargetsResult = {
   targets: RemiStatsPokeTarget[];
 };
 
-export type RemiStatsProfileIdentityResult = {
-  ok: true;
-  source: "official";
-  identity: RemiStatsPokeTarget | null;
-} | RemiStatsOfficialFailure;
-
 type StoredNotificationReadState = {
   schemaVersion: 1;
   entries: Array<{ key: string; readAt: number }>;
@@ -416,18 +410,6 @@ export class RemiStatsOfficialService {
       source: "official",
       targets: resolved.targets.filter((target) => target.remiliaUsername !== authUsername),
     };
-  }
-
-  async resolveProfileIdentity(xHandleInput: string): Promise<RemiStatsProfileIdentityResult> {
-    const xHandle = normalizeExactXHandle(xHandleInput);
-    if (!xHandle) return { ok: true, source: "official", identity: null };
-    const authUsername = await this.activeAuthUsername();
-    if (!authUsername) return { ok: true, source: "official", identity: null };
-
-    const resolved = await this.resolveExactDirectoryTargets([xHandle]);
-    if (!resolved.ok) return resolved;
-    const identity = resolved.targets.length === 1 ? resolved.targets[0] : null;
-    return { ok: true, source: "official", identity };
   }
 
   async pokeXAuthor(xHandleInput: string, expectedRemiliaUsernameInput: string): Promise<RemiStatsPokeResult> {
