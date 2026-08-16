@@ -4,9 +4,10 @@ import { describe, expect, it } from "vitest";
 import { exactXProfileHandle, findExactProfileBannerRoot, headerPhotoXHandle } from "./profile-page";
 
 const fixtureHtml = readFileSync(new URL("./fixtures/x-profile-live-equivalent.html", import.meta.url), "utf8");
+const selfFixtureHtml = readFileSync(new URL("./fixtures/x-profile-self-live-equivalent.html", import.meta.url), "utf8");
 
-function fixtureRoot() {
-  const $ = load(fixtureHtml);
+function fixtureRoot(html = fixtureHtml) {
+  const $ = load(html);
   const anchors = $('[data-testid="primaryColumn"] a[href]').toArray().map((anchor) => ({
     id: $(anchor).attr("id"),
     getAttribute(name: string) {
@@ -46,5 +47,12 @@ describe("live-equivalent X profile targeting", () => {
   it("matches relative and canonical X header-photo links case-insensitively", () => {
     expect(headerPhotoXHandle("/MiladyBonkle/header_photo")).toBe("miladybonkle");
     expect(headerPhotoXHandle("https://twitter.com/MILADYBONKLE/header_photo")).toBe("miladybonkle");
+  });
+
+  it("selects the exact verified banner on an owner view without using Edit profile as identity", () => {
+    const $ = load(selfFixtureHtml);
+    expect($('[data-testid="editProfileButton"]').text()).toBe("Edit profile");
+    const banner = findExactProfileBannerRoot(fixtureRoot(selfFixtureHtml), "MiladyBonkle") as unknown as { id: string };
+    expect(banner.id).toBe("self-banner");
   });
 });

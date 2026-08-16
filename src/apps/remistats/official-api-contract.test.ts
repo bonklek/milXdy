@@ -46,6 +46,7 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).not.toContain("confirmPokeIdentity(userData.remiliaUsername)");
     expect(remiStatsOfficialApi).toContain('authStatus.phase === "connected" || authStatus.phase === "missing-scope"');
     expect(remiStatsOfficialApi).not.toContain('private async connectedAuthUsername()');
+    expect(remiStatsOfficialApi).toContain("target.remiliaUsername !== authUsername");
   });
 
   it("reconciles one launcher after rerender and exposes action failures visibly", () => {
@@ -69,16 +70,21 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("const trophyShelfUrl = legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL)");
     expect(remiStatsContent).toContain("await preloadDisplayImage(trophyShelfUrl)");
     expect(remiStatsContent).toContain("rememberTrophyBanner(clean, trophyShelfUrl)");
-    expect(remiStatsContent).toContain("upgradeProfileTrophyBanner(profileTarget.remiliaUsername, exactProfileXHandle, window.location.pathname)");
+    expect(remiStatsContent).toContain("upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname)");
     expect(remiStatsContent).toContain("findExactProfileBannerRoot(document, cleanExactXHandle(xHandle))");
     expect(remiStatsContent).toContain("const delays = [0, 200, 600, 1400]");
     expect(remiStatsContent).not.toContain("document.querySelector('[data-testid=\"UserProfileHeader_Items\"]')");
+    expect(remiStatsContent).toContain("type: 'remistats:resolveProfileIdentity'");
+    expect(remiStatsBackground).toContain("remiStatsOfficialService.resolveProfileIdentity(message.xHandle)");
+    expect(remiStatsContent).toContain("isConfirmedProfileIdentity(remiliaUsername, xHandle)");
+    expect(remiStatsContent).not.toContain("isConfirmedPokeTarget(remiliaUsername, xHandle)");
+    expect(remiStatsContent).not.toContain("Edit profile");
   });
 
   it("suppresses stale or mismatched trophy results across SPA profile changes", () => {
     expect(remiStatsContent).toContain("function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)");
     expect(remiStatsContent).toContain("&& profilePath === window.location.pathname");
-    expect(remiStatsContent).toContain("&& isConfirmedPokeTarget(remiliaUsername, xHandle)");
+    expect(remiStatsContent).toContain("&& isConfirmedProfileIdentity(remiliaUsername, xHandle)");
     expect(remiStatsContent).toContain("export function onRouteChange(route)");
     expect(remiStatsContent).toContain("resetProfileTrophyBanner()");
     expect(remiStatsContent).toContain("processedProfiles.clear()");

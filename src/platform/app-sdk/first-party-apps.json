@@ -2298,6 +2298,7 @@
         "remistats:getUser",
         "remistats:getMyStats",
         "remistats:getMyStatsForXProfile",
+        "remistats:resolveProfileIdentity",
         "remistats:resolvePokeTargets",
         "remistats:pokeXAuthor",
         "remistats:markNotificationsRead",

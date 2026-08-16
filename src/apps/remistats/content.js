@@ -240,6 +240,9 @@ const pokeCountdownTimers = new Map();
 const pokeButtonsByUsername = new Map();
 const pokeEligibilityChecked = new Set();
 const confirmedPokeTargets = new Map();
+const confirmedProfileIdentities = new Map();
+const profileIdentityLatestRequests = new Map();
+let profileIdentityRequestGeneration = 0;
 let incomingPokeCache = null;
 let visualTheme = DEFAULT_VISUAL_THEME;
 let likeAutoPokeEnabled = false;
@@ -290,6 +293,34 @@ function isConfirmedPokeTarget(username, xHandle) {
     cleanXHandle
     && cleanRemilia
     && confirmedPokeTargets.get(cleanXHandle) === cleanRemilia
+  );
+}
+
+function setConfirmedProfileIdentity(xHandle, remiliaUsername) {
+  const cleanXHandle = cleanExactXHandle(xHandle).toLowerCase();
+  const cleanRemilia = cleanRemiliaUsername(remiliaUsername).toLowerCase();
+  if (!cleanXHandle) return null;
+  if (!cleanRemilia) {
+    confirmedProfileIdentities.delete(cleanXHandle);
+    return null;
+  }
+  if (confirmedProfileIdentities.has(cleanXHandle)) confirmedProfileIdentities.delete(cleanXHandle);
+  confirmedProfileIdentities.set(cleanXHandle, cleanRemilia);
+  while (confirmedProfileIdentities.size > SCORE_CACHE_LIMIT) {
+    const oldest = confirmedProfileIdentities.keys().next().value;
+    if (oldest === undefined) break;
+    confirmedProfileIdentities.delete(oldest);
+  }
+  return { xHandle: cleanXHandle, remiliaUsername: cleanRemilia };
+}
+
+function isConfirmedProfileIdentity(username, xHandle) {
+  const cleanXHandle = cleanExactXHandle(xHandle).toLowerCase();
+  const cleanRemilia = cleanRemiliaUsername(username).toLowerCase();
+  return Boolean(
+    cleanXHandle
+    && cleanRemilia
+    && confirmedProfileIdentities.get(cleanXHandle) === cleanRemilia
   );
 }
 
@@ -591,6 +622,36 @@ function fetchPokeTarget(xHandle) {
     pokeTargetBatchQueue.add(cleanXHandle);
     schedulePokeTargetBatch();
   });
+}
+
+async function fetchProfileIdentity(xHandle) {
+  const cleanXHandle = cleanExactXHandle(xHandle).toLowerCase();
+  if (!cleanXHandle) return null;
+  const requestGeneration = ++profileIdentityRequestGeneration;
+  confirmedProfileIdentities.delete(cleanXHandle);
+  if (profileIdentityLatestRequests.has(cleanXHandle)) profileIdentityLatestRequests.delete(cleanXHandle);
+  profileIdentityLatestRequests.set(cleanXHandle, requestGeneration);
+  while (profileIdentityLatestRequests.size > SCORE_CACHE_LIMIT) {
+    const oldest = profileIdentityLatestRequests.keys().next().value;
+    if (oldest === undefined) break;
+    profileIdentityLatestRequests.delete(oldest);
+  }
+
+  try {
+    const response = await runtimeSendMessage({
+      type: 'remistats:resolveProfileIdentity',
+      xHandle: cleanXHandle,
+    }, 'remistats:resolveProfileIdentity');
+    if (!response?.ok || profileIdentityLatestRequests.get(cleanXHandle) !== requestGeneration) return null;
+    const responseXHandle = cleanExactXHandle(response.identity?.xHandle).toLowerCase();
+    if (responseXHandle !== cleanXHandle) return null;
+    return setConfirmedProfileIdentity(cleanXHandle, response.identity?.remiliaUsername);
+  } catch (error) {
+    if (!/extension context/i.test(String(error?.message || error))) {
+      console.debug('RemiStats profile identity lookup skipped:', error.message);
+    }
+    return null;
+  }
 }
 
 // Fetch user score with batching
@@ -1677,6 +1738,9 @@ function clearAllPokeCountdowns() {
   pokeCooldownSources.clear();
   pokeEligibilityChecked.clear();
   confirmedPokeTargets.clear();
+  confirmedProfileIdentities.clear();
+  profileIdentityRequestGeneration += 1;
+  profileIdentityLatestRequests.clear();
   pokeTargetRequestGeneration += 1;
   pokeTargetLatestRequests.clear();
   pokeTargetBatchQueue.clear();
@@ -2495,7 +2559,7 @@ let profileTrophyRequestGeneration = 0;
 function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle) {
   return requestGeneration === profileTrophyRequestGeneration
     && profilePath === window.location.pathname
-    && isConfirmedPokeTarget(remiliaUsername, xHandle);
+    && isConfirmedProfileIdentity(remiliaUsername, xHandle);
 }
 
 function clearProfileTrophyBannerRoot(root) {
@@ -2530,7 +2594,7 @@ async function waitForProfileBannerRoot(requestGeneration, profilePath, remiliaU
 async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath) {
   const clean = cleanRemiliaUsername(remiliaUsername);
   const cleanXHandle = cleanExactXHandle(xHandle);
-  if (!clean || !cleanXHandle || !isConfirmedPokeTarget(clean, cleanXHandle)) return;
+  if (!clean || !cleanXHandle || !isConfirmedProfileIdentity(clean, cleanXHandle)) return;
   const requestGeneration = ++profileTrophyRequestGeneration;
 
   await idle();
@@ -2639,12 +2703,14 @@ async function insertProfileBadge() {
       const group = existingBadge.closest('[data-reminet-profile-badge-group]');
       (group || existingBadge).remove();
     } else {
-      const existingTarget = exactProfileXHandle ? await fetchPokeTarget(exactProfileXHandle) : null;
+      const [profileIdentity, existingTarget] = exactProfileXHandle
+        ? await Promise.all([fetchProfileIdentity(exactProfileXHandle), fetchPokeTarget(exactProfileXHandle)])
+        : [null, null];
       const existingUsername = cleanRemiliaUsername(existingTarget?.remiliaUsername);
       const group = existingBadge.closest('[data-reminet-profile-badge-group]');
       if (group) attachProfileBadgeGroup(userNameSection, group);
-      if (existingTarget) {
-        void upgradeProfileTrophyBanner(existingTarget.remiliaUsername, exactProfileXHandle, window.location.pathname);
+      if (profileIdentity) {
+        void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
       } else {
         resetProfileTrophyBanner();
       }
@@ -2670,11 +2736,13 @@ async function insertProfileBadge() {
         const group = existingSlot.closest('[data-reminet-profile-badge-group]');
         const slotXHandle = cleanExactXHandle(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetXHandle || exactProfileXHandle || username);
         if (group) attachProfileBadgeGroup(userNameSection, group);
-        const slotTarget = slotXHandle ? await fetchPokeTarget(slotXHandle) : null;
+        const [profileIdentity, slotTarget] = slotXHandle
+          ? await Promise.all([fetchProfileIdentity(slotXHandle), fetchPokeTarget(slotXHandle)])
+          : [null, null];
         const existingPokeSlot = ensureProfileActionPokeSlot(userNameSection, slotXHandle);
         const confirmedUsername = cleanRemiliaUsername(slotTarget?.remiliaUsername);
         if (confirmedUsername) fillProfilePokeSlot(existingPokeSlot, confirmedUsername, slotXHandle);
-        if (slotTarget) void upgradeProfileTrophyBanner(slotTarget.remiliaUsername, slotXHandle, window.location.pathname);
+        if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, slotXHandle, window.location.pathname);
         else resetProfileTrophyBanner();
         return;
       }
@@ -2689,8 +2757,10 @@ async function insertProfileBadge() {
   
   // Create a unique key for this profile + location
   if (processedProfiles.has(profileKey)) {
-    const cachedTarget = exactProfileXHandle ? await fetchPokeTarget(exactProfileXHandle) : null;
-    if (cachedTarget) void upgradeProfileTrophyBanner(cachedTarget.remiliaUsername, exactProfileXHandle, window.location.pathname);
+    const [profileIdentity, cachedTarget] = exactProfileXHandle
+      ? await Promise.all([fetchProfileIdentity(exactProfileXHandle), fetchPokeTarget(exactProfileXHandle)])
+      : [null, null];
+    if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
     else resetProfileTrophyBanner();
     const cachedPublicScore = cachedScoreData(username);
     const officialSelfScore = exactProfileXHandle
@@ -2724,11 +2794,12 @@ async function insertProfileBadge() {
   attachProfileBadgeGroup(userNameSection, profileBadgeGroup);
 
   try {
-    const [publicScoreData, profileTarget] = await Promise.all([
+    const [publicScoreData, profileIdentity, profileTarget] = await Promise.all([
       fetchUserScore(username),
+      exactProfileXHandle ? fetchProfileIdentity(exactProfileXHandle) : Promise.resolve(null),
       exactProfileXHandle ? fetchPokeTarget(exactProfileXHandle) : Promise.resolve(null),
     ]);
-    if (profileTarget) void upgradeProfileTrophyBanner(profileTarget.remiliaUsername, exactProfileXHandle, window.location.pathname);
+    if (profileIdentity) void upgradeProfileTrophyBanner(profileIdentity.remiliaUsername, exactProfileXHandle, window.location.pathname);
     else resetProfileTrophyBanner();
     const officialSelfScoreData = exactProfileXHandle
       ? await fetchOfficialSelfProfileScore(exactProfileXHandle)

@@ -6,6 +6,7 @@ import { RemiStatsOfficialService, type RemiStatsStorage } from "./official-api"
 const REMISTATS_MESSAGE_TYPES = new Set([
   "remistats:getMyStats",
   "remistats:getMyStatsForXProfile",
+  "remistats:resolveProfileIdentity",
   "remistats:resolvePokeTargets",
   "remistats:pokeXAuthor",
   "remistats:markNotificationsRead",
@@ -46,6 +47,11 @@ registerBackgroundMessageHandlers([
     handle: handleRemiStatsOfficialMessage,
   },
   {
+    type: "remistats:resolveProfileIdentity",
+    matches: isRemiStatsOfficialMessage,
+    handle: handleRemiStatsOfficialMessage,
+  },
+  {
     type: "remistats:resolvePokeTargets",
     matches: isRemiStatsOfficialMessage,
     handle: handleRemiStatsOfficialMessage,
@@ -80,6 +86,7 @@ registerBackgroundMessageHandlers([
 export type RemiStatsOfficialMessage =
   | { type: "remistats:getMyStats" }
   | { type: "remistats:getMyStatsForXProfile"; xHandle: string }
+  | { type: "remistats:resolveProfileIdentity"; xHandle: string }
   | { type: "remistats:resolvePokeTargets"; xHandles: string[] }
   | { type: "remistats:pokeXAuthor"; xHandle: string; expectedRemiliaUsername: string }
   | { type: "remistats:markNotificationsRead"; keys: string[] }
@@ -92,7 +99,7 @@ export function isRemiStatsOfficialMessage(value: unknown): value is RemiStatsOf
   if (value.type === "beetol:poke" || value.type === "beetol:pokeEligibility") {
     return hasOnlyKeys(value, ["type", "username"]) && typeof value.username === "string";
   }
-  if (value.type === "remistats:getMyStatsForXProfile") {
+  if (value.type === "remistats:getMyStatsForXProfile" || value.type === "remistats:resolveProfileIdentity") {
     return hasOnlyKeys(value, ["type", "xHandle"]) && typeof value.xHandle === "string";
   }
   if (value.type === "remistats:resolvePokeTargets") {
@@ -125,6 +132,8 @@ async function handleRemiStatsOfficialMessage(
       return remiStatsOfficialService.getMyStats();
     case "remistats:getMyStatsForXProfile":
       return remiStatsOfficialService.getMyStatsForXProfile(message.xHandle);
+    case "remistats:resolveProfileIdentity":
+      return remiStatsOfficialService.resolveProfileIdentity(message.xHandle);
     case "remistats:resolvePokeTargets":
       return remiStatsOfficialService.resolvePokeTargets(message.xHandles);
     case "remistats:pokeXAuthor":
