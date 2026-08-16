@@ -138,7 +138,7 @@ describe("shared Remilia API v1 identity service", () => {
         status: 200,
         data: identifiers.map((query: ReminetDirectoryIdentifier) => ({
           query,
-          identity: { handle: "gone", display_name: "Gone", avatar_url: "https://example.test/gone.png" },
+          identity: { handle: "Gone" },
         })),
       })),
       getUserProfile: vi.fn(async () => ({
@@ -159,7 +159,11 @@ describe("shared Remilia API v1 identity service", () => {
       { now: () => 5_001 },
     );
 
-    expect(first.results[0]).toMatchObject({ status: "resolved", profile: null });
+    expect(first.results[0]).toMatchObject({
+      status: "resolved",
+      identity: { handle: "gone", display_name: "", avatar_url: "" },
+      profile: null,
+    });
     expect(first.cache.publicProfileMisses["rn:gone"]).toMatchObject({ source: "remilia-api-v1:profile" });
     expect(second.results[0]).toMatchObject({ status: "resolved", cached: true, profile: null });
     expect(api.getUserProfile).toHaveBeenCalledTimes(1);

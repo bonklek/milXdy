@@ -63,6 +63,61 @@ describe("Remilia API v1 endpoint fixtures", () => {
     expect(fetchMock).toHaveBeenCalledTimes(11);
   });
 
+  it("accepts exact directory identities without optional presentation fields", async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          results: [{
+            query: { type: "x_handle", value: "MiladyBonkle" },
+            identity: { handle: "Bonkle.Remilia" },
+          }],
+        },
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        data: {
+          results: [{
+            query: { type: "x_handle", value: "MiladyBonkle" },
+            identity: {
+              handle: "Bonkle.Remilia",
+              display_name: null,
+              avatar_url: null,
+              avatar_url_small: null,
+              connections: [{ provider: "twitter", username: "MiladyBonkle" }],
+            },
+          }],
+        },
+      }));
+    const client = new RemiliaApiClient({
+      auth: authProvider(grant("token", [REMILIA_SCOPE_DIRECTORY_READ])),
+      fetch: fetchMock,
+    });
+
+    const missing = await client.resolveDirectory([{ type: "x_handle", value: "MiladyBonkle" }]);
+    const nullable = await client.resolveDirectory([{ type: "x_handle", value: "MiladyBonkle" }]);
+
+    expect(missing).toMatchObject({ ok: true, data: { results: [{ identity: { handle: "Bonkle.Remilia" } }] } });
+    expect(nullable).toMatchObject({ ok: true, data: { results: [{ identity: { handle: "Bonkle.Remilia" } }] } });
+  });
+
+  it("still rejects malformed directory presentation fields", async () => {
+    const client = new RemiliaApiClient({
+      auth: authProvider(grant("token", [REMILIA_SCOPE_DIRECTORY_READ])),
+      fetch: vi.fn(async () => jsonResponse({
+        data: {
+          results: [{
+            query: { type: "x_handle", value: "miladybonkle" },
+            identity: { handle: "bonkle.remilia", display_name: 42 },
+          }],
+        },
+      })),
+    });
+
+    await expect(client.resolveDirectory([{ type: "x_handle", value: "miladybonkle" }])).resolves.toMatchObject({
+      ok: false,
+      error: { category: "invalid_response", code: "invalid_response" },
+    });
+  });
+
   it("covers and normalizes every documented error without retaining private messages", async () => {
     for (const [code, fixture] of Object.entries(REMILIA_API_V1_ERROR_FIXTURES)) {
       const client = new RemiliaApiClient({

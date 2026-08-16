@@ -88,6 +88,18 @@ export type RemiliaApiPublicIdentity = {
   avatar_url_small?: string;
 };
 
+/**
+ * Directory resolution authorizes an identity from the exact query/handle
+ * pair. Presentation fields are optional in provider responses and must not
+ * turn an otherwise authoritative mapping into a miss.
+ */
+export type RemiliaApiDirectoryIdentity = {
+  handle: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  avatar_url_small?: string | null;
+};
+
 export type RemiliaApiNotification = {
   type: string;
   read: boolean;
@@ -159,7 +171,7 @@ export type RemiliaApiDirectoryIdentifierType = "handle" | "x_handle" | "github"
 export type RemiliaApiDirectoryIdentifier = { type: RemiliaApiDirectoryIdentifierType; value: string };
 export type RemiliaApiDirectoryResult = {
   query: RemiliaApiDirectoryIdentifier;
-  identity: RemiliaApiPublicIdentity | null;
+  identity: RemiliaApiDirectoryIdentity | null;
 };
 export type RemiliaApiDirectoryResolution = { results: RemiliaApiDirectoryResult[] };
 export type RemiliaApiDirectoryPage = {
@@ -815,7 +827,19 @@ function isDirectoryIdentifier(value: unknown): value is RemiliaApiDirectoryIden
 }
 
 function isDirectoryResult(value: unknown): value is RemiliaApiDirectoryResult {
-  return isObject(value) && isDirectoryIdentifier(value.query) && (value.identity === null || isPublicIdentity(value.identity));
+  return isObject(value) && isDirectoryIdentifier(value.query) && (value.identity === null || isDirectoryIdentity(value.identity));
+}
+
+function isDirectoryIdentity(value: unknown): value is RemiliaApiDirectoryIdentity {
+  return isObject(value)
+    && typeof value.handle === "string"
+    && optionalNullableString(value.display_name)
+    && optionalNullableString(value.avatar_url)
+    && optionalNullableString(value.avatar_url_small);
+}
+
+function optionalNullableString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
 }
 
 function isDirectoryResultsEnvelopeData(value: unknown): value is RemiliaApiDirectoryResolution {

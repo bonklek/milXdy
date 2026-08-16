@@ -12,9 +12,16 @@ export type ReminetDirectoryIdentity = {
   avatar_url_small?: string;
 };
 
+export type ReminetDirectoryApiIdentity = {
+  handle: string;
+  display_name?: string | null;
+  avatar_url?: string | null;
+  avatar_url_small?: string | null;
+};
+
 export type ReminetDirectoryApiResult = {
   query: ReminetDirectoryIdentifier;
-  identity: ReminetDirectoryIdentity | null;
+  identity: ReminetDirectoryApiIdentity | null;
 };
 
 export type ReminetDirectoryApiFailure = {
@@ -346,13 +353,13 @@ function normalizeIdentifierValue(type: ReminetDirectoryIdentifierType, raw: str
   return normalized.length <= 256 ? normalized : "";
 }
 
-function normalizeDirectoryIdentity(identity: ReminetDirectoryIdentity): ReminetDirectoryIdentity | null {
+function normalizeDirectoryIdentity(identity: ReminetDirectoryApiIdentity): ReminetDirectoryIdentity | null {
   const handle = normalizeIdentifierValue("handle", identity.handle);
-  if (!handle || typeof identity.display_name !== "string" || typeof identity.avatar_url !== "string") return null;
+  if (!handle) return null;
   return {
     handle,
-    display_name: identity.display_name,
-    avatar_url: identity.avatar_url,
+    display_name: typeof identity.display_name === "string" ? identity.display_name : "",
+    avatar_url: typeof identity.avatar_url === "string" ? identity.avatar_url : "",
     ...(typeof identity.avatar_url_small === "string" ? { avatar_url_small: identity.avatar_url_small } : {}),
   };
 }
@@ -399,8 +406,20 @@ function isDirectoryIdentity(value: unknown): value is ReminetDirectoryIdentity 
     && typeof value.avatar_url === "string";
 }
 
+function isDirectoryApiIdentity(value: unknown): value is ReminetDirectoryApiIdentity {
+  return isRecord(value)
+    && typeof value.handle === "string"
+    && optionalNullableString(value.display_name)
+    && optionalNullableString(value.avatar_url)
+    && optionalNullableString(value.avatar_url_small);
+}
+
+function optionalNullableString(value: unknown): boolean {
+  return value === undefined || value === null || typeof value === "string";
+}
+
 function isDirectoryResult(value: unknown): value is ReminetDirectoryApiResult {
   return isRecord(value)
     && isDirectoryIdentifier(value.query)
-    && (value.identity === null || isDirectoryIdentity(value.identity));
+    && (value.identity === null || isDirectoryApiIdentity(value.identity));
 }

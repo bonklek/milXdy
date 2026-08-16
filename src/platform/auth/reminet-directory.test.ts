@@ -78,6 +78,64 @@ describe("Remilia API v1 directory resolution", () => {
     expect(resolved.results[0]).toEqual(resolved.results[2]);
   });
 
+  it("authorizes an exact handle independently of optional presentation fields", async () => {
+    const queries = [
+      { type: "x_handle" as const, value: "MiladyBonkle" },
+      { type: "x_handle" as const, value: "OtherMilady" },
+    ];
+    const resolved = await resolveReminetDirectoryIdentifiers(
+      queries,
+      emptyReminetDirectoryCache(),
+      async ([first, second]) => ({
+        ok: true as const,
+        status: 200,
+        data: [
+          { query: first, identity: { handle: "Bonkle.Remilia" } },
+          {
+            query: second,
+            identity: {
+              handle: "Other.Remilia",
+              display_name: null,
+              avatar_url: null,
+              avatar_url_small: null,
+            },
+          },
+        ],
+      }),
+      { now: () => 2_500 },
+    );
+
+    expect(resolved.results).toMatchObject([
+      {
+        query: { type: "x_handle", value: "miladybonkle" },
+        status: "resolved",
+        identity: { handle: "bonkle.remilia", display_name: "", avatar_url: "" },
+      },
+      {
+        query: { type: "x_handle", value: "othermilady" },
+        status: "resolved",
+        identity: { handle: "other.remilia", display_name: "", avatar_url: "" },
+      },
+    ]);
+  });
+
+  it("rejects malformed presentation values instead of converting them into a miss", async () => {
+    const query = { type: "x_handle" as const, value: "miladybonkle" };
+    const resolved = await resolveReminetDirectoryIdentifiers(
+      [query],
+      emptyReminetDirectoryCache(),
+      async () => ({
+        ok: true as const,
+        status: 200,
+        data: [{ query, identity: { handle: "bonkle.remilia", avatar_url: 42 } as any }],
+      }),
+      { now: () => 2_600 },
+    );
+
+    expect(resolved.results[0]).toMatchObject({ status: "error", error: { code: "invalid_response" } });
+    expect(resolved.cache.negative).toEqual({});
+  });
+
   it("caches positive mappings until expiry and refreshes handle changes authoritatively", async () => {
     let now = 10_000;
     const fetchBatch = vi.fn(async (identifiers: readonly ReminetDirectoryIdentifier[]) => ({

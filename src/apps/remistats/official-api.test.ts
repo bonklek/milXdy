@@ -315,6 +315,29 @@ describe("RemiStats official API service", () => {
     ]);
   });
 
+  it("resolves a non-self Poke target when directory presentation fields are absent", async () => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: [{
+        query: { type: "x_handle", value: "bob_x" },
+        identity: { handle: "Bob.Remilia" },
+      }] },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    await expect(service.resolvePokeTargets(["Bob_X"])).resolves.toEqual({
+      ok: true,
+      source: "official",
+      targets: [{ xHandle: "bob_x", remiliaUsername: "bob.remilia" }],
+    });
+  });
+
   it("does not suppress an exact non-self Poke target for an unrelated missing release scope", async () => {
     const resolveDirectory = vi.fn().mockResolvedValue({
       ok: true,
