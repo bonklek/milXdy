@@ -2,6 +2,7 @@ import { recordFeatureTiming } from "../../platform/diagnostics/performance-diag
 import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../platform/visuals/reskin-profile";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { legacyBeetleTrophyShelfUrl } from "../beetol/legacy-beetle-actions";
+import { findExactProfileBannerRoot } from "./profile-page";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -2222,19 +2223,8 @@ async function renderTrophyBanner(remiliaUsername) {
   return pending;
 }
 
-function findProfileBannerRoot() {
-  const image = document.querySelector('main img[src*="/profile_banners/"], main img[src*="profile_banners"]');
-  if (!image) return null;
-
-  let root = image.parentElement;
-  for (let i = 0; i < 3 && root?.parentElement; i += 1) {
-    const rect = root.getBoundingClientRect();
-    const parentRect = root.parentElement.getBoundingClientRect();
-    if (parentRect.width >= rect.width && parentRect.height >= rect.height) {
-      root = root.parentElement;
-    }
-  }
-  return root || image.parentElement;
+function findProfileBannerRoot(xHandle = profileUsernameFromUrl()) {
+  return findExactProfileBannerRoot(document, cleanExactXHandle(xHandle));
 }
 
 function clearTrophyBannerOverlay(root) {
@@ -2508,15 +2498,33 @@ function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUs
     && isConfirmedPokeTarget(remiliaUsername, xHandle);
 }
 
-function resetProfileTrophyBanner() {
-  profileTrophyRequestGeneration += 1;
-  const root = findProfileBannerRoot();
+function clearProfileTrophyBannerRoot(root) {
   if (!root) return;
   clearTrophyBannerOverlay(root);
   root.querySelector(':scope > .milxdy-banner-cycle-button')?.remove();
   delete root.dataset.milxdyTrophyBannerUser;
   delete root.dataset.milxdyTrophyBannerState;
   root.dataset.milxdyBannerMode = 'original';
+}
+
+function resetProfileTrophyBanner() {
+  profileTrophyRequestGeneration += 1;
+  for (const root of document.querySelectorAll('[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]')) {
+    clearProfileTrophyBannerRoot(root);
+  }
+}
+
+async function waitForProfileBannerRoot(requestGeneration, profilePath, remiliaUsername, xHandle) {
+  const delays = [0, 200, 600, 1400];
+  for (const delay of delays) {
+    if (delay > 0) {
+      await new Promise((resolve) => runtimeScheduler.timeout(resolve, delay));
+    }
+    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)) return null;
+    const root = findProfileBannerRoot(xHandle);
+    if (root) return root;
+  }
+  return null;
 }
 
 async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath) {
@@ -2528,7 +2536,7 @@ async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath)
   await idle();
 
   if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
-  const root = findProfileBannerRoot();
+  const root = await waitForProfileBannerRoot(requestGeneration, profilePath, clean, cleanXHandle);
   if (!root) return;
 
   if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
@@ -2587,14 +2595,8 @@ let runtimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 1500, tim
 
 // Insert badge on profile pages
 async function insertProfileBadge() {
-  // Check if we're on a profile page
-  const profileHeader = document.querySelector('[data-testid="UserProfileHeader_Items"]');
-  if (!profileHeader) {
-    return;
-  }
-  
   // Find the username/handle section
-  const userNameSection = document.querySelector('[data-testid="UserName"]');
+  const userNameSection = document.querySelector('[data-testid="primaryColumn"] [data-testid="UserName"]');
   if (!userNameSection) {
     return;
   }

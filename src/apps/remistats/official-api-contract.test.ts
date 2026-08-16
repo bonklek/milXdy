@@ -70,6 +70,9 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("await preloadDisplayImage(trophyShelfUrl)");
     expect(remiStatsContent).toContain("rememberTrophyBanner(clean, trophyShelfUrl)");
     expect(remiStatsContent).toContain("upgradeProfileTrophyBanner(profileTarget.remiliaUsername, exactProfileXHandle, window.location.pathname)");
+    expect(remiStatsContent).toContain("findExactProfileBannerRoot(document, cleanExactXHandle(xHandle))");
+    expect(remiStatsContent).toContain("const delays = [0, 200, 600, 1400]");
+    expect(remiStatsContent).not.toContain("document.querySelector('[data-testid=\"UserProfileHeader_Items\"]')");
   });
 
   it("suppresses stale or mismatched trophy results across SPA profile changes", () => {
@@ -80,6 +83,7 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("resetProfileTrophyBanner()");
     expect(remiStatsContent).toContain("processedProfiles.clear()");
     expect(remiStatsContent).toContain("if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return");
+    expect(remiStatsContent).toContain("document.querySelectorAll('[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]')");
     expect(remiStatsContent).not.toContain("root.dataset.milxdyTrophyBannerState === 'loading') return");
   });
 });
