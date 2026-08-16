@@ -505,7 +505,10 @@ host-owned transfer to a known external tool. It is not a general browser DOM,
 clipboard, tab, or network API. A package declares a host-recognized adapter and
 target, lists the matching host permission and remote-service/data disclosure,
 and remains disabled until consent is acknowledged. The package receives only
-its own `{ id, label }` declarations plus `launchExternalHandoff(id)`.
+its own `{ id, label }` declarations plus
+`launchExternalHandoff(id, { mode, captions? })`. Both the declaration ID and
+mode must come from the user's explicit package controls; the host provides no
+default maker or mode.
 
 The call is valid only from an explicit package click. The host—not package
 code—reads the active X composer, splits it on the newline nearest the text
@@ -520,7 +523,7 @@ there is no raw upload API, no attachment to another composer, and no post is
 sent automatically.
 
 For a handoff that declares `captionSource: "packageFields"`, the package may
-instead call `launchExternalHandoff(id, { captions: { topText, bottomText } })`
+instead call `launchExternalHandoff(id, { mode, captions: { topText, bottomText } })`
 from its explicit control. Each literal field is bounded by the declared
 `captionMaxLength` (1–10,000) and is transferred exactly as entered to the
 named reviewed maker; the host does not read the X composer for that call. The

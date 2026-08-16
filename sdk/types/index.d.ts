@@ -171,8 +171,8 @@ export interface MilxdyComposerActionContext {
   readonly panel: HTMLElement;
   readonly signal: AbortSignal;
   readonly externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
-  launchExternalHandoff(id: string, options?: {
-    mode?: "captioned" | "randomMeme";
+  launchExternalHandoff(id: string, options: {
+    mode: "captioned" | "randomMeme";
     captions?: { topText: string; bottomText: string };
   }): Promise<{ ok: boolean; error?: string }>;
   readonly remoteQueries: ReadonlyArray<{ id: string; label: string }>;

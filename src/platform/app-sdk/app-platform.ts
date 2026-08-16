@@ -423,8 +423,8 @@ export type MilxdyComposerActionContext = {
    * or bounded, explicit package caption fields; packages never receive X text.
    */
   externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
-  launchExternalHandoff: (id: string, options?: {
-    mode?: "captioned" | "randomMeme";
+  launchExternalHandoff: (id: string, options: {
+    mode: "captioned" | "randomMeme";
     captions?: { topText: string; bottomText: string };
   }) => Promise<{ ok: boolean; error?: string }>;
   /** Host-filtered, sanitized gallery services; no package fetch or raw URLs. */

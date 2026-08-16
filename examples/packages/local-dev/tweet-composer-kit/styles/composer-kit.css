@@ -176,8 +176,9 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
 .tweet-composer-kit__phrase-row input { min-block-size: 34px; min-inline-size: 0; padding: 5px 7px; }
 .tweet-composer-kit__composer-panel > .tweet-composer-kit__button { min-block-size: 34px; padding: 5px 8px; }
 .tweet-composer-kit__maker-group { display: grid; inline-size: max-content; gap: 2px; min-inline-size: 0; }
-.tweet-composer-kit__random-label { display: inline-flex; align-items: center; justify-self: start; gap: 4px; margin: 0; color: var(--tck-muted); font-size: 10px; font-weight: 700; cursor: pointer; }
-.tweet-composer-kit__random-toggle { display: inline-block !important; flex: 0 0 14px; inline-size: 14px !important; block-size: 14px !important; min-block-size: 14px !important; margin: 0; accent-color: var(--tck-accent); vertical-align: middle; }
+.tweet-composer-kit__mode-label { display: inline-flex; align-items: center; justify-self: start; gap: 4px; margin: 0; color: var(--tck-muted); font-size: 10px; font-weight: 700; cursor: pointer; }
+.tweet-composer-kit__mode-radio { display: inline-block !important; flex: 0 0 14px; inline-size: 14px !important; block-size: 14px !important; min-block-size: 14px !important; margin: 0; accent-color: var(--tck-accent); vertical-align: middle; }
+.tweet-composer-kit__mode-radio:disabled + span { opacity: .55; }
 .tweet-composer-kit__maker-row { display: flex; position: relative; inline-size: max-content; gap: 4px; overflow-x: auto; padding-block-start: 1px; }
 .tweet-composer-kit__maker-row .tweet-composer-kit__maker {
   display: grid;
@@ -205,6 +206,7 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
   background: color-mix(in srgb, var(--tck-surface-raised) 82%, var(--tck-accent) 18%);
   color: var(--tck-ink);
 }
+.tweet-composer-kit__maker-row .tweet-composer-kit__maker[aria-pressed="true"] { border-color: var(--tck-accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--tck-accent) 70%, transparent); }
 .tweet-composer-kit__maker-row .tweet-composer-kit__maker:focus-visible {
   outline: 2px solid var(--tck-accent);
   outline-offset: 2px;
@@ -250,6 +252,8 @@ html[data-milxdy-settings-theme="dark"] .tweet-composer-kit__composer-panel {
 .tweet-composer-kit__maker--bonkler .tweet-composer-kit__maker-thumb { background: #87846e; }
 .tweet-composer-kit__maker--kagami .tweet-composer-kit__maker-thumb { background: #c85f78; }
 .tweet-composer-kit__maker-row .tweet-composer-kit__maker:disabled { cursor: not-allowed; opacity: .55; }
+.tweet-composer-kit__generate { justify-self: start; min-block-size: 30px !important; border: 1px solid var(--tck-border) !important; border-radius: 3px !important; background: var(--tck-accent) !important; color: var(--tck-accent-ink) !important; padding: 4px 8px !important; font: 700 10px/1 inherit !important; }
+.tweet-composer-kit__generate:disabled { cursor: not-allowed; opacity: .55; }
 .tweet-composer-kit__maker-status { min-block-size: 0; margin: 0; color: var(--tck-muted); font-size: 10px; }
 .tweet-composer-kit__maker-status:empty { display: none; }
 .tweet-composer-kit__maker-status[data-state="error"] { color: var(--tck-danger); font-weight: 700; }

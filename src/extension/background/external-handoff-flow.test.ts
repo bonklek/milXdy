@@ -4,18 +4,20 @@ import { describe, expect, it } from "vitest";
 const read = (path: string) => readFile(new URL(path, import.meta.url), "utf8");
 
 describe("Post-Factory reviewed maker handoff", () => {
-  it("keeps source and built package callbacks on the same result-aware random path", async () => {
+  it("keeps source and built package callbacks on the same explicit selection path", async () => {
     const [source, built] = await Promise.all([
       read("../../../examples/packages/local-dev/tweet-composer-kit/src/content.js"),
       read("../../../examples/packages/local-dev/tweet-composer-kit/dist/content.js"),
     ]);
 
     for (const packageCode of [source, built]) {
-      expect(packageCode).toContain("const mode = random.checked ||");
-      expect(packageCode).toMatch(/!topInput\.value\.trim\(\) && !bottomInput\.value\.trim\(\)\)? \? "randomMeme" : "captioned"/u);
-      expect(packageCode).toContain("const { ok, error } = await launchExternalHandoff(maker.handoffId");
-      expect(packageCode).toContain("could not generate an image");
-      expect(packageCode).toContain("added the generated image to the active composer");
+      expect(packageCode).toContain("resolveMakerDispatch(selection, externalHandoffs)");
+      expect(packageCode).toContain("Choose a maker and mode to generate.");
+      expect(packageCode).toContain("const { ok, error } = await launchExternalHandoff(dispatch.handoffId");
+      expect(packageCode).toContain("mode: dispatch.mode");
+      expect(packageCode).not.toContain('|| (!topInput.value.trim() && !bottomInput.value.trim()) ? "randomMeme"');
+      expect(packageCode).toContain('const verb = dispatch.handoffId === "cheeseworld-deepfry" ? "replace the composer image" : "generate an image"');
+      expect(packageCode).toContain('const result = dispatch.handoffId === "cheeseworld-deepfry" ? "replaced the initiating composer image" : "added the generated image to the active composer"');
     }
   });
 
@@ -48,6 +50,8 @@ describe("Post-Factory reviewed maker handoff", () => {
 
     expect(contentRuntime).toContain("if (!navigator.userActivation?.isActive)");
     expect(contentRuntime).toContain('(app.externalHandoffs || []).find((candidate) => candidate.id === id)');
+    expect(contentRuntime).toContain('if (mode !== "captioned" && mode !== "randomMeme")');
+    expect(contentRuntime).not.toContain('options?.mode || "captioned"');
     expect(contentRuntime).toContain('type: "milxdy:externalHandoff"');
     expect(contentRuntime).toContain('await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")');
 

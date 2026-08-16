@@ -14,6 +14,8 @@ const backgroundMessagePolicy = await readFile("src/platform/runtime/background-
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
 const background = await readFile("src/extension/background/index.ts", "utf8");
 const externalHandoffPageAdapters = await readFile("src/extension/background/external-handoff-page-adapters.ts", "utf8");
+const postFactorySource = await readFile("examples/packages/local-dev/tweet-composer-kit/src/content.js", "utf8");
+const postFactoryBuilt = await readFile("examples/packages/local-dev/tweet-composer-kit/dist/content.js", "utf8");
 const composerSource = await readFile("scripts/packages/compose-local-app-packages.mjs", "utf8");
 const postReadingDefaults = await readFile("src/apps/post-reading/shared/defaults.ts", "utf8");
 const postReadingContent = await readFile("src/apps/post-reading/content.ts", "utf8");
@@ -169,6 +171,15 @@ function verifyPlatformContract() {
   requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
   requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
   requireIncludes(background, "renderRemiliaMakerImage", "External maker handoffs must be host-owned adapter code");
+  requireIncludes(contentRuntime, 'const mode = options?.mode;', "External maker handoffs must require the package to send the selected mode");
+  requireNotIncludes(contentRuntime, 'options?.mode || "captioned"', "External maker handoffs must not invent a default mode");
+  for (const packageContent of [postFactorySource, postFactoryBuilt]) {
+    requireIncludes(packageContent, "resolveMakerDispatch(selection, externalHandoffs)", "Post-Factory must resolve only its explicit maker and mode selection");
+    requireIncludes(packageContent, "Choose a maker and mode to generate.", "Post-Factory must fail closed before a maker and mode are selected");
+    requireIncludes(packageContent, "launchExternalHandoff(dispatch.handoffId", "Post-Factory must dispatch the resolved selected maker without a default target");
+    requireIncludes(packageContent, "mode: dispatch.mode", "Post-Factory must dispatch the resolved selected mode without a default action");
+    requireNotIncludes(packageContent, '|| (!topInput.value.trim() && !bottomInput.value.trim()) ? "randomMeme"', "Empty captions must not implicitly enable random-meme mode");
+  }
   requireIncludes(background, "renderCheeseWorldImage", "CheeseWorld deep-fry must remain a reviewed host-owned adapter");
   requireIncludes(externalHandoffContract, 'new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN)', "CheeseWorld handoff must use its fixed reviewed destination");
   requireIncludes(background, "validateExternalHandoffImageDataUrl", "CheeseWorld input must be MIME- and size-validated by the host");

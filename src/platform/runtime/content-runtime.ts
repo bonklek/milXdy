@@ -2526,8 +2526,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
         attachmentIdentity,
       };
     };
-    const launchExternalHandoff = async (id: string, options?: {
-      mode?: "captioned" | "randomMeme";
+    const launchExternalHandoff = async (id: string, options: {
+      mode: "captioned" | "randomMeme";
       captions?: { topText: string; bottomText: string };
     }): Promise<{ ok: boolean; error?: string }> => {
       if (!navigator.userActivation?.isActive) {
@@ -2535,7 +2535,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
       }
       const handoff = (app.externalHandoffs || []).find((candidate) => candidate.id === id);
       if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
-      const mode = options?.mode || "captioned";
+      const mode = options?.mode;
+      if (mode !== "captioned" && mode !== "randomMeme") return { ok: false, error: "Choose an explicit maker mode from its control." };
       if (!(handoff.modes || ["captioned"]).includes(mode)) return { ok: false, error: "This handoff mode is not declared by the package." };
       // The package owns its loading treatment; the host owns optional audio
       // feedback so it remains consistent, user-preference-respecting, and
