@@ -247,6 +247,136 @@ describe("RemiStats official API service", () => {
     expect(JSON.stringify(result)).not.toContain("999");
   });
 
+  it("resolves Poke targets from the official directory without requiring public profile data", async () => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: [
+        {
+          query: { type: "x_handle", value: "bob_x" },
+          identity: { handle: "bob.remilia", display_name: "Bob", avatar_url: "https://example.invalid/b.png" },
+        },
+        {
+          query: { type: "x_handle", value: "alice_x" },
+          identity: { handle: "alice.remilia", display_name: "Alice", avatar_url: "https://example.invalid/a.png" },
+        },
+      ] },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    await expect(service.resolvePokeTargets(["Bob_X", "alice_x"])).resolves.toEqual({
+      ok: true,
+      source: "official",
+      targets: [{ xHandle: "bob_x", remiliaUsername: "bob.remilia" }],
+    });
+    expect(resolveDirectory).toHaveBeenCalledWith([
+      { type: "x_handle", value: "bob_x" },
+      { type: "x_handle", value: "alice_x" },
+    ]);
+  });
+
+  it("returns no Poke targets while disconnected and makes no directory request", async () => {
+    const resolveDirectory = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "disconnected" }),
+    );
+
+    await expect(service.resolvePokeTargets(["bob_x"])).resolves.toEqual({
+      ok: true,
+      source: "official",
+      targets: [],
+    });
+    expect(resolveDirectory).not.toHaveBeenCalled();
+  });
+
+  it("does not launch a Poke after disconnect even if the UI had an earlier target", async () => {
+    const resolveDirectory = vi.fn();
+    const pokeUser = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, pokeUser } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "disconnected" }),
+    );
+
+    await expect(service.pokeXAuthor("bob_x", "bob.remilia")).resolves.toMatchObject({
+      ok: false,
+      authRequired: true,
+      code: "auth_unavailable",
+    });
+    expect(resolveDirectory).not.toHaveBeenCalled();
+    expect(pokeUser).not.toHaveBeenCalled();
+  });
+
+  it("fails closed on ambiguous Poke directory mappings", async () => {
+    const identity = { handle: "bob.remilia", display_name: "Bob", avatar_url: "https://example.invalid/b.png" };
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: [
+        { query: { type: "x_handle", value: "bob_x" }, identity },
+        { query: { type: "x_handle", value: "bob_x" }, identity },
+      ] },
+    });
+    const pokeUser = vi.fn();
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, pokeUser } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    await expect(service.resolvePokeTargets(["bob_x"])).resolves.toMatchObject({ targets: [] });
+    await expect(service.pokeXAuthor("bob_x", "bob.remilia")).resolves.toMatchObject({
+      ok: false,
+      code: "forbidden",
+    });
+    expect(pokeUser).not.toHaveBeenCalled();
+  });
+
+  it("revalidates the exact X mapping and expected Remilia target before Poke", async () => {
+    const resolveDirectory = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { results: [{
+        query: { type: "x_handle", value: "bob_x" },
+        identity: { handle: "bob.remilia", display_name: "Bob", avatar_url: "https://example.invalid/b.png" },
+      }] },
+    });
+    const pokeUser = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      data: { target_handle: "bob.remilia", poked_at: 10 },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ resolveDirectory, pokeUser } as Partial<RemiliaApiClient>),
+      new MemoryStorage(),
+      Date.now,
+      async () => ({ phase: "connected", identity: { username: "alice.remilia" } }),
+    );
+
+    await expect(service.pokeXAuthor("Bob_X", "bob.remilia")).resolves.toMatchObject({
+      ok: true,
+      data: { target_handle: "bob.remilia" },
+    });
+    expect(pokeUser).toHaveBeenCalledWith("bob.remilia");
+
+    pokeUser.mockClear();
+    await expect(service.pokeXAuthor("bob_x", "mallory")).resolves.toMatchObject({
+      ok: false,
+      code: "forbidden",
+    });
+    expect(pokeUser).not.toHaveBeenCalled();
+  });
+
   it("pages notifications, deduplicates deterministically, and persists only opaque local read keys", async () => {
     const duplicate = notification("alice", 1_754_870_400);
     const older = notification("bob", 1_754_870_300);

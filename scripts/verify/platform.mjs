@@ -147,12 +147,12 @@ async function verifyRuntimeOwnership() {
   const remistats = await readFile("src/apps/remistats/content.js", "utf8");
   const remistatsStyles = await readFile("src/apps/remistats/remistats.css", "utf8");
   assert(!remistats.includes("for (const [cachedKey, cached] of scoreCache)"), "RemiStats score insertion must not sweep the entire cache for every result");
-  assert(remistats.includes("if (!clean || !isConfirmedPokeIdentity(clean)) return null"), "RemiStats must not render poke controls before confirming a RemiliaNET identity");
-  assert(remistats.includes("confirmedPokeIdentities.size > SCORE_CACHE_LIMIT"), "RemiStats confirmed poke identity caching must remain bounded");
+  assert(remistats.includes("if (!clean || !cleanXHandle || !isConfirmedPokeTarget(clean, cleanXHandle)) return null"), "RemiStats must not render poke controls before confirming an exact X-to-RemiliaNET identity");
+  assert(remistats.includes("confirmedPokeTargets.size > SCORE_CACHE_LIMIT"), "RemiStats confirmed poke target caching must remain bounded");
   assert(remistats.includes("fillProfilePokeSlot(slot, '')"), "RemiStats profile poke slots must remain empty while an X handle is only provisional");
   assert(remistats.includes("remiliaUsername: explicitRemiliaUsername || null"), "RemiStats must preserve explicit missing RemiliaNET identity instead of replacing it with an X handle");
   assert(remistatsStyles.includes(".reminet-profile-action-poke-slot:empty"), "RemiStats must not reserve visible profile action-row space for an unconfirmed poke target");
-  assert(remistats.includes("const confirmedUsername = cleanUsername(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetUsername)"), "RemiStats reused profile slots must derive poke eligibility from the confirmed badge, not the X handle");
+  assert(remistats.includes("const confirmedUsername = cleanRemiliaUsername(slotTarget?.remiliaUsername)"), "RemiStats reused profile slots must derive poke eligibility from the exact official directory target, not public badge data or the X handle");
 
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
   assert(contentRoot.includes("appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)"), "root content script must filter apps by the validated runtime site");

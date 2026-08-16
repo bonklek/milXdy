@@ -132,6 +132,17 @@ export type RemiStatsPokeSuccess = {
 
 export type RemiStatsPokeResult = RemiStatsPokeSuccess | RemiStatsOfficialFailure;
 
+export type RemiStatsPokeTarget = {
+  xHandle: string;
+  remiliaUsername: string;
+};
+
+export type RemiStatsPokeTargetsResult = {
+  ok: true;
+  source: "official";
+  targets: RemiStatsPokeTarget[];
+};
+
 type StoredNotificationReadState = {
   schemaVersion: 1;
   entries: Array<{ key: string; readAt: number }>;
@@ -389,6 +400,43 @@ export class RemiStatsOfficialService {
     return failure;
   }
 
+  async resolvePokeTargets(xHandleInputs: readonly string[]): Promise<RemiStatsPokeTargetsResult> {
+    const xHandles = uniqueExactXHandles(xHandleInputs);
+    if (xHandles.length === 0) return { ok: true, source: "official", targets: [] };
+    const authUsername = await this.connectedAuthUsername();
+    if (!authUsername) return { ok: true, source: "official", targets: [] };
+
+    const resolved = await this.resolveExactDirectoryTargets(xHandles);
+    if (!resolved.ok) return { ok: true, source: "official", targets: [] };
+    return {
+      ok: true,
+      source: "official",
+      targets: resolved.targets.filter((target) => target.remiliaUsername !== authUsername),
+    };
+  }
+
+  async pokeXAuthor(xHandleInput: string, expectedRemiliaUsernameInput: string): Promise<RemiStatsPokeResult> {
+    const xHandle = normalizeExactXHandle(xHandleInput);
+    const expectedRemiliaUsername = normalizeRemiliaUsername(expectedRemiliaUsernameInput);
+    if (!xHandle || !expectedRemiliaUsername) return unavailablePokeTargetFailure();
+
+    const authUsername = await this.connectedAuthUsername();
+    if (!authUsername) return authRequiredFailure();
+
+    const resolved = await this.resolveExactDirectoryTargets([xHandle]);
+    if (!resolved.ok) return resolved;
+    const target = resolved.targets.length === 1 ? resolved.targets[0] : null;
+    if (
+      !target
+      || target.xHandle !== xHandle
+      || target.remiliaUsername !== expectedRemiliaUsername
+      || target.remiliaUsername === authUsername
+    ) {
+      return unavailablePokeTargetFailure();
+    }
+    return this.pokeUser(target.remiliaUsername);
+  }
+
   async getPokeEligibility(handle: string): Promise<{
     ok: true;
     username: string;
@@ -425,6 +473,40 @@ export class RemiStatsOfficialService {
       .sort((left, right) => right.readAt - left.readAt || left.key.localeCompare(right.key))
       .slice(0, MAX_NOTIFICATION_READ_ENTRIES);
     return { schemaVersion: 1, entries };
+  }
+
+  private async connectedAuthUsername(): Promise<string> {
+    const authStatus = await this.getAuthStatus();
+    return authStatus.phase === "connected"
+      ? normalizeRemiliaUsername(authStatus.identity?.username)
+      : "";
+  }
+
+  private async resolveExactDirectoryTargets(xHandles: readonly string[]): Promise<{
+    ok: true;
+    targets: RemiStatsPokeTarget[];
+  } | RemiStatsOfficialFailure> {
+    const result = await this.client.resolveDirectory(xHandles.map((value) => ({ type: "x_handle", value })));
+    if (!result.ok) return officialFailure(result.error);
+
+    const requested = new Set(xHandles);
+    const matches = new Map<string, string[]>();
+    for (const item of result.data.results) {
+      const xHandle = item.query.type === "x_handle" ? normalizeExactXHandle(item.query.value) : "";
+      const remiliaUsername = normalizeRemiliaUsername(item.identity?.handle);
+      if (!xHandle || !requested.has(xHandle) || !remiliaUsername) continue;
+      const values = matches.get(xHandle) || [];
+      values.push(remiliaUsername);
+      matches.set(xHandle, values);
+    }
+
+    const targets: RemiStatsPokeTarget[] = [];
+    for (const xHandle of xHandles) {
+      const values = matches.get(xHandle) || [];
+      if (values.length !== 1) continue;
+      targets.push({ xHandle, remiliaUsername: values[0] });
+    }
+    return { ok: true, targets };
   }
 
   private async readPokeCooldownState(): Promise<StoredPokeCooldownState> {
@@ -515,6 +597,28 @@ function invalidPaginationFailure(): RemiStatsOfficialFailure {
 
 function unmatchedSelfProfile(): RemiStatsSelfProfileResult {
   return { ok: true, source: "official", matched: false, data: null };
+}
+
+function uniqueExactXHandles(values: readonly string[]): string[] {
+  return [...new Set(values.map(normalizeExactXHandle).filter(Boolean))].slice(0, 50);
+}
+
+function authRequiredFailure(): RemiStatsOfficialFailure {
+  return officialFailure({
+    category: "authentication",
+    code: "auth_unavailable",
+    message: "Connect Remilia to use this action.",
+    status: 401,
+  });
+}
+
+function unavailablePokeTargetFailure(): RemiStatsOfficialFailure {
+  return officialFailure({
+    category: "authorization",
+    code: "forbidden",
+    message: "This X profile cannot be poked.",
+    status: 403,
+  });
 }
 
 function normalizeExactXHandle(value: unknown): string {

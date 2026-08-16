@@ -2277,7 +2277,7 @@
         "Fetches public RemiStats profile data for visible handles and delegated official Remilia account stats, notifications, and poke actions after connection."
       ],
       "dataNotes": [
-        "Sends X handles to the public RemiStats API for badge data. Official /me stats render only on the connected user's own X profile after the background verifies an exact OIDC username, official directory mapping, and stats-handle match. Paged notifications and pokes use background-held delegated credentials and exact scopes; content code receives no token."
+        "Sends X handles to the public RemiStats API for optional badge data. Official /me stats render only on the connected user's own X profile after the background verifies an exact OIDC username, official directory mapping, and stats-handle match. For non-self profiles and posts, the background separately resolves exact official directory identities before enabling a Poke or trophy shelf, revalidates the identity before Poke, and fails closed on disconnect, ambiguity, or mismatch. Paged notifications and pokes use background-held delegated credentials and exact scopes; content code receives no token or auth state."
       ],
       "remoteServices": [
         "api.remistats.net",
@@ -2298,6 +2298,8 @@
         "remistats:getUser",
         "remistats:getMyStats",
         "remistats:getMyStatsForXProfile",
+        "remistats:resolvePokeTargets",
+        "remistats:pokeXAuthor",
         "remistats:markNotificationsRead",
         "reminetIdentity:resolve",
         "reminetIdentity:getProfile",

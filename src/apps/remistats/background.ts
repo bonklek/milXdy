@@ -6,6 +6,8 @@ import { RemiStatsOfficialService, type RemiStatsStorage } from "./official-api"
 const REMISTATS_MESSAGE_TYPES = new Set([
   "remistats:getMyStats",
   "remistats:getMyStatsForXProfile",
+  "remistats:resolvePokeTargets",
+  "remistats:pokeXAuthor",
   "remistats:markNotificationsRead",
   "beetol:poke",
   "beetol:pokeEligibility",
@@ -44,6 +46,16 @@ registerBackgroundMessageHandlers([
     handle: handleRemiStatsOfficialMessage,
   },
   {
+    type: "remistats:resolvePokeTargets",
+    matches: isRemiStatsOfficialMessage,
+    handle: handleRemiStatsOfficialMessage,
+  },
+  {
+    type: "remistats:pokeXAuthor",
+    matches: isRemiStatsOfficialMessage,
+    handle: handleRemiStatsOfficialMessage,
+  },
+  {
     type: "remistats:markNotificationsRead",
     matches: isRemiStatsOfficialMessage,
     handle: handleRemiStatsOfficialMessage,
@@ -68,6 +80,8 @@ registerBackgroundMessageHandlers([
 export type RemiStatsOfficialMessage =
   | { type: "remistats:getMyStats" }
   | { type: "remistats:getMyStatsForXProfile"; xHandle: string }
+  | { type: "remistats:resolvePokeTargets"; xHandles: string[] }
+  | { type: "remistats:pokeXAuthor"; xHandle: string; expectedRemiliaUsername: string }
   | { type: "remistats:markNotificationsRead"; keys: string[] }
   | { type: "beetol:poke"; username: string }
   | { type: "beetol:pokeEligibility"; username: string }
@@ -80,6 +94,17 @@ export function isRemiStatsOfficialMessage(value: unknown): value is RemiStatsOf
   }
   if (value.type === "remistats:getMyStatsForXProfile") {
     return hasOnlyKeys(value, ["type", "xHandle"]) && typeof value.xHandle === "string";
+  }
+  if (value.type === "remistats:resolvePokeTargets") {
+    return hasOnlyKeys(value, ["type", "xHandles"])
+      && Array.isArray(value.xHandles)
+      && value.xHandles.length <= 50
+      && value.xHandles.every((xHandle) => typeof xHandle === "string");
+  }
+  if (value.type === "remistats:pokeXAuthor") {
+    return hasOnlyKeys(value, ["type", "xHandle", "expectedRemiliaUsername"])
+      && typeof value.xHandle === "string"
+      && typeof value.expectedRemiliaUsername === "string";
   }
   if (value.type === "remistats:markNotificationsRead") {
     return hasOnlyKeys(value, ["type", "keys"])
@@ -100,6 +125,10 @@ async function handleRemiStatsOfficialMessage(
       return remiStatsOfficialService.getMyStats();
     case "remistats:getMyStatsForXProfile":
       return remiStatsOfficialService.getMyStatsForXProfile(message.xHandle);
+    case "remistats:resolvePokeTargets":
+      return remiStatsOfficialService.resolvePokeTargets(message.xHandles);
+    case "remistats:pokeXAuthor":
+      return remiStatsOfficialService.pokeXAuthor(message.xHandle, message.expectedRemiliaUsername);
     case "remistats:markNotificationsRead":
       return remiStatsOfficialService.markNotificationsRead(message.keys);
     case "beetol:poke":
