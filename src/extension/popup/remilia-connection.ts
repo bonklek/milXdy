@@ -312,7 +312,7 @@ export function remiliaErrorMessage(error: RemiliaAuthError | null): string {
     ID_TOKEN_INVALID: "Remilia returned identity proof that did not pass secure validation. Nothing was stored; try again.",
     ID_TOKEN_FORMAT_INVALID: "Remilia returned incomplete identity proof. Nothing was stored; the Login client response needs review.",
     ID_TOKEN_ALGORITHM_INVALID: "Remilia returned identity proof using an unsupported signing algorithm. Nothing was stored; the Login client signing configuration needs review.",
-    ID_TOKEN_SIGNING_KEY_INVALID: "Remilia's identity proof did not match a published RS256 signing key. Nothing was stored; the Login signing keys need review.",
+    ID_TOKEN_SIGNING_KEY_INVALID: "Remilia's identity proof did not match a published RS256 or Ed25519 signing key. Nothing was stored; the Login signing keys need review.",
     ID_TOKEN_SIGNATURE_INVALID: "Remilia's identity-proof signature could not be verified. Nothing was stored; the Login signing configuration needs review.",
     ID_TOKEN_ISSUER_INVALID: "Remilia's identity proof named an unexpected issuer. Nothing was stored; the Login issuer configuration needs review.",
     ID_TOKEN_AUDIENCE_INVALID: "Remilia's identity proof was not issued for this milXdy Login client. Nothing was stored; the Login client audience configuration needs review.",

@@ -165,7 +165,7 @@ describe("Remilia connection UI contract", () => {
     ["ID_TOKEN_INVALID", "did not pass secure validation"],
     ["ID_TOKEN_FORMAT_INVALID", "incomplete identity proof"],
     ["ID_TOKEN_ALGORITHM_INVALID", "unsupported signing algorithm"],
-    ["ID_TOKEN_SIGNING_KEY_INVALID", "published RS256 signing key"],
+    ["ID_TOKEN_SIGNING_KEY_INVALID", "published RS256 or Ed25519 signing key"],
     ["ID_TOKEN_SIGNATURE_INVALID", "signature could not be verified"],
     ["ID_TOKEN_ISSUER_INVALID", "unexpected issuer"],
     ["ID_TOKEN_AUDIENCE_INVALID", "not issued for this milXdy Login client"],

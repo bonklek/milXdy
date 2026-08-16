@@ -25,6 +25,13 @@ The authorization uses OIDC Authorization Code with PKCE S256. The callback is
 bound to milXdy's installed beta identity, and state validation prevents a
 callback from an unrelated login attempt from being accepted.
 
+Before storing a connection, milXdy verifies RemiliaNET's identity proof using
+exactly one of two discovery-published signing contracts: RS256 with the
+matching RSA signing key, or EdDSA with the matching Ed25519 signing key. The
+key ID, key type, signing use, declared algorithm, issuer, audience, authorized
+party, nonce, time window, and account subject must all match. Other signing
+algorithms and mismatched keys are rejected, and no credentials are stored.
+
 ## Firefox Compatibility
 
 The 0.2.5 Firefox build is intentionally keyless and does not include a Remilia

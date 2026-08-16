@@ -19,8 +19,21 @@ const REQUIRED_SCOPES = [
   "remilia:directory.read",
 ] as const;
 const SIGNING_KEY_ID = "milxdy-test-key";
+const ED25519_SIGNING_KEY_ID = "milxdy-ed25519-test-key";
 const TEST_KEYS = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const TEST_PUBLIC_JWK = TEST_KEYS.publicKey.export({ format: "jwk" });
+const TEST_ED25519_KEYS = generateKeyPairSync("ed25519");
+const TEST_ED25519_PUBLIC_JWK = TEST_ED25519_KEYS.publicKey.export({ format: "jwk" });
+const TEST_OTHER_ED25519_KEYS = generateKeyPairSync("ed25519");
+const TEST_OTHER_ED25519_PUBLIC_JWK = TEST_OTHER_ED25519_KEYS.publicKey.export({ format: "jwk" });
+
+type SuccessfulFetchOverrides = {
+  nonce?: string;
+  claims?: Record<string, unknown>;
+  idToken?: (claims: Record<string, unknown>) => string;
+  jwks?: Array<JsonWebKey & { kid?: string }>;
+  discoveryAlgorithms?: string[];
+};
 
 type StorageFixture = {
   local: Map<string, unknown>;
@@ -98,6 +111,31 @@ describe("Remilia OIDC PKCE", () => {
       grantedScopes: expect.arrayContaining(["openid", "remilia:beetle.read"]),
     });
     expect(JSON.stringify(await auth.getRemiliaAuthStatus())).not.toContain("access-one");
+  });
+
+  it("verifies an EdDSA ID token only with the published Ed25519 signing key", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, {
+      idToken: ed25519Jwt,
+      jwks: [{
+        ...TEST_ED25519_PUBLIC_JWK,
+        kid: ED25519_SIGNING_KEY_ID,
+        use: "sig",
+        alg: "EdDSA",
+      }],
+    });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: true, accessToken: "access-one" });
+    expect(fixture.session.size).toBe(1);
+    expect(await auth.getRemiliaAuthStatus()).toMatchObject({ phase: "connected" });
   });
 
   it("fails closed on callback state mismatch", async () => {
@@ -252,6 +290,106 @@ describe("Remilia OIDC PKCE", () => {
 
     await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: expectedCode });
     expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: expectedCode });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it.each([
+    {
+      name: "a different algorithm even when discovery advertises it",
+      expectedCode: "ID_TOKEN_ALGORITHM_INVALID",
+      idToken: (claims: Record<string, unknown>) => jwtWithHeader({ alg: "PS256", kid: SIGNING_KEY_ID }, claims),
+      discoveryAlgorithms: ["RS256", "EdDSA", "PS256"],
+      jwks: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "PS256" }],
+    },
+    {
+      name: "an EdDSA token not advertised by discovery",
+      expectedCode: "ID_TOKEN_ALGORITHM_INVALID",
+      idToken: ed25519Jwt,
+      discoveryAlgorithms: ["RS256"],
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig", alg: "EdDSA" }],
+    },
+    {
+      name: "an EdDSA header paired with an RSA key",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig", alg: "EdDSA" }],
+    },
+    {
+      name: "an RS256 header paired with an Ed25519 key",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: jwt,
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }],
+    },
+    {
+      name: "an RSA key without signing use",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: jwt,
+      jwks: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, alg: "RS256" }],
+    },
+    {
+      name: "an RSA key without an exact algorithm binding",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: jwt,
+      jwks: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig" }],
+    },
+    {
+      name: "an EdDSA key with the wrong curve",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig", alg: "EdDSA", crv: "X25519" }],
+    },
+    {
+      name: "an EdDSA key without signing use",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, alg: "EdDSA" }],
+    },
+    {
+      name: "an EdDSA key without an exact algorithm binding",
+      expectedCode: "ID_TOKEN_SIGNING_KEY_INVALID",
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig" }],
+    },
+    {
+      name: "an EdDSA signature from a different key",
+      expectedCode: "ID_TOKEN_SIGNATURE_INVALID",
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_OTHER_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig", alg: "EdDSA" }],
+    },
+  ])("fails closed without storage for $name", async ({ expectedCode, idToken, discoveryAlgorithms, jwks }) => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, { idToken, discoveryAlgorithms, jwks });
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: expectedCode });
+    expect((await auth.getRemiliaAuthStatus()).lastError).toEqual({ code: expectedCode });
+    expect(fixture.session.size).toBe(0);
+  });
+
+  it("fails closed without storage when Ed25519 WebCrypto verification is unavailable", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    installSuccessfulFetch(() => authorizationUrl, {
+      idToken: ed25519Jwt,
+      jwks: [{ ...TEST_ED25519_PUBLIC_JWK, kid: ED25519_SIGNING_KEY_ID, use: "sig", alg: "EdDSA" }],
+    });
+    vi.spyOn(crypto.subtle, "importKey").mockRejectedValue(new DOMException("Unsupported algorithm", "NotSupportedError"));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: false, error: "ID_TOKEN_SIGNATURE_INVALID" });
     expect(fixture.session.size).toBe(0);
   });
 
@@ -447,6 +585,38 @@ describe("Remilia OIDC PKCE", () => {
         return jwksCalls === 1
           ? jsonResponse({ keys: [] })
           : jsonResponse({ keys: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }] });
+      }
+      return baseFetch(input, init);
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    await expect(auth.connectRemiliaAuth()).resolves.toMatchObject({ ok: true, accessToken: "access-one" });
+    expect(jwksCalls).toBe(2);
+    expect(fixture.session.size).toBe(1);
+  });
+
+  it("refreshes Ed25519 signing keys once during key rotation", async () => {
+    const fixture = installChrome();
+    let authorizationUrl = "";
+    let jwksCalls = 0;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      authorizationUrl = url;
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    const baseFetch = successfulFetchImplementation(() => authorizationUrl, { idToken: ed25519Jwt });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === JWKS_ENDPOINT) {
+        jwksCalls += 1;
+        return jwksCalls === 1
+          ? jsonResponse({ keys: [] })
+          : jsonResponse({ keys: [{
+            ...TEST_ED25519_PUBLIC_JWK,
+            kid: ED25519_SIGNING_KEY_ID,
+            use: "sig",
+            alg: "EdDSA",
+          }] });
       }
       return baseFetch(input, init);
     }));
@@ -753,11 +923,7 @@ function storageArea(store: Map<string, unknown>) {
 
 function installSuccessfulFetch(
   getAuthorizationUrl: () => string,
-  overrides: {
-    nonce?: string;
-    claims?: Record<string, unknown>;
-    idToken?: (claims: Record<string, unknown>) => string;
-  } = {},
+  overrides: SuccessfulFetchOverrides = {},
 ) {
   const mock = vi.fn(successfulFetchImplementation(getAuthorizationUrl, overrides));
   vi.stubGlobal("fetch", mock);
@@ -766,16 +932,14 @@ function installSuccessfulFetch(
 
 function successfulFetchImplementation(
   getAuthorizationUrl: () => string,
-  overrides: {
-    nonce?: string;
-    claims?: Record<string, unknown>;
-    idToken?: (claims: Record<string, unknown>) => string;
-  } = {},
+  overrides: SuccessfulFetchOverrides = {},
 ) {
   return async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     const url = String(input);
-    if (url === DISCOVERY_URL) return jsonResponse(discovery());
-    if (url === JWKS_ENDPOINT) return jsonResponse({ keys: [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }] });
+    if (url === DISCOVERY_URL) return jsonResponse(discovery(overrides.discoveryAlgorithms));
+    if (url === JWKS_ENDPOINT) return jsonResponse({
+      keys: overrides.jwks ?? [{ ...TEST_PUBLIC_JWK, kid: SIGNING_KEY_ID, use: "sig", alg: "RS256" }],
+    });
     if (url === REVOCATION_ENDPOINT) return jsonResponse({});
     if (url === TOKEN_ENDPOINT) {
       const body = new URLSearchParams(String(init?.body));
@@ -806,7 +970,7 @@ function successfulFetchImplementation(
   };
 }
 
-function discovery() {
+function discovery(signingAlgorithms = ["RS256", "EdDSA"]) {
   return {
     issuer: ISSUER,
     authorization_endpoint: AUTHORIZATION_ENDPOINT,
@@ -816,12 +980,26 @@ function discovery() {
     end_session_endpoint: `${ISSUER}/protocol/openid-connect/logout`,
     userinfo_endpoint: `${ISSUER}/protocol/openid-connect/userinfo`,
     code_challenge_methods_supported: ["S256"],
-    id_token_signing_alg_values_supported: ["RS256"],
+    id_token_signing_alg_values_supported: signingAlgorithms,
   };
 }
 
 function jwt(claims: Record<string, unknown>): string {
   return jwtWithHeader({ alg: "RS256", typ: "JWT", kid: SIGNING_KEY_ID }, claims);
+}
+
+function ed25519Jwt(claims: Record<string, unknown>): string {
+  return ed25519JwtWithHeader({ alg: "EdDSA", typ: "JWT", kid: ED25519_SIGNING_KEY_ID }, claims);
+}
+
+function ed25519JwtWithHeader(header: Record<string, unknown>, claims: Record<string, unknown>): string {
+  const encode = (value: Record<string, unknown>) => Buffer.from(JSON.stringify(value)).toString("base64url");
+  const signingInput = `${encode(header)}.${encode({
+    iat: Math.floor(Date.now() / 1000),
+    ...claims,
+  })}`;
+  const signature = sign(null, Buffer.from(signingInput), TEST_ED25519_KEYS.privateKey).toString("base64url");
+  return `${signingInput}.${signature}`;
 }
 
 function jwtWithHeader(header: Record<string, unknown>, claims: Record<string, unknown>): string {

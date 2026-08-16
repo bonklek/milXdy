@@ -34,6 +34,16 @@ their allowed endpoint classes, reject redirects, and send no referrer. A 3xx
 response is a hard failure; authorization codes, refresh/revocation material,
 or trust-bootstrap data must never follow a redirect.
 
+ID-token verification accepts exactly `RS256` and `EdDSA`, and only when the
+selected algorithm is advertised by pinned discovery. `RS256` requires the
+exact `kid` on a published `kty=RSA`, `use=sig`, `alg=RS256` JWK. `EdDSA`
+requires the exact `kid` on a published `kty=OKP`, `crv=Ed25519`, `use=sig`,
+`alg=EdDSA` JWK and uses WebCrypto Ed25519 verification. Other algorithms,
+missing bindings, key-type/curve confusion, and unsupported WebCrypto fail
+closed before storage. Signature failure triggers one bounded JWKS refresh for
+key rotation, then fails closed. Issuer, audience/authorized-party, nonce,
+expiry/issued-at, and subject validation remain mandatory for both algorithms.
+
 The official API client accepts only fixed API-v1 route classes. It injects the
 bearer token in the trusted background, makes at most one refresh retry after an
 authentication failure, preserves `insufficient_scope`, `requires_user`,

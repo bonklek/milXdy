@@ -10,6 +10,8 @@ export const REMILIA_REQUIRED_SCOPES = [
   "remilia:chat.write",
   "remilia:directory.read",
 ] as const;
+export const REMILIA_ACCEPTED_ID_TOKEN_ALGORITHMS = ["RS256", "EdDSA"] as const;
+type RemiliaIdTokenAlgorithm = typeof REMILIA_ACCEPTED_ID_TOKEN_ALGORITHMS[number];
 const OIDC_SCOPE = ["openid", ...REMILIA_REQUIRED_SCOPES].join(" ");
 const OIDC_PROTOCOL_BASE = `${OIDC_ISSUER}/protocol/openid-connect`;
 const OIDC_ENDPOINTS = {
@@ -618,7 +620,9 @@ async function fetchDiscovery(): Promise<OidcDiscovery> {
       || (discovery.end_session_endpoint && discovery.end_session_endpoint !== OIDC_ENDPOINTS.end_session_endpoint)
       || (discovery.userinfo_endpoint && discovery.userinfo_endpoint !== OIDC_ENDPOINTS.userinfo_endpoint)
       || !discovery.code_challenge_methods_supported?.includes("S256")
-      || !discovery.id_token_signing_alg_values_supported?.includes("RS256")) {
+      || !REMILIA_ACCEPTED_ID_TOKEN_ALGORITHMS.some((algorithm) => (
+        discovery.id_token_signing_alg_values_supported?.includes(algorithm)
+      ))) {
       throw new AuthProtocolError("DISCOVERY_FAILED");
     }
     return discovery;
@@ -701,21 +705,24 @@ async function validateIdToken(
   if (parts.length !== 3) throw new AuthProtocolError("ID_TOKEN_FORMAT_INVALID");
   const header = decodeJwtPart(parts[0]);
   if (!header) throw new AuthProtocolError("ID_TOKEN_FORMAT_INVALID");
-  if (header.alg !== "RS256") throw new AuthProtocolError("ID_TOKEN_ALGORITHM_INVALID");
+  const algorithm = readIdTokenAlgorithm(header.alg);
+  if (!algorithm || !discovery.id_token_signing_alg_values_supported?.includes(algorithm)) {
+    throw new AuthProtocolError("ID_TOKEN_ALGORITHM_INVALID");
+  }
   if (typeof header.kid !== "string" || !header.kid) throw new AuthProtocolError("ID_TOKEN_SIGNING_KEY_INVALID");
   let keys = await readJwks(discovery.jwks_uri, signal);
-  let jwk = findSigningKey(keys, header.kid);
+  let jwk = findSigningKey(keys, header.kid, algorithm);
   if (!jwk) {
     keys = await readJwks(discovery.jwks_uri, signal, true);
-    jwk = findSigningKey(keys, header.kid);
+    jwk = findSigningKey(keys, header.kid, algorithm);
   }
   if (!jwk) throw new AuthProtocolError("ID_TOKEN_SIGNING_KEY_INVALID");
   try {
-    let valid = await verifyIdTokenSignature(parts, jwk);
+    let valid = await verifyIdTokenSignature(parts, jwk, algorithm);
     if (!valid) {
       keys = await readJwks(discovery.jwks_uri, signal, true);
-      const refreshed = findSigningKey(keys, header.kid);
-      valid = Boolean(refreshed && await verifyIdTokenSignature(parts, refreshed));
+      const refreshed = findSigningKey(keys, header.kid, algorithm);
+      valid = Boolean(refreshed && await verifyIdTokenSignature(parts, refreshed, algorithm));
     }
     if (!valid) throw new AuthProtocolError("ID_TOKEN_SIGNATURE_INVALID");
   } catch (error) {
@@ -725,23 +732,41 @@ async function validateIdToken(
   return validateIdTokenClaims(idToken, discovery.issuer, expectedNonce);
 }
 
-function findSigningKey(keys: JsonWebKey[], kid: string): JsonWebKey | undefined {
-  return keys.find((candidate) => (candidate as JsonWebKey & { kid?: string }).kid === kid
-    && candidate.kty === "RSA"
-    && (!candidate.use || candidate.use === "sig")
-    && (!candidate.alg || candidate.alg === "RS256"));
+function readIdTokenAlgorithm(value: unknown): RemiliaIdTokenAlgorithm | undefined {
+  return REMILIA_ACCEPTED_ID_TOKEN_ALGORITHMS.find((algorithm) => value === algorithm);
 }
 
-async function verifyIdTokenSignature(parts: string[], jwk: JsonWebKey): Promise<boolean> {
+function findSigningKey(
+  keys: JsonWebKey[],
+  kid: string,
+  algorithm: RemiliaIdTokenAlgorithm,
+): JsonWebKey | undefined {
+  return keys.find((candidate) => {
+    if ((candidate as JsonWebKey & { kid?: string }).kid !== kid
+      || candidate.use !== "sig"
+      || candidate.alg !== algorithm) return false;
+    if (algorithm === "RS256") return candidate.kty === "RSA";
+    return candidate.kty === "OKP" && candidate.crv === "Ed25519";
+  });
+}
+
+async function verifyIdTokenSignature(
+  parts: string[],
+  jwk: JsonWebKey,
+  algorithm: RemiliaIdTokenAlgorithm,
+): Promise<boolean> {
+  const webCryptoAlgorithm = algorithm === "RS256"
+    ? { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }
+    : { name: "Ed25519" };
   const key = await crypto.subtle.importKey(
     "jwk",
     jwk,
-    { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" },
+    webCryptoAlgorithm,
     false,
     ["verify"],
   );
   return crypto.subtle.verify(
-    "RSASSA-PKCS1-v1_5",
+    webCryptoAlgorithm,
     key,
     base64UrlBytes(parts[2]).buffer as ArrayBuffer,
     new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
