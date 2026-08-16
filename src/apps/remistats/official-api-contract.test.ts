@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const remiStatsContent = readFileSync(new URL("./content.js", import.meta.url), "utf8");
 const remiStatsBackground = readFileSync(new URL("./background.ts", import.meta.url), "utf8");
+const remiStatsOfficialApi = readFileSync(new URL("./official-api.ts", import.meta.url), "utf8");
 const remiStatsCss = readFileSync(new URL("./remistats.css", import.meta.url), "utf8");
 const chatContent = readFileSync(new URL("../reminet-chat/content.ts", import.meta.url), "utf8");
 const beetolBackground = readFileSync(new URL("../beetol/background.js", import.meta.url), "utf8");
@@ -43,6 +44,8 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("expectedRemiliaUsername: username");
     expect(remiStatsBackground).toContain("remiStatsOfficialService.pokeXAuthor(message.xHandle, message.expectedRemiliaUsername)");
     expect(remiStatsContent).not.toContain("confirmPokeIdentity(userData.remiliaUsername)");
+    expect(remiStatsOfficialApi).toContain('authStatus.phase === "connected" || authStatus.phase === "missing-scope"');
+    expect(remiStatsOfficialApi).not.toContain('private async connectedAuthUsername()');
   });
 
   it("reconciles one launcher after rerender and exposes action failures visibly", () => {

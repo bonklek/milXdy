@@ -186,10 +186,7 @@ export class RemiStatsOfficialService {
     const xHandle = normalizeExactXHandle(xHandleInput);
     if (!xHandle) return unmatchedSelfProfile();
 
-    const authStatus = await this.getAuthStatus();
-    const authUsername = authStatus.phase === "connected"
-      ? normalizeRemiliaUsername(authStatus.identity?.username)
-      : "";
+    const authUsername = await this.activeAuthUsername();
     if (!authUsername) return unmatchedSelfProfile();
 
     const directory = await this.client.resolveDirectory([{ type: "x_handle", value: xHandle }]);
@@ -403,7 +400,7 @@ export class RemiStatsOfficialService {
   async resolvePokeTargets(xHandleInputs: readonly string[]): Promise<RemiStatsPokeTargetsResult> {
     const xHandles = uniqueExactXHandles(xHandleInputs);
     if (xHandles.length === 0) return { ok: true, source: "official", targets: [] };
-    const authUsername = await this.connectedAuthUsername();
+    const authUsername = await this.activeAuthUsername();
     if (!authUsername) return { ok: true, source: "official", targets: [] };
 
     const resolved = await this.resolveExactDirectoryTargets(xHandles);
@@ -420,7 +417,7 @@ export class RemiStatsOfficialService {
     const expectedRemiliaUsername = normalizeRemiliaUsername(expectedRemiliaUsernameInput);
     if (!xHandle || !expectedRemiliaUsername) return unavailablePokeTargetFailure();
 
-    const authUsername = await this.connectedAuthUsername();
+    const authUsername = await this.activeAuthUsername();
     if (!authUsername) return authRequiredFailure();
 
     const resolved = await this.resolveExactDirectoryTargets([xHandle]);
@@ -475,9 +472,13 @@ export class RemiStatsOfficialService {
     return { schemaVersion: 1, entries };
   }
 
-  private async connectedAuthUsername(): Promise<string> {
+  private async activeAuthUsername(): Promise<string> {
     const authStatus = await this.getAuthStatus();
-    return authStatus.phase === "connected"
+    // `missing-scope` still represents an authenticated credential with a
+    // verified OIDC identity. Let each shared API client method enforce its
+    // own exact operation scope instead of suppressing directory-backed UI
+    // because an unrelated release-wide scope was not granted.
+    return authStatus.phase === "connected" || authStatus.phase === "missing-scope"
       ? normalizeRemiliaUsername(authStatus.identity?.username)
       : "";
   }
