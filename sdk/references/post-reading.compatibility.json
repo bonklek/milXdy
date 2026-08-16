@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.6",
+  "packageVersion": "0.2.0-sdk.7",
   "sourceRepository": "https://github.com/bonklek/post-reading",
   "sourceBranch": "codex/18-dark-controls",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
@@ -24,6 +24,7 @@
     "existing settings compatibility",
     "compact draggable player chrome with host-resolved assets",
     "idempotent host-scaffolded per-post launcher placement",
+    "native-row-aligned per-post launcher geometry without absolute offsets",
     "dark-panel light-control contrast scoped to Post-reading settings",
     "manifest-declared active-tab page context actions"
   ],

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.6",
+  "packageVersion": "0.2.0-sdk.7",
   "appSdkVersion": "0.2.5",
   "browserTarget": "chromium",
   "scenarios": [
@@ -22,8 +22,8 @@
     },
     {
       "id": "launch-navigation",
-      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; shares article extraction/highlight containers; and idempotently fills the host-scaffolded per-post header slot beside native X controls.",
-      "manual": "Launch from timeline and individual-post read-aloud actions beside Grok, then from an X Article; navigate routes and virtualize/reuse posts, confirming one working control targets the correct post without disturbing native Grok/overflow controls and active speech resets."
+      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; shares article extraction/highlight containers; idempotently fills the host-scaffolded per-post header slot; and cancels fallback absolute offsets so the 20px launcher shares the native Grok/overflow centerline at normal and narrow layouts.",
+      "manual": "Launch from timeline and individual-post read-aloud actions beside Grok at normal zoom and a narrow responsive width, then from an X Article; confirm the launcher shares the native control row, centerline, hit-area height, and spacing, and navigate/virtualize/reuse posts to confirm one working control targets the correct post without disturbing native Grok/overflow controls or speech reset."
     },
     {
       "id": "direct-message-read-aloud",

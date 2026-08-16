@@ -6,9 +6,9 @@ declaration, and acceptance matrix live in `bonklek/post-reading`. milXdy owns
 the public SDK runtime, shared services, trust policy, pinned source commit and
 package hash, and mirrors used to detect contract drift.
 
-The current pair is Post-reading `0.2.0-sdk.6` at commit
-`f05a2281d26937fb268676d1546da22007d1f17c` with App SDK `0.2.5` and package
-SHA-256 `12b6e47f1d4db4014e45741e485fe00345a6484ec1716d03c64672c43ceac678`.
+The current pair is Post-reading `0.2.0-sdk.7` at commit
+`add0c55b5dfd07c664480cd9d56ca625658abdc7` with App SDK `0.2.5` and package
+SHA-256 `b4fcb5563e954523ba0926dba1dbd39f0c6c1c6752edb9668ba9ccc9ccc2cffc`.
 
 Run the complete cross-repository proof from this repository with:
 
