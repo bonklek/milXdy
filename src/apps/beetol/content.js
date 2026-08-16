@@ -929,7 +929,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      enterSignedOutState('Remilia authorization expired.');
+      enterSignedOutState(response?.data?.message || 'Remilia authorization expired.');
       render();
       return;
     }
@@ -969,7 +969,7 @@ function mountBeetolGame(context = {}) {
     const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
 
     if (response?.authRequired) {
-      enterSignedOutState('Remilia authorization expired.');
+      enterSignedOutState(responseMessage || 'Remilia authorization expired.');
       render();
       return;
     }
@@ -1067,7 +1067,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      enterSignedOutState('Remilia authorization expired.');
+      enterSignedOutState(response?.data?.message || 'Remilia authorization expired.');
       render();
       return;
     }

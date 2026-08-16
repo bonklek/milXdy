@@ -4,10 +4,14 @@ import { resolve } from "node:path";
 
 import {
   beetleConnectorIsActive,
+  createNativeBeetleAccelerationCss,
   createBeetleReducedMotionCss,
   instantBeetleResultsCanRun,
   nativeBeetleActionButtonFor,
   nativeBeetleActionFor,
+  nativeBeetleOutcomeForElement,
+  nativeBeetleStatusCopy,
+  trustedNativeBeetleActionFor,
 } from "./reminet-beetle-fast-controls";
 
 function crossRealmTarget(buttonClass: string): EventTarget {
@@ -36,15 +40,65 @@ describe("RemiliaNET fast Beetle controls", () => {
     expect(instantBeetleResultsCanRun(false, connected)).toBe(false);
   });
 
-  it("polls only the token-free Beetol status operation and fails runtime eligibility closed", () => {
+  it("polls only token-free Beetol status and leaves the native action transport untouched", () => {
     const source = readFileSync(resolve(process.cwd(), "src/extension/frames/reminet-chat-bridge.ts"), "utf8");
     expect(source).toContain('{ type: "beetol:authStatus" }');
     expect(source).toContain("BEETLE_CONNECTOR_STATUS_POLL_MS");
     expect(source).toContain("preferred && connectorActive");
-    expect(source).toContain("root.removeAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE)");
-    expect(source.indexOf('{ type: "beetol:authStatus" }', source.indexOf("async function runInstantBeetleAction")))
-      .toBeLessThan(source.indexOf('{ type: "beetol:action", action }'));
+    expect(source).toContain("releaseNativeBeetleAcceleration()");
+    expect(source).toContain("document.documentElement.removeAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE)");
+    expect(source).toContain("The trusted click continues to RemiliaNET's native handler");
+    const observation = source.slice(
+      source.indexOf("function observeNativeBeetleAction"),
+      source.indexOf("function installInstantResultListener"),
+    );
+    expect(observation).toContain("document.documentElement.toggleAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE, true)");
+    expect(source).not.toContain('{ type: "beetol:action", action }');
+    expect(source).not.toContain("event.preventDefault()");
+    expect(source).not.toContain("event.stopImmediatePropagation()");
     expect(source).not.toContain("remilia-auth:");
+  });
+
+  it("observes only an enabled trusted native action click", () => {
+    const huntTarget = crossRealmTarget("beetle-catch-module__hunt-button");
+    expect(trustedNativeBeetleActionFor({ isTrusted: true, target: huntTarget }, true)).toBe("beetleHunt");
+    expect(trustedNativeBeetleActionFor({ isTrusted: false, target: huntTarget }, true)).toBeNull();
+    expect(trustedNativeBeetleActionFor({ isTrusted: true, target: huntTarget }, false)).toBeNull();
+  });
+
+  it("accelerates presentation with nonzero lifecycle-safe durations", () => {
+    const css = createNativeBeetleAccelerationCss("data-test-native-beetle");
+    expect(css).toContain(".beetle-catch-module");
+    expect(css).toContain("animation-duration: 0.001ms !important");
+    expect(css).toContain("transition-duration: 0.001ms !important");
+    expect(css).not.toMatch(/animation:\s*none/i);
+    expect(css).not.toContain("visibility: hidden");
+    expect(css).not.toContain("pointer-events: none");
+  });
+
+  it("maps only structural native result/failure evidence to bounded visible copy", () => {
+    const result = matchableElement((selector) => selector.includes(".beetle-catch-module__beetle-item"));
+    const failure = matchableElement((selector) => selector.includes('[role="alert"]'));
+    const nestedResult = matchableElement(() => false, (selector) => (
+      selector.includes(".beetle-catch-module__result") ? ({} as Element) : null
+    ));
+    const unrelated = matchableElement(() => false);
+
+    expect(nativeBeetleOutcomeForElement(result)).toBe("result");
+    expect(nativeBeetleOutcomeForElement(failure)).toBe("failure");
+    expect(nativeBeetleOutcomeForElement(nestedResult)).toBeNull();
+    expect(nativeBeetleOutcomeForElement(nestedResult, true)).toBe("result");
+    expect(nativeBeetleOutcomeForElement(unrelated)).toBeNull();
+    expect(nativeBeetleStatusCopy("beetleHunt", "result")).toMatchObject({
+      title: "Hunt result ready",
+      kind: "success",
+      detail: expect.stringContaining("native result"),
+    });
+    expect(nativeBeetleStatusCopy("catchBeetle", "failure")).toMatchObject({
+      title: "Catch unavailable",
+      kind: "error",
+      detail: expect.not.stringContaining("unauthorized"),
+    });
   });
 
   it("resolves trusted action targets without a realm-sensitive instanceof check", () => {
@@ -78,3 +132,10 @@ describe("RemiliaNET fast Beetle controls", () => {
     }
   });
 });
+
+function matchableElement(
+  matches: (selector: string) => boolean,
+  querySelector?: (selector: string) => Element | null,
+): Element {
+  return { nodeType: 1, matches, querySelector } as unknown as Element;
+}

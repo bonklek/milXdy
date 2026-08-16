@@ -111,8 +111,8 @@ as an API-v1 response.
 | --- | --- | --- | --- |
 | RemiNet WebSocket acceleration at `wss://www.remilia.net/api/ws` | API v1 documents REST history and posting, not realtime delivery | REST history/polling and text posting remain functional with the socket disabled; reconnect/worker restart requests official REST reconciliation | Remove only after an official scoped stream covers deliver/edit/delete/reaction, passes reconnect, worker-restart, payload, and privacy parity, then ships one release cycle with the legacy adapter disabled by default |
 | RemiNet media upload/confirm at `https://www.remilia.net/media/upload/` and `https://www.remilia.net/media/upload/confirm` | API v1 documents media metadata on reads but not upload/confirm | Background injects the delegated token; browser credentials are omitted; redirects are rejected with no referrer; text/reply posting remains functional; failed upload sends no message or undisclosed media and preserves the pending attachment for retry | Remove after official scoped upload plus media-bearing post (or an explicit official unsupported declaration), type/size/timeout/retry/privacy/confirmation parity, and tests proving pending attachments survive failure with no callers of legacy upload, confirm, or media-socket submit |
-| `catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet` actions | API v1 documents Beetle state/cards reads but not these user actions | Official state/cards remain functional and identify each legacy failure separately | Remove each adapter when API v1 documents an equivalent user-delegated operation and milXdy ships and live-verifies it |
-| Beetle `craft` | API v1 does not document equivalent user-delegated crafting | Official state/cards remain functional; craft failures are typed and separate | Remove when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
+| `catchBeetle`, `beetleHunt`, `claimUBC`, and `junkFaucet` actions | API v1 documents Beetle state/cards reads but not these user actions | The visible RemiliaNET page performs its native action after the user's trusted click; milXdy does not submit, proxy, or authenticate the mutation, and official state/cards remain functional | Remove each typed legacy classification when API v1 documents an equivalent user-delegated operation and milXdy ships and live-verifies it |
+| Beetle `craft` | API v1 does not document equivalent user-delegated crafting | The visible RemiliaNET page owns native craft submission and bounded failures; official state/cards remain functional and milXdy only supplies UI-selection shortcuts | Remove the typed legacy classification when API v1 documents equivalent user-delegated craft including per-recipe failures and parity QA passes |
 | Public trophy shelf read | API v1 does not document a public shelf asset/read | Official state/cards remain functional; banner mode is independently removable | Remove when API v1 provides the documented public shelf asset/read, or remove banner mode if the legacy image endpoint retires |
 | Public RemiStats X badge/profile lookup at `https://api.remistats.net/user/{x-handle}` | Official delegated `/me/stats` describes only the token user, not arbitrary visible X accounts | Request is unauthenticated and separately labeled; no Remilia credential enters the request | Remove when an official documented public lookup covers equivalent arbitrary-user badge/profile data and parity QA passes, or retire the badge surface |
 
@@ -121,11 +121,20 @@ it passively directs the user to open the milXdy extension popup and use
 **Remilia connection → Connect/Reconnect**; it never opens RemiliaNET, adopts a
 website session, or invokes disconnect/logout. Retired `beetol:logout`,
 `beetol:sessionStatus`, and retry-session routes are not registered. Legacy
-Beetle mutations retry at most once after the first HTTP 401, never refresh on
-403, and never clear the trusted connection after an action failure. Their
-fixed background fetches use `credentials: "omit"`, `redirect: "error"`, and
-`referrerPolicy: "no-referrer"`, then require the final response URL to equal
-the fixed requested endpoint.
+Beetle action names remain a typed classification, not an authenticated
+extension transport. The official bearer is used only for documented state and
+card reads. On the visible RemiliaNET page, a direct trusted click continues to
+the site's native control; RemiliaNET owns the mutation and its website session.
+milXdy never reads, exports, stores, replays, proxies, or constructs requests
+from that session. Instant results may observe only structural native
+result/failure state and accelerate presentation with nonzero lifecycle-safe
+durations; they never cancel the click, replace the native request, or claim
+success before the page exposes a result. A missing connector, status error, or
+unsupported build fails closed, while X/Twitter Beetol action messages return a
+bounded `NATIVE_ACTION_REQUIRED` instruction to use the visible RemiliaNET
+control. Caller-supplied 401/403 fields are ignored, with no refresh,
+disconnect, credential clearing, cookie use, hidden tab, or background mutation
+request.
 
 Official API-v1 REST is the only chat history authority. The retired legacy
 `/api/chats/1/messages` history handler and public socket-preparation runtime

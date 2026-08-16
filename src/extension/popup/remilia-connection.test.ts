@@ -23,7 +23,7 @@ describe("Remilia connection UI contract", () => {
     const connected = normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase: "connected" } });
     expect(instantBeetleResultsAvailability(connected)).toEqual({
       active: true,
-      help: "Connected. Instant Claim/Hunt results are available on RemiliaNET.",
+      help: "Connected. milXdy can accelerate RemiliaNET's native Claim/Hunt presentation; RemiliaNET still performs the action.",
     });
     expect([
       normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase: "disconnected" } }),

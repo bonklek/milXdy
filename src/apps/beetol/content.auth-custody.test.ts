@@ -16,5 +16,8 @@ describe("Beetol content auth custody", () => {
     expect(source).toContain("Remilia connection &rarr; Connect/Reconnect");
     expect(source).toContain("type: 'beetol:authStatus'");
     expect(source).toContain("checkAuthStatus(true)");
+    expect(source).toContain("enterSignedOutState(responseMessage || 'Remilia authorization expired.')");
+    expect(source).toContain("enterSignedOutState(response?.data?.message || 'Remilia authorization expired.')");
+    expect(source).toContain("response?.data?.message || response?.actionResult?.message || response?.error");
   });
 });

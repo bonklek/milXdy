@@ -28,9 +28,10 @@ const currentGuides = [
 
 const files = new Map(await Promise.all(currentGuides.map(async (path) => [path, await readFile(path, "utf8")])));
 const allCurrentGuides = Array.from(files, ([path, text]) => `\n--- ${path} ---\n${text}`).join("");
-const [beetolContent, beetolBackground, postReadingFullQuote] = await Promise.all([
+const [beetolContent, beetolBackground, reminetBeetleBridge, postReadingFullQuote] = await Promise.all([
   readFile("src/apps/beetol/content.js", "utf8"),
   readFile("src/apps/beetol/background.js", "utf8"),
+  readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
   readFile("src/apps/post-reading/fullQuote.ts", "utf8"),
 ]);
 
@@ -66,15 +67,41 @@ for (const required of [
   assert(beetolContent.includes(required), `Beetol content must retain passive popup/auth-status boundary ${JSON.stringify(required)}`);
 }
 for (const required of [
-  "if (result.status === 401 && retry)",
-  "credentials: 'omit'",
-  "redirect: 'error'",
-  "referrerPolicy: 'no-referrer'",
-  "isExactResponseUrl(response.url, endpoint)",
+  "nativeBeetleActionResponse(action)",
+  "NATIVE_ACTION_REQUIRED",
+  "actionMode: 'native-remilianet'",
+  "readOfficialBeetleSnapshot(officialBeetleReads)",
 ]) {
-  assert(beetolBackground.includes(required), `Beetol legacy transport must include ${JSON.stringify(required)}`);
+  assert(beetolBackground.includes(required), `Beetol native/official boundary must include ${JSON.stringify(required)}`);
 }
-assert(!/result\.status\s*===\s*403[\s\S]{0,160}refreshAccessToken|refreshAccessToken[\s\S]{0,160}result\.status\s*===\s*403/.test(beetolBackground), "Beetol legacy transport must never refresh after 403");
+for (const forbidden of [
+  "/api/beetle/action/",
+  "Authorization",
+  "fetch(",
+  "prepareRemiliaAccess",
+  "refreshRemiliaAccess",
+  "credentials: 'include'",
+  "chrome.tabs.create",
+  "chrome.windows.create",
+]) {
+  assert(!beetolBackground.includes(forbidden), `Beetol background must not retain native-action transport ${JSON.stringify(forbidden)}`);
+}
+for (const required of [
+  "trustedNativeBeetleActionFor(event, instantResultsEnabled)",
+  "observeNativeBeetleAction(action)",
+  "data-milxdy-reminet-beetle-native-acceleration",
+  "The trusted click continues to RemiliaNET's native handler",
+]) {
+  assert(reminetBeetleBridge.includes(required), `RemiliaNET native Beetle pass-through must include ${JSON.stringify(required)}`);
+}
+for (const forbidden of [
+  '{ type: "beetol:action", action }',
+  "event.preventDefault()",
+  "event.stopImmediatePropagation()",
+  "remilia-auth:",
+]) {
+  assert(!reminetBeetleBridge.includes(forbidden), `RemiliaNET native Beetle pass-through must not include ${JSON.stringify(forbidden)}`);
+}
 
 const directFullQuoteContract = `const response = await fetch(url, {
     credentials: "omit",

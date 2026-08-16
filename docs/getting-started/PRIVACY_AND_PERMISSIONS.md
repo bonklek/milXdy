@@ -47,9 +47,13 @@ official account connection is required, it passively tells the user to open
 the milXdy extension popup and choose **Remilia connection →
 Connect/Reconnect**. It cannot open a login/session tab, disconnect the account,
 or call retired logout/session-status routes. Legacy Beetle action requests
-stay in trusted background code, retry only after the first HTTP 401 (never
-403), do not clear the connection on action failure, omit browser credentials,
-reject redirects, send no referrer, and reject a changed final response URL.
+are not sent by milXdy. After a direct trusted click, the visible RemiliaNET
+page performs its native action with its own website session. milXdy does not
+read, export, store, replay, proxy, or construct a request from that session,
+and it never attaches the official bearer to an undocumented action. Instant
+results only accelerates native presentation and observes bounded structural
+result/failure state; it does not cancel the click, read a response body, retry
+401/403, disconnect the account, or open a hidden action tab.
 - `remilia.wiki` and `wiki.remilia.org`: a feature-only runtime for direct Post-reading article controls and route handling; the existing validated embedded-Wiki bridge remains separate.
 - `boards.miladychan.org`: a filtered Miladychan Portal launcher. Public JSON and explicit text-only posting still use the fixed background allowlist with credentials omitted.
 
@@ -266,11 +270,13 @@ are not uploaded or passed through the public catalog bridge.
 
 Official API v1 covers public/connected profiles, stats, notifications, pokes,
 Beetle state/cards, global chat REST history/text posting, and directory
-resolution/listing. The only temporary legacy adapters are RemiNet realtime,
-RemiNet media upload/confirm, and Beetle actions such as hunt, craft, and trophy
-flows that have no documented API-v1 equivalent. Each adapter is separately
-classified, bounded, redacted, independently disableable, and removed when an
-official documented endpoint reaches parity. The unauthenticated public
+resolution/listing. The temporary legacy adapters are RemiNet realtime,
+RemiNet media upload/confirm, and the public Beetle trophy read. Beetle actions
+such as hunt and craft have typed legacy classifications because they have no
+documented API-v1 equivalent, but milXdy does not provide an authenticated
+transport for them; the visible RemiliaNET page owns the native action. Each
+adapter or classification is separately bounded and removed when an official
+documented endpoint reaches parity. The unauthenticated public
 `api.remistats.net/user/{x-handle}` badge/profile lookup is also separately
 labeled legacy coverage because delegated `/me/stats` is connected-user-only;
 it receives no Remilia credential. See the

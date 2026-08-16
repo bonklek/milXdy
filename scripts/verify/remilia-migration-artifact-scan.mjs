@@ -254,29 +254,57 @@ try {
     );
   }
   const builtBeetolTransport = `beetol:authStatus
-    credentials: "omit",
-    result.status === 401 && retry
-    redirect: "error",
-    referrerPolicy: "no-referrer",
-    INVALID_RESPONSE_URL`;
+    official-api
+    NATIVE_ACTION_REQUIRED
+    native-remilianet`;
   const builtBeetolBackground = (moduleSuffix = "", nextModule = "") => `// src/apps/beetol/background.js
 ${builtBeetolTransport}
 ${moduleSuffix}
 // src/apps/remistats/background.ts
 ${nextModule}`;
   scanContent(releaseArchive, "background.js", Buffer.from(builtBeetolBackground()));
-  for (const residue of ["result.status === 403", "disconnectRemiliaAuth", "clearRemiliaAuth"]) {
+  for (const residue of [
+    "/api/beetle/action/catchBeetle",
+    "Authorization",
+    "fetch(",
+    "prepareRemiliaAccess",
+    "refreshRemiliaAccess",
+    'credentials: "include"',
+    "chrome.tabs.create",
+    "chrome.windows.create",
+    "disconnectRemiliaAuth",
+    "clearRemiliaAuth",
+  ]) {
     assert.throws(
       () => scanContent(releaseArchive, "background.js", Buffer.from(builtBeetolBackground(`${"x".repeat(2_000)}${residue}`))),
-      /Beetol 403 refresh or implicit disconnect residue detected/,
+      /Beetol native-action transport or auth-custody residue detected/,
       `expected distant Beetol ${residue} residue to fail within the emitted module`,
     );
   }
   scanContent(
     releaseArchive,
     "background.js",
-    Buffer.from(builtBeetolBackground("", "async function disconnectRemiliaAuth() {}\nclearRemiliaAuth();\nresult.status === 403")),
+    Buffer.from(builtBeetolBackground("", "async function disconnectRemiliaAuth() {}\nclearRemiliaAuth();\nconst Authorization = true")),
   );
+  const builtReminetBridge = `beetol:authStatus
+    isTrusted
+    data-milxdy-reminet-beetle-native-acceleration
+    milxdy-reminet-beetle-native-status
+    0.001ms`;
+  scanContent(releaseArchive, "reminetChatBridge.js", Buffer.from(builtReminetBridge));
+  for (const interception of [
+    'chrome.runtime.sendMessage({type:"beetol:action"})',
+    'chrome.runtime.sendMessage({type:"remilia-auth:connect"})',
+    "event.preventDefault()",
+    "event.stopImmediatePropagation()",
+    "/api/beetle/action/beetleHunt",
+  ]) {
+    assert.throws(
+      () => scanContent(releaseArchive, "reminetChatBridge.js", Buffer.from(`${builtReminetBridge}${"x".repeat(2_000)}${interception}`)),
+      /intercepted or proxied RemiliaNET Beetle action detected/,
+      `expected emitted RemiliaNET Beetle interception to fail: ${interception}`,
+    );
+  }
   const builtFullQuote = `const response = await fetch(url, {
     credentials: "omit",
     redirect: "error",

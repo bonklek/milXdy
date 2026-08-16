@@ -79,17 +79,19 @@ describe("legacy Beetle endpoint isolation", () => {
     expect(legacyBeetleTrophyShelfUrl("remilia", "https://evil.example")).toBeNull();
   });
 
-  it("keeps undocumented paths out of feature call sites", async () => {
+  it("keeps undocumented mutation paths dormant and out of feature call sites", async () => {
     const [background, remistats] = await Promise.all([
       readFile(new URL("./background.js", import.meta.url), "utf8"),
       readFile(new URL("../remistats/content.js", import.meta.url), "utf8"),
     ]);
 
-    expect(background).toContain("legacyBeetleActions.runAction(action)");
-    expect(background).toContain("legacyBeetleActions.craftJunk(pool[i], pool[i + 1])");
+    expect(background).toContain("nativeBeetleActionResponse(action)");
+    expect(background).toContain("error: 'NATIVE_ACTION_REQUIRED'");
     expect(background).toContain("readOfficialBeetleSnapshot(officialBeetleReads)");
     expect(background).not.toContain("/api/beetle/user");
-    expect(background).not.toMatch(/remilia(?:Authed)?Fetch\('POST',\s*['`]\/api\/beetle\/action/);
+    expect(background).not.toContain("createLegacyBeetleActionsAdapter");
+    expect(background).not.toContain("/api/beetle/action/");
+    expect(background).not.toContain("Authorization");
     expect(remistats).toContain("legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL)");
     expect(remistats).not.toContain("/api/beetle/trophy/");
   });

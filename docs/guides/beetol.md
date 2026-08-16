@@ -25,13 +25,16 @@ Beetol uses the same official Remilia account connection as RemiStats pokes and
 RemiNet Chat. API-v1 state and card reads are official coverage. Hunt, craft,
 the `catchBeetle`, `beetleHunt`, `claimUBC`, `junkFaucet`, `craft`, and public
 trophy-shelf operations that do not yet have documented API-v1 equivalents use
-separately labeled temporary legacy adapters and run only after user action.
+separately labeled temporary legacy classifications. The visible RemiliaNET
+page, not milXdy, performs those native actions after your direct click.
 Beetol content reads token-free connection status only. It cannot disconnect
 the account or invoke retired logout/session-status operations.
 
 Beetle state and discovered cards are read through the documented Remilia API v1 endpoints using the delegated `remilia:beetle.read` scope. milXdy normalizes missing inventory, hammer, charge, card, and cooldown fields locally so a partial response does not invent a ready action or discard a persisted cooldown.
 
-Hunt, claim, faucet, Crunch All Junk craft mutations, and the public trophy-shelf texture still depend on explicitly labeled, undocumented legacy Remilia endpoints. Mutation adapters accept only fixed operations and validated item codenames, keep credentials in background code, and run only after a user action; the shelf image sends only the already-resolved public Remilia username and no bearer token or X browsing data. Each adapter is temporary: remove it once API v1 documents and live-verifies an equivalent scoped operation or shelf asset contract, or remove the related feature if Remilia retires the legacy endpoint.
+Hunt, claim, faucet, and Crunch All Junk craft mutations do not have documented API-v1 write operations. Use the visible controls on RemiliaNET: the page performs its native request with its own website session after your trusted click. milXdy does not read or forward that session, attach the official bearer, call the undocumented mutation route, or open a hidden action tab. The X/Twitter Beetol panel reports a bounded **use the visible RemiliaNET control** instruction for these actions. The public trophy-shelf texture remains a separately labeled legacy public read; it sends only the already-resolved public Remilia username and no bearer token or X browsing data. Remove each typed action classification once API v1 documents and live-verifies an equivalent scoped operation, and remove the shelf adapter once an official asset contract reaches parity or the legacy image retires.
+
+**Use instant Beetle results** is available only while the token-free connector status is active. It preserves your saved preference while disconnected, then restores it on reconnect. When enabled on RemiliaNET, it lets the trusted native Claim/Hunt click pass through unchanged, observes only the page's structural result or failure state, and accelerates the native presentation. It cannot submit or retry the action, read the native response body, or report success before RemiliaNET exposes a result.
 
 Cooldown and exhausted hunt state are restored locally after refresh so the panel does not incorrectly reset the visible hunt timer.
 

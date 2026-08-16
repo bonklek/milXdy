@@ -90,9 +90,12 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(bridge, "preferred && connectorActive", "RemiNet instant Beetle results must combine stored preference with live connector status");
   assertIncludes(bridge, "BEETLE_CONNECTOR_STATUS_POLL_MS", "RemiNet instant Beetle results must react to live disconnect and reconnect");
   assertNotIncludes(bridge, "remilia-auth:", "RemiNet content must not call popup-only Remilia auth operations");
-  const instantAction = functionBody(bridge, "runInstantBeetleAction");
-  assertOrder(instantAction, '{ type: "beetol:authStatus" }', '{ type: "beetol:action", action }', "RemiNet instant Beetle actions must recheck connector status before dispatch");
-  assertIncludes(bridge, "!event.isTrusted", "RemiNet fast Beetle actions must remain limited to trusted user clicks");
+  assertIncludes(bridge, "trustedNativeBeetleActionFor(event, instantResultsEnabled)", "RemiNet fast Beetle presentation must remain limited to trusted enabled clicks");
+  assertIncludes(bridge, "observeNativeBeetleAction(action)", "RemiNet fast Beetle presentation must observe the native action result");
+  assertIncludes(beetleFastControls, "createNativeBeetleAccelerationCss", "RemiNet instant results must accelerate native presentation through a bounded policy");
+  assertNotIncludes(bridge, '{ type: "beetol:action", action }', "RemiNet fast Beetle controls must not replace native actions with a background mutation");
+  assertNotIncludes(bridge, "event.preventDefault()", "RemiNet fast Beetle controls must not cancel the trusted native click");
+  assertNotIncludes(bridge, "event.stopImmediatePropagation()", "RemiNet fast Beetle controls must not silence the native page handler");
   assertNotIncludes(bridge, "event.target instanceof Element", "RemiNet fast Beetle actions must not discard isolated-world click targets");
   const animationNoneSelectors = Array.from(beetleFastControls.matchAll(/([^{}]+)\{[^{}]*animation:\s*none/gi))
     .map((match) => match[1])
@@ -157,26 +160,24 @@ function verifyBeetolRuntimeBridge() {
   assertNotIncludes(files.beetolContent, "remilia-auth:", "Beetol content must not invoke extension-page-only auth actions");
   assertIncludes(files.beetolContent, "Open the milXdy extension popup", "Beetol disconnected UI must direct users to the official extension connection surface");
 
-  const legacyFetch = functionBody(files.beetolBackground, "remiliaFetch");
-  assertIncludes(legacyFetch, "result.status === 401 && retry", "Beetol legacy actions may refresh only after the first 401");
-  assertNotIncludes(legacyFetch, "result.status === 403", "Beetol legacy actions must not refresh after 403");
-  assertIncludes(files.beetolBackground, "credentials: 'omit'", "Beetol legacy actions must omit ambient credentials");
-  assertIncludes(files.beetolBackground, "redirect: 'error'", "Beetol legacy actions must reject redirects");
-  assertIncludes(files.beetolBackground, "referrerPolicy: 'no-referrer'", "Beetol legacy actions must suppress referrers");
-  assertIncludes(files.beetolBackground, "isExactResponseUrl(response.url, endpoint)", "Beetol legacy actions must validate the final response URL");
-
   const action = functionBody(files.beetolBackground, "runAction");
-  assertIncludes(action, "legacyBeetleActions.runAction(action)", "Beetol actions must submit through the typed legacy authenticated adapter");
-  assertNotIncludes(action, "/api/v1/", "Legacy Beetol actions must never masquerade as official API v1 operations");
+  const nativeAction = functionBody(files.beetolBackground, "nativeBeetleActionResponse");
+  assertIncludes(action, "nativeBeetleActionResponse(action)", "Beetol actions must route to the visible native RemiliaNET action boundary");
+  assertIncludes(nativeAction, "getRemiliaAuthStatus()", "Beetol native action guidance must fail closed on connector status");
+  assertIncludes(nativeAction, "status.phase !== 'connected'", "Beetol native action guidance must require the connected official connector");
+  assertIncludes(nativeAction, "NATIVE_ACTION_REQUIRED", "Beetol must return a bounded native-action result instead of proxying a legacy mutation");
+  assertIncludes(nativeAction, "actionMode: 'native-remilianet'", "Beetol status must distinguish native RemiliaNET actions");
+  assertNotIncludes(files.beetolBackground, "/api/beetle/action/", "Beetol must not call undocumented mutation endpoints");
+  assertNotIncludes(files.beetolBackground, "Authorization", "Beetol must not attach the official bearer to undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "fetch(", "Beetol background must not directly transport undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "prepareRemiliaAccess", "Beetol must not prepare an access token for undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "refreshRemiliaAccess", "Beetol must not refresh after a legacy action rejection");
+  assertNotIncludes(files.beetolBackground, "credentials: 'include'", "Beetol must not borrow ambient website credentials");
+  assertNotIncludes(files.beetolBackground, "chrome.tabs.create", "Beetol must not open a hidden action or auth tab");
+  assertNotIncludes(files.beetolBackground, "chrome.windows.create", "Beetol must not open a hidden action or auth window");
   assertIncludes(files.beetolBackground, "readOfficialBeetleSnapshot(officialBeetleReads)", "Beetol state must use the official typed Beetle reads");
   assertNotIncludes(files.beetolBackground, "/api/beetle/user", "Beetol must not retain the undocumented state read endpoint");
-  assertIncludes(action, "getStored({ lastUser: null })", "Beetol actions may use the last snapshot for reward comparison without a blocking preflight GET");
-  assertNotIncludes(action, "remiliaAuthedFetch('GET'", "Beetol actions must not spend their shared message deadline on a preflight state GET");
-  assertNotIncludes(action, "await getState()", "Beetol actions must return the mutation result before trailing state reconciliation");
-  assertIncludes(action, "needsRefresh: true", "Beetol action responses must request non-blocking state reconciliation");
-  const reconciliation = functionBody(files.beetolContent, "reconcileStateAfterAction");
-  assertIncludes(reconciliation, "type: 'beetol:getState'", "Beetol content must reconcile state after an action in a separate request");
-  assertIncludes(files.beetolContent, "if (response.needsRefresh) void reconcileStateAfterAction()", "Beetol action UI must launch reconciliation without keeping the action pending");
+  assertIncludes(files.beetolContent, "response?.data?.message", "Beetol action UI must surface the bounded native-action instruction");
 }
 
 function verifyPostReadingOcrBridge() {

@@ -1,386 +1,77 @@
 import { registerBackgroundMessageHandlers } from "../../platform/background/router";
 import { RemiliaApiClient } from "../../platform/auth/remilia-api";
-import {
-  createLegacyBeetleActionsAdapter,
-  isLegacyBeetleAction,
-} from "./legacy-beetle-actions";
+import { isLegacyBeetleAction } from "./legacy-beetle-actions";
 import {
   officialBeetleReadFailure,
   readOfficialBeetleSnapshot,
 } from "./official-beetle-reads";
 import {
-  REMILIA_BASE_URL,
-  prepareRemiliaAccess,
-  refreshRemiliaAccess,
   getRemiliaAuthStatus,
-  isRemiliaDisconnected,
   remiliaAuthProvider,
 } from "../../platform/auth/remilia-auth";
 
-const BASE_URL = REMILIA_BASE_URL;
 const officialBeetleReads = new RemiliaApiClient({ auth: remiliaAuthProvider });
-const CRUNCH_STEP_MS = 717;
 const MESSAGE_TYPES = new Set([
   'beetol:authStatus',
   'beetol:getState',
   'beetol:action',
   'beetol:crunchJunk',
 ]);
-const KNOWN_ITEM_KEYS = new Set([
-  'green', 'purple', 'ladybug', 'cucumber', 'monarch', 'pond', 'giraffe_weevil', 'pillbug',
-  'imperial_tortoise', 'christmas', 'skull', 'bumblebee', 'golden_tiger', 'blue_longicorn',
-  'goliath', 'bombardier', 'death_feigning', 'pondhawk', 'stag', 'sabertooth_longhorn',
-  'sunset_moth', 'golden', 'widow', 'candycane_tiger_moth', 'mars_rhino', 'radbro',
-  'daisy', 'sunflower', 'poppy', 'petunia', 'snapdragon', 'carnation', 'gallic_rose',
-  'st_johns_wort', 'milk_thistle', 'marigold', 'magnolia', 'royal_poinciana', 'larkspur',
-  'morning_glory', 'camellia', 'fringed_iris', 'pincushion', 'gazania', 'hellebore',
-  'passionflower', 'black_lotus', 'pollen_common', 'pollen_uncommon', 'pollen_rare',
-  'pollen_super_rare', 'junk_cube_t1', 'junk_cube_t2', 'nectar', 'cattail', 'pinecone',
-  'moss', 'gunpowder', 'chinese_coin', 'prism', 'roman_dodeca', 'arrowhead', 'titanium_cube',
-  'oriental_fan', 'mokia', 'thumb_drive', 'jade_cabbage', 'juex_card', 'cult_medallion',
-  'd20', 'deck_of_cards', 'compass', 'stradivarius', 'engraved_lighter', 'joystick',
-  'goya_miniature', 'police_badge', 'milady_fumoku', 'remilianet_id', 'hammer_t1',
-  'hammer_t2', 'hammer_t3', 'hammer_t4', 'hammer_t5', 'beetleboy_key', 'specimen_pin',
-  'trophy_chinese_coin', 'trophy_prism', 'trophy_roman_dodeca', 'trophy_arrowhead',
-  'trophy_titanium_cube', 'trophy_oriental_fan', 'trophy_jade_cabbage', 'trophy_thumb_drive',
-  'trophy_mokia', 'trophy_compass', 'trophy_juex_card', 'trophy_cult_medallion',
-  'trophy_stradivarius', 'trophy_police_badge', 'trophy_goya_miniature', 'trophy_milady_fumoku',
-  'trophy_remilianet_id', 'trophy_deck_of_cards', 'trophy_d20', 'trophy_engraved_lighter',
-  'trophy_joystick',
-]);
-
-const legacyBeetleActions = createLegacyBeetleActionsAdapter(({ method, path, body }) => (
-  remiliaAuthedFetch(method, path, body)
-));
-
-async function getStored(keys) {
-  return chrome.storage.local.get(keys);
-}
-
 async function setStored(values) {
   return chrome.storage.local.set(values);
-}
-
-async function refreshAccessToken() {
-  const result = await refreshRemiliaAccess();
-  return result.ok;
-}
-
-async function remiliaFetch(method, path, body, retry = true) {
-  if (await isRemiliaDisconnected()) return { ok: false, authRequired: true, disconnected: true };
-  const prepared = await prepareRemiliaAccess();
-  if (!prepared.ok) return { ok: false, authRequired: true, error: prepared.error };
-
-  const result = await remiliaRequest(method, path, body, {
-    credentials: 'omit',
-    authMethod: 'bearer',
-    accessToken: prepared.accessToken,
-  });
-
-  if (result.status === 401 && retry) {
-    if (await refreshAccessToken()) return remiliaFetch(method, path, body, false);
-    return { ok: false, authRequired: true, status: result.status, data: result.data, authMethod: result.authMethod };
-  }
-
-  return result;
-}
-
-async function remiliaRequest(method, path, body, options = {}) {
-  const endpoint = new URL(path, BASE_URL).href;
-  const headers = {
-    Accept: 'application/json',
-    ...(body == null ? {} : { 'Content-Type': 'application/json' }),
-    ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
-  };
-  const response = await fetch(endpoint, {
-    method,
-    credentials: 'omit',
-    redirect: 'error',
-    referrerPolicy: 'no-referrer',
-    headers,
-    body: body == null ? undefined : JSON.stringify(body),
-  });
-
-  if (!isExactResponseUrl(response.url, endpoint)) {
-    return { ok: false, status: 0, data: { message: 'INVALID_RESPONSE_URL' }, authMethod: options.authMethod };
-  }
-  const data = await readResponseBody(response);
-  if (!response.ok) {
-    return { ok: false, status: response.status, data, authMethod: options.authMethod };
-  }
-  return { ok: true, status: response.status, data, authMethod: options.authMethod };
-}
-
-function isExactResponseUrl(actual, expected) {
-  try {
-    return new URL(actual).href === new URL(expected).href;
-  } catch {
-    return false;
-  }
-}
-
-async function readResponseBody(response) {
-  const text = await response.text().catch(() => '');
-  if (!text) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { message: text };
-  }
-}
-
-async function remiliaAuthedFetch(method, path, body, retry = true) {
-  return remiliaFetch(method, path, body, retry);
 }
 
 async function getState() {
   try {
     const snapshot = await readOfficialBeetleSnapshot(officialBeetleReads);
     await setStored({ lastUser: snapshot.user, lastFetchedAt: snapshot.fetchedAt });
-    return { ok: true, ...snapshot };
+    return { ok: true, readMode: 'official-api', ...snapshot };
   } catch (error) {
-    return officialBeetleReadFailure(error);
+    return { readMode: 'official-api', ...officialBeetleReadFailure(error) };
   }
 }
 
 async function runAction(action) {
   if (!isLegacyBeetleAction(action)) return { ok: false, error: 'UNKNOWN_ACTION' };
-  // Do not surround the mutation with two state reads. The shared runtime
-  // deadline applies to the whole message handler, and a successful action
-  // used to time out while waiting for the trailing GET. Use the last known
-  // snapshot for best-effort reward labels and let the content panel reconcile
-  // state in a separate, non-blocking request after it receives this result.
-  const stored = await getStored({ lastUser: null });
-  const inventoryBefore = stored.lastUser?.inventory || {};
-  const result = await legacyBeetleActions.runAction(action);
+  return nativeBeetleActionResponse(action);
+}
 
-  if (!result.ok) return result;
-  const cooldownMs = extractActionCooldownMs(result.data, action);
-  const responseUser = result.data?.user || null;
-  if (result.data?.success === false) {
+async function crunchJunk() {
+  return nativeBeetleActionResponse('craft');
+}
+
+async function nativeBeetleActionResponse(action) {
+  const status = await getRemiliaAuthStatus();
+  if (status.phase !== 'connected') {
+    const unsupported = status.phase === 'unsupported';
+    const missingScope = status.phase === 'missing-scope';
     return {
-      ok: true,
-      actionResult: result.data,
-      cooldownMs,
-      user: responseUser,
-      fetchedAt: Date.now(),
-      needsRefresh: true,
+      ok: false,
+      status: 0,
+      error: unsupported ? 'CONNECTOR_UNSUPPORTED' : (missingScope ? 'MISSING_SCOPE' : 'AUTH_REQUIRED'),
+      authRequired: !missingScope,
+      missingScope,
+      actionMode: 'unavailable',
+      data: {
+        message: unsupported
+          ? 'RemiliaNET connection is not supported in this extension build.'
+          : (missingScope
+            ? 'Reconnect RemiliaNET in the milXdy popup and approve Beetle read access.'
+            : 'Connect RemiliaNET in the milXdy popup before using Beetle actions.'),
+      },
     };
   }
-
-  const inventoryAfter = responseUser?.inventory || result.data?.inventory || {};
-  const gained = Object.entries(inventoryAfter)
-    .map(([key, qty]) => [key, qty - (inventoryBefore[key] || 0)])
-    .filter(([, diff]) => diff > 0)
-    .map(([key, diff]) => ({ key, diff }));
-
   return {
-    ok: true,
-    actionResult: result.data,
-    cooldownMs,
-    user: responseUser,
-    fetchedAt: Date.now(),
-    gained,
-    needsRefresh: true,
+    ok: false,
+    status: 0,
+    error: 'NATIVE_ACTION_REQUIRED',
+    nativeAction: true,
+    action,
+    actionMode: 'native-remilianet',
+    data: {
+      message: 'Use the visible RemiliaNET Beetle control. milXdy will accelerate its native result without replacing the site action.',
+    },
   };
-}
-
-function junkPool(inventory) {
-  const pool = [];
-  for (const [key, qty] of Object.entries(inventory || {})) {
-    if (KNOWN_ITEM_KEYS.has(key) || key === 'cheese' || key.endsWith('_shelf')) continue;
-    const count = Number(qty);
-    if (Number.isFinite(count) && count > 0) pool.push(...Array(Math.floor(count)).fill(key));
-  }
-  return pool;
-}
-
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function crunchJunk({ runId, onProgress } = {}) {
-  const before = await getState();
-  if (!before.ok) return before;
-
-  const pool = junkPool(before.user?.inventory);
-  if (pool.length < 2) {
-    return { ok: false, error: 'Not enough loose junk.' };
-  }
-
-  const pairs = Math.floor(pool.length / 2);
-  let made = 0;
-  let skipped = 0;
-  const skippedPairs = [];
-  const reportProgress = (outcome = null, skippedPair = null) => onProgress?.({
-    runId,
-    total: pairs,
-    processed: made + skipped,
-    made,
-    skipped,
-    outcome,
-    skippedPair,
-  });
-
-  reportProgress();
-
-  for (let i = 0; i < pairs * 2; i += 2) {
-    const startedAt = Date.now();
-    onProgress?.({
-      runId,
-      total: pairs,
-      processed: made + skipped,
-      made,
-      skipped,
-      phase: 'processing',
-    });
-    const result = await legacyBeetleActions.craftJunk(pool[i], pool[i + 1]);
-    if (!result.ok) return { ...result, made, skipped, pairs };
-    if (result.data?.success !== false) {
-      made += 1;
-      await sleep(Math.max(0, CRUNCH_STEP_MS - (Date.now() - startedAt)));
-      reportProgress('made');
-    } else if (result.data?.message === 'INVALID_RECIPE') {
-      skipped += 1;
-      const skippedPair = { slot1: pool[i], slot2: pool[i + 1] };
-      skippedPairs.push(skippedPair);
-      await sleep(Math.max(0, CRUNCH_STEP_MS - (Date.now() - startedAt)));
-      reportProgress('skipped', skippedPair);
-    }
-    else return { ok: false, error: result.data?.message || 'Failed mid-crunch.', made, skipped, pairs };
-  }
-
-  const after = await getState();
-  return {
-    ok: true,
-    made,
-    skipped,
-    skippedPairs,
-    pairs,
-    user: after.ok ? after.user : null,
-    fetchedAt: after.ok ? after.fetchedAt : Date.now(),
-  };
-}
-
-function extractCooldownMs(data, action) {
-  const nested = data?.data || {};
-  const actionCooldowns = data?.cooldowns || nested?.cooldowns || {};
-  const actionData = action ? data?.[action] || nested?.[action] || data?.actions?.[action] || nested?.actions?.[action] || {} : {};
-  const values = [
-    action ? actionCooldowns?.[action] : undefined,
-    actionData?.cooldownMs,
-    actionData?.cooldown,
-    actionData?.cooldownRemaining,
-    actionData?.cooldownRemainingMs,
-    actionData?.remainingMs,
-    actionData?.remaining,
-    actionData?.retryAfterMs,
-    actionData?.retryAfter,
-    actionData?.message,
-    actionData?.error,
-    data?.result?.cooldownMs,
-    data?.result?.cooldown,
-    data?.result?.cooldownRemainingMs,
-    data?.result?.retryAfterMs,
-    data?.cooldownMs,
-    data?.cooldown,
-    data?.cooldownRemaining,
-    data?.cooldownRemainingMs,
-    data?.remainingMs,
-    data?.remaining,
-    data?.retryAfterMs,
-    data?.retryAfter,
-    data?.message,
-    data?.error,
-    data?.nextPokeInMs,
-    data?.nextPokeIn,
-    data?.pokeCooldownMs,
-    data?.pokeCooldown,
-    data?.pokeCooldownSeconds,
-    nested?.cooldownMs,
-    nested?.cooldown,
-    nested?.cooldownRemaining,
-    nested?.cooldownRemainingMs,
-    nested?.remainingMs,
-    nested?.remaining,
-    nested?.retryAfterMs,
-    nested?.retryAfter,
-    nested?.message,
-    nested?.error,
-    nested?.nextPokeInMs,
-    nested?.nextPokeIn,
-    nested?.pokeCooldownMs,
-    nested?.pokeCooldown,
-    nested?.pokeCooldownSeconds,
-  ];
-
-  for (const value of values) {
-    const ms = normalizeCooldownMs(value);
-    if (ms > 0) return ms;
-  }
-
-  const untilValues = [
-    actionData?.cooldownUntil,
-    actionData?.availableAt,
-    actionData?.nextAt,
-    data?.cooldownUntil,
-    data?.nextPokeAt,
-    data?.pokeAvailableAt,
-    data?.availableAt,
-    nested?.cooldownUntil,
-    nested?.nextPokeAt,
-    nested?.pokeAvailableAt,
-    nested?.availableAt,
-  ];
-  for (const value of untilValues) {
-    const timestamp = Date.parse(value);
-    if (Number.isFinite(timestamp) && timestamp > Date.now()) {
-      return timestamp - Date.now();
-    }
-  }
-
-  return 0;
-}
-
-function extractActionCooldownMs(data, action) {
-  const cooldownMs = extractCooldownMs(data, action);
-  if (cooldownMs > 0) return cooldownMs;
-  return 0;
-}
-
-function isCooldownMessage(message) {
-  return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
-}
-
-function normalizeCooldownMs(value) {
-  if (value == null || value === false) return 0;
-  if (typeof value === 'number') {
-    if (!Number.isFinite(value) || value <= 0) return 0;
-    if (value > 1000000000000) return Math.max(0, value - Date.now());
-    return value < 1000 ? value * 1000 : value;
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (!trimmed) return 0;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
-    const colonMatch = trimmed.match(/\b(?:(\d+):)?([0-5]?\d):([0-5]\d)\b/);
-    if (colonMatch) {
-      const hours = Number(colonMatch[1] || 0);
-      const minutes = Number(colonMatch[2] || 0);
-      const seconds = Number(colonMatch[3] || 0);
-      return ((hours * 60 + minutes) * 60 + seconds) * 1000;
-    }
-    const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
-    if (match && match[0].trim()) {
-      const days = Number(match[1] || 0);
-      const hours = Number(match[2] || 0);
-      const minutes = Number(match[3] || 0);
-      const seconds = Number(match[4] || 0);
-      return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
-    }
-  }
-  return 0;
 }
 
 registerBackgroundMessageHandlers([{
@@ -407,14 +98,7 @@ async function handleBeetolMessage(message, sender) {
     return runAction(message.action);
   }
   if (message?.type === 'beetol:crunchJunk') {
-    const tabId = sender.tab?.id;
-    return crunchJunk({
-      runId: message.runId,
-      onProgress: progress => {
-        if (typeof tabId !== 'number') return;
-        void chrome.tabs.sendMessage(tabId, { type: 'beetol:crunchProgress', ...progress }).catch(() => {});
-      },
-    });
+    return crunchJunk();
   }
   return { ok: false, error: 'UNKNOWN_BEETOL_MESSAGE' };
 }
@@ -459,6 +143,7 @@ async function getAuthStatus() {
     ok: true,
     signedIn: status.phase === 'connected',
     method: status.phase === 'connected' ? 'oidc' : null,
+    actionMode: status.phase === 'connected' ? 'native-remilianet' : 'unavailable',
     user: status.identity || null,
   };
 }

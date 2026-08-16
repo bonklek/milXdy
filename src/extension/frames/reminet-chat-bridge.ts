@@ -1,9 +1,12 @@
 import { startReminetLegacySocketBridge } from "./reminet-chat-legacy-socket";
 import {
   beetleConnectorIsActive,
+  createNativeBeetleAccelerationCss,
   createBeetleReducedMotionCss,
   nativeBeetleActionButtonFor,
-  nativeBeetleActionFor,
+  nativeBeetleOutcomeForElement,
+  nativeBeetleStatusCopy,
+  trustedNativeBeetleActionFor,
   type NativeBeetleAction,
 } from "./reminet-beetle-fast-controls";
 
@@ -15,10 +18,10 @@ const BEETLE_REDUCED_MOTION_STYLE_ID = "milxdy-reminet-beetle-reduced-motion";
 const BEETLE_INSTANT_RESULTS_ATTRIBUTE = "data-milxdy-reminet-beetle-instant-results";
 const BEETLE_INSTANT_RESULTS_PREFERENCE_ATTRIBUTE = "data-milxdy-reminet-beetle-instant-results-preference";
 const BEETLE_CONNECTOR_ACTIVE_ATTRIBUTE = "data-milxdy-reminet-beetle-connector-active";
-const BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE = "data-milxdy-reminet-beetle-instant-results-active";
+const BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE = "data-milxdy-reminet-beetle-native-acceleration";
 const BEETLE_INSTANT_RESULTS_STYLE_ID = "milxdy-reminet-beetle-instant-results";
-const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-result";
-const BEETLE_HUNT_COOLDOWN_MS = 90 * 60 * 1000;
+const BEETLE_INSTANT_RESULTS_ID = "milxdy-reminet-beetle-native-status";
+const BEETLE_NATIVE_ACTION_TIMEOUT_MS = 15_000;
 const BEETLE_WELCOME_PENDING_KEY = "milxdy.reminet.beetleWelcomePending";
 const BEETLE_WELCOME_ID = "milxdy-reminet-beetle-welcome";
 const BEETLE_WELCOME_ANCHOR_SELECTOR = ".beetle-tab.beetleboy.active";
@@ -27,12 +30,11 @@ const BEETLE_CONNECTOR_STATUS_POLL_MS = 2_000;
 let instantResultsEnabled = false;
 let instantResultsPreferred = false;
 let instantResultsConnectorActive = false;
-let instantResultsAvailabilityVersion = 0;
 let connectorStatusRefreshId = 0;
-let instantResultRunning = false;
 let instantResultListenerInstalled = false;
-const instantResultLockedActions = new Set<"catchBeetle" | "beetleHunt">();
-let instantHuntCharges: number | null = null;
+let nativeActionObserver: MutationObserver | null = null;
+let nativeActionTimeout: ReturnType<typeof setTimeout> | null = null;
+let nativeAccelerationRelease: ReturnType<typeof setTimeout> | null = null;
 let beetleRouteObserverTimer: ReturnType<typeof setInterval> | null = null;
 let beetleConnectorStatusTimer: ReturnType<typeof setInterval> | null = null;
 let lastObservedBeetleRoute: boolean | null = null;
@@ -223,51 +225,38 @@ function ensureInstantResultStyle(): void {
   if (document.getElementById(BEETLE_INSTANT_RESULTS_STYLE_ID)) return;
   const style = document.createElement("style");
   style.id = BEETLE_INSTANT_RESULTS_STYLE_ID;
-  style.textContent = `
-    html[${BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE}] .module-main-screen.beetle-catch-main-screen > video {
-      visibility: hidden !important;
-    }
+  style.textContent = `${createNativeBeetleAccelerationCss(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE)}
     #${BEETLE_INSTANT_RESULTS_ID} {
       position: absolute;
-      inset: 0;
-      z-index: 4;
+      right: 12px;
+      bottom: 12px;
+      z-index: 6;
       display: grid;
-      align-content: center;
-      gap: 10px;
-      padding: 24px;
+      gap: 3px;
+      max-width: min(320px, calc(100% - 24px));
+      padding: 9px 11px;
       box-sizing: border-box;
-      overflow: auto;
-      background: radial-gradient(circle at 50% 30%, rgba(212, 251, 137, 0.18), rgba(8, 14, 10, 0.96) 70%);
+      border: 1px solid rgba(255, 193, 105, 0.82);
+      border-radius: 8px;
+      background: rgba(8, 14, 10, 0.92);
+      box-shadow: 0 5px 18px rgba(0, 0, 0, 0.36);
       color: #f7f1d0;
-      font: 800 15px/1.35 ui-monospace, "Cascadia Mono", Menlo, monospace;
-      letter-spacing: 0.04em;
-      text-align: center;
-      text-transform: uppercase;
+      font: 700 11px/1.35 ui-monospace, "Cascadia Mono", Menlo, monospace;
+      pointer-events: none;
     }
-    #${BEETLE_INSTANT_RESULTS_ID}[data-kind="success"] { box-shadow: inset 0 0 0 2px rgba(212, 251, 137, 0.82); }
-    #${BEETLE_INSTANT_RESULTS_ID}[data-kind="error"] { box-shadow: inset 0 0 0 2px rgba(255, 117, 117, 0.82); }
-    #${BEETLE_INSTANT_RESULTS_ID}[data-kind="pending"] { box-shadow: inset 0 0 0 2px rgba(255, 193, 105, 0.82); }
-    #${BEETLE_INSTANT_RESULTS_ID} strong { color: #d4fb89; font-size: 19px; }
+    #${BEETLE_INSTANT_RESULTS_ID}[data-kind="success"] { border-color: rgba(212, 251, 137, 0.82); }
+    #${BEETLE_INSTANT_RESULTS_ID}[data-kind="error"] { border-color: rgba(255, 117, 117, 0.82); }
+    #${BEETLE_INSTANT_RESULTS_ID} strong { color: #d4fb89; font-size: 12px; }
     #${BEETLE_INSTANT_RESULTS_ID}[data-kind="error"] strong { color: #ffb4b4; }
-    .beetle-catch-module__catch-button[data-milxdy-instant-result-locked="true"],
-    .beetle-catch-module__hunt-button[data-milxdy-instant-result-locked="true"] {
-      filter: grayscale(0.8) brightness(0.58) !important;
-      opacity: 0.48 !important;
-      cursor: not-allowed !important;
-    }
   `;
   document.documentElement.append(style);
 }
 
 function applyInstantBeetleResults(preferred: boolean, connectorActive: boolean): void {
   const enabled = preferred && connectorActive;
-  const availabilityChanged = preferred !== instantResultsPreferred
-    || connectorActive !== instantResultsConnectorActive
-    || enabled !== instantResultsEnabled;
   instantResultsPreferred = preferred;
   instantResultsConnectorActive = connectorActive;
   instantResultsEnabled = enabled;
-  if (availabilityChanged) instantResultsAvailabilityVersion += 1;
   const root = document.documentElement;
   if (!root) return;
   root.dataset.milxdyReminetBeetleInstantResults = String(enabled);
@@ -276,13 +265,10 @@ function applyInstantBeetleResults(preferred: boolean, connectorActive: boolean)
   if (enabled && isBeetleRoute()) {
     ensureInstantResultStyle();
     installInstantResultListener();
-    void reconcileInstantBeetleState();
   } else if (!enabled) {
-    instantResultLockedActions.clear();
-    instantHuntCharges = null;
+    stopNativeBeetleActionObservation();
+    releaseNativeBeetleAcceleration();
     document.getElementById(BEETLE_INSTANT_RESULTS_ID)?.remove();
-    root.removeAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE);
-    lockNativeActionButtons();
   }
 }
 
@@ -296,108 +282,6 @@ async function refreshInstantBeetleAvailability(): Promise<void> {
     .catch(() => null);
   if (refreshId !== connectorStatusRefreshId) return;
   applyInstantBeetleResults(instantResultsPreferred, beetleConnectorIsActive(response));
-}
-
-function nativeActionButtons(): HTMLButtonElement[] {
-  return Array.from(document.querySelectorAll<HTMLButtonElement>(
-    ".beetle-catch-module__catch-button, .beetle-catch-module__hunt-button",
-  ));
-}
-
-function actionForNativeButton(button: HTMLButtonElement): NativeBeetleAction {
-  return button.classList.contains("beetle-catch-module__catch-button") ? "catchBeetle" : "beetleHunt";
-}
-
-function setNativeActionButtonLocked(button: HTMLButtonElement, locked: boolean): void {
-  if (locked) {
-    if (!button.dataset.milxdyInstantResultOriginalDisabled) {
-      button.dataset.milxdyInstantResultOriginalDisabled = String(button.disabled);
-    }
-    button.disabled = true;
-    button.dataset.milxdyInstantResultLocked = "true";
-    button.setAttribute("aria-disabled", "true");
-    return;
-  }
-  if (!button.dataset.milxdyInstantResultLocked) return;
-  button.disabled = button.dataset.milxdyInstantResultOriginalDisabled === "true";
-  delete button.dataset.milxdyInstantResultOriginalDisabled;
-  delete button.dataset.milxdyInstantResultLocked;
-  button.removeAttribute("aria-disabled");
-}
-
-function huntChargesFromUser(user: Record<string, unknown>): number | null {
-  const remaining = Number(user.beetleHuntsRemaining ?? user.beetleHuntCharges ?? recordValue(user.charges).beetleHunt);
-  if (Number.isFinite(remaining)) return Math.max(0, Math.min(3, Math.floor(remaining)));
-  const used = Number(user.beetleHuntsUsed);
-  if (Number.isFinite(used)) {
-    if (used < 3) return Math.max(0, Math.min(3, 3 - Math.floor(used)));
-    const rawLastHunt = user.lastBeetleHuntDate;
-    const lastHuntAt = typeof rawLastHunt === "number"
-      ? (rawLastHunt < 10_000_000_000 ? rawLastHunt * 1000 : rawLastHunt)
-      : Date.parse(String(rawLastHunt ?? ""));
-    return Number.isFinite(lastHuntAt) && lastHuntAt + BEETLE_HUNT_COOLDOWN_MS <= Date.now() ? 3 : 0;
-  }
-  const available = user.canBeetleHunt ?? user.canHunt ?? user.beetleHuntAvailable;
-  return available === false ? 0 : null;
-}
-
-function huntStatusDetail(): string {
-  if (instantHuntCharges === null) return "Hunt state is reconciling with RemiliaNET.";
-  if (instantHuntCharges <= 0) return "All three hunts are used. Hunt is now on cooldown.";
-  return `${instantHuntCharges}/3 hunts remaining.`;
-}
-
-function formatBeetleItem(value: unknown): string {
-  return String(value ?? "reward")
-    .replace(/[_-]+/g, " ")
-    .replace(/\b\w/g, (character) => character.toUpperCase());
-}
-
-function recordValue(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
-}
-
-function resultCopy(action: "catchBeetle" | "beetleHunt", response: Record<string, unknown>): { title: string; detail: string; kind: "success" | "error" } {
-  const result = recordValue(response.actionResult);
-  const payload = recordValue(result.result);
-  const message = typeof result.message === "string"
-    ? result.message
-    : (typeof payload.message === "string" ? payload.message : "");
-  if (response.ok !== true || result.success === false || payload.success === false) {
-    return {
-      title: action === "catchBeetle" ? "Claim unavailable" : "Hunt unavailable",
-      detail: message || String(response.error || "RemiliaNET did not complete this action."),
-      kind: "error",
-    };
-  }
-  const beetleCard = recordValue(payload.beetleCard);
-  const beetleName = typeof beetleCard.beetle_name === "string" ? beetleCard.beetle_name : "";
-  const secondaryDrops = Array.isArray(payload.secondaryItemDrops)
-    ? payload.secondaryItemDrops
-      .map((entry) => recordValue(entry).beetle_name)
-      .filter((name): name is string => typeof name === "string" && name.length > 0)
-    : [];
-  const xp = Number(payload.xp);
-  if (beetleName) {
-    const rewards = [formatBeetleItem(beetleName), ...secondaryDrops.map(formatBeetleItem)];
-    return {
-      title: action === "catchBeetle" ? "Beetle claimed" : "Hunt resolved",
-      detail: `Found: ${rewards.join(", ")}${Number.isFinite(xp) ? ` · +${xp} XP` : ""}`,
-      kind: "success",
-    };
-  }
-  const gained = Array.isArray(response.gained)
-    ? response.gained.map((entry) => recordValue(entry)).map((entry) => {
-      const quantity = Number(entry.diff);
-      const item = formatBeetleItem(entry.key);
-      return Number.isFinite(quantity) && quantity > 1 ? `${item} ×${quantity}` : item;
-    }).filter(Boolean)
-    : [];
-  return {
-    title: action === "catchBeetle" ? "Beetle claimed" : "Hunt resolved",
-    detail: gained.length > 0 ? `Received: ${gained.join(", ")}` : (message || "Result received from RemiliaNET."),
-    kind: "success",
-  };
 }
 
 function showInstantResult(title: string, detail: string, kind: "pending" | "success" | "error"): void {
@@ -417,93 +301,82 @@ function showInstantResult(title: string, detail: string, kind: "pending" | "suc
   const copy = document.createElement("span");
   copy.textContent = detail;
   pane.append(heading, copy);
+}
+
+function stopNativeBeetleActionObservation(): void {
+  nativeActionObserver?.disconnect();
+  nativeActionObserver = null;
+  if (nativeActionTimeout !== null) clearTimeout(nativeActionTimeout);
+  nativeActionTimeout = null;
+}
+
+function releaseNativeBeetleAcceleration(): void {
+  if (nativeAccelerationRelease !== null) clearTimeout(nativeAccelerationRelease);
+  nativeAccelerationRelease = null;
+  document.documentElement.removeAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE);
+}
+
+function finishNativeBeetleActionObservation(
+  action: NativeBeetleAction,
+  outcome: "result" | "failure" | "timeout",
+): void {
+  stopNativeBeetleActionObservation();
+  if (!instantResultsEnabled) return;
+  const copy = nativeBeetleStatusCopy(action, outcome);
+  showInstantResult(copy.title, copy.detail, copy.kind);
+  if (nativeAccelerationRelease !== null) clearTimeout(nativeAccelerationRelease);
+  nativeAccelerationRelease = setTimeout(() => {
+    nativeAccelerationRelease = null;
+    document.documentElement.removeAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE);
+  }, 250);
+}
+
+function observeNativeBeetleAction(action: NativeBeetleAction): void {
+  if (!instantResultsEnabled) return;
+  const screen = document.querySelector<HTMLElement>(".module-main-screen.beetle-catch-main-screen");
+  if (!screen) return;
+  stopNativeBeetleActionObservation();
+  if (nativeAccelerationRelease !== null) clearTimeout(nativeAccelerationRelease);
+  nativeAccelerationRelease = null;
   document.documentElement.toggleAttribute(BEETLE_INSTANT_RESULTS_ACTIVE_ATTRIBUTE, true);
-}
-
-function lockNativeActionButtons(): void {
-  for (const button of nativeActionButtons()) {
-    const action = actionForNativeButton(button);
-    setNativeActionButtonLocked(button, instantResultsEnabled && (instantResultRunning || instantResultLockedActions.has(action)));
-  }
-}
-
-async function reconcileInstantBeetleState(): Promise<void> {
-  if (!instantResultsEnabled) return;
-  const availabilityVersion = instantResultsAvailabilityVersion;
-  try {
-    const response = await chrome.runtime.sendMessage({ type: "beetol:getState" }) as Record<string, unknown>;
-    if (!instantResultsEnabled || availabilityVersion !== instantResultsAvailabilityVersion) return;
-    if (response.ok !== true) return;
-    const charges = huntChargesFromUser(recordValue(response.user));
-    if (charges === null) return;
-    instantHuntCharges = charges;
-    if (charges <= 0) instantResultLockedActions.add("beetleHunt");
-    else instantResultLockedActions.delete("beetleHunt");
-    lockNativeActionButtons();
-  } catch {
-    // The immediate result remains useful if a trailing state refresh is unavailable.
-  }
-}
-
-async function runInstantBeetleAction(action: "catchBeetle" | "beetleHunt"): Promise<void> {
-  if (!instantResultsEnabled || instantResultRunning) return;
-  const connectorStatus = await chrome.runtime.sendMessage({ type: "beetol:authStatus" })
-    .catch(() => null);
-  if (!beetleConnectorIsActive(connectorStatus)) {
-    applyInstantBeetleResults(instantResultsPreferred, false);
-    return;
-  }
-  if (!instantResultsEnabled) return;
-  if (instantResultLockedActions.has(action)) {
-    showInstantResult(
-      action === "catchBeetle" ? "Claim unavailable" : "Hunt unavailable",
-      action === "catchBeetle" ? "The current Beetle claim is already resolved." : huntStatusDetail(),
-      "success",
-    );
-    return;
-  }
-  instantResultRunning = true;
-  const availabilityVersion = instantResultsAvailabilityVersion;
-  lockNativeActionButtons();
-  showInstantResult(action === "catchBeetle" ? "Claiming Beetle…" : "Hunting Beetle…", "Resolving directly with RemiliaNET.", "pending");
-  try {
-    const response = await chrome.runtime.sendMessage({ type: "beetol:action", action }) as Record<string, unknown>;
-    if (!instantResultsEnabled || availabilityVersion !== instantResultsAvailabilityVersion) return;
-    const copy = resultCopy(action, response);
-    if (copy.kind === "success") {
-      if (action === "catchBeetle") {
-        instantResultLockedActions.add(action);
-      } else {
-        instantHuntCharges = Math.max(0, (instantHuntCharges ?? 3) - 1);
-        if (instantHuntCharges <= 0) instantResultLockedActions.add(action);
+  nativeActionObserver = new MutationObserver((records) => {
+    for (const record of records) {
+      const targetOutcome = nativeBeetleOutcomeForElement(record.target);
+      if (targetOutcome) {
+        finishNativeBeetleActionObservation(action, targetOutcome);
+        return;
+      }
+      for (const candidate of record.addedNodes) {
+        const addedOutcome = nativeBeetleOutcomeForElement(candidate, true);
+        if (!addedOutcome) continue;
+        finishNativeBeetleActionObservation(action, addedOutcome);
+        return;
       }
     }
-    const detail = action === "beetleHunt" && copy.kind === "success"
-      ? `${copy.detail} ${huntStatusDetail()}`
-      : copy.detail;
-    showInstantResult(copy.title, detail, copy.kind);
-    void reconcileInstantBeetleState();
-  } catch {
-    if (!instantResultsEnabled || availabilityVersion !== instantResultsAvailabilityVersion) return;
-    showInstantResult("Action could not complete", "Reload the Beetle page and try again.", "error");
-  } finally {
-    instantResultRunning = false;
-    lockNativeActionButtons();
-  }
+  });
+  nativeActionObserver.observe(screen, { attributes: true, childList: true, subtree: true });
+  nativeActionTimeout = setTimeout(() => {
+    finishNativeBeetleActionObservation(action, "timeout");
+  }, BEETLE_NATIVE_ACTION_TIMEOUT_MS);
+  queueMicrotask(() => {
+    if (!instantResultsEnabled || !nativeActionObserver) return;
+    const copy = nativeBeetleStatusCopy(action, "pending");
+    showInstantResult(copy.title, copy.detail, copy.kind);
+  });
 }
 
 function installInstantResultListener(): void {
   if (instantResultListenerInstalled) return;
   instantResultListenerInstalled = true;
   document.addEventListener("click", (event) => {
-    if (!instantResultsEnabled || !isBeetleRoute() || !event.isTrusted) return;
-    const action = nativeBeetleActionFor(event.target);
+    if (!isBeetleRoute()) return;
+    const action = trustedNativeBeetleActionFor(event, instantResultsEnabled);
     if (!action) return;
     const button = nativeBeetleActionButtonFor(event.target);
-    if (button?.disabled && !button.dataset.milxdyInstantResultLocked) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    void runInstantBeetleAction(action);
+    if (!button || button.disabled) return;
+    // Observe only. The trusted click continues to RemiliaNET's native handler,
+    // which owns its website session and mutation request.
+    observeNativeBeetleAction(action);
   }, true);
 }
 
@@ -533,6 +406,8 @@ function observeBeetleRouteChanges(): void {
 }
 
 window.addEventListener("pagehide", () => {
+  stopNativeBeetleActionObservation();
+  releaseNativeBeetleAcceleration();
   if (beetleRouteObserverTimer !== null) clearInterval(beetleRouteObserverTimer);
   beetleRouteObserverTimer = null;
   if (beetleConnectorStatusTimer !== null) clearInterval(beetleConnectorStatusTimer);

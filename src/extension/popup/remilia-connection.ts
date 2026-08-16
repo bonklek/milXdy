@@ -262,7 +262,7 @@ export function instantBeetleResultsAvailability(status: RemiliaAuthStatus): Ins
   if (status.phase === "connected") {
     return {
       active: true,
-      help: "Connected. Instant Claim/Hunt results are available on RemiliaNET.",
+      help: "Connected. milXdy can accelerate RemiliaNET's native Claim/Hunt presentation; RemiliaNET still performs the action.",
     };
   }
   return {

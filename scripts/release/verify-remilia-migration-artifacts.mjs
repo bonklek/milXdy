@@ -134,18 +134,22 @@ function assertRequiredMigrationRuntimeContracts(archivePath, entryName, text) {
   if (entryName === "background.js") {
     const beetolModule = extractBundledAppModule(archivePath, entryName, text, "src/apps/beetol/background.js");
     requireArtifactText(archivePath, entryName, beetolModule, "beetol:authStatus", "Beetol auth-status registration");
-    const retryIndex = beetolModule.indexOf("result.status === 401 && retry");
-    const invalidUrlIndex = beetolModule.indexOf("INVALID_RESPONSE_URL", Math.max(0, retryIndex));
-    if (retryIndex < 0 || invalidUrlIndex < retryIndex) {
-      throw new Error(`${archivePath}:${entryName}: Beetol first-401-only retry contract missing`);
+    requireArtifactText(archivePath, entryName, beetolModule, "official-api", "official Beetle read mode");
+    requireArtifactText(archivePath, entryName, beetolModule, "NATIVE_ACTION_REQUIRED", "bounded native-action result");
+    requireArtifactText(archivePath, entryName, beetolModule, "native-remilianet", "native RemiliaNET action mode");
+    const prohibitedNativeTransport = /\/api\/beetle\/action\/|Authorization|fetch\s*\(|prepareRemiliaAccess|refreshRemiliaAccess|credentials:\s*["']include["']|chrome\.tabs\.create|chrome\.windows\.create|disconnectRemiliaAuth|clearRemiliaAuth/;
+    if (prohibitedNativeTransport.test(beetolModule)) {
+      throw new Error(`${archivePath}:${entryName}: Beetol native-action transport or auth-custody residue detected`);
     }
-    const transport = beetolModule.slice(Math.max(0, retryIndex - 1_500), Math.min(beetolModule.length, invalidUrlIndex + 500));
-    requireArtifactText(archivePath, entryName, transport, 'credentials: "omit"', "Beetol credentials omission");
-    requireArtifactText(archivePath, entryName, transport, 'redirect: "error"', "Beetol redirect rejection");
-    requireArtifactText(archivePath, entryName, transport, 'referrerPolicy: "no-referrer"', "Beetol no-referrer policy");
-    requireArtifactText(archivePath, entryName, transport, "INVALID_RESPONSE_URL", "Beetol final-URL rejection");
-    if (/result\.status === 403|disconnectRemiliaAuth|clearRemiliaAuth/.test(beetolModule)) {
-      throw new Error(`${archivePath}:${entryName}: Beetol 403 refresh or implicit disconnect residue detected`);
+  }
+  if (entryName === "reminetChatBridge.js") {
+    requireArtifactText(archivePath, entryName, text, "beetol:authStatus", "token-free connector status polling");
+    requireArtifactText(archivePath, entryName, text, "isTrusted", "trusted native Beetle click check");
+    requireArtifactText(archivePath, entryName, text, "data-milxdy-reminet-beetle-native-acceleration", "native Beetle presentation acceleration");
+    requireArtifactText(archivePath, entryName, text, "milxdy-reminet-beetle-native-status", "bounded native Beetle status");
+    requireArtifactText(archivePath, entryName, text, "0.001ms", "lifecycle-safe native Beetle acceleration duration");
+    if (/beetol:action|remilia-auth:|\.preventDefault\(|\.stopImmediatePropagation\(|\/api\/beetle\/action\//i.test(text)) {
+      throw new Error(`${archivePath}:${entryName}: intercepted or proxied RemiliaNET Beetle action detected`);
     }
   }
   if (entryName === "features/post-reading.js") {
