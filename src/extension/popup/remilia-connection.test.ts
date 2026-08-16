@@ -2,10 +2,8 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
-  REMILIA_CONNECTION_UI_VERSION,
   instantBeetleResultsAvailability,
   normalizeRemiliaAuthResponse,
-  normalizeRemiliaConnectionUiState,
   remiliaConnectionView,
   remiliaErrorMessage,
   remiliaIdentityLabel,
@@ -181,19 +179,6 @@ describe("Remilia connection UI contract", () => {
     expect(remiliaErrorMessage(status.lastError)).toContain(expected);
   });
 
-  it("keeps rollback state versioned and presentation-only", () => {
-    expect(normalizeRemiliaConnectionUiState({
-      schemaVersion: 99,
-      presentationVersion: 0,
-      compatibilityPresentation: true,
-      legacyCookieAuth: true,
-    })).toEqual({
-      schemaVersion: REMILIA_CONNECTION_UI_VERSION,
-      presentationVersion: REMILIA_CONNECTION_UI_VERSION,
-      compatibilityPresentation: true,
-    });
-  });
-
   it.each([
     [{ authStateVersion: 1, status: { phase: "unsupported" } }],
     [{ authStateVersion: 1, error: { code: "UNSUPPORTED" } }],
@@ -260,8 +245,13 @@ describe("Remilia connection UI contract", () => {
     });
   });
 
-  it("ships labeled live status, alert, scope, migration, and rollback controls", () => {
+  it("ships the compact connection layout as the only default while retaining required controls", () => {
     const html = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.html"), "utf8");
+    const css = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.css"), "utf8").replaceAll("\r\n", "\n");
+    const popupSource = readFileSync(resolve(process.cwd(), "src/extension/popup/index.ts"), "utf8");
+    const contractSource = readFileSync(resolve(process.cwd(), "src/extension/popup/remilia-connection.ts"), "utf8");
+    expect(html).toContain('id="remiliaConnection"');
+    expect(html).toContain('data-layout="compact"');
     expect(html).toContain('id="remiliaAuthStatus" role="status" aria-live="polite"');
     expect(html).toContain('id="remiliaAuthError" role="alert" tabindex="-1"');
     expect(html).toContain('id="remiliaMigration" role="region" aria-labelledby="remiliaMigrationTitle"');
@@ -270,6 +260,14 @@ describe("Remilia connection UI contract", () => {
     expect(html).toContain('id="remiliaReconnect"');
     expect(html).toContain('id="remiliaDisconnect"');
     expect(html).toContain('id="remiliaRevoke"');
-    expect(html).toContain('id="remiliaUiRollback"');
+    expect(html).not.toContain("Use compact connection layout");
+    expect(html).not.toContain('id="remiliaUiRollback"');
+    expect(html).not.toContain("full connection");
+    expect(css).toContain(".remilia-consent,\n.remilia-scopes li small {\n  display: none;");
+    expect(css).toContain(".remilia-scopes ul {\n  grid-template-columns: repeat(2, minmax(0, 1fr));");
+    expect(css).not.toContain("data-compatibility");
+    expect(popupSource).not.toContain("milxdy.remilia.connectionUi");
+    expect(popupSource).not.toContain("compatibilityPresentation");
+    expect(contractSource).not.toContain("RemiliaConnectionUiState");
   });
 });

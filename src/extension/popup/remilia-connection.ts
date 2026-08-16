@@ -10,8 +10,6 @@ export const REMILIA_AUTH_MESSAGE = {
 export const REMILIA_AUTH_STATE_VERSION = 1;
 export const REMILIA_CONSENT_VERSION = 1;
 export const REMILIA_MIGRATION_VERSION = 1;
-export const REMILIA_CONNECTION_UI_KEY = "milxdy.remilia.connectionUi";
-export const REMILIA_CONNECTION_UI_VERSION = 1;
 
 export type RemiliaAuthPhase =
   | "migration-required"
@@ -82,12 +80,6 @@ export type RemiliaAuthStatus = {
     legacyDeleted: boolean;
   };
   lastError: RemiliaAuthError | null;
-};
-
-export type RemiliaConnectionUiState = {
-  schemaVersion: typeof REMILIA_CONNECTION_UI_VERSION;
-  presentationVersion: typeof REMILIA_CONNECTION_UI_VERSION;
-  compatibilityPresentation: boolean;
 };
 
 export type RemiliaScopeRow = {
@@ -203,15 +195,6 @@ export function normalizeRemiliaAuthResponse(value: unknown): RemiliaAuthStatus 
       legacyDeleted: migration.legacyDeleted === true,
     },
     lastError: versionSupported ? error : { code: "UNKNOWN" },
-  };
-}
-
-export function normalizeRemiliaConnectionUiState(value: unknown): RemiliaConnectionUiState {
-  const state = recordValue(value);
-  return {
-    schemaVersion: REMILIA_CONNECTION_UI_VERSION,
-    presentationVersion: REMILIA_CONNECTION_UI_VERSION,
-    compatibilityPresentation: state.compatibilityPresentation === true,
   };
 }
 

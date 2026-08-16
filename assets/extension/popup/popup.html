@@ -364,7 +364,7 @@
           <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
           <label class="setting"><span><strong>Reduce remilia.net Beetle Hunt motion</strong><small>Reduce decorative and idle motion on remilia.net while preserving action-result feedback. Does not change the X/Twitter Beetol panel.</small></span><input type="checkbox" data-control="reminet.beetleReducedMotion"></label>
           <label class="setting" id="beetleInstantResultsSetting" data-connector-available="false" aria-disabled="true"><span><strong>Use instant Beetle results</strong><small>Accelerate the result presentation after your trusted click. RemiliaNET's visible page still performs the native Claim or Hunt action.</small><small id="beetleInstantResultsHelp" class="setting-availability-help" role="status" aria-live="polite">Checking the RemiliaNET connection...</small></span><input type="checkbox" data-control="reminet.beetleInstantResults" aria-describedby="beetleInstantResultsHelp" disabled></label>
-          <section class="remilia-connection" id="remiliaConnection" tabindex="-1" aria-labelledby="remiliaConnectionTitle" data-phase="connecting">
+          <section class="remilia-connection" id="remiliaConnection" tabindex="-1" aria-labelledby="remiliaConnectionTitle" data-phase="connecting" data-layout="compact">
             <div class="remilia-connection-heading">
               <div>
                 <h4 id="remiliaConnectionTitle">Official Remilia connection</h4>
@@ -399,10 +399,6 @@
               <button class="secondary-button" id="remiliaDisconnect" type="button" hidden>Disconnect</button>
               <button class="secondary-button danger-button" id="remiliaRevoke" type="button" hidden>Revoke authorization</button>
             </div>
-            <label class="setting remilia-ui-rollback">
-              <span><strong>Use compact connection layout</strong><small>Presentation rollback only. Official Remilia Login, token deletion, and the no-cookie boundary remain enforced.</small></span>
-              <input id="remiliaUiRollback" type="checkbox">
-            </label>
             <p class="message remilia-auth-message" id="remiliaAuthMessage" aria-live="polite"></p>
           </section>
           <div class="auth-diagnostic" id="beetolPokeDiagnostic" hidden></div>

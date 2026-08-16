@@ -20,10 +20,11 @@ async function verifyBuild(build) {
   const content = await readFile(path.join(build.dir, "content.js"), "utf8");
   const background = await readFile(path.join(build.dir, "background.js"), "utf8");
   const popupHtml = await readFile(path.join(build.dir, "popup.html"), "utf8");
+  const popupCss = (await readFile(path.join(build.dir, "popup.css"), "utf8")).replaceAll("\r\n", "\n");
   const popupJs = await readFile(path.join(build.dir, "popup.js"), "utf8");
 
   verifyManifest(build, manifest);
-  verifyPopup(build, popupHtml, popupJs);
+  verifyPopup(build, popupHtml, popupCss, popupJs);
   verifyRuntimeBundle(build, content, background);
   await verifyFeatureBundles(build);
   verifyAppAssets(build);
@@ -61,13 +62,20 @@ function verifyManifest(build, manifest) {
   }
 }
 
-function verifyPopup(build, popupHtml, popupJs) {
+function verifyPopup(build, popupHtml, popupCss, popupJs) {
   for (const value of ['value="fast"', 'value="balanced"', 'value="full"', 'value="developer"']) {
     assert(popupHtml.includes(value), `${build.dir}: popup missing Performance mode ${value}`);
   }
   assert(popupHtml.includes('data-control="performanceMode"'), `${build.dir}: popup performance control missing`);
   assert(popupJs.includes(`normalizeBuildProfile("${build.profile}")`), `${build.dir}: popup build profile constant mismatch`);
   assert(popupJs.includes("performanceModeSummary"), `${build.dir}: popup performance summary missing`);
+  assert(popupHtml.includes('id="remiliaConnection"') && popupHtml.includes('data-layout="compact"'), `${build.dir}: compact Remilia connection layout must be the default`);
+  assert(popupHtml.includes('id="remiliaScopesTitle">Requested abilities'), `${build.dir}: compact Remilia layout must retain requested abilities`);
+  assert(!popupHtml.includes("Use compact connection layout") && !popupHtml.includes('id="remiliaUiRollback"'), `${build.dir}: Remilia layout toggle must be absent`);
+  assert(!popupCss.includes("data-compatibility"), `${build.dir}: alternate Remilia compatibility layout must be absent`);
+  assert(popupCss.includes(".remilia-consent,\n.remilia-scopes li small {\n  display: none;"), `${build.dir}: compact Remilia disclosure rules must be unconditional`);
+  assert(popupCss.includes(".remilia-scopes ul {\n  grid-template-columns: repeat(2, minmax(0, 1fr));"), `${build.dir}: compact Remilia ability grid must be unconditional`);
+  assert(!popupJs.includes("milxdy.remilia.connectionUi") && !popupJs.includes("compatibilityPresentation"), `${build.dir}: Remilia layout preference runtime must be absent`);
 }
 
 function verifyRuntimeBundle(build, content, background) {

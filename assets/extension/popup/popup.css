@@ -878,16 +878,12 @@ input[type="checkbox"] {
   opacity: 0.6;
 }
 
-.remilia-ui-rollback {
-  background: transparent;
-}
-
-.remilia-connection[data-compatibility="true"] .remilia-consent,
-.remilia-connection[data-compatibility="true"] .remilia-scopes li small {
+.remilia-consent,
+.remilia-scopes li small {
   display: none;
 }
 
-.remilia-connection[data-compatibility="true"] .remilia-scopes ul {
+.remilia-scopes ul {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 

@@ -48,13 +48,10 @@ import {
 } from "../../platform/visuals/reskin-profile";
 import {
   REMILIA_AUTH_MESSAGE,
-  REMILIA_CONNECTION_UI_KEY,
-  REMILIA_CONNECTION_UI_VERSION,
   REMILIA_CONSENT_VERSION,
   REMILIA_MIGRATION_VERSION,
   instantBeetleResultsAvailability,
   normalizeRemiliaAuthResponse,
-  normalizeRemiliaConnectionUiState,
   remiliaConnectionView,
   remiliaErrorMessage,
   remiliaIdentityLabel,
@@ -2730,7 +2727,6 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
   const disconnect = document.getElementById("remiliaDisconnect") as HTMLButtonElement | null;
   const revoke = document.getElementById("remiliaRevoke") as HTMLButtonElement | null;
   const completeMigration = document.getElementById("remiliaCompleteMigration") as HTMLButtonElement | null;
-  const rollback = document.getElementById("remiliaUiRollback") as HTMLInputElement | null;
   const message = document.getElementById("remiliaAuthMessage");
   const pokeDiagnostic = document.getElementById("beetolPokeDiagnostic");
   const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
@@ -2740,18 +2736,15 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
   const instantResultsHelp = document.getElementById("beetleInstantResultsHelp");
   const required = [
     root, migration, consent, statusTitle, statusDetail, identity, error, scopeList, connect, reconnect,
-    disconnect, revoke, completeMigration, rollback, message, pokeDiagnostic, color, mode,
+    disconnect, revoke, completeMigration, message, pokeDiagnostic, color, mode,
     instantResultsSetting, instantResultsControl, instantResultsHelp,
   ];
   if (required.some((node) => !node)) return;
 
   const actionButtons = [connect, reconnect, disconnect, revoke, completeMigration] as HTMLButtonElement[];
-  const stored = await chrome.storage.local.get(["beetolColor", "beetolMode", REMILIA_CONNECTION_UI_KEY]);
+  const stored = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
   color!.value = typeof stored.beetolColor === "string" ? stored.beetolColor : "red";
   mode!.value = typeof stored.beetolMode === "string" ? stored.beetolMode : "settings";
-  const uiState = normalizeRemiliaConnectionUiState(stored[REMILIA_CONNECTION_UI_KEY]);
-  rollback!.checked = uiState.compatibilityPresentation;
-  root!.dataset.compatibility = String(uiState.compatibilityPresentation);
 
   const setMessage = (text: string, kind = "") => {
     message!.textContent = text;
@@ -2906,20 +2899,6 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
         ? "Local credentials removed. Remilia could not confirm remote revocation; you can review active authorizations on Remilia. Your other milXdy settings were kept."
         : "Authorization revoked and local credentials removed. Your other milXdy settings were kept.",
     );
-  });
-  rollback!.addEventListener("change", () => {
-    const compatibilityPresentation = rollback!.checked;
-    root!.dataset.compatibility = String(compatibilityPresentation);
-    void chrome.storage.local.set({
-      [REMILIA_CONNECTION_UI_KEY]: {
-        schemaVersion: REMILIA_CONNECTION_UI_VERSION,
-        presentationVersion: REMILIA_CONNECTION_UI_VERSION,
-        compatibilityPresentation,
-      },
-    });
-    setMessage(compatibilityPresentation
-      ? "Compact presentation enabled. Official authorization and credential protections remain active."
-      : "Full connection details restored.");
   });
   color!.addEventListener("change", () => {
     void chrome.storage.local.set({ beetolColor: color!.value });
