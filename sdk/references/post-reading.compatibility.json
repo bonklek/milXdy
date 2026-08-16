@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.5",
+  "packageVersion": "0.2.0-sdk.6",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/18-player-regression",
+  "sourceBranch": "codex/18-dark-controls",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
     "minVersion": "0.2.5",
@@ -23,6 +23,8 @@
     "diagnostics",
     "existing settings compatibility",
     "compact draggable player chrome with host-resolved assets",
+    "idempotent host-scaffolded per-post launcher placement",
+    "dark-panel light-control contrast scoped to Post-reading settings",
     "manifest-declared active-tab page context actions"
   ],
   "reviewedExceptions": [

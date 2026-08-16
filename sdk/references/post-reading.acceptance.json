@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.5",
+  "packageVersion": "0.2.0-sdk.6",
   "appSdkVersion": "0.2.5",
   "browserTarget": "chromium",
   "scenarios": [
@@ -22,8 +22,8 @@
     },
     {
       "id": "launch-navigation",
-      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; and shares article extraction/highlight containers.",
-      "manual": "Launch from a post and an X Article, navigate routes, rescan repeated surfaces, and confirm only one working control per surface and that active speech resets."
+      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; shares article extraction/highlight containers; and idempotently fills the host-scaffolded per-post header slot beside native X controls.",
+      "manual": "Launch from timeline and individual-post read-aloud actions beside Grok, then from an X Article; navigate routes and virtualize/reuse posts, confirming one working control targets the correct post without disturbing native Grok/overflow controls and active speech resets."
     },
     {
       "id": "direct-message-read-aloud",
@@ -62,8 +62,8 @@
     },
     {
       "id": "theme-layout-accessibility",
-      "automated": "The package emits compact rounded player chrome, a host-resolved logo, bounded pointer dragging, and persisted nearest-corner positioning through the existing setting.",
-      "manual": "Check light/dark theme, keyboard controls, focus, zoom/reflow, reduced motion, and forced colors; drag the compact player to every viewport edge, reload to confirm its nearest corner persists, and reset player position to confirm the default returns."
+      "automated": "The package emits compact rounded player chrome, a host-resolved logo, bounded pointer dragging, persisted nearest-corner positioning, and Post-reading-scoped light form controls with dark values/placeholders/options/caret in dark mode.",
+      "manual": "Check light/dark theme, keyboard controls, focus, disabled/error states, zoom/reflow, reduced motion, and forced colors; in dark mode verify Engine, Voice, Speed, endpoint and shortcut controls have readable values/placeholders/options/indicators; drag the compact player to every viewport edge, reload to confirm its nearest corner persists, and reset player position to confirm the default returns."
     },
     {
       "id": "uninstall-cleanup",

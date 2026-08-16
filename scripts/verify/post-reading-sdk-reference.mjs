@@ -113,9 +113,17 @@ try {
     "nearestPlayerPosition(",
     "width: min(340px, calc(100vw - 32px))",
     "border-radius: 10px",
+    'data-milxdy-tweet-slot="post-reading-header-action"',
+    'button.setAttribute("aria-label", "Read aloud")',
+    "collectTweetsWithEmptyRuntimeSlots",
+    "MutationObserver",
+    '.post-reading-settings input[type="text"]',
+    "caret-color: rgb(15, 20, 25)",
+    "color-scheme: light",
+    ".post-reading-settings select option",
   ]) {
     if (!builtPackageContent.includes(expected)) {
-      throw new Error(`Built Post-reading package omitted compact player evidence: ${expected}`);
+      throw new Error(`Built Post-reading package omitted reviewed UI evidence: ${expected}`);
     }
   }
 
