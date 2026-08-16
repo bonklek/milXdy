@@ -56,6 +56,7 @@ for (const [pattern, label] of staleInstructions) {
 for (const [source, pattern, label] of [
   [beetolContent, /beetol-retry-session|beetol:sessionStatus|beetol:logout|remilia-auth:/i, "retired Beetol content auth operation"],
   [beetolContent, /Sign in[\s\S]{0,120}RemiliaNET[\s\S]{0,120}(?:return|retry)|RemiliaNET[\s\S]{0,120}(?:return|retry)[\s\S]{0,120}Beetol/i, "website-sign-in/return/retry Beetol instruction"],
+  [beetolContent, /type:\s*["']beetol:(?:action|crunchJunk)["']|data-action|Use the visible RemiliaNET Beetle control/i, "action-looking or circular Beetol content interaction"],
   [beetolBackground, /beetol:sessionStatus|beetol:logout|disconnectRemiliaAuth|clearRemiliaAuth/i, "retired Beetol background auth operation"],
 ]) {
   assert(!pattern.test(source), `${label} remains in source`);
@@ -63,6 +64,11 @@ for (const [source, pattern, label] of [
 for (const required of [
   "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.",
   "type: 'beetol:authStatus'",
+  "Official read-only status",
+  "Actions run in RemiliaNET's visible Beetle game.",
+  "Play Beetle on RemiliaNET",
+  "?cartridge=beetle",
+  'target="_blank" rel="noopener noreferrer"',
 ]) {
   assert(beetolContent.includes(required), `Beetol content must retain passive popup/auth-status boundary ${JSON.stringify(required)}`);
 }

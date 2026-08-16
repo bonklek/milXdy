@@ -240,7 +240,7 @@ try {
   );
 
   const releaseArchive = "release/milXdy-0.2.5-chromium.zip";
-  const builtBeetolContent = "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect. beetol:authStatus";
+  const builtBeetolContent = "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect. beetol:authStatus Official read-only status Play Beetle on RemiliaNET cartridge=beetle noopener noreferrer";
   scanContent(releaseArchive, "features/beetol.js", Buffer.from(builtBeetolContent));
   for (const directAuth of [
     'chrome.runtime.sendMessage({type:"remilia-auth:connect"})',
@@ -251,6 +251,18 @@ try {
       () => scanContent(releaseArchive, "features/beetol.js", Buffer.from(`${builtBeetolContent}${"x".repeat(2_000)}${directAuth}`)),
       /direct Remilia auth operation detected in Beetol content/,
       `expected emitted Beetol direct auth prefix to fail: ${directAuth}`,
+    );
+  }
+  for (const misleadingInteraction of [
+    'chrome.runtime.sendMessage({type:"beetol:action"})',
+    'chrome.runtime.sendMessage({type:"beetol:crunchJunk"})',
+    '<button data-action="beetleHunt">Hunt Beetle</button>',
+    'Use the visible RemiliaNET Beetle control',
+  ]) {
+    assert.throws(
+      () => scanContent(releaseArchive, "features/beetol.js", Buffer.from(`${builtBeetolContent}${"x".repeat(2_000)}${misleadingInteraction}`)),
+      /action-looking or circular Beetol content interaction detected/,
+      `expected emitted Beetol misleading interaction to fail: ${misleadingInteraction}`,
     );
   }
   const builtBeetolTransport = `beetol:authStatus

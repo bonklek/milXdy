@@ -155,10 +155,17 @@ function verifyBeetolRuntimeBridge() {
   assertIncludes(contentScriptPolicy, "url.hostname === 'twitter.com'", "Beetol content-script sender policy must allow supported Twitter pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'www.remilia.net'", "Beetol content-script sender policy must allow supported RemiliaNET pages");
   assertNotIncludes(files.beetolContent, "beetol-retry-session", "Beetol content must not retain retry-session UI or action naming");
-  assertNotIncludes(files.beetolContent, "https://www.remilia.net/", "Beetol disconnected UI must not send users through website login");
   assertNotIncludes(files.beetolContent, "beetol:sessionStatus", "Beetol content must not invoke retired browser-session status");
   assertNotIncludes(files.beetolContent, "remilia-auth:", "Beetol content must not invoke extension-page-only auth actions");
   assertIncludes(files.beetolContent, "Open the milXdy extension popup", "Beetol disconnected UI must direct users to the official extension connection surface");
+  assertIncludes(files.beetolContent, "Official read-only status", "Beetol X/Twitter UI must label official state as read-only");
+  assertIncludes(files.beetolContent, "Play Beetle on RemiliaNET", "Beetol X/Twitter UI must provide one clear visible native-game route");
+  assertIncludes(files.beetolContent, "?cartridge=beetle", "Beetol native-game route must target the visible Beetle cartridge");
+  assertIncludes(files.beetolContent, 'target="_blank" rel="noopener noreferrer"', "Beetol native-game navigation must be user-initiated and opener-safe");
+  assertNotIncludes(files.beetolContent, "type: 'beetol:action'", "Beetol read-only content must not invoke the legacy action handler");
+  assertNotIncludes(files.beetolContent, "type: 'beetol:crunchJunk'", "Beetol read-only content must not invoke legacy craft handling");
+  assertNotIncludes(files.beetolContent, "data-action", "Beetol read-only content must not render action-looking legacy tiles");
+  assertNotIncludes(files.beetolContent, "Use the visible RemiliaNET Beetle control", "Beetol content must not show circular native-control guidance");
 
   const action = functionBody(files.beetolBackground, "runAction");
   const nativeAction = functionBody(files.beetolBackground, "nativeBeetleActionResponse");
@@ -177,7 +184,6 @@ function verifyBeetolRuntimeBridge() {
   assertNotIncludes(files.beetolBackground, "chrome.windows.create", "Beetol must not open a hidden action or auth window");
   assertIncludes(files.beetolBackground, "readOfficialBeetleSnapshot(officialBeetleReads)", "Beetol state must use the official typed Beetle reads");
   assertNotIncludes(files.beetolBackground, "/api/beetle/user", "Beetol must not retain the undocumented state read endpoint");
-  assertIncludes(files.beetolContent, "response?.data?.message", "Beetol action UI must surface the bounded native-action instruction");
 }
 
 function verifyPostReadingOcrBridge() {

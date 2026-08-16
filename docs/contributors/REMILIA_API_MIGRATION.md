@@ -118,8 +118,11 @@ as an API-v1 response.
 
 Beetol content receives only token-free `beetol:authStatus`. When disconnected,
 it passively directs the user to open the milXdy extension popup and use
-**Remilia connection → Connect/Reconnect**; it never opens RemiliaNET, adopts a
-website session, or invokes disconnect/logout. Retired `beetol:logout`,
+**Remilia connection → Connect/Reconnect**; it never opens a login or hidden
+session surface, adopts a website session, or invokes disconnect/logout. When
+connected, the X/Twitter panel labels official state as read-only, renders no
+action tiles, and offers one normal user-initiated **Play Beetle on RemiliaNET**
+link to the visible profile Beetle cartridge. Retired `beetol:logout`,
 `beetol:sessionStatus`, and retry-session routes are not registered. Legacy
 Beetle action names remain a typed classification, not an authenticated
 extension transport. The official bearer is used only for documented state and
@@ -131,8 +134,8 @@ result/failure state and accelerate presentation with nonzero lifecycle-safe
 durations; they never cancel the click, replace the native request, or claim
 success before the page exposes a result. A missing connector, status error, or
 unsupported build fails closed, while X/Twitter Beetol action messages return a
-bounded `NATIVE_ACTION_REQUIRED` instruction to use the visible RemiliaNET
-control. Caller-supplied 401/403 fields are ignored, with no refresh,
+bounded `NATIVE_ACTION_REQUIRED` result for stale or non-UI callers; the current
+read-only panel does not send those messages. Caller-supplied 401/403 fields are ignored, with no refresh,
 disconnect, credential clearing, cookie use, hidden tab, or background mutation
 request.
 

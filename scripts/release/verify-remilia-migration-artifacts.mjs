@@ -127,8 +127,15 @@ function assertRequiredMigrationRuntimeContracts(archivePath, entryName, text) {
   if (entryName === "features/beetol.js") {
     requireArtifactText(archivePath, entryName, text, "Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.", "passive popup guidance");
     requireArtifactText(archivePath, entryName, text, "beetol:authStatus", "token-free auth-status operation");
+    requireArtifactText(archivePath, entryName, text, "Official read-only status", "read-only Beetle status label");
+    requireArtifactText(archivePath, entryName, text, "Play Beetle on RemiliaNET", "visible native Beetle navigation");
+    requireArtifactText(archivePath, entryName, text, "cartridge=beetle", "visible native Beetle cartridge route");
+    requireArtifactText(archivePath, entryName, text, "noopener noreferrer", "opener-safe native Beetle navigation");
     if (/remilia-auth:/i.test(text)) {
       throw new Error(`${archivePath}:${entryName}: direct Remilia auth operation detected in Beetol content`);
+    }
+    if (/beetol:(?:action|crunchJunk)|data-action|Use the visible RemiliaNET Beetle control/i.test(text)) {
+      throw new Error(`${archivePath}:${entryName}: action-looking or circular Beetol content interaction detected`);
     }
   }
   if (entryName === "background.js") {

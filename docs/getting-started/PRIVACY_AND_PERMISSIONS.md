@@ -47,7 +47,9 @@ official account connection is required, it passively tells the user to open
 the milXdy extension popup and choose **Remilia connection →
 Connect/Reconnect**. It cannot open a login/session tab, disconnect the account,
 or call retired logout/session-status routes. Legacy Beetle action requests
-are not sent by milXdy. After a direct trusted click, the visible RemiliaNET
+are not sent by the X/Twitter panel: it displays official read-only status and
+one clearly labeled normal link to the visible RemiliaNET Beetle cartridge,
+with no action-like controls. After a direct trusted click, the visible RemiliaNET
 page performs its native action with its own website session. milXdy does not
 read, export, store, replay, proxy, or construct a request from that session,
 and it never attaches the official bearer to an undocumented action. Instant
