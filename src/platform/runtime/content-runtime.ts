@@ -21,6 +21,13 @@ import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClie
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
 import { migratePostReadingRailDefault, POST_READING_RAIL_DEFAULT_MIGRATION_KEY } from "./post-reading-rail-default";
 import { diagnosticStorageEntry } from "./reminet-chat-diagnostics";
+import {
+  applyRemiStatsRuntimePhaseUpdate,
+  emptyRemiStatsRuntimePhaseState,
+  formatRemiStatsRuntimePhaseState,
+  sanitizeRemiStatsRuntimePhaseUpdate,
+  type RemiStatsRuntimePhaseState,
+} from "./remistats-runtime-phase";
 import { contentScriptScopeForApp, loadTriggersForApp, routeScopeMatches, surfacesForApp } from "./site-runtime";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
@@ -104,6 +111,7 @@ type RuntimeState = {
   appAbortControllers: Map<MilxdyAppId, AbortController>;
   remiliaCapabilityClients: Map<MilxdyAppId, PackageRemiliaCapabilityClient>;
   diagnostics: Map<MilxdyAppId, AppDiagnostics>;
+  remistatsRuntimePhases: RemiStatsRuntimePhaseState;
   route: MilxdyRouteChange;
   disposed: boolean;
   diagnosticsTimer: number | null;
@@ -299,6 +307,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     appAbortControllers: new Map(),
     remiliaCapabilityClients: new Map(),
     diagnostics: new Map(apps.map((app) => [app.id, appDiagnosticsBase(app, "pending")])),
+    remistatsRuntimePhases: emptyRemiStatsRuntimePhaseState(),
     route: currentRoute(null, site),
     disposed: false,
     diagnosticsTimer: null,
@@ -530,7 +539,18 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
         sendMessage: (message, label) => sendAppMessage(app, message, label),
         remiliaCapabilities: remiliaCapabilityClient.declarations,
         invokeRemiliaCapability: (operation, params) => remiliaCapabilityClient.invoke(operation, params),
-        recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
+        recordDiagnostic: (key, value) => {
+          if (app.id === "remistats" && key === "runtimePhase") {
+            const sanitized = sanitizeRemiStatsRuntimePhaseUpdate(value);
+            if (sanitized) {
+              state.remistatsRuntimePhases = applyRemiStatsRuntimePhaseUpdate(state.remistatsRuntimePhases, sanitized);
+              refreshRemiStatsRuntimePhaseSummary();
+              recordRuntimeDiagnostic(`${app.id}.${key}`, sanitized);
+            }
+            return;
+          }
+          recordRuntimeDiagnostic(`${app.id}.${key}`, value);
+        },
         addDisposable: (disposable) => disposables.add(disposable),
       }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id), () => abortAppWork(app.id));
       lifecycleOwnsTeardown = true;
@@ -762,6 +782,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     return dispatchAuthorizedBackgroundMessage(message, app.background?.messageTypes, {
       denied(authorization) {
         recordDeniedAppMessage(app, label, authorization.messageType);
+        if (app.id === "remistats") {
+          return Promise.resolve({ ok: false, error: "MESSAGE_POLICY_REJECTED" } as T);
+        }
         return Promise.resolve(null);
       },
       authorized() {
@@ -4030,6 +4053,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
       body.append(unavailable);
     }
     body.append(runtime);
+    if (app.id === "remistats") {
+      const phaseSummary = document.createElement("span");
+      phaseSummary.className = "milxdy-app-hub-runtime-state";
+      phaseSummary.dataset.remistatsRuntimePhase = "true";
+      phaseSummary.textContent = formatRemiStatsRuntimePhaseState(state.remistatsRuntimePhases);
+      body.append(phaseSummary);
+    }
 
     const controls = document.createElement("div");
     controls.className = "milxdy-app-hub-controls";
@@ -4928,6 +4958,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: M
     if (state.loading.has(app.id)) parts.push("import:loading");
     if (state.loaded.has(app.id)) parts.push("import:loaded");
     return parts.join(" | ");
+  }
+
+  function refreshRemiStatsRuntimePhaseSummary(): void {
+    const summary = document.querySelector<HTMLElement>("[data-remistats-runtime-phase='true']");
+    if (summary) summary.textContent = formatRemiStatsRuntimePhaseState(state.remistatsRuntimePhases);
   }
 
   function appHubLifecycle(app: MilxdyAppManifest): { state: string; label: string; detail: string } {

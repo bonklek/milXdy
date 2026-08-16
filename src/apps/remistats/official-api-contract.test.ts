@@ -8,6 +8,7 @@ const remiStatsCss = readFileSync(new URL("./remistats.css", import.meta.url), "
 const chatContent = readFileSync(new URL("../reminet-chat/content.ts", import.meta.url), "utf8");
 const beetolBackground = readFileSync(new URL("../beetol/background.js", import.meta.url), "utf8");
 const popup = readFileSync(new URL("../../extension/popup/index.ts", import.meta.url), "utf8");
+const contentRuntime = readFileSync(new URL("../../platform/runtime/content-runtime.ts", import.meta.url), "utf8");
 
 describe("official RemiStats UI and legacy boundaries", () => {
   it("does not assume a fixed 24-hour poke cooldown in either consumer", () => {
@@ -64,6 +65,23 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("const username = cleanRemiliaUsername(button.dataset.reminetUsername || badge?.dataset.reminetUsername)");
     expect(remiStatsContent).not.toContain("badge?.dataset.reminetUsername || profileUsernameFromUrl()");
     expect(remiStatsContent).toContain("const confirmedPokeUsername = cleanRemiliaUsername(pokeTargetUsername)");
+  });
+
+  it("exposes one sanitized built-path checkpoint without identity or auth fields", () => {
+    expect(remiStatsContent).toContain("recordRuntimePhase('activation', 'module-started')");
+    expect(remiStatsContent).toContain("'directory-requested'");
+    expect(remiStatsContent).toContain("shouldForceExactDirectoryProfileRetry(response)");
+    expect(remiStatsContent).toContain("{ force: true, maxAgeMs: 0 }");
+    expect(remiStatsContent).toContain("reserveForcedProfileRoute(cleanXHandle)");
+    expect(remiStatsContent).toContain("'directory-sender-rejected'");
+    expect(remiStatsContent).toContain("recordRuntimePhase('profile', 'banner-control-mounted')");
+    expect(remiStatsContent).toContain("recordRuntimePhase('profile', 'banner-removed')");
+    expect(remiStatsContent).toContain("recordRuntimePhase('poke', 'control-mounted')");
+    expect(contentRuntime).toContain('key === "runtimePhase"');
+    expect(contentRuntime).toContain('phaseSummary.dataset.remistatsRuntimePhase = "true"');
+    expect(contentRuntime).toContain('error: "MESSAGE_POLICY_REJECTED"');
+    expect(contentRuntime).not.toContain("remistatsRuntimePhases.handle");
+    expect(contentRuntime).not.toContain("remistatsRuntimePhases.token");
   });
 
   it("renders a directory-confirmed trophy shelf when public profile data is empty", () => {

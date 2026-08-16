@@ -3,7 +3,7 @@ import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../platform/visua
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { legacyBeetleTrophyShelfUrl } from "../beetol/legacy-beetle-actions";
 import { exactXProfileHandle, findExactProfileBannerRoot } from "./profile-page";
-import { exactDirectoryProfileIdentity } from "./profile-identity";
+import { exactDirectoryProfileIdentity, shouldForceExactDirectoryProfileRetry } from "./profile-identity";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
@@ -244,8 +244,14 @@ const confirmedPokeTargets = new Map();
 const confirmedProfileIdentities = new Map();
 const profileIdentityPending = new Map();
 const profileIdentityLatestRequests = new Map();
+const profileIdentityForcedRouteKeys = new Set();
 let profileIdentityRequestGeneration = 0;
 let incomingPokeCache = null;
+let recordRemiStatsRuntimePhase = () => undefined;
+
+function recordRuntimePhase(channel, phase) {
+  recordRemiStatsRuntimePhase('runtimePhase', { channel, phase });
+}
 let visualTheme = DEFAULT_VISUAL_THEME;
 let likeAutoPokeEnabled = false;
 let pokeAutoLikeEnabled = false;
@@ -565,6 +571,8 @@ function cleanExactXHandle(value) {
 
 async function processPokeTargetBatch(xHandles) {
   const requested = [...new Set(xHandles.map((value) => cleanExactXHandle(value).toLowerCase()).filter(Boolean))];
+  if (!requested.length) return new Map();
+  recordRuntimePhase('poke', 'directory-requested');
   const requestGeneration = ++pokeTargetRequestGeneration;
   for (const xHandle of requested) {
     confirmedPokeTargets.delete(xHandle);
@@ -581,7 +589,18 @@ async function processPokeTargetBatch(xHandles) {
       type: 'remistats:resolvePokeTargets',
       xHandles: requested,
     }, 'remistats:resolvePokeTargets');
-    if (!response?.ok || !Array.isArray(response.targets)) return new Map();
+    if (!response) {
+      recordRuntimePhase('poke', 'directory-no-response');
+      return new Map();
+    }
+    if (!response.ok || !Array.isArray(response.targets)) {
+      recordRuntimePhase('poke', response.error === 'MESSAGE_POLICY_REJECTED'
+        ? 'directory-policy-rejected'
+        : response.error === 'UNSUPPORTED_SENDER'
+          ? 'directory-sender-rejected'
+          : 'directory-rejected');
+      return new Map();
+    }
     const targets = new Map();
     for (const target of response.targets) {
       const xHandle = cleanExactXHandle(target?.xHandle).toLowerCase();
@@ -589,8 +608,10 @@ async function processPokeTargetBatch(xHandles) {
       const confirmed = setConfirmedPokeTarget(xHandle, target?.remiliaUsername);
       if (confirmed) targets.set(confirmed.xHandle, confirmed);
     }
+    recordRuntimePhase('poke', targets.size ? 'directory-confirmed' : 'directory-no-match');
     return targets;
   } catch (error) {
+    recordRuntimePhase('poke', 'directory-no-response');
     if (!/extension context/i.test(String(error?.message || error))) {
       console.debug('RemiStats Poke target lookup skipped:', error.message);
     }
@@ -630,7 +651,10 @@ async function fetchProfileIdentity(xHandle) {
   const cleanXHandle = cleanExactXHandle(xHandle).toLowerCase();
   if (!cleanXHandle) return null;
   const cachedUsername = confirmedProfileIdentities.get(cleanXHandle);
-  if (cachedUsername) return { xHandle: cleanXHandle, remiliaUsername: cachedUsername };
+  if (cachedUsername) {
+    recordRuntimePhase('profile', 'directory-confirmed');
+    return { xHandle: cleanXHandle, remiliaUsername: cachedUsername };
+  }
   if (profileIdentityPending.has(cleanXHandle)) return profileIdentityPending.get(cleanXHandle);
 
   const requestGeneration = ++profileIdentityRequestGeneration;
@@ -645,18 +669,23 @@ async function fetchProfileIdentity(xHandle) {
   let pending;
   pending = (async () => {
     try {
-      const response = await runtimeSendMessage({
-        type: 'reminetIdentity:resolve',
-        identifiers: [{ type: 'x_handle', value: cleanXHandle }],
-      }, 'reminetIdentity:resolve');
+      let forcedAttempted = false;
+      let response = await requestProfileDirectoryIdentity(cleanXHandle, false);
       if (profileIdentityLatestRequests.get(cleanXHandle) !== requestGeneration) return null;
-      const identity = exactDirectoryProfileIdentity(response, cleanXHandle);
-      if (!identity) {
-        confirmedProfileIdentities.delete(cleanXHandle);
-        return null;
+      if (
+        shouldForceExactDirectoryProfileRetry(response)
+        && reserveForcedProfileRoute(cleanXHandle)
+      ) {
+        recordRuntimePhase('profile', 'directory-cached-negative');
+        forcedAttempted = true;
+        response = await requestProfileDirectoryIdentity(cleanXHandle, true);
+        if (profileIdentityLatestRequests.get(cleanXHandle) !== requestGeneration) return null;
       }
+      const identity = exactProfileIdentityFromDirectoryResponse(response, cleanXHandle, forcedAttempted);
+      if (!identity) return null;
       return setConfirmedProfileIdentity(identity.xHandle, identity.remiliaUsername);
     } catch (error) {
+      recordRuntimePhase('profile', 'directory-no-response');
       if (!/extension context/i.test(String(error?.message || error))) {
         console.debug('RemiStats profile identity lookup skipped:', error.message);
       }
@@ -667,6 +696,64 @@ async function fetchProfileIdentity(xHandle) {
   })();
   profileIdentityPending.set(cleanXHandle, pending);
   return pending;
+}
+
+async function requestProfileDirectoryIdentity(cleanXHandle, force) {
+  recordRuntimePhase('profile', force ? 'directory-forced-requested' : 'directory-requested');
+  const response = await runtimeSendMessage({
+    type: 'reminetIdentity:resolve',
+    identifiers: [{ type: 'x_handle', value: cleanXHandle }],
+    ...(force ? { force: true, maxAgeMs: 0 } : {}),
+  }, 'reminetIdentity:resolve');
+  return response;
+}
+
+function exactProfileIdentityFromDirectoryResponse(response, cleanXHandle, forced) {
+  const prefix = forced ? 'directory-forced' : 'directory';
+  if (!response) {
+    recordRuntimePhase('profile', `${prefix}-no-response`);
+    return null;
+  }
+  if (!response.ok) {
+    recordRuntimePhase('profile', response.error === 'MESSAGE_POLICY_REJECTED'
+      ? 'directory-policy-rejected'
+      : response.error === 'UNSUPPORTED_SENDER'
+        ? 'directory-sender-rejected'
+        : forced ? 'directory-forced-rejected' : 'directory-rejected');
+    return null;
+  }
+  if (!Array.isArray(response.results) || response.results.length !== 1) {
+    recordRuntimePhase('profile', `${prefix}-result-mismatch`);
+    return null;
+  }
+  if (response.results[0]?.status === 'error') {
+    recordRuntimePhase('profile', forced ? 'directory-forced-rejected' : 'directory-rejected');
+    return null;
+  }
+  if (response.results[0]?.status === 'not_found') {
+    recordRuntimePhase('profile', forced ? 'directory-forced-not-found' : 'directory-not-found');
+    return null;
+  }
+  const identity = exactDirectoryProfileIdentity(response, cleanXHandle);
+  if (!identity) {
+    recordRuntimePhase('profile', `${prefix}-result-mismatch`);
+    confirmedProfileIdentities.delete(cleanXHandle);
+    return null;
+  }
+  recordRuntimePhase('profile', forced ? 'directory-forced-confirmed' : 'directory-confirmed');
+  return identity;
+}
+
+function reserveForcedProfileRoute(cleanXHandle) {
+  const key = `${window.location.pathname.toLowerCase()}#${cleanXHandle}`;
+  if (profileIdentityForcedRouteKeys.has(key)) return false;
+  profileIdentityForcedRouteKeys.add(key);
+  while (profileIdentityForcedRouteKeys.size > 100) {
+    const oldest = profileIdentityForcedRouteKeys.values().next().value;
+    if (oldest === undefined) break;
+    profileIdentityForcedRouteKeys.delete(oldest);
+  }
+  return true;
 }
 
 // Fetch user score with batching
@@ -1035,6 +1122,7 @@ function fillActionPokeSlot(group, username, xHandle = '') {
   group.removeAttribute('aria-hidden');
   group.dataset.reminetUsername = clean;
   group.appendChild(pokeButton);
+  recordRuntimePhase('poke', 'control-mounted');
   void updateIncomingPokeFlag(group, clean);
 }
 
@@ -1757,6 +1845,7 @@ function clearAllPokeCountdowns() {
   profileIdentityRequestGeneration += 1;
   profileIdentityPending.clear();
   profileIdentityLatestRequests.clear();
+  profileIdentityForcedRouteKeys.clear();
   pokeTargetRequestGeneration += 1;
   pokeTargetLatestRequests.clear();
   pokeTargetBatchQueue.clear();
@@ -2576,6 +2665,7 @@ let profileTrophyRequestGeneration = 0;
 async function reconcileProfileTrophy(xHandleInput = profileUsernameFromUrl(), profilePath = window.location.pathname) {
   const cleanXHandle = exactXProfileHandle(xHandleInput);
   if (!cleanXHandle || exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle) return;
+  recordRuntimePhase('profile', 'route-observed');
   const reconcileGeneration = ++profileTrophyReconcileGeneration;
   const identity = await fetchProfileIdentity(cleanXHandle);
   if (
@@ -2631,19 +2721,28 @@ async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath)
   const cleanXHandle = cleanExactXHandle(xHandle);
   if (!clean || !cleanXHandle || !isConfirmedProfileIdentity(clean, cleanXHandle)) return;
   const requestGeneration = ++profileTrophyRequestGeneration;
+  recordRuntimePhase('profile', 'banner-waiting');
 
   await idle();
 
   if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
   const root = await waitForProfileBannerRoot(requestGeneration, profilePath, clean, cleanXHandle);
-  if (!root) return;
+  if (!root) {
+    recordRuntimePhase('profile', 'banner-root-missing');
+    return;
+  }
 
   if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
   root.style.overflow = 'hidden';
   ensureBannerCycleButton(root);
+  recordRuntimePhase('profile', 'banner-control-mounted');
 
   const key = clean.toLowerCase();
-  if (root.dataset.milxdyTrophyBannerUser === key && root.dataset.milxdyTrophyBannerState === 'ready') return;
+  if (root.dataset.milxdyTrophyBannerUser === key && root.dataset.milxdyTrophyBannerState === 'ready') {
+    recordRuntimePhase('profile', 'banner-ready');
+    verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle);
+    return;
+  }
   if (root.dataset.milxdyTrophyBannerUser !== key) {
     clearTrophyBannerOverlay(root);
   }
@@ -2654,9 +2753,11 @@ async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath)
     const bannerUrl = await renderTrophyBanner(clean);
     if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
     if (!bannerUrl) {
+      recordRuntimePhase('profile', 'banner-empty');
       root.dataset.milxdyTrophyBannerState = 'empty';
       clearTrophyBannerOverlay(root);
       root.dataset.milxdyBannerMode = 'original';
+      verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle, 'banner-empty');
       return;
     }
 
@@ -2665,12 +2766,28 @@ async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath)
     clearBannerNftLabel(root);
     root.dataset.milxdyBannerMode = 'shelf';
     root.dataset.milxdyTrophyBannerState = 'ready';
+    recordRuntimePhase('profile', 'banner-ready');
+    verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle);
   } catch (error) {
     if (profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) {
       root.dataset.milxdyTrophyBannerState = 'error';
+      recordRuntimePhase('profile', 'banner-error');
     }
     console.debug('RemiStats trophy banner skipped:', error);
   }
+}
+
+function verifyProfileTrophyMount(root, requestGeneration, profilePath, remiliaUsername, xHandle, stablePhase = 'banner-ready') {
+  runtimeScheduler.timeout(() => {
+    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)) return;
+    const currentRoot = findProfileBannerRoot(xHandle);
+    const control = root.querySelector?.(':scope > .milxdy-banner-cycle-button');
+    if (!root.isConnected || currentRoot !== root || !control?.isConnected) {
+      recordRuntimePhase('profile', 'banner-removed');
+      return;
+    }
+    recordRuntimePhase('profile', stablePhase);
+  }, 1200);
 }
 
 // Track which profiles have been processed
@@ -3094,10 +3211,12 @@ export function boot(context = {}) {
   runtimeScheduleScan = context.scheduleScan || runtimeScheduleScan;
   runtimeScheduler = context.scheduler || runtimeScheduler;
   runtimeSendMessage = context.sendMessage || unavailableRuntimeSendMessage;
+  recordRemiStatsRuntimePhase = context.recordDiagnostic || (() => undefined);
   addRuntimeDisposable = context.addDisposable || (() => undefined);
   lifecycleSignal = context.signal || null;
   if (booted) return;
   booted = true;
+  recordRuntimePhase('activation', 'module-started');
   const bootSignal = lifecycleSignal;
   bootSignal?.addEventListener?.('abort', disable, { once: true });
   addRuntimeDisposable(() => bootSignal?.removeEventListener?.('abort', disable));
@@ -3115,14 +3234,18 @@ function init() {
     if (!lifecycleActive()) return;
     remistatsEnabled = settings['milxdy.remistats.enabled'] !== false;
     if (remistatsEnabled) {
+      recordRuntimePhase('activation', 'feature-enabled');
       runtimeScheduleScan();
       scheduleSurfaceReconciliation();
       void reconcileProfileTrophy();
       insertProfileBadge();
       scheduleGroupChatAvatars();
     } else {
+      recordRuntimePhase('activation', 'feature-disabled');
       clearRemiStatsBadges();
     }
+  }).catch(() => {
+    recordRuntimePhase('activation', 'initialization-failed');
   });
 
   const storageListener = (changes, area) => {
@@ -3145,12 +3268,14 @@ function init() {
     if (changes['milxdy.remistats.enabled']) {
       remistatsEnabled = changes['milxdy.remistats.enabled'].newValue !== false;
       if (remistatsEnabled) {
+        recordRuntimePhase('activation', 'feature-enabled');
         runtimeScheduleScan();
         scheduleSurfaceReconciliation();
         void reconcileProfileTrophy();
         insertProfileBadge();
         scheduleGroupChatAvatars();
       } else {
+        recordRuntimePhase('activation', 'feature-disabled');
         clearRemiStatsBadges();
       }
       return;
@@ -3212,6 +3337,7 @@ export function onRouteChange(route) {
 
 export function disable() {
   remistatsEnabled = false;
+  recordRuntimePhase('activation', 'feature-disabled');
   clearAllPokeCountdowns();
   if (tooltipHideTimer) {
     window.clearTimeout(tooltipHideTimer);
@@ -3243,6 +3369,7 @@ export function dispose() {
   reconciliationFollowUpDelay = 900;
   addRuntimeDisposable = () => undefined;
   runtimeSendMessage = unavailableRuntimeSendMessage;
+  recordRemiStatsRuntimePhase = () => undefined;
   lifecycleSignal = null;
   booted = false;
 }

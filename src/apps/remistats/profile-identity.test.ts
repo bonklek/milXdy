@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { exactDirectoryProfileIdentity } from "./profile-identity";
+import { exactDirectoryProfileIdentity, shouldForceExactDirectoryProfileRetry } from "./profile-identity";
 
 function resolved(profile: unknown = null) {
   return {
@@ -32,5 +32,21 @@ describe("exact directory profile identity", () => {
     ["mismatched profile Remilia identity", resolved({ xHandle: "MiladyBonkle", remiliaUsername: "Other.Remilia" })],
   ])("fails closed for %s", (_label, response) => {
     expect(exactDirectoryProfileIdentity(response, "MiladyBonkle")).toBeNull();
+  });
+
+  it("forces only a cached exact negative or error and never a fresh miss or resolved identity", () => {
+    expect(shouldForceExactDirectoryProfileRetry({
+      ok: true,
+      results: [{ status: "not_found", cached: true }],
+    })).toBe(true);
+    expect(shouldForceExactDirectoryProfileRetry({
+      ok: true,
+      results: [{ status: "error", cached: true }],
+    })).toBe(true);
+    expect(shouldForceExactDirectoryProfileRetry({
+      ok: true,
+      results: [{ status: "not_found", cached: false }],
+    })).toBe(false);
+    expect(shouldForceExactDirectoryProfileRetry(resolved(null))).toBe(false);
   });
 });

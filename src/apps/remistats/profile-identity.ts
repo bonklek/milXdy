@@ -3,6 +3,14 @@ export type ExactDirectoryProfileIdentity = {
   remiliaUsername: string;
 };
 
+export function shouldForceExactDirectoryProfileRetry(response: unknown): boolean {
+  if (!isRecord(response) || response.ok !== true || !Array.isArray(response.results) || response.results.length !== 1) return false;
+  const result = response.results[0];
+  return isRecord(result)
+    && result.cached === true
+    && (result.status === "not_found" || result.status === "error");
+}
+
 export function exactDirectoryProfileIdentity(
   response: unknown,
   expectedXHandleInput: unknown,
