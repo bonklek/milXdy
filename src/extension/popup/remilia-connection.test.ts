@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
   REMILIA_CONNECTION_UI_VERSION,
+  instantBeetleResultsAvailability,
   normalizeRemiliaAuthResponse,
   normalizeRemiliaConnectionUiState,
   remiliaConnectionView,
@@ -12,6 +13,38 @@ import {
 } from "./remilia-connection";
 
 describe("Remilia connection UI contract", () => {
+  it("fails the instant Beetle setting closed until the connector is active", () => {
+    const statuses = ["disconnected", "unsupported", "error", "offline"] as const;
+    for (const phase of statuses) {
+      const status = normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase } });
+      expect(instantBeetleResultsAvailability(status)).toMatchObject({ active: false });
+    }
+
+    const connected = normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase: "connected" } });
+    expect(instantBeetleResultsAvailability(connected)).toEqual({
+      active: true,
+      help: "Connected. Instant Claim/Hunt results are available on RemiliaNET.",
+    });
+    expect([
+      normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase: "disconnected" } }),
+      connected,
+      normalizeRemiliaAuthResponse({ authStateVersion: 1, status: { phase: "expired" } }),
+      connected,
+    ].map((status) => instantBeetleResultsAvailability(status).active)).toEqual([false, true, false, true]);
+  });
+
+  it("ships the instant Beetle setting disabled and accessibly described before status resolves", () => {
+    const html = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.html"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "src/extension/popup/index.ts"), "utf8");
+    expect(html).toContain('id="beetleInstantResultsSetting" data-connector-available="false" aria-disabled="true"');
+    expect(html).toContain('data-control="reminet.beetleInstantResults" aria-describedby="beetleInstantResultsHelp" disabled');
+    expect(html).toContain('id="beetleInstantResultsHelp" class="setting-availability-help" role="status" aria-live="polite"');
+    expect(source).toContain("instantResultsControl!.disabled = !instantResultsAvailability.active");
+    expect(source).toContain('setAttribute("aria-disabled", String(!instantResultsAvailability.active))');
+    expect(source).toContain("const statusTimer = setInterval");
+    expect(source).not.toContain('chrome.storage.sync.set({ [BEETLE_INSTANT_RESULTS_KEY]');
+  });
+
   it("renders migration as an explicit deletion step without treating legacy state as connected", () => {
     const status = normalizeRemiliaAuthResponse({
       ok: true,

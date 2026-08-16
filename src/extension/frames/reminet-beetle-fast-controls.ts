@@ -1,5 +1,11 @@
 export type NativeBeetleAction = "catchBeetle" | "beetleHunt";
 
+type TokenFreeBeetleAuthStatus = {
+  ok?: unknown;
+  signedIn?: unknown;
+  method?: unknown;
+};
+
 const NATIVE_BEETLE_ACTION_SELECTOR =
   ".beetle-catch-module__catch-button, .beetle-catch-module__hunt-button";
 
@@ -23,6 +29,16 @@ export function nativeBeetleActionFor(target: EventTarget | null): NativeBeetleA
   const button = nativeBeetleActionButtonFor(target);
   if (!button) return null;
   return button.classList.contains("beetle-catch-module__catch-button") ? "catchBeetle" : "beetleHunt";
+}
+
+export function beetleConnectorIsActive(response: unknown): boolean {
+  if (!response || typeof response !== "object") return false;
+  const status = response as TokenFreeBeetleAuthStatus;
+  return status.ok === true && status.signedIn === true && status.method === "oidc";
+}
+
+export function instantBeetleResultsCanRun(preferred: boolean, response: unknown): boolean {
+  return preferred && beetleConnectorIsActive(response);
 }
 
 export function createBeetleReducedMotionCss(attribute: string): string {

@@ -110,6 +110,11 @@ export type RemiliaConnectionView = {
   showRevoke: boolean;
 };
 
+export type InstantBeetleResultsAvailability = {
+  active: boolean;
+  help: string;
+};
+
 const KNOWN_PHASES = new Set<RemiliaAuthPhase>([
   "migration-required",
   "disconnected",
@@ -250,6 +255,19 @@ export function remiliaConnectionView(status: RemiliaAuthStatus): RemiliaConnect
     showReconnect: reconnect,
     showDisconnect: connected,
     showRevoke: connected || reconnect,
+  };
+}
+
+export function instantBeetleResultsAvailability(status: RemiliaAuthStatus): InstantBeetleResultsAvailability {
+  if (status.phase === "connected") {
+    return {
+      active: true,
+      help: "Connected. Instant Claim/Hunt results are available on RemiliaNET.",
+    };
+  }
+  return {
+    active: false,
+    help: "Connect RemiliaNET in this milXdy popup below to use instant results. Your saved choice returns after reconnecting.",
   };
 }
 

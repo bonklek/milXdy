@@ -85,6 +85,13 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(bridge, "createBeetleReducedMotionCss", "RemiNet bridge must use the completion-safe Beetle motion policy");
   assertIncludes(beetleFastControls, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
   assertIncludes(beetleFastControls, 'candidate.nodeType === 1 && typeof candidate.closest === "function"', "RemiNet fast Beetle actions must resolve cross-realm click targets without instanceof");
+  assertIncludes(beetleFastControls, 'status.ok === true && status.signedIn === true && status.method === "oidc"', "RemiNet instant Beetle results must require token-free connected OIDC status");
+  assertIncludes(bridge, '{ type: "beetol:authStatus" }', "RemiNet instant Beetle results must poll only the token-free Beetol connector status");
+  assertIncludes(bridge, "preferred && connectorActive", "RemiNet instant Beetle results must combine stored preference with live connector status");
+  assertIncludes(bridge, "BEETLE_CONNECTOR_STATUS_POLL_MS", "RemiNet instant Beetle results must react to live disconnect and reconnect");
+  assertNotIncludes(bridge, "remilia-auth:", "RemiNet content must not call popup-only Remilia auth operations");
+  const instantAction = functionBody(bridge, "runInstantBeetleAction");
+  assertOrder(instantAction, '{ type: "beetol:authStatus" }', '{ type: "beetol:action", action }', "RemiNet instant Beetle actions must recheck connector status before dispatch");
   assertIncludes(bridge, "!event.isTrusted", "RemiNet fast Beetle actions must remain limited to trusted user clicks");
   assertNotIncludes(bridge, "event.target instanceof Element", "RemiNet fast Beetle actions must not discard isolated-world click targets");
   const animationNoneSelectors = Array.from(beetleFastControls.matchAll(/([^{}]+)\{[^{}]*animation:\s*none/gi))

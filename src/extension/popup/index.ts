@@ -52,6 +52,7 @@ import {
   REMILIA_CONNECTION_UI_VERSION,
   REMILIA_CONSENT_VERSION,
   REMILIA_MIGRATION_VERSION,
+  instantBeetleResultsAvailability,
   normalizeRemiliaAuthResponse,
   normalizeRemiliaConnectionUiState,
   remiliaConnectionView,
@@ -2734,9 +2735,13 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
   const pokeDiagnostic = document.getElementById("beetolPokeDiagnostic");
   const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
   const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
+  const instantResultsSetting = document.getElementById("beetleInstantResultsSetting");
+  const instantResultsControl = document.querySelector<HTMLInputElement>('[data-control="reminet.beetleInstantResults"]');
+  const instantResultsHelp = document.getElementById("beetleInstantResultsHelp");
   const required = [
     root, migration, consent, statusTitle, statusDetail, identity, error, scopeList, connect, reconnect,
     disconnect, revoke, completeMigration, rollback, message, pokeDiagnostic, color, mode,
+    instantResultsSetting, instantResultsControl, instantResultsHelp,
   ];
   if (required.some((node) => !node)) return;
 
@@ -2761,6 +2766,7 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
 
   const renderStatus = async (authStatus: RemiliaAuthStatus, announceError = false): Promise<void> => {
     const view = remiliaConnectionView(authStatus);
+    const instantResultsAvailability = instantBeetleResultsAvailability(authStatus);
     root!.dataset.phase = view.phase;
     root!.dataset.tone = view.tone;
     statusTitle!.textContent = view.title;
@@ -2771,6 +2777,10 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
     reconnect!.hidden = !view.showReconnect;
     disconnect!.hidden = !view.showDisconnect;
     revoke!.hidden = !view.showRevoke;
+    instantResultsControl!.disabled = !instantResultsAvailability.active;
+    instantResultsSetting!.dataset.connectorAvailable = String(instantResultsAvailability.active);
+    instantResultsSetting!.setAttribute("aria-disabled", String(!instantResultsAvailability.active));
+    instantResultsHelp!.textContent = instantResultsAvailability.help;
 
     const connectedIdentity = authStatus.phase === "connected" ? remiliaIdentityLabel(authStatus.identity) : "";
     identity!.textContent = connectedIdentity;
@@ -2919,6 +2929,10 @@ async function setupRemiliaConnectionPanel(): Promise<void> {
   });
 
   await fetchStatus();
+  const statusTimer = setInterval(() => {
+    void fetchStatus();
+  }, 2_000);
+  addEventListener("pagehide", () => clearInterval(statusTimer), { once: true });
 }
 
 async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {
