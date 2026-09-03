@@ -1,6 +1,6 @@
 # Remilia Maker Pet Import
 
-> Planned for 0.2.5. This adapter is not part of the 0.2.4 shipped feature set.
+The adapter shipped with milXdy 0.2.5 as a non-web-accessible user download.
 
 `remilia-maker-pet-import` is the companion Codex adapter for Pets Maker's
 `remilia-pet-request.zip`. It validates the two-file bundle, selects the

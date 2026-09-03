@@ -44,8 +44,12 @@ receive X draft text, inspect the Maker page, or post the result.
 - Maker handoffs send only user-reviewed declared caption fields.
 - Every composer, reply, attachment, and maker action begins with an explicit user control.
 
-Publishing media to Remibooru is planned for 0.2.5 and is not part of the
-0.2.4 Post-Factory surface.
+milXdy 0.2.5 added an explicit **Publish to Remibooru** flow for a visible
+X-hosted image selected from the context menu. The host keeps the selected
+image behind a one-use, short-lived opaque handle; Post-Factory receives no
+image URL or bytes. Review the public destination and tags before publishing.
+If Remibooru requires browser verification or rejects direct contribution, use
+the native uploader fallback instead; milXdy does not bypass verification.
 
 See [Privacy and permissions](../getting-started/PRIVACY_AND_PERMISSIONS.md)
 for the complete remote-service and storage summary.

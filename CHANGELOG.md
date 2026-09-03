@@ -2,32 +2,46 @@
 
 ## 0.2.5
 
-Status: candidate; integrated browser acceptance is pending.
+Status: released.
 
 See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 
-- Initializes the 0.2.5 release line and App SDK declarations from the clean post-0.2.4 `main` baseline.
-- Reserves Reader Voice as the public theme while candidate issue scope, acceptance criteria, and manual QA remain subject to maintainer approval.
-- Does not represent any deferred 0.2.4 issue or historical release-branch implementation as shipped or accepted.
-- Updates the Share Kit candidate to use exact-pinned Pretext 0.0.8 for Unicode-aware local Canvas layout across post, quoted-post, and link-card text, with a formatted-run seam for the separately owned rich-text editor.
-- Adds local Share Kit post-text editing with bullets, bold, italic, strikethrough, combined styles, clear/reset controls, accessible labels and shortcuts, and reviewed preview/export parity.
-- Replaces RemiliaNET browser-session/cookie adoption with an explicit official
-  Remilia Login public-client PKCE flow and background-only credential custody.
-- Migrates profiles, directory resolution, stats, notifications, pokes, Beetle
-  reads, and global-chat REST behavior to typed, scope-gated API-v1 services.
-- Separates temporary RemiNet realtime/media and Beetle-action adapters from
-  official coverage and records exact removal conditions.
-- Adds a host-owned Remilia App SDK capability broker that exposes normalized
-  operations, never tokens, cookies, OAuth, or authenticated arbitrary fetch.
-- Adds explicit existing-installation migration, connection/scope/revoke UI,
-  complete Chromium/Firefox acceptance evidence, and deterministic artifact
-  leakage scans to the release gates.
-- Retains Reader Voice and the other accepted 0.2.5 work under the Speaking
-  Special release theme; no candidate item is represented as shipped before
-  integrated manual acceptance.
-- Records exact candidate package/archive/pet hashes, public-history exception,
-  DM Web Speech privacy prerequisite, and unpublished X/screenshot briefs
-  without marking pending browser observations as accepted.
+- Replaced RemiliaNET browser-session and cookie adoption with explicit Remilia
+  Login using Authorization Code with PKCE, background-only credential custody,
+  a one-time migration prompt, and visible connect, reconnect, disconnect, and
+  revoke controls.
+- Moved profile and directory resolution, RemiStats, notifications, pokes,
+  Beetle reads, and global RemiNet Chat history and text replies to typed,
+  scope-gated Remilia API v1 services.
+- Kept temporary RemiNet realtime/media and Beetle action adapters separate
+  from official coverage, with documented removal conditions and no hidden
+  browser-session fallback.
+- Added Reader Voice support for native X Articles and browser-local DM read
+  aloud with explicit privacy isolation, transient message custody, and cleanup
+  across route and conversation changes.
+- Added review-first long-form audio export through the external Post-reading
+  package, including editable text and metadata, local-loopback transport,
+  cancellation, labeled format fallbacks, and a JSON sidecar.
+- Added Unicode-aware Share Kit layout with exact-pinned Pretext 0.0.8 and local
+  rich-text editing for bullets, bold, italic, strikethrough, combined styles,
+  accessible controls, and same-blob preview/copy/download/RemiNet parity.
+- Added explicit Remibooru media contribution from Post-Factory with reviewed
+  tags, one-use short-lived host media custody, clear public-destination copy,
+  and native-uploader fallback.
+- Added the multi-site runtime and reviewed page-context actions while keeping
+  site, sender, frame, host, and privileged-operation boundaries fail closed.
+- Completed the Remilia Maker pet-import adapter and deterministic pipeline QA
+  for Milady, Remilio, Bonkler, and Kagami templates, including cache/resume and
+  recovery checks in the packaged skill archive.
+- Added a host-owned App SDK capability broker and reviewed Post-Factory,
+  Post-reading, and Share Kit composition without exposing OAuth, tokens,
+  cookies, raw private responses, or authenticated arbitrary fetch to packages.
+- Hardened authenticated transports with first-401-only retry, redirect
+  rejection, no-referrer behavior, exact final-URL checks, and explicit Firefox
+  keyless compatibility behavior.
+- Added deterministic release archives, exact checksums, reproducibility and
+  package-trust gates, migration evidence, secret/machine-path scans, and
+  source-and-built regression coverage for retired session-login paths.
 
 ## 0.2.4
 

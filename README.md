@@ -8,17 +8,19 @@ milXdy is a beta Manifest V3 browser extension for X/Twitter. It combines severa
 
 This project is intended for GitHub beta distribution and local browser testing. It is not currently packaged through the Chrome Web Store or Firefox Add-ons.
 
-The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
+The current release is **0.2.5 — Speaking Special**. See the [0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 
 ## Features
 
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
+- **Reader Voice and audio export**: native X Article reading, browser-local DM read aloud, and review-first long-form audio export through the external Post-reading package.
 - **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
 - **Post-Factory**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that can fetch public Maker traits by family and NFT number, then turns an explicitly selected Maker PNG and reviewed traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
+- **Remilia account connection**: explicit Remilia Login in the Chromium beta, background-only credentials, and typed API-v1 access for supported account, stats, poke, Beetle, and chat features. Firefox remains keyless and fails closed for authenticated features.
 - **Beetol Game**: official Beetle state/card reads plus clearly separated
   temporary legacy game actions, using the shared Remilia account connection.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
@@ -28,7 +30,7 @@ The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes]
 
 ## Quick Install
 
-Quickest Chrome install: [download `milXdy-0.2.4-chromium.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
+Quickest Chrome install: [download `milXdy-0.2.5-chromium.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install decisions.
 

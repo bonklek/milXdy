@@ -1,8 +1,8 @@
 # Custom Pet pipeline provenance
 
-> The #192/#193 adapter, template, envelope-QA, and cache/resume material below
-> is scheduled for 0.2.5. In 0.2.4, Pets Maker ships only the versioned request
-> bundle and explicit local Codex handoff covered by #190/#191.
+The #192/#193 adapter, template, envelope-QA, and cache/resume material below
+shipped in 0.2.5. The earlier 0.2.4 release contained only the versioned request
+bundle and explicit local Codex handoff covered by #190/#191.
 
 This record distinguishes copied material from independently implemented work. It contains no user image, private prompt, or machine-specific path.
 
