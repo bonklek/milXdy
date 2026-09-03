@@ -46,6 +46,49 @@ try {
     "--acknowledge-package-consent",
     "--acknowledge-first-party-replacement",
   ], 0, "first-party-id-replacement");
+
+  runCase("reviewed Post-Factory Remilia capability passes exact declarations and consent", [
+    "--check",
+    "--json",
+    "--package=examples/packages/local-dev/tweet-composer-kit",
+    "--acknowledge-package-consent",
+  ], 0, "Maintainer-approved default-on reviewed Post-Factory composition");
+
+  const copiedDefaultOnPackage = await copyLocalPackage("tweet-composer-kit", "copied-default-on-post-factory");
+  await runRejectedComposerCaseWithoutPlan("copied Post-Factory cannot inherit default-on approval", [
+    `--package=${copiedDefaultOnPackage}`,
+    "--acknowledge-package-consent",
+  ], "does not match policy root");
+
+  const remiliaScopeDriftPackage = await copyLocalPackage("tweet-composer-kit", "remilia-scope-drift");
+  const remiliaScopeDriftManifest = await readManifest(remiliaScopeDriftPackage);
+  remiliaScopeDriftManifest.remiliaCapabilities[0].scopes = ["remilia:directory.read"];
+  await writeManifest(remiliaScopeDriftPackage, remiliaScopeDriftManifest);
+  runCase("Remilia capability scope drift fails closed", [
+    "--check",
+    `--package=${remiliaScopeDriftPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "must declare its exact official scopes");
+
+  const unreviewedRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "unreviewed-remilia-capability");
+  const unreviewedRemiliaManifest = await readManifest(unreviewedRemiliaPackage);
+  unreviewedRemiliaManifest.review = { status: "local", notes: ["Synthetic unreviewed Remilia capability fixture."] };
+  await writeManifest(unreviewedRemiliaPackage, unreviewedRemiliaManifest);
+  runCase("unreviewed Remilia capability package fails closed", [
+    "--check",
+    `--package=${unreviewedRemiliaPackage}`,
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ], 1, "Remilia capabilities require review.status reviewed");
+
+  const directFetchRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "direct-fetch-remilia-capability");
+  const directFetchEntry = path.join(directFetchRemiliaPackage, "dist", "content.js");
+  await writeFile(directFetchEntry, `${await readFile(directFetchEntry, "utf8")}\nexport const forbiddenDirectFetch = () => fetch("https://www.remilia.net/api/v1/me");\n`);
+  runCase("Remilia capability package cannot add direct authenticated or arbitrary fetch", [
+    "--check",
+    `--package=${directFetchRemiliaPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "direct-fetch");
   runCase("composer handoff includes required local-app build acknowledgements", [
     "--packages-dir=examples/packages/first-party-replacements",
     "--acknowledge-package-consent",
@@ -822,7 +865,7 @@ try {
   const absolutePlan = await composeBuildPlan("absolute-package-plan", { packagePath: path.resolve("examples/packages/first-party-replacements/tweetPng") });
   assertGeneratedCopyTargets(absolutePlan);
   assertGeneratedRuntimeMetadata(absolutePlan);
-  if (path.isAbsolute(absolutePlan.packageSources[0].root)) {
+  if (absolutePlan && path.isAbsolute(absolutePlan.packageSources[0].root)) {
     fail("absolute package input should be recorded as a build-plan-safe relative root for workspace-contained packages");
   }
   await runBuildPlanCase("workspace absolute package input composes into a buildable relative plan", absolutePlan, (plan) => {

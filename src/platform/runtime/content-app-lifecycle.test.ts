@@ -3,6 +3,8 @@ import type { MilxdyContentAppContext, MilxdyContentAppModule, MilxdyRouteChange
 import { ContentAppLifecycleOwner, disableContentApp, disposeContentApp } from "./content-app-lifecycle";
 
 const ROUTE: MilxdyRouteChange = {
+  site: "x",
+  origin: "https://x.com",
   href: "https://x.com/home",
   pathname: "/home",
   previousHref: null,

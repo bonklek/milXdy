@@ -1,12 +1,18 @@
 import type { TwitterSurface, TwitterSurfaceKind } from "../scanner/twitter-scanner";
 import type { Disposable } from "../runtime/disposables";
 import type { AppStorageFacade } from "./app-storage";
+import type {
+  AppRemiliaCapabilityDeclaration,
+  RemiliaCapabilityBrokerResult,
+  RemiliaCapabilityOperation,
+  RemiliaCapabilityParams,
+} from "./remilia-capabilities";
 
 export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageChanges, AppStorageFacade } from "./app-storage";
 
 export type MilxdyAppId = string;
 
-export type MilxdyAppSurface = TwitterSurfaceKind | "route" | "overlayApp" | "composerAction" | "replyAction";
+export type MilxdyAppSurface = TwitterSurfaceKind | "document" | "route" | "overlayApp" | "composerAction" | "replyAction";
 export type AppCostLevel = "cheap" | "moderate" | "heavy";
 export type AppNetworkCost = "none" | "batched" | "eager";
 export type AppWorkerCost = "none" | "optional" | "heavy";
@@ -23,6 +29,8 @@ export type AppSiteId = "x" | "remiliaNet" | "remiliaWiki" | "miladychan";
 export type AppRouteMatchType = "exact" | "prefix";
 export type AppSiteIntegration = "contentScript" | "backgroundService" | "embeddedFrame" | "overlayApp";
 export type AppSitePresentation = "sideRailOverlay" | "hostRouteOverlay" | "userAction";
+export type AppSiteRuntimeMode = "fullRail" | "appLauncher" | "featureOnly" | "bridgeOnly";
+export type AppSiteFallbackMode = "nativeSite" | "externalPage" | "none";
 export type AppSettingStorageArea = "local" | "sync";
 export type AppSettingScope = "global" | "app" | "feature";
 export type AppSettingLocation = "appearance" | "appsAndFeatures" | "appSurface" | "advanced";
@@ -204,8 +212,20 @@ export type AppSiteScope = {
   integration: AppSiteIntegration;
   surfaces: MilxdyAppSurface[];
   routes?: AppRoutePattern[];
+  loadTriggers?: AppLoadTrigger[];
   presentation?: AppSitePresentation;
+  fallback?: {
+    mode: AppSiteFallbackMode;
+    url?: string;
+    note: string;
+  };
   notes?: string[];
+};
+
+export type MilxdyRuntimeSite = {
+  id: AppSiteId;
+  origin: string;
+  mode: AppSiteRuntimeMode;
 };
 
 export type MilxdyAppManifest = {
@@ -215,6 +235,7 @@ export type MilxdyAppManifest = {
   description: string;
   packageKind?: AppPackageKind;
   contentEntry: string;
+  pageContextActions?: AppPageContextAction[];
   available?: boolean;
   unavailableReason?: string;
   css?: Array<{ id: string; path: string }>;
@@ -231,6 +252,8 @@ export type MilxdyAppManifest = {
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
   remoteQueries?: AppRemoteQuery[];
+  /** Reviewed host-owned Remilia operations. Packages never receive credentials, URLs, or fetch. */
+  remiliaCapabilities?: AppRemiliaCapabilityDeclaration[];
   chrome?: {
     nativeStyle: AppChromeStyle;
     supportedStyles: AppChromeStyle[];
@@ -279,9 +302,38 @@ export type MilxdyAppManifest = {
   assets?: string[];
   requiredOutputs?: string[];
   hostAssetAccess?: string[];
-  localPackage?: Record<string, unknown>;
+  localPackage?: {
+    root?: string;
+    sourceType?: string;
+    reviewStatus?: MilxdyLocalPackageReviewStatus;
+    sourceVersion?: string;
+    packageSha256?: string;
+    contentSha256?: string;
+    manifestSha256?: string;
+    archiveSha256?: string;
+    packageConsentAcknowledged?: boolean;
+  };
   isEnabled: () => Promise<boolean>;
   setEnabled?: (enabled: boolean) => Promise<void>;
+};
+
+export type AppPageContextAction = {
+  id: string;
+  label: string;
+  entry: string;
+  documentUrlPatterns: Array<"http://*/*" | "https://*/*">;
+};
+
+export type MilxdyPageContextActionHost<TSync extends object = Record<string, unknown>> = {
+  appId: string;
+  actionId: string;
+  storage: {
+    sync: {
+      values: Partial<TSync>;
+      set(values: Partial<TSync>): Promise<void>;
+    };
+  };
+  sendMessage<T = unknown>(message: unknown, label?: string): Promise<T | null>;
 };
 
 export type MilxdyLocalPackageAsset = {
@@ -338,6 +390,7 @@ export type AppRuntimeScheduler = {
 
 export type MilxdyContentAppContext = {
   manifest: MilxdyAppManifest;
+  site: MilxdyRuntimeSite;
   signal: AbortSignal;
   requestSurfaceRescan: () => void;
   /** @deprecated Internal compatibility alias. External packages use requestSurfaceRescan. */
@@ -347,6 +400,12 @@ export type MilxdyContentAppContext = {
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
+  /** Host-filtered declarations; exact operation and scope checks run again in the background broker. */
+  remiliaCapabilities?: ReadonlyArray<AppRemiliaCapabilityDeclaration>;
+  invokeRemiliaCapability?: <Operation extends RemiliaCapabilityOperation>(
+    operation: Operation,
+    params: RemiliaCapabilityParams[Operation],
+  ) => Promise<RemiliaCapabilityBrokerResult>;
   recordDiagnostic: (key: string, value: unknown) => void;
   addDisposable: (disposable: Disposable) => void;
 };
@@ -364,8 +423,8 @@ export type MilxdyComposerActionContext = {
    * or bounded, explicit package caption fields; packages never receive X text.
    */
   externalHandoffs: ReadonlyArray<Pick<AppExternalHandoff, "id" | "label">>;
-  launchExternalHandoff: (id: string, options?: {
-    mode?: "captioned" | "randomMeme";
+  launchExternalHandoff: (id: string, options: {
+    mode: "captioned" | "randomMeme";
     captions?: { topText: string; bottomText: string };
   }) => Promise<{ ok: boolean; error?: string }>;
   /** Host-filtered, sanitized gallery services; no package fetch or raw URLs. */
@@ -434,10 +493,8 @@ export type MilxdyContextualPostActionContext = {
   signal: AbortSignal;
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
-  /** Retests the host-owned RemiNet browser session without reloading the page. */
+  /** Retests the host-owned RemiNet authorization without reloading the page. */
   probeRemiNetConnection: () => Promise<{ connected: boolean }>;
-  /** Opens the fixed RemiliaNET session page in an inactive tab. */
-  openRemiNetSession: () => Promise<{ ok: boolean; error?: string }>;
   /** Stages a reviewed PNG locally in RemiNet Chat. Upload still requires Send. */
   stageRemiNetChatPng: (input: {
     blob: Blob;
@@ -479,6 +536,8 @@ export type MilxdyContentAppModule = {
 };
 
 export type MilxdyRouteChange = {
+  site: AppSiteId;
+  origin: string;
   href: string;
   pathname: string;
   previousHref: string | null;

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "tweet-composer-kit",
+      "sourceType": "folder",
+      "root": "examples/packages/local-dev/tweet-composer-kit",
+      "packageSha256": "2497647e2a4717a2c0b7e7c79bde54eedf92f4e22376f242f96e873a8eb12abc",
+      "manifestSha256": "36f0330a1e91b52c6d5a4df0b744ee84c3d686b04f912bef357aa432eae0780a",
+      "reason": "Maintainer-approved default-on reviewed Post-Factory composition; package consent and all existing privilege gates remain required."
+    }
+  ]
+}

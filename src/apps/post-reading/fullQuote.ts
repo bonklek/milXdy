@@ -112,6 +112,8 @@ async function fetchText(url: string, signal: AbortSignal): Promise<string> {
 
   const response = await fetch(url, {
     credentials: "omit",
+    redirect: "error",
+    referrerPolicy: "no-referrer",
     signal,
   });
   if (!response.ok) throw new Error(`Text fetch failed: ${response.status}`);

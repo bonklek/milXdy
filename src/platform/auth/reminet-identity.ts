@@ -1,3 +1,18 @@
+import {
+  emptyReminetDirectoryCache,
+  normalizeReminetDirectoryCache,
+  pruneReminetDirectoryCache,
+  type ReminetDirectoryCache,
+  type ReminetDirectoryIdentifier,
+} from "./reminet-directory";
+
+export type ReminetIdentityProvenance = {
+  source: "remilia-api-v1" | "legacy" | "local";
+  endpoint: string;
+  observedAt: number;
+  identifier?: ReminetDirectoryIdentifier;
+};
+
 export type ReminetIdentityProfile = {
   xHandle: string | null;
   remiliaUsername: string | null;
@@ -17,6 +32,12 @@ export type ReminetIdentityProfile = {
   trophyShelves: unknown[] | null;
   allTrophies: unknown[] | null;
   connections: unknown[] | null;
+  friendsDisplayed: unknown[] | null;
+  viewerContext: Record<string, unknown> | null;
+  isAuthenticated: boolean | null;
+  isOwnProfile: boolean | null;
+  externalIdentifiers: ReminetDirectoryIdentifier[];
+  provenance: ReminetIdentityProvenance[];
   sources: string[];
   updatedAt: number;
 };
@@ -28,27 +49,49 @@ export type ReminetIdentityCacheEntry = {
 };
 
 export type ReminetIdentityCache = {
-  version: 2;
+  version: 3;
   records: Record<string, ReminetIdentityCacheEntry>;
   aliases: Record<string, string>;
+  directory: ReminetDirectoryCache;
+  publicProfileMisses: Record<string, { cachedAt: number; source: "remilia-api-v1:profile" }>;
 };
 
 export const REMINET_IDENTITY_CACHE_KEY = "milxdy.reminetIdentity.profileCache";
 export const REMINET_IDENTITY_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 export const REMINET_IDENTITY_CACHE_MAX_ENTRIES = 600;
+export const REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS = 15 * 60 * 1000;
+export const REMINET_PUBLIC_PROFILE_NEGATIVE_MAX_ENTRIES = 300;
 
 export function emptyReminetIdentityCache(): ReminetIdentityCache {
-  return { version: 2, records: {}, aliases: {} };
+  return {
+    version: 3,
+    records: {},
+    aliases: {},
+    directory: emptyReminetDirectoryCache(),
+    publicProfileMisses: {},
+  };
 }
 
 export function normalizeReminetIdentityCache(value: unknown): ReminetIdentityCache {
   if (!value || typeof value !== "object" || Array.isArray(value)) return emptyReminetIdentityCache();
   const raw = value as Record<string, unknown>;
-  if (raw.version === 2 && raw.records && typeof raw.records === "object" && raw.aliases && typeof raw.aliases === "object") {
+  if (raw.version === 3 && raw.records && typeof raw.records === "object" && raw.aliases && typeof raw.aliases === "object") {
     return {
-      version: 2,
+      version: 3,
       records: raw.records as Record<string, ReminetIdentityCacheEntry>,
       aliases: raw.aliases as Record<string, string>,
+      directory: normalizeReminetDirectoryCache(raw.directory),
+      publicProfileMisses: normalizePublicProfileMisses(raw.publicProfileMisses),
+    };
+  }
+
+  if (raw.version === 2 && raw.records && typeof raw.records === "object" && raw.aliases && typeof raw.aliases === "object") {
+    return {
+      version: 3,
+      records: raw.records as Record<string, ReminetIdentityCacheEntry>,
+      aliases: raw.aliases as Record<string, string>,
+      directory: emptyReminetDirectoryCache(),
+      publicProfileMisses: {},
     };
   }
 
@@ -84,10 +127,13 @@ export function rememberSharedIdentity(
     cachedAt?: number;
     publicProfileCachedAt?: number;
     aliases?: string[];
+    authoritativeAliases?: boolean;
   } = {},
 ): string {
   const aliasKeys = (options.aliases || []).filter(Boolean);
-  const existingCanonical = aliasKeys.map((alias) => cache.aliases[alias]).find(Boolean);
+  const existingCanonical = options.authoritativeAliases === true
+    ? undefined
+    : aliasKeys.map((alias) => cache.aliases[alias]).find(Boolean);
   const canonical = existingCanonical || canonicalIdentityKey(profile, aliasKeys);
   const previous = cache.records[canonical];
   cache.records[canonical] = {
@@ -100,7 +146,11 @@ export function rememberSharedIdentity(
   return canonical;
 }
 
-export function pruneSharedIdentityCache(cache: ReminetIdentityCache, maxEntries = REMINET_IDENTITY_CACHE_MAX_ENTRIES): ReminetIdentityCache {
+export function pruneSharedIdentityCache(
+  cache: ReminetIdentityCache,
+  maxEntries = REMINET_IDENTITY_CACHE_MAX_ENTRIES,
+  now = Date.now(),
+): ReminetIdentityCache {
   const records = Object.fromEntries(
     Object.entries(cache.records)
       .filter(([, entry]) => entry && typeof entry.cachedAt === "number" && Boolean(entry.profile))
@@ -108,7 +158,38 @@ export function pruneSharedIdentityCache(cache: ReminetIdentityCache, maxEntries
       .slice(0, maxEntries),
   );
   const aliases = Object.fromEntries(Object.entries(cache.aliases).filter(([, canonical]) => Boolean(records[canonical])));
-  return { version: 2, records, aliases };
+  const publicProfileMisses = Object.fromEntries(
+    Object.entries(cache.publicProfileMisses)
+      .filter(([, entry]) => entry && typeof entry.cachedAt === "number" && now - entry.cachedAt < REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS)
+      .sort((left, right) => right[1].cachedAt - left[1].cachedAt)
+      .slice(0, REMINET_PUBLIC_PROFILE_NEGATIVE_MAX_ENTRIES),
+  );
+  return {
+    version: 3,
+    records,
+    aliases,
+    directory: pruneReminetDirectoryCache(cache.directory, { now: () => now }),
+    publicProfileMisses,
+  };
+}
+
+export function rememberPublicProfileMiss(cache: ReminetIdentityCache, username: string, cachedAt = Date.now()): void {
+  const key = identityCacheKeyForRemiliaUsername(username);
+  if (!key.endsWith(":")) cache.publicProfileMisses[key] = { cachedAt, source: "remilia-api-v1:profile" };
+}
+
+export function clearPublicProfileMiss(cache: ReminetIdentityCache, username: string): void {
+  delete cache.publicProfileMisses[identityCacheKeyForRemiliaUsername(username)];
+}
+
+export function freshPublicProfileMiss(
+  cache: ReminetIdentityCache,
+  username: string,
+  maxAgeMs = REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS,
+  now = Date.now(),
+): boolean {
+  const entry = cache.publicProfileMisses[identityCacheKeyForRemiliaUsername(username)];
+  return Boolean(entry && now - entry.cachedAt < maxAgeMs);
 }
 
 function canonicalIdentityKey(profile: ReminetIdentityProfile, aliases: string[]): string {
@@ -146,7 +227,9 @@ export function normalizeXHandle(value: unknown): string {
 }
 
 export function normalizeRemiliaUsername(value: unknown): string {
-  return typeof value === "string" ? value.trim().replace(/^[@~]+/, "").replace(/[^a-zA-Z0-9_-]/g, "").toLowerCase() : "";
+  if (typeof value !== "string") return "";
+  const normalized = value.trim().replace(/^[@~]+/, "").toLowerCase();
+  return /^[a-z0-9_.-]{1,64}$/.test(normalized) ? normalized : "";
 }
 
 export function normalizePfpProject(value: unknown): string {
@@ -181,6 +264,12 @@ export function emptyIdentityProfile(): ReminetIdentityProfile {
     trophyShelves: null,
     allTrophies: null,
     connections: null,
+    friendsDisplayed: null,
+    viewerContext: null,
+    isAuthenticated: null,
+    isOwnProfile: null,
+    externalIdentifiers: [],
+    provenance: [],
     sources: [],
     updatedAt: Date.now(),
   };
@@ -197,15 +286,54 @@ export function mergeIdentityProfile(
     ...(base.gweiNameCandidates || []),
     ...(patch.gweiNameCandidates || []),
   ], normalizeGweiName);
+  const externalIdentifiers = uniqueDirectoryIdentifiers([
+    ...(base.externalIdentifiers || []),
+    ...(patch.externalIdentifiers || []),
+  ]);
+  const provenance = mergeProvenance(base.provenance || [], patch.provenance || []);
   return {
     ...base,
     ...Object.fromEntries(
-      Object.entries(patch).filter(([key, value]) => key !== "gweiNameCandidates" && value !== undefined && value !== null && value !== ""),
+      Object.entries(patch).filter(([key, value]) => !["gweiNameCandidates", "externalIdentifiers", "provenance"].includes(key) && value !== undefined && value !== null && value !== ""),
     ),
     gweiNameCandidates,
+    externalIdentifiers,
+    provenance,
     sources: Array.from(sources).sort(),
     updatedAt: Date.now(),
   };
+}
+
+function normalizePublicProfileMisses(value: unknown): ReminetIdentityCache["publicProfileMisses"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return Object.fromEntries(Object.entries(value).filter((entry): entry is [string, { cachedAt: number; source: "remilia-api-v1:profile" }] => {
+    const candidate = entry[1];
+    return Boolean(candidate && typeof candidate === "object" && typeof (candidate as { cachedAt?: unknown }).cachedAt === "number");
+  }));
+}
+
+function uniqueDirectoryIdentifiers(identifiers: ReminetDirectoryIdentifier[]): ReminetDirectoryIdentifier[] {
+  const seen = new Set<string>();
+  const result: ReminetDirectoryIdentifier[] = [];
+  for (const identifier of identifiers) {
+    if (!identifier || typeof identifier.type !== "string" || typeof identifier.value !== "string") continue;
+    const key = `${identifier.type}:${identifier.value.toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    result.push(identifier);
+  }
+  return result;
+}
+
+function mergeProvenance(base: ReminetIdentityProvenance[], patch: ReminetIdentityProvenance[]): ReminetIdentityProvenance[] {
+  const newest = new Map<string, ReminetIdentityProvenance>();
+  for (const entry of [...base, ...patch]) {
+    if (!entry || typeof entry.endpoint !== "string" || typeof entry.observedAt !== "number") continue;
+    const identifier = entry.identifier ? `${entry.identifier.type}:${entry.identifier.value.toLowerCase()}` : "";
+    const key = `${entry.source}:${entry.endpoint}:${identifier}`;
+    if (!newest.has(key) || newest.get(key)!.observedAt <= entry.observedAt) newest.set(key, entry);
+  }
+  return Array.from(newest.values()).sort((left, right) => right.observedAt - left.observedAt).slice(0, 16);
 }
 
 export function contractForPfpProject(project: unknown): string | null {

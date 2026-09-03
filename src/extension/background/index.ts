@@ -2,7 +2,11 @@ import "../../apps/wiki-links/background";
 import "../../apps/post-reading/background";
 import "../../apps/milady-maxxer/background";
 import "../../apps/beetol/background.js";
+import "../../apps/remistats/background.js";
 import "../../apps/reminet-chat/background";
+import "./remilia-auth-router";
+import "../../platform/background/remilia-api-registration";
+import { remiliaApiClient } from "../../platform/background/remilia-api-registration";
 import { createBackgroundNetworkDeadlineSignal, initializeBackgroundNetworkBudget, runNetworkTask, setupBackgroundMessageRouter } from "../../platform/background/router";
 import { browserAction } from "../../platform/background/browser-action";
 import { PERFORMANCE_MODE_KEY, normalizePerformanceMode, type PerformanceMode } from "../../platform/settings/performance-mode";
@@ -12,15 +16,18 @@ import {
   GWEI_NAME_SERVICE_ADDRESS,
   REMINET_IDENTITY_CACHE_KEY,
   REMINET_IDENTITY_CACHE_TTL_MS,
+  REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS,
   addressFromEthCallResult,
   concatHex,
   contractForPfpProject,
+  clearPublicProfileMiss,
   decodeAbiStringResult,
   emptyIdentityProfile,
   emptyReminetIdentityCache,
   ensNameCallData,
   ensResolverCallData,
   extractGweiNameCandidates,
+  freshPublicProfileMiss,
   gweiGatewayUrl,
   gweiResolveCallData,
   gweiReverseResolveCallData,
@@ -36,12 +43,21 @@ import {
   normalizeXHandle,
   ownerOfCallData,
   pruneSharedIdentityCache,
+  rememberPublicProfileMiss,
   rememberSharedIdentity,
   reverseEnsNameForAddress,
   type ReminetIdentityCache,
   type ReminetIdentityCacheEntry,
   type ReminetIdentityProfile,
 } from "../../platform/auth/reminet-identity";
+import {
+  resolveReminetIdentities,
+  identityProfileFromApiV1,
+} from "../../platform/auth/reminet-identity-service";
+import {
+  mergeReminetDirectoryCache,
+  type ReminetDirectoryIdentifier,
+} from "../../platform/auth/reminet-directory";
 import {
   UPDATE_ALARM_NAME,
   UPDATE_CHECK_INTERVAL_MINUTES,
@@ -54,16 +70,10 @@ import { MILXDY_ADDONS_CATALOG_FALLBACK_URL, MILXDY_ADDONS_CATALOG_URL, MILXDY_A
 import appRegistry from "../../platform/app-sdk/first-party-apps.json";
 import { externalHandoffUrl, isExternalHandoffAdapter, isExternalHandoffTarget, validateExternalHandoffCaptions, validateExternalHandoffImageDataUrl, withExternalHandoffTimeout, type ExternalHandoffRequest } from "../../platform/app-sdk/external-handoff";
 import { REMIBOORU_QUERY_ORIGIN, REMOTE_QUERY_RESULT_TTL_MS, RemoteQueryResultStore, isStoredRemibooruResultPage, remibooruQueryUrl, sanitizeRemibooruFacets, sanitizeRemibooruPosts, type RemoteQueryRequest, type SanitizedRemibooruPostPage } from "../../platform/app-sdk/remote-query";
-import { isSupportedMediaContributionMime, mediaContributionFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
-
-// `attributeDisplay` is the reviewed maker's own top-level renderer. This
-// declaration is used only by `world: "MAIN"` injected code; the extension
-// never reads or writes the maker page outside the explicit reviewed handoff.
-declare const attributeDisplay: {
-  currentlyDisplaying?: boolean;
-  canvas?: HTMLCanvasElement;
-  drawSelectedLayers?: (full?: boolean, canvas?: boolean) => Promise<void>;
-} | undefined;
+import { isSupportedMediaContributionMime, MEDIA_CONTRIBUTION_MAX_BYTES, mediaContributionFailureMessage, mediaContributionPreparationFailureMessage, OPAQUE_MEDIA_HANDLE_TTL_MS, OpaqueMediaHandleStore, remibooruUploadSizeBucket, validateMediaContributionTags, type OpaqueMediaHandleRecord } from "../../platform/app-sdk/media-contribution";
+import { registerPageContextActions, type PageContextActionApp } from "../../platform/background/page-context-actions";
+import { renderRemiliaMakerImage } from "./external-handoff-page-adapters";
+import { removeLegacyReminetChatDiagnostics } from "../../platform/runtime/reminet-chat-diagnostics";
 
 type RemiStatsMessage = {
   type: "remistats:getUser";
@@ -75,6 +85,13 @@ type ReminetIdentityMessage = {
   type: "reminetIdentity:getProfile";
   xHandle?: string;
   remiliaUsername?: string;
+  force?: boolean;
+  maxAgeMs?: number;
+};
+
+type ReminetIdentityResolveMessage = {
+  type: "reminetIdentity:resolve";
+  identifiers: ReminetDirectoryIdentifier[];
   force?: boolean;
   maxAgeMs?: number;
 };
@@ -93,8 +110,6 @@ type OpenAddonsSettingsMessage = {
 };
 
 type OpenAddonsCatalogMessage = { type: "milxdy:openAddonsCatalog" };
-
-type OpenRemiNetSessionMessage = { type: "milxdy:openRemiNetSession" };
 
 type FetchImageDataUrlMessage = {
   type: "milxdy:fetchImageDataUrl";
@@ -148,6 +163,8 @@ const REMOTE_QUERY_RESULT_SESSION_PREFIX = "milxdy.remoteQueryResult.";
 const contextMediaHandles = new OpaqueMediaHandleStore();
 const CONTEXT_MEDIA_MENU_ID = "milxdy:context-media";
 const CONTEXT_MEDIA_SESSION_PREFIX = "milxdy.contextMediaHandle.";
+
+registerPageContextActions(appRegistry as PageContextActionApp[]);
 
 type MiladychanFetchJsonMessage = {
   type: "miladychan:fetchJson";
@@ -271,12 +288,7 @@ setupBackgroundMessageRouter([
   {
     type: "milxdy:openAddonsCatalog",
     matches: isOpenAddonsCatalogMessage,
-    handle: openAddonsCatalogWindow,
-  },
-  {
-    type: "milxdy:openRemiNetSession",
-    matches: isOpenRemiNetSessionMessage,
-    handle: (_message, sender) => openRemiNetSession(sender),
+    handle: (_message, sender) => openAddonsCatalogWindow(sender),
   },
   {
     type: "milxdy:checkUpdate",
@@ -383,8 +395,14 @@ setupBackgroundMessageRouter([
     matches: isReminetIdentityMessage,
     handle: (message, sender) => resolveReminetIdentityForSender(message, sender),
   },
+  {
+    type: "reminetIdentity:resolve",
+    matches: isReminetIdentityResolveMessage,
+    handle: (message, sender) => resolveReminetIdentityBatchForSender(message, sender),
+  },
 ]);
 void initializeBackgroundNetworkBudget();
+removePersistedLegacyReminetChatDiagnostics();
 
 function isRemiStatsMessage(message: unknown): message is RemiStatsMessage {
   if (!message || typeof message !== "object") return false;
@@ -399,6 +417,20 @@ function isReminetIdentityMessage(message: unknown): message is ReminetIdentityM
     && (typeof record.xHandle === "string" || typeof record.remiliaUsername === "string");
 }
 
+function isReminetIdentityResolveMessage(message: unknown): message is ReminetIdentityResolveMessage {
+  if (!message || typeof message !== "object") return false;
+  const record = message as Record<string, unknown>;
+  return record.type === "reminetIdentity:resolve"
+    && Array.isArray(record.identifiers)
+    && record.identifiers.length <= 1_000
+    && record.identifiers.every((identifier) => {
+      if (!identifier || typeof identifier !== "object") return false;
+      const candidate = identifier as Record<string, unknown>;
+      return ["handle", "x_handle", "github", "discord"].includes(String(candidate.type))
+        && typeof candidate.value === "string";
+    });
+}
+
 function isUpdateMessage(message: unknown): message is UpdateMessage {
   return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:checkUpdate");
 }
@@ -411,17 +443,8 @@ function isOpenAddonsCatalogMessage(message: unknown): message is OpenAddonsCata
   return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:openAddonsCatalog");
 }
 
-function isOpenRemiNetSessionMessage(message: unknown): message is OpenRemiNetSessionMessage {
-  return Boolean(message && typeof message === "object" && (message as Record<string, unknown>).type === "milxdy:openRemiNetSession");
-}
-
-async function openRemiNetSession(sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
-  await chrome.tabs.create({ url: "https://www.remilia.net/", active: false });
-  return { ok: true };
-}
-
-async function openAddonsCatalogWindow(): Promise<Record<string, unknown>> {
+async function openAddonsCatalogWindow(sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (!isApprovedRuntimeContentSender(sender)) return unsupportedSender();
   if (addOnsCatalogLaunch) return addOnsCatalogLaunch;
   addOnsCatalogLaunch = (async () => {
     const target = parseAllowedUrl(MILXDY_ADDONS_CATALOG_URL, MILXDY_ADDONS_CATALOG_URL_RULES)
@@ -624,13 +647,13 @@ async function clearPersistedContextMedia(): Promise<void> {
 async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
   if (!isXContentScriptSender(sender) || !contributionDeclaration(message.appId, message.actionId)) return unsupportedSender();
   const parsed = parseAllowedUrl(message.sourceUrl, X_CONTEXT_MEDIA_RULES);
-  if (!parsed) return { ok: false, error: "Only visible X-hosted images can be contributed." };
+  if (!parsed) return { ok: false, error: "Only visible X-hosted images can use direct contribution. Use Remibooru's native uploader for other media." };
   try {
     const response = await budgetedFetch(parsed.href, { credentials: "omit" }, "remibooru:prepareMedia");
-    if (!response.ok) return { ok: false, error: `The selected image returned HTTP ${response.status}.` };
+    if (!response.ok) return { ok: false, error: `The selected image could not be retrieved from X (HTTP ${response.status}). Retry or use Remibooru's native uploader.` };
     const mimeType = (response.headers.get("content-type") || "").split(";", 1)[0].toLowerCase();
-    if (!isSupportedMediaContributionMime(mimeType)) return { ok: false, error: "The selected media is not a supported image." };
-    const bytes = await readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES);
+    if (!isSupportedMediaContributionMime(mimeType)) return { ok: false, error: "The selected media is not a supported image or GIF. Choose different media or use Remibooru's native uploader." };
+    const bytes = await readCappedResponseBytes(response, MEDIA_CONTRIBUTION_MAX_BYTES);
     let width = message.width;
     let height = message.height;
     if (!width || !height) {
@@ -646,7 +669,7 @@ async function prepareContextMedia(message: ContextMediaPrepareMessage, sender: 
     await persistContextMedia(mediaHandle, mediaRecord);
     return { ok: true, mediaHandle, media: { mimeType, width, height, altAvailable: message.altAvailable } };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: mediaContributionPreparationFailureMessage(error) };
   }
 }
 
@@ -663,19 +686,21 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     await restoreContextMedia(message.mediaHandle);
     media = contextMediaHandles.claim(message.mediaHandle, message.appId, message.actionId);
   }
-  if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again." };
+  if (!media) return { ok: false, error: "The selected image expired or was already used. Select it again, or use Remibooru's native uploader." };
   const form = new FormData();
   const extension = media.mimeType === "image/jpeg" ? "jpg" : media.mimeType.slice("image/".length);
   const uploadBytes = media.bytes.slice().buffer as ArrayBuffer;
   form.set("file", new Blob([uploadBytes], { type: media.mimeType }), `upload.${extension}`);
   if (!media.width || !media.height) {
     contextMediaHandles.release(message.mediaHandle);
-    return { ok: false, error: "The selected image dimensions could not be verified." };
+    return { ok: false, error: "The selected image dimensions could not be verified. Select it again, or use Remibooru's native uploader." };
   }
   form.set("metadata", JSON.stringify({ width: media.width, height: media.height, globalTags: tags, spatialTags: [], authorUrls: [], mediaType: "image", pageCount: 1 }));
   try {
-    const response = await fetch(REMIBOORU_MEMBER_POSTS_URL, { method: "POST", credentials: "include", headers: { accept: "application/json", "x-upload-incident-id": crypto.randomUUID(), "x-upload-media-type": "image", "x-upload-size-bucket": remibooruUploadSizeBucket(media.bytes.byteLength), "x-upload-page-count": "1", "x-upload-browser-family": "chrome" }, body: form });
-    const payload = (response.headers.get("content-type") || "").includes("application/json") ? await response.json() as Record<string, unknown> : null;
+    const response = await budgetedFetch(REMIBOORU_MEMBER_POSTS_URL, { method: "POST", credentials: "include", headers: { accept: "application/json", "x-upload-incident-id": crypto.randomUUID(), "x-upload-media-type": "image", "x-upload-size-bucket": remibooruUploadSizeBucket(media.bytes.byteLength), "x-upload-page-count": "1", "x-upload-browser-family": "chrome" }, body: form }, "remibooru:contributeMedia");
+    const payload = (response.headers.get("content-type") || "").includes("application/json")
+      ? await response.json().catch(() => null) as Record<string, unknown> | null
+      : null;
     if (!response.ok) {
       contextMediaHandles.release(message.mediaHandle);
       return { ok: false, error: mediaContributionFailureMessage(response.status, payload?.error) };
@@ -683,16 +708,14 @@ async function submitMediaContribution(message: MediaContributionSubmitMessage, 
     const post = payload?.post as Record<string, unknown> | undefined;
     if (typeof post?.id !== "string") {
       contextMediaHandles.release(message.mediaHandle);
-      return { ok: false, error: "Remibooru returned an unsupported contribution result." };
+      return { ok: false, error: "Remibooru returned an unsupported contribution result. The selected-media session is preserved; retry or use the native uploader." };
     }
     contextMediaHandles.consume(message.mediaHandle);
     await discardPersistedContextMedia(message.mediaHandle);
     return { ok: true, canonicalUrl: `https://remibooru.com/posts/${encodeURIComponent(post.id)}` };
-  } catch (error) {
+  } catch {
     contextMediaHandles.release(message.mediaHandle);
-    return { ok: false, error: error instanceof Error && error.message
-      ? `Remibooru could not be reached: ${error.message}`
-      : "Remibooru could not be reached. Check your connection and try again." };
+    return { ok: false, error: "Remibooru could not be reached. Check your connection, then retry or use the native uploader." };
   }
 }
 
@@ -880,8 +903,8 @@ async function launchExternalHandoff(message: ExternalHandoffMessage, sender: ch
     if (result?.ok !== true) return { ok: false, error: result?.error || "The maker controls were unavailable." };
     if (!isSafeMakerImageDataUrl(result.imageDataUrl)) return { ok: false, error: "The maker did not return a usable image." };
     return { ok: true, imageDataUrl: result.imageDataUrl };
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  } catch {
+    return { ok: false, error: "The maker image could not be generated." };
   } finally {
     if (generatedMakerTabId !== null) await chrome.tabs.remove(generatedMakerTabId).catch(() => undefined);
   }
@@ -999,56 +1022,6 @@ async function renderCheeseWorldImage(sourceDataUrl: string, contentType: string
   }
 }
 
-/** Runs only in the reviewed maker tab after an explicit package gesture. */
-async function renderRemiliaMakerImage(topText: string, bottomText: string, mode: "captioned" | "randomMeme"): Promise<{ ok: boolean; error?: string; imageDataUrl?: string }> {
-  // `chrome.scripting.executeScript` serializes only this function, so the
-  // wait helper must remain inside it rather than closing over extension code.
-  const waitForRender = async (): Promise<void> => {
-    const deadline = Date.now() + 15_000;
-    await new Promise<void>((resolve) => window.setTimeout(resolve, 120));
-    while (Date.now() < deadline) {
-      const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
-      if (display && display.currentlyDisplaying === false && display.canvas?.width && display.canvas.height) return;
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 100));
-    }
-    throw new Error("The maker did not finish rendering in time.");
-  };
-  const top = document.querySelector<HTMLInputElement>("#topText");
-  const bottom = document.querySelector<HTMLInputElement>("#bottomText");
-  const randomToken = document.querySelector<HTMLElement>("#randomButton");
-  const randomMeme = document.querySelector<HTMLElement>("#randomMemeButton");
-  if (!top || !bottom || !randomToken || !randomMeme) return { ok: false, error: "This maker no longer exposes its reviewed caption controls." };
-  // The token button selects the maker base; the separate Meme Maker control
-  // supplies its reviewed random caption/preset. They are deliberately not
-  // interchangeable, even though both are labelled "Random" in the maker UI.
-  randomToken.click();
-  await waitForRender();
-  const setInput = (input: HTMLInputElement, value: string) => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, value);
-    input.dispatchEvent(new Event("input", { bubbles: true }));
-    input.dispatchEvent(new Event("change", { bubbles: true }));
-  };
-  if (mode === "captioned") {
-    setInput(top, topText);
-    setInput(bottom, bottomText);
-  } else {
-    // The maker applies a random meme preset asynchronously.  Do not capture
-    // the already-rendered base token while its new preset is still pending;
-    // this is especially visible when both package caption fields are empty.
-    randomMeme.click();
-    await waitForRender();
-  }
-  // The reviewed maker exposes its complete renderer only from its own main
-  // world. Rendering there preserves its selected layers, text treatment, and
-  // pixel-art settings instead of trying to recreate its DOM in the extension.
-  const display = typeof attributeDisplay === "undefined" ? undefined : attributeDisplay;
-  if (!display?.drawSelectedLayers) return { ok: false, error: "This maker no longer exposes its reviewed renderer." };
-  await display.drawSelectedLayers(false, true);
-  const image = document.querySelector<HTMLImageElement>("#downloadable");
-  if (!image?.src.startsWith("data:image/png;base64,")) return { ok: false, error: "The maker did not render a PNG." };
-  return { ok: true, imageDataUrl: image.src };
-}
-
 function isMiladychanFetchJsonMessage(message: unknown): message is MiladychanFetchJsonMessage {
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
@@ -1164,6 +1137,29 @@ async function resolveReminetIdentityForSender(message: ReminetIdentityMessage, 
   return resolveReminetIdentity(message);
 }
 
+async function resolveReminetIdentityBatchForSender(
+  message: ReminetIdentityResolveMessage,
+  sender: chrome.runtime.MessageSender,
+): Promise<Record<string, unknown>> {
+  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  const cache = await loadIdentityCache();
+  const resolved = await resolveReminetIdentities(message.identifiers, cache, {
+    resolveDirectory: async (identifiers) => {
+      const response = await remiliaApiClient.resolveDirectory(identifiers);
+      return response.ok ? { ...response, data: response.data.results } : response;
+    },
+    getUserProfile: (username) => remiliaApiClient.getUserProfile(username),
+  }, {
+    force: message.force === true,
+    positiveTtlMs: normalizeIdentityMaxAge(message.maxAgeMs),
+    profileMaxAgeMs: normalizeIdentityMaxAge(message.maxAgeMs),
+  });
+  await mutateSharedIdentityCache((latest) => {
+    mergeReminetIdentityCaches(latest, resolved.cache);
+  });
+  return { ok: true, results: resolved.results, batchSizes: resolved.batchSizes };
+}
+
 async function loadCurrentPerformanceMode(): Promise<PerformanceMode> {
   const stored = await chrome.storage.local.get({ [PERFORMANCE_MODE_KEY]: "balanced" }).catch(() => ({})) as Record<string, unknown>;
   return normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
@@ -1210,43 +1206,66 @@ async function resolveReminetIdentity(message: ReminetIdentityMessage): Promise<
 
   let profile = cached?.profile || emptyIdentityProfile();
   const warnings: string[] = [];
+  let publicProfileCachedAt: number | undefined;
   if (xHandle) profile = mergeIdentityProfile(profile, { xHandle }, "input");
   if (remiliaUsername) profile = mergeIdentityProfile(profile, { remiliaUsername }, "input");
 
   if (xHandle) {
-    const remiStatsResponse = await fetchRemiStatsUser(xHandle, message.force === true);
-    if (remiStatsResponse.ok) {
-      profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, xHandle), "remistats");
-    } else if (remiStatsResponse.notFound || remiStatsResponse.status === 404) {
-      profile = mergeIdentityProfile(profile, { xHandle }, "remistats:notFound");
+    const directory = await resolveReminetIdentities([{ type: "x_handle", value: xHandle }], cache, {
+      resolveDirectory: async (identifiers) => {
+        const response = await remiliaApiClient.resolveDirectory(identifiers);
+        return response.ok ? { ...response, data: response.data.results } : response;
+      },
+      getUserProfile: (username) => remiliaApiClient.getUserProfile(username),
+    }, { force: message.force === true, positiveTtlMs: maxAgeMs, profileMaxAgeMs: maxAgeMs });
+    const resolved = directory.results[0];
+    if (resolved?.profile) {
+      profile = mergeIdentityProfile(profile, resolved.profile);
+      publicProfileCachedAt = resolved.profile.provenance.some((entry) => entry.endpoint.startsWith("GET /api/v1/users/"))
+        ? Date.now()
+        : undefined;
+    } else if (resolved?.status === "not_found") {
+      profile = mergeIdentityProfile(profile, { xHandle }, "remilia-api-v1:directory:notFound");
+    } else if (resolved?.error) {
+      warnings.push(`REMILIA_DIRECTORY_${resolved.error.code.toUpperCase()}`);
     }
+    mergeReminetIdentityCaches(cache, directory.cache);
   }
 
   const resolvedUsername = normalizeRemiliaUsername(profile.remiliaUsername || remiliaUsername);
-  let publicProfileCachedAt: number | undefined;
-  if (resolvedUsername) {
-    const remiliaProfile = await fetchRemiliaPublicProfile(resolvedUsername);
-    if (remiliaProfile) {
-      profile = mergeIdentityProfile(profile, profileFromRemiliaResponse(remiliaProfile, resolvedUsername), "remilia.net");
+  if (resolvedUsername && publicProfileCachedAt === undefined) {
+    const remiliaProfile = await fetchRemiliaPublicProfile(resolvedUsername, cache, message.force === true);
+    if (remiliaProfile.ok && remiliaProfile.data) {
+      profile = mergeIdentityProfile(
+        profile,
+        identityProfileFromApiV1(remiliaProfile.data, resolvedUsername),
+        "remilia-api-v1:profile",
+      );
       publicProfileCachedAt = Date.now();
-    } else {
+    } else if (!remiliaProfile.notFound) {
       warnings.push("REMILIA_PROFILE_UNAVAILABLE");
-    }
-  }
-
-  const resolvedXHandle = normalizeXHandle(profile.xHandle);
-  if (!xHandle && resolvedXHandle) {
-    const remiStatsResponse = await fetchRemiStatsUser(resolvedXHandle, message.force === true);
-    if (remiStatsResponse.ok) {
-      profile = mergeIdentityProfile(profile, profileFromRemiStatsResponse(remiStatsResponse.data, resolvedXHandle), "remistats");
     }
   }
 
   profile = await attachNftOwner(profile);
   profile = await attachEnsName(profile);
   profile = await attachGweiName(profile);
+  await mutateSharedIdentityCache((latest) => mergeReminetIdentityCaches(latest, cache));
   await rememberIdentityProfile(profile, { publicProfileCachedAt });
   return { ok: true, cached: false, partial: warnings.length > 0, warnings, profile };
+}
+
+function mergeReminetIdentityCaches(target: ReminetIdentityCache, source: ReminetIdentityCache): void {
+  mergeReminetDirectoryCache(target.directory, source.directory);
+  for (const [key, entry] of Object.entries(source.records)) {
+    if (!target.records[key] || target.records[key].cachedAt <= entry.cachedAt) target.records[key] = entry;
+  }
+  Object.assign(target.aliases, source.aliases);
+  for (const [key, entry] of Object.entries(source.publicProfileMisses)) {
+    if (!target.publicProfileMisses[key] || target.publicProfileMisses[key].cachedAt <= entry.cachedAt) {
+      target.publicProfileMisses[key] = entry;
+    }
+  }
 }
 
 function normalizeIdentityMaxAge(value: unknown): number {
@@ -1255,19 +1274,24 @@ function normalizeIdentityMaxAge(value: unknown): number {
   return Math.max(0, Math.min(7 * 24 * 60 * 60 * 1000, numeric));
 }
 
-async function fetchRemiliaPublicProfile(username: string): Promise<unknown | null> {
+async function fetchRemiliaPublicProfile(
+  username: string,
+  cache?: ReminetIdentityCache,
+  force = false,
+): Promise<{ ok: boolean; data: unknown | null; notFound: boolean }> {
   const clean = normalizeRemiliaUsername(username);
-  if (!clean) return null;
-  try {
-    const response = await budgetedFetch(`https://www.remilia.net/api/profile/~${encodeURIComponent(clean)}`, {
-      credentials: "omit",
-      headers: { Accept: "application/json" },
-    }, "reminetIdentity:profile");
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
+  if (!clean) return { ok: false, data: null, notFound: true };
+  if (!force && cache && freshPublicProfileMiss(cache, clean, REMINET_PUBLIC_PROFILE_NEGATIVE_TTL_MS)) {
+    return { ok: false, data: null, notFound: true };
   }
+  const response = await remiliaApiClient.getUserProfile(clean);
+  if (response.ok) {
+    if (cache) clearPublicProfileMiss(cache, clean);
+    return { ok: true, data: response.data, notFound: false };
+  }
+  const notFound = response.error.status === 404 || ["not_found", "user_not_found"].includes(response.error.code);
+  if (notFound && cache) rememberPublicProfileMiss(cache, clean);
+  return { ok: false, data: null, notFound };
 }
 
 async function attachNftOwner(profile: ReminetIdentityProfile): Promise<ReminetIdentityProfile> {
@@ -1686,12 +1710,12 @@ async function fetchMiladychanJson(url: string): Promise<Record<string, unknown>
 }
 
 async function fetchMiladychanJsonForSender(url: string, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  if (!isMiladychanPortalSender(sender)) return unsupportedSender();
   return fetchMiladychanJson(url);
 }
 
 async function postMiladychanTextForSender(message: MiladychanPostTextMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
-  if (!isXContentScriptSender(sender)) return unsupportedSender();
+  if (!isMiladychanPortalSender(sender)) return unsupportedSender();
   return postMiladychanText(message);
 }
 
@@ -1841,6 +1865,21 @@ function isXContentScriptSender(sender: chrome.runtime.MessageSender): boolean {
   return isSameExtensionTopFrameHttpsSender(sender, ["x.com", "twitter.com"]);
 }
 
+function isApprovedRuntimeContentSender(sender: chrome.runtime.MessageSender): boolean {
+  return isSameExtensionTopFrameHttpsSender(sender, [
+    "x.com",
+    "twitter.com",
+    "www.remilia.net",
+    "remilia.wiki",
+    "wiki.remilia.org",
+    "boards.miladychan.org",
+  ]);
+}
+
+function isMiladychanPortalSender(sender: chrome.runtime.MessageSender): boolean {
+  return isSameExtensionTopFrameHttpsSender(sender, ["x.com", "twitter.com", "boards.miladychan.org"]);
+}
+
 function isSameExtensionTopFrameHttpsSender(sender: chrome.runtime.MessageSender, allowedHosts: readonly string[]): boolean {
   if (sender.id !== chrome.runtime.id) return false;
   if (typeof sender.tab?.id !== "number") return false;
@@ -1931,6 +1970,7 @@ function combineAbortSignals(existing: AbortSignal | null | undefined, deadline:
 }
 
 chrome.runtime.onInstalled.addListener((details) => {
+  removePersistedLegacyReminetChatDiagnostics();
   scheduleUpdateChecks();
   void runUpdateCheck();
   // Chrome reports an unpacked-extension reload as an update. Re-arm the
@@ -1953,6 +1993,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 chrome.runtime.onStartup.addListener(() => {
+  removePersistedLegacyReminetChatDiagnostics();
   scheduleUpdateChecks();
   void runUpdateCheck();
 });
@@ -1983,6 +2024,10 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 });
 
 void scheduleUpdateChecks();
+
+function removePersistedLegacyReminetChatDiagnostics(): void {
+  void removeLegacyReminetChatDiagnostics(chrome.storage.local).catch(() => undefined);
+}
 
 function scheduleUpdateChecks(): void {
   void chrome.alarms.create(UPDATE_ALARM_NAME, {

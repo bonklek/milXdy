@@ -21,6 +21,7 @@
   --accent-soft: #effaf3;
   --accent-ring: rgba(31, 111, 91, 0.12);
   --warn: #a45100;
+  --danger: #b42318;
   --focus: #c84f73;
   --control-bg: #ffffff;
   --control-text: #17202a;
@@ -55,6 +56,7 @@
   --accent-soft: rgba(81, 196, 157, 0.13);
   --accent-ring: rgba(81, 196, 157, 0.2);
   --warn: #ffb15c;
+  --danger: #ff8a80;
   --focus: #ff73a2;
   --control-bg: #0f141b;
   --control-text: #edf2f7;
@@ -90,6 +92,7 @@
     --accent-soft: rgba(81, 196, 157, 0.13);
     --accent-ring: rgba(81, 196, 157, 0.2);
     --warn: #ffb15c;
+    --danger: #ff8a80;
     --focus: #ff73a2;
     --control-bg: #0f141b;
     --control-text: #edf2f7;
@@ -299,6 +302,7 @@ p {
 
 .tab:focus-visible,
 .icon-button:focus-visible,
+.primary-button:focus-visible,
 .secondary-button:focus-visible,
 .settings-list-action:focus-visible,
 .settings-list-remove:focus-visible,
@@ -406,6 +410,25 @@ textarea:focus-visible {
   color: var(--muted);
   font-size: 10px;
   line-height: 1.3;
+}
+
+.setting[data-connector-available="false"] {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+
+.setting[data-connector-available="false"] strong,
+.setting[data-connector-available="false"] small {
+  color: var(--muted);
+}
+
+.setting .setting-availability-help {
+  margin-top: 3px;
+  color: var(--heading-muted);
+}
+
+.setting[data-connector-available="false"] input:disabled {
+  cursor: not-allowed;
 }
 
 input[type="checkbox"] {
@@ -652,6 +675,224 @@ input[type="checkbox"] {
   font-size: 10px;
   line-height: 1.45;
   white-space: pre-wrap;
+}
+
+.remilia-connection {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface-muted);
+}
+
+.remilia-connection-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.remilia-connection-heading h4,
+.remilia-connection-heading p,
+.remilia-migration p,
+.remilia-consent p {
+  margin: 0;
+}
+
+.remilia-connection-heading h4 {
+  color: var(--text);
+  font-size: 14px;
+}
+
+.remilia-connection-heading p,
+.remilia-migration p,
+.remilia-consent p {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.remilia-auth-version {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--heading-muted);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 9px;
+}
+
+.remilia-migration,
+.remilia-consent,
+.remilia-auth-status,
+.remilia-auth-error,
+.remilia-scopes {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.remilia-migration {
+  border-color: var(--warn);
+}
+
+.remilia-migration > strong,
+.remilia-consent > strong,
+.remilia-scopes > strong,
+.remilia-auth-status > strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.remilia-migration .primary-button {
+  margin-top: 9px;
+}
+
+.remilia-auth-status {
+  display: grid;
+  gap: 3px;
+  border-left: 4px solid var(--line-strong);
+}
+
+.remilia-connection[data-tone="success"] .remilia-auth-status {
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.remilia-connection[data-tone="warning"] .remilia-auth-status {
+  border-left-color: var(--warn);
+}
+
+.remilia-connection[data-tone="danger"] .remilia-auth-status,
+.remilia-auth-error {
+  border-color: var(--danger, #b42318);
+}
+
+.remilia-auth-status span {
+  color: var(--accent-strong);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.remilia-auth-status small,
+.remilia-auth-error {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.remilia-auth-error {
+  color: var(--danger, #b42318);
+}
+
+.remilia-scopes ul {
+  display: grid;
+  gap: 7px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.remilia-scopes li {
+  display: grid;
+  grid-template-columns: 12px 1fr;
+  gap: 7px;
+  align-items: start;
+}
+
+.remilia-scopes li > span {
+  width: 10px;
+  height: 10px;
+  margin-top: 3px;
+  border: 2px solid var(--line-strong);
+  border-radius: 999px;
+}
+
+.remilia-scopes li[data-granted="true"] > span {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2px var(--surface);
+}
+
+.remilia-scopes li[data-granted="false"] > span {
+  border-color: var(--warn);
+}
+
+.remilia-scopes li strong,
+.remilia-scopes li small {
+  display: block;
+}
+
+.remilia-scopes li strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.remilia-scopes li small {
+  margin-top: 1px;
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.remilia-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+#remiliaConnect,
+#remiliaReconnect {
+  grid-column: 1 / -1;
+}
+
+.primary-button,
+.remilia-actions .secondary-button {
+  width: 100%;
+  min-height: 36px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.primary-button {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--button-primary-text);
+  font-weight: 700;
+}
+
+.danger-button {
+  border-color: var(--danger, #b42318) !important;
+  color: var(--danger, #b42318) !important;
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
+.remilia-consent,
+.remilia-scopes li small {
+  display: none;
+}
+
+.remilia-scopes ul {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.remilia-auth-message[data-kind="success"] {
+  color: var(--accent-strong);
+}
+
+.remilia-auth-message[data-kind="error"] {
+  color: var(--danger, #b42318);
 }
 
 .update-status {
@@ -924,6 +1165,7 @@ input[type="checkbox"] {
 .field select,
 .field input,
 .field textarea,
+.primary-button,
 .secondary-button {
   width: 100%;
   min-height: 34px;

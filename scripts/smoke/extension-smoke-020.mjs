@@ -20,12 +20,13 @@ async function verifyBuild(build) {
   const content = await readFile(path.join(build.dir, "content.js"), "utf8");
   const background = await readFile(path.join(build.dir, "background.js"), "utf8");
   const popupHtml = await readFile(path.join(build.dir, "popup.html"), "utf8");
+  const popupCss = (await readFile(path.join(build.dir, "popup.css"), "utf8")).replaceAll("\r\n", "\n");
   const popupJs = await readFile(path.join(build.dir, "popup.js"), "utf8");
 
   verifyManifest(build, manifest);
-  verifyPopup(build, popupHtml, popupJs);
+  verifyPopup(build, popupHtml, popupCss, popupJs);
   verifyRuntimeBundle(build, content, background);
-  verifyFeatureBundles(build);
+  await verifyFeatureBundles(build);
   verifyAppAssets(build);
 }
 
@@ -61,13 +62,20 @@ function verifyManifest(build, manifest) {
   }
 }
 
-function verifyPopup(build, popupHtml, popupJs) {
+function verifyPopup(build, popupHtml, popupCss, popupJs) {
   for (const value of ['value="fast"', 'value="balanced"', 'value="full"', 'value="developer"']) {
     assert(popupHtml.includes(value), `${build.dir}: popup missing Performance mode ${value}`);
   }
   assert(popupHtml.includes('data-control="performanceMode"'), `${build.dir}: popup performance control missing`);
   assert(popupJs.includes(`normalizeBuildProfile("${build.profile}")`), `${build.dir}: popup build profile constant mismatch`);
   assert(popupJs.includes("performanceModeSummary"), `${build.dir}: popup performance summary missing`);
+  assert(popupHtml.includes('id="remiliaConnection"') && popupHtml.includes('data-layout="compact"'), `${build.dir}: compact Remilia connection layout must be the default`);
+  assert(popupHtml.includes('id="remiliaScopesTitle">Requested abilities'), `${build.dir}: compact Remilia layout must retain requested abilities`);
+  assert(!popupHtml.includes("Use compact connection layout") && !popupHtml.includes('id="remiliaUiRollback"'), `${build.dir}: Remilia layout toggle must be absent`);
+  assert(!popupCss.includes("data-compatibility"), `${build.dir}: alternate Remilia compatibility layout must be absent`);
+  assert(popupCss.includes(".remilia-consent,\n.remilia-scopes li small {\n  display: none;"), `${build.dir}: compact Remilia disclosure rules must be unconditional`);
+  assert(popupCss.includes(".remilia-scopes ul {\n  grid-template-columns: repeat(2, minmax(0, 1fr));"), `${build.dir}: compact Remilia ability grid must be unconditional`);
+  assert(!popupJs.includes("milxdy.remilia.connectionUi") && !popupJs.includes("compatibilityPresentation"), `${build.dir}: Remilia layout preference runtime must be absent`);
 }
 
 function verifyRuntimeBundle(build, content, background) {
@@ -77,6 +85,10 @@ function verifyRuntimeBundle(build, content, background) {
   assert(content.includes("milxdy-overlay-dock-root"), `${build.dir}: overlay dock missing from content bundle`);
   assert(content.includes("milxdy.apps.firstRun.status"), `${build.dir}: first-run Apps Hub state missing`);
   assert(content.includes("milxdy.performance.mode"), `${build.dir}: Performance mode state missing`);
+  assert(content.includes("isRailDiscoverableWhenDisabled"), `${build.dir}: disabled RemiNet Chat rail discovery missing`);
+  assert(content.includes("railLauncher"), `${build.dir}: RemiNet Chat rail activation enablement missing`);
+  assert(content.includes("diagnosticStorageEntry") && content.includes("sanitizeReminetChatDiagnostic") && content.includes("reminetChat."), `${build.dir}: RemiNet Chat diagnostic persistence boundary missing`);
+  assert(content.includes("PROFILE_LOOKUP_FAILED"), `${build.dir}: RemiNet Chat stable diagnostic failure code missing`);
   assert(content.includes("milxdyVersion") && content.includes("milxdyBuildProfile") && content.includes("milxdyBuildTarget"), `${build.dir}: runtime build markers missing from content bundle`);
   assert(content.includes(JSON.stringify(expectedVersion)), `${build.dir}: runtime version marker value missing from content bundle`);
   assert(content.includes(`"${build.profile}"`), `${build.dir}: runtime build profile marker value missing from content bundle`);
@@ -84,9 +96,13 @@ function verifyRuntimeBundle(build, content, background) {
   assert(background.includes("Unsupported music lookup URL"), `${build.dir}: music allowlist rejection missing`);
   assert(background.includes("Unsupported Miladychan URL"), `${build.dir}: Miladychan allowlist rejection missing`);
   assert(background.includes("UNSUPPORTED_IMAGE_URL"), `${build.dir}: image proxy allowlist rejection missing`);
+  assert(background.includes("removeLegacyReminetChatDiagnostics"), `${build.dir}: legacy RemiNet Chat diagnostic migration missing`);
+  for (const key of ["socket.connect", "profileLookupPartial", "profileLookupFailed"]) {
+    assert(background.includes(`milxdy.diagnostics.reminetChat.${key}`), `${build.dir}: legacy RemiNet Chat diagnostic key migration missing ${key}`);
+  }
 }
 
-function verifyFeatureBundles(build) {
+async function verifyFeatureBundles(build) {
   const featuresDir = path.join(build.dir, "features");
   assert(existsSync(featuresDir), `${build.dir}: features directory missing`);
   const actual = readdirSync(featuresDir).filter((file) => file.endsWith(".js")).sort();
@@ -94,6 +110,16 @@ function verifyFeatureBundles(build) {
   assertEqualList(actual, expected, `${build.dir}: feature bundle set mismatch`);
   if (build.profile !== "lite") {
     assert(actual.includes("wikiSidebar.js"), `${build.dir}: Wiki sidebar bundle missing from non-lite build`);
+  }
+  if (actual.includes("reminetChat.js")) {
+    const chat = await readFile(path.join(featuresDir, "reminetChat.js"), "utf8");
+    assert(chat.includes("Open the milXdy popup"), `${build.dir}: RemiNet Chat disconnected popup guidance missing`);
+    assert(chat.includes("Remilia connection") && chat.includes("Connect/Reconnect"), `${build.dir}: RemiNet Chat connection-control guidance missing`);
+    assert(chat.includes("Recheck Chat"), `${build.dir}: RemiNet Chat REST recheck action missing`);
+    assert(!chat.includes(">Open RemiliaNET</a>"), `${build.dir}: RemiNet Chat must not expose website-session recovery`);
+    assert(!chat.includes("route:location.pathname"), `${build.dir}: RemiNet Chat socket diagnostics must not retain route paths`);
+    assert(!/profileLookupPartial.{0,240}(?:handle:|warnings:)/su.test(chat), `${build.dir}: RemiNet Chat partial-profile diagnostics retain sensitive values`);
+    assert(!/profileLookupFailed.{0,240}(?:handle:|error:)/su.test(chat), `${build.dir}: RemiNet Chat failed-profile diagnostics retain sensitive values`);
   }
 }
 

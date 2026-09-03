@@ -10,6 +10,7 @@
   "scripts": {
     "build": "node scripts/build/build-extension.mjs --target=chromium",
     "build:chromium": "node scripts/build/build-extension.mjs --target=chromium",
+    "build:chromium:beta": "node scripts/build/build-extension.mjs --target=chromium --channel=beta",
     "build:firefox": "node scripts/build/build-extension.mjs --target=firefox",
     "build:chromium:lite": "node scripts/build/build-extension.mjs --target=chromium --profile=lite",
     "build:chromium:balanced": "node scripts/build/build-extension.mjs --target=chromium --profile=balanced",
@@ -19,12 +20,13 @@
     "build:firefox:full": "node scripts/build/build-extension.mjs --target=firefox --profile=full",
     "build:post-reading": "node scripts/build/build-post-reading-distribution.mjs --target=chromium",
     "dev:post-reading": "node scripts/build/build-post-reading-distribution.mjs --target=chromium --watch",
-    "build:all": "node scripts/build/build-extension.mjs --target=chromium && node scripts/build/build-extension.mjs --target=firefox",
+    "build:all": "node scripts/build/build-extension.mjs --target=chromium && node scripts/build/build-extension.mjs --target=chromium --channel=beta && node scripts/build/build-extension.mjs --target=firefox",
     "build:profiles": "node scripts/build/build-profiles.mjs",
     "build:pages-catalog": "node scripts/build/build-pages-catalog.mjs",
     "dev": "node scripts/build/build-extension.mjs --target=chromium --watch",
     "test": "vitest run src",
     "qa:build": "node scripts/qa/qa-reload.mjs --once",
+    "qa:build:beta": "node scripts/qa/qa-reload.mjs --once --channel=beta",
     "qa:watch": "node scripts/qa/qa-reload.mjs --watch",
     "qa:submit": "node scripts/qa/qa-handoff.mjs submit",
     "qa:apply-next": "node scripts/qa/qa-handoff.mjs apply-next",
@@ -32,6 +34,7 @@
     "verify:qa-reload": "node scripts/verify/qa-reload-tool.mjs",
     "verify:qa-handoff": "node scripts/verify/qa-handoff-tool.mjs",
     "verify:qa-external-local-package": "node scripts/verify/qa-external-local-package.mjs",
+    "verify:chromium-beta-identity": "node scripts/verify/chromium-beta-identity.mjs",
     "architecture:inventory": "node scripts/architecture/inventory.mjs",
     "verify:architecture": "node scripts/architecture/verify.mjs && node scripts/architecture/verify-fixtures.mjs",
     "typecheck": "tsc --noEmit",
@@ -66,6 +69,7 @@
     "verify:local-app-trust-gates": "node scripts/packages/verify-local-app-trust-gates.mjs",
     "verify:remilia-pet-import": "node scripts/verify/remilia-pet-import.mjs",
     "verify:remilia-pet-integration": "node scripts/verify/remilia-pet-integration.mjs",
+    "verify:remilia-pet-family-integration": "node scripts/verify/remilia-pet-family-integration.mjs",
     "verify:pages-catalog": "node scripts/verify/pages-catalog.mjs",
     "build:local-apps:chromium": "node scripts/build/build-local-apps.mjs",
     "addons:status": "node scripts/addons/manage-local-addons.mjs status",
@@ -77,6 +81,10 @@
     "verify:local-addon-selection-workflow": "node scripts/verify/local-addon-selection-workflow.mjs",
     "verify:url-allowlist": "node scripts/verify/url-allowlist.mjs",
     "verify:platform": "node scripts/verify/platform.mjs",
+    "verify:remilia-migration": "node scripts/verify/remilia-api-migration.mjs",
+    "verify:remilia-migration:live": "node scripts/verify/remilia-api-migration.mjs --require-live",
+    "verify:remilia-migration:artifacts": "node scripts/release/verify-remilia-migration-artifacts.mjs",
+    "verify:remilia-migration:artifact-scan": "node scripts/verify/remilia-migration-artifact-scan.mjs",
     "verify:release": "node scripts/release/verify-release-current.mjs",
     "verify:release:gates": "node scripts/release/verify-release-gates.mjs",
     "verify:release:020": "node scripts/release/verify-release-020.mjs",
@@ -90,6 +98,7 @@
     "package:release": "node scripts/release/package-release.mjs"
   },
   "dependencies": {
+    "@chenglou/pretext": "0.0.8",
     "@tesseract.js-data/eng": "^1.0.0",
     "@unimusic/chromaprint": "^0.1.4",
     "jsqr": "^1.4.0",
@@ -106,10 +115,16 @@
     "typescript": "^5.9.3",
     "vite": "^8.0.3",
     "vitest": "^4.1.2",
-    "web-ext": "^10.4.0"
+    "web-ext": "^10.6.0"
   },
   "overrides": {
-    "shell-quote": "1.8.4",
-    "tmp": "0.2.7"
+    "brace-expansion": "1.1.18",
+    "fast-uri": "3.1.5",
+    "js-yaml": "4.3.1",
+    "nanoid": "3.3.18",
+    "postcss": "8.5.26",
+    "shell-quote": "1.10.0",
+    "tmp": "0.2.7",
+    "undici": "7.29.0"
   }
 }

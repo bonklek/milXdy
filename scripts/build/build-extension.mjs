@@ -11,9 +11,15 @@ import { commonAssetDirs, webAccessibleMatches } from "../release/release-builds
 const watch = process.argv.includes("--watch");
 const target = readTarget();
 const buildProfile = readProfile();
+const buildChannel = readChannel();
 const localAppPlanPath = readStringArg("--local-app-plan");
 const explicitOutputDir = readStringArg("--output-dir");
 const localAppPlan = localAppPlanPath ? JSON.parse(await readFile(localAppPlanPath, "utf8")) : null;
+const chromiumBetaProfile = JSON.parse(await readFile("assets/extension/profiles/chromium-beta.json", "utf8"));
+validateChromiumBetaProfile(chromiumBetaProfile);
+if (buildChannel === "beta" && target !== "chromium") {
+  throw new Error("The beta identity channel is Chromium-only.");
+}
 const firstPartyReplacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const firstPartyReplacementPolicyById = new Map((firstPartyReplacementPolicy.replacements || []).map((item) => [item.id, item]));
 if (localAppPlan && target !== "chromium") {
@@ -24,12 +30,18 @@ const userDownloadAssetDirs = ["wiki-helper", "remilia-pet"];
 const nonWebAccessibleAssetDirs = new Set(userDownloadAssetDirs);
 const outDir = explicitOutputDir
   ? assertSafeGeneratedOutputDir(explicitOutputDir, "Build output directory")
-  : localAppPlan?.outputDir ?? (buildProfile === "full" ? `dist/${target}` : `dist/${target}-${buildProfile}`);
+  : localAppPlan?.outputDir ?? defaultOutputDir();
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const extensionVersion = String(packageJson.extensionVersion || packageJson.version || "").trim();
 const localAddonBuildId = localAppPlan?.buildId ?? `standard-${target}-${buildProfile}-${extensionVersion}`;
-const registryApps = localAppPlan?.apps ?? JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const builtInRegistryApps = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
+const registryApps = localAppPlan?.apps ?? builtInRegistryApps;
 const firstPartyApps = registryApps;
+const selectedLocalPackageIds = new Set(localAppPlan?.selectedPackageIds || []);
+const replacementHostAssetApps = localAppPlan
+  ? builtInRegistryApps.filter((app) => selectedLocalPackageIds.has(app.id))
+  : [];
+const hostAssetApps = [...firstPartyApps, ...replacementHostAssetApps];
 const sourceBuiltApps = firstPartyApps.filter((app) => app.entryName && app.entryPoint);
 const require = createRequire(import.meta.url);
 const tesseractCoreDir = resolvePackageDir("tesseract.js-core");
@@ -39,6 +51,7 @@ await mkdir(outDir, { recursive: true });
 await mkdir(`${outDir}/features`, { recursive: true });
 
 await writeManifest();
+await writeLoginClientContract();
 await copyFile("THIRD_PARTY_NOTICES.md", `${outDir}/THIRD_PARTY_NOTICES.md`);
 await copyFile("assets/extension/popup/popup.html", `${outDir}/popup.html`);
 await copyFile("assets/extension/popup/popup.css", `${outDir}/popup.css`);
@@ -54,7 +67,7 @@ if (appEnabled("miladymaxxer") && existsSync("assets/apps/milady-maxxer/milady-l
 
 for (const dir of unique([
   ...commonAssetDirs,
-  ...firstPartyApps.flatMap((app) => app.assets || []),
+  ...hostAssetApps.flatMap((app) => app.assets || []),
 ])) {
   await copyAssetDirectory(dir);
 }
@@ -102,10 +115,15 @@ const common = {
   logLevel: "info",
   loader: { ".css": "text" },
   define: {
+    MILXDY_BUILD_CHANNEL: JSON.stringify(buildChannel),
     MILXDY_BUILD_PROFILE: JSON.stringify(buildProfile),
     MILXDY_BUILD_TARGET: JSON.stringify(target),
     MILXDY_VERSION: JSON.stringify(extensionVersion),
     MILXDY_LOCAL_ADDON_BUILD_ID: JSON.stringify(localAddonBuildId),
+    MILXDY_REMILIA_CLIENT_ID: JSON.stringify(buildChannel === "beta" ? chromiumBetaProfile.remiliaLogin.clientId : ""),
+    MILXDY_REMILIA_ISSUER_URI: JSON.stringify(buildChannel === "beta" ? chromiumBetaProfile.remiliaLogin.issuerUri : ""),
+    MILXDY_REMILIA_REDIRECT_PATH: JSON.stringify(buildChannel === "beta" ? chromiumBetaProfile.remiliaLogin.redirectPath : ""),
+    MILXDY_REMILIA_REDIRECT_URI: JSON.stringify(buildChannel === "beta" ? chromiumBetaProfile.remiliaLogin.redirectUri : ""),
   },
   plugins: [profileRegistryPlugin()],
 };
@@ -128,6 +146,19 @@ function readProfile() {
     throw new Error(`Unknown build profile "${value}". Use "lite", "balanced", or "full".`);
   }
   return value;
+}
+
+function readChannel() {
+  const value = process.argv.find((arg) => arg.startsWith("--channel="))?.split("=")[1] ?? "production";
+  if (value !== "production" && value !== "beta") {
+    throw new Error(`Unknown build channel "${value}". Use "production" or "beta".`);
+  }
+  return value;
+}
+
+function defaultOutputDir() {
+  const targetChannel = buildChannel === "beta" ? `${target}-beta` : target;
+  return buildProfile === "full" ? `dist/${targetChannel}` : `dist/${targetChannel}-${buildProfile}`;
 }
 
 function readStringArg(name) {
@@ -376,6 +407,10 @@ function validateLocalAppPlanMetadata(plan, packageRoots, copyTargetsByPackage) 
       assertLocalPackageTarget(packageId, asset, `web-accessible asset ${packageId}`);
       if (!copyTargets.has(asset)) throw new Error(`Local app plan metadata for ${packageId} has a web-accessible asset outside the composer copy map.`);
     }
+    for (const action of app.pageContextActions || []) {
+      assertLocalPackageTarget(packageId, action.entry, `page context action ${packageId}:${action.id}`);
+      if (!copyTargets.has(action.entry)) throw new Error(`Local app plan metadata for ${packageId} has a page context action entry outside the composer copy map.`);
+    }
   }
 
   const declaredAddedHosts = unique(Array.from(privacyById.values()).flatMap((entry) => entry.permissions?.addedHosts || [])).sort();
@@ -458,6 +493,13 @@ async function writeManifest() {
   manifest.optional_permissions = buildOptionalPermissions(manifest.optional_permissions || []);
   if (manifest.optional_permissions.length === 0) delete manifest.optional_permissions;
   manifest.web_accessible_resources = buildWebAccessibleResources(manifest.web_accessible_resources || []);
+  if (buildChannel === "beta") {
+    manifest.name = chromiumBetaProfile.name;
+    manifest.key = chromiumBetaProfile.manifestKey;
+    manifest.permissions = unique([...(manifest.permissions || []), chromiumBetaProfile.identityPermission]);
+    manifest.version_name = `${extensionVersion} Beta`;
+    manifest.action.default_title = chromiumBetaProfile.name;
+  }
   if (target === "firefox") {
     manifest.background = {
       scripts: ["background.js"],
@@ -485,6 +527,56 @@ async function writeManifest() {
   await writeFile(`${outDir}/manifest.json`, `${JSON.stringify(manifest, null, 2)}\n`);
 }
 
+async function writeLoginClientContract() {
+  if (buildChannel !== "beta") return;
+  const contract = {
+    schemaVersion: 1,
+    channel: chromiumBetaProfile.channel,
+    clientType: "public",
+    clientId: chromiumBetaProfile.remiliaLogin.clientId,
+    issuerUri: chromiumBetaProfile.remiliaLogin.issuerUri,
+    authorizationScope: "openid",
+    extensionId: chromiumBetaProfile.extensionId,
+    redirectPath: chromiumBetaProfile.remiliaLogin.redirectPath,
+    redirectUri: chromiumBetaProfile.remiliaLogin.redirectUri,
+  };
+  await writeFile(`${outDir}/remilia-login-client.json`, `${JSON.stringify(contract, null, 2)}\n`);
+}
+
+function validateChromiumBetaProfile(profile) {
+  if (profile?.schemaVersion !== 1 || profile.channel !== "beta" || profile.target !== "chromium") {
+    throw new Error("Chromium beta profile metadata is invalid.");
+  }
+  if (profile.name !== "milXdy Beta") throw new Error("Chromium beta profile name must be milXdy Beta.");
+  if (profile.identityPermission !== "identity") throw new Error("Chromium beta profile must declare the identity permission.");
+  if (!/^MIIB[A-Za-z0-9+/]+={0,2}$/u.test(profile.manifestKey || "")) {
+    throw new Error("Chromium beta profile is missing a pinned public manifest key.");
+  }
+  const derivedExtensionId = extensionIdFromManifestKey(profile.manifestKey);
+  if (profile.extensionId !== derivedExtensionId) {
+    throw new Error(`Chromium beta profile extension id mismatch: expected ${derivedExtensionId}.`);
+  }
+  const login = profile.remiliaLogin;
+  if (!/^[A-Za-z0-9._-]+$/u.test(login?.clientId || "")) {
+    throw new Error("Chromium beta profile is missing a valid public Remilia Login client id.");
+  }
+  if (login.issuerUri !== "https://www.remilia.net/oidc/realms/remilia") {
+    throw new Error("Chromium beta profile Remilia issuer URI is invalid.");
+  }
+  if (login.redirectPath !== "remilia-oauth") {
+    throw new Error("Chromium beta profile redirect path must be remilia-oauth.");
+  }
+  const expectedRedirectUri = `https://${derivedExtensionId}.chromiumapp.org/${login.redirectPath}`;
+  if (login.redirectUri !== expectedRedirectUri) {
+    throw new Error(`Chromium beta profile redirect URI mismatch: expected ${expectedRedirectUri}.`);
+  }
+}
+
+function extensionIdFromManifestKey(key) {
+  const digest = createHash("sha256").update(Buffer.from(key, "base64")).digest().subarray(0, 16);
+  return Array.from(digest, (byte) => `${String.fromCharCode(97 + (byte >> 4))}${String.fromCharCode(97 + (byte & 15))}`).join("");
+}
+
 function buildHostPermissions(existing) {
   return unique([
     ...existing,
@@ -505,8 +597,8 @@ function buildWebAccessibleResources(existing) {
     "icons/*",
     "remilia-fonts/*",
     "features/*.js",
-    ...firstPartyApps.flatMap((app) => app.assets || []).filter((dir) => !nonWebAccessibleAssetDirs.has(dir)).map((dir) => `${dir}/*`),
-    ...firstPartyApps.flatMap((app) => app.requiredOutputs || []),
+    ...hostAssetApps.flatMap((app) => app.assets || []).filter((dir) => !nonWebAccessibleAssetDirs.has(dir)).map((dir) => `${dir}/*`),
+    ...hostAssetApps.flatMap((app) => app.requiredOutputs || []),
   ]);
   if (appEnabled("post-reading")) {
     resources.push("ocr/*");
@@ -724,7 +816,7 @@ if (!watch) {
     `${outDir}/reminetChatBridge.js`,
     `${outDir}/reminetCraftFastPath.js`,
     ...sourceBuiltApps.map((app) => `${outDir}/${app.entryName}.js`),
-    ...firstPartyApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
+    ...hostAssetApps.flatMap((app) => (app.requiredOutputs || []).map((file) => `${outDir}/${file}`)),
     ...(localAppPlan?.packageCopyMap || []).map((item) => `${outDir}/${item.to}`),
   ];
   const missing = required.filter((file) => !existsSync(file));

@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import path from "node:path";
@@ -12,6 +12,7 @@ const planPath = path.join(compositionRoot, "build-plan.json");
 const packageInput = "tmp/post-reading-sdk-reference/post-reading";
 const compositionInput = "tmp/post-reading-sdk-reference/composition";
 const planInput = "tmp/post-reading-sdk-reference/composition/build-plan.json";
+const POST_READING_RAIL_DEFAULT_MIGRATION_KEY = "milxdy.apps.postReadingRailDefault.v1";
 const replacementPolicies = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
 const referencePolicy = replacementPolicies.replacements?.find((candidate) => candidate.id === "post-reading");
 if (!referencePolicy?.sourceUrl || !referencePolicy?.sourceCommit) {
@@ -33,12 +34,18 @@ if (sourceCommit !== referencePolicy.sourceCommit) {
 }
 
 try {
+  run(process.execPath, ["scripts/sync-milxdy-sdk.mjs", "--check", `--milxdy-repo=${workspace}`], referenceRepo);
   run(process.execPath, ["scripts/build-milxdy-package.mjs"], referenceRepo);
-  run(process.execPath, ["scripts/verify-milxdy-package.mjs"], referenceRepo);
+  run(process.execPath, ["scripts/verify-milxdy-package.mjs"], referenceRepo, false, {
+    MILXDY_SDK_TYPES: path.join(workspace, "sdk", "types", "index.d.ts"),
+  });
 
   const externalCompatibility = JSON.parse(await readFile(path.join(referenceRepo, "milxdy.compatibility.json"), "utf8"));
   const localCompatibility = JSON.parse(await readFile("sdk/references/post-reading.compatibility.json", "utf8"));
   assertEqual(externalCompatibility, localCompatibility, "Post-reading compatibility contract drifted from the milXdy mirror");
+  const externalAcceptance = JSON.parse(await readFile(path.join(referenceRepo, "milxdy.acceptance.json"), "utf8"));
+  const localAcceptance = JSON.parse(await readFile("sdk/references/post-reading.acceptance.json", "utf8"));
+  assertEqual(externalAcceptance, localAcceptance, "Post-reading acceptance contract drifted from the milXdy mirror");
 
   await rm(stageRoot, { recursive: true, force: true });
   await mkdir(stageRoot, { recursive: true });
@@ -47,6 +54,8 @@ try {
   const stagedManifestPath = path.join(packageRoot, "milxdy.app.json");
   const stagedContentPath = path.join(packageRoot, "dist", "content.js");
   const stagedManifest = JSON.parse(await readFile(stagedManifestPath, "utf8"));
+  const stagedAcceptance = JSON.parse(await readFile(path.join(packageRoot, "milxdy.acceptance.json"), "utf8"));
+  assertEqual(stagedAcceptance, localAcceptance, "Built Post-reading package omitted or changed the acceptance contract");
   const stagedContent = await readFile(stagedContentPath);
   stagedManifest.review.sourceUrl = "https://github.com/example/untrusted-post-reading";
   await writeFile(stagedManifestPath, `${JSON.stringify(stagedManifest, null, 2)}\n`);
@@ -65,6 +74,14 @@ try {
   }
 
   const plan = JSON.parse(await readFile(planPath, "utf8"));
+  const composedPostReading = plan.apps?.find((candidate) => candidate.id === "post-reading");
+  if (!composedPostReading?.defaultEnabled
+    || !composedPostReading?.dock
+    || composedPostReading?.hub?.rail?.supported !== true
+    || composedPostReading?.hub?.rail?.defaultPinned !== true
+    || !composedPostReading?.hostAssetAccess?.includes("post-reading")) {
+    throw new Error("Composed Post-reading must retain the host-owned default-enabled X rail launcher and packaged host assets");
+  }
   plan.outputDir = "tmp/post-reading-sdk-reference/chromium";
   await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
   run(process.execPath, [
@@ -72,14 +89,60 @@ try {
     "--target=chromium",
     `--local-app-plan=${planInput}`,
   ], workspace);
+  const builtContent = await readFile(path.join(workspace, plan.outputDir, "content.js"), "utf8");
+  const builtPackageContent = await readFile(path.join(workspace, plan.outputDir, "local-apps", "post-reading", "dist", "content.js"), "utf8");
+  const builtManifest = JSON.parse(await readFile(path.join(workspace, plan.outputDir, "manifest.json"), "utf8"));
+  await stat(path.join(workspace, plan.outputDir, "post-reading", "post-reading-logo.png"));
+  const builtWebAccessibleResources = (builtManifest.web_accessible_resources || []).flatMap((entry) => entry.resources || []);
+  if (!builtWebAccessibleResources.includes("post-reading/*")) {
+    throw new Error("Built Post-reading runtime omitted the host-owned logo asset exposure");
+  }
+  for (const expected of [
+    POST_READING_RAIL_DEFAULT_MIGRATION_KEY,
+    "post-reading",
+    "railDefaultPinned",
+  ]) {
+    if (!builtContent.includes(expected)) {
+      throw new Error(`Built Post-reading runtime omitted default rail migration evidence: ${expected}`);
+    }
+  }
+  for (const expected of [
+    'header.className = "post-reading-panel-header"',
+    'postReadingAssetUrl("post-reading/post-reading-logo.png")',
+    'window.addEventListener("pointermove", move)',
+    "nearestPlayerPosition(",
+    "width: min(340px, calc(100vw - 32px))",
+    "border-radius: 10px",
+    'data-milxdy-tweet-slot="post-reading-header-action"',
+    'button.setAttribute("aria-label", "Read aloud")',
+    "collectTweetsWithEmptyRuntimeSlots",
+    "MutationObserver",
+    '[data-milxdy-tweet-slot="post-reading-header-action"] > .post-reading-button',
+    "position: static",
+    "transform: none",
+    "align-self: center",
+    '.post-reading-settings input[type="text"]',
+    "caret-color: rgb(15, 20, 25)",
+    "color-scheme: light",
+    ".post-reading-settings select option",
+  ]) {
+    if (!builtPackageContent.includes(expected)) {
+      throw new Error(`Built Post-reading package omitted reviewed UI evidence: ${expected}`);
+    }
+  }
 
   console.log(`Post-reading external App SDK reference verified from ${referenceRepo}`);
 } finally {
   await rm(stageRoot, { recursive: true, force: true });
 }
 
-function run(command, args, cwd, capture = false) {
-  const result = spawnSync(command, args, { cwd, encoding: capture ? "utf8" : undefined, stdio: capture ? "pipe" : "inherit" });
+function run(command, args, cwd, capture = false, extraEnv = {}) {
+  const result = spawnSync(command, args, {
+    cwd,
+    env: { ...process.env, ...extraEnv },
+    encoding: capture ? "utf8" : undefined,
+    stdio: capture ? "pipe" : "inherit",
+  });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${command} ${args.join(" ")} failed with exit ${result.status}`);
   return result;

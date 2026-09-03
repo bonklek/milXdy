@@ -90,39 +90,80 @@ let baselineCharsPerSecond = 13;
 let calibrationSamples = 0;
 let calibrationLocked = false;
 let frameBooted = false;
+let directReaderEnabled = window.top !== window;
 const CALIBRATION_SAMPLE_LIMIT = 5;
 const highlightEngine = new TextHighlightEngine();
 
-if (window.top !== window) {
-  bootWikiFrame();
+if (WIKI_HOSTS.has(window.location.hostname.toLowerCase())) {
+  bootWikiFrame(window.top !== window);
 }
 
-function bootWikiFrame(): void {
+function bootWikiFrame(embedded: boolean): void {
   if (frameBooted) return;
   frameBooted = true;
-  document.addEventListener("click", handleWikiFrameClick, true);
-  document.addEventListener("mousedown", handleWikiFrameMouseHistoryButton, true);
-  document.addEventListener("auxclick", handleWikiFrameMouseHistoryButton, true);
-  document.addEventListener("submit", handleWikiFrameSubmit, true);
-  window.addEventListener("pageshow", reportCurrentFrameUrl);
-  window.addEventListener("pageshow", installReadAloudButton);
+  document.documentElement.dataset.milxdyWikiSurface = embedded ? "embedded" : "direct";
+  if (embedded) {
+    document.addEventListener("click", handleWikiFrameClick, true);
+    document.addEventListener("mousedown", handleWikiFrameMouseHistoryButton, true);
+    document.addEventListener("auxclick", handleWikiFrameMouseHistoryButton, true);
+    document.addEventListener("submit", handleWikiFrameSubmit, true);
+    window.addEventListener("pageshow", reportCurrentFrameUrl);
+    window.addEventListener("message", handleParentMessage);
+  } else {
+    observeDirectReaderEnablement();
+    document.addEventListener("wikiSidebar:reader-highlight", handleDirectReaderHighlight as EventListener);
+    document.addEventListener("post-reading:wiki-reading-state", handleDirectReaderState as EventListener);
+  }
+  window.addEventListener("pageshow", refreshReadAloudButton);
   window.addEventListener("popstate", () => {
     clearReadHighlight();
-    reportCurrentFrameUrl();
-    installReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    refreshReadAloudButton();
   });
   window.addEventListener("hashchange", () => {
     clearReadHighlight();
-    reportCurrentFrameUrl();
-    installReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    refreshReadAloudButton();
   });
-  window.addEventListener("message", handleParentMessage);
   whenWikiDomReady(() => {
     injectPostReadingStyles();
-    installReadAloudButton();
-    reportCurrentFrameUrl();
-    new MutationObserver(() => installReadAloudButton()).observe(document.documentElement, { childList: true, subtree: true });
+    refreshReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    new MutationObserver(refreshReadAloudButton).observe(document.documentElement, { childList: true, subtree: true });
   });
+}
+
+function refreshReadAloudButton(): void {
+  if (!directReaderEnabled) {
+    document.getElementById(READ_BUTTON_ID)?.remove();
+    document.getElementById(READ_BUTTON_SLOT_ID)?.remove();
+    return;
+  }
+  installReadAloudButton();
+}
+
+function observeDirectReaderEnablement(): void {
+  void chrome.storage.sync.get({ enabled: true }).then((stored) => {
+    directReaderEnabled = stored.enabled !== false;
+    refreshReadAloudButton();
+  }).catch(() => undefined);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "sync" || !changes.enabled) return;
+    directReaderEnabled = changes.enabled.newValue !== false;
+    if (!directReaderEnabled) clearReadHighlight();
+    refreshReadAloudButton();
+  });
+}
+
+function handleDirectReaderHighlight(event: CustomEvent<unknown>): void {
+  if (!isWikiParentMessage(event.detail) || event.detail.type === "wikiSidebar:theme") return;
+  if (event.detail.type === "wikiSidebar:clearReadHighlight") clearReadHighlight();
+  else applyHighlightBoundary(event.detail);
+}
+
+function handleDirectReaderState(event: CustomEvent<unknown>): void {
+  const detail = event.detail && typeof event.detail === "object" ? event.detail as Record<string, unknown> : null;
+  if (detail?.active === false) clearReadHighlight();
 }
 
 function whenWikiDomReady(callback: () => void): void {
@@ -209,6 +250,12 @@ function requestReadAloud(): void {
     title: article.title,
     text: article.text,
   };
+  if (window.top === window) {
+    document.dispatchEvent(new CustomEvent("post-reading:read-document", {
+      detail: { id: message.articleId, title: message.title, text: message.text, source: "wiki" },
+    }));
+    return;
+  }
   void chrome.runtime.sendMessage(message).catch(() => undefined);
 }
 

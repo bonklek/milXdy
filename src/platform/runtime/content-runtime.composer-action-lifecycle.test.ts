@@ -21,4 +21,18 @@ describe("composer action click lifecycle", () => {
     expect(source).toContain("activeComposerAction.button = button");
     expect(source).toContain("pendingComposerAction.button = button");
   });
+
+  it("opens package panels without waiting for optional package stylesheets", async () => {
+    const source = await readFile(new URL("./content-runtime.ts", import.meta.url), "utf8");
+    const openComposerAction = source.slice(
+      source.indexOf("async function openComposerAction"),
+      source.indexOf("function closeComposerActionPanel"),
+    );
+
+    expect(openComposerAction).toContain("void installComposerActionPackageStyles(app, shadow).catch");
+    expect(openComposerAction).not.toContain("await installComposerActionPackageStyles(app, shadow)");
+    expect(openComposerAction).toContain('fallback: "host-style"');
+    expect(source).toContain("shadow.append(hostStyle)");
+    expect(source).toContain("shadow.append(stylesheet)");
+  });
 });

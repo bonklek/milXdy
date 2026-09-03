@@ -4,7 +4,7 @@
   "version": "0.2.5",
   "default_locale": "en",
   "description": "__MSG_extensionDescription__",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs", "scripting"],
+  "permissions": ["activeTab", "alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "scripting"],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
@@ -36,7 +36,14 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.remilia.net/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*",
+        "https://boards.miladychan.org/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_start"
     },
@@ -89,7 +96,14 @@
         "generated/*",
         "models/*"
       ],
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://remilia.wiki/*", "https://wiki.remilia.org/*"]
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.remilia.net/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*",
+        "https://boards.miladychan.org/*"
+      ]
     }
   ],
   "options_page": "popup.html",

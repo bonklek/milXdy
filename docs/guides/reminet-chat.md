@@ -10,15 +10,22 @@ RemiNet Chat provides a docked RemiliaNET chat client and an X Messages integrat
 
 ## Common Tasks
 
-- Confirm RemiNet login status before opening chat.
+- Confirm the official **Remilia account** status before opening chat.
 - Use the docked panel for recent messages, live updates, reactions, pokes, attachments, allowlisted media and pfp.remilia.net avatar previews, and profile lookups.
 - Reaction counts appear pressed when your account is included, and clicking the count continues to toggle that reaction.
 - Scroll to the oldest loaded messages and click **Show more** to load another batch of older history.
 - Use minimized mode when you want chat present without taking over the page.
-- If chat does not connect, finish RemiliaNET login in the browser, then retry the session and refresh X/Twitter.
+- If chat does not connect, use **Connect** or **Reconnect** and confirm the
+  `remilia:chat.read` and `remilia:chat.write` abilities, then refresh X/Twitter.
 
 ## Notes
 
-RemiNet Chat uses the browser RemiliaNET session and connects to RemiliaNET APIs and WebSocket live updates. Media and avatar previews are limited to allowlisted HTTPS RemiliaNET media and pfp.remilia.net URLs.
+Official API-v1 REST history and text/reply posting are the source of truth.
+The WebSocket is a temporary legacy acceleration adapter: disabling or losing
+it must not break REST history or text posting. Media upload/confirm remains a
+separately labeled legacy adapter until Remilia publishes an equivalent API-v1
+contract. A failed upload sends neither the message nor undisclosed media and
+keeps the pending attachment available for retry. Media and avatar previews are limited to allowlisted HTTPS
+RemiliaNET media and `pfp.remilia.net` URLs.
 
 On RemiliaNET global chat, hover or keyboard-focus **Last read** or **Jump to present** to reveal its dismissal control. Dismissing either removes only that marker kind for the current page document; it does not hide messages, change read history, send a request, or persist across a page navigation/reload.

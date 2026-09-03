@@ -13,7 +13,7 @@ void bootStandalonePostReading();
 async function bootStandalonePostReading(): Promise<void> {
   document.documentElement.dataset.milxdyPerformanceMode ||= "balanced";
 
-  const context: MilxdyContentAppContext = {
+  await boot({
     manifest: {
       id: "post-reading",
       name: "Post-reading",
@@ -72,6 +72,7 @@ async function bootStandalonePostReading(): Promise<void> {
       },
       isEnabled: async () => true,
     },
+    site: { id: "x", origin: location.origin, mode: "fullRail" },
     signal: controller.signal,
     requestSurfaceRescan: scheduleTwitterScan,
     scheduleScan: scheduleTwitterScan,
@@ -87,9 +88,7 @@ async function bootStandalonePostReading(): Promise<void> {
     addDisposable(disposable) {
       disposables.push(disposable);
     },
-  };
-
-  await boot(context);
+  } satisfies MilxdyContentAppContext);
   disposables.push(subscribeTwitterSurfaces(onSurface));
 }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAppAssetResolver } from "./app-assets";
-import { firstPartyAppById } from "./first-party-registry";
+import { firstPartyAppById, firstPartyHostAssetAccess } from "./first-party-registry";
 
 describe("createAppAssetResolver", () => {
   it("maps declared local-package assets into the package namespace", () => {
@@ -22,6 +22,24 @@ describe("createAppAssetResolver", () => {
     }, (path) => path);
     expect(resolve("ocr.html")).toBe("ocr.html");
     expect(resolve("post-reading/logo.png")).toBe("post-reading/logo.png");
+  });
+
+  it("preserves reviewed host-asset grants after first-party package composition", () => {
+    const hostAssetAccess = firstPartyHostAssetAccess({
+      assets: undefined,
+      requiredOutputs: undefined,
+      hostAssetAccess: ["ocr.html", "post-reading"],
+    });
+    const resolve = createAppAssetResolver({
+      id: "post-reading",
+      localPackage: {},
+      package: { assets: [] },
+      hostAssetAccess,
+    }, (path) => path);
+
+    expect(resolve("post-reading/post-reading-logo.png")).toBe("post-reading/post-reading-logo.png");
+    expect(resolve("ocr.html")).toBe("ocr.html");
+    expect(() => resolve("other-app/icon.png")).toThrow("not declared or policy-granted");
   });
 
   it("rejects undeclared and unsafe paths", () => {

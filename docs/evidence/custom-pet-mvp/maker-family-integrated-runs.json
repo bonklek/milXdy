@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "issue": 192,
+  "status": "passed",
+  "samples": [
+    {
+      "family": "remilio",
+      "samplePet": "moxie",
+      "source": {
+        "petManifestSha256": "739a67d27c322a86842120036460639841831d299ff4f5d406a3c81df0b9a2b3",
+        "atlasSha256": "4eb19c01b6fc66e321710f43e12688dbcdd9ec8536a6fc4c78fec07cd3d40402",
+        "contactSheetSha256": "71ed9ae08ef483a7bba036dd9a915a8b03488fdd1857de97c08a088a92ae672b",
+        "directionSheetSha256": "aa40a8fea7f91d8392618618cfc4b5e6fa999e7896a38d3c19a9b70cd1487fd4",
+        "continuitySha256": "2e907402687b2eda622e2e218f15e97f4fb7ae59d446d3f8a9b2ae0307991254",
+        "sourceMutated": false
+      },
+      "bundle": {
+        "sha256": "bd28d9baa0ad8ddb0f95f694f994ec7d29beeda130c1013469de2c40191de1aa",
+        "requestSha256": "e0ff634919011a31c7643587988b84d4fe2af7b993230618525d3f7344821076",
+        "avatarSha256": "fb6a5fc3db2b3bae3bd532770d63b5aa1fddfbeb63d4a21039ef55cd6b22e264"
+      },
+      "adapter": {
+        "templateId": "remilio-v1",
+        "combinedTemplateSha256": "6cc5a7baa9f33ef26f7274639628a78e54d10f40b3e8213b85711016db028b25",
+        "delegateSkill": "hatch-pet"
+      },
+      "deterministicQa": {
+        "status": "passed",
+        "failures": 0,
+        "runtimeFrames": 73,
+        "reservedFrames": 1,
+        "evidenceSha256": "3e059879fb6a92c6fc347e547f25c59c8ff27428a886f7416ed9272b656032f9"
+      },
+      "semanticReview": {
+        "status": "approved",
+        "evidenceFile": "docs/evidence/custom-pet-mvp/maker-family-semantic-reviews.json"
+      },
+      "safety": {
+        "uploaded": false,
+        "published": false,
+        "installed": false,
+        "sourceMutated": false
+      }
+    },
+    {
+      "family": "bonkler",
+      "samplePet": "wiggum",
+      "source": {
+        "petManifestSha256": "76660adc49ca46f42090bd700b5ce5155ebdf9af2f884829c5c90b7c4bbaa037",
+        "atlasSha256": "d33bec3d1483e328f3d75a53853dd335576edd7f8b44f36fb5ddd81621762236",
+        "contactSheetSha256": "edd93176b3a634da014df1baca6289328b55f7039189122ebeca75b15bc0bee6",
+        "directionSheetSha256": "0027225df97121d0c00e73de6acd0faa0c70af7155547a9ada87830134d2036b",
+        "continuitySha256": "a4c32fb4b81c876a663970f3752705dfcfe74bf9eeabab2c28a88867a3e02d44",
+        "sourceMutated": false
+      },
+      "bundle": {
+        "sha256": "55ef03ac8da56eaa98dc9382ef4f3c98c4b56e9e0269f4e82f671a9ee054e742",
+        "requestSha256": "f6a770c61a10c52c42200b1cf450608c8a3f532fbf1247424d670ef6e71496ec",
+        "avatarSha256": "118a64d6e63742863b0a6f68e13eb7cba530cb036ed096a1f4bf538afea71953"
+      },
+      "adapter": {
+        "templateId": "bonkler-v1",
+        "combinedTemplateSha256": "60758e2222ca4d52a9b5aac6a1080c9c0e97b8c7f06562f92b08e02de45688a8",
+        "delegateSkill": "hatch-pet"
+      },
+      "deterministicQa": {
+        "status": "passed",
+        "failures": 0,
+        "runtimeFrames": 73,
+        "reservedFrames": 1,
+        "evidenceSha256": "46c276e1d4c99e61ce1d8cb731c9b27e433b83669b5aabfabd0d904418cbeb3e"
+      },
+      "semanticReview": {
+        "status": "approved",
+        "evidenceFile": "docs/evidence/custom-pet-mvp/maker-family-semantic-reviews.json"
+      },
+      "safety": {
+        "uploaded": false,
+        "published": false,
+        "installed": false,
+        "sourceMutated": false
+      }
+    },
+    {
+      "family": "kagami",
+      "samplePet": "yumi",
+      "source": {
+        "petManifestSha256": "c7b0ffec907a715b4492b05d843a935822158f60540d9397bfefe4959da65a14",
+        "atlasSha256": "18bbb27ed171c8a1ee3da97cc86e88e4d17e703ee6bea3a51318a9822cc6bfcf",
+        "contactSheetSha256": "15cd50d76104a2defa762d68158d06d0383db8eeeac908921a3daf5cde5dff08",
+        "directionSheetSha256": "ba8413c6d79d90197375be5d8bcd71d352b85d3bf72aab2734ac5ed460536f28",
+        "continuitySha256": "697d57732f4e1e29f3bddc43268986760d4250a44ece8f891033cdadd4db27c5",
+        "sourceMutated": false
+      },
+      "bundle": {
+        "sha256": "e1a42d3f20563d78b1b79779b1f9fc925ed0f6651576634e9ee5e291c0da0741",
+        "requestSha256": "139da8b0ce42f596b89cf13dd0e5e135f12408a436b48ef013573450a65a50c1",
+        "avatarSha256": "fe5b4b052684722f805f0008de9cc45a96d221b6970a044b1d8dfb396277e02f"
+      },
+      "adapter": {
+        "templateId": "kagami-v1",
+        "combinedTemplateSha256": "1295c70fed69d6a78dab9e2788929285e0f0ced34b4e2af3fea9ced754104439",
+        "delegateSkill": "hatch-pet"
+      },
+      "deterministicQa": {
+        "status": "passed",
+        "failures": 0,
+        "runtimeFrames": 73,
+        "reservedFrames": 1,
+        "evidenceSha256": "1283d202dfabf76a853c26fb8cd65398dc00fcc71c18edbf26c667d6cff0df85"
+      },
+      "semanticReview": {
+        "status": "approved",
+        "evidenceFile": "docs/evidence/custom-pet-mvp/maker-family-semantic-reviews.json"
+      },
+      "safety": {
+        "uploaded": false,
+        "published": false,
+        "installed": false,
+        "sourceMutated": false
+      }
+    }
+  ]
+}

@@ -45,8 +45,10 @@ const extractionDir = checkOnly
 const registryApps = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const publicManifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 const firstPartyReplacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
+const defaultEnablementPolicy = JSON.parse(await readFile("scripts/packages/local-app-default-enablement.json", "utf8"));
 const firstPartyById = new Map(registryApps.map((app) => [app.id, app]));
 const firstPartyReplacementPolicyById = new Map((firstPartyReplacementPolicy.replacements || []).map((item) => [item.id, item]));
+const defaultEnablementPolicyById = new Map((defaultEnablementPolicy.packages || []).map((item) => [item.id, item]));
 const baseHostPermissions = publicManifest.host_permissions ?? [];
 const builtInStorageKeys = builtInRegistryStorageKeys(registryApps);
 
@@ -81,6 +83,17 @@ const supportedRemoteQueryAdapters = new Map([
     host: "https://remibooru.com/*",
     resources: new Set(["posts", "facets"]),
   }],
+]);
+const remiliaCapabilityContracts = new Map([
+  ["remilia.profile.public", { operations: ["getUserProfile"], scopes: [], consent: "enablement" }],
+  ["remilia.profile.me", { operations: ["getMe"], scopes: [], consent: "enablement" }],
+  ["remilia.directory.read", { operations: ["resolveDirectory", "listDirectoryUsers"], scopes: ["remilia:directory.read"], consent: "enablement" }],
+  ["remilia.stats.read", { operations: ["getMyStats"], scopes: ["remilia:stats.read"], consent: "enablement" }],
+  ["remilia.notifications.read", { operations: ["listMyNotifications"], scopes: ["remilia:notifications.read"], consent: "enablement" }],
+  ["remilia.pokes.write", { operations: ["pokeUser"], scopes: ["remilia:pokes.write"], consent: "perInvocation" }],
+  ["remilia.beetle.read", { operations: ["getMyBeetle", "getMyBeetleCards"], scopes: ["remilia:beetle.read"], consent: "enablement" }],
+  ["remilia.chat.read", { operations: ["listGlobalChatMessages"], scopes: ["remilia:chat.read"], consent: "enablement" }],
+  ["remilia.chat.write", { operations: ["postGlobalChatMessage"], scopes: ["remilia:chat.write"], consent: "perInvocation" }],
 ]);
 const sensitiveStorageNeedles = [
   "auth",
@@ -126,6 +139,10 @@ const nonAcknowledgeablePackageApiRuleIds = new Set([
   "computed-extension-api-global-from-char-code",
   "computed-extension-api-global-from-reflect",
   "computed-runtime-api-property",
+  "direct-fetch",
+  "direct-xhr",
+  "direct-websocket",
+  "credential-material",
 ]);
 const staticSensitiveStringValues = Object.freeze([
   "chrome",
@@ -230,6 +247,30 @@ const sensitivePackageApiRules = [
     severity: "warning",
     pattern: /\b(?:chrome-extension|moz-extension):\/\//g,
     message: "references extension-origin internals directly; use declared package assets and reviewed platform APIs",
+  },
+  {
+    id: "direct-fetch",
+    severity: "error",
+    pattern: /\bfetch\s*\(/g,
+    message: "uses fetch directly; reviewed packages must use typed host capabilities and cannot issue authenticated or arbitrary network requests",
+  },
+  {
+    id: "direct-xhr",
+    severity: "error",
+    pattern: /\b(?:new\s+)?XMLHttpRequest\b/g,
+    message: "uses XMLHttpRequest directly; reviewed packages must use typed host capabilities",
+  },
+  {
+    id: "direct-websocket",
+    severity: "error",
+    pattern: /\b(?:new\s+)?WebSocket\b/g,
+    message: "uses WebSocket directly; Remilia realtime remains a trusted first-party legacy adapter",
+  },
+  {
+    id: "credential-material",
+    severity: "error",
+    pattern: /(?:\bAuthorization\b\s*:|\bBearer\s+[A-Za-z0-9._~+/-]+|\b(?:accessToken|refreshToken|clientSecret)\b|\bdocument\s*\.\s*cookie\b|\bcredentials\s*:\s*["']include["'])/gi,
+    message: "references credential material; package code cannot access OAuth tokens, cookies, authorization headers, or credentialed fetch",
   },
 ];
 
@@ -504,13 +545,13 @@ async function analyzePackage(source, manifest) {
   if (source.type === "folder" && manifest.id !== path.basename(root)) warnings.push(`${id}: package folder name does not match manifest id; folder packages should be renamed before distribution`);
   if (firstPartyById.has(id)) warnings.push(`${id}: local package declares a built-in app id; replacement requires reviewed status and explicit acknowledgement`);
   verifyNovelPackageEnablement(id, manifest, errors);
-  if (!firstPartyById.has(id) && manifest.defaultEnabled === true && packageRequiresExplicitEnablement(manifest)) {
-    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false`);
-  }
   verifyReviewStatus(id, manifest, errors, warnings);
   verifySdk(id, manifest, errors, warnings);
   verifyExecutableContentEntry(id, manifest, errors);
   collectFile(source, manifest.contentEntry, "contentEntry", files, errors);
+  for (const action of manifest.pageContextActions || []) {
+    collectFile(source, action.entry, `pageContextAction ${action.id || "<unknown>"} entry`, files, errors);
+  }
   for (const sheet of manifest.css || []) {
     for (const field of Object.keys(sheet)) {
       if (forbiddenCssFields.has(field)) errors.push(`${id}: css entry must not include first-party build field ${field}`);
@@ -536,10 +577,12 @@ async function analyzePackage(source, manifest) {
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
   verifyContextualPostActions(id, manifest, errors);
+  verifyPageContextActions(id, manifest, errors);
   verifyContextMediaActions(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
   verifyRemoteQueries(id, manifest, errors);
+  verifyRemiliaCapabilities(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
   verifyBackgroundCapabilities(id, manifest, errors);
   verifyLifecycleExports(id, root, manifest, errors);
@@ -558,8 +601,11 @@ async function analyzePackage(source, manifest) {
   const contentSha256 = sha256Files(root, packageFiles);
   const manifestSha256 = sha256File(path.join(root, "milxdy.app.json"));
   const packageSha256 = source.archiveSha256 ?? contentSha256;
+  const defaultEnablementTrust = reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256);
+  verifyPrivilegedDefaultEnablement(id, manifest, defaultEnablementTrust, errors);
   const payloadScan = scanPackagePayloads(id, root, packageFiles);
   const trust = evaluatePackageTrust(id, source, manifest, packageFiles, webAccessibleAssets, payloadScan, packageSha256);
+  trust.trustDecision.defaultEnablementPolicy = defaultEnablementTrust;
   verifySensitivePresetParticipation(id, manifest, errors);
   verifyStorageDeclarations(id, manifest, errors, {
     allowBuiltInStorageKeys: trust.trustDecision.firstPartyReplacementPolicy.allowed
@@ -735,11 +781,17 @@ function toGeneratedRegistryApp(record) {
   const manifest = structuredClone(record.manifest);
   const firstParty = firstPartyById.get(record.id);
   manifest.contentEntry = record.contentEntry.target;
+  manifest.pageContextActions = (manifest.pageContextActions || []).map((action) => ({
+    ...action,
+    entry: packageOutputPath(record.id, action.entry),
+  }));
   manifest.css = record.css.map((sheet) => ({
     id: sheet.id,
     path: sheet.target,
   }));
-  manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  if (manifest.dock) manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  else delete manifest.dock;
+  manifest.hub = preserveFirstPartyRail(firstParty?.hub, manifest.hub);
   manifest.composerAction = rewriteComposerActionIcon(manifest.composerAction, record.id);
   manifest.contextualPostActions = rewriteContextualPostActionIcons(manifest.contextualPostActions, record.id);
   manifest.available = true;
@@ -773,7 +825,16 @@ function toGeneratedRegistryApp(record) {
       contentSha256: record.contentSha256,
       manifestSha256: record.manifestSha256,
       archiveSha256: record.source.archiveSha256,
+      packageConsentAcknowledged: record.trustDecision.packageConsentAcknowledged === true,
     },
+  };
+}
+
+function preserveFirstPartyRail(firstPartyHub, packageHub) {
+  if (!firstPartyHub?.rail) return packageHub;
+  return {
+    ...(packageHub || {}),
+    rail: structuredClone(firstPartyHub.rail),
   };
 }
 
@@ -931,6 +992,28 @@ function verifyContextualPostActions(id, manifest, errors) {
     ids.add(action?.id);
     if (!action?.label || typeof action.label !== "string") errors.push(`${id}: contextualPostActions require labels`);
     if (action?.placement !== "shareMenu") errors.push(`${id}: contextualPostActions placement must be shareMenu`);
+  }
+}
+
+function verifyPageContextActions(id, manifest, errors) {
+  const actions = manifest.pageContextActions;
+  if (!actions) return;
+  if (!Array.isArray(actions) || actions.length === 0 || actions.length > 4) {
+    errors.push(`${id}: pageContextActions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: pageContextActions packages must declare the userAction load trigger`);
+  const ids = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || ids.has(action.id)) errors.push(`${id}: pageContextActions ids must be unique safe identifiers`);
+    ids.add(action?.id);
+    if (!action?.label || typeof action.label !== "string") errors.push(`${id}: pageContextActions require labels`);
+    if (typeof action?.entry !== "string" || path.extname(action.entry).toLowerCase() !== ".js") errors.push(`${id}: pageContextActions entries must be executable .js files`);
+    const patterns = action?.documentUrlPatterns;
+    if (!Array.isArray(patterns) || patterns.length === 0 || patterns.length > 2 || new Set(patterns).size !== patterns.length
+      || patterns.some((pattern) => pattern !== "http://*/*" && pattern !== "https://*/*")) {
+      errors.push(`${id}: pageContextActions documentUrlPatterns may contain only unique HTTP/HTTPS active-tab patterns`);
+    }
   }
 }
 
@@ -1203,7 +1286,106 @@ function packageRequiresExplicitEnablement(manifest) {
     || (manifest.permissions?.optional || []).length > 0
     || (manifest.background?.messageTypes || []).length > 0
     || (manifest.background?.services || []).length > 0
+    || (manifest.remiliaCapabilities || []).length > 0
     || (manifest.privacy?.remoteServices || []).length > 0;
+}
+
+function reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256) {
+  const requested = manifest.defaultEnabled === true
+    || (manifest.settings || []).some((setting) => setting.role === "enablement" && setting.defaultValue === true);
+  const policy = defaultEnablementPolicyById.get(id);
+  const base = {
+    requested,
+    allowed: false,
+    packageConsentAcknowledged: acknowledgePackageConsent,
+  };
+  if (!requested) return { ...base, reason: "default-on enablement not requested" };
+  if (firstPartyById.has(id)) return { ...base, allowed: true, reason: "built-in app defaults are governed by the first-party registry or replacement policy" };
+  if (!packageRequiresExplicitEnablement(manifest)) return { ...base, allowed: true, reason: "package does not declare a privileged or consent-required surface" };
+  if (!policy) return { ...base, reason: "no repo-owned default-enablement policy entry" };
+
+  const expectedRoot = normalizeInputPath(policy.root);
+  const actualRoot = normalizeInputPath(source.root);
+  if (policy.sourceType && policy.sourceType !== source.type) {
+    return { ...base, root: expectedRoot, reason: `source type ${source.type} does not match policy sourceType ${policy.sourceType}` };
+  }
+  if (expectedRoot !== actualRoot) {
+    return { ...base, root: expectedRoot, reason: `source root ${actualRoot} does not match policy root ${expectedRoot}` };
+  }
+  if (manifest.review?.status !== "reviewed") {
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages require review.status reviewed" };
+  }
+  if (manifest.privacy?.consentRequired !== true) {
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages must retain privacy.consentRequired true" };
+  }
+  if (policy.packageSha256 !== packageSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, reason: `package SHA-256 ${packageSha256} does not match policy hash` };
+  }
+  if (policy.manifestSha256 !== manifestSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, manifestSha256: policy.manifestSha256, reason: `manifest SHA-256 ${manifestSha256} does not match policy hash` };
+  }
+  return {
+    ...base,
+    allowed: true,
+    root: expectedRoot,
+    packageSha256: policy.packageSha256,
+    manifestSha256: policy.manifestSha256,
+    reason: policy.reason || "repo-owned default-enablement policy matched",
+  };
+}
+
+function verifyPrivilegedDefaultEnablement(id, manifest, trust, errors) {
+  if (firstPartyById.has(id) || !packageRequiresExplicitEnablement(manifest) || trust.allowed) return;
+  if (manifest.defaultEnabled === true) {
+    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
+  }
+  for (const setting of (manifest.settings || []).filter((candidate) => candidate.role === "enablement" && candidate.defaultValue === true)) {
+    errors.push(`${id}:${setting.id || "<unknown>"}: privileged or consent-required local packages must not default enablement settings to true unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
+  }
+}
+
+function verifyRemiliaCapabilities(id, manifest, errors) {
+  const declarations = manifest.remiliaCapabilities;
+  if (declarations === undefined) return;
+  if (!Array.isArray(declarations) || declarations.length < 1 || declarations.length > remiliaCapabilityContracts.size) {
+    errors.push(`${id}: remiliaCapabilities must contain between one and ${remiliaCapabilityContracts.size} declarations`);
+    return;
+  }
+  if (manifest.review?.status !== "reviewed") errors.push(`${id}: Remilia capabilities require review.status reviewed`);
+  if (manifest.privacy?.consentRequired !== true) errors.push(`${id}: Remilia capabilities require privacy.consentRequired true`);
+  if (!manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: Remilia capabilities require the remote-api privacy label`);
+  const disclosure = [...(manifest.privacy?.permissionNotes || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.permissionNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.hub?.remoteServices || [])].join(" ").toLowerCase();
+  if (!/credential|token|cookie|authorization/.test(disclosure) || !/remilia/.test(disclosure)) {
+    errors.push(`${id}: Remilia capabilities require explicit Remilia credential-isolation privacy disclosure`);
+  }
+  const ids = new Set();
+  for (const declaration of declarations) {
+    if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) {
+      errors.push(`${id}: each Remilia capability declaration must be an object`);
+      continue;
+    }
+    for (const field of Object.keys(declaration)) {
+      if (!["id", "operations", "scopes", "consent", "reason"].includes(field)) errors.push(`${id}: Remilia capability ${declaration.id || "<unknown>"} includes unsupported field ${field}`);
+    }
+    const contract = remiliaCapabilityContracts.get(declaration.id);
+    if (!contract) {
+      errors.push(`${id}: unsupported Remilia capability ${declaration.id}`);
+      continue;
+    }
+    if (ids.has(declaration.id)) errors.push(`${id}: duplicate Remilia capability ${declaration.id}`);
+    ids.add(declaration.id);
+    if (!Array.isArray(declaration.operations) || declaration.operations.length === 0 || new Set(declaration.operations).size !== declaration.operations.length
+      || !declaration.operations.every((operation) => contract.operations.includes(operation))) {
+      errors.push(`${id}: Remilia capability ${declaration.id} must declare only its exact reviewed operations`);
+    }
+    if (!sameStringSet(declaration.scopes, contract.scopes)) errors.push(`${id}: Remilia capability ${declaration.id} must declare its exact official scopes`);
+    if (declaration.consent !== contract.consent) errors.push(`${id}: Remilia capability ${declaration.id} consent must be ${contract.consent}`);
+    if (typeof declaration.reason !== "string" || declaration.reason.trim().length < 8 || declaration.reason.length > 280) errors.push(`${id}: Remilia capability ${declaration.id} requires a bounded review reason`);
+  }
+}
+
+function sameStringSet(value, expected) {
+  return Array.isArray(value) && value.length === expected.length && new Set(value).size === value.length && value.every((item) => expected.includes(item));
 }
 
 function verifyBackgroundCapabilities(id, manifest, errors) {
@@ -1399,6 +1581,11 @@ function privilegedSurfacesFor(manifest, files, webAccessibleAssets) {
   for (const permission of manifest.permissions?.optional || []) surfaces.push(`optionalPermission:${permission}`);
   for (const type of manifest.background?.messageTypes || []) surfaces.push(`backgroundMessage:${type}`);
   for (const service of manifest.background?.services || []) surfaces.push(`backgroundService:${service}`);
+  for (const capability of manifest.remiliaCapabilities || []) {
+    surfaces.push(`remiliaCapability:${capability.id}`);
+    for (const operation of capability.operations || []) surfaces.push(`remiliaOperation:${operation}`);
+    for (const scope of capability.scopes || []) surfaces.push(`remiliaScope:${scope}`);
+  }
   for (const scope of manifest.siteScopes || []) {
     surfaces.push(`siteScope:${scope.site}:${scope.integration}`);
     for (const host of scope.hosts || []) surfaces.push(`siteHost:${host}`);
@@ -2001,10 +2188,6 @@ function verifyNovelPackageEnablement(id, manifest, errors) {
     }
     if (!declared[setting.storage.area]?.includes(setting.storage.key)) {
       errors.push(`${id}:${settingId}: enablement storage key must be declared in storageKeys.${setting.storage.area}`);
-      continue;
-    }
-    if (packageRequiresExplicitEnablement(manifest) && setting.defaultValue === true) {
-      errors.push(`${id}:${settingId}: privileged or consent-required local packages must not default enablement settings to true`);
       continue;
     }
     hasValidEnablement = true;

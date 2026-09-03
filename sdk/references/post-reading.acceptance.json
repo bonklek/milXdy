@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "packageId": "post-reading",
+  "packageVersion": "0.2.0-sdk.7",
+  "appSdkVersion": "0.2.5",
+  "browserTarget": "chromium",
+  "scenarios": [
+    {
+      "id": "install-connect",
+      "automated": "Source, commit, hash, manifest, compatibility, composition, and complete Chromium output are verified.",
+      "manual": "Load the reviewed custom build and confirm Post-reading appears in Apps & Features and on supported X surfaces."
+    },
+    {
+      "id": "update-version-mismatch",
+      "automated": "The exact package commit, hash, package version, and App SDK version pair fail closed on drift.",
+      "manual": "Replace the previous package build, reload the same extension, and confirm settings survive; an incompatible package must leave the last-known-good or built-in reader available."
+    },
+    {
+      "id": "enable-disable",
+      "automated": "The manifest declares generated enablement and exports disable/dispose lifecycle hooks.",
+      "manual": "Disable, reload, and verify controls, player, speech, listeners, and highlights are absent; re-enable and verify recovery."
+    },
+    {
+      "id": "launch-navigation",
+      "automated": "The package exports boot, onSurface, onRouteChange, open, and close; declares tweet, X Article, and direct-message delivery; shares article extraction/highlight containers; idempotently fills the host-scaffolded per-post header slot; and cancels fallback absolute offsets so the 20px launcher shares the native Grok/overflow centerline at normal and narrow layouts.",
+      "manual": "Launch from timeline and individual-post read-aloud actions beside Grok at normal zoom and a narrow responsive width, then from an X Article; confirm the launcher shares the native control row, centerline, hit-area height, and spacing, and navigate/virtualize/reuse posts to confirm one working control targets the correct post without disturbing native Grok/overflow controls or speech reset."
+    },
+    {
+      "id": "direct-message-read-aloud",
+      "automated": "DM reading requires the conversation action, uses stable route/message identity, queues visible bubbles chronologically across virtualization, forces browser Web Speech, and clears transient state on stop, completion, navigation, disable, or disposal.",
+      "manual": "Open an X DM conversation, choose Read conversation aloud, verify incoming/outgoing announcements and shared controls, virtualize and add bubbles without repeats or skips, then switch conversations and confirm speech/highlight state clears."
+    },
+    {
+      "id": "settings-migration",
+      "automated": "Declared sync/local storage keys, defaults, package version, and mirrored compatibility are validated.",
+      "manual": "Change voice, speed, volume, and reading options; reload, reset, update, and verify compatible persistence/default recovery."
+    },
+    {
+      "id": "messaging-boundaries",
+      "automated": "Direct runtime messaging and undeclared browser storage/asset access are rejected; the reviewed post-reading namespace is declared.",
+      "manual": "Exercise full-quote requests and confirm success and failure stay within the visible reader flow without leaking unrelated host capabilities."
+    },
+    {
+      "id": "audio-export",
+      "automated": "The package declares one explicit HTTP/HTTPS active-tab page action, ships its secondary entry, rejects direct browser and network APIs in both entries, and verifies extraction, loopback-only routed TTS, request-scoped active transport cancellation, object-URL cleanup, and standalone parity.",
+      "manual": "Invoke Review and download audio on an X Article and a non-X article, edit title/metadata/text, select local TTS, preview, cancel once, retry, and download preferred audio plus the adjacent metadata sidecar; confirm unsupported pages are rejected and closing the panel discards temporary data."
+    },
+    {
+      "id": "tts-fallback",
+      "automated": "Browser Web Speech remains the default and the custom endpoint is a declared user-configured remote service.",
+      "manual": "Read with browser TTS, then use an unavailable custom endpoint, cancel, select browser TTS again, and confirm local speech recovers."
+    },
+    {
+      "id": "error-offline-timeout-cancellation",
+      "automated": "Lifecycle cancellation, bounded scheduling, request-id generation/cancel routing, routed-message failure, and OCR timeout contracts are included in package verification.",
+      "manual": "Test offline quote/OCR/custom-TTS failure, cancel active work, navigate away, and confirm actionable status plus clean recovery."
+    },
+    {
+      "id": "privacy-consent",
+      "automated": "Permissions, remote services, privacy labels, consent, and package API scans are enforced by the composer; DM text is excluded from custom TTS, audio export, OCR, full-quote, background routes, diagnostics, and persistent storage.",
+      "manual": "With custom TTS selected, start DM reading and confirm browser Web Speech is used with no custom endpoint/background request; stop and navigate away, then confirm the old conversation is not retained."
+    },
+    {
+      "id": "theme-layout-accessibility",
+      "automated": "The package emits compact rounded player chrome, a host-resolved logo, bounded pointer dragging, persisted nearest-corner positioning, and Post-reading-scoped light form controls with dark values/placeholders/options/caret in dark mode.",
+      "manual": "Check light/dark theme, keyboard controls, focus, disabled/error states, zoom/reflow, reduced motion, and forced colors; in dark mode verify Engine, Voice, Speed, endpoint and shortcut controls have readable values/placeholders/options/indicators; drag the compact player to every viewport edge, reload to confirm its nearest corner persists, and reset player position to confirm the default returns."
+    },
+    {
+      "id": "uninstall-cleanup",
+      "automated": "The external package is a reviewed build-time replacement and normal builds remain independent of it.",
+      "manual": "Remove the external package selection, rebuild/reload the same extension, and verify the built-in browser-only Post-reading controls and saved compatible settings still work."
+    }
+  ]
+}

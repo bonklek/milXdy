@@ -10,6 +10,7 @@ await esbuild.build({
   format: "esm",
   platform: "browser",
   target: "chrome120",
+  preserveSymlinks: true,
   sourcemap: false,
   legalComments: "none",
 });

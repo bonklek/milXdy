@@ -17,7 +17,18 @@ import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions
 import { resolveReplyActionPanelPosition } from "./reply-action-position";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
+import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClient } from "./remilia-capability-client";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
+import { migratePostReadingRailDefault, POST_READING_RAIL_DEFAULT_MIGRATION_KEY } from "./post-reading-rail-default";
+import { diagnosticStorageEntry } from "./reminet-chat-diagnostics";
+import {
+  applyRemiStatsRuntimePhaseUpdate,
+  emptyRemiStatsRuntimePhaseState,
+  formatRemiStatsRuntimePhaseState,
+  sanitizeRemiStatsRuntimePhaseUpdate,
+  type RemiStatsRuntimePhaseState,
+} from "./remistats-runtime-phase";
+import { contentScriptScopeForApp, loadTriggersForApp, routeScopeMatches, surfacesForApp } from "./site-runtime";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
 import { splitExternalHandoffText, validateExternalHandoffCaptions } from "../app-sdk/external-handoff";
@@ -44,13 +55,12 @@ import type {
   AppPreset,
   AppRuntimeScheduler,
   AppSettingDefinition,
-  AppSiteId,
-  AppSiteScope,
   MilxdyAppId,
   MilxdyAppManifest,
   MilxdyComposerActionContext,
   MilxdyContentAppModule,
   MilxdyRouteChange,
+  MilxdyRuntimeSite,
 } from "../app-sdk/app-platform";
 
 declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
@@ -90,6 +100,7 @@ function normalizedStringSet(value: unknown): Set<string> {
 }
 
 type RuntimeState = {
+  site: MilxdyRuntimeSite;
   apps: readonly MilxdyAppManifest[];
   enabledApps: Set<MilxdyAppId>;
   loaded: Map<MilxdyAppId, MilxdyContentAppModule>;
@@ -98,7 +109,9 @@ type RuntimeState = {
   unloadingApps: Set<MilxdyAppId>;
   appDisposables: Map<MilxdyAppId, DisposableStore>;
   appAbortControllers: Map<MilxdyAppId, AbortController>;
+  remiliaCapabilityClients: Map<MilxdyAppId, PackageRemiliaCapabilityClient>;
   diagnostics: Map<MilxdyAppId, AppDiagnostics>;
+  remistatsRuntimePhases: RemiStatsRuntimePhaseState;
   route: MilxdyRouteChange;
   disposed: boolean;
   diagnosticsTimer: number | null;
@@ -134,6 +147,7 @@ type RuntimeState = {
   railPinnedApps: Set<MilxdyAppId>;
   railUnpinnedApps: Set<MilxdyAppId>;
   railPinsExplicit: boolean;
+  postReadingRailDefaultMigrated: boolean;
   idlePreloadTimer: number | null;
   routeSurfaceImports: number;
   pendingSurfaceImports: Set<MilxdyAppId>;
@@ -274,7 +288,7 @@ export type ContentRuntime = {
   diagnostics: () => AppDiagnostics[];
 };
 
-export function createContentRuntime(apps: readonly MilxdyAppManifest[]): ContentRuntime {
+export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: MilxdyRuntimeSite): ContentRuntime {
   // Chrome keeps content-script DOM across an extension reload, while the old
   // script's event listeners disappear with its runtime. A per-runtime token
   // elects one delegated composer-action owner without depending on toolbar
@@ -282,6 +296,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   const composerActionBindingToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   let composerActionOwnerSequence = 0;
   const state: RuntimeState = {
+    site,
     apps,
     enabledApps: new Set(),
     loaded: new Map(),
@@ -290,8 +305,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     unloadingApps: new Set(),
     appDisposables: new Map(),
     appAbortControllers: new Map(),
+    remiliaCapabilityClients: new Map(),
     diagnostics: new Map(apps.map((app) => [app.id, appDiagnosticsBase(app, "pending")])),
-    route: currentRoute(null),
+    remistatsRuntimePhases: emptyRemiStatsRuntimePhaseState(),
+    route: currentRoute(null, site),
     disposed: false,
     diagnosticsTimer: null,
     unsubscribeSurfaces: null,
@@ -322,6 +339,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     railPinnedApps: new Set(),
     railUnpinnedApps: new Set(),
     railPinsExplicit: false,
+    postReadingRailDefaultMigrated: false,
     idlePreloadTimer: null,
     routeSurfaceImports: 0,
     pendingSurfaceImports: new Set(),
@@ -390,28 +408,34 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   async function boot(): Promise<void> {
     const bootStartedAt = performance.now();
     resetRuntimeCounters();
-    resetTwitterScannerCounters();
+    if (isXRuntime()) resetTwitterScannerCounters();
     state.performanceMode = await loadPerformanceMode();
     state.budget = budgetForPerformanceMode(state.performanceMode);
     activateStartupBudgetWindow();
     applyRuntimeDocumentMarkers(state.performanceMode);
-    injectTweetScaffoldStyles();
+    if (isXRuntime()) injectTweetScaffoldStyles();
     await loadFirstRunState();
-    configureTwitterScannerFromEffectiveBudget();
+    if (isXRuntime()) configureTwitterScannerFromEffectiveBudget();
     configurePerformanceObservers();
     startRouteService();
     await loadRailPins();
     await loadInterfaceSoundSettings();
     registerHubDockMetadata();
-    installComposerActionHost();
-    installReplyActionHost();
-    installContextualPostActionHost();
-    installContextMediaActionHost();
+    if (isXRuntime()) {
+      installComposerActionHost();
+      installReplyActionHost();
+      installContextualPostActionHost();
+      installContextMediaActionHost();
+    }
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
       enabled: app.available !== false && await app.isEnabled(),
     })));
+    const postReadingEnablement = enablement.find(({ app }) => app.id === "post-reading");
+    if (postReadingEnablement) {
+      await applyPostReadingRailDefault(postReadingEnablement.app, postReadingEnablement.enabled);
+    }
     const startupApps: MilxdyAppManifest[] = [];
     const metadataStartedAt = performance.now();
     for (const { app, enabled } of enablement) {
@@ -421,15 +445,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if (shouldLoadAtStartup(app)) startupApps.push(app);
         else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
       }
-      else updateAppDiagnostics(app, "disabled");
+      else {
+        updateAppDiagnostics(app, "disabled");
+        updateDockRegistration(app);
+      }
     }
-    syncContextMediaMenuState();
+    if (isXRuntime()) syncContextMediaMenuState();
     registerAddOnsCatalogDockItem();
-    refreshComposerActionButtons();
+    if (isXRuntime()) refreshComposerActionButtons();
     syncHiddenRailItems();
     updateScannerConfiguration();
     recordRuntimeDiagnostic("runtime.metadata", {
       appCount: state.apps.length,
+      site: state.site,
       enabledApps: Array.from(state.enabledApps).sort(),
       enablementMs: Math.round((metadataStartedAt - enablementStartedAt) * 10) / 10,
       metadataMs: Math.round((performance.now() - metadataStartedAt) * 10) / 10,
@@ -437,7 +465,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     for (const app of startupApps) await loadApp(app, "startup");
     loadRouteApps("routeInitial");
-    state.unsubscribeSurfaces = subscribeTwitterSurfaces(handleSurface);
+    if (isXRuntime()) state.unsubscribeSurfaces = subscribeTwitterSurfaces(handleSurface);
     observeEnablement();
     observeRailPins();
     observePerformanceMode();
@@ -497,17 +525,32 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const abortController = new AbortController();
       state.appDisposables.set(app.id, disposables);
       state.appAbortControllers.set(app.id, abortController);
+      const remiliaCapabilityClient = getRemiliaCapabilityClient(app);
       const lifecycle = new ContentAppLifecycleOwner(module, {
         manifest: app,
+        site: state.site,
         signal: abortController.signal,
-        requestSurfaceRescan: scheduleTwitterScan,
-        scheduleScan: scheduleTwitterScan,
+        requestSurfaceRescan: requestRuntimeSurfaceRescan,
+        scheduleScan: requestRuntimeSurfaceRescan,
         loadAppById,
         scheduler,
         storage: createRuntimeAppStorage(app),
         resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
-        recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
+        remiliaCapabilities: remiliaCapabilityClient.declarations,
+        invokeRemiliaCapability: (operation, params) => remiliaCapabilityClient.invoke(operation, params),
+        recordDiagnostic: (key, value) => {
+          if (app.id === "remistats" && key === "runtimePhase") {
+            const sanitized = sanitizeRemiStatsRuntimePhaseUpdate(value);
+            if (sanitized) {
+              state.remistatsRuntimePhases = applyRemiStatsRuntimePhaseUpdate(state.remistatsRuntimePhases, sanitized);
+              refreshRemiStatsRuntimePhaseSummary();
+              recordRuntimeDiagnostic(`${app.id}.${key}`, sanitized);
+            }
+            return;
+          }
+          recordRuntimeDiagnostic(`${app.id}.${key}`, value);
+        },
         addDisposable: (disposable) => disposables.add(disposable),
       }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id), () => abortAppWork(app.id));
       lifecycleOwnsTeardown = true;
@@ -585,6 +628,43 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     await invokeAppLifecycleHook(app, "open", () => lifecycle.open());
   }
 
+  async function openRailApp(app: MilxdyAppManifest): Promise<void> {
+    if (!state.enabledApps.has(app.id)) {
+      if (!isRailDiscoverableWhenDisabled(app) || !app.setEnabled) return;
+      const performanceBlock = appEnableBlockedByPerformance(app);
+      if (performanceBlock) {
+        window.alert(performanceBlock);
+        return;
+      }
+      try {
+        await app.setEnabled(true);
+        if (!await app.isEnabled()) return;
+        state.enabledApps.add(app.id);
+        ensureDefaultRailPin(app);
+        updateScannerConfiguration();
+        updateDockRegistration(app);
+        updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
+        refreshComposerActionButtons();
+        syncContextMediaMenuState();
+        syncHiddenRailItems();
+        renderHubPanel();
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          enabled: true,
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+      } catch (error) {
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          error: errorMessage(error),
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+    }
+    await openApp(app, "dockOpen");
+  }
+
   async function closeApp(app: MilxdyAppManifest): Promise<void> {
     const lifecycle = state.appLifecycles.get(app.id);
     if (!lifecycle) return;
@@ -592,7 +672,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function notifyRoute(): void {
-    const next = currentRoute(state.route.href);
+    const next = currentRoute(state.route.href, state.site);
     if (next.href === state.route.href && next.visible === state.route.visible) return;
     state.route = next;
     state.routeSurfaceImports = 0;
@@ -608,7 +688,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       if (shouldLoadForRoute(app, next)) void loadApp(app, "route");
     }
-    scheduleTwitterScan();
+    requestRuntimeSurfaceRescan();
     scheduleIdlePreloads();
     flushDiagnosticsSoon();
   }
@@ -641,6 +721,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
     for (const appId of Array.from(state.appAbortControllers.keys())) abortAppWork(appId);
+    await Promise.allSettled(Array.from(state.remiliaCapabilityClients.values(), (client) => client.revoke()));
+    state.remiliaCapabilityClients.clear();
     const teardownResults = await Promise.allSettled(Array.from(state.appLifecycles.entries()).map(async ([appId, lifecycle]) => {
       await lifecycle.dispose();
       return appId;
@@ -700,6 +782,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return dispatchAuthorizedBackgroundMessage(message, app.background?.messageTypes, {
       denied(authorization) {
         recordDeniedAppMessage(app, label, authorization.messageType);
+        if (app.id === "remistats") {
+          return Promise.resolve({ ok: false, error: "MESSAGE_POLICY_REJECTED" } as T);
+        }
         return Promise.resolve(null);
       },
       authorized() {
@@ -737,9 +822,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       for (const app of state.apps) {
         const keys = area === "local" ? app.storageKeys.local : area === "sync" ? app.storageKeys.sync : undefined;
         if (!keys?.some((key) => changes[key])) continue;
-        void app.isEnabled().then((enabled) => {
+        void app.isEnabled().then(async (enabled) => {
           if (enabled) {
             state.enabledApps.add(app.id);
+            await applyPostReadingRailDefault(app, true);
+            ensureDefaultRailPin(app);
             updateScannerConfiguration();
             updateDockRegistration(app);
             if (shouldLoadForRoute(app, state.route)) void loadApp(app, "enablementRoute");
@@ -852,10 +939,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.pendingSurfaceImports.delete(app.id);
     clearSurfaceDeliveryQueueForApp(app.id);
     cancelNetworkQueueForApp(app.id);
+    void revokeRemiliaCapabilityClient(app.id);
     const module = state.loaded.get(app.id);
     const lifecycle = state.appLifecycles.get(app.id);
     if (state.unloadingApps.has(app.id)) return;
-    if (!module || !lifecycle) return;
+    if (!module || !lifecycle) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return;
+    }
     state.unloadingApps.add(app.id);
     abortAppWork(app.id);
     void lifecycle.deactivate()
@@ -869,7 +962,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function reconcileAppAfterUnload(app: MilxdyAppManifest): void {
-    if (state.disposed || !state.enabledApps.has(app.id)) return;
+    if (state.disposed) return;
+    if (!state.enabledApps.has(app.id)) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return;
+    }
     updateDockRegistration(app);
     if (shouldLoadAtStartup(app)) void loadApp(app, "reenableAfterUnload");
     else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
@@ -890,6 +989,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.appLifecycles.delete(appId);
     state.loaded.delete(appId);
     state.unloadingApps.delete(appId);
+  }
+
+  function getRemiliaCapabilityClient(app: MilxdyAppManifest): PackageRemiliaCapabilityClient {
+    const existing = state.remiliaCapabilityClients.get(app.id);
+    if (existing) return existing;
+    const client = createPackageRemiliaCapabilityClient(app, async (message) => {
+      if (state.disposed || !state.enabledApps.has(app.id) || !hasExtensionRuntime()) return null;
+      return chrome.runtime.sendMessage(message).catch(() => null);
+    });
+    state.remiliaCapabilityClients.set(app.id, client);
+    return client;
+  }
+
+  async function revokeRemiliaCapabilityClient(appId: MilxdyAppId): Promise<void> {
+    const client = state.remiliaCapabilityClients.get(appId);
+    if (!client) return;
+    state.remiliaCapabilityClients.delete(appId);
+    await client.revoke();
   }
 
   function resetRuntimeCounters(): void {
@@ -937,7 +1054,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       state.effectiveBudget = state.budget;
       state.startupBudgetActive = false;
       updateScannerConfiguration();
-      scheduleTwitterScan();
+      requestRuntimeSurfaceRescan();
       drainNetworkQueue();
       scheduleIdlePreloads();
       flushDiagnosticsSoon();
@@ -957,6 +1074,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function updateScannerConfiguration(): void {
+    if (!isXRuntime()) return;
     state.surfaceAppIndex = buildSurfaceAppIndex();
     configureTwitterScannerFromEffectiveBudget(Array.from(state.surfaceAppIndex.keys()));
   }
@@ -996,7 +1114,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function scannerSurfacesForApp(app: MilxdyAppManifest): readonly (TwitterSurfaceKind | string)[] {
     if (state.loaded.has(app.id) && app.deliverySurfaces) return app.deliverySurfaces;
-    return app.surfaces;
+    return surfacesForApp(app, state.site);
   }
 
   function handleSurface(surface: TwitterSurface): void {
@@ -1019,7 +1137,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         prepareTweetFeatureScaffold(app, surface);
       }
       if (!module?.onSurface) {
-        const importDecision = app.loadTriggers.includes("surface")
+        const importDecision = loadTriggersForApp(app, state.site).includes("surface")
           ? surfaceImportDecision(app, surface, surfaceIsWithinBudget)
           : { mode: "blocked" as const, reason: "noSurfaceTrigger" };
         if (importDecision.mode === "immediate") {
@@ -1574,14 +1692,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
         return { connected: Boolean(record?.signedIn) };
       },
-      openRemiNetSession: async () => {
-        const response = await chrome.runtime.sendMessage({ type: "milxdy:openRemiNetSession" }).catch(() => null);
-        const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
-        return {
-          ok: record?.ok === true,
-          error: typeof record?.error === "string" ? record.error : undefined,
-        };
-      },
       stageRemiNetChatPng: async ({ blob, fileName }) => {
         if (blob.type && blob.type !== "image/png") return { ok: false, error: "Only PNG images can be staged." };
         if (blob.size > 10 * 1024 * 1024) return { ok: false, error: "Images must be 10 MB or smaller." };
@@ -1666,20 +1776,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     currentClose()?.();
     const module = await loadApp(app, `userAction:contextMedia:${actionId}`);
     if (!isCurrent() || !module?.onContextMediaAction) return;
-    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
-      type: "milxdy:contextMediaPrepare",
-      appId: app.id,
-      actionId,
-      sourceUrl: selected.sourceUrl,
-      width: selected.width,
-      height: selected.height,
-      altAvailable: selected.altAvailable,
-    });
-    if (!isCurrent()) return;
-    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
-      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: prepared?.error || "The selected image could not be prepared." });
-      return;
-    }
     const controller = new AbortController();
     const panel = document.createElement("section");
     panel.className = "milxdy-context-media-panel";
@@ -1689,7 +1785,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     panel.style.cssText = `color-scheme:light dark;position:fixed;z-index:2147483646;left:${Math.max(8, Math.min(selected.x, window.innerWidth - 380))}px;top:${Math.max(8, Math.min(selected.y, window.innerHeight - 440))}px;max-width:360px;max-height:calc(100vh - 16px);overflow:auto;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px`;
     const shadow = panel.attachShadow({ mode: "open" });
     const hostStyle = document.createElement("style");
-    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
+    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.preparation-status{margin:0 0 8px}.native-fallback{color:LinkText;font-weight:700}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
     const preview = document.createElement("img");
     preview.className = "preview";
     preview.alt = "Selected X image preview";
@@ -1741,6 +1837,40 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     setClose(close);
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", escape, true);
+    const preparing = document.createElement("p");
+    preparing.className = "preparation-status";
+    preparing.setAttribute("role", "status");
+    preparing.textContent = "Preparing the selected media for public Remibooru review...";
+    surface.replaceChildren(preparing);
+    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
+      type: "milxdy:contextMediaPrepare",
+      appId: app.id,
+      actionId,
+      sourceUrl: selected.sourceUrl,
+      width: selected.width,
+      height: selected.height,
+      altAvailable: selected.altAvailable,
+    });
+    if (!isCurrent() || controller.signal.aborted) {
+      close();
+      return;
+    }
+    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
+      const error = prepared?.error || "The selected image could not be prepared for direct contribution.";
+      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error });
+      const message = document.createElement("p");
+      message.className = "preparation-status";
+      message.setAttribute("role", "alert");
+      message.textContent = error;
+      const fallback = document.createElement("a");
+      fallback.className = "native-fallback";
+      fallback.href = "https://remibooru.com/upload";
+      fallback.target = "_blank";
+      fallback.rel = "noopener noreferrer";
+      fallback.textContent = "Open Remibooru's native uploader";
+      surface.replaceChildren(message, fallback);
+      return;
+    }
     try {
       await installComposerActionPackageStyles(app, shadow);
       await Promise.resolve(module.onContextMediaAction({
@@ -2419,8 +2549,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         attachmentIdentity,
       };
     };
-    const launchExternalHandoff = async (id: string, options?: {
-      mode?: "captioned" | "randomMeme";
+    const launchExternalHandoff = async (id: string, options: {
+      mode: "captioned" | "randomMeme";
       captions?: { topText: string; bottomText: string };
     }): Promise<{ ok: boolean; error?: string }> => {
       if (!navigator.userActivation?.isActive) {
@@ -2428,7 +2558,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       const handoff = (app.externalHandoffs || []).find((candidate) => candidate.id === id);
       if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
-      const mode = options?.mode || "captioned";
+      const mode = options?.mode;
+      if (mode !== "captioned" && mode !== "randomMeme") return { ok: false, error: "Choose an explicit maker mode from its control." };
       if (!(handoff.modes || ["captioned"]).includes(mode)) return { ok: false, error: "This handoff mode is not declared by the package." };
       // The package owns its loading treatment; the host owns optional audio
       // feedback so it remains consistent, user-preference-respecting, and
@@ -2602,7 +2733,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
     window.addEventListener("resize", scheduleComposerActionPosition);
     try {
-      await installComposerActionPackageStyles(app, shadow);
+      void installComposerActionPackageStyles(app, shadow).catch((error) => {
+        recordRuntimeDiagnostic(`packageStyles.${app.id}`, {
+          error: errorMessage(error),
+          fallback: "host-style",
+        });
+      });
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       await Promise.resolve(module.onComposerAction({
         kind: currentButton().closest('[role="dialog"]') ? "reply" : "post",
@@ -2710,7 +2846,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       title: app.name,
       active: false,
       onActivate: () => {
-        void openApp(app, "dockOpen");
+        void openRailApp(app);
       },
       onDeactivate: () => {
         void closeApp(app);
@@ -2729,7 +2865,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function updateDockRegistration(app: MilxdyAppManifest): void {
     if (!app.dock) return;
-    if (state.enabledApps.has(app.id) && isRailPinned(app)) {
+    if (isRailPinned(app)) {
       registerDockMetadata(app);
       return;
     }
@@ -2738,9 +2874,39 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   async function loadRailPins(): Promise<void> {
-    const stored = await safeLocalGet({ [RAIL_PIN_KEY]: null, [RAIL_UNPIN_KEY]: [] });
+    const stored = await safeLocalGet({
+      [RAIL_PIN_KEY]: null,
+      [RAIL_UNPIN_KEY]: [],
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: false,
+    });
     applyStoredRailPins(stored?.[RAIL_PIN_KEY]);
     applyStoredRailUnpins(stored?.[RAIL_UNPIN_KEY]);
+    state.postReadingRailDefaultMigrated = stored?.[POST_READING_RAIL_DEFAULT_MIGRATION_KEY] === true;
+  }
+
+  async function applyPostReadingRailDefault(app: MilxdyAppManifest, enabled: boolean): Promise<void> {
+    const migration = migratePostReadingRailDefault({
+      appId: app.id,
+      enabled,
+      available: app.available !== false,
+      hasDock: Boolean(app.dock),
+      railSupported: app.hub?.rail.supported !== false,
+      railDefaultPinned: app.hub?.rail.defaultPinned === true,
+      alreadyMigrated: state.postReadingRailDefaultMigrated,
+      pinnedAppIds: state.railPinnedApps,
+      unpinnedAppIds: state.railUnpinnedApps,
+    });
+    if (!migration.changed) return;
+    state.railPinnedApps = new Set(migration.pinnedAppIds as Set<MilxdyAppId>);
+    state.railUnpinnedApps = new Set(migration.unpinnedAppIds as Set<MilxdyAppId>);
+    state.railPinsExplicit = true;
+    state.postReadingRailDefaultMigrated = migration.migrated;
+    const persisted = await safeLocalSet({
+      [RAIL_PIN_KEY]: Array.from(state.railPinnedApps),
+      [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: true,
+    });
+    if (!persisted) state.postReadingRailDefaultMigrated = false;
   }
 
   async function loadFirstRunState(): Promise<void> {
@@ -2769,8 +2935,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function isRailPinned(app: MilxdyAppManifest): boolean {
     if (!app.dock || app.available === false || app.hub?.rail.supported === false) return false;
     if (state.railUnpinnedApps.has(app.id)) return false;
+    if (!state.enabledApps.has(app.id) && !isRailDiscoverableWhenDisabled(app)) return false;
     if (state.railPinnedApps.has(app.id)) return true;
-    return state.enabledApps.has(app.id) && app.hub?.rail.defaultPinned === true;
+    return app.hub?.rail.defaultPinned === true;
+  }
+
+  function isRailDiscoverableWhenDisabled(app: MilxdyAppManifest): boolean {
+    return state.site.id === "x"
+      && app.id === "reminetChat"
+      && app.defaultEnabled === false
+      && app.hub?.rail.defaultPinned === true;
   }
 
   function currentRailPins(): MilxdyAppId[] {
@@ -2842,9 +3016,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const startedAt = performance.now();
     void app.setEnabled(enabled)
       .then(() => app.isEnabled())
-      .then((isEnabled) => {
+      .then(async (isEnabled) => {
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);
@@ -2888,6 +3063,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const isEnabled = await app.isEnabled();
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);
@@ -2979,7 +3155,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         state.budget = budgetForPerformanceMode(performanceMode);
         activateStartupBudgetWindow();
         applyRuntimeDocumentMarkers(performanceMode);
-        configureTwitterScannerFromEffectiveBudget(interestedSurfaceKinds());
+        updateScannerConfiguration();
         for (const app of state.apps) {
           if (await app.isEnabled()) {
             state.enabledApps.add(app.id);
@@ -3877,6 +4053,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       body.append(unavailable);
     }
     body.append(runtime);
+    if (app.id === "remistats") {
+      const phaseSummary = document.createElement("span");
+      phaseSummary.className = "milxdy-app-hub-runtime-state";
+      phaseSummary.dataset.remistatsRuntimePhase = "true";
+      phaseSummary.textContent = formatRemiStatsRuntimePhaseState(state.remistatsRuntimePhases);
+      body.append(phaseSummary);
+    }
 
     const controls = document.createElement("div");
     controls.className = "milxdy-app-hub-controls";
@@ -4390,7 +4573,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         setting.control.type,
         ...(setting.presets || []),
       ]),
-      ...app.loadTriggers,
+      ...loadTriggersForApp(app, state.site),
     ].filter(Boolean).join(" ").toLowerCase();
     return searchable.includes(normalized);
   }
@@ -4401,7 +4584,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     details.append(
       appHubDetailRow("Does", app.hub?.longDescription || app.description),
       appHubDetailRow("Performance", `Startup ${app.cost.startup}; per-surface ${app.cost.perSurface}; network ${app.cost.network}; worker ${app.cost.worker}; DOM ${app.cost.domWrite}.`),
-      appHubDetailRow("Loads", app.loadTriggers.join(", ")),
+      appHubDetailRow("Site", `${state.site.id} (${state.site.mode})`),
+      appHubDetailRow("Surfaces", surfacesForApp(app, state.site).join(", ")),
+      appHubDetailRow("Loads", loadTriggersForApp(app, state.site).join(", ")),
+      appHubDetailRow("Fallback", appSiteFallbackSummary(app)),
       appHubDetailRow("Chrome", appChromeSummary(app)),
       appHubDetailRow("Settings", appSettingsSummary(app)),
       appHubDetailRow("Settings home", appSettingsHome(app)),
@@ -4762,7 +4948,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       app.available === false ? "app:unavailable" : "app:available",
       `state:${diagnostic?.state || "pending"}`,
       isRailPinned(app) ? "rail:pinned" : "rail:hidden",
-      `load:${app.loadTriggers.join(",")}`,
+      `site:${state.site.id}`,
+      `load:${loadTriggersForApp(app, state.site).join(",")}`,
       `cost:${app.cost.startup}/${app.cost.perSurface}`,
     ];
     if (diagnostic?.deferredReason) parts.push(`defer:${diagnostic.deferredReason}`);
@@ -4771,6 +4958,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.loading.has(app.id)) parts.push("import:loading");
     if (state.loaded.has(app.id)) parts.push("import:loaded");
     return parts.join(" | ");
+  }
+
+  function refreshRemiStatsRuntimePhaseSummary(): void {
+    const summary = document.querySelector<HTMLElement>("[data-remistats-runtime-phase='true']");
+    if (summary) summary.textContent = formatRemiStatsRuntimePhaseState(state.remistatsRuntimePhases);
   }
 
   function appHubLifecycle(app: MilxdyAppManifest): { state: string; label: string; detail: string } {
@@ -4794,26 +4986,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available === false || !app.setEnabled) return null;
     if (app.id === "reminetChat" && mode !== "fast") return null;
     if (allowsFastModerateSurfaceImport(app)) return null;
-    if (mode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
+    const triggers = loadTriggersForApp(app, state.site);
+    if (mode === "fast" && triggers.includes("surface") && !isCheapSurfaceImport(app)) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !budget.allowHeavyStartup) {
+    if (app.cost.startup === "heavy" && triggers.includes("startup") && !budget.allowHeavyStartup) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
+    if (app.cost.perSurface === "heavy" && triggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
     if (app.cost.worker === "heavy" && mode !== "full" && mode !== "developer") {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
+    if (app.cost.domWrite === "large" && triggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
     return null;
   }
 
   function shouldLoadAtStartup(app: MilxdyAppManifest): boolean {
-    if (!app.loadTriggers.includes("startup")) return false;
+    if (!loadTriggersForApp(app, state.site).includes("startup")) return false;
     if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyStartup) return false;
     if (app.cost.worker === "heavy" && !state.effectiveBudget.allowWorkerPreload) return false;
     return true;
@@ -4901,7 +5094,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function appDeliversSurface(app: MilxdyAppManifest, surfaceKind: TwitterSurfaceKind): boolean {
-    return app.deliverySurfaces ? app.deliverySurfaces.includes(surfaceKind) : app.surfaces.includes(surfaceKind);
+    return app.deliverySurfaces ? app.deliverySurfaces.includes(surfaceKind) : surfacesForApp(app, state.site).includes(surfaceKind);
+  }
+
+  function appSiteFallbackSummary(app: MilxdyAppManifest): string {
+    const fallback = contentScriptScopeForApp(app, state.site)?.fallback;
+    if (!fallback) return "No separate fallback is declared for this site.";
+    const target = fallback.url ? ` ${fallback.url}` : "";
+    return `${fallback.mode}.${target} ${fallback.note}`.trim();
   }
 
   function surfaceWithinBudget(surface: TwitterSurface): boolean {
@@ -4921,7 +5121,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.idlePreloadTimer = window.setTimeout(() => {
       state.idlePreloadTimer = null;
       for (const app of state.apps) {
-        if (!app.loadTriggers.includes("idle") || state.loaded.has(app.id)) continue;
+        if (!loadTriggersForApp(app, state.site).includes("idle") || state.loaded.has(app.id)) continue;
         if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyIdlePreload) {
           recordImportAvoided(app, "idle:heavy");
           continue;
@@ -4946,53 +5146,26 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function deferredReason(app: MilxdyAppManifest): string {
-    if (app.dock && app.loadTriggers.includes("dockOpen")) return "metadataDock";
-    if (app.loadTriggers.includes("userAction")) return "userAction";
-    if (app.loadTriggers.includes("surface")) return "surface";
-    if (app.loadTriggers.includes("idle")) return "idle";
+    const triggers = loadTriggersForApp(app, state.site);
+    if (app.dock && triggers.includes("dockOpen")) return "metadataDock";
+    if (triggers.includes("userAction")) return "userAction";
+    if (triggers.includes("surface")) return "surface";
+    if (triggers.includes("idle")) return "idle";
     return "performanceMode";
   }
 
   function shouldLoadForRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
     if (!state.enabledApps.has(app.id) || state.loaded.has(app.id) || state.loading.has(app.id)) return false;
-    if (!app.surfaces.includes("route") || !app.loadTriggers.includes("surface")) return false;
-    return appRouteScopesMatchRoute(app, route);
+    if (!surfacesForApp(app, state.site).includes("route") || !loadTriggersForApp(app, state.site).includes("surface")) return false;
+    return routeScopeMatches(app, state.site, route.pathname);
   }
 
-  function appRouteScopesMatchRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
-    const currentSite = currentAppSiteId();
-    if (!currentSite) return false;
-    for (const scope of app.siteScopes || []) {
-      if (!siteScopeMatchesCurrentHost(scope, currentSite)) continue;
-      for (const routePattern of scope.routes || []) {
-        if (routePattern.type === "exact" && routePattern.path === route.pathname) return true;
-        if (routePattern.type === "prefix" && route.pathname.startsWith(routePattern.path)) return true;
-      }
-    }
-    return false;
+  function isXRuntime(): boolean {
+    return state.site.id === "x";
   }
 
-  function currentAppSiteId(): AppSiteId | null {
-    const host = window.location.hostname.toLowerCase();
-    if (host === "x.com" || host === "twitter.com") return "x";
-    if (host === "www.remilia.net" || host === "remilia.net") return "remiliaNet";
-    if (host === "wiki.remilia.org" || host === "remilia.wiki") return "remiliaWiki";
-    if (host === "boards.miladychan.org") return "miladychan";
-    return null;
-  }
-
-  function siteScopeMatchesCurrentHost(scope: AppSiteScope, currentSite: AppSiteId): boolean {
-    if (scope.site !== currentSite) return false;
-    const hosts = scope.hosts || [];
-    return hosts.length === 0 || hosts.some((host) => hostPatternMatchesCurrentLocation(host));
-  }
-
-  function hostPatternMatchesCurrentLocation(pattern: string): boolean {
-    const match = pattern.match(/^(https?|wss):\/\/([^/]+)\/\*$/);
-    if (!match) return false;
-    const [, protocol, host] = match;
-    if (`${protocol}:` !== window.location.protocol) return false;
-    return host.toLowerCase() === window.location.hostname.toLowerCase();
+  function requestRuntimeSurfaceRescan(): void {
+    if (isXRuntime()) scheduleTwitterScan();
   }
 
   function recordImportAvoided(app: MilxdyAppManifest, reason: string): void {
@@ -5187,6 +5360,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         "milxdy.diagnostics.apps": diagnostics(),
         "milxdy.diagnostics.runtime": {
           mode: state.performanceMode,
+          site: state.site,
           budget: state.budget,
           effectiveBudget: state.effectiveBudget,
           startupBudgetActive: state.startupBudgetActive,
@@ -5233,7 +5407,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function recordRuntimeDiagnostic(key: string, value: unknown): void {
     void safeLocalGet({ "milxdy.diagnostics.enabled": false }).then((stored) => {
       if (stored?.["milxdy.diagnostics.enabled"] !== true) return;
-      void safeLocalSet({ [`milxdy.diagnostics.${key}`]: value });
+      void safeLocalSet(diagnosticStorageEntry(key, value));
     });
   }
 
@@ -6840,8 +7014,10 @@ function runtimeAssetUrl(value: string): string {
     : chrome.runtime.getURL(value);
 }
 
-function currentRoute(previousHref: string | null): MilxdyRouteChange {
+function currentRoute(previousHref: string | null, site: MilxdyRuntimeSite): MilxdyRouteChange {
   return {
+    site: site.id,
+    origin: site.origin,
     href: location.href,
     pathname: location.pathname,
     previousHref,

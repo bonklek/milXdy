@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "issue": 192,
+  "status": "approved",
+  "reviewedAt": "2026-08-13T00:00:00Z",
+  "reviewMethod": "Independent visual inspection of a full 11-row contact sheet, a labeled sixteen-direction sheet, and direction-continuity metrics after each atlas passed its selected Maker family template with zero deterministic failures.",
+  "families": {
+    "milady": {
+      "status": "approved",
+      "evidence": "The existing Mildred integration is separately hash-bound in milady-semantic-review.json and milady-integrated-run.json.",
+      "source": {
+        "reviewEvidence": "docs/evidence/custom-pet-mvp/milady-semantic-review.json",
+        "atlasSha256": "c8e9ba02dc357faeff458e0eebb4b5867b26f908cab86e838b98fa2295566b6f"
+      }
+    },
+    "remilio": {
+      "status": "approved",
+      "reviewer": "Independent Codex visual-review worker",
+      "samplePet": "moxie",
+      "source": {
+        "scope": "maintainer-local private-review v2 pet package; evidence only, not published",
+        "petManifest": "pets/moxie/pet.json",
+        "petManifestSha256": "739a67d27c322a86842120036460639841831d299ff4f5d406a3c81df0b9a2b3",
+        "atlas": "pets/moxie/spritesheet.webp",
+        "atlasSha256": "4eb19c01b6fc66e321710f43e12688dbcdd9ec8536a6fc4c78fec07cd3d40402",
+        "contactSheetSha256": "71ed9ae08ef483a7bba036dd9a915a8b03488fdd1857de97c08a088a92ae672b",
+        "directionSheetSha256": "aa40a8fea7f91d8392618618cfc4b5e6fa999e7896a38d3c19a9b70cd1487fd4",
+        "continuitySha256": "2e907402687b2eda622e2e218f15e97f4fb7ae59d446d3f8a9b2ae0307991254"
+      },
+      "checks": {
+        "identityAndTraits": "Black bob, straight bangs, pink horns, reflective eyes, green hoodie, shorts, and shoes remain consistent through every state and viewpoint.",
+        "expressionAndMotion": "Idle, directional sprint, wave, jump, failure, waiting, active task, and review pose families are distinct.",
+        "gaitAndDirections": "Running rows face the required screen direction; hard cardinals are 000 up, 090 right, 180 down, and 270 left, with clockwise intermediates.",
+        "continuityAndClipping": "Metric warnings at silhouette-changing turns are visually acceptable; there is no conspicuous snap, cropping, detached effect, or broken transparency."
+      }
+    },
+    "bonkler": {
+      "status": "approved",
+      "reviewer": "Independent Codex visual-review worker",
+      "samplePet": "wiggum",
+      "source": {
+        "scope": "maintainer-local v2 pet package; evidence only, not published",
+        "petManifest": "pets/wiggum/pet.json",
+        "petManifestSha256": "76660adc49ca46f42090bd700b5ce5155ebdf9af2f884829c5c90b7c4bbaa037",
+        "atlas": "pets/wiggum/spritesheet.webp",
+        "atlasSha256": "d33bec3d1483e328f3d75a53853dd335576edd7f8b44f36fb5ddd81621762236",
+        "contactSheetSha256": "edd93176b3a634da014df1baca6289328b55f7039189122ebeca75b15bc0bee6",
+        "directionSheetSha256": "0027225df97121d0c00e73de6acd0faa0c70af7155547a9ada87830134d2036b",
+        "continuitySha256": "a4c32fb4b81c876a663970f3752705dfcfe74bf9eeabab2c28a88867a3e02d44"
+      },
+      "checks": {
+        "identityAndTraits": "Blond bob, angular glasses, earrings, graphic shirt, shorts, socks, shoes, proportions, and facial construction remain consistent.",
+        "expressionAndMotion": "All standard states remain distinct; running rows alternate stride phases and the jumping apex stays connected.",
+        "gaitAndDirections": "Running rows face their required screen directions and the labeled cardinal and intermediate look poses advance clockwise without reversal.",
+        "continuityAndClipping": "Reported profile-transition shifts are visually acceptable and grounded, without clipping, teleportation, or broken attachment."
+      }
+    },
+    "kagami": {
+      "status": "approved",
+      "reviewer": "Independent Codex visual-review worker",
+      "samplePet": "yumi",
+      "source": {
+        "scope": "maintainer-local private-review v2 pet package; evidence only, not published",
+        "petManifest": "pets/yumi/pet.json",
+        "petManifestSha256": "c7b0ffec907a715b4492b05d843a935822158f60540d9397bfefe4959da65a14",
+        "atlas": "pets/yumi/spritesheet.webp",
+        "atlasSha256": "18bbb27ed171c8a1ee3da97cc86e88e4d17e703ee6bea3a51318a9822cc6bfcf",
+        "contactSheetSha256": "15cd50d76104a2defa762d68158d06d0383db8eeeac908921a3daf5cde5dff08",
+        "directionSheetSha256": "ba8413c6d79d90197375be5d8bcd71d352b85d3bf72aab2734ac5ed460536f28",
+        "continuitySha256": "697d57732f4e1e29f3bddc43268986760d4250a44ece8f891033cdadd4db27c5"
+      },
+      "checks": {
+        "identityAndTraits": "Face, dusty-blue bob, pink bow earpieces, grey uniform, proportions, palette, pants, and boots remain consistent.",
+        "expressionAndMotion": "All standard states are semantically distinct, with a readable jump arc and directional gait.",
+        "gaitAndDirections": "Running rows face their required screen directions; 000/090/180/270 read up/right/down/left and intermediates advance clockwise.",
+        "continuityAndClipping": "Local metric outliers remain visually continuous, with no clipping, scale pop, detached effect, or visible loop reversal."
+      }
+    }
+  },
+  "publicationActionAuthorized": false,
+  "notes": "These are template-family compatibility samples, not provenance claims that each sample pet originated from its selected collection. Raw local packages and rendered sheets remain outside the repository."
+}

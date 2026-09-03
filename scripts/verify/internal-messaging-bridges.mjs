@@ -7,7 +7,11 @@ const files = {
   postReadingOcr: await readFile("src/apps/post-reading/ocr.ts", "utf8"),
   postReadingOcrHost: await readFile("src/extension/frames/ocr-host.ts", "utf8"),
   reminetChatBackground: await readFile("src/apps/reminet-chat/background.ts", "utf8"),
+  reminetLegacyAdapters: await readFile("src/apps/reminet-chat/legacy-adapters.ts", "utf8"),
+  reminetLegacyMediaUpload: await readFile("src/apps/reminet-chat/legacy-media-upload.ts", "utf8"),
   reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
+  reminetBeetleFastControls: await readFile("src/extension/frames/reminet-beetle-fast-controls.ts", "utf8"),
+  reminetLegacySocket: await readFile("src/extension/frames/reminet-chat-legacy-socket.ts", "utf8"),
   reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
   extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
@@ -39,9 +43,11 @@ console.log("Internal messaging bridge verification passed.");
 
 function verifyReminetChatSocketBridge() {
   const onConnect = functionBody(files.reminetChatBackground, "chrome.runtime.onConnect.addListener");
-  const senderPolicy = functionBody(files.reminetChatBackground, "isReminetChatSocketSender");
+  const senderPolicy = functionBody(files.reminetLegacyAdapters, "isAllowedLegacySender");
   const registerSiteBridge = functionBody(files.reminetChatBackground, "registerSiteSocketBridge");
   const bridge = files.reminetChatBridge;
+  const beetleFastControls = files.reminetBeetleFastControls;
+  const socketTransport = files.reminetLegacySocket;
   assertIncludes(onConnect, "if (port.name !== SOCKET_PORT_NAME) return;", "RemiNet socket bridge must ignore unrelated port names");
   assertIncludes(onConnect, "if (!isReminetChatSocketSender(port.sender))", "RemiNet socket bridge must validate sender before socket setup");
   assertIncludes(onConnect, "port.disconnect();", "RemiNet socket bridge must disconnect invalid senders");
@@ -50,48 +56,81 @@ function verifyReminetChatSocketBridge() {
   assertNotIncludes(files.reminetChatBackground, "chrome.tabs.create", "RemiNet socket recovery must not open hidden tabs");
   assertNotIncludes(files.reminetChatBackground, "chrome.tabs.remove", "RemiNet socket recovery must not close tabs");
 
-  assertIncludes(registerSiteBridge, 'isAllowedReminetChatSender(port.sender, ["www.remilia.net"])', "RemiNet site bridge must accept only RemiliaNET top-frame senders");
-  assertIncludes(registerSiteBridge, 'startsWith("socket:")', "RemiNet site bridge must relay only socket events");
-  assertIncludes(registerSiteBridge, "client.postMessage(record)", "RemiNet site bridge must broadcast live frames to connected chat clients");
+  assertIncludes(registerSiteBridge, 'isAllowedLegacySender(port.sender, "remilia-bridge")', "RemiNet site bridge must accept only exact RemiliaNET top-frame senders");
+  assertIncludes(registerSiteBridge, "parseLegacySocketBridgeEvent(message)", "RemiNet site bridge must schema-validate every socket event");
+  assertIncludes(registerSiteBridge, "broadcastSocketEvent(event)", "RemiNet site bridge must broadcast only validated live events");
 
-  assertIncludes(bridge, 'chrome.runtime.connect({ name: SOCKET_PORT_NAME })', "RemiNet site bridge must use its dedicated runtime port");
-  assertIncludes(bridge, 'new WebSocket(SOCKET_URL)', "RemiNet live socket must be created in the RemiliaNET page context");
-  assertIncludes(bridge, 'type: "subscribe"', "RemiNet live socket must subscribe after opening");
-  assertIncludes(bridge, 'socket.send(JSON.stringify(record.payload))', "RemiNet site bridge must forward submitted chat payloads unchanged");
-  assertIncludes(bridge, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
-  assertIncludes(bridge, "reconnectTimer = setTimeout(connectPort", "RemiNet site bridge must reconnect after a background-worker restart");
-  assertIncludes(bridge, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
+  assertIncludes(bridge, "startReminetLegacySocketBridge()", "RemiNet page bridge must start the isolated legacy socket module");
+  assertIncludes(socketTransport, 'chrome.runtime.connect({ name: SOCKET_PORT_NAME })', "RemiNet site bridge must use its dedicated runtime port");
+  assertIncludes(socketTransport, 'new WebSocket(LEGACY_SOCKET_URL)', "RemiNet live socket must be created at the exact legacy endpoint in the RemiliaNET page context");
+  assertIncludes(socketTransport, "isExactLegacySocketUrl(LEGACY_SOCKET_URL)", "RemiNet live socket must fail closed unless its endpoint is exact");
+  assertIncludes(socketTransport, 'type: "subscribe"', "RemiNet live socket must subscribe after opening");
+  assertIncludes(socketTransport, 'socket.send(JSON.stringify(command.mutation))', "RemiNet site bridge must forward only typed legacy mutations");
+  assertIncludes(socketTransport, 'type: "socket:mutation-sent"', "RemiNet site bridge must acknowledge only locally serialized mutations");
+  assertIncludes(socketTransport, "parseLegacySocketFrame(event.data)", "RemiNet site bridge must reject malformed and oversized frames before relay");
+  assertIncludes(socketTransport, 'type: "socket:hint"', "RemiNet site bridge must relay only typed hints rather than raw frame payloads");
+  assertNotIncludes(socketTransport, 'post({ type: "socket:frame"', "RemiNet site bridge must not expose raw frame bodies outside RemiliaNET");
+  assertIncludes(socketTransport, "LEGACY_SOCKET_OPEN_TIMEOUT_MS", "RemiNet live socket opening must have a deadline");
+  assertIncludes(socketTransport, 'reason: "remote-close"', "RemiNet live socket close events must redact server-provided reasons");
+  assertNotIncludes(socketTransport, "reason: event.reason", "RemiNet live socket must never relay raw close reasons");
+  assertIncludes(socketTransport, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
+  assertIncludes(socketTransport, "legacyPortReconnectDelay(portReconnectAttempts)", "RemiNet site bridge must use bounded reconnect backoff after a background-worker restart");
+  assertIncludes(socketTransport, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
   assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*"]', "RemiNet site bridge must be injected only on RemiliaNET pages");
   assertIncludes(files.extensionManifest, '"js": ["reminetChatBridge.js"]', "RemiNet site bridge must be declared in the extension manifest");
   assertIncludes(files.extensionManifest, '"js": ["reminetCraftFastPath.js"]', "RemiNet crafting fast path must be declared in the extension manifest");
   assertIncludes(files.extensionManifest, '"world": "MAIN"', "RemiNet crafting fast path must run in the page world");
   assertIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must limit acceleration to known staged timers");
   assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
-  assertIncludes(bridge, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
+  assertIncludes(bridge, "createBeetleReducedMotionCss", "RemiNet bridge must use the completion-safe Beetle motion policy");
+  assertIncludes(beetleFastControls, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
+  assertIncludes(beetleFastControls, 'candidate.nodeType === 1 && typeof candidate.closest === "function"', "RemiNet fast Beetle actions must resolve cross-realm click targets without instanceof");
+  assertIncludes(beetleFastControls, 'status.ok === true && status.signedIn === true && status.method === "oidc"', "RemiNet instant Beetle results must require token-free connected OIDC status");
+  assertIncludes(bridge, '{ type: "beetol:authStatus" }', "RemiNet instant Beetle results must poll only the token-free Beetol connector status");
+  assertIncludes(bridge, "preferred && connectorActive", "RemiNet instant Beetle results must combine stored preference with live connector status");
+  assertIncludes(bridge, "BEETLE_CONNECTOR_STATUS_POLL_MS", "RemiNet instant Beetle results must react to live disconnect and reconnect");
+  assertNotIncludes(bridge, "remilia-auth:", "RemiNet content must not call popup-only Remilia auth operations");
+  assertIncludes(bridge, "trustedNativeBeetleActionFor(event, instantResultsEnabled)", "RemiNet fast Beetle presentation must remain limited to trusted enabled clicks");
+  assertIncludes(bridge, "observeNativeBeetleAction(action)", "RemiNet fast Beetle presentation must observe the native action result");
+  assertIncludes(beetleFastControls, "createNativeBeetleAccelerationCss", "RemiNet instant results must accelerate native presentation through a bounded policy");
+  assertNotIncludes(bridge, '{ type: "beetol:action", action }', "RemiNet fast Beetle controls must not replace native actions with a background mutation");
+  assertNotIncludes(bridge, "event.preventDefault()", "RemiNet fast Beetle controls must not cancel the trusted native click");
+  assertNotIncludes(bridge, "event.stopImmediatePropagation()", "RemiNet fast Beetle controls must not silence the native page handler");
+  assertNotIncludes(bridge, "event.target instanceof Element", "RemiNet fast Beetle actions must not discard isolated-world click targets");
+  const animationNoneSelectors = Array.from(beetleFastControls.matchAll(/([^{}]+)\{[^{}]*animation:\s*none/gi))
+    .map((match) => match[1])
+    .join("\n");
+  for (const selector of [".beetle-console", ".beetleModule", ".beetle-catch-module", ".carousel", ".claim-button"]) {
+    assertNotIncludes(animationNoneSelectors, selector, `RemiNet fast motion must preserve ${selector} completion events`);
+  }
 
-  const auth = files.reminetChatBackground;
-  assertIncludes(auth, "socketAuthReadyUntil", "RemiNet socket setup must reuse a recent successful auth preparation");
-  assertIncludes(auth, "socketAuthPromise", "RemiNet socket setup must share an in-flight auth preparation");
-  assertIncludes(auth, "SOCKET_AUTH_TIMEOUT_MS", "RemiNet socket auth preparation must have a deadline");
-  assertIncludes(auth, 'error: "AUTH_TIMEOUT"', "RemiNet socket auth timeout must return a typed recovery error");
-  assertIncludes(auth, "await isRemiliaDisconnected()", "RemiNet socket auth cache must honor explicit connector logout before reuse");
-  assertIncludes(auth, "socketAuthGeneration", "RemiNet socket auth must reject late results after logout or timeout");
-  assertIncludes(auth, "generation !== socketAuthGeneration", "RemiNet socket auth must check request generation before caching credentials");
-  assertIncludes(auth, "prepareRemiliaAuth(SESSION_PROBE_PATH, { signal: abort.signal })", "RemiNet socket auth timeout must cancel shared authentication work");
-  assertIncludes(auth, "abort.abort(new DOMException", "RemiNet socket auth timeout must abort underlying authentication work");
+  assertNotIncludes(files.reminetChatBackground, "prepareSocketAuth", "RemiNet site socket must not depend on a dormant browser-session preparation route");
+  assertNotIncludes(files.reminetChatBackground, "refreshRemiliaAccess", "RemiNet site socket must not refresh ambient browser session state");
 
-  assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\"])", "RemiNet socket sender policy must restrict to X/Twitter hosts");
-  verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");
+  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatSocketSender"), 'isAllowedLegacySender(sender, "runtime-content")', "RemiNet socket sender policy must use the typed multi-site runtime role");
+  assertIncludes(functionBody(files.reminetChatBackground, "isReminetChatMessageSender"), 'isAllowedLegacySender(sender, "x-content")', "RemiNet privileged runtime messages must retain the typed X/Twitter-only role");
+  assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "RemiNet legacy sender policy must require same-extension sender id");
+  assertIncludes(senderPolicy, 'typeof sender.tab?.id !== "number"', "RemiNet legacy sender policy must require tab context");
+  assertIncludes(senderPolicy, "sender.frameId !== undefined && sender.frameId !== 0", "RemiNet legacy sender policy must reject non-top frames");
+  assertIncludes(senderPolicy, "sender.url || sender.origin || sender.tab.url", "RemiNet legacy sender policy must inspect sender URL sources");
+  assertIncludes(senderPolicy, 'url.protocol !== "https:"', "RemiNet legacy sender policy must reject non-HTTPS senders");
+  assertIncludes(senderPolicy, 'url.origin === LEGACY_SOCKET_ORIGIN', "RemiNet site sender policy must require the exact RemiliaNET origin");
+  assertIncludes(senderPolicy, 'url.origin === "https://x.com" || url.origin === "https://twitter.com"', "RemiNet client sender policy must require exact X/Twitter origins");
+  assertIncludes(senderPolicy, 'role === "runtime-content"', "RemiNet runtime sender policy must use an explicit typed role");
 }
 
 function verifyReminetChatRuntimeBridge() {
   const handler = functionBody(files.reminetChatBackground, "handleChatMessage");
   const senderPolicy = functionBody(files.reminetChatBackground, "isReminetChatMessageSender");
+  const matcher = functionBody(files.reminetChatBackground, "isChatMessage");
   assertIncludes(handler, "if (!isReminetChatMessageSender(sender))", "RemiNet runtime bridge must validate sender before authenticated operations");
   assertIncludes(handler, "UNSUPPORTED_SENDER", "RemiNet runtime bridge must fail closed for unsupported senders");
   assertOrder(handler, "if (!isReminetChatMessageSender(sender))", "if (message.type === \"reminetChat:authStatus\")", "RemiNet runtime bridge must validate sender before dispatch");
-  assertIncludes(senderPolicy, "isAllowedReminetChatSender(sender, [\"x.com\", \"twitter.com\", \"www.remilia.net\"])", "RemiNet runtime sender policy must restrict to supported X/Twitter and RemiliaNET pages");
-  verifySameExtensionTopFrameHttpsPolicy(functionBody(files.reminetChatBackground, "isAllowedReminetChatSender"), "RemiNet shared sender policy");
+  assertIncludes(senderPolicy, 'isAllowedLegacySender(sender, "x-content")', "RemiNet runtime sender policy must retain the exact X/Twitter top-frame role");
+  assertIncludes(matcher, "Object.keys(record)", "RemiNet runtime bridge must exact-key validate message payloads");
+  assertIncludes(matcher, "keys.length === 1", "RemiNet auth-status messages must be body-free");
+  assertIncludes(matcher, "keys.length === 3", "RemiNet legacy uploads must contain exactly the typed upload fields");
+  assertIncludes(matcher, "keys.length === 2", "RemiNet media fetches must contain exactly a type and URL");
 }
 
 function verifyBeetolRuntimeBridge() {
@@ -101,12 +140,13 @@ function verifyBeetolRuntimeBridge() {
   const contentScriptPolicy = functionBody(files.beetolBackground, "isBeetolContentScriptSender");
   assertIncludes(handler, "if (!isBeetolMessageSender(message, sender))", "Beetol runtime bridge must validate sender before authenticated operations");
   assertIncludes(handler, "UNSUPPORTED_SENDER", "Beetol runtime bridge must fail closed for unsupported senders");
-  assertOrder(handler, "if (!isBeetolMessageSender(message, sender))", "if (message?.type === 'beetol:logout')", "Beetol runtime bridge must validate sender before dispatch");
+  assertOrder(handler, "if (!isBeetolMessageSender(message, sender))", "if (message?.type === 'beetol:authStatus')", "Beetol runtime bridge must validate sender before dispatch");
   assertIncludes(senderPolicy, "sender.id !== chrome.runtime.id", "Beetol sender policy must require same-extension sender id");
   assertIncludes(senderPolicy, "isBeetolExtensionPageSender(sender)", "Beetol sender policy must recognize popup/extension-page senders");
   assertIncludes(senderPolicy, "message?.type === 'beetol:authStatus'", "Beetol extension-page policy must allow popup auth status");
-  assertIncludes(senderPolicy, "message?.type === 'beetol:sessionStatus'", "Beetol extension-page policy must allow popup session status");
-  assertIncludes(senderPolicy, "message?.type === 'beetol:logout'", "Beetol extension-page policy must allow popup logout");
+  assertNotIncludes(files.beetolBackground, "beetol:sessionStatus", "Beetol must not retain the retired browser-session status operation");
+  assertNotIncludes(files.beetolBackground, "beetol:logout", "Beetol must not retain a non-popup auth-disconnect operation");
+  assertNotIncludes(files.beetolBackground, "disconnectRemiliaAuth", "Beetol action failures must not destroy trusted auth state");
   assertIncludes(senderPolicy, "return isBeetolContentScriptSender(sender);", "Beetol sender policy must use a separate content-script policy for page actions");
   assertIncludes(extensionPagePolicy, "if (sender.tab) return false;", "Beetol extension-page policy must reject tab senders");
   assertIncludes(extensionPagePolicy, "chrome.runtime.getURL('')", "Beetol extension-page policy must compare against the packaged extension origin");
@@ -114,16 +154,36 @@ function verifyBeetolRuntimeBridge() {
   assertIncludes(contentScriptPolicy, "url.hostname === 'x.com'", "Beetol content-script sender policy must allow supported X pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'twitter.com'", "Beetol content-script sender policy must allow supported Twitter pages");
   assertIncludes(contentScriptPolicy, "url.hostname === 'www.remilia.net'", "Beetol content-script sender policy must allow supported RemiliaNET pages");
+  assertNotIncludes(files.beetolContent, "beetol-retry-session", "Beetol content must not retain retry-session UI or action naming");
+  assertNotIncludes(files.beetolContent, "beetol:sessionStatus", "Beetol content must not invoke retired browser-session status");
+  assertNotIncludes(files.beetolContent, "remilia-auth:", "Beetol content must not invoke extension-page-only auth actions");
+  assertIncludes(files.beetolContent, "Open the milXdy extension popup", "Beetol disconnected UI must direct users to the official extension connection surface");
+  assertIncludes(files.beetolContent, "Official read-only status", "Beetol X/Twitter UI must label official state as read-only");
+  assertIncludes(files.beetolContent, "Play Beetle on RemiliaNET", "Beetol X/Twitter UI must provide one clear visible native-game route");
+  assertIncludes(files.beetolContent, "?cartridge=beetle", "Beetol native-game route must target the visible Beetle cartridge");
+  assertIncludes(files.beetolContent, 'target="_blank" rel="noopener noreferrer"', "Beetol native-game navigation must be user-initiated and opener-safe");
+  assertNotIncludes(files.beetolContent, "type: 'beetol:action'", "Beetol read-only content must not invoke the legacy action handler");
+  assertNotIncludes(files.beetolContent, "type: 'beetol:crunchJunk'", "Beetol read-only content must not invoke legacy craft handling");
+  assertNotIncludes(files.beetolContent, "data-action", "Beetol read-only content must not render action-looking legacy tiles");
+  assertNotIncludes(files.beetolContent, "Use the visible RemiliaNET Beetle control", "Beetol content must not show circular native-control guidance");
 
   const action = functionBody(files.beetolBackground, "runAction");
-  assertIncludes(action, "remiliaAuthedFetch('POST'", "Beetol actions must submit through the authenticated mutation path");
-  assertIncludes(action, "getStored({ lastUser: null })", "Beetol actions may use the last snapshot for reward comparison without a blocking preflight GET");
-  assertNotIncludes(action, "remiliaAuthedFetch('GET'", "Beetol actions must not spend their shared message deadline on a preflight state GET");
-  assertNotIncludes(action, "await getState()", "Beetol actions must return the mutation result before trailing state reconciliation");
-  assertIncludes(action, "needsRefresh: true", "Beetol action responses must request non-blocking state reconciliation");
-  const reconciliation = functionBody(files.beetolContent, "reconcileStateAfterAction");
-  assertIncludes(reconciliation, "type: 'beetol:getState'", "Beetol content must reconcile state after an action in a separate request");
-  assertIncludes(files.beetolContent, "if (response.needsRefresh) void reconcileStateAfterAction()", "Beetol action UI must launch reconciliation without keeping the action pending");
+  const nativeAction = functionBody(files.beetolBackground, "nativeBeetleActionResponse");
+  assertIncludes(action, "nativeBeetleActionResponse(action)", "Beetol actions must route to the visible native RemiliaNET action boundary");
+  assertIncludes(nativeAction, "getRemiliaAuthStatus()", "Beetol native action guidance must fail closed on connector status");
+  assertIncludes(nativeAction, "status.phase !== 'connected'", "Beetol native action guidance must require the connected official connector");
+  assertIncludes(nativeAction, "NATIVE_ACTION_REQUIRED", "Beetol must return a bounded native-action result instead of proxying a legacy mutation");
+  assertIncludes(nativeAction, "actionMode: 'native-remilianet'", "Beetol status must distinguish native RemiliaNET actions");
+  assertNotIncludes(files.beetolBackground, "/api/beetle/action/", "Beetol must not call undocumented mutation endpoints");
+  assertNotIncludes(files.beetolBackground, "Authorization", "Beetol must not attach the official bearer to undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "fetch(", "Beetol background must not directly transport undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "prepareRemiliaAccess", "Beetol must not prepare an access token for undocumented mutations");
+  assertNotIncludes(files.beetolBackground, "refreshRemiliaAccess", "Beetol must not refresh after a legacy action rejection");
+  assertNotIncludes(files.beetolBackground, "credentials: 'include'", "Beetol must not borrow ambient website credentials");
+  assertNotIncludes(files.beetolBackground, "chrome.tabs.create", "Beetol must not open a hidden action or auth tab");
+  assertNotIncludes(files.beetolBackground, "chrome.windows.create", "Beetol must not open a hidden action or auth window");
+  assertIncludes(files.beetolBackground, "readOfficialBeetleSnapshot(officialBeetleReads)", "Beetol state must use the official typed Beetle reads");
+  assertNotIncludes(files.beetolBackground, "/api/beetle/user", "Beetol must not retain the undocumented state read endpoint");
 }
 
 function verifyPostReadingOcrBridge() {
@@ -190,16 +250,25 @@ function verifyPostReadingOcrBridge() {
 
 function verifyReminetUploadCaps() {
   const background = files.reminetChatBackground;
-  const upload = functionBody(background, "uploadAttachment");
-  assertIncludes(background, "MAX_ATTACHMENT_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet uploads must cap image attachments");
-  assertIncludes(background, "MAX_ATTACHMENT_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet uploads must cap video attachments");
-  assertIncludes(background, "ALLOWED_ATTACHMENT_IMAGE_TYPES", "RemiNet uploads must enumerate allowed image MIME types");
-  assertIncludes(background, "ALLOWED_ATTACHMENT_VIDEO_TYPES", "RemiNet uploads must enumerate allowed video MIME types");
-  assertIncludes(upload, "isAllowedAttachmentMimeType(declaredMimeType)", "RemiNet upload handler must validate declared MIME type before decoding");
-  assertIncludes(upload, "decodeAttachmentDataUrl(dataUrl)", "RemiNet upload handler must decode data URLs through capped validation");
-  assertIncludes(upload, "decoded.contentType !== declaredMimeType", "RemiNet upload handler must reject MIME mismatches");
-  assertIncludes(upload, "decoded.tooLarge || decoded.bytes.byteLength > maxBytes", "RemiNet upload handler must reject oversized decoded payloads");
-  assertIncludes(functionBody(background, "decodeAttachmentDataUrl"), "estimatedBase64Bytes(base64) > maxBytes", "RemiNet upload decoder must reject oversized base64 before full decode");
+  const contract = files.reminetLegacyAdapters;
+  const executor = files.reminetLegacyMediaUpload;
+  assertIncludes(contract, "LEGACY_MAX_IMAGE_BYTES = 10 * 1024 * 1024", "RemiNet legacy uploads must cap image attachments");
+  assertIncludes(contract, "LEGACY_MAX_VIDEO_BYTES = 32 * 1024 * 1024", "RemiNet legacy uploads must cap video attachments");
+  assertIncludes(contract, "LEGACY_IMAGE_TYPES", "RemiNet legacy uploads must enumerate allowed image MIME types");
+  assertIncludes(contract, "LEGACY_VIDEO_TYPES", "RemiNet legacy uploads must enumerate allowed video MIME types");
+  assertIncludes(background, "executeLegacyMediaUpload(request, { fetch, accessToken: ready.accessToken })", "RemiNet upload handler must delegate with a background-only access token");
+  assertIncludes(background, 'isAllowedLegacySender(sender, "x-content")', "RemiNet legacy upload messages must require the exact X/Twitter sender role");
+  assertIncludes(executor, "decodeLegacyAttachmentDataUrl(request)", "RemiNet legacy upload executor must decode through strict capped validation");
+  assertIncludes(executor, "estimatedBase64Bytes(base64) > maxBytes", "RemiNet upload decoder must reject oversized base64 before full decode");
+  assertIncludes(executor, "LEGACY_UPLOAD_TIMEOUT_MS", "RemiNet upload must have a deadline");
+  assertIncludes(executor, "LEGACY_CONFIRM_TIMEOUT_MS", "RemiNet confirmation must have a deadline");
+  assertIncludes(executor, "LEGACY_RESPONSE_MAX_BYTES", "RemiNet legacy JSON responses must have a byte ceiling");
+  assertIncludes(executor, 'credentials: "omit"', "RemiNet legacy media mutation must not send ambient browser credentials");
+  assertIncludes(executor, 'redirect: "error"', "RemiNet legacy media mutation must reject redirects");
+  assertIncludes(executor, 'referrerPolicy: "no-referrer"', "RemiNet legacy media mutation must suppress referrers");
+  assertIncludes(executor, "Authorization: `Bearer ${dependencies.accessToken}`", "RemiNet legacy media mutation must keep delegated authorization inside the background executor");
+  assertNotIncludes(executor, "response.text()", "RemiNet legacy media failures must not buffer or relay raw response bodies");
+  assertNotIncludes(background, 'error instanceof Error ? error.message', "RemiNet legacy upload failures must not relay exception text");
 }
 
 function verifyMiladyLevelUpSender() {
@@ -213,6 +282,12 @@ function verifyMiladyLevelUpSender() {
 
 function verifyCentralRoutedBridgePolicies() {
   const router = files.background;
+  const catalogWrapper = functionBody(router, "openAddonsCatalogWindow");
+  const runtimeSenderPolicy = functionBody(router, "isApprovedRuntimeContentSender");
+  assertIncludes(catalogWrapper, "if (!isApprovedRuntimeContentSender(sender)) return unsupportedSender();", "Add-ons catalog launch must validate approved runtime content senders");
+  for (const host of ["x.com", "twitter.com", "www.remilia.net", "remilia.wiki", "wiki.remilia.org", "boards.miladychan.org"]) {
+    assertIncludes(runtimeSenderPolicy, `"${host}"`, `approved runtime sender policy must include ${host}`);
+  }
   for (const [type, wrapper] of [
     ["milxdy:fetchImageDataUrl", "fetchImageDataUrlForSender"],
     ["miladychan:fetchJson", "fetchMiladychanJsonForSender"],
@@ -230,8 +305,6 @@ function verifyCentralRoutedBridgePolicies() {
 
   for (const wrapper of [
     "fetchImageDataUrlForSender",
-    "fetchMiladychanJsonForSender",
-    "postMiladychanTextForSender",
     "fetchMusicJsonForSender",
     "postMusicFormForSender",
     "fetchMusicImageDataUrlForSender",
@@ -241,6 +314,13 @@ function verifyCentralRoutedBridgePolicies() {
     const body = functionBody(files.background, wrapper);
     assertIncludes(body, "if (!isXContentScriptSender(sender)) return unsupportedSender();", `${wrapper} must require same-extension top-frame X/Twitter sender policy`);
   }
+
+  for (const wrapper of ["fetchMiladychanJsonForSender", "postMiladychanTextForSender"]) {
+    const body = functionBody(files.background, wrapper);
+    assertIncludes(body, "if (!isMiladychanPortalSender(sender)) return unsupportedSender();", `${wrapper} must require the scoped Miladychan portal sender policy`);
+  }
+  const miladychanPolicy = functionBody(files.background, "isMiladychanPortalSender");
+  assertIncludes(miladychanPolicy, '"x.com", "twitter.com", "boards.miladychan.org"', "Miladychan sender policy must allow only X/Twitter and the approved native board host");
 
   const wikiWrapper = functionBody(files.background, "fetchWikiImageDataUrlForSender");
   assertIncludes(wikiWrapper, "if (!isWikiImageSender(sender)) return unsupportedSender();", "wiki image fetches must use the wiki image sender policy");

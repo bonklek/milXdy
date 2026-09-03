@@ -19,11 +19,18 @@ import {
 
 describe("Share Kit package compatibility", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
+  const packageBundle = readFileSync("examples/packages/first-party-replacements/tweetPng/dist/content.js", "utf8");
   const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
   const packageIcon = readFileSync("examples/packages/first-party-replacements/tweetPng/assets/tweet-png-icon.svg", "utf8");
   const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
   const chatSource = readFileSync("src/apps/reminet-chat/content.ts", "utf8");
   const backgroundSource = readFileSync("src/extension/background/index.ts", "utf8");
+
+  it("keeps dependency labels independent of the dependency install path", () => {
+    expect(packageBundle).toContain("// node_modules/@chenglou/pretext/");
+    expect(packageBundle).not.toMatch(/^\/\/ (?:\.\.\/|\/|[A-Za-z]:[\\/])/mu);
+    expect(packageBundle).not.toMatch(/(?:\.codex|worktrees[\\/])/u);
+  });
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({
@@ -112,13 +119,11 @@ describe("Share Kit package compatibility", () => {
     ]);
   });
 
-  it("updates color previews and swaps explicit RemiNet recovery for local chat staging", () => {
+  it("updates color previews and keeps authorization recovery outside package custody", () => {
     expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
-    expect(packageSource).toMatch(/data-action="reconnect"[^>]*>Reconnect<\/button>/u);
-    expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh<\/button>/u);
+    expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh authorization<\/button>/u);
     expect(packageSource).toMatch(/data-action="reminet"[^>]*hidden>Share to RemiNet<\/button>/u);
     expect(packageSource).toContain("probeRemiNetConnection()");
-    expect(packageSource).toContain("openRemiNetSession()");
     expect(packageSource).toContain("stageRemiNetChatPng({");
     expect(packageSource).toContain("close(false)");
     expect(packageSource).toContain("setRemiNetConnected(connected)");
@@ -127,6 +132,8 @@ describe("Share Kit package compatibility", () => {
     expect(runtimeSource).toContain("stageRemiNetChatPng: async");
     expect(runtimeSource).toContain('loadApp(chat, "userAction:stageRemiNetChatPng")');
     expect(packageSource).not.toContain("window.location.reload()");
+    expect(packageSource).not.toContain("openRemiNetSession");
+    expect(runtimeSource).not.toContain("milxdy:openRemiNetSession");
     expect(packageSource).not.toContain('href="https://www.remilia.net/"');
   });
 
@@ -142,7 +149,7 @@ describe("Share Kit package compatibility", () => {
     expect(packageSource).toContain("copyButton.disabled = false");
   });
 
-  it("keeps RemiNet staging local and constrains reconnect to a fixed inactive tab", () => {
+  it("keeps RemiNet staging local without a hidden-tab authorization fallback", () => {
     const stageStart = chatSource.indexOf("export async function stageLocalAttachment");
     const stageEnd = chatSource.indexOf("\nexport function close", stageStart);
     const stageSource = chatSource.slice(stageStart, stageEnd);
@@ -159,8 +166,8 @@ describe("Share Kit package compatibility", () => {
     expect(canMountRemiNetChatRoute("/search?q=milady", true)).toBe(true);
     expect(canMountRemiNetChatRoute("/explore", true)).toBe(true);
     expect(canMountRemiNetChatRoute("/compose/post", true)).toBe(true);
-    expect(backgroundSource).toContain("if (!isXContentScriptSender(sender)) return unsupportedSender()");
-    expect(backgroundSource).toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
+    expect(backgroundSource).not.toContain('type: "milxdy:openRemiNetSession"');
+    expect(backgroundSource).not.toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
     expect(runtimeSource).toContain('blob.type !== "image/png"');
     expect(runtimeSource).toContain("blob.size > 10 * 1024 * 1024");
   });

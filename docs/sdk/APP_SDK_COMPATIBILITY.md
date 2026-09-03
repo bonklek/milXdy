@@ -14,6 +14,9 @@ Current App SDK 0.2.5 boundaries:
 - Novel packages use generated Apps & Features metadata for enablement.
 - Stable builds expose a composition fingerprint and Chrome reload identity.
 - Package-owned background module | Use host-provided declared services.
+  Package-owned background modules remain unsupported.
+- Remilia integrations use declared typed host capabilities. Packages never
+  receive tokens, cookies, OAuth callbacks, or authenticated arbitrary fetch.
 - Runtime installation, remote marketplace updates, arbitrary-site execution,
   and capability-isolated third-party execution are outside this contract.
 

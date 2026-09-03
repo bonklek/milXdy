@@ -22,8 +22,8 @@ gate without replacing hatch-pet's package validation.
    python scripts/validate_bundle.py <bundle.zip> --json-out <run>/bundle-validation.json
    ```
 
-3. Stop on any archive, schema, PNG, SHA-256, trait, policy, or body-completion
-   error. A legacy upper-body bundle without explicit legs, bottom,
+3. Stop on any archive, duplicate JSON field, schema, PNG structure/CRC,
+   transparent-RGBA, SHA-256, trait, policy, or body-completion error. A legacy upper-body bundle without explicit legs, bottom,
    footwear, asset versions, and colors is incomplete; do not fill it in.
 4. Prepare a local run:
 
@@ -33,6 +33,9 @@ gate without replacing hatch-pet's package validation.
 
    The command writes a validated input copy, selected template record,
    full-body identity brief, hatch-pet handoff, provenance, and row state.
+   The identity brief records the exact bundled trait-policy version and
+   SHA-256 used for every translated trait; provenance fingerprints bind that
+   policy hash and adapter version so changed policy cannot reuse stale work.
 5. Read `<run>/identity-brief.md`,
    `<run>/selected-template.json`, and `<run>/hatch-pet-handoff.json`.
    Treat the composited PNG and `bodyCompletion` choices as authoritative.
@@ -48,10 +51,11 @@ gate without replacing hatch-pet's package validation.
    python scripts/cache_resume.py plan --run-dir <run> --cache-dir <user-selected-cache> --json-out <run>/resume-plan.json
    ```
 
-   Reuse only an exact entry whose atlas hash, template/prompt/style provenance,
-   deterministic QA, and separate semantic approval all validate. For an
-   interrupted local run, resume at the first unfinished row recorded in
-   `run-state.json`.
+   Reuse only an exact entry whose atlas hash and confined path, image/template/
+   adapter/prompt/policy/style provenance, deterministic QA, and separate
+   semantic approval all validate. For an interrupted local run, resume only
+   the contiguous completed-row prefix with valid content hashes and matching
+   run/template provenance; regenerate from the first unsafe row.
 8. After hatch-pet assembles the v2 atlas, run Maker-template QA with the bundled
    workspace Python runtime (Pillow is required):
 
@@ -63,7 +67,9 @@ gate without replacing hatch-pet's package validation.
    frame geometry, alpha, transparent unused cells, clipping, registration,
    baseline, scale, centroid, required-region coverage, permitted envelope,
    adjacency, declared phase order, and loop closure. It writes frame-specific
-   diagnostics and initializes `semantic-review.json` as `pending`.
+   diagnostics and initializes `semantic-review.json` as `pending`. Reruns
+   remove stale generated frame diagnostics and reset any semantic decision
+   that is not bound to the current deterministic report.
 9. Review identity, expression, trait fidelity, gait/look direction, and motion
    quality separately. Mark `semantic-review.json` approved only after that
    review. Cache the final atlas only after both gates pass:
@@ -104,6 +110,8 @@ gate without replacing hatch-pet's package validation.
 - Do not cache raw private bundle data outside the user-selected local run.
 - A cache entry may contain the final validated atlas and provenance hashes, but
   never the raw bundle, request sidecar, or canonical input image.
+- Interrupted cache writes may recover only the expected atlas/metadata files;
+  unexpected files are never deleted or overwritten during recovery.
 - Do not accept a model output solely because it resembles a silhouette.
 - Keep the copied bundle, request hash, template hash, adapter version, policy
   version, and style settings in provenance.

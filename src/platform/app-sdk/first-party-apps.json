@@ -1160,6 +1160,21 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens validated Remilia Wiki pages from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "remiliaWiki",
         "hosts": [
           "https://remilia.wiki/*",
@@ -1171,7 +1186,7 @@
         ],
         "presentation": "hostRouteOverlay",
         "notes": [
-          "The X side-rail app embeds validated Remilia Wiki pages and uses the separate wiki frame script; it is not a general Remilia Wiki app runtime yet."
+          "The X side-rail app embeds validated Remilia Wiki pages and uses the separate wiki frame script."
         ]
       }
     ],
@@ -1733,6 +1748,8 @@
     "surfaces": [
       "tweet",
       "xArticle",
+      "document",
+      "route",
       "overlayApp"
     ],
     "siteScopes": [
@@ -1765,6 +1782,39 @@
         ],
         "notes": [
           "Can read validated wiki-frame article text sent from the Wiki sidebar frame; it does not load the full app runtime directly on the wiki host."
+        ]
+      },
+      {
+        "site": "remiliaWiki",
+        "hosts": [
+          "https://remilia.wiki/*",
+          "https://wiki.remilia.org/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "document",
+          "route",
+          "overlayApp"
+        ],
+        "routes": [
+          {
+            "type": "prefix",
+            "path": "/",
+            "surface": "route"
+          }
+        ],
+        "loadTriggers": [
+          "startup",
+          "dockOpen"
+        ],
+        "presentation": "hostRouteOverlay",
+        "fallback": {
+          "mode": "nativeSite",
+          "url": "https://wiki.remilia.org/",
+          "note": "When Post-reading is disabled, the native Wiki remains unchanged and no reader control is added."
+        },
+        "notes": [
+          "Loads the shared scheduler, route service, settings, diagnostics, and direct article read-aloud surface on approved top-level Remilia Wiki pages."
         ]
       }
     ],
@@ -1805,7 +1855,8 @@
       ],
       "permissionNotes": [
         "OCR uses packaged local worker assets when image text is requested.",
-        "Full-quote fetching uses public X/Twitter embed, syndication, or tweet HTML fallbacks without browser cookies or session tokens."
+        "Full-quote fetching uses public X/Twitter embed, syndication, or tweet HTML fallbacks without browser cookies or session tokens.",
+        "On approved Remilia Wiki hosts, Post-reading reads only the visible article text after the user starts read-aloud."
       ],
       "dataNotes": [
         "Reads selected post text, quote text, and optional image text.",
@@ -1848,7 +1899,9 @@
         "https://twitter.com/*",
         "https://pbs.twimg.com/*",
         "https://publish.twitter.com/*",
-        "https://cdn.syndication.twimg.com/*"
+        "https://cdn.syndication.twimg.com/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*"
       ]
     },
     "assets": [
@@ -1886,7 +1939,8 @@
       "local": [
         "milxdy.settings.visualTheme",
         "milxdy.remistats.pokeCooldowns",
-        "milxdy.remistats.incomingPokeCache"
+        "milxdy.remistats.notificationReadState",
+        "milxdy.remistats.lastPokeDiagnostic"
       ]
     },
     "settings": [
@@ -2184,7 +2238,7 @@
           "directMessage"
         ],
         "notes": [
-          "Uses routed RemiliaNET and RemiStats service calls for profile, poke, and trophy data; it does not inject into RemiliaNET pages."
+        "Uses routed official Remilia API calls for delegated account stats, notifications, and pokes; public profile badges retain the separate unauthenticated RemiStats lookup."
         ]
       }
     ],
@@ -2220,10 +2274,10 @@
         "full"
       ],
       "permissionNotes": [
-        "Fetches RemiStats and RemiliaNET profile data for visible handles, Remilia profile images for tooltips, and Milady Maker banner images for profile banners."
+        "Fetches public RemiStats profile data for visible handles and delegated official Remilia account stats, notifications, and poke actions after connection."
       ],
       "dataNotes": [
-        "Sends X handles to the RemiStats API when badge data is needed, may resolve verified PFP owners through Ethereum RPC, loads Remilia profile images from pfp.remilia.net, and background-proxies Milady Maker NFT banner images without account credentials or cookies."
+        "Sends X handles to the public RemiStats API for optional badge data. Official /me stats render only on the connected user's own X profile after the background verifies an exact OIDC username, official directory mapping, and stats-handle match. For non-self profiles and posts, the background separately resolves exact official directory identities before enabling a Poke or trophy shelf, revalidates the identity before Poke, and fails closed on disconnect, ambiguity, or mismatch. Paged notifications and pokes use background-held delegated credentials and exact scopes; content code receives no token or auth state."
       ],
       "remoteServices": [
         "api.remistats.net",
@@ -2233,7 +2287,7 @@
         "ethereum.publicnode.com"
       ],
       "localStorageNotes": [
-        "Stores badge, poke cooldown, and theme state."
+        "Stores badge/theme state, authoritative poke deadlines for labeled offline fallback, and opaque local notification read keys without notification payloads."
       ],
       "privacyLabels": [
         "remote-api"
@@ -2242,8 +2296,15 @@
     "background": {
       "messageTypes": [
         "remistats:getUser",
+        "remistats:getMyStats",
+        "remistats:getMyStatsForXProfile",
+        "remistats:resolvePokeTargets",
+        "remistats:pokeXAuthor",
+        "remistats:markNotificationsRead",
+        "reminetIdentity:resolve",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "beetol:incomingPokes",
         "milxdy:fetchImageDataUrl"
       ]
@@ -2824,6 +2885,21 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens Beetol from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "remiliaNet",
         "hosts": [
           "https://www.remilia.net/*"
@@ -2834,7 +2910,7 @@
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Uses the browser RemiliaNET session through routed background services after user interaction; no RemiliaNET content-script runtime loads today."
+          "Uses the browser RemiliaNET session through routed background services after user interaction."
         ]
       }
     ],
@@ -2921,7 +2997,7 @@
     "id": "reminetChat",
     "name": "RemiNet Chat",
     "version": "0.1.5",
-    "description": "Provides a docked RemiliaNET chat client and X messages integration.",
+    "description": "Provides a docked RemiliaNET chat client with official REST authority and isolated legacy realtime/media adapters.",
     "packageKind": "app",
     "entryName": "features/reminetChat",
     "entryPoint": "src/apps/reminet-chat/entry.ts",
@@ -3122,7 +3198,7 @@
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Uses RemiliaNET HTTP and WebSocket services through background routing and the browser session; it does not inject the app runtime into RemiliaNET pages yet."
+          "Uses the official Remilia API for authoritative chat REST behavior. A same-extension RemiliaNET top-frame bridge retains the undocumented WebSocket only as optional acceleration, and explicit media sends retain isolated legacy upload/confirm behavior until official equivalents exist."
         ]
       }
     ],
@@ -3160,10 +3236,10 @@
         "full"
       ],
       "permissionNotes": [
-        "Uses the browser RemiliaNET session and a background WebSocket port."
+        "Official chat REST uses the trusted API client. Optional legacy realtime/media adapters remain first-party-only, require exact RemiliaNET origins, and are not exposed to local packages."
       ],
       "dataNotes": [
-        "Sends chat reads, sends, reactions, RemiliaNET media fetches, pfp.remilia.net avatar fetches, and profile lookups to RemiliaNET."
+        "Sends official chat reads and text/reply posts to the Remilia API. When explicitly selected attachments are sent, a legacy adapter uploads and confirms them before a legacy media-bearing message mutation; pending files are never uploaded merely by selecting them."
       ],
       "remoteServices": [
         "www.remilia.net",
@@ -3187,6 +3263,7 @@
         "reminetChat:*",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "remistats:getUser",
         "reminetIdentity:getProfile"
       ],
@@ -3194,6 +3271,30 @@
         "remiliaAuth"
       ]
     },
+    "remiliaCapabilities": [
+      {
+        "id": "remilia.chat.read",
+        "operations": [
+          "listGlobalChatMessages"
+        ],
+        "scopes": [
+          "remilia:chat.read"
+        ],
+        "consent": "enablement",
+        "reason": "Read official Remilia global chat history while RemiNet Chat is enabled."
+      },
+      {
+        "id": "remilia.chat.write",
+        "operations": [
+          "postGlobalChatMessage"
+        ],
+        "scopes": [
+          "remilia:chat.write"
+        ],
+        "consent": "perInvocation",
+        "reason": "Post text or replies to official Remilia global chat after an explicit Send action."
+      }
+    ],
     "permissions": {
       "hosts": [
         "https://www.remilia.net/*",
@@ -3263,6 +3364,21 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens the Miladychan Portal from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "miladychan",
         "hosts": [
           "https://boards.miladychan.org/*"
@@ -3274,6 +3390,28 @@
         "presentation": "sideRailOverlay",
         "notes": [
           "Fetches public Miladychan board and thread JSON and can explicitly submit a text-only post through fixed native endpoints with credentials omitted; the visible poster pseudonym defaults to milXdy and is not derived from an account."
+        ]
+      },
+      {
+        "site": "miladychan",
+        "hosts": [
+          "https://boards.miladychan.org/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "loadTriggers": [
+          "dockOpen"
+        ],
+        "presentation": "sideRailOverlay",
+        "fallback": {
+          "mode": "nativeSite",
+          "url": "https://boards.miladychan.org/",
+          "note": "Native boards remain the full posting, CAPTCHA, media, and session-bound fallback."
+        },
+        "notes": [
+          "Appears in the scoped Miladychan launcher and keeps all public JSON and text-only posting calls on the existing allowlisted background routes."
         ]
       }
     ],
@@ -3447,6 +3585,23 @@
     ],
     "surfaces": [
       "overlayApp"
+    ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Keeps local music and optional enrichment in the X/Twitter side rail."
+        ]
+      }
     ],
     "cost": {
       "startup": "heavy",

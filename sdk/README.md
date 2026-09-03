@@ -94,6 +94,12 @@ manager's package placement, transaction recovery, or persistent status flow.
 - Namespace package storage and message types under the package ID.
 - Declare every host, remote service, asset, storage key, and privacy effect.
 - Use host-provided declared services for background work.
+- Use the host-owned Remilia capability broker for declared account operations.
+  Never request tokens, cookies, OAuth callbacks, authentication storage, or an
+  authenticated arbitrary-fetch proxy.
+- Treat the broker as the sole Remilia API path from content/package code. The
+  internal `remiliaApi:request` route and background client singleton are not
+  public SDK capabilities.
 - Treat DOM nodes delivered in `onSurface` as short-lived SPA state.
 - Register cleanup through `context.addDisposable` and check
   `context.signal.aborted` after asynchronous work.

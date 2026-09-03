@@ -1,6 +1,6 @@
 # milXdy User Guide
 
-milXdy is an unpacked browser extension for improving X/Twitter workflows around Remilia Wiki, Post-reading, RemiNet/RemiStats, Beetol Game, Maxxer, Composer Tools, Miladychan, and local music. Open the extension icon for popup settings, and use the in-page side rail on X/Twitter for docked apps.
+milXdy is an unpacked browser extension for improving X/Twitter workflows and providing explicitly scoped surfaces on RemiliaNET, Remilia Wiki, and Miladychan. Open the extension icon for popup settings; the in-page rail is full on X/Twitter and filtered to relevant apps on approved non-X hosts.
 
 ## Updating The Extension
 
@@ -31,7 +31,7 @@ Use the Main tab for whole-extension controls, the in-page **Apps** rail item fo
 
 ### Apps & Features And Side Rail
 
-The shared side rail appears on X/Twitter and opens Apps & Features. This menu separates full app surfaces from smaller feature modules.
+The shared side rail appears in full on X/Twitter. Approved non-X hosts show only apps and features explicitly declared for that site; see [Multi-site runtime](multi-site-runtime.md).
 
 - Click **Apps** to open Apps & Features.
 - Full apps include docked or windowed surfaces such as Post-reading, RemiNet Chat, Beetol, Miladychan, Music, Wiki, and Maxxer.
@@ -165,6 +165,11 @@ The Reader tab controls post and Wiki read-aloud behavior.
 - Tune **Speech speed**, **Volume**, **Auto voice**, and **Voice URI** for local browser voices.
 - Use the compact voice language and gender filters to narrow browser voices before selecting or testing one.
 - Use **Custom HTTP endpoint** only when you have a local TTS service running on `localhost`, `127.0.0.1`, or `[::1]`.
+- In a direct-message conversation, use **Read conversation aloud** only when
+  you want the visible bubbles spoken. DM reading always uses browser Web
+  Speech; it never sends DM text to custom TTS, audio export, OCR, full-quote,
+  background, diagnostic, or persistent-storage paths, and leaving/stopping
+  the conversation clears its transient queue.
 - **Include quote posts**, **Image alt text**, **Image OCR**, and **Link previews** add more context to spoken output. **Fetch full quotes** is off by default; when you enable it, Post-reading uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without sending browser cookies or session tokens.
 - **Skip OCR** cancels pending OCR or skips active image text.
 - **Next post** skips active image text to the parent caption before advancing.
@@ -187,7 +192,13 @@ The RemiNet connector shows RemiStats data and RemiliaNET actions on X/Twitter.
 
 ### Pokes
 
-The poke button uses the RemiNet connector login. It plays a short poke sound, shakes while sending a poke, and switches to a live cooldown timer when RemiliaNET returns a cooldown. If no explicit cooldown is returned, milXdy assumes a 24-hour poke cooldown. Active poke cooldowns are stored locally so the poked state is restored after refreshing X/Twitter. When the same account appears multiple times on screen, visible poke buttons for that account update to the same cooldown state after a successful poke.
+The poke button uses the official Remilia account connection and the
+`remilia:pokes.write` ability. It plays a short sound and shakes while sending.
+A successful poke invents no cooldown: only the service's `next_allowed_at` or
+`Retry-After` establishes a deadline. A prior unexpired authoritative deadline
+may appear after a network/timeout failure only when visibly labeled **offline
+fallback**. When the same account appears multiple times, visible controls
+reconcile to that same authoritative state.
 
 **Like tweets when poking** is off by default. When enabled, a successful tweet poke also clicks X's Like button for that tweet if it is not already liked.
 
@@ -203,39 +214,51 @@ During beta testing, the RemiNet connector tab may show the last poke diagnostic
 
 ### Incoming pokes
 
-When RemiNet connector auth is available, milXdy can show a small incoming poke flag for accounts that recently poked you. This is based on recent RemiliaNET notifications inside the active poke window, so it is a current-activity hint rather than a full all-time poke history. **Gold poke alerts** in Appearance gives these flags a shiny gold finish.
+When the official account has `remilia:notifications.read`, milXdy can show a
+small incoming poke flag for a recent notification. Response bodies are not
+persisted; bounded opaque read keys prevent replay. **Gold poke alerts** in
+Appearance gives these flags a shiny gold finish.
 
 ### RemiNet Chat
 
 Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/Twitter routes and add a RemiNet entry to X Messages.
 
-- The chat uses the same RemiNet connector login as pokes and Beetol Game.
-- It loads recent message history from RemiliaNET and connects to the RemiliaNET chat WebSocket for live updates.
+- The chat uses the same official Remilia account connection as pokes and
+  Beetol.
+- Official REST owns history, polling, text, and reply posting. The temporary
+  WebSocket adapter supplies body-free acceleration hints only; chat remains
+  usable without it.
 - When you scroll to the oldest loaded messages, use **Show more** to load another batch of older chat history.
 - It supports reactions, pokes, attachments, allowlisted media and pfp.remilia.net avatar previews, profile lookups, and minimized mode.
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
 
-If the chat does not connect, confirm RemiNet login status first, then refresh the X/Twitter tab. Accounts using 2FA may need the RemiliaNET SSO retry flow before chat APIs can authenticate.
+If the chat does not connect, check **Remilia account** first, then refresh the
+X/Twitter tab. Missing `remilia:chat.read` or `remilia:chat.write`, expiry,
+revocation, rate limiting, and offline state are reported separately.
 
-## Beetol Game Login
+## Remilia Account Connection
 
-The RemiNet connector login powers both RemiStats pokes and the Beetol Game hunter panel.
+One official Remilia Login grant powers RemiStats stats/notifications/pokes,
+Beetle reads, directory resolution, and RemiNet Chat according to the abilities
+the user approves.
 
-- Click **Open RemiliaNET** to open remilia.net.
-- Click **Log in** on RemiliaNET so the site can start its current OIDC login flow.
-- Finish RemiliaNET login in the opened tab, including any 2FA step.
-- Return to milXdy and click **Retry session**.
-- Non-sensitive RemiNet connector state is stored in Chrome extension local storage. RemiNet access and refresh tokens stay only in extension background memory and are not intentionally persisted.
-- Login state should persist across browser restarts, extension reloads, and normal updates that keep the same extension identity.
+- Open **Remilia account** and review the requested abilities.
+- Choose **Connect** and finish the visible RemiliaNET authorization flow.
+- Confirm the connected identity and granted abilities in milXdy.
+- Use **Reconnect** after an unrecoverable expiry, revocation, or missing scope.
+- Use **Disconnect** to clear local credentials without erasing unrelated settings.
 
-After **Retry session**, milXdy checks the RemiliaNET browser session and reuses or silently renews the RemiliaNET `authToken` cookie for connector actions. Direct username/password login is no longer supported by RemiliaNET for this extension path.
+0.2.5 migrates older connector installations explicitly. It removes legacy
+connector credentials and leaves the user disconnected until **Connect** is
+chosen. It does not adopt browser cookies, open a hidden refresh tab, or ask for
+a password, authorization code, client secret, or token.
 
-When a poke request fails because the stored connector auth appears stale, milXdy may briefly open RemiliaNET in an inactive tab, wait for the site session to settle, close that tab, and retry using the refreshed browser session.
+Tokens and PKCE material stay in the trusted extension background and never
+enter X/Twitter pages, content scripts, local packages, exported settings, or
+diagnostics. See [Connect a Remilia account](../getting-started/REMILIA_ACCOUNT.md).
 
-Clicking **Log out** disconnects milXdy from the RemiNet connector session. It does not necessarily sign the browser out of remilia.net; click **Retry session** again when you want milXdy to reuse the browser session.
-
-milXdy requests the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
+The browser `cookies` permission is not used for Remilia authentication.
 
 ## Beetol Hunter Panel
 
@@ -243,7 +266,7 @@ Enable **Show Beetol hunt panel** to mount the Beetol Game hover panel on X/Twit
 
 - **Beetol color** controls the panel accent.
 - **Beetol mode** controls dark/light styling.
-- The panel uses the same RemiNet connector login as pokes.
+- The panel uses the same official Remilia account connection as pokes.
 
 ## Miladychan Portal
 
@@ -315,6 +338,8 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
 - Music enrichment may call `https://musicbrainz.org` and `https://api.acoustid.org` when the user starts enrichment. Local library indexing reads only folders the user selects.
 - GitHub update checks call `https://api.github.com`.
 - Post-reading OCR and Maxxer avatar inference run locally.
-- RemiNet connector actions use the browser `cookies` permission for RemiliaNET requests that require the user's RemiliaNET session.
+- Official Remilia account actions use OIDC Authorization Code with PKCE and
+  fixed API-v1 endpoints. Credentials stay in the trusted extension background;
+  local packages receive only approved normalized capabilities.
 
 Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.

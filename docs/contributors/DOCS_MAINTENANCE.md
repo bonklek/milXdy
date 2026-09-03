@@ -8,6 +8,12 @@ milXdy has several docs that intentionally overlap at the edges. Keep each doc f
 - `CHANGELOG.md`: historical release summary in descending version order.
 - `docs/releases/RELEASE_NOTES_*.md`: detailed shipped scope for one release.
 - `docs/releases/RELEASES.md`: reproducible build mechanics, archive expectations, and GitHub release policy.
+- `docs/getting-started/REMILIA_ACCOUNT.md`: canonical user connection and
+  existing-installation migration flow.
+- `docs/contributors/REMILIA_API_MIGRATION.md`: canonical official/legacy API,
+  custody, package, and removal contract.
+- `docs/contributors/REMILIA_API_QA.md` plus its JSON evidence: exact integrated
+  Chromium/Firefox migration acceptance.
 - `docs/guides/README.md` and `docs/guides/*`: user-facing behavior for shipped features.
 - `docs/sdk/APP_SDK_OVERVIEW.md`: short public SDK front door organized by reader goal.
 - `docs/sdk/LOCAL_ADDONS.md`: canonical install, validation, rebuild, status, and reload procedure.
@@ -29,6 +35,11 @@ When a feature ships:
 - Update user-facing guides for the shipped behavior.
 - Remove or rewrite roadmap text that still describes the feature as future work.
 - Create or update follow-up issues for anything intentionally left incomplete.
+
+When Remilia publishes or changes an endpoint, scope, login behavior, or
+official replacement for a legacy adapter, update the migration contract,
+privacy guide, affected user/SDK guide, QA matrix, release notes, and verifier
+fixtures together.
 
 When release status changes:
 

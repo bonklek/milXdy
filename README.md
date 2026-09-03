@@ -19,7 +19,8 @@ The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes]
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that can fetch public Maker traits by family and NFT number, then turns an explicitly selected Maker PNG and reviewed traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
-- **Beetol Game**: Beetol hunter panel and RemiliaNET login shared with RemiNet actions.
+- **Beetol Game**: official Beetle state/card reads plus clearly separated
+  temporary legacy game actions, using the shared Remilia account connection.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
 - **Miladychan Portal**: docked Miladychan board, thread, post, and media browsing with local watched threads, explicit `milXdy`-pseudonymous text-only posting, and native-site fallback.
 - **Music**: docked local music library, playlists, ISRC enrichment, QR import/export, and metadata-based local radio sessions.
@@ -89,8 +90,8 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | <img src="assets/apps/post-reading/post-reading-logo.png" alt="" width="20"> [Post-reading](docs/guides/post-reading.md) | Read-aloud controls, voices, quote reading, OCR, link previews, and docked playback. |
 | <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiStats](docs/guides/remistats.md) | RemiStats badges, score context, beetle icons, poke icons, tooltips, sounds, and cooldowns. |
 | <img src="assets/apps/milady-maxxer/milady-logo.png" alt="" width="20"> [Milady Maxxer](docs/guides/milady-maxxer.md) | Maxxer effects, local detection, card themes, XP behavior, whitelist handles, and manual handles. |
-| <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/guides/beetol.md) | Beetol panel setup, RemiliaNET login, hunt panel styling, and shared RemiNet auth. |
-| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/guides/reminet-chat.md) | Docked RemiliaNET chat, X Messages integration, reactions, attachments, live updates, and login checks. |
+| <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/guides/beetol.md) | Beetol panel setup, official state/card reads, legacy-action labels, and shared Remilia account abilities. |
+| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/guides/reminet-chat.md) | Official REST history/text posting, X Messages integration, reactions, attachments, and temporary legacy realtime/media adapters. |
 | <img src="assets/apps/miladychan-portal/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/guides/miladychan-portal.md) | Board browsing, thread reading, local watched threads, explicit `milXdy`-pseudonymous text-only posting, media previews, and native Miladychan links. |
 | <img src="assets/apps/music/milxdy-music-logo.png" alt="" width="20"> [Music](docs/guides/music.md) | Local library indexing, playback queue, playlists, QR metadata sharing, ISRC enrichment, and radio sessions. |
 

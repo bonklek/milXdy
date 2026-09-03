@@ -1,4 +1,27 @@
 import type { MilxdyContextualPostActionContext, MilxdyRouteChange } from "../../../../../sdk/types/index";
+import {
+  layoutTweetPngPlainText,
+  layoutTweetPngRichInlineBlocks,
+  limitTweetPngTextLayout,
+  tweetPngTextFont,
+  type RichInlineRun,
+  type RichInlineRunStyle,
+  type TweetPngRichInlineBlock,
+  type TweetPngTextLine,
+} from "./text-layout";
+import {
+  clearTweetPngFormatting,
+  createTweetPngRichText,
+  isTweetPngRichTextPristine,
+  reconcileTweetPngRichText,
+  selectionHasTweetPngBullets,
+  selectionHasTweetPngInlineStyle,
+  toggleTweetPngBullets,
+  toggleTweetPngInlineStyle,
+  tweetPngRichTextLines,
+  type TweetPngInlineStyle,
+  type TweetPngRichText,
+} from "./rich-text";
 
 const RESKIN_PROFILE_KEY = "milxdy.settings.reskinProfile";
 const VISUAL_THEME_KEY = "milxdy.settings.visualTheme";
@@ -188,6 +211,7 @@ type TweetPngData = {
   cashtag: TweetPngCashtag | null;
   quote: TweetPngQuoteData | null;
   stats: TweetPngStats | null;
+  richText: TweetPngRichText;
 };
 
 type TweetPngQuoteData = {
@@ -298,6 +322,11 @@ const TWEET_PNG_QUOTE_LINE_HEIGHT = 38;
 const TWEET_PNG_WRAP_SAFETY_PX = 16;
 const TWEET_PNG_MAX_ASPECT_RATIO = 2.25;
 const TWEET_PNG_CASHTAG_HEIGHT = 570;
+const TWEET_PNG_PLAIN_TEXT_STYLE: RichInlineRunStyle = {
+  fontWeight: 400,
+  fontStyle: "normal",
+  strikethrough: false,
+};
 
 function extractTweetPngData(tweet: HTMLElement, statusUrl: string | null): TweetPngData {
   const settings = visualTheme;
@@ -332,6 +361,7 @@ function extractTweetPngData(tweet: HTMLElement, statusUrl: string | null): Twee
     cashtag,
     quote: quote ? { author: quote.author, handle: quote.handle, text: quote.text, images: quote.images } : null,
     stats,
+    richText: createTweetPngRichText(text),
   };
 }
 
@@ -564,17 +594,40 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   );
   const mediaRegions: TweetPngMediaRegion[] = [];
 
-  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const textLines = wrapCanvasText(
+  const bodyFont = tweetPngTextFont(TWEET_PNG_FONT_FALLBACK, TWEET_PNG_BODY_FONT_SIZE, TWEET_PNG_PLAIN_TEXT_STYLE);
+  const richTextBlocks = tweetPngRichTextLines(data.richText).map((line): TweetPngRichInlineBlock => ({
+    runs: line.runs.map((run): RichInlineRun => ({
+      text: run.text,
+      style: {
+        fontWeight: run.bold ? 700 : 400,
+        fontStyle: run.italic ? "italic" : "normal",
+        strikethrough: run.strikethrough,
+      },
+    })),
+    ...(line.bullet ? { bullet: { marker: "\u2022" } } : {}),
+  }));
+  const textLayout = layoutTweetPngRichInlineBlocks(
     context,
-    data.text || data.date || data.handle,
-    bodyWidth,
-    Math.ceil(maxHeight / TWEET_PNG_BODY_LINE_HEIGHT),
+    richTextBlocks.length && data.richText.text ? richTextBlocks : [{
+      runs: [{ text: data.date || data.handle }],
+    }],
+    {
+      fontFamily: TWEET_PNG_FONT_FALLBACK,
+      fontSize: TWEET_PNG_BODY_FONT_SIZE,
+      maxWidth: bodyWidth,
+      maxLines: Math.ceil(maxHeight / TWEET_PNG_BODY_LINE_HEIGHT),
+      safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+    },
   );
-  context.font = `${TWEET_PNG_QUOTE_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
-  const quoteTextLines = data.quote?.text
-    ? wrapCanvasText(context, data.quote.text, bodyWidth - 48, Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT))
-    : [];
+  const quoteTextLayout = data.quote?.text
+    ? layoutTweetPngPlainText(context, data.quote.text, {
+        fontFamily: TWEET_PNG_FONT_FALLBACK,
+        fontSize: TWEET_PNG_QUOTE_FONT_SIZE,
+        maxWidth: bodyWidth - 48,
+        maxLines: Math.ceil(maxHeight / TWEET_PNG_QUOTE_LINE_HEIGHT),
+        safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+      })
+    : { lines: [], truncated: false, safeWidth: Math.max(1, bodyWidth - 48 - TWEET_PNG_WRAP_SAFETY_PX) };
   const mediaImages = await Promise.all(data.images.map(loadTweetPngMedia));
   const linkCard = data.linkCard ? await loadTweetPngLinkCard(data.linkCard) : null;
   const quoteImages = data.quote ? await Promise.all(data.quote.images.map(loadTweetPngMedia)) : [];
@@ -585,8 +638,8 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   const linkCardHeight = linkCard ? (linkCard.image?.image ? 420 : 120) : 0;
   const cashtagHeight = cashtag?.chart ? TWEET_PNG_CASHTAG_HEIGHT : 0;
   const quoteMediaHeight = measureTweetPngMediaHeight(quoteImages, bodyWidth - 48, 300);
-  const textHeight = textLines.length * TWEET_PNG_BODY_LINE_HEIGHT;
-  const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLines.length, quoteMediaHeight) : 0;
+  const textHeight = textLayout.lines.length * TWEET_PNG_BODY_LINE_HEIGHT;
+  const quoteHeight = data.quote ? measureTweetPngQuoteHeight(quoteTextLayout.lines.length, quoteMediaHeight) : 0;
   const uncappedHeight = padding * 2 + Math.max(
     avatarSize,
     86 + textHeight + (mediaHeight ? mediaHeight + 28 : 0) + (cashtagHeight ? cashtagHeight + 28 : 0)
@@ -632,7 +685,6 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
   drawTweetPngHeaderStats(context, data.stats, assets, bodyX, padding + 34, bodyWidth);
 
   context.fillStyle = visualTheme.tweetPngFontColor;
-  context.font = `${TWEET_PNG_BODY_FONT_SIZE}px ${TWEET_PNG_FONT_FALLBACK}`;
   let y = padding + 126;
   const footerY = height - padding - (data.date ? 8 : 0);
   const maxContentY = data.date ? footerY - footerHeight : height - padding;
@@ -641,9 +693,14 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
     + (linkCardHeight ? linkCardHeight + 28 : 0)
     + (quoteHeight ? quoteHeight + 22 : 0);
   const textAreaBottom = maxContentY - reservedAfterText;
-  const drawableTextLines = visibleCanvasTextLines(context, textLines, bodyWidth, y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT);
-  for (const line of drawableTextLines) {
-    context.fillText(line, bodyX, y);
+  const drawableTextLayout = limitTweetPngTextLayout(
+    context,
+    textLayout,
+    tweetPngVisibleLineCount(y, textAreaBottom, TWEET_PNG_BODY_LINE_HEIGHT),
+    { font: bodyFont, style: TWEET_PNG_PLAIN_TEXT_STYLE },
+  );
+  for (const line of drawableTextLayout.lines) {
+    drawTweetPngTextLine(context, line, bodyX, y);
     y += TWEET_PNG_BODY_LINE_HEIGHT;
   }
 
@@ -681,7 +738,7 @@ async function renderTweetPng(data: TweetPngData): Promise<TweetPngRenderResult>
     y = drawTweetPngQuote(context, {
       quote: data.quote,
       images: quoteImages,
-      textLines: quoteTextLines,
+      textLines: quoteTextLayout.lines,
       x: bodyX,
       y,
       width: bodyWidth,
@@ -782,112 +839,6 @@ async function waitForTweetPngFonts(): Promise<void> {
   ]);
 }
 
-function wrapCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
-  const safeWidth = Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX);
-  const paragraphs = text.replace(/\r\n?/g, "\n").split("\n");
-  const lines: string[] = [];
-  let truncated = false;
-
-  for (const paragraph of paragraphs) {
-    if (lines.length >= maxLines) {
-      truncated = true;
-      break;
-    }
-    const words = paragraph.replace(/[^\S\n]+/g, " ").trim().split(" ").filter(Boolean);
-    if (!words.length) {
-      lines.push("");
-      continue;
-    }
-
-    let line = "";
-    for (const word of words) {
-      if (lines.length >= maxLines) {
-        truncated = true;
-        break;
-      }
-      const next = line ? `${line} ${word}` : word;
-      if (canvasTextWidth(context, next) <= safeWidth) {
-        line = next;
-        continue;
-      }
-      if (line) {
-        lines.push(line);
-        line = "";
-      }
-      if (lines.length >= maxLines) {
-        truncated = true;
-        break;
-      }
-      if (canvasTextWidth(context, word) <= safeWidth) {
-        line = word;
-        continue;
-      }
-      const segments = splitCanvasTextByWidth(context, word, safeWidth);
-      for (const segment of segments) {
-        if (lines.length >= maxLines) {
-          truncated = true;
-          break;
-        }
-        lines.push(segment);
-      }
-    }
-    if (line && lines.length < maxLines) lines.push(line);
-  }
-
-  while (lines.length > 1 && lines[lines.length - 1] === "") lines.pop();
-  if (truncated && lines.length) {
-    lines[lines.length - 1] = ellipsizeCanvasText(context, lines[lines.length - 1], safeWidth);
-  }
-  return lines.length ? lines : [""];
-}
-
-function splitCanvasTextByWidth(context: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const lines: string[] = [];
-  let line = "";
-  for (const segment of canvasTextSegments(text)) {
-    const next = line + segment;
-    if (!line || canvasTextWidth(context, next) <= maxWidth) {
-      line = next;
-      continue;
-    }
-    lines.push(line);
-    line = segment;
-  }
-  if (line) lines.push(line);
-  return lines;
-}
-
-function ellipsizeCanvasText(context: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  const ellipsis = "...";
-  const segments = canvasTextSegments(text.trim());
-  while (segments.length > 0 && canvasTextWidth(context, `${segments.join("")}${ellipsis}`) > maxWidth) {
-    segments.pop();
-  }
-  return `${segments.join("").trim()}${ellipsis}`;
-}
-
-function canvasTextWidth(context: CanvasRenderingContext2D, text: string): number {
-  const metrics = context.measureText(text);
-  const bounds = Math.abs(metrics.actualBoundingBoxLeft || 0) + Math.abs(metrics.actualBoundingBoxRight || 0);
-  return Math.max(metrics.width, bounds);
-}
-
-function visibleCanvasTextLines(
-  context: CanvasRenderingContext2D,
-  lines: readonly string[],
-  maxWidth: number,
-  startY: number,
-  maxY: number,
-  lineHeight: number,
-): string[] {
-  const availableLines = tweetPngVisibleLineCount(startY, maxY, lineHeight);
-  if (lines.length <= availableLines) return [...lines];
-  if (availableLines <= 0) return [];
-  const visible = lines.slice(0, availableLines);
-  visible[visible.length - 1] = ellipsizeCanvasText(context, visible[visible.length - 1], Math.max(1, maxWidth - TWEET_PNG_WRAP_SAFETY_PX));
-  return visible;
-}
-
 export function tweetPngVisibleLineCount(startY: number, maxY: number, lineHeight: number): number {
   if (maxY < startY || lineHeight <= 0) return 0;
   return Math.floor((maxY - startY) / lineHeight) + 1;
@@ -954,21 +905,12 @@ function drawTweetPngCashtag(
   context.fillText(cashtag.currentPrice, x + padding + 68, y + height - 20);
 }
 
-function canvasTextSegments(text: string): string[] {
-  const segmenter = typeof Intl !== "undefined" && "Segmenter" in Intl
-    ? new Intl.Segmenter(undefined, { granularity: "grapheme" })
-    : null;
-  return segmenter
-    ? Array.from(segmenter.segment(text), (part) => part.segment)
-    : Array.from(text);
-}
-
 function drawTweetPngQuote(
   context: CanvasRenderingContext2D,
   options: {
     quote: TweetPngQuoteData;
     images: LoadedTweetPngMedia[];
-    textLines: string[];
+    textLines: TweetPngTextLine[];
     x: number;
     y: number;
     width: number;
@@ -1007,10 +949,19 @@ function drawTweetPngQuote(
 
   y += 38;
   context.fillStyle = quoteTextColor;
-  context.font = `26px ${TWEET_PNG_FONT_FALLBACK}`;
-  for (const line of options.textLines) {
-    if (y + lineHeight > options.y + cardHeight - padding) break;
-    context.fillText(line, options.x + padding, y);
+  const quoteFont = tweetPngTextFont(TWEET_PNG_FONT_FALLBACK, TWEET_PNG_QUOTE_FONT_SIZE, TWEET_PNG_PLAIN_TEXT_STYLE);
+  const quoteLayout = limitTweetPngTextLayout(
+    context,
+    {
+      lines: options.textLines,
+      truncated: false,
+      safeWidth: Math.max(1, options.width - padding * 2 - TWEET_PNG_WRAP_SAFETY_PX),
+    },
+    Math.max(0, Math.floor((options.y + cardHeight - padding - y) / lineHeight)),
+    { font: quoteFont, style: TWEET_PNG_PLAIN_TEXT_STYLE },
+  );
+  for (const line of quoteLayout.lines) {
+    drawTweetPngTextLine(context, line, options.x + padding, y);
     y += lineHeight;
   }
 
@@ -1085,15 +1036,47 @@ function drawTweetPngLinkCard(
   }
   let textY = y + imageHeight + 34;
   context.fillStyle = visualTheme.tweetPngFontColor;
-  context.font = `700 24px ${TWEET_PNG_FONT_FALLBACK}`;
-  for (const line of wrapCanvasText(context, card.title, width - 48, 2)) {
-    context.fillText(line, x + 24, textY);
+  const cardTitleLayout = layoutTweetPngPlainText(context, card.title, {
+    fontFamily: TWEET_PNG_FONT_FALLBACK,
+    fontSize: 24,
+    maxWidth: width - 48,
+    maxLines: 2,
+    safetyPx: TWEET_PNG_WRAP_SAFETY_PX,
+    baseStyle: { fontWeight: 700 },
+  });
+  for (const line of cardTitleLayout.lines) {
+    drawTweetPngTextLine(context, line, x + 24, textY);
     textY += 30;
   }
   if (card.source && textY <= y + height - 12) {
     context.fillStyle = colorWithAlpha(visualTheme.tweetPngFontColor, "b8");
     context.font = `20px ${TWEET_PNG_FONT_FALLBACK}`;
     context.fillText(card.source, x + 24, Math.min(y + height - 22, textY + 4));
+  }
+}
+
+function drawTweetPngTextLine(
+  context: CanvasRenderingContext2D,
+  line: TweetPngTextLine,
+  x: number,
+  baselineY: number,
+): void {
+  for (const fragment of line.fragments) {
+    context.font = fragment.font;
+    context.fillText(fragment.text, x + fragment.x, baselineY);
+    if (fragment.role === "text" && fragment.style.strikethrough && fragment.text) {
+      const metrics = context.measureText("M");
+      const ascent = metrics.actualBoundingBoxAscent || TWEET_PNG_BODY_FONT_SIZE * 0.72;
+      const strikeY = baselineY - Math.max(2, ascent * 0.38);
+      context.save();
+      context.strokeStyle = context.fillStyle;
+      context.lineWidth = Math.max(2, ascent / 12);
+      context.beginPath();
+      context.moveTo(x + fragment.x, strikeY);
+      context.lineTo(x + fragment.x + fragment.width, strikeY);
+      context.stroke();
+      context.restore();
+    }
   }
 }
 
@@ -1299,6 +1282,8 @@ function showTweetPngModal(
   let currentBlob = result.blob;
   let currentData = data;
   let currentResult = result;
+  const originalEditorText = data.text;
+  let editorState = data.richText;
   let url = URL.createObjectURL(result.blob);
   let renderVersion = 0;
   let previewUpdateTimer: number | null = null;
@@ -1312,15 +1297,29 @@ function showTweetPngModal(
         <div class="milxdy-tweet-png-actions" role="group" aria-label="PNG actions">
           <button type="button" data-action="copy">Copy PNG</button>
           <button type="button" data-action="download">Download</button>
-          <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
-            <button type="button" data-action="reconnect" title="Open RemiliaNET in a background tab">Reconnect</button>
-            <button type="button" data-action="refresh" title="Retest the RemiNet connection">Refresh</button>
-          </span>
+            <span class="milxdy-tweet-png-reminet-disconnected" data-reminet-disconnected>
+              <button type="button" data-action="refresh" title="Retest Remilia Chat authorization">Refresh authorization</button>
+            </span>
           <button type="button" data-action="reminet" title="Stage this PNG in RemiNet Chat" hidden>Share to RemiNet</button>
           <button type="button" data-action="settings" aria-label="Share Kit settings" aria-expanded="false" aria-controls="milxdy-tweet-png-settings">&#9881;</button>
           <button type="button" data-action="close" aria-label="Close">&times;</button>
         </div>
       </header>
+      <section class="milxdy-tweet-png-editor" aria-labelledby="milxdy-tweet-png-editor-label">
+        <div class="milxdy-tweet-png-editor-heading">
+          <label id="milxdy-tweet-png-editor-label" for="milxdy-tweet-png-editor-input">Post text</label>
+          <div class="milxdy-tweet-png-formatting" role="toolbar" aria-label="Post text formatting">
+            <button type="button" data-format="bullet" aria-label="Toggle bulleted list" aria-pressed="false" title="Bulleted list">&#8226; List</button>
+            <button type="button" data-format="bold" aria-label="Toggle bold" aria-pressed="false" aria-keyshortcuts="Control+B Meta+B" title="Bold (Ctrl+B)"><strong>B</strong></button>
+            <button type="button" data-format="italic" aria-label="Toggle italic" aria-pressed="false" aria-keyshortcuts="Control+I Meta+I" title="Italic (Ctrl+I)"><em>I</em></button>
+            <button type="button" data-format="strikethrough" aria-label="Toggle strikethrough" aria-pressed="false" aria-keyshortcuts="Control+Shift+X Meta+Shift+X" title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
+            <button type="button" data-action="clear-formatting">Clear formatting</button>
+            <button type="button" data-action="reset-text">Reset text</button>
+          </div>
+        </div>
+        <textarea id="milxdy-tweet-png-editor-input" rows="4" spellcheck="true" aria-describedby="milxdy-tweet-png-editor-help"></textarea>
+        <p id="milxdy-tweet-png-editor-help">Select text to combine styles. List formatting applies to each selected line. Edits stay in this export.</p>
+      </section>
       <section id="milxdy-tweet-png-settings" class="milxdy-tweet-png-settings" aria-label="Share Kit settings" hidden>
         <div class="milxdy-tweet-png-presets" role="group" aria-label="Color presets">
           <span>Colors</span>
@@ -1345,6 +1344,7 @@ function showTweetPngModal(
     </div>
   `;
   const preview = modal.querySelector<HTMLImageElement>(".milxdy-tweet-png-preview");
+  const editor = modal.querySelector<HTMLTextAreaElement>("#milxdy-tweet-png-editor-input");
   const mediaControls = modal.querySelector<HTMLElement>(".milxdy-tweet-png-media-controls");
   const settings = modal.querySelector<HTMLElement>("#milxdy-tweet-png-settings");
   const settingsButton = modal.querySelector<HTMLButtonElement>('[data-action="settings"]');
@@ -1352,8 +1352,25 @@ function showTweetPngModal(
   const disconnectedControls = modal.querySelector<HTMLElement>("[data-reminet-disconnected]");
   const shareToRemiNetButton = modal.querySelector<HTMLButtonElement>('[data-action="reminet"]');
   const status = modal.querySelector<HTMLElement>(".milxdy-tweet-png-status");
+  if (editor) editor.value = editorState.text;
   const setStatus = (message: string) => {
     if (status) status.textContent = message;
+  };
+  const editorSelection = (): { start: number; end: number } => ({
+    start: editor?.selectionStart ?? 0,
+    end: editor?.selectionEnd ?? 0,
+  });
+  const renderFormattingControls = () => {
+    const selection = editorSelection();
+    for (const button of Array.from(modal.querySelectorAll<HTMLButtonElement>("[data-format]"))) {
+      const format = button.dataset.format;
+      const pressed = format === "bullet"
+        ? selectionHasTweetPngBullets(editorState, selection.start, selection.end)
+        : selectionHasTweetPngInlineStyle(editorState, selection.start, selection.end, format as TweetPngInlineStyle);
+      button.setAttribute("aria-pressed", String(pressed));
+    }
+    const reset = modal.querySelector<HTMLButtonElement>('[data-action="reset-text"]');
+    if (reset) reset.disabled = isTweetPngRichTextPristine(editorState, originalEditorText);
   };
   const excludedMedia = new Set<string>();
   const renderMediaControls = (nextData: TweetPngData, nextResult: TweetPngRenderResult) => {
@@ -1429,7 +1446,7 @@ function showTweetPngModal(
       return;
     }
     if (event.key !== "Tab") return;
-    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+    const focusable = Array.from(modal.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'))
       .filter((element) => element.offsetParent !== null);
     if (!focusable.length) return;
     const first = focusable[0];
@@ -1474,25 +1491,6 @@ function showTweetPngModal(
     setRemiNetConnected(connected);
     return connected;
   };
-  modal.querySelector<HTMLButtonElement>('[data-action="reconnect"]')?.addEventListener("click", (event) => {
-    const button = event.currentTarget as HTMLButtonElement;
-    const context = actionContext;
-    if (!context) {
-      setStatus("RemiNet reconnect is unavailable.");
-      return;
-    }
-    button.disabled = true;
-    setStatus("Opening RemiliaNET in a background tab...");
-    void context.openRemiNetSession()
-      .then((result) => {
-        if (!result.ok) throw new Error(result.error || "RemiliaNET could not be opened.");
-        setStatus("RemiliaNET opened in a background tab. Sign in there, then select Refresh.");
-      })
-      .catch((error) => setStatus(errorMessage(error)))
-      .finally(() => {
-        if (button.isConnected) button.disabled = false;
-      });
-  });
   modal.querySelector<HTMLButtonElement>('[data-action="refresh"]')?.addEventListener("click", (event) => {
     const button = event.currentTarget as HTMLButtonElement;
     button.disabled = true;
@@ -1500,7 +1498,7 @@ function showTweetPngModal(
     void probeRemiNetConnection()
       .then((connected) => setStatus(connected
         ? "RemiNet connection is live."
-        : "RemiNet connection is unavailable. Use Reconnect, then try Refresh again."))
+        : "Remilia Chat authorization is unavailable. Connect Remilia from the extension popup, then refresh authorization."))
       .catch((error) => setStatus(errorMessage(error)))
       .finally(() => {
         if (button.isConnected) button.disabled = false;
@@ -1531,7 +1529,12 @@ function showTweetPngModal(
     const version = ++renderVersion;
     setStatus("Updating preview...");
     await saveVisualTheme();
-    const nextData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
+    const extractedData = withoutExcludedTweetPngMedia(extractTweetPngData(tweet, statusUrl), excludedMedia);
+    const nextData: TweetPngData = {
+      ...extractedData,
+      text: editorState.text,
+      richText: editorState,
+    };
     const nextResult = await renderTweetPng(nextData);
     if (version !== renderVersion || !modal.isConnected) return;
     const nextUrl = URL.createObjectURL(nextResult.blob);
@@ -1542,6 +1545,7 @@ function showTweetPngModal(
     currentResult = nextResult;
     if (preview) preview.src = nextUrl;
     renderMediaControls(nextData, nextResult);
+    renderFormattingControls();
     setStatus(successMessage);
   };
   mediaControls?.addEventListener("click", (event) => {
@@ -1558,6 +1562,76 @@ function showTweetPngModal(
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     }, 75);
   };
+  const commitEditorState = (
+    nextState: TweetPngRichText,
+    selection: { start: number; end: number },
+    message: string,
+  ) => {
+    if (nextState === editorState) {
+      setStatus("Select text or place the cursor in a word to apply inline formatting.");
+      editor?.focus();
+      return;
+    }
+    editorState = nextState;
+    currentData = { ...currentData, text: editorState.text, richText: editorState };
+    if (editor) {
+      if (editor.value !== editorState.text) editor.value = editorState.text;
+      editor.focus();
+      editor.setSelectionRange(
+        Math.min(selection.start, editorState.text.length),
+        Math.min(selection.end, editorState.text.length),
+      );
+    }
+    renderFormattingControls();
+    setStatus(message);
+    schedulePreviewUpdate();
+  };
+  const applyFormattingAction = (format: string) => {
+    if (format !== "bullet" && format !== "bold" && format !== "italic" && format !== "strikethrough") return;
+    const selection = editorSelection();
+    const nextState = format === "bullet"
+      ? toggleTweetPngBullets(editorState, selection.start, selection.end)
+      : toggleTweetPngInlineStyle(editorState, selection.start, selection.end, format);
+    const label = format === "bullet" ? "List formatting updated." : `${format[0].toUpperCase()}${format.slice(1)} formatting updated.`;
+    commitEditorState(nextState, selection, label);
+  };
+  for (const button of Array.from(modal.querySelectorAll<HTMLButtonElement>("[data-format]"))) {
+    button.addEventListener("click", () => applyFormattingAction(button.dataset.format || ""));
+  }
+  modal.querySelector<HTMLButtonElement>('[data-action="clear-formatting"]')?.addEventListener("click", () => {
+    const selection = editorSelection();
+    commitEditorState(
+      clearTweetPngFormatting(editorState, selection.start, selection.end),
+      selection,
+      "Formatting cleared.",
+    );
+  });
+  modal.querySelector<HTMLButtonElement>('[data-action="reset-text"]')?.addEventListener("click", () => {
+    commitEditorState(createTweetPngRichText(originalEditorText), { start: 0, end: 0 }, "Original post text restored.");
+  });
+  editor?.addEventListener("input", () => {
+    editorState = reconcileTweetPngRichText(editorState, editor.value);
+    currentData = { ...currentData, text: editorState.text, richText: editorState };
+    renderFormattingControls();
+    schedulePreviewUpdate();
+  });
+  editor?.addEventListener("select", renderFormattingControls);
+  editor?.addEventListener("keyup", renderFormattingControls);
+  editor?.addEventListener("click", renderFormattingControls);
+  editor?.addEventListener("keydown", (event) => {
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+    const key = event.key.toLowerCase();
+    const format = key === "b" && !event.shiftKey
+      ? "bold"
+      : key === "i" && !event.shiftKey
+        ? "italic"
+        : key === "x" && event.shiftKey
+          ? "strikethrough"
+          : null;
+    if (!format) return;
+    event.preventDefault();
+    applyFormattingAction(format);
+  });
   for (const input of Array.from(modal.querySelectorAll<HTMLInputElement>("[data-setting]"))) {
     input.addEventListener(input.type === "color" ? "input" : "change", () => {
       const key = input.dataset.setting as keyof VisualThemeSettings;
@@ -1586,6 +1660,7 @@ function showTweetPngModal(
       void updatePreview().catch((error) => setStatus(errorMessage(error)));
     });
   }
+  renderFormattingControls();
   renderMediaControls(currentData, currentResult);
   document.body.appendChild(modal);
   void probeRemiNetConnection().catch(() => setRemiNetConnected(false));
@@ -1729,9 +1804,15 @@ function injectTweetPngStyles(): void {
     }
     .milxdy-tweet-png-dialog button:focus-visible,
     .milxdy-tweet-png-action-link:focus-visible,
-    .milxdy-tweet-png-dialog input:focus-visible {
+    .milxdy-tweet-png-dialog input:focus-visible,
+    .milxdy-tweet-png-dialog textarea:focus-visible {
       outline: 2px solid #7b2cff;
       outline-offset: 2px;
+    }
+    .milxdy-tweet-png-dialog button[aria-pressed="true"] {
+      background: #7b2cff;
+      border-color: #5e19c5;
+      color: #ffffff;
     }
     .milxdy-tweet-png-dialog button:disabled {
       background: #ece8ef;
@@ -1739,6 +1820,45 @@ function injectTweetPngStyles(): void {
       color: #8b8492;
       cursor: not-allowed;
       opacity: 0.72;
+    }
+    .milxdy-tweet-png-editor {
+      background: #f6efff;
+      border: 1px solid #d7b8ff;
+      border-radius: 6px;
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+    }
+    .milxdy-tweet-png-editor-heading {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 16px;
+      justify-content: space-between;
+    }
+    .milxdy-tweet-png-editor-heading > label {
+      font: 700 13px/1.3 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .milxdy-tweet-png-formatting {
+      align-items: center;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .milxdy-tweet-png-formatting button {
+      min-width: 32px;
+    }
+    #milxdy-tweet-png-editor-input {
+      background: #ffffff;
+      border: 1px solid #bfa5dd;
+      border-radius: 5px;
+      box-sizing: border-box;
+      color: #20122f;
+      font: 15px/1.45 TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      min-height: 92px;
+      padding: 8px 10px;
+      resize: vertical;
+      width: 100%;
     }
     .milxdy-tweet-png-settings {
       align-items: center;

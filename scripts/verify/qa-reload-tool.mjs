@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { acquirePublisherLock, buildQaOnce, createDebouncer, resolvePersistentQaOutput, startCoordinator } from "../qa/qa-reload.mjs";
+import { acquirePublisherLock, buildQaOnce, createDebouncer, promoteLastKnownGood, resolvePersistentQaOutput, startCoordinator } from "../qa/qa-reload.mjs";
 
 const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 assert.match(packageJson.scripts?.["qa:build"] || "", /qa-reload\.mjs --once/u);
@@ -56,6 +56,45 @@ await assert.rejects(
 );
 assert.equal(await readFile(resolve(preservationRoot, "last-known-good.txt"), "utf8"), "keep me\n", "failed builds must preserve the existing output");
 await rm(preservationRoot, { recursive: true, force: true });
+
+const stableRoot = resolve("tmp/qa-reload-stable-root");
+const stableStaging = resolve("tmp/qa-reload-stable-staging");
+await rm(stableRoot, { recursive: true, force: true });
+await rm(stableStaging, { recursive: true, force: true });
+try {
+  await mkdir(resolve(stableRoot, "nested"), { recursive: true });
+  await mkdir(resolve(stableStaging, "nested"), { recursive: true });
+  await writeFile(resolve(stableRoot, "manifest.json"), "old manifest\n");
+  await writeFile(resolve(stableRoot, "stale.txt"), "remove me\n");
+  await writeFile(resolve(stableRoot, "nested", "old.txt"), "remove me too\n");
+  await writeFile(resolve(stableStaging, "manifest.json"), "new manifest\n");
+  await writeFile(resolve(stableStaging, "nested", "new.txt"), "new nested file\n");
+  const before = await stat(stableRoot);
+
+  await promoteLastKnownGood(stableStaging, stableRoot);
+
+  const after = await stat(stableRoot);
+  if (before.ino && after.ino) assert.equal(after.ino, before.ino, "promotion must preserve the registered unpacked-extension root directory");
+  assert.equal(await readFile(resolve(stableRoot, "manifest.json"), "utf8"), "new manifest\n");
+  assert.equal(await readFile(resolve(stableRoot, "nested", "new.txt"), "utf8"), "new nested file\n");
+  await assert.rejects(readFile(resolve(stableRoot, "stale.txt"), "utf8"), /ENOENT/u);
+  await assert.rejects(readFile(resolve(stableRoot, "nested", "old.txt"), "utf8"), /ENOENT/u);
+
+  await writeFile(resolve(stableStaging, "manifest.json"), "failed replacement\n");
+  await assert.rejects(
+    promoteLastKnownGood(stableStaging, stableRoot, {
+      async publishMirror(_source, target) {
+        await writeFile(resolve(target, "manifest.json"), "partial replacement\n");
+        throw new Error("deliberate in-place publish failure");
+      },
+    }),
+    /deliberate in-place publish failure/u,
+  );
+  assert.equal(await readFile(resolve(stableRoot, "manifest.json"), "utf8"), "new manifest\n", "failed in-place promotion must restore the last-known-good contents");
+} finally {
+  await rm(stableRoot, { recursive: true, force: true });
+  await rm(stableStaging, { recursive: true, force: true });
+}
 
 const artifactDir = "tmp/qa-reload-artifact";
 const qaOutput = resolve(artifactDir);

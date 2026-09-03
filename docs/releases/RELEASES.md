@@ -33,7 +33,26 @@ For reproducible release archives, use the npm lockfile as the canonical depende
 
 `scripts/release/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, browser builds, copied assets, or archive metadata changes.
 
-The release build emits browser-ready files under `dist/chromium` and `dist/firefox`. Lite, Balanced, and Full are setup choices inside the extension, not separate public release archives.
+The release build emits the authenticated browser-ready Chromium beta under
+`dist/chromium-beta` and the compatibility build under `dist/firefox`. The
+keyless `dist/chromium` output remains a production-profile source build, not
+the 0.2.5 authenticated beta archive. Lite, Balanced, and Full are setup choices
+inside the extension, not separate public release archives.
+
+For 0.2.5, the Chromium release archive is sourced from
+`dist/chromium-beta`, not the default keyless `dist/chromium` production output.
+The beta profile is declared in `assets/extension/profiles/chromium-beta.json`
+and must generate `remilia-login-client.json` with public client ID
+`tpa-milxdy`, issuer `https://www.remilia.net/oidc/realms/remilia`, authorization
+scope `openid`, extension ID `idlmhjcedjkmbkndigbiobfjadhlmgki`, redirect path
+`remilia-oauth`, and exact callback
+`https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth`.
+
+The maintainer QA output deliberately injects a different public key/name into
+the keyless production base; QA identity is not the beta client. Firefox also
+remains keyless with no Remilia Login client/callback and is accepted through
+the documented compatibility-only matrix. No profile may contain a client
+secret or signing private key.
 
 ## Snapshot Builds
 
@@ -45,18 +64,19 @@ Use release candidates, such as `v0.2.2-rc.1`, only when the release scope is ne
 
 Required outputs include:
 
-- `dist/chromium/content.js`
-- `dist/chromium/background.js`
-- `dist/chromium/popup.js`
-- `dist/chromium/features/wiki.js`
-- `dist/chromium/features/post-reading.js`
-- `dist/chromium/features/remistats.js`
-- `dist/chromium/features/miladymaxxer.js`
-- `dist/chromium/features/beetol.js`
-- `dist/chromium/features/reminetChat.js`
-- `dist/chromium/worker.js`
-- `dist/chromium/ocr.html`
-- `dist/chromium/ocrHost.js`
+- `dist/chromium-beta/content.js`
+- `dist/chromium-beta/background.js`
+- `dist/chromium-beta/popup.js`
+- `dist/chromium-beta/remilia-login-client.json`
+- `dist/chromium-beta/features/wiki.js`
+- `dist/chromium-beta/features/post-reading.js`
+- `dist/chromium-beta/features/remistats.js`
+- `dist/chromium-beta/features/miladymaxxer.js`
+- `dist/chromium-beta/features/beetol.js`
+- `dist/chromium-beta/features/reminetChat.js`
+- `dist/chromium-beta/worker.js`
+- `dist/chromium-beta/ocr.html`
+- `dist/chromium-beta/ocrHost.js`
 - `dist/firefox/manifest.json`
 
 Disabled feature bundles should not be downloaded or parsed on initial page load. The build script includes smoke checks to keep large feature implementation strings out of the bootstrap.
@@ -71,6 +91,14 @@ npm.cmd run verify:release:gates
 
 `verify:release:gates` rebuilds the profile matrix, runs the project checks, packages both browser archives, verifies checksums, and confirms reproducible output. Version-specific commands such as `verify:release:gates:020` are retained only for compatibility with their historical release line.
 
+For releases that include the Remilia API migration, the current gate also
+verifies the migration documentation/evidence schema and scans the extracted
+contents of both archives twice in deterministic order. The scan fails on
+private-key material, JWT/bearer-like credentials, client-secret assignments,
+machine-specific user paths, Codex worktree paths, and retired session-login UI
+copy. Its ignored local report contains only archive/file paths, byte counts,
+SHA-256 hashes, and the reproducible report hash.
+
 Also verify:
 
 - `git status --short`
@@ -84,6 +112,10 @@ Also verify:
 - safe-update instructions
 - no personal identifiers or secrets in source/docs
 - no local browser caches or machine-specific test output in source or release archives
+- `npm.cmd run verify:remilia-migration:live` passes against the exact integrated
+  source commit after both browser matrices are observed and recorded
+- `npm.cmd run verify:remilia-migration:artifacts` passes after release archives
+  are packaged
 - `.gitignore` contains secret-file rules for `.env`, `.env.*`, `!.env.example`, `*.pem`, `*.key`, `*.p12`, and `*.pfx`
 - GitHub release state matches the intended update channel: normal published releases for the normal updater, prereleases only for experimental tester builds
 

@@ -14,6 +14,17 @@
     ]
   },
   "contentEntry": "dist/content.js",
+  "pageContextActions": [
+    {
+      "id": "show-note",
+      "label": "Show developer note",
+      "entry": "dist/page-action.js",
+      "documentUrlPatterns": [
+        "http://*/*",
+        "https://*/*"
+      ]
+    }
+  ],
   "defaultEnabled": false,
   "storageKeys": {
     "local": [
@@ -79,7 +90,8 @@
     "domWrite": "small"
   },
   "loadTriggers": [
-    "startup"
+    "startup",
+    "userAction"
   ],
   "chrome": {
     "nativeStyle": "native",

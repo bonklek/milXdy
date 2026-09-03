@@ -231,10 +231,10 @@
           },
           "summary": "Review and export a local PNG from an explicitly selected X/Twitter post share action.",
           "packageKind": "feature",
-          "version": "0.2.4",
+          "version": "0.2.5",
           "sdk": {
-            "minVersion": "0.2.4",
-            "targetVersion": "0.2.4"
+            "minVersion": "0.2.5",
+            "targetVersion": "0.2.5"
           },
           "availability": "published",
           "publisher": "milXdy maintainers",
@@ -242,21 +242,23 @@
             "repositoryUrl": "https://github.com/bonklek/milXdy",
             "path": "examples/packages/first-party-replacements/tweetPng",
             "issues": [
-              "https://github.com/bonklek/milXdy/issues/16"
+              "https://github.com/bonklek/milXdy/issues/16",
+              "https://github.com/bonklek/milXdy/issues/224"
             ]
           },
           "artifact": {
             "kind": "maintainer-source",
             "path": "examples/packages/first-party-replacements/tweetPng",
-            "packageSha256": "ce59d98c76589cd8f5830829440a5e2adb2bda515429f4452aa4bb5b5f005ba5",
+            "packageSha256": "3e014f073d7d10c86392e901af6c1e262bbaf3a77d8e0416fd57a9d0105197e9",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
             "reviewedBy": "milxdy-first-party-share-kit",
-            "reviewedAt": "2026-08-06",
+            "reviewedAt": "2026-08-13",
             "notes": [
-              "Reviewed first-party replacement preserving the stable tweetPng identity and existing visual/profile settings."
+              "Reviewed first-party replacement preserving the stable tweetPng identity and existing visual/profile settings.",
+              "Exact-pinned @chenglou/pretext 0.0.8 is bundled under MIT for local Unicode-aware Canvas layout."
             ]
           },
           "capabilities": [

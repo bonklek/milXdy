@@ -17,6 +17,7 @@ vm.runInContext([
   functionDeclaration("nonNegativeNumber"),
   functionDeclaration("formatMetric"),
   functionDeclaration("cleanUsername"),
+  functionDeclaration("cleanRemiliaUsername"),
   functionDeclaration("transformApiResponse"),
   "globalThis.transformApiResponse = transformApiResponse;",
 ].join("\n"), context);

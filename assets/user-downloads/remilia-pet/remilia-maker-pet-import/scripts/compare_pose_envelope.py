@@ -196,6 +196,10 @@ def finding(
     template_id: str,
     diagnostic: str,
 ) -> dict[str, Any]:
+    version_suffix = template_id.rsplit("-v", 1)[-1]
+    template_version: int | str | None = (
+        int(version_suffix) if version_suffix.isdigit() else None
+    )
     return {
         "row": measurement.row,
         "column": measurement.column,
@@ -205,6 +209,7 @@ def finding(
         "actual": actual,
         "threshold": threshold,
         "templateId": template_id,
+        "templateVersion": template_version,
         "diagnosticArtifact": diagnostic,
     }
 
@@ -300,7 +305,14 @@ def run_qa(
 
     output_dir.mkdir(parents=True, exist_ok=True)
     diagnostics_dir = output_dir / "diagnostics"
+    if diagnostics_dir.is_symlink():
+        raise QaInputError("diagnostics directory must not be a symbolic link")
     diagnostics_dir.mkdir(parents=True, exist_ok=True)
+    for stale in diagnostics_dir.glob("row-??-frame-??.png"):
+        stale.unlink()
+    annotated_atlas = diagnostics_dir / "annotated-atlas.png"
+    if annotated_atlas.exists():
+        annotated_atlas.unlink()
     template_id = manifest["templateId"]
     thresholds = manifest["thresholds"]
     active_zones = active_expansion_zones(identity, manifest)
@@ -596,7 +608,7 @@ def run_qa(
         ):
             color = (255, 50, 50, 255)
         sheet_draw.rectangle((x0, y0, x0 + width - 1, y0 + height - 1), outline=color, width=2)
-    sheet_path = diagnostics_dir / "annotated-atlas.png"
+    sheet_path = annotated_atlas
     contact_sheet.save(sheet_path, format="PNG", optimize=False)
 
     report = {
@@ -656,11 +668,19 @@ def run_qa(
     report_path = output_dir / "deterministic-qa.json"
     report_path.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     semantic_path = output_dir / "semantic-review.json"
-    if not semantic_path.exists():
+    deterministic_hash = sha256_file(report_path)
+    preserve_semantic = False
+    if semantic_path.is_file():
+        try:
+            existing_semantic = load_json(semantic_path, "semantic review")
+            preserve_semantic = existing_semantic.get("deterministicQaSha256") == deterministic_hash
+        except QaInputError:
+            preserve_semantic = False
+    if not preserve_semantic:
         semantic = {
             "schemaVersion": 1,
             "status": "pending",
-            "deterministicQaSha256": sha256_file(report_path),
+            "deterministicQaSha256": deterministic_hash,
             "reviewer": None,
             "reviewedAt": None,
             "checks": {

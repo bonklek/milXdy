@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "release": "0.2.5",
+  "sourceCommit": null,
+  "browsers": {
+    "chromium": {
+      "browserVersion": null,
+      "buildId": null,
+      "testedAt": null,
+      "tester": null
+    },
+    "firefoxCompatibility": {
+      "browserVersion": null,
+      "buildId": null,
+      "testedAt": null,
+      "tester": null
+    }
+  },
+  "results": [
+    { "id": "migration-prompt", "chromium": "pending", "note": null },
+    { "id": "connect-pkce", "chromium": "pending", "note": null },
+    { "id": "connect-fail-closed", "chromium": "pending", "note": null },
+    { "id": "scope-status", "chromium": "pending", "note": null },
+    { "id": "disconnect-revoke", "chromium": "pending", "note": null },
+    { "id": "restart-refresh", "chromium": "pending", "note": null },
+    { "id": "public-profile", "chromium": "pending", "note": null },
+    { "id": "connected-profile", "chromium": "pending", "note": null },
+    { "id": "directory-resolution", "chromium": "pending", "note": null },
+    { "id": "stats", "chromium": "pending", "note": null },
+    { "id": "notifications", "chromium": "pending", "note": null },
+    { "id": "poke-cooldown", "chromium": "pending", "note": null },
+    { "id": "beetle-reads", "chromium": "pending", "note": null },
+    { "id": "beetle-legacy-actions", "chromium": "pending", "note": null },
+    { "id": "chat-history-post", "chromium": "pending", "note": null },
+    { "id": "chat-reconnect", "chromium": "pending", "note": null },
+    { "id": "chat-legacy-realtime", "chromium": "pending", "note": null },
+    { "id": "chat-legacy-media", "chromium": "pending", "note": null },
+    { "id": "post-factory-isolation", "chromium": "pending", "note": null },
+    { "id": "error-separation", "chromium": "pending", "note": null },
+    { "id": "keyboard-screen-reader", "chromium": "pending", "note": null },
+    { "id": "dm-read-aloud-privacy", "chromium": "pending", "note": null }
+  ],
+  "firefoxCompatibility": [
+    { "id": "firefox-no-client", "status": "pending", "note": null },
+    { "id": "firefox-unsupported-ui", "status": "pending", "note": null },
+    { "id": "firefox-no-fallback", "status": "pending", "note": null },
+    { "id": "firefox-no-token-leakage", "status": "pending", "note": null },
+    { "id": "firefox-public-profile", "status": "pending", "note": null },
+    { "id": "firefox-non-auth", "status": "pending", "note": null },
+    { "id": "firefox-build", "status": "pending", "note": null }
+  ]
+}

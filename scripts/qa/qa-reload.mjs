@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
-import { cp, mkdir, open, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { watch as watchFiles } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
@@ -21,6 +21,7 @@ export async function main(argv = process.argv.slice(2)) {
   const once = argv.includes("--once");
   const watch = argv.includes("--watch") || !once;
   const returnToBaseline = argv.includes("--return-to-baseline");
+  const buildChannel = readBuildChannel(argv);
   const localAppPackages = readRepeatedArg(argv, "--local-app-package");
   const trustFlags = ["--allow-local-review", "--acknowledge-package-consent", "--acknowledge-first-party-replacement", "--allow-sensitive-package-apis"]
     .filter((flag) => argv.includes(flag));
@@ -49,7 +50,7 @@ export async function main(argv = process.argv.slice(2)) {
         const composition = localAppPackages.length > 0
           ? await prepareExternalLocalPackageComposition(localAppPackages, trustFlags)
           : baselineComposition();
-        const build = await buildQaOnce({ outputDir, builder, builderArgs: composition.builderArgs, composition: composition.provenance, port, replaceForeignOutput });
+        const build = await buildQaOnce({ outputDir, builder, builderArgs: composition.builderArgs, buildChannel, composition: composition.provenance, port, replaceForeignOutput });
         state.build = build;
         process.exitCode = 0;
         releaseWaiters(state);
@@ -88,7 +89,8 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", builderArgs = [], composition = baselineComposition(), port = DEFAULT_PORT, quiet = false, replaceForeignOutput = false } = {}) {
+export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scripts/build/build-extension.mjs", builderArgs = [], buildChannel = "production", composition = baselineComposition(), port = DEFAULT_PORT, quiet = false, replaceForeignOutput = false } = {}) {
+  assertBuildChannel(buildChannel);
   const outputRoot = resolveQaBuildOutput(outputDir);
   const stagingRelative = `${DEFAULT_STAGING_ROOT}/staging-${process.pid}-${Date.now()}`;
   const staging = resolve(assertSafeGeneratedOutputDir(stagingRelative, "QA staging directory"));
@@ -96,12 +98,12 @@ export async function buildQaOnce({ outputDir = DEFAULT_OUTPUT, builder = "scrip
   await rm(staging, { recursive: true, force: true });
 
   try {
-    await runBuilder(builder, stagingRelative, builderArgs, quiet);
+    await runBuilder(builder, stagingRelative, builderArgs, buildChannel, quiet);
     const after = await collectSourceIdentity();
     if (before.sourceSha256 !== after.sourceSha256) {
       throw new Error("source changed during the build; discarded mixed-source output and queued a clean rebuild");
     }
-    const provenance = createProvenance(after, outputRoot, port, composition);
+    const provenance = createProvenance(after, outputRoot, port, composition, buildChannel);
     await injectQaRuntime(staging, provenance);
     await verifyStagedOutput(staging, provenance);
     await assertOutputCanBeReplaced(outputRoot, provenance, replaceForeignOutput);
@@ -303,7 +305,7 @@ export async function startCoordinator(state, port = DEFAULT_PORT) {
   return server;
 }
 
-function createProvenance(source, outputDir, coordinatorPort, composition) {
+function createProvenance(source, outputDir, coordinatorPort, composition, buildChannel) {
   const builtAt = new Date().toISOString();
   const stamp = builtAt.replaceAll(/[-:.]/g, "").replace("Z", "Z");
   const shortCommit = source.commit.slice(0, 8);
@@ -322,9 +324,9 @@ function createProvenance(source, outputDir, coordinatorPort, composition) {
       fileCount: source.fileCount,
     },
     release,
-    build: { target: "chromium", profile: "full", node: process.version },
+    build: { target: "chromium", profile: "full", channel: buildChannel, node: process.version },
     composition,
-    extensionId: extensionIdFromManifestKey(QA_MANIFEST_KEY),
+    extensionId: null,
     // QA artifacts may be shared outside this workstation. Keep the output
     // identity stable for reload coordination without serializing local paths.
     output: "shared-qa-chromium",
@@ -334,7 +336,6 @@ function createProvenance(source, outputDir, coordinatorPort, composition) {
 
 async function injectQaRuntime(staging, provenance) {
   const runtimeDir = resolve("scripts/qa/runtime");
-  const encoded = JSON.stringify(provenance);
   const [backgroundTemplate, popupTemplate, popupCss, popupHtml, backgroundBundle, manifestText] = await Promise.all([
     readFile(resolve(runtimeDir, "qa-background.js"), "utf8"),
     readFile(resolve(runtimeDir, "qa-popup.js"), "utf8"),
@@ -358,11 +359,14 @@ async function injectQaRuntime(staging, provenance) {
     .replace('<main class="app">', `<main class="app">\n${panel}`)
     .replace('<script src="popup.js"></script>', '<script src="qa-popup.js"></script>\n    <script src="popup.js"></script>');
   const manifest = JSON.parse(manifestText);
-  manifest.name = "milXdy QA";
-  manifest.key = QA_MANIFEST_KEY;
+  const betaIdentity = provenance.build.channel === "beta";
+  manifest.name = betaIdentity ? "milXdy Beta QA" : "milXdy QA";
+  if (!betaIdentity) manifest.key = QA_MANIFEST_KEY;
+  provenance.extensionId = extensionIdFromManifestKey(manifest.key);
+  const encoded = JSON.stringify(provenance);
   const displayVersion = provenance.release || manifest.version;
   manifest.version_name = `${displayVersion} QA ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
-  manifest.action.default_title = `milXdy QA ${displayVersion} ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
+  manifest.action.default_title = `${manifest.name} ${displayVersion} ${provenance.source.shortCommit}-${provenance.source.sha256.slice(0, 8)}`;
 
   await Promise.all([
     writeFile(resolve(staging, "qa-build.json"), `${JSON.stringify(provenance, null, 2)}\n`),
@@ -382,8 +386,10 @@ async function verifyStagedOutput(staging, provenance) {
   const parsed = JSON.parse(await readFile(resolve(staging, "qa-build.json"), "utf8"));
   if (parsed.buildId !== provenance.buildId || parsed.channel !== "developer-qa") throw new Error("QA provenance verification failed");
   const manifest = JSON.parse(await readFile(resolve(staging, "manifest.json"), "utf8"));
-  if (manifest.name !== "milXdy QA") throw new Error("QA manifest label was not injected");
-  if (manifest.key !== QA_MANIFEST_KEY || provenance.extensionId !== extensionIdFromManifestKey(manifest.key)) {
+  const expectedName = provenance.build.channel === "beta" ? "milXdy Beta QA" : "milXdy QA";
+  if (manifest.name !== expectedName) throw new Error("QA manifest label was not injected");
+  if ((provenance.build.channel !== "beta" && manifest.key !== QA_MANIFEST_KEY)
+    || provenance.extensionId !== extensionIdFromManifestKey(manifest.key)) {
     throw new Error("QA stable extension identity verification failed");
   }
   const runtimeSource = await readFile(resolve("src/platform/runtime/content-runtime.ts"), "utf8");
@@ -401,24 +407,79 @@ async function assertOutputCanBeReplaced(output, provenance, replaceForeignOutpu
   throw new Error("QA output belongs to a different source snapshot. Use qa:apply-next for a submitted handoff, or rerun qa:build with --replace-foreign-output after intentionally switching sources.");
 }
 
-async function promoteLastKnownGood(staging, output) {
+export async function promoteLastKnownGood(staging, output, { publishMirror = mirrorDirectoryContents } = {}) {
   await mkdir(dirname(output), { recursive: true });
   const publishStaging = `${output}.staging-${process.pid}-${Date.now()}`;
   const backup = `${output}.previous-${process.pid}`;
+  let preserveBackup = false;
   await rm(publishStaging, { recursive: true, force: true });
   await rm(backup, { recursive: true, force: true });
   try {
     await cp(staging, publishStaging, { recursive: true });
     const hadOutput = existsSync(output);
-    if (hadOutput) await rename(output, backup);
-    await rename(publishStaging, output);
-    await rm(backup, { recursive: true, force: true });
+    if (!hadOutput) {
+      await rename(publishStaging, output);
+      return;
+    }
+
+    // Chrome persists an unpacked extension by its root directory. Renaming that
+    // directory away during a publish can make the registered path disappear
+    // long enough for Chrome to drop the unpacked extension from the profile.
+    // Keep the root continuously present and mirror only its verified contents.
+    await cp(output, backup, { recursive: true });
+    try {
+      await publishMirror(publishStaging, output);
+    } catch (publishError) {
+      try {
+        await mirrorDirectoryContents(backup, output);
+      } catch (rollbackError) {
+        preserveBackup = true;
+        throw new Error(`publish failed (${errorMessage(publishError)}) and rollback failed (${errorMessage(rollbackError)}); recovery copy retained at ${backup}`);
+      }
+      throw publishError;
+    }
   } catch (error) {
-    if (!existsSync(output) && existsSync(backup)) await rename(backup, output);
-    throw new Error(`could not promote QA output atomically: ${error instanceof Error ? error.message : error}`);
+    throw new Error(`could not safely promote QA output: ${error instanceof Error ? error.message : error}`);
   } finally {
     await rm(publishStaging, { recursive: true, force: true });
+    if (!preserveBackup) await rm(backup, { recursive: true, force: true });
   }
+}
+
+async function mirrorDirectoryContents(source, target) {
+  await mkdir(target, { recursive: true });
+  const [sourceEntries, targetEntries] = await Promise.all([
+    readdir(source, { withFileTypes: true }),
+    readdir(target, { withFileTypes: true }),
+  ]);
+  const targetByName = new Map(targetEntries.map((entry) => [entry.name, entry]));
+  const sourceNames = new Set(sourceEntries.map((entry) => entry.name));
+
+  for (const entry of sourceEntries) {
+    const sourcePath = resolve(source, entry.name);
+    const targetPath = resolve(target, entry.name);
+    const targetEntry = targetByName.get(entry.name);
+    if (entry.isDirectory()) {
+      if (targetEntry && !targetEntry.isDirectory()) await rm(targetPath, { recursive: true, force: true });
+      await mirrorDirectoryContents(sourcePath, targetPath);
+    } else if (entry.isFile()) {
+      if (targetEntry && !targetEntry.isFile()) await rm(targetPath, { recursive: true, force: true });
+      await copyFile(sourcePath, targetPath);
+    } else {
+      if (targetEntry) await rm(targetPath, { recursive: true, force: true });
+      await cp(sourcePath, targetPath, { recursive: true, force: true, verbatimSymlinks: true });
+    }
+  }
+
+  for (const entry of targetEntries) {
+    if (!sourceNames.has(entry.name)) {
+      await rm(resolve(target, entry.name), { recursive: true, force: true });
+    }
+  }
+}
+
+function errorMessage(error) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function resolveQaBuildOutput(value) {
@@ -468,9 +529,9 @@ function coordinatorMessage(action, build) {
   };
 }
 
-function runBuilder(builder, stagingRelative, builderArgs = [], quiet = false) {
+function runBuilder(builder, stagingRelative, builderArgs = [], buildChannel = "production", quiet = false) {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", `--output-dir=${stagingRelative}`, ...builderArgs], {
+    const child = spawn(process.execPath, [builder, "--target=chromium", "--profile=full", `--channel=${buildChannel}`, `--output-dir=${stagingRelative}`, ...builderArgs], {
       cwd: resolve("."),
       stdio: quiet ? "ignore" : "inherit",
       windowsHide: true,
@@ -506,6 +567,16 @@ function shouldIgnoreWatchPath(filename) {
 function readArg(argv, name) {
   const prefix = `${name}=`;
   return argv.find((arg) => arg.startsWith(prefix))?.slice(prefix.length);
+}
+
+function readBuildChannel(argv) {
+  const value = readArg(argv, "--channel") || "production";
+  assertBuildChannel(value);
+  return value;
+}
+
+function assertBuildChannel(value) {
+  if (value !== "production" && value !== "beta") throw new Error("QA build channel must be production or beta.");
 }
 
 function readRepeatedArg(argv, name) {
