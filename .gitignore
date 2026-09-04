@@ -5,6 +5,8 @@ _sources/
 .agents/
 .codex/
 tmp/
+ideas/
+internal/
 .env
 .env.*
 !.env.example
