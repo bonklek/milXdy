@@ -77,7 +77,7 @@ Optional fields:
 - `dock` metadata for apps that appear in the shared overlay dock
 - `chrome` metadata for app-window style compatibility: native style, supported shared presets, and notes about app-specific chrome constraints
 - `settings` metadata for user-configurable storage-backed controls
-- `background.messageTypes` and `background.services`
+- `background.messageTypes` for reviewed host message routes; local packages cannot declare `background.services`
 - `permissions.hosts` for URL allowlist documentation
 
 `src/platform/app-sdk/first-party-apps.json` is the source of truth for first-party package metadata. `src/platform/app-sdk/first-party-registry.ts` adapts that static registry into runtime manifests by adding storage-backed `isEnabled()` functions, and `scripts/build/build-extension.mjs` consumes the same JSON for bundle entries, copied assets, CSS, web-accessible files, and required outputs.
@@ -96,7 +96,42 @@ Supported site IDs are currently `x`, `remiliaNet`, `remiliaWiki`, and `miladych
 - `embeddedFrame` for behavior inside a validated embedded frame, such as the Wiki sidebar frame
 - `overlayApp` for a local overlay surface whose host relationship is user-initiated or service-backed rather than injected
 
-The shared content runtime operates only on reviewed HTTPS origins. X/Twitter gets the full rail and Twitter scanner. RemiliaNET and Miladychan get a lighter launcher containing only apps with matching `contentScript` scopes. Remilia Wiki gets direct document/route services for explicitly scoped features such as Post-reading. Background and embedded-frame scopes never authorize top-level runtime loading by themselves. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
+The site/runtime support table is authoritative for authoring and review:
+
+| Site | Runtime mode | What packages can rely on |
+| --- | --- | --- |
+| X/Twitter | `fullRail` | Rail, dock, route tracking, and X scanner surface delivery for matching `contentScript` scopes. |
+| RemiliaNET | `bridgeOnly` | No milXdy page UI runtime. Reviewed host bridges may support an X-hosted app, but packages cannot treat this as a launcher or overlay site. |
+| Remilia Wiki | `featureOnly` | Matching `contentScript` scopes can receive the declared document and route feature lifecycle; it is not a rail runtime. |
+| Miladychan | `appLauncher` | A matching `contentScript` scope can use the site launcher; it does not receive X scanner surfaces. |
+
+`backgroundService`, `embeddedFrame`, and `overlayApp` scopes describe host integrations but never authorize top-level package runtime loading by themselves. Route-aware packages that claim X direct-message behavior must declare the `/messages`, `/messages/...`, `/i/chat`, and `/i/chat/...` patterns they support.
+
+### Declared host actions and storage retention
+
+`hostActions` is a closed allowlist. The current action,
+`"wiki.openPage"`, enables `context.openWikiPage(url)`. The host validates the
+Wiki URL and returns `{ ok: false, reason }` when the action is undeclared,
+disabled, unavailable, cancelled, invalid, or fails. It never gives a package a
+loader, another app module, or cross-app storage access.
+
+`storageKeys` controls storage access. `storageResources` separately describes
+what a declared key contains: `settings`, `cache`, `authoredData`, or
+`sensitiveData`. A represented settings resource resets by default and the
+other represented kinds are preserved unless they explicitly declare
+`reset: "reset"`. Unrepresented keys are preserved; existing per-setting reset
+rules continue to apply to their own setting storage. Adding an access key alone
+must not make user-authored or sensitive data deletable.
+
+### Managed package windows
+
+`context.windows.create({ id, title, content, ... })` creates a host-managed
+utility window for package-owned UI. The host mounts the window, manages
+drag/resize, clamps it around the viewport and rail, returns focus on close,
+handles Escape, and disposes it when the app activation ends. A package receives
+only a handle with `open()`, `close()`, `focus()`, `dispose()`, `element`, and
+`isOpen`. `persistKey` must be a declared local-storage key and stores only
+window layout. The package owns its content element and `onClose` response.
 
 ## Settings Schema
 
@@ -346,13 +381,13 @@ First-party platform examples:
 
 | Package | Integration | Notes |
 | --- | --- | --- |
-| RemiNet Chat | Multi-site launcher with official REST and isolated legacy adapters | Uses shared dock chrome and App SDK routed background messages on X/Twitter and the scoped RemiliaNET launcher. Official REST remains history and text/reply authority. The undocumented `wss://www.remilia.net/api/ws` bridge is optional acceleration plus legacy media/reaction mutation, while the exact upload/confirm endpoints are restricted to explicit attachment sends. These transports remain trusted first-party internals between validated same-extension top-frame X/Twitter and RemiliaNET senders; their absence never disables official text chat. |
+| RemiNet Chat | X/Twitter UI with bridge-only RemiliaNET support | Uses shared dock chrome and App SDK routed background messages on X/Twitter. RemiliaNET has no milXdy launcher or overlay; its exact-host bridge is a separately declared internal transport. Official REST remains history and text/reply authority. The undocumented `wss://www.remilia.net/api/ws` bridge is optional acceleration plus legacy media/reaction mutation, while the exact upload/confirm endpoints are restricted to explicit attachment sends. Its absence never disables official text chat. |
 | Beetol | Aligned | Uses shared dock frame, background router metadata, and App SDK routed messaging. Legacy direct runtime-message fallback has been removed from the app surface path. |
 | Miladychan Portal | Multi-site launcher | Uses shared overlay chrome on X/Twitter and the native Miladychan host. Public board and text-only posting calls remain on allowlisted, credential-omitting background routes. |
 | Music | Aligned | Uses shared overlay chrome, App SDK routed background messaging, and local-file plus remote enrichment disclosure. Local folder and API-key-adjacent settings must remain out of profile packs unless explicitly safe. |
 | Remilia Wiki hyperlinks | Shared surface feature | Inline delivery and manifest-generated Apps & Features preferences with storage-compatible popup mirrors. |
 | Remilia Wiki sidebar | Aligned with internal iframe bridge | Uses shared overlay chrome and declares its wiki sidebar background routes. Frame-local observers and frame-to-background messages are sidebar-frame implementation details; background handlers validate same-extension non-top wiki frame senders before forwarding navigation, history, open-tab, or read-aloud messages. |
-| Post-reading | Shared X and Wiki reader | Uses scanner delivery on X/Twitter and a direct `document` surface on approved Remilia Wiki hosts. The packaged OCR frame accepts parent requests from allowed X/Twitter/wiki origins only when they carry a content-issued frame authentication token, and its background helper validates the packaged `ocr.html` sender. |
+| Post-reading | Shared X and Wiki reader | Uses scanner delivery on X/Twitter and a direct `document` surface on approved Remilia Wiki hosts. The packaged OCR frame accepts a session that the trusted content script obtains from the background and that the packaged `ocr.html` frame redeems once in the same tab; page-origin setup and reinitialization are rejected. |
 | RemiStats and Pokes | Shared surface and background services | Uses shared surface delivery, routed background work, generated settings metadata, and declared storage ownership. |
 | Milady Maxxer | Worker-heavy overlay app | Uses shared scanner delivery, overlay chrome, worker/output metadata, and App SDK routed background work with explicit model, remote identity, and cache disclosures. |
 | Share Kit | Invoked-only external replacement | Retains the compatibility ID `tweetPng`, declares a `contextualPostActions` share-menu action, and owns Tweet PNG rendering/review UI entirely inside the reviewed package. The base client supplies only the generic host contract. |
@@ -426,8 +461,8 @@ Novel local package IDs become Apps & Features controllable when they declare a 
 
 Package-kind rules:
 
-- `app` packages may declare a dock entry, overlay app surface, app-owned settings surface, background services, and route/site scopes. They should use shared overlay chrome and rail metadata instead of registering app-local docks or window managers.
-- `feature` packages may declare scanner-delivered surfaces, generated Apps & Features controls, background routes, and user-action tools. They must not declare dock metadata or pretend to be rail apps.
+- `app` packages may declare a dock entry, overlay app surface, app-owned settings surface, and route/site scopes. They should use shared overlay chrome and rail metadata instead of registering app-local docks or window managers.
+- `feature` packages may declare scanner-delivered surfaces, generated Apps & Features controls, host-provided background routes, and user-action tools. They must not declare dock metadata or pretend to be rail apps.
 - `theme` packages are for visual, texture, icon, chrome, or preset resources. They should not declare content-script surfaces, host permissions, background services, or remote services unless a later platform pass adds explicit theme runtime support and review rules.
 
 ### Contextual post actions
@@ -807,10 +842,10 @@ apps must not import private helpers from `src/platform/overlay`.
 
 ### Package Fixtures
 
-First-party replacement fixtures live under `examples/packages/first-party-replacements/`. They demonstrate built-in replacement and registry compatibility:
+First-party replacement fixtures live under `examples/packages/first-party-replacements/`. They are schema/trust fixtures unless they separately name browser-acceptance evidence:
 
 - `examples/packages/first-party-replacements/tweetPng/` is the reviewed Share Kit replacement package. It keeps the stable technical ID, ships its prebuilt Tweet PNG implementation and declared icon, uses the generic contextual post-action contract, preserves legacy visual/profile keys, and declares no dock, network, or runtime delivery surface.
-- `examples/packages/first-party-replacements/wikiSidebar/` converts the first-party Wiki Sidebar metadata into a docked `app` package root with `milxdy.app.json`, placeholder prebuilt content/frame files, CSS, and a declared icon asset. It proves the overlay app shape: runtime lifecycle, `dock` and chrome metadata, embedded Wiki site scope, permission/privacy disclosure, background message metadata, and web-accessible assets.
+- `examples/packages/first-party-replacements/wikiSidebar/` is a nonfunctional schema and trust fixture. Its `open()` intentionally throws, so it does not demonstrate a working replacement, browser acceptance, or an implemented Wiki Sidebar runtime.
 
 Run `pnpm.cmd run verify:local-app-packages` to validate the fixtures. The verifier checks manifest version, ID/folder alignment, SDK compatibility, package kind rules, safe package-relative paths, declared file existence, lifecycle exports, site scopes, settings storage metadata, permissions/privacy disclosure, package assets, and absence of first-party-only runtime/build fields such as `entryName`, `entryPoint`, `requiredOutputs`, `isEnabled`, and `setEnabled`.
 
@@ -931,13 +966,13 @@ On a clean checkout using the checked-in examples fallback, the first-party repl
 
 The builder supports folder packages and ZIP archives. It produces an unpacked Chromium distribution for developer review and local installation.
 
-Background declarations are metadata-only for third-party local packages in this release. `background.messageTypes` may declare the message types a content bundle is allowed to send through `context.sendMessage`, and those message types must live under the package's own namespace such as `dev-note:*`. The composer does not copy, import, or register package-owned background handlers. `background.services` and extra fields such as `background.entry` are rejected until a reviewed package-owned background-loader design exists.
+Background declarations are metadata-only for third-party local packages in this release. `background.messageTypes` may declare the message types a content bundle is allowed to send through `context.sendMessage`, and those message types must live under the package's own namespace such as `dev-note:*`. `background.services`, `background.entry`, and every package-owned background handler are rejected. A host service may implement a reviewed message route, but that does not make the service a package capability.
 
 Shared-service expectations:
 
 - Content bundles export SDK lifecycle hooks and use `context.scheduler`, `context.signal`, `context.sendMessage`, `context.recordDiagnostic`, and shared scanner delivery instead of app-owned duplicate observers, direct runtime messaging, or unbounded polling.
-- Overlay packages use `overlayDock`, `overlayAppFrame`, and `overlayPanelBase` behavior instead of custom drag/resize/layout primitives.
-- Background work declares `background.messageTypes`, `background.services`, `permissions.hosts`, privacy notes, and URL allowlists before the router enables it.
+- Overlay packages use the public UI kit and host-owned dock lifecycle. Private overlay helpers are not package APIs; a package that needs custom geometry must own and document that bounded behavior.
+- Host-routed work declares `background.messageTypes`, `permissions.hosts`, privacy notes, and URL allowlists before the router enables the reviewed route.
 - Settings use the manifest settings schema and storage metadata so Apps & Features, profile packs, reset, and import/export flows can reason about them without importing the app bundle.
 - Packages that declare non-X sites must distinguish `contentScript`, `backgroundService`, `embeddedFrame`, and `overlayApp` integrations; only an exact reviewed `contentScript` scope can enter that site's filtered runtime, and it must declare fallback behavior.
 

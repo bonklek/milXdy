@@ -6,10 +6,11 @@ import {
   startOverlayPanelDrag,
 } from "../../platform/overlay/panel-base";
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
-import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 import { beetleHuntChargesFromUser, beetleHuntCooldownFromUser } from "./hunt-cooldown";
+import { createBeetolSdkServices } from "./sdk-services";
 
 function mountBeetolGame(context = {}) {
+  const sdkServices = createBeetolSdkServices(context);
   const ROOT_VERSION = '2026-08-16-read-only-native-link';
   const existingRoot = document.getElementById('beetol-hunter-root');
   if (existingRoot) {
@@ -27,7 +28,7 @@ function mountBeetolGame(context = {}) {
     ['claimUBC', 'Claim Cheese'],
     ['junkFaucet', 'Junk Faucet'],
   ];
-  const TAB_ICON_URL = chrome.runtime.getURL('beetol/icons/hunt-beetle.png');
+  const TAB_ICON_URL = sdkServices.tabIconUrl;
   const REMILIANET_ORIGIN = 'https://www.remilia.net';
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
@@ -37,9 +38,7 @@ function mountBeetolGame(context = {}) {
   const LEGACY_PREFIX = 'bex' + 'tol';
   const LEGACY_ENABLED_KEY = `milxdy.${LEGACY_PREFIX}.enabled`;
   const SNAP_MARGIN = 10;
-  const runtimeScheduler = context.scheduler || createFallbackRuntimeScheduler();
-  const lifecycleSignal = context.signal || null;
-  const appSdkSendMessage = typeof context.sendMessage === 'function' ? context.sendMessage : null;
+  const { runtimeScheduler, lifecycleSignal, appSdkSendMessage, getLocal, setLocal } = sdkServices;
   const lifecycleActive = () => state.enabled && lifecycleSignal?.aborted !== true;
 
   const state = {
@@ -236,12 +235,12 @@ function mountBeetolGame(context = {}) {
   function savePosition() {
     if (root.dataset.docked === 'true') return;
     if (!hasExtensionRuntime() || !state.position) return;
-    chrome.storage.local.set({ [POSITION_KEY]: state.position });
+    setLocal({ [POSITION_KEY]: state.position });
   }
 
   function saveCooldownState() {
     if (!hasExtensionRuntime()) return;
-    chrome.storage.local.set({
+    setLocal({
       [COOLDOWN_STATE_KEY]: {
         version: COOLDOWN_STATE_VERSION,
         savedAt: Date.now(),
@@ -824,8 +823,7 @@ function mountBeetolGame(context = {}) {
     });
     render();
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  addDisposable(sdkServices.observeLocal((changes) => storageListener(changes, 'local')));
 
   const panelThemeListener = () => {
     if (!lifecycleActive()) return;
@@ -892,7 +890,7 @@ function mountBeetolGame(context = {}) {
     },
   };
 
-  chrome.storage.local.get({
+  getLocal({
     beetolColor: 'red',
     beetolMode: 'settings',
     [SETTINGS_THEME_KEY]: 'system',

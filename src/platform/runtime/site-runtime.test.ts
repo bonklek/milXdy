@@ -47,9 +47,9 @@ describe("site runtime policy", () => {
   it("recognizes only the reviewed HTTPS origins", () => {
     expect(resolveRuntimeSite(location("https://x.com/home"))).toMatchObject({ id: "x", mode: "fullRail" });
     expect(resolveRuntimeSite(location("https://www.remilia.net/chat"))).toMatchObject({ id: "remiliaNet", mode: "bridgeOnly" });
+    expect(resolveRuntimeSite(location("https://remilia.net/chat"))).toMatchObject({ id: "remiliaNet", mode: "bridgeOnly" });
     expect(resolveRuntimeSite(location("https://remilia.wiki/Test"))).toMatchObject({ id: "remiliaWiki", mode: "featureOnly" });
     expect(resolveRuntimeSite(location("https://boards.miladychan.org/milady/1"))).toMatchObject({ id: "miladychan", mode: "appLauncher" });
-    expect(resolveRuntimeSite(location("https://remilia.net/"))).toBeNull();
     expect(resolveRuntimeSite(location("http://www.remilia.net/"))).toBeNull();
     expect(resolveRuntimeSite(location("https://related.remilia.net/"))).toBeNull();
   });
@@ -66,6 +66,7 @@ describe("site runtime policy", () => {
       "https://x.com/*",
       "https://twitter.com/*",
       "https://www.remilia.net/*",
+      "https://remilia.net/*",
       "https://remilia.wiki/*",
       "https://wiki.remilia.org/*",
       "https://boards.miladychan.org/*",

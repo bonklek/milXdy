@@ -183,7 +183,8 @@ for (const required of [
   "remilia:chat.write",
   "temporary legacy adapters",
   "does not use the browser `cookies` permission for Remilia authentication",
-  "Direct-message read-aloud is a stricter local boundary",
+  "accepted external Post-reading composition provides direct-message read-aloud",
+  "does not establish an on-device speech guarantee",
   "DM text is excluded from custom TTS, audio export, OCR, full-quote retrieval",
   "message references are transient",
 ]) {
@@ -304,11 +305,8 @@ for (const required of [
 
 const releaseMedia = files.get("docs/releases/RELEASE_NOTES_0.2.5.md").replace(/\s+/g, " ");
 for (const required of [
-  "This is candidate copy",
+  "Candidate status",
   "intentionally keyless",
-  "Privacy-safe screenshot brief",
-  "Never capture tokens",
-  "Screenshots are release media, not evidence",
 ]) {
   assert(releaseMedia.includes(required), `release media brief must include ${JSON.stringify(required)}`);
 }

@@ -4,6 +4,7 @@ import path from "node:path";
 import { contentScriptMatches, generatedAssetRoots, releaseBuilds, webAccessibleMatches } from "../release/release-builds.mjs";
 import { appsForProfile, featureBundlesForProfile, hostPermissionsForProfile } from "../release/release-registry.mjs";
 
+const hubPanelSource = await readFile("src/platform/runtime/hub-panel-renderer.ts", "utf8");
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const firstPartyAdapter = await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8");
 const VALID_PRESETS = new Set(["lite", "balanced", "full"]);
@@ -46,7 +47,7 @@ async function verifyRuntimeOwnership() {
   const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
   const maxxerStyles = await readFile("src/apps/milady-maxxer/styles.ts", "utf8");
-  const reskinStyles = await readFile("src/platform/visuals/reskin-styles.ts", "utf8");
+  const reskinStyles = await readFile("src/platform/visuals/reskin.css", "utf8");
   const wikiFrame = await readFile("src/apps/wiki-sidebar/frameContent.ts", "utf8");
 
   assert(runtime.includes("subscribeTwitterSurfaces(handleSurface)"), "runtime must own scanner subscription");
@@ -104,7 +105,7 @@ async function verifyRuntimeOwnership() {
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
   assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("snapshot.settingsActions"), "overlay dock settings panel must render registered settings actions");
   assert(overlayDock.includes("grid-template-columns: 22px minmax(0, 1fr) 28px 28px"), "overlay dock settings rows must keep icons, labels, and both move controls on one line");
-  assert(runtime.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
+  assert(runtime.includes("createHubPanelRenderer({") && hubPanelSource.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
   assert(runtime.includes('document.createElement("details")') && runtime.includes('title.textContent = "Change app preset"'), "Apps & Features presets must stay collapsed behind an explicit disclosure");
   assert(overlayAppLayout.includes('OVERLAY_APP_LAYOUTS_KEY = "milxdy.overlayApps.layouts.v1"'), "overlay app layouts must persist through the shared local layout store");
   assert(overlayAppLayout.includes("chrome.storage.local") && !overlayAppLayout.includes("chrome.storage.sync"), "overlay app pixel layouts must use chrome.storage.local only");
@@ -154,6 +155,10 @@ async function verifyRuntimeOwnership() {
   assert(remistatsStyles.includes(".reminet-profile-action-poke-slot:empty"), "RemiStats must not reserve visible profile action-row space for an unconfirmed poke target");
   assert(remistats.includes("const confirmedUsername = cleanRemiliaUsername(slotTarget?.remiliaUsername)"), "RemiStats reused profile slots must derive poke eligibility from the exact official directory target, not public badge data or the X handle");
 
+  await verifyFeatureRuntimeBoundaries();
+}
+
+async function verifyFeatureRuntimeBoundaries() {
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
   assert(contentRoot.includes("appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)"), "root content script must filter apps by the validated runtime site");
   assert(contentRoot.includes("createContentRuntime(runtimeApps, runtimeSite)"), "root content script must bootstrap the shared runtime with site context");

@@ -86,6 +86,12 @@ export class ContentAppLifecycleOwner {
 
   async #invokeOperationalHook(hook: Extract<ContentAppHook, "route" | "open" | "close">, invoke: () => Promise<void> | void | undefined): Promise<void> {
     if (this.#teardownPromise || this.#deactivationRequested) return;
+    // A loaded module is not operational until boot and enable have settled.
+    // Waiting here also makes direct lifecycle callers safe while activation is
+    // still in flight.
+    const activation = this.activate();
+    await activation;
+    if (this.#teardownPromise || this.#deactivationRequested) return;
     const operation = invokeHook(invoke);
     this.#activeHooks.add(operation);
     try {

@@ -1,0 +1,16 @@
+      [data-milxdy-contextual-post-action] {
+        transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
+      }
+      [data-milxdy-contextual-post-action]:hover,
+      [data-milxdy-contextual-post-action]:focus-visible {
+        background: rgba(15, 20, 25, 0.1) !important;
+        color: inherit !important;
+      }
+      [data-milxdy-contextual-post-action]:active,
+      [data-milxdy-contextual-post-action][data-milxdy-contextual-post-action-busy="true"] {
+        background: rgba(15, 20, 25, 0.16) !important;
+        color: inherit !important;
+        transform: translateY(1px) !important;
+      }
+      .milxdy-contextual-post-action-icon { flex: 0 0 auto; height: 20px; width: 20px; }
+

@@ -9,12 +9,10 @@ import {
   type RemiliaApiStats,
 } from "../../platform/auth/remilia-api";
 import { normalizeRemiliaUsername, normalizeXHandle } from "../../platform/auth/reminet-identity";
-
-export const REMISTATS_OFFICIAL_SCOPES = [
-  REMILIA_SCOPE_STATS_READ,
-  REMILIA_SCOPE_NOTIFICATIONS_READ,
-  REMILIA_SCOPE_POKES_WRITE,
-] as const;
+import { PokeCooldownStore } from "./poke-cooldown-store";
+import { isNotificationKey, notificationKey, readNotificationReadState } from "./notification-state";
+import { authRequiredFailure, invalidPaginationFailure, officialFailure, unavailablePokeTargetFailure, unmatchedSelfProfile } from "./official-api-results";
+export { officialFailure } from "./official-api-results";
 
 export const REMISTATS_NOTIFICATION_READ_STATE_KEY = "milxdy.remistats.notificationReadState";
 export const REMISTATS_POKE_COOLDOWN_STORAGE_KEY = "milxdy.remistats.pokeCooldowns";
@@ -26,149 +24,39 @@ const MAX_NOTIFICATION_PAGES = 100;
 const MAX_NOTIFICATION_READ_ENTRIES = 500;
 const NOTIFICATION_READ_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
 
-export type RemiStatsOfficialScope = typeof REMISTATS_OFFICIAL_SCOPES[number];
-
-export type RemiStatsStorage = {
-  get(key: string): Promise<unknown>;
-  set(key: string, value: unknown): Promise<void>;
-  remove?(key: string): Promise<void>;
-};
-
-export type RemiStatsOfficialFailure = {
-  ok: false;
-  source: "official";
-  error: string;
-  message: string;
-  status: number;
-  category: RemiliaApiError["category"];
-  code: RemiliaApiError["code"];
-  retryAfterMs?: number;
-  nextAllowedAt?: number;
-  authRequired?: boolean;
-  scopeRequired?: boolean;
-  cooldownMs?: number;
-  cooldownUntil?: number;
-  cooldownSource?: "official" | "offline-fallback";
-};
-
-export type RemiStatsStatsResult = {
-  ok: true;
-  source: "official";
-  scope: typeof REMILIA_SCOPE_STATS_READ;
-  status: number;
-  data: RemiliaApiStats;
-} | RemiStatsOfficialFailure;
-
-export type RemiStatsAuthStatus = {
-  phase: string;
-  identity?: { username?: string };
-};
-
-export type RemiStatsSelfProfileData = {
-  xHandle: string;
-  remiliaUsername: string;
-  displayName: string;
-  score: number | null;
-  beetleCount: number | null;
-  followers: number | null;
-};
-
-export type RemiStatsSelfProfileResult = {
-  ok: true;
-  source: "official";
-  matched: true;
-  scope: typeof REMILIA_SCOPE_STATS_READ;
-  status: number;
-  data: RemiStatsSelfProfileData;
-} | {
-  ok: true;
-  source: "official";
-  matched: false;
-  data: null;
-} | RemiStatsOfficialFailure;
-
-export type RemiStatsNotificationItem = RemiliaApiNotification & {
-  key: string;
-  read: boolean;
-  readSource: "official" | "local" | "unread";
-};
-
-export type RemiStatsNotificationsResult = {
-  ok: true;
-  source: "official";
-  scope: typeof REMILIA_SCOPE_NOTIFICATIONS_READ;
-  status: number;
-  notifications: RemiStatsNotificationItem[];
-  pageCount: number;
-  duplicateCount: number;
-} | RemiStatsOfficialFailure;
-
-export type RemiStatsIncomingPoke = {
-  key: string;
-  handle: string;
-  createdAt: number;
-};
-
-export type RemiStatsIncomingPokesResult = {
-  ok: true;
-  source: "official";
-  scope: typeof REMILIA_SCOPE_NOTIFICATIONS_READ;
-  pokes: RemiStatsIncomingPoke[];
-  pokers: string[];
-  notificationCount: number;
-  pageCount: number;
-  duplicateCount: number;
-  fetchedAt: number;
-} | RemiStatsOfficialFailure;
-
-export type RemiStatsPokeSuccess = {
-  ok: true;
-  source: "official";
-  scope: typeof REMILIA_SCOPE_POKES_WRITE;
-  status: number;
-  data: RemiliaApiPoke;
-  cooldownMs: 0;
-};
-
-export type RemiStatsPokeResult = RemiStatsPokeSuccess | RemiStatsOfficialFailure;
-
-export type RemiStatsPokeTarget = {
-  xHandle: string;
-  remiliaUsername: string;
-};
-
-export type RemiStatsPokeTargetsResult = {
-  ok: true;
-  source: "official";
-  targets: RemiStatsPokeTarget[];
-};
-
-type StoredNotificationReadState = {
-  schemaVersion: 1;
-  entries: Array<{ key: string; readAt: number }>;
-};
-
-type StoredPokeCooldown = {
-  until: number;
-  observedAt: number;
-  source: "official";
-};
-
-type StoredPokeCooldownState = {
-  schemaVersion: 2;
-  targets: Record<string, StoredPokeCooldown>;
-};
-
+import type {
+  RemiStatsAuthStatus, RemiStatsIncomingPoke, RemiStatsIncomingPokesResult, RemiStatsNotificationItem,
+  RemiStatsNotificationsResult, RemiStatsOfficialFailure, RemiStatsOfficialScope, RemiStatsPokeResult,
+  RemiStatsPokeSuccess, RemiStatsPokeTarget, RemiStatsPokeTargetsResult, RemiStatsSelfProfileResult,
+  RemiStatsStatsResult, RemiStatsStorage, StoredNotificationReadState, StoredPokeCooldown, StoredPokeCooldownState,
+} from "./official-api-contract";
+import { REMISTATS_OFFICIAL_SCOPES } from "./official-api-contract";
+export { REMISTATS_OFFICIAL_SCOPES } from "./official-api-contract";
+export type {
+  RemiStatsAuthStatus, RemiStatsIncomingPoke, RemiStatsIncomingPokesResult, RemiStatsNotificationItem,
+  RemiStatsNotificationsResult, RemiStatsOfficialFailure, RemiStatsOfficialScope, RemiStatsPokeResult,
+  RemiStatsPokeSuccess, RemiStatsPokeTarget, RemiStatsPokeTargetsResult, RemiStatsSelfProfileData,
+  RemiStatsSelfProfileResult, RemiStatsStatsResult, RemiStatsStorage, StoredNotificationReadState,
+  StoredPokeCooldown, StoredPokeCooldownState,
+} from "./official-api-contract";
 export class RemiStatsOfficialService {
+  private accountProfile: { id: string; username: Promise<string> } | null = null;
   private notificationReadWriteQueue: Promise<void> = Promise.resolve();
-  private pokeCooldownWriteQueue: Promise<void> = Promise.resolve();
+  private readonly pokeCooldowns: PokeCooldownStore;
 
   constructor(
     private readonly client: RemiliaApiClient,
     private readonly storage: RemiStatsStorage,
     private readonly now: () => number = Date.now,
     private readonly getAuthStatus: () => Promise<RemiStatsAuthStatus> = async () => ({ phase: "disconnected" }),
-  ) {}
+  ) {
+    this.pokeCooldowns = new PokeCooldownStore(
+      this.storage,
+      this.now,
+      () => this.activeAuthUsername(),
+      REMISTATS_POKE_COOLDOWN_STORAGE_KEY,
+    );
+  }
 
   async getMyStats(): Promise<RemiStatsStatsResult> {
     const result = await this.client.getMyStats();
@@ -249,7 +137,7 @@ export class RemiStatsOfficialService {
 
     if (!completed) return invalidPaginationFailure();
 
-    const readState = await this.readNotificationReadState();
+    const readState = await readNotificationReadState(this.storage, REMISTATS_NOTIFICATION_READ_STATE_KEY, MAX_NOTIFICATION_READ_ENTRIES);
     const readKeys = new Set(readState.entries.map((entry) => entry.key));
     const keyed = await Promise.all(pages.map(async (notification, index) => ({
       index,
@@ -339,7 +227,7 @@ export class RemiStatsOfficialService {
     const accepted = [...new Set(keys.filter(isNotificationKey))];
     if (accepted.length === 0) return { ok: true, marked: 0 };
     const write = this.notificationReadWriteQueue.then(async () => {
-      const state = await this.readNotificationReadState();
+      const state = await readNotificationReadState(this.storage, REMISTATS_NOTIFICATION_READ_STATE_KEY, MAX_NOTIFICATION_READ_ENTRIES);
       const byKey = new Map(state.entries.map((entry) => [entry.key, entry]));
       const readAt = this.now();
       for (const key of accepted) byKey.set(key, { key, readAt });
@@ -356,9 +244,10 @@ export class RemiStatsOfficialService {
 
   async pokeUser(handle: string): Promise<RemiStatsPokeResult> {
     const clean = normalizeHandle(handle);
+    const cooldownAccount = await this.pokeCooldowns.currentAccount();
     const result = await this.client.pokeUser(clean);
     if (result.ok) {
-      await this.removePokeCooldown(clean);
+      await this.pokeCooldowns.remove(clean, cooldownAccount);
       await this.storePokeDiagnostic({ ok: true, status: result.status });
       return {
         ok: true,
@@ -374,13 +263,13 @@ export class RemiStatsOfficialService {
     if (result.error.code === "poke_cooldown") {
       const cooldownUntil = authoritativeCooldownUntil(result.error, this.now());
       if (cooldownUntil > this.now()) {
-        await this.storePokeCooldown(clean, cooldownUntil);
+        await this.pokeCooldowns.store(clean, cooldownUntil, cooldownAccount);
         failure.cooldownMs = cooldownUntil - this.now();
         failure.cooldownUntil = cooldownUntil;
         failure.cooldownSource = "official";
       }
     } else if (result.error.category === "network" || result.error.category === "timeout") {
-      const fallback = await this.getStoredPokeCooldown(clean);
+      const fallback = await this.pokeCooldowns.get(clean, cooldownAccount);
       if (fallback && fallback.until > this.now()) {
         failure.cooldownMs = fallback.until - this.now();
         failure.cooldownUntil = fallback.until;
@@ -443,9 +332,10 @@ export class RemiStatsOfficialService {
     cooldownSource?: "offline-fallback";
   }> {
     const clean = normalizeHandle(handle);
-    const stored = await this.getStoredPokeCooldown(clean);
+    const cooldownAccount = await this.pokeCooldowns.currentAccount();
+    const stored = await this.pokeCooldowns.get(clean, cooldownAccount);
     if (!stored || stored.until <= this.now()) {
-      await this.removePokeCooldown(clean);
+      await this.pokeCooldowns.remove(clean, cooldownAccount);
       return { ok: true, username: clean, canPoke: true, cooldownMs: 0 };
     }
     return {
@@ -458,19 +348,7 @@ export class RemiStatsOfficialService {
     };
   }
 
-  private async readNotificationReadState(): Promise<StoredNotificationReadState> {
-    const value = await this.storage.get(REMISTATS_NOTIFICATION_READ_STATE_KEY);
-    if (!isRecord(value) || value.schemaVersion !== 1 || !Array.isArray(value.entries)) {
-      return { schemaVersion: 1, entries: [] };
-    }
-    const entries = value.entries
-      .filter((entry): entry is { key: string; readAt: number } => (
-        isRecord(entry) && isNotificationKey(entry.key) && isFiniteNumber(entry.readAt)
-      ))
-      .sort((left, right) => right.readAt - left.readAt || left.key.localeCompare(right.key))
-      .slice(0, MAX_NOTIFICATION_READ_ENTRIES);
-    return { schemaVersion: 1, entries };
-  }
+
 
   private async activeAuthUsername(): Promise<string> {
     const authStatus = await this.getAuthStatus();
@@ -478,9 +356,28 @@ export class RemiStatsOfficialService {
     // verified OIDC identity. Let each shared API client method enforce its
     // own exact operation scope instead of suppressing directory-backed UI
     // because an unrelated release-wide scope was not granted.
-    return authStatus.phase === "connected" || authStatus.phase === "missing-scope"
-      ? normalizeRemiliaUsername(authStatus.identity?.username)
-      : "";
+    if (authStatus.phase !== "connected" && authStatus.phase !== "missing-scope") {
+      this.accountProfile = null;
+      return "";
+    }
+    const username = normalizeRemiliaUsername(authStatus.identity?.username);
+    if (username) return username;
+    // A valid OIDC subject does not guarantee a preferred_username claim.
+    // Resolve the account through /me, never through the visible X profile.
+    const id = authStatus.identity?.id;
+    if (!id) return "";
+    if (this.accountProfile?.id !== id) {
+      const username = this.client.getMe().then((result) => result.ok
+        ? normalizeRemiliaUsername(result.data.user.username)
+        : "").catch(() => "");
+      this.accountProfile = { id, username };
+    }
+    const request = this.accountProfile;
+    const resolved = await request.username;
+    const current = await this.getAuthStatus();
+    if (!resolved && this.accountProfile === request) this.accountProfile = null;
+    if ((current.phase !== "connected" && current.phase !== "missing-scope") || current.identity?.id !== id) return "";
+    return resolved;
   }
 
   private async resolveExactDirectoryTargets(xHandles: readonly string[]): Promise<{
@@ -510,116 +407,18 @@ export class RemiStatsOfficialService {
     return { ok: true, targets };
   }
 
-  private async readPokeCooldownState(): Promise<StoredPokeCooldownState> {
-    const value = await this.storage.get(REMISTATS_POKE_COOLDOWN_STORAGE_KEY);
-    if (!isRecord(value)) return { schemaVersion: 2, targets: {} };
-    if (value.schemaVersion === 2 && isRecord(value.targets)) {
-      const targets: Record<string, StoredPokeCooldown> = {};
-      for (const [target, entry] of Object.entries(value.targets)) {
-        if (!isRecord(entry) || !isFiniteNumber(entry.until) || !isFiniteNumber(entry.observedAt) || entry.source !== "official") continue;
-        targets[target] = { until: entry.until, observedAt: entry.observedAt, source: "official" };
-      }
-      return { schemaVersion: 2, targets };
-    }
-
-    const targets: Record<string, StoredPokeCooldown> = {};
-    for (const [target, until] of Object.entries(value)) {
-      if (!isFiniteNumber(until)) continue;
-      targets[target.toLowerCase()] = { until, observedAt: 0, source: "official" };
-    }
-    return { schemaVersion: 2, targets };
-  }
-
-  private async storePokeCooldown(handle: string, until: number): Promise<void> {
-    await this.mutatePokeCooldownState((state) => {
-      state.targets[handle.toLowerCase()] = { until, observedAt: this.now(), source: "official" };
-      return true;
-    });
-  }
-
-  private async removePokeCooldown(handle: string): Promise<void> {
-    const key = handle.toLowerCase();
-    if (!key) return;
-    await this.mutatePokeCooldownState((state) => {
-      if (!Object.hasOwn(state.targets, key)) return false;
-      delete state.targets[key];
-      return true;
-    });
-  }
-
-  private async getStoredPokeCooldown(handle: string): Promise<StoredPokeCooldown | null> {
-    const state = await this.readPokeCooldownState();
-    return state.targets[handle.toLowerCase()] ?? null;
-  }
-
   private storePokeDiagnostic(diagnostic: Record<string, unknown>): Promise<void> {
     return this.storage.set(REMISTATS_LAST_POKE_DIAGNOSTIC_KEY, {
-      schemaVersion: 1,
-      operation: "pokeUser",
-      ...diagnostic,
-      updatedAt: this.now(),
+      schemaVersion: 1, operation: "pokeUser", ...diagnostic, updatedAt: this.now(),
     });
   }
 
-  private async mutatePokeCooldownState(mutator: (state: StoredPokeCooldownState) => boolean): Promise<void> {
-    const write = this.pokeCooldownWriteQueue.then(async () => {
-      const state = await this.readPokeCooldownState();
-      if (mutator(state)) await this.storage.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, state);
-    });
-    this.pokeCooldownWriteQueue = write.catch(() => undefined);
-    await write;
-  }
 }
 
-export function officialFailure(error: RemiliaApiError): RemiStatsOfficialFailure {
-  return {
-    ok: false,
-    source: "official",
-    error: error.code,
-    message: error.message,
-    status: error.status,
-    category: error.category,
-    code: error.code,
-    ...(error.retryAfterMs === undefined ? {} : { retryAfterMs: error.retryAfterMs }),
-    ...(error.nextAllowedAt === undefined ? {} : { nextAllowedAt: error.nextAllowedAt }),
-    ...(["unauthorized", "invalid_token", "auth_unavailable"].includes(error.code) ? { authRequired: true } : {}),
-    ...(["insufficient_scope", "requires_user"].includes(error.code) ? { scopeRequired: true } : {}),
-  };
-}
 
-function invalidPaginationFailure(): RemiStatsOfficialFailure {
-  return officialFailure({
-    category: "invalid_response",
-    code: "invalid_response",
-    message: "The Remilia API returned an invalid response.",
-    status: 0,
-  });
-}
-
-function unmatchedSelfProfile(): RemiStatsSelfProfileResult {
-  return { ok: true, source: "official", matched: false, data: null };
-}
 
 function uniqueExactXHandles(values: readonly string[]): string[] {
   return [...new Set(values.map(normalizeExactXHandle).filter(Boolean))].slice(0, 50);
-}
-
-function authRequiredFailure(): RemiStatsOfficialFailure {
-  return officialFailure({
-    category: "authentication",
-    code: "auth_unavailable",
-    message: "Connect Remilia to use this action.",
-    status: 401,
-  });
-}
-
-function unavailablePokeTargetFailure(): RemiStatsOfficialFailure {
-  return officialFailure({
-    category: "authorization",
-    code: "forbidden",
-    message: "This X profile cannot be poked.",
-    status: 403,
-  });
 }
 
 function normalizeExactXHandle(value: unknown): string {
@@ -643,29 +442,26 @@ function finiteNumberOrNull(value: unknown): number | null {
 }
 
 function authoritativeCooldownUntil(error: RemiliaApiError, now: number): number {
-  if (isFiniteNumber(error.nextAllowedAt)) return Math.max(now, error.nextAllowedAt * 1000);
+  if (isFiniteNumber(error.nextAllowedAt)) {
+    const timestamp = error.nextAllowedAt >= 100_000_000_000
+      ? error.nextAllowedAt
+      : error.nextAllowedAt * 1000;
+    return Math.max(now, timestamp);
+  }
   if (isFiniteNumber(error.retryAfterMs)) return now + Math.max(0, error.retryAfterMs);
   return 0;
 }
 
-async function notificationKey(notification: RemiliaApiNotification): Promise<string> {
-  const canonical = JSON.stringify([
-    notification.type,
-    notification.created_at,
-    notification.from?.handle ?? "",
-    notification.from?.display_name ?? "",
-    notification.count ?? null,
-    notification.guild_name ?? "",
-    notification.message ?? "",
-  ]);
-  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
-  const hex = [...new Uint8Array(digest)].map((value) => value.toString(16).padStart(2, "0")).join("");
-  return `notification:v1:${hex}`;
+function normalizeStoredCooldownUntil(value: number): number | null {
+  if (!Number.isFinite(value) || value <= 0) return null;
+  // Repair deadlines saved by 0.2.5 after a Unix-millisecond API value was
+  // multiplied by 1,000 as though it were Unix seconds.
+  return value >= 100_000_000_000_000 ? value / 1000 : value;
 }
 
-function isNotificationKey(value: unknown): value is string {
-  return typeof value === "string" && /^notification:v1:[a-f0-9]{64}$/.test(value);
-}
+
+
+
 
 function normalizeHandle(value: unknown): string {
   if (typeof value !== "string") return "";

@@ -18,7 +18,7 @@ type SiteDefinition = {
 
 export const APPROVED_RUNTIME_SITES: readonly SiteDefinition[] = [
   { id: "x", mode: "fullRail", origins: ["https://x.com", "https://twitter.com"] },
-  { id: "remiliaNet", mode: "bridgeOnly", origins: ["https://www.remilia.net"] },
+  { id: "remiliaNet", mode: "bridgeOnly", origins: ["https://www.remilia.net", "https://remilia.net"] },
   { id: "remiliaWiki", mode: "featureOnly", origins: ["https://remilia.wiki", "https://wiki.remilia.org"] },
   { id: "miladychan", mode: "appLauncher", origins: ["https://boards.miladychan.org"] },
 ] as const;

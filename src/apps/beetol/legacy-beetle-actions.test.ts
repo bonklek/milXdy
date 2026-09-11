@@ -80,9 +80,10 @@ describe("legacy Beetle endpoint isolation", () => {
   });
 
   it("keeps undocumented mutation paths dormant and out of feature call sites", async () => {
-    const [background, remistats] = await Promise.all([
+    const [background, remistats, trophyMedia] = await Promise.all([
       readFile(new URL("./background.js", import.meta.url), "utf8"),
       readFile(new URL("../remistats/content.js", import.meta.url), "utf8"),
+      readFile(new URL("../remistats/trophy-banner-media.ts", import.meta.url), "utf8"),
     ]);
 
     expect(background).toContain("nativeBeetleActionResponse(action)");
@@ -92,7 +93,8 @@ describe("legacy Beetle endpoint isolation", () => {
     expect(background).not.toContain("createLegacyBeetleActionsAdapter");
     expect(background).not.toContain("/api/beetle/action/");
     expect(background).not.toContain("Authorization");
-    expect(remistats).toContain("legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL)");
+    expect(remistats).toContain("createTrophyBannerMedia({");
+    expect(trophyMedia).toContain("legacyBeetleTrophyShelfUrl(username, deps.baseUrl)");
     expect(remistats).not.toContain("/api/beetle/trophy/");
   });
 });

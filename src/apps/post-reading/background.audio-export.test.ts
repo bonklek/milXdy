@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const chromeMock = {
-  runtime: { id: "milxdy-test" },
+  runtime: { id: "milxdy-test", getURL: vi.fn((path: string) => `chrome-extension://milxdy-test/${path}`) },
   storage: {
     local: {
       get: vi.fn(async () => ({ "milxdy.performance.mode": "balanced" })),
@@ -24,6 +24,43 @@ beforeEach(() => {
 });
 
 describe("Post-reading audio export broker", () => {
+  it("binds a one-time OCR session to an extension content script and its packaged frame", async () => {
+    const contentSender = {
+      id: "milxdy-test", tab: { id: 42, url: "https://x.com/home" }, frameId: 0, url: "https://x.com/home",
+    } as chrome.runtime.MessageSender;
+    const session = await handlePostReadingBackgroundMessage({ type: "post-reading:ocrSession" }, contentSender);
+    expect(session).toMatchObject({ ok: true, authToken: expect.any(String) });
+    const authToken = String(session.authToken);
+    const frameSender = {
+      id: "milxdy-test", tab: { id: 42 }, frameId: 3, url: "chrome-extension://milxdy-test/ocr.html",
+    } as chrome.runtime.MessageSender;
+    await expect(handlePostReadingBackgroundMessage({ type: "post-reading:authorizeOcrSession", authToken }, frameSender))
+      .resolves.toEqual({ ok: true });
+    await expect(handlePostReadingBackgroundMessage({ type: "post-reading:authorizeOcrSession", authToken }, frameSender))
+      .resolves.toEqual({ ok: false, error: "INVALID_OCR_SESSION" });
+    await expect(handlePostReadingBackgroundMessage({ type: "post-reading:ocrSession" }, { ...contentSender, url: "https://attacker.example/" }))
+      .resolves.toEqual({ ok: false, error: "UNSUPPORTED_SENDER" });
+  });
+
+  it("mints OCR sessions only for trusted top-level X/Twitter and Wiki content scripts", async () => {
+    const sender = (url: string, overrides: Partial<chrome.runtime.MessageSender> = {}) => ({
+      id: "milxdy-test", tab: { id: 42, url }, frameId: 0, url, ...overrides,
+    }) as chrome.runtime.MessageSender;
+    for (const url of ["https://x.com/home", "https://twitter.com/home", "https://remilia.wiki/Page", "https://wiki.remilia.org/Page"]) {
+      await expect(handlePostReadingBackgroundMessage({ type: "post-reading:ocrSession" }, sender(url)))
+        .resolves.toMatchObject({ ok: true, authToken: expect.any(String) });
+    }
+    for (const rejected of [
+      sender("https://wiki.remilia.org.evil.example/Page"),
+      sender("https://wiki.remilia.org/Page", { frameId: 1 }),
+      sender("https://wiki.remilia.org/Page", { id: undefined }),
+      sender("https://wiki.remilia.org/Page", { tab: undefined }),
+    ]) {
+      await expect(handlePostReadingBackgroundMessage({ type: "post-reading:ocrSession" }, rejected))
+        .resolves.toEqual({ ok: false, error: "UNSUPPORTED_SENDER" });
+    }
+  });
+
   it("actively aborts an in-flight loopback POST when the declared cancel route is called", async () => {
     let transportSignal: AbortSignal | undefined;
     const fetchMock = vi.fn((_input: RequestInfo | URL, init?: RequestInit) => {

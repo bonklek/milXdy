@@ -170,12 +170,15 @@ the installed host version. It is the sole production Remilia API path for
 content and package principals; those principals must not call
 `remiliaApi:request` directly.
 
-Every broker call must validate:
+Every broker call validates its cooperative trusted-extension boundary:
 
 - same-extension sender and expected execution surface;
-- package identity and installed composition identity;
+- package identity and reviewed composition metadata supplied by the trusted
+  extension client (this is not an independent package principal);
 - declared capability and data-use metadata;
-- user consent/grant and the endpoint's delegated scope;
+- user consent/grant and the endpoint's delegated scope. Per-invocation gesture
+  assertions are supplied by trusted extension content and are not a
+  browser-verified gesture primitive;
 - fixed route class, normalized input, output bounds, and cancellation.
 
 | Capability | Allowed operations | Exact delegated scopes | Consent |

@@ -1,27 +1,17 @@
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
 import { DEFAULT_VISUAL_THEME, normalizeVisualTheme } from "../../platform/visuals/reskin-profile";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
-import { legacyBeetleTrophyShelfUrl } from "../beetol/legacy-beetle-actions";
-import { exactXProfileHandle, findExactProfileBannerRoot } from "./profile-page";
+import { profileBadgeIdentity, exactXProfileHandle, findExactProfileBannerRoot } from "./profile-page";
 import { exactDirectoryProfileIdentity, shouldForceExactDirectoryProfileRetry } from "./profile-identity";
+import { createTrophyBannerMedia, preloadDisplayImage } from "./trophy-banner-media";
+import { clearBannerNftLabel, clearBannerOverlay, setBannerNftLabel, transitionBannerOverlay, transitionBannerToOriginal } from "./banner-overlay-view";
+import { createProfileBannerController } from "./profile-banner-controller";
+import { createBannerCycleService } from "./banner-cycle-service";
+import { createRemiStatsEffects } from "./runtime-effects.js";
 
 // Content script for overlaying user scores on X.com.
 const REMINET_CONTENT_VERSION = 'reminet-poke-direct-2026-06-23';
-document.documentElement.dataset.milxdyReminetContentVersion = REMINET_CONTENT_VERSION;
-
-// Inject font into page
-const fontUrl = chrome.runtime.getURL('remistats/RemiliaMincho-Regular.otf');
-const fontStyle = document.createElement('style');
-fontStyle.textContent = `
-  @font-face {
-    font-family: 'Remilia Mincho';
-    src: url('${fontUrl}') format('opentype');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-  }
-`;
-document.head.appendChild(fontStyle);
+const runtimeEffects = createRemiStatsEffects();
 
 // Configuration
 const CONFIG = {
@@ -33,20 +23,10 @@ const CONFIG = {
 };
 
 const REMILIA_BASE_URL = 'https://www.remilia.net';
-const TROPHY_BANNER_WIDTH = 1500;
-const TROPHY_BANNER_HEIGHT = 500;
-const TROPHY_BANNER_CACHE_LIMIT = 50;
-const BANNERS_NFT_SUPPLY = 2000;
-const BANNERS_NFT_CONTRACT = '0x1352149Cd78D686043B504e7e7D96C5946b0C39c';
-const BANNER_MODES = ['original', 'shelf', 'nft'];
 
 // Cache for user scores
 const scoreCache = new Map();
 const SCORE_CACHE_LIMIT = 1000;
-const trophyBannerCache = new Map();
-const trophyBannerPending = new Map();
-let prefetchedBannersNft = null;
-let prefetchedBannersNftPending = null;
 const reminetProcessingElements = new Set();
 
 // Batch fetching queue
@@ -1308,6 +1288,16 @@ function removeEmptyBadgeRow(row) {
 }
 
 // Create score badge element
+function appendScoreBadgePoke(badge, options, xHandle) {
+  if (options.includePokeInside !== false && visualTheme.pokePlacement !== 'actions') {
+    const pokeTargetUsername = cleanRemiliaUsername(options.pokeTargetUsername);
+    const inlinePoke = createPokeButton(pokeTargetUsername, false, xHandle);
+    const content = badge.querySelector('.reminet-badge-content');
+    if (inlinePoke && content) content.appendChild(inlinePoke);
+    if (content && pokeTargetUsername) void updateIncomingPokeFlag(content, pokeTargetUsername);
+  }
+}
+
 function createScoreBadge(scoreData, options = {}) {
   const badge = document.createElement('div');
   badge.className = 'reminet-score-badge';
@@ -1346,13 +1336,7 @@ function createScoreBadge(scoreData, options = {}) {
     </div>
   `;
 
-  if (options.includePokeInside !== false && visualTheme.pokePlacement !== 'actions') {
-    const pokeTargetUsername = cleanRemiliaUsername(options.pokeTargetUsername);
-    const inlinePoke = createPokeButton(pokeTargetUsername, false, xHandle);
-    const content = badge.querySelector('.reminet-badge-content');
-    if (inlinePoke && content) content.appendChild(inlinePoke);
-    if (content && pokeTargetUsername) void updateIncomingPokeFlag(content, pokeTargetUsername);
-  }
+  appendScoreBadgePoke(badge, options, xHandle);
   
   // Calculate progress percentages
   const scorePercent = Math.min(100, (score / Math.max(1, finiteNumber(maxScore, 1000))) * 100);
@@ -2233,163 +2217,14 @@ function findTweetActionRow(element) {
   return findOwnedNode(element, '[role="group"][aria-label]');
 }
 
-function idle() {
-  return new Promise((resolve) => runtimeScheduler.idle(resolve, { timeout: 1500 }));
-}
+const trophyBannerMedia = createTrophyBannerMedia({
+  baseUrl: REMILIA_BASE_URL,
+  cleanUsername: cleanRemiliaUsername,
+  send: (message, type) => runtimeSendMessage(message, type),
+});
 
-function remiliaUrl(path) {
-  return new URL(path, REMILIA_BASE_URL).href;
-}
-
-async function fetchTrophyProfile(remiliaUsername) {
-  const clean = cleanRemiliaUsername(remiliaUsername);
-  if (!clean) return null;
-  try {
-    const response = await runtimeSendMessage({
-      type: 'reminetIdentity:getProfile',
-      remiliaUsername: clean,
-      maxAgeMs: 24 * 60 * 60 * 1000,
-    }, 'reminetIdentity:getProfile');
-    return response?.ok ? response.profile || null : null;
-  } catch {
-    return null;
-  }
-}
-
-function firstShelfRow(user) {
-  const shelves = Array.isArray(user?.trophyShelves) ? user.trophyShelves.slice(0, 5) : [];
-  const trophies = Array.isArray(user?.allTrophies) ? user.allTrophies : [];
-  const byId = new Map(trophies.map((trophy) => [String(trophy.id), trophy]));
-  return shelves
-    .filter(Boolean)
-    .map((id) => byId.get(String(id)))
-    .filter((trophy) => trophy?.icon);
-}
-
-function loadImage(src) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.crossOrigin = 'anonymous';
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
-function preloadDisplayImage(src) {
-  return new Promise((resolve, reject) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = reject;
-    image.src = src;
-  });
-}
-
-function drawImageCover(ctx, image, x, y, width, height) {
-  const scale = Math.max(width / image.width, height / image.height);
-  const scaledWidth = image.width * scale;
-  const scaledHeight = image.height * scale;
-  ctx.drawImage(
-    image,
-    x + (width - scaledWidth) / 2,
-    y + (height - scaledHeight) / 2,
-    scaledWidth,
-    scaledHeight
-  );
-}
-
-function canvasToBlob(canvas) {
-  return new Promise((resolve) => {
-    canvas.toBlob(resolve, 'image/webp', 0.9);
-  });
-}
-
-function rememberTrophyBanner(username, url) {
-  const key = username.toLowerCase();
-  trophyBannerCache.set(key, { url, touchedAt: Date.now() });
-  if (trophyBannerCache.size <= TROPHY_BANNER_CACHE_LIMIT) return;
-
-  const [oldestKey, oldest] = Array.from(trophyBannerCache.entries())
-    .sort((a, b) => a[1].touchedAt - b[1].touchedAt)[0] || [];
-  if (!oldestKey) return;
-  if (oldest?.url?.startsWith?.('blob:')) URL.revokeObjectURL(oldest.url);
-  trophyBannerCache.delete(oldestKey);
-}
-
-async function renderTrophyBanner(remiliaUsername) {
-  const clean = cleanRemiliaUsername(remiliaUsername);
-  if (!clean) return null;
-
-  const key = clean.toLowerCase();
-  const cached = trophyBannerCache.get(key);
-  if (cached?.url) {
-    cached.touchedAt = Date.now();
-    return cached.url;
-  }
-
-  if (trophyBannerPending.has(key)) return trophyBannerPending.get(key);
-
-  const pending = (async () => {
-    const trophyShelfUrl = legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL);
-    if (!trophyShelfUrl) return null;
-    const user = await fetchTrophyProfile(clean);
-    const row = firstShelfRow(user);
-    if (!row.length) {
-      try {
-        await preloadDisplayImage(trophyShelfUrl);
-        rememberTrophyBanner(clean, trophyShelfUrl);
-        return trophyShelfUrl;
-      } catch {
-        return null;
-      }
-    }
-    const texture = await loadImage(trophyShelfUrl);
-    const icons = await Promise.all(row.map((trophy) => loadImage(remiliaUrl(trophy.icon))));
-
-    const canvas = document.createElement('canvas');
-    canvas.width = TROPHY_BANNER_WIDTH;
-    canvas.height = TROPHY_BANNER_HEIGHT;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-
-    drawImageCover(ctx, texture, 0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const shelfY = Math.round(canvas.height * 0.72);
-    const ledgeHeight = Math.round(canvas.height * 0.07);
-    ctx.fillStyle = 'rgba(38, 20, 8, 0.5)';
-    ctx.fillRect(0, shelfY, canvas.width, ledgeHeight);
-    ctx.fillStyle = 'rgba(255, 236, 188, 0.22)';
-    ctx.fillRect(0, shelfY, canvas.width, 4);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
-    ctx.fillRect(0, shelfY + ledgeHeight - 5, canvas.width, 5);
-
-    const slotWidth = canvas.width / 5;
-    const iconSize = Math.round(canvas.height * 0.62);
-    const iconY = shelfY - iconSize + Math.round(canvas.height * 0.05);
-
-    for (let i = 0; i < icons.length; i += 1) {
-      const x = Math.round(i * slotWidth + (slotWidth - iconSize) / 2);
-      ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.58)';
-      ctx.shadowBlur = 24;
-      ctx.shadowOffsetY = 13;
-      ctx.drawImage(icons[i], x, iconY, iconSize, iconSize);
-      ctx.restore();
-    }
-
-    const blob = await canvasToBlob(canvas);
-    if (!blob) return null;
-    const url = URL.createObjectURL(blob);
-    rememberTrophyBanner(clean, url);
-    return url;
-  })().finally(() => {
-    trophyBannerPending.delete(key);
-  });
-
-  trophyBannerPending.set(key, pending);
-  return pending;
+function renderTrophyBanner(remiliaUsername) {
+  return trophyBannerMedia.render(remiliaUsername);
 }
 
 function findProfileBannerRoot(xHandle = profileUsernameFromUrl()) {
@@ -2400,395 +2235,22 @@ function clearTrophyBannerOverlay(root) {
   clearBannerOverlay(root);
 }
 
-function randomBannersNft() {
-  const tokenId = Math.floor(Math.random() * BANNERS_NFT_SUPPLY) + 1;
-  return {
-    tokenId,
-    imageUrl: `https://miladymaker.net/banners/nft/${tokenId}.png`,
-    tokenUrl: `https://etherscan.io/nft/${BANNERS_NFT_CONTRACT}/${tokenId}`,
-  };
-}
+const bannerCycleService = createBannerCycleService({
+    send: (message, type) => runtimeSendMessage(message, type), preload: preloadDisplayImage, renderTrophy: renderTrophyBanner, transition: transitionBannerOverlay, toOriginal: transitionBannerToOriginal,
+    clearLabel: clearBannerNftLabel, setLabel: setBannerNftLabel, cleanUsername: cleanRemiliaUsername, runtimeUrl: (path) => chrome.runtime.getURL(path),
+    playSpin: () => window.reminetSounds?.playSpin?.(),
+});
+const ensureBannerCycleButton = bannerCycleService.ensureButton;
 
-async function fetchBannerImageDataUrl(imageUrl) {
-  const response = await runtimeSendMessage({ type: 'milxdy:fetchImageDataUrl', url: imageUrl }, 'milxdy:fetchImageDataUrl');
-  return response?.ok && typeof response.dataUrl === 'string' ? response.dataUrl : imageUrl;
-}
-
-async function fetchBannersNftDisplay(nft) {
-  const displayUrl = await fetchBannerImageDataUrl(nft.imageUrl);
-  await preloadDisplayImage(displayUrl);
-  return { ...nft, displayUrl };
-}
-
-function prefetchRandomBannersNft() {
-  if (prefetchedBannersNft || prefetchedBannersNftPending) return;
-  prefetchedBannersNftPending = fetchBannersNftDisplay(randomBannersNft())
-    .then((nft) => {
-      prefetchedBannersNft = nft;
-      return nft;
-    })
-    .catch((error) => {
-      console.debug('RemiStats Banners NFT prefetch skipped:', error);
-      return null;
-    })
-    .finally(() => {
-      prefetchedBannersNftPending = null;
-    });
-}
-
-async function takePrefetchedBannersNft() {
-  const ready = prefetchedBannersNft;
-  if (ready) {
-    prefetchedBannersNft = null;
-    prefetchRandomBannersNft();
-    return ready;
-  }
-
-  if (prefetchedBannersNftPending) {
-    const pending = await prefetchedBannersNftPending;
-    if (pending) {
-      prefetchedBannersNft = null;
-      prefetchRandomBannersNft();
-      return pending;
-    }
-  }
-
-  const nft = await fetchBannersNftDisplay(randomBannersNft());
-  prefetchRandomBannersNft();
-  return nft;
-}
-
-function getBannerStage(root) {
-  let stage = root.querySelector(':scope > .milxdy-banner-stage');
-  if (stage) return stage;
-
-  stage = document.createElement('div');
-  stage.className = 'milxdy-banner-stage';
-  root.appendChild(stage);
-  return stage;
-}
-
-function clearBannerNftLabel(root) {
-  const label = root.querySelector(':scope > .milxdy-banner-nft-label');
-  if (label) label.remove();
-}
-
-function setBannerNftLabel(root, nft) {
-  clearBannerNftLabel(root);
-  if (!nft?.tokenId || !nft?.tokenUrl) return;
-
-  const link = document.createElement('a');
-  link.className = 'milxdy-banner-nft-label';
-  link.href = nft.tokenUrl;
-  link.target = '_blank';
-  link.rel = 'noreferrer';
-  link.textContent = `Banners NFT #${nft.tokenId}`;
-  link.addEventListener('click', (event) => {
-    event.stopPropagation();
-  });
-  root.appendChild(link);
-}
-
-function makeBannerPanel(type, url, role) {
-  const panel = document.createElement('div');
-  panel.className = `milxdy-banner-panel milxdy-banner-panel--${role}`;
-  panel.dataset.milxdyBannerOverlay = type;
-  panel.style.backgroundImage = `url("${url}")`;
-  return panel;
-}
-
-function originalBannerUrl(root) {
-  const image = root?.querySelector?.('img[src*="/profile_banners/"], img[src*="profile_banners"]')
-    || document.querySelector('main img[src*="/profile_banners/"], main img[src*="profile_banners"]');
-  return typeof image?.currentSrc === 'string' && image.currentSrc
-    ? image.currentSrc
-    : typeof image?.src === 'string'
-      ? image.src
-      : '';
-}
-
-function transitionBannerOverlay(root, type, url) {
-  const stage = getBannerStage(root);
-  let current = stage.querySelector(':scope > .milxdy-banner-panel--current');
-  if (!current) {
-    const originalUrl = originalBannerUrl(root);
-    if (originalUrl) {
-      current = makeBannerPanel('original', originalUrl, 'current');
-      stage.appendChild(current);
-    }
-  }
-  const next = makeBannerPanel(type, url, 'next');
-  stage.appendChild(next);
-
-  if (!current) {
-    delete root.dataset.milxdyBannerLoading;
-    next.classList.remove('milxdy-banner-panel--next');
-    next.classList.add('milxdy-banner-panel--current');
-    return Promise.resolve();
-  }
-
-  delete root.dataset.milxdyBannerLoading;
-  stage.dataset.spinning = 'true';
-  current.classList.add('milxdy-banner-panel--exit');
-
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      current.remove();
-      next.classList.remove('milxdy-banner-panel--next');
-      next.classList.remove('milxdy-banner-panel--enter');
-      next.classList.add('milxdy-banner-panel--current');
-      delete stage.dataset.spinning;
-      resolve();
-    };
-    next.addEventListener('transitionend', finish, { once: true });
-    window.setTimeout(finish, 900);
-    requestAnimationFrame(() => {
-      next.classList.add('milxdy-banner-panel--enter');
-    });
-  });
-}
-
-function clearBannerOverlay(root) {
-  const stage = root.querySelector(':scope > .milxdy-banner-stage');
-  if (stage) stage.remove();
-  clearBannerNftLabel(root);
-}
-
-function transitionBannerToOriginal(root) {
-  const stage = root.querySelector(':scope > .milxdy-banner-stage');
-  const current = stage?.querySelector(':scope > .milxdy-banner-panel--current');
-  clearBannerNftLabel(root);
-  if (!stage || !current) return Promise.resolve();
-
-  delete root.dataset.milxdyBannerLoading;
-  stage.dataset.spinning = 'true';
-  current.classList.add('milxdy-banner-panel--exit');
-
-  return new Promise((resolve) => {
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      stage.remove();
-      resolve();
-    };
-    current.addEventListener('transitionend', finish, { once: true });
-    window.setTimeout(finish, 900);
-    requestAnimationFrame(() => {
-      current.style.transform = 'translateY(-100%)';
-    });
-  });
-}
-
-async function applyBannerMode(root, mode, remiliaUsername) {
-  root.dataset.milxdyBannerMode = mode;
-
-  if (mode === 'original') {
-    await transitionBannerToOriginal(root);
-    return true;
-  }
-
-  if (mode === 'shelf') {
-    const bannerUrl = await renderTrophyBanner(remiliaUsername);
-    if (!bannerUrl) return false;
-    await transitionBannerOverlay(root, 'shelf', bannerUrl);
-    clearBannerNftLabel(root);
-    root.dataset.milxdyTrophyBannerState = 'ready';
-    return true;
-  }
-
-  if (mode === 'nft') {
-    const nft = await takePrefetchedBannersNft();
-    await transitionBannerOverlay(root, 'nft', nft.displayUrl);
-    setBannerNftLabel(root, nft);
-    return true;
-  }
-
-  return false;
-}
-
-async function cycleProfileBanner(root) {
-  const remiliaUsername = cleanRemiliaUsername(root.dataset.milxdyTrophyBannerUser);
-  if (!remiliaUsername || root.dataset.milxdyBannerCycling === 'true') return;
-
-  root.dataset.milxdyBannerCycling = 'true';
-  root.dataset.milxdyBannerLoading = 'true';
-  window.reminetSounds?.playSpin?.();
-
-  const current = root.dataset.milxdyBannerMode || 'shelf';
-  const startIndex = Math.max(0, BANNER_MODES.indexOf(current));
-
-  try {
-    for (let offset = 1; offset <= BANNER_MODES.length; offset += 1) {
-      const mode = BANNER_MODES[(startIndex + offset) % BANNER_MODES.length];
-      if (await applyBannerMode(root, mode, remiliaUsername)) {
-        const button = root.querySelector(':scope > .milxdy-banner-cycle-button');
-        if (button) button.title = `Banner mode: ${mode}. Click to cycle.`;
-        return;
-      }
-    }
-  } catch (error) {
-    console.debug('RemiStats banner cycle skipped:', error);
-  } finally {
-    delete root.dataset.milxdyBannerLoading;
-    delete root.dataset.milxdyBannerCycling;
-  }
-}
-
-function ensureBannerCycleButton(root) {
-  prefetchRandomBannersNft();
-  if (root.querySelector(':scope > .milxdy-banner-cycle-button')) return;
-
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'milxdy-banner-cycle-button';
-  button.title = 'Cycle banner: original, trophy shelf, random Banners NFT';
-  button.setAttribute('aria-label', button.title);
-  button.innerHTML = `
-    <img class="milxdy-banner-lever milxdy-banner-lever--idle" src="${chrome.runtime.getURL('remistats/banner-lever-idle.png')}" alt="" />
-    <img class="milxdy-banner-lever milxdy-banner-lever--pulled" src="${chrome.runtime.getURL('remistats/banner-lever-pulled.png')}" alt="" />
-  `;
-  button.addEventListener('click', (event) => {
-    event.preventDefault();
-    event.stopPropagation();
-    void cycleProfileBanner(root);
-  });
-  root.appendChild(button);
-}
-
-let profileTrophyReconcileGeneration = 0;
-let profileTrophyRequestGeneration = 0;
-
-async function reconcileProfileTrophy(xHandleInput = profileUsernameFromUrl(), profilePath = window.location.pathname) {
-  const cleanXHandle = exactXProfileHandle(xHandleInput);
-  if (!cleanXHandle || exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle) return;
-  recordRuntimePhase('profile', 'route-observed');
-  const reconcileGeneration = ++profileTrophyReconcileGeneration;
-  const identity = await fetchProfileIdentity(cleanXHandle);
-  if (
-    reconcileGeneration !== profileTrophyReconcileGeneration
-    || profilePath !== window.location.pathname
-    || exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle
-  ) return;
-  if (!identity) {
-    resetProfileTrophyBanner();
-    return;
-  }
-  await upgradeProfileTrophyBanner(identity.remiliaUsername, cleanXHandle, profilePath);
-}
-
-function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle) {
-  return requestGeneration === profileTrophyRequestGeneration
-    && profilePath === window.location.pathname
-    && isConfirmedProfileIdentity(remiliaUsername, xHandle);
-}
-
-function clearProfileTrophyBannerRoot(root) {
-  if (!root) return;
-  clearTrophyBannerOverlay(root);
-  root.querySelector(':scope > .milxdy-banner-cycle-button')?.remove();
-  delete root.dataset.milxdyTrophyBannerUser;
-  delete root.dataset.milxdyTrophyBannerState;
-  root.dataset.milxdyBannerMode = 'original';
-}
-
-function resetProfileTrophyBanner() {
-  profileTrophyReconcileGeneration += 1;
-  profileTrophyRequestGeneration += 1;
-  for (const root of document.querySelectorAll('[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]')) {
-    clearProfileTrophyBannerRoot(root);
-  }
-}
-
-async function waitForProfileBannerRoot(requestGeneration, profilePath, remiliaUsername, xHandle) {
-  const delays = [0, 200, 600, 1400];
-  for (const delay of delays) {
-    if (delay > 0) {
-      await new Promise((resolve) => runtimeScheduler.timeout(resolve, delay));
-    }
-    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)) return null;
-    const root = findProfileBannerRoot(xHandle);
-    if (root) return root;
-  }
-  return null;
-}
-
-async function upgradeProfileTrophyBanner(remiliaUsername, xHandle, profilePath) {
-  const clean = cleanRemiliaUsername(remiliaUsername);
-  const cleanXHandle = cleanExactXHandle(xHandle);
-  if (!clean || !cleanXHandle || !isConfirmedProfileIdentity(clean, cleanXHandle)) return;
-  const requestGeneration = ++profileTrophyRequestGeneration;
-  recordRuntimePhase('profile', 'banner-waiting');
-
-  await idle();
-
-  if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
-  const root = await waitForProfileBannerRoot(requestGeneration, profilePath, clean, cleanXHandle);
-  if (!root) {
-    recordRuntimePhase('profile', 'banner-root-missing');
-    return;
-  }
-
-  if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
-  root.style.overflow = 'hidden';
-  ensureBannerCycleButton(root);
-  recordRuntimePhase('profile', 'banner-control-mounted');
-
-  const key = clean.toLowerCase();
-  if (root.dataset.milxdyTrophyBannerUser === key && root.dataset.milxdyTrophyBannerState === 'ready') {
-    recordRuntimePhase('profile', 'banner-ready');
-    verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle);
-    return;
-  }
-  if (root.dataset.milxdyTrophyBannerUser !== key) {
-    clearTrophyBannerOverlay(root);
-  }
-  root.dataset.milxdyTrophyBannerUser = key;
-  root.dataset.milxdyTrophyBannerState = 'loading';
-
-  try {
-    const bannerUrl = await renderTrophyBanner(clean);
-    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
-    if (!bannerUrl) {
-      recordRuntimePhase('profile', 'banner-empty');
-      root.dataset.milxdyTrophyBannerState = 'empty';
-      clearTrophyBannerOverlay(root);
-      root.dataset.milxdyBannerMode = 'original';
-      verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle, 'banner-empty');
-      return;
-    }
-
-    await transitionBannerOverlay(root, 'shelf', bannerUrl);
-    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return;
-    clearBannerNftLabel(root);
-    root.dataset.milxdyBannerMode = 'shelf';
-    root.dataset.milxdyTrophyBannerState = 'ready';
-    recordRuntimePhase('profile', 'banner-ready');
-    verifyProfileTrophyMount(root, requestGeneration, profilePath, clean, cleanXHandle);
-  } catch (error) {
-    if (profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) {
-      root.dataset.milxdyTrophyBannerState = 'error';
-      recordRuntimePhase('profile', 'banner-error');
-    }
-    console.debug('RemiStats trophy banner skipped:', error);
-  }
-}
-
-function verifyProfileTrophyMount(root, requestGeneration, profilePath, remiliaUsername, xHandle, stablePhase = 'banner-ready') {
-  runtimeScheduler.timeout(() => {
-    if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)) return;
-    const currentRoot = findProfileBannerRoot(xHandle);
-    const control = root.querySelector?.(':scope > .milxdy-banner-cycle-button');
-    if (!root.isConnected || currentRoot !== root || !control?.isConnected) {
-      recordRuntimePhase('profile', 'banner-removed');
-      return;
-    }
-    recordRuntimePhase('profile', stablePhase);
-  }, 1200);
-}
+const profileBannerController = createProfileBannerController({
+    profileUsername: profileUsernameFromUrl, exactXHandle: exactXProfileHandle, cleanXHandle: cleanExactXHandle, cleanRemilia: cleanRemiliaUsername,
+    fetchIdentity: fetchProfileIdentity, confirmed: isConfirmedProfileIdentity, findRoot: findProfileBannerRoot, clearOverlay: clearTrophyBannerOverlay,
+    transitionOverlay: transitionBannerOverlay, clearNftLabel: clearBannerNftLabel, renderBanner: renderTrophyBanner, ensureCycleButton: ensureBannerCycleButton,
+    phase: recordRuntimePhase, scheduler: () => runtimeScheduler, pathname: () => window.location.pathname,
+});
+const reconcileProfileTrophy = profileBannerController.reconcile;
+const resetProfileTrophyBanner = profileBannerController.reset;
+const upgradeProfileTrophyBanner = profileBannerController.upgrade;
 
 // Track which profiles have been processed
 const processedProfiles = new Set();
@@ -2810,6 +2272,7 @@ let lifecycleSignal = null;
 let runtimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 1500, timeoutFallbackMs: 250 });
 
 // Insert badge on profile pages
+
 async function insertProfileBadge() {
   // Find the username/handle section
   const userNameSection = document.querySelector('[data-testid="primaryColumn"] [data-testid="UserName"]');
@@ -2817,28 +2280,9 @@ async function insertProfileBadge() {
     return;
   }
 
-  // Extract username from URL or from the handle in the profile before
-  // deciding whether an existing badge is still valid. X reuses header DOM
-  // during SPA navigation, so stale profile badges can remain attached.
-  let username = null;
-  let exactProfileXHandle = '';
-
-  const urlMatch = window.location.pathname.match(/^\/([^\/\?]+)/);
-  if (urlMatch && urlMatch[1] && !ROUTE_BLOCKLIST.has(urlMatch[1])) {
-    exactProfileXHandle = cleanExactXHandle(urlMatch[1]);
-    username = exactProfileXHandle;
-  }
-
-  if (!username) {
-    const handleElement = userNameSection.querySelector('[href^="/"]');
-    if (handleElement) {
-      const href = handleElement.getAttribute('href');
-      const match = href.match(/^\/([^\/\?]+)/);
-      if (match && !ROUTE_BLOCKLIST.has(match[1])) {
-        username = cleanUsername(match[1]);
-      }
-    }
-  }
+  const { username, exactProfileXHandle } = profileBadgeIdentity(
+    userNameSection, window.location.pathname, ROUTE_BLOCKLIST, cleanExactXHandle, cleanUsername,
+  );
 
   if (!username) {
     clearReminetProcessing(userNameSection);
@@ -3216,6 +2660,8 @@ export function boot(context = {}) {
   lifecycleSignal = context.signal || null;
   if (booted) return;
   booted = true;
+  runtimeEffects.install(REMINET_CONTENT_VERSION, context.resolveAssetUrl);
+  addRuntimeDisposable(runtimeEffects.dispose);
   recordRuntimePhase('activation', 'module-started');
   const bootSignal = lifecycleSignal;
   bootSignal?.addEventListener?.('abort', disable, { once: true });
@@ -3367,6 +2813,7 @@ export function dispose() {
   reconciliationRunning = false;
   reconciliationFollowUp = false;
   reconciliationFollowUpDelay = 900;
+  runtimeEffects.dispose();
   addRuntimeDisposable = () => undefined;
   runtimeSendMessage = unavailableRuntimeSendMessage;
   recordRemiStatsRuntimePhase = () => undefined;

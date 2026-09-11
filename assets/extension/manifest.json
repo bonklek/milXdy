@@ -23,6 +23,7 @@
     "https://ethereum.publicnode.com/*",
     "https://miladymaker.net/banners/nft/*",
     "https://www.remilia.net/*",
+    "https://remilia.net/*",
     "wss://www.remilia.net/*",
     "https://boards.miladychan.org/*",
     "https://musicbrainz.org/*",
@@ -40,6 +41,7 @@
         "https://x.com/*",
         "https://twitter.com/*",
         "https://www.remilia.net/*",
+        "https://remilia.net/*",
         "https://remilia.wiki/*",
         "https://wiki.remilia.org/*",
         "https://boards.miladychan.org/*"
@@ -54,12 +56,12 @@
       "all_frames": true
     },
     {
-      "matches": ["https://www.remilia.net/*"],
+      "matches": ["https://www.remilia.net/*", "https://remilia.net/*"],
       "js": ["reminetChatBridge.js"],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.remilia.net/*"],
+      "matches": ["https://www.remilia.net/*", "https://remilia.net/*"],
       "js": ["reminetCraftFastPath.js"],
       "run_at": "document_start",
       "world": "MAIN"
@@ -100,6 +102,7 @@
         "https://x.com/*",
         "https://twitter.com/*",
         "https://www.remilia.net/*",
+        "https://remilia.net/*",
         "https://remilia.wiki/*",
         "https://wiki.remilia.org/*",
         "https://boards.miladychan.org/*"

@@ -33,12 +33,12 @@ describe("Remilia connection UI contract", () => {
 
   it("ships the instant Beetle setting disabled and accessibly described before status resolves", () => {
     const html = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.html"), "utf8");
-    const source = readFileSync(resolve(process.cwd(), "src/extension/popup/index.ts"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "src/extension/popup/remilia-connection-panel.ts"), "utf8");
     expect(html).toContain('id="beetleInstantResultsSetting" data-connector-available="false" aria-disabled="true"');
     expect(html).toContain('data-control="reminet.beetleInstantResults" aria-describedby="beetleInstantResultsHelp" disabled');
     expect(html).toContain('id="beetleInstantResultsHelp" class="setting-availability-help" role="status" aria-live="polite"');
-    expect(source).toContain("instantResultsControl!.disabled = !instantResultsAvailability.active");
-    expect(source).toContain('setAttribute("aria-disabled", String(!instantResultsAvailability.active))');
+    expect(source).toContain("instantResultsControl.disabled = !availability.active");
+    expect(source).toContain('setAttribute("aria-disabled", String(!availability.active))');
     expect(source).toContain("const statusTimer = setInterval");
     expect(source).not.toContain('chrome.storage.sync.set({ [BEETLE_INSTANT_RESULTS_KEY]');
   });
@@ -172,7 +172,7 @@ describe("Remilia connection UI contract", () => {
     ["AUTH_STORAGE_FAILED", "safely store"],
     ["BACKGROUND_UNAVAILABLE", "connection service did not respond"],
     ["REVOKED", "revoked"],
-    ["UNSUPPORTED", "Firefox"],
+    ["UNSUPPORTED", "authenticated Chromium beta"],
     ["UNKNOWN", "could not be completed"],
   ])("maps %s to actionable accessible copy", (code, expected) => {
     const status = normalizeRemiliaAuthResponse({ error: { code, retryAfterSeconds: 30 } });
@@ -182,11 +182,11 @@ describe("Remilia connection UI contract", () => {
   it.each([
     [{ authStateVersion: 1, status: { phase: "unsupported" } }],
     [{ authStateVersion: 1, error: { code: "UNSUPPORTED" } }],
-  ])("renders Firefox keyless status neutrally without authorization actions", (response) => {
+  ])("renders keyless build status neutrally without authorization actions", (response) => {
     const status = normalizeRemiliaAuthResponse(response);
     expect(status.phase).toBe("unsupported");
     expect(remiliaConnectionView(status)).toMatchObject({
-      title: "Remilia connection is unavailable in Firefox",
+      title: "Remilia connection is unavailable in this build",
       tone: "neutral",
       showConsent: false,
       showConnect: false,
@@ -207,7 +207,7 @@ describe("Remilia connection UI contract", () => {
   });
 
   it("keeps popup auth actions on the official token-free message boundary", () => {
-    const source = readFileSync(resolve(process.cwd(), "src/extension/popup/index.ts"), "utf8");
+    const source = readFileSync(resolve(process.cwd(), "src/extension/popup/remilia-connection-panel.ts"), "utf8");
     expect(source).not.toContain("beetol:authStatus");
     expect(source).not.toContain("beetol:sessionStatus");
     expect(source).not.toContain("beetol:logout");

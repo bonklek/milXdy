@@ -165,6 +165,13 @@
       "uniqueItems": true,
       "maxItems": 1
     },
+    "hostActions": {
+      "description": "Reviewed cross-app host actions. A package receives no action that it has not declared.",
+      "type": "array",
+      "items": { "enum": ["wiki.openPage"] },
+      "uniqueItems": true,
+      "maxItems": 1
+    },
     "replyAction": {
       "type": "object",
       "additionalProperties": false,
@@ -313,6 +320,21 @@
       "properties": {
         "local": { "$ref": "#/$defs/stringArray" },
         "sync": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "storageResources": {
+      "description": "Retention policy for a declared storage key. Access remains governed by storageKeys.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["area", "key", "kind"],
+        "properties": {
+          "area": { "enum": ["local", "sync"] },
+          "key": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["settings", "cache", "authoredData", "sensitiveData"] },
+          "reset": { "enum": ["reset", "preserve"] }
+        }
       }
     },
     "settings": {

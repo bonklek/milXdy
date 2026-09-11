@@ -1,3 +1,4 @@
+import { cancelPointerSession, clearPointerSession, setPointerSession } from "./panel-pointer-session";
 import { OVERLAY_APP_RESERVED_WIDTH_PX } from "./app-frame";
 import {
   bringOverlayAppToFront,
@@ -43,7 +44,10 @@ export type OverlayPanelPointerOptions = OverlayPanelClampOptions & {
 
 export type OverlayPanelResizeAxis = "both" | "x" | "y";
 
-let activePointerCleanup: (() => void) | null = null;
+/** Ends the active managed-panel pointer session during lifecycle disposal. */
+export function cancelOverlayPanelPointerSession(owner?: HTMLElement): void {
+  if (cancelPointerSession(owner)) clearOverlayGuideLines();
+}
 
 export function observeOverlayPanelTheme(callback: () => void): () => void {
   const mediaQuery = window.matchMedia?.("(prefers-color-scheme: dark)");
@@ -141,7 +145,7 @@ export function startOverlayPanelDrag(event: PointerEvent, options: OverlayPanel
   const startY = event.clientY;
   const startBox = options.box();
   event.preventDefault();
-  activePointerCleanup?.();
+  cancelPointerSession();
   const sessionTarget = pointerSessionTarget(event);
   const move = (moveEvent: PointerEvent) => {
     if (moveEvent.pointerId !== event.pointerId) return;
@@ -161,10 +165,10 @@ export function startOverlayPanelDrag(event: PointerEvent, options: OverlayPanel
     window.removeEventListener("blur", up);
     sessionTarget?.removeEventListener("lostpointercapture", up);
     releasePointerCapture(sessionTarget, event.pointerId);
-    if (activePointerCleanup === up) activePointerCleanup = null;
+    clearPointerSession(up);
     options.persist(clampOverlayPanelBox(options.box(), options));
   };
-  activePointerCleanup = up;
+  setPointerSession(up, options.root || sessionTarget);
   capturePointer(sessionTarget, event.pointerId);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
@@ -185,7 +189,7 @@ export function startOverlayPanelResize(event: PointerEvent, options: OverlayPan
   const startBox = options.box();
   const direction = options.side() === "right" ? -1 : 1;
   event.preventDefault();
-  activePointerCleanup?.();
+  cancelPointerSession();
   const sessionTarget = pointerSessionTarget(event);
   capturePointer(sessionTarget, event.pointerId);
   let latestClientX = startX;
@@ -227,10 +231,10 @@ export function startOverlayPanelResize(event: PointerEvent, options: OverlayPan
     window.removeEventListener("blur", up);
     sessionTarget?.removeEventListener("lostpointercapture", up);
     releasePointerCapture(sessionTarget, event.pointerId);
-    if (activePointerCleanup === up) activePointerCleanup = null;
+    clearPointerSession(up);
     options.persist(clampOverlayPanelBox(options.box(), options));
   };
-  activePointerCleanup = up;
+  setPointerSession(up, options.root || sessionTarget);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", up);
@@ -251,7 +255,7 @@ function startFreeformDrag(event: PointerEvent, options: OverlayPanelPointerOpti
   let currentSnap: OverlayAppSnapRecord | undefined;
   let raf = 0;
   event.preventDefault();
-  activePointerCleanup?.();
+  cancelPointerSession();
   bringOverlayAppToFront(root, options.appId);
   const sessionTarget = pointerSessionTarget(event);
   capturePointer(sessionTarget, event.pointerId);
@@ -281,12 +285,12 @@ function startFreeformDrag(event: PointerEvent, options: OverlayPanelPointerOpti
     if (raf) window.cancelAnimationFrame(raf);
     clearOverlayGuideLines();
     cleanupPointer(event, sessionTarget, move, up);
-    if (activePointerCleanup === up) activePointerCleanup = null;
+    clearPointerSession(up);
     const box = rectToBox(current);
     options.persist(box);
     void saveOverlayAppLayout({ appId: options.appId!, side, rect: current, snap: currentSnap });
   };
-  activePointerCleanup = up;
+  setPointerSession(up, root);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", up);
@@ -306,7 +310,7 @@ function startFreeformResize(event: PointerEvent, options: OverlayPanelPointerOp
   const resizeFromLeft = resizeHandleIsLeft(event.currentTarget);
   let current = boxToRect(startBox);
   event.preventDefault();
-  activePointerCleanup?.();
+  cancelPointerSession();
   bringOverlayAppToFront(root, options.appId);
   const sessionTarget = pointerSessionTarget(event);
   capturePointer(sessionTarget, event.pointerId);
@@ -366,12 +370,12 @@ function startFreeformResize(event: PointerEvent, options: OverlayPanelPointerOp
     if (pendingResize) applyResize();
     clearOverlayGuideLines();
     cleanupPointer(event, sessionTarget, move, up);
-    if (activePointerCleanup === up) activePointerCleanup = null;
+    clearPointerSession(up);
     const box = rectToBox(current);
     options.persist(box);
     void saveOverlayAppLayout({ appId: options.appId!, side, rect: current });
   };
-  activePointerCleanup = up;
+  setPointerSession(up, root);
   window.addEventListener("pointermove", move);
   window.addEventListener("pointerup", up);
   window.addEventListener("pointercancel", up);

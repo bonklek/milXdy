@@ -32,36 +32,7 @@ export function createPackageRemiliaCapabilityClient(
   const declarations = validateRemiliaCapabilityDeclarations(app.remiliaCapabilities)
     ? structuredClone(app.remiliaCapabilities)
     : [];
-  const packageMetadata = app.localPackage;
-  const grantId = randomGrantId();
-  let granted = false;
-  let revoked = false;
-
-  async function ensureGrant(): Promise<RemiliaCapabilityBrokerResult | null> {
-    if (revoked) return localFailure("grant_revoked", "The capability grant is no longer active.");
-    if (granted) return null;
-    if (declarations.length === 0) return localFailure("capability_not_declared", "The package did not declare a Remilia capability.");
-    const packageSource = packageMetadata ? "reviewedLocal" : "firstParty";
-    if (packageSource === "reviewedLocal" && packageMetadata?.reviewStatus !== "reviewed") return localFailure("package_not_reviewed", "The package is not reviewed for Remilia capabilities.");
-    if (packageSource === "reviewedLocal" && packageMetadata?.packageConsentAcknowledged !== true) return localFailure("consent_required", "Package capability consent was not acknowledged.");
-    const manifestSha256 = packageSource === "reviewedLocal"
-      ? packageMetadata?.manifestSha256
-      : await firstPartyManifestFingerprint(app, declarations);
-    if (typeof manifestSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(manifestSha256)) return localFailure("package_not_granted", "The reviewed package identity is unavailable.");
-    const result = await transport({
-      type: REMILIA_CAPABILITY_GRANT_MESSAGE_TYPE,
-      packageId: app.id,
-      grantId,
-      manifestSha256,
-      packageSource,
-      reviewStatus: "reviewed",
-      consentAcknowledged: true,
-      declarations,
-    });
-    if (!isRecord(result) || result.ok !== true) return normalizeTransportFailure(result);
-    granted = true;
-    return null;
-  }
+  const grant = createCapabilityGrant(app, declarations, transport);
 
   return {
     declarations,
@@ -75,26 +46,107 @@ export function createPackageRemiliaCapabilityClient(
       if (definition.consent === "perInvocation" && !userGesture) {
         return localFailure("consent_required", "This Remilia operation requires an active user gesture.");
       }
-      const grantFailure = await ensureGrant();
+      const grantFailure = await grant.ensure();
       if (grantFailure) return grantFailure;
-      const result = await transport({
+      const result = normalizeTransportFailure(await transport({
         type: REMILIA_CAPABILITY_INVOKE_MESSAGE_TYPE,
         packageId: app.id,
-        grantId,
+        grantId: grant.grantId,
         operation,
         params,
         ...(userGesture ? { userGesture: true } : {}),
-      });
-      return normalizeTransportFailure(result);
+      }));
+      if (!isRecoverableGrantFailure(result)) return result;
+      grant.invalidate();
+      // Do not replay writes. The next explicit user gesture can obtain a new grant.
+      if (definition.consent === "perInvocation") return result;
+      const renewalFailure = await grant.ensure();
+      if (renewalFailure) return renewalFailure;
+      return normalizeTransportFailure(await transport({
+        type: REMILIA_CAPABILITY_INVOKE_MESSAGE_TYPE,
+        packageId: app.id,
+        grantId: grant.grantId,
+        operation,
+        params,
+      }));
     },
+    revoke: grant.revoke,
+  };
+}
+
+function createCapabilityGrant(
+  app: MilxdyAppManifest,
+  declarations: readonly AppRemiliaCapabilityDeclaration[],
+  transport: RemiliaCapabilityTransport,
+) {
+  const packageMetadata = app.localPackage;
+  const grantId = randomGrantId();
+  let granted = false;
+  let revoked = false;
+  let grantRequest: Promise<RemiliaCapabilityBrokerResult | null> | null = null;
+  let grantGeneration = 0;
+
+  async function ensureGrant(): Promise<RemiliaCapabilityBrokerResult | null> {
+    if (revoked) return localFailure("grant_revoked", "The capability grant is no longer active.");
+    if (granted) return null;
+    if (declarations.length === 0) return localFailure("capability_not_declared", "The package did not declare a Remilia capability.");
+    const packageSource = packageMetadata ? "reviewedLocal" : "firstParty";
+    if (packageSource === "reviewedLocal" && packageMetadata?.reviewStatus !== "reviewed") return localFailure("package_not_reviewed", "The package is not reviewed for Remilia capabilities.");
+    if (packageSource === "reviewedLocal" && packageMetadata?.packageConsentAcknowledged !== true) return localFailure("consent_required", "Package capability consent was not acknowledged.");
+    const manifestSha256 = packageSource === "reviewedLocal"
+      ? packageMetadata?.manifestSha256
+      : await firstPartyManifestFingerprint(app, declarations);
+    if (typeof manifestSha256 !== "string" || !/^[a-f0-9]{64}$/u.test(manifestSha256)) return localFailure("package_not_granted", "The reviewed package identity is unavailable.");
+    if (revoked) return localFailure("grant_revoked", "The capability grant is no longer active.");
+    if (granted) return null;
+    if (grantRequest) return grantRequest;
+    const generation = grantGeneration;
+    const request = (async () => {
+      const result = await transport({
+        type: REMILIA_CAPABILITY_GRANT_MESSAGE_TYPE,
+        packageId: app.id,
+        grantId,
+        manifestSha256,
+        packageSource,
+        reviewStatus: "reviewed",
+        consentAcknowledged: true,
+        declarations,
+      });
+      if (!isRecord(result) || result.ok !== true) return normalizeTransportFailure(result);
+      if (revoked || generation !== grantGeneration) return localFailure("grant_revoked", "The capability grant is no longer active.");
+      granted = true;
+      return null;
+    })();
+    grantRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (grantRequest === request) grantRequest = null;
+    }
+  }
+
+  return {
+    grantId,
+    ensure: ensureGrant,
+    // All concurrent recoveries keep the same opaque client identity.
+    invalidate() { granted = false; },
     async revoke() {
       if (revoked) return;
       revoked = true;
-      if (!granted) return;
+      grantGeneration += 1;
+      await grantRequest?.catch(() => null);
+      // A grant may have reached the broker while local revocation was pending.
+      // Revoke it even when the completion correctly refused to set granted.
       granted = false;
       await transport({ type: REMILIA_CAPABILITY_REVOKE_MESSAGE_TYPE, packageId: app.id, grantId }).catch(() => null);
     },
   };
+}
+
+function isRecoverableGrantFailure(result: RemiliaCapabilityBrokerResult): boolean {
+  return result.ok === false
+    && result.error.category === "broker"
+    && result.error.code === "package_not_granted";
 }
 
 function normalizeTransportFailure(value: unknown): RemiliaCapabilityBrokerResult {

@@ -226,7 +226,7 @@ export function remiliaConnectionView(status: RemiliaAuthStatus): RemiliaConnect
     "missing-scope": { title: "More permission is required", detail: "Reconnect and approve the missing ability shown below.", tone: "warning" },
     "rate-limited": { title: "Remilia is limiting requests", detail: "Wait before reconnecting. Your local settings are unchanged.", tone: "warning" },
     offline: { title: "You appear to be offline", detail: "Check your connection, then reconnect. Your local settings are unchanged.", tone: "warning" },
-    unsupported: { title: "Remilia connection is unavailable in Firefox", detail: "This Firefox build is intentionally keyless and does not include a Remilia identity client. Other milXdy settings and features remain available.", tone: "neutral" },
+    unsupported: { title: "Remilia connection is unavailable in this build", detail: "This build does not include a Remilia login client. Use the authenticated Chromium beta build for Pokes and profile shelves. Other milXdy settings and features remain available.", tone: "neutral" },
     error: { title: "Connection unavailable", detail: "The connection could not be checked. Reload the popup or try again.", tone: "danger" },
   };
   return {
@@ -304,7 +304,7 @@ export function remiliaErrorMessage(error: RemiliaAuthError | null): string {
     AUTH_STORAGE_FAILED: "milXdy could not safely store the connection for this browser session. Nothing was connected; reload the extension and try again.",
     BACKGROUND_UNAVAILABLE: "The milXdy connection service did not respond. Reload the extension, reopen the popup, and try again.",
     REVOKED: "This authorization was revoked. Reconnect if you want to use Remilia features again.",
-    UNSUPPORTED: "Remilia connection is unavailable in this intentionally keyless Firefox build.",
+    UNSUPPORTED: "This build does not include a Remilia login client. Use the authenticated Chromium beta build to connect.",
     UNKNOWN: "The connection could not be completed. Reload the popup and try again.",
   };
   return messages[error.code];

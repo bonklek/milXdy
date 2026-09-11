@@ -10,7 +10,10 @@ declared App SDK contract.
 ## Contents
 
 - `types/index.d.ts`: the supported content-app lifecycle and context facade for
-  App SDK `0.2.5`.
+  App SDK `0.2.5`, including site context, declared host actions, reviewed
+  Remilia operations, composer/reply callbacks, and managed utility windows.
+- `types/public-contract.test.ts`: positive and negative public-consumer
+  compile coverage; it proves private runtime loader/scanner APIs remain absent.
 - `templates/basic-feature/`: a minimal novel feature package with generated
   Apps & Features enablement, cancellation-safe lifecycle hooks, and local-only
   diagnostics.
@@ -43,6 +46,12 @@ From the repository root:
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/docked-app --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:app-sdk-harness
+```
+
+The starter's TypeScript check also compiles the public-consumer contract test:
+
+```powershell
+node node_modules/typescript/bin/tsc -p sdk/tsconfig.json
 ```
 
 These commands validate the templates and public lifecycle contract without

@@ -33,6 +33,7 @@ const gates = [
   ["Remilia migration artifact scan", ["scripts/release/verify-remilia-migration-artifacts.mjs"]],
   ["Release archive checksums", ["scripts/release/verify-release-checksums.mjs"]],
   ["Release archive reproducibility", ["scripts/release/verify-reproducible-release.mjs"]],
+  ["Fresh build reproducibility", ["scripts/release/verify-reproducible-build.mjs"]],
 ];
 
 await withReleaseArtifactLock("verify release gates", async () => {

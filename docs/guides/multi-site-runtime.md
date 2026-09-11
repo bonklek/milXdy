@@ -5,7 +5,7 @@ milXdy runs only on a small reviewed host set. The current extension manifest an
 | Site | Runtime surface | Apps/features that can load | Native fallback |
 | --- | --- | --- | --- |
 | X/Twitter (`x.com`, `twitter.com`) | Full rail, Apps & Features, routes, composer hosts, and Twitter scanner | The complete X-scoped registry | X/Twitter remains usable when individual apps are disabled. |
-| RemiliaNET (`www.remilia.net`) | Bridge-only exact-host runtime; no milXdy rail, hub, launcher, or overlay UI | The isolated RemiNet socket bridge and accepted native-site helpers only | Native RemiliaNET chat, session, and game pages remain visually authoritative. |
+| RemiliaNET (`www.remilia.net`, `remilia.net`) | Bridge-only runtime on these exact HTTPS hosts; no milXdy rail, hub, launcher, or overlay UI | The isolated RemiNet socket bridge and accepted native-site helpers only | Native RemiliaNET chat, session, and game pages remain visually authoritative. |
 | Remilia Wiki (`remilia.wiki`, `wiki.remilia.org`) | Direct document reader plus feature-only launcher | Post-reading | The native article is unchanged when Post-reading is disabled. |
 | Miladychan (`boards.miladychan.org`) | Filtered app launcher | Miladychan Portal, on user open | Native boards for CAPTCHA, media, sessions, and full posting. |
 

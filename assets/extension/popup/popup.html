@@ -20,7 +20,7 @@
         <button class="tab is-active" type="button" data-panel="suite"><span>Main</span></button>
         <button class="tab" type="button" data-panel="visual"><span>Appearance</span></button>
         <button class="tab" type="button" data-panel="audio"><span>Audio</span></button>
-        <button class="tab" type="button" data-panel="remistats"><span>RemiNet</span><small>Stats</small></button>
+        <button class="tab" type="button" data-panel="remistats"><span>RemiNet</span><small>Account &amp; features</small></button>
         <button class="tab" type="button" data-panel="wiki"><span>Wiki</span></button>
         <button class="tab" type="button" data-panel="addons"><span>Add-ons</span></button>
       </nav>
@@ -345,30 +345,19 @@
 
       <section class="panel" data-panel="remistats">
         <div class="panel-heading">
-          <h2>RemiNet Mirrors</h2>
-          <p>RemiStats, poke, Beetol, and chat controls stay synced during migration.</p>
+          <h2>RemiNet Account &amp; Features</h2>
+          <p>Manage your two sign-ins during the transition, then configure RemiStats and Beetol.</p>
         </div>
-        <section class="setting-group" aria-label="RemiNet badges">
+        <section class="setting-group" aria-label="Remilia account access">
           <div class="setting-group-header">
-            <h3>RemiStats Feature Mirror</h3>
+            <h3>Account access</h3>
+            <p>Temporary dual-auth holdover: milXdy and the RemiliaNET website have separate sign-ins. Connecting one does not confirm that the other is signed in.</p>
           </div>
-          <label class="setting"><span><strong>Show RemiStats badges</strong><small>Display score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
-          <label class="setting"><span><strong>Badge detail tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
-          <label class="setting"><span><strong>Poke users when liking</strong><small>When you click X's Like button on a tweet, also poke that user on RemiliaNET.</small></span><input type="checkbox" data-control="remistats.likeAutoPoke"></label>
-          <label class="setting"><span><strong>Like tweets when poking</strong><small>After a successful tweet poke, also click X's Like button for that tweet.</small></span><input type="checkbox" data-control="remistats.pokeAutoLike"></label>
-        </section>
-        <section class="setting-group" aria-label="Beetol">
-          <div class="setting-group-header">
-            <h3>Beetol and Chat Mirrors</h3>
-          </div>
-          <label class="setting"><span><strong>Show Beetol hunt panel</strong><small>Mount the Beetol hover panel on X/Twitter. This login also powers RemiStats pokes.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
-          <label class="setting"><span><strong>Reduce remilia.net Beetle Hunt motion</strong><small>Reduce decorative and idle motion on remilia.net while preserving action-result feedback. Does not change the X/Twitter Beetol panel.</small></span><input type="checkbox" data-control="reminet.beetleReducedMotion"></label>
-          <label class="setting" id="beetleInstantResultsSetting" data-connector-available="false" aria-disabled="true"><span><strong>Use instant Beetle results</strong><small>Accelerate the result presentation after your trusted click. RemiliaNET's visible page still performs the native Claim or Hunt action.</small><small id="beetleInstantResultsHelp" class="setting-availability-help" role="status" aria-live="polite">Checking the RemiliaNET connection...</small></span><input type="checkbox" data-control="reminet.beetleInstantResults" aria-describedby="beetleInstantResultsHelp" disabled></label>
           <section class="remilia-connection" id="remiliaConnection" tabindex="-1" aria-labelledby="remiliaConnectionTitle" data-phase="connecting" data-layout="compact">
             <div class="remilia-connection-heading">
               <div>
                 <h4 id="remiliaConnectionTitle">Official Remilia connection</h4>
-                <p>Authorization uses official Remilia Login. milXdy never reuses website cookies or silently reconnects a browser session.</p>
+                <p>Connect milXdy for official profile, stats, notifications, pokes, Beetle reads, and chat features, subject to granted abilities. milXdy never reuses website cookies or silently reconnects a browser session.</p>
               </div>
               <span class="remilia-auth-version" aria-label="Connection state version 1">Auth v1</span>
             </div>
@@ -394,14 +383,37 @@
               </ul>
             </div>
             <div class="remilia-actions" id="remiliaActions">
-              <button class="primary-button" id="remiliaConnect" type="button" hidden>Connect to RemiliaNET</button>
-              <button class="primary-button" id="remiliaReconnect" type="button" hidden>Reconnect to RemiliaNET</button>
-              <button class="secondary-button" id="remiliaDisconnect" type="button" hidden>Disconnect</button>
+              <button class="primary-button" id="remiliaConnect" type="button" hidden>Connect milXdy with Remilia</button>
+              <button class="primary-button" id="remiliaReconnect" type="button" hidden>Reconnect milXdy</button>
+              <button class="secondary-button" id="remiliaDisconnect" type="button" hidden>Disconnect milXdy</button>
               <button class="secondary-button danger-button" id="remiliaRevoke" type="button" hidden>Revoke authorization</button>
             </div>
             <p class="message remilia-auth-message" id="remiliaAuthMessage" aria-live="polite"></p>
           </section>
           <div class="auth-diagnostic" id="beetolPokeDiagnostic" hidden></div>
+          <div class="setting-group-header">
+            <h3>RemiliaNET website sign-in</h3>
+            <p>Hunt, Claim, and Craft still run on the visible RemiliaNET website using its own sign-in. Open the site to check your account and sign in there if needed. milXdy does not read or manage that session.</p>
+            <p>The connection status above applies only to milXdy. Disconnecting milXdy does not sign you out of the website.</p>
+          </div>
+          <a class="repo-link" href="https://www.remilia.net" target="_blank" rel="noreferrer">Open RemiliaNET to check website sign-in</a>
+        </section>
+        <section class="setting-group" aria-label="RemiNet badges">
+          <div class="setting-group-header">
+            <h3>RemiStats badges and pokes</h3>
+          </div>
+          <label class="setting"><span><strong>Show RemiStats badges</strong><small>Display score badges from the RemiStats API.</small></span><input type="checkbox" data-control="remistats.enabled"></label>
+          <label class="setting"><span><strong>Badge detail tooltips</strong><small>Show RemiStats details on hover.</small></span><input type="checkbox" data-control="remistats.showTooltips"></label>
+          <label class="setting"><span><strong>Poke users when liking</strong><small>When you click X's Like button on a tweet, also poke that user on RemiliaNET.</small></span><input type="checkbox" data-control="remistats.likeAutoPoke"></label>
+          <label class="setting"><span><strong>Like tweets when poking</strong><small>After a successful tweet poke, also click X's Like button for that tweet.</small></span><input type="checkbox" data-control="remistats.pokeAutoLike"></label>
+        </section>
+        <section class="setting-group" aria-label="Beetol">
+          <div class="setting-group-header">
+            <h3>Beetol panel and website controls</h3>
+          </div>
+          <label class="setting"><span><strong>Show Beetol status panel</strong><small>Show official Beetle state and cards on X/Twitter using the milXdy connection above. Play on the RemiliaNET website.</small></span><input type="checkbox" data-control="remistats.beetol.enabled"></label>
+          <label class="setting"><span><strong>Reduce remilia.net Beetle Hunt motion</strong><small>Reduce decorative and idle motion on remilia.net while preserving action-result feedback. Does not change the X/Twitter Beetol panel.</small></span><input type="checkbox" data-control="reminet.beetleReducedMotion"></label>
+          <label class="setting" id="beetleInstantResultsSetting" data-connector-available="false" aria-disabled="true"><span><strong>Use instant Beetle results</strong><small>Accelerate the result presentation after your trusted click. RemiliaNET's visible page still performs the native Claim or Hunt action.</small><small id="beetleInstantResultsHelp" class="setting-availability-help" role="status" aria-live="polite">Checking the RemiliaNET connection...</small></span><input type="checkbox" data-control="reminet.beetleInstantResults" aria-describedby="beetleInstantResultsHelp" disabled></label>
           <div class="field-grid">
             <label class="field"><span>Panel color</span><select id="beetolColor"><option value="red">Red</option><option value="green">Green</option><option value="gold">Gold</option><option value="blue">Blue</option><option value="purple">Purple</option></select></label>
             <label class="field"><span>Panel theme</span><select id="beetolMode"><option value="settings">Match settings</option><option value="dark">Dark</option><option value="light">Light</option></select></label>
@@ -537,7 +549,7 @@
         </section>
         <section class="setting-group" aria-label="RemiStats appearance">
           <div class="setting-group-header">
-            <h3>RemiStats Feature Mirrors</h3>
+            <h3>RemiStats badges and pokess</h3>
           </div>
           <label class="setting"><span><strong>Show metric icons</strong><small>Display icon buttons and badge metric icons.</small></span><input type="checkbox" data-control="remistats.icons.enabled"></label>
           <label class="setting"><span><strong>Score group</strong><small>Show the star score metric.</small></span><input type="checkbox" data-control="remistats.icons.score"></label>

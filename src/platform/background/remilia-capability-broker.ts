@@ -125,7 +125,7 @@ export function createRemiliaCapabilityBrokerHandlers(
         if (!grant || grant.grantId !== invokeMessage.grantId) return brokerFailure("package_not_granted", 403);
         if (grant.revoked || grant.expiresAt <= now()) {
           grants.delete(grantKey(senderKey, invokeMessage.packageId));
-          return brokerFailure("grant_revoked", 403);
+          return brokerFailure("package_not_granted", 403);
         }
         const definition = remiliaCapabilityForOperation(invokeMessage.operation);
         if (!definition) return brokerFailure("invalid_request", 400);

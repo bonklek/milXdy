@@ -8,38 +8,32 @@
     "functionHard": 80
   },
   "oversizedFiles": {
-    "scripts/build/build-extension.mjs": 704,
-    "scripts/packages/compose-local-app-packages.mjs": 2235,
-    "scripts/packages/verify-local-app-trust-gates.mjs": 1097,
-    "scripts/verify/app-sdk-compliance.mjs": 775,
-    "src/apps/beetol/background.js": 744,
-    "src/apps/beetol/content.js": 1254,
-    "src/apps/link-browser/content.ts": 572,
+    "scripts/build/build-extension.mjs": 573,
+    "scripts/packages/compose-local-app-packages.mjs": 2028,
+    "scripts/packages/verify-local-app-trust-gates.mjs": 1082,
+    "scripts/verify/app-sdk-compliance.mjs": 639,
+    "src/apps/beetol/content.js": 868,
     "src/apps/milady-maxxer/content.ts": 1958,
     "src/apps/milady-maxxer/effects.ts": 508,
     "src/apps/milady-maxxer/styles.ts": 1916,
-    "src/apps/miladychan-portal/content.ts": 927,
-    "src/apps/music/content.ts": 3299,
-    "src/apps/post-reading/content.ts": 2528,
-    "src/apps/post-reading/player.ts": 817,
-    "src/apps/post-reading/styles.ts": 748,
-    "src/apps/reminet-chat/content.ts": 2810,
-    "src/apps/remistats/content.js": 2531,
-    "src/apps/root-visuals/content.ts": 935,
-    "src/apps/tweet-png/content.ts": 860,
-    "src/apps/wiki-links/content.ts": 1188,
-    "src/apps/wiki-sidebar/content.ts": 968,
-    "src/apps/wiki-sidebar/frameContent.ts": 1038,
-    "src/extension/background/index.ts": 1236,
-    "src/extension/frames/reminet-chat-bridge.ts": 501,
-    "src/extension/popup/index.ts": 2599,
+    "src/apps/miladychan-portal/content.ts": 924,
+    "src/apps/music/content.ts": 3172,
+    "src/apps/post-reading/content.ts": 2515,
+    "src/apps/post-reading/player.ts": 808,
+    "src/apps/reminet-chat/content.ts": 2736,
+    "src/apps/remistats/content.js": 2499,
+    "src/apps/root-visuals/content.ts": 818,
+    "src/apps/wiki-links/content.ts": 1176,
+    "src/apps/wiki-sidebar/content.ts": 958,
+    "src/apps/wiki-sidebar/frameContent.ts": 994,
+    "src/extension/background/index.ts": 1195,
+    "src/extension/popup/index.ts": 2519,
     "src/platform/overlay/app-layout.ts": 798,
-    "src/platform/runtime/content-runtime.ts": 5838,
-    "src/platform/scanner/twitter-scanner.ts": 680,
-    "src/platform/visuals/reskin-styles.ts": 1795
+    "src/platform/runtime/content-runtime.ts": 4518,
+    "src/platform/scanner/twitter-scanner.ts": 670
   },
   "oversizedFunctions": {
-    "scripts/packages/compose-local-app-packages.mjs:analyzePackage#1": 119,
+    "scripts/packages/compose-local-app-packages.mjs:analyzePackage#1": 106,
     "scripts/packages/compose-local-app-packages.mjs:buildGeneratedPlan#1": 117,
     "scripts/packages/compose-local-app-packages.mjs:evaluatePackageTrust#1": 104,
     "scripts/packages/compose-local-app-packages.mjs:composeLocalPackages#1": 98,
@@ -47,38 +41,31 @@
     "scripts/release/verify-release-020.mjs:verifyDocsCoverage#1": 268,
     "scripts/smoke/live-rail-app-probe.js:<anonymous@1>#1": 102,
     "scripts/smoke/live-smoke-probe-020.js:<anonymous@1>#1": 87,
-    "scripts/verify/app-sdk-compliance.mjs:verifyLifecycleAndSiteMetadata#1": 85,
-    "scripts/verify/platform.mjs:verifyRuntimeOwnership#1": 137,
-    "sdk/testing/app-harness.mjs:createAppHarness#1": 122,
-    "src/apps/beetol/content.js:mountBeetolGame#1": 1226,
-    "src/apps/beetol/content.js:runAction#1": 86,
+    "scripts/verify/platform.mjs:verifyRuntimeOwnership#1": 124,
+    "sdk/testing/app-harness.mjs:createAppHarness#1": 120,
+    "src/apps/beetol/content.js:mountBeetolGame#1": 840,
     "src/apps/link-browser/content.ts:injectStyles#1": 154,
-    "src/apps/link-browser/content.ts:render#1": 82,
     "src/apps/milady-maxxer/content.ts:processTweet#1": 135,
     "src/apps/milady-maxxer/content.ts:processDirectMessage#1": 97,
     "src/apps/milady-maxxer/effects.ts:applyMode#1": 137,
     "src/apps/milady-maxxer/styles.ts:injectStyles#1": 1915,
-    "src/apps/music/content.ts:renderPlayer#1": 97,
+    "src/apps/music/content.ts:renderPlayer#1": 88,
     "src/apps/post-reading/content.ts:boot#1": 180,
     "src/apps/post-reading/content.ts:enrichFullQuote#1": 157,
     "src/apps/post-reading/content.ts:updateTweetHighlight#1": 118,
     "src/apps/post-reading/player.ts:renderSettings#1": 219,
-    "src/apps/post-reading/player.ts:constructor#1": 122,
+    "src/apps/post-reading/player.ts:constructor#1": 112,
     "src/apps/post-reading/speech.ts:startCurrentChunk#1": 83,
-    "src/apps/post-reading/styles.ts:injectStyles#1": 748,
     "src/apps/post-reading/ttsEngines.ts:speak#2": 126,
     "src/apps/remistats/content.js:insertProfileBadge#1": 122,
     "src/apps/remistats/content.js:installRemiStatsDelegation#1": 87,
-    "src/apps/remistats/content.js:createScoreBadge#1": 84,
+    "src/apps/remistats/content.js:createScoreBadge#1": 81,
     "src/apps/root-visuals/content.ts:setupHomeLogoReplacement#1": 88,
-    "src/apps/tweet-png/content.ts:renderTweetPng#1": 107,
-    "src/apps/tweet-png/content.ts:injectTweetPngStyles#1": 81,
     "src/apps/wiki-links/content.ts:showGrokWikiCta#1": 182,
     "src/apps/wiki-links/styles.ts:injectStyles#1": 88,
     "src/apps/wiki-sidebar/content.ts:injectStyles#1": 252,
     "src/apps/wiki-sidebar/content.ts:render#1": 167,
     "src/apps/wiki-sidebar/frameContent.ts:injectSidebarThemeStyles#1": 160,
-    "src/apps/wiki-sidebar/frameContent.ts:injectPostReadingStyles#1": 99,
     "src/extension/frames/reminet-chat-bridge.ts:syncBeetleWelcome#1": 109,
     "src/extension/popup/index.ts:setupVisualSettings#1": 110,
     "src/extension/popup/index.ts:applyFullStartSetup#1": 98,
@@ -86,16 +73,12 @@
     "src/platform/diagnostics/max-profile-benchmark.ts:runBenchmark#1": 99,
     "src/platform/overlay/app-chrome.ts:ensureOverlayAppChromeStyles#1": 178,
     "src/platform/overlay/panel-base.ts:startFreeformResize#1": 84,
-    "src/platform/runtime/content-runtime.ts:createContentRuntime#1": 4017,
-    "src/platform/runtime/content-runtime.ts:injectTweetScaffoldStyles#1": 1212,
+    "src/platform/runtime/content-runtime.ts:createContentRuntime#1": 3850,
     "src/platform/runtime/content-runtime.ts:localAddonManagerPanel#1": 270,
-    "src/platform/runtime/content-runtime.ts:openComposerAction#1": 173,
-    "src/platform/runtime/content-runtime.ts:appHubCard#1": 122,
-    "src/platform/runtime/content-runtime.ts:openReplyActionPanel#1": 115,
-    "src/platform/runtime/content-runtime.ts:loadApp#1": 109,
-    "src/platform/runtime/content-runtime.ts:renderHubPanel#1": 101,
-    "src/platform/runtime/content-runtime.ts:createRuntimeScheduler#1": 90,
-    "src/platform/runtime/content-runtime.ts:refreshComposerActionButtons#1": 88
+    "src/platform/runtime/content-runtime.ts:openComposerAction#1": 133,
+    "src/platform/runtime/content-runtime.ts:openReplyActionPanel#1": 110,
+    "src/platform/runtime/content-runtime.ts:loadApp#1": 98,
+    "src/platform/runtime/content-runtime.ts:createRuntimeScheduler#1": 90
   },
   "uncheckedProduction": [
     "src/apps/beetol/background.js",
@@ -103,8 +86,7 @@
     "src/apps/beetol/hunt-cooldown.js",
     "src/apps/remistats/background.js",
     "src/apps/remistats/content.js",
-    "src/apps/remistats/sounds.js",
-    "src/platform/overlay/dock.css.d.ts"
+    "src/apps/remistats/sounds.js"
   ],
   "wildcardAppEntries": [
     "src/apps/beetol/entry.ts",
@@ -131,7 +113,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2235
+      "maximumLogicalLines": 2028
     },
     {
       "id": "existing-emergency-scripts-packages-verify-local-app-trust-gates-mjs",
@@ -142,7 +124,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 1097
+      "maximumLogicalLines": 1082
     },
     {
       "id": "existing-emergency-src-apps-beetol-content-js",
@@ -153,7 +135,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 1254
+      "maximumLogicalLines": 868
     },
     {
       "id": "existing-emergency-src-apps-milady-maxxer-content-ts",
@@ -186,7 +168,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 927
+      "maximumLogicalLines": 924
     },
     {
       "id": "existing-emergency-src-apps-music-content-ts",
@@ -197,7 +179,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 3299
+      "maximumLogicalLines": 3172
     },
     {
       "id": "existing-emergency-src-apps-post-reading-content-ts",
@@ -208,7 +190,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2528
+      "maximumLogicalLines": 2515
     },
     {
       "id": "existing-emergency-src-apps-post-reading-player-ts",
@@ -219,7 +201,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 817
+      "maximumLogicalLines": 808
     },
     {
       "id": "existing-emergency-src-apps-reminet-chat-content-ts",
@@ -230,7 +212,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2810
+      "maximumLogicalLines": 2736
     },
     {
       "id": "existing-emergency-src-apps-remistats-content-js",
@@ -241,7 +223,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2531
+      "maximumLogicalLines": 2499
     },
     {
       "id": "existing-emergency-src-apps-root-visuals-content-ts",
@@ -252,18 +234,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 935
-    },
-    {
-      "id": "existing-emergency-src-apps-tweet-png-content-ts",
-      "path": "src/apps/tweet-png/content.ts",
-      "owner": "release-maintainer",
-      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
-      "removalMilestone": "post-0.2.4 architecture reduction",
-      "tests": [
-        "npm run verify:architecture"
-      ],
-      "maximumLogicalLines": 860
+      "maximumLogicalLines": 818
     },
     {
       "id": "existing-emergency-src-apps-wiki-links-content-ts",
@@ -274,7 +245,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 1188
+      "maximumLogicalLines": 1176
     },
     {
       "id": "existing-emergency-src-apps-wiki-sidebar-content-ts",
@@ -285,7 +256,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 968
+      "maximumLogicalLines": 958
     },
     {
       "id": "existing-emergency-src-apps-wiki-sidebar-framecontent-ts",
@@ -296,7 +267,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 1038
+      "maximumLogicalLines": 994
     },
     {
       "id": "existing-emergency-src-extension-background-index-ts",
@@ -307,7 +278,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 1236
+      "maximumLogicalLines": 1195
     },
     {
       "id": "existing-emergency-src-extension-popup-index-ts",
@@ -318,7 +289,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 2599
+      "maximumLogicalLines": 2519
     },
     {
       "id": "existing-emergency-src-platform-runtime-content-runtime-ts",
@@ -329,18 +300,7 @@
       "tests": [
         "npm run verify:architecture"
       ],
-      "maximumLogicalLines": 5838
-    },
-    {
-      "id": "existing-emergency-src-platform-visuals-reskin-styles-ts",
-      "path": "src/platform/visuals/reskin-styles.ts",
-      "owner": "release-maintainer",
-      "rationale": "Pre-existing 0.2.4 monolith retained behind an exact non-growth baseline during current-base consolidation.",
-      "removalMilestone": "post-0.2.4 architecture reduction",
-      "tests": [
-        "npm run verify:architecture"
-      ],
-      "maximumLogicalLines": 1795
+      "maximumLogicalLines": 4518
     }
   ]
 }

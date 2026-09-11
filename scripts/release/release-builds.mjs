@@ -25,6 +25,7 @@ export const contentScriptMatches = [
   "https://x.com/*",
   "https://twitter.com/*",
   "https://www.remilia.net/*",
+  "https://remilia.net/*",
   "https://remilia.wiki/*",
   "https://wiki.remilia.org/*",
   "https://boards.miladychan.org/*",

@@ -1,6 +1,8 @@
 import type { TwitterSurface, TwitterSurfaceKind } from "../scanner/twitter-scanner";
 import type { Disposable } from "../runtime/disposables";
 import type { AppStorageFacade } from "./app-storage";
+import type { AppWindowService } from "./app-window";
+import type { AppStorageResource } from "./app-storage-resource";
 import type {
   AppRemiliaCapabilityDeclaration,
   RemiliaCapabilityBrokerResult,
@@ -9,6 +11,8 @@ import type {
 } from "./remilia-capabilities";
 
 export type { AppStorageArea, AppStorageAreaName, AppStorageChange, AppStorageChanges, AppStorageFacade } from "./app-storage";
+export type { AppWindowBounds, AppWindowCreateOptions, AppWindowHandle, AppWindowService } from "./app-window";
+export type { AppStorageResource, AppStorageResourceKind, AppStorageResourceReset } from "./app-storage-resource";
 
 export type MilxdyAppId = string;
 
@@ -252,6 +256,8 @@ export type MilxdyAppManifest = {
   replyAction?: AppReplyAction;
   externalHandoffs?: AppExternalHandoff[];
   remoteQueries?: AppRemoteQuery[];
+  /** Explicit declarations required before a package may invoke a host action. */
+  hostActions?: Array<"wiki.openPage">;
   /** Reviewed host-owned Remilia operations. Packages never receive credentials, URLs, or fetch. */
   remiliaCapabilities?: AppRemiliaCapabilityDeclaration[];
   chrome?: {
@@ -264,6 +270,8 @@ export type MilxdyAppManifest = {
     sync?: string[];
     local?: string[];
   };
+  /** Retention metadata is separate from key authorization. */
+  storageResources?: AppStorageResource[];
   settings?: AppSettingDefinition[];
   surfaces: MilxdyAppSurface[];
   deliverySurfaces?: TwitterSurfaceKind[];
@@ -397,9 +405,12 @@ export type MilxdyContentAppContext = {
   scheduleScan: () => void;
   loadAppById: (id: MilxdyAppId, reason?: string) => Promise<MilxdyContentAppModule | null>;
   scheduler: AppRuntimeScheduler;
+  windows: AppWindowService;
   storage: AppStorageFacade;
   resolveAssetUrl: (path: string) => string;
   sendMessage: <T = unknown>(message: unknown, label?: string) => Promise<T | null>;
+  /** Opens a validated Wiki page through the declared host action. */
+  openWikiPage: (url: string) => Promise<{ ok: boolean; reason?: "disabled" | "unavailable" | "invalid-url" | "cancelled" | "failed" }>;
   /** Host-filtered declarations; exact operation and scope checks run again in the background broker. */
   remiliaCapabilities?: ReadonlyArray<AppRemiliaCapabilityDeclaration>;
   invokeRemiliaCapability?: <Operation extends RemiliaCapabilityOperation>(

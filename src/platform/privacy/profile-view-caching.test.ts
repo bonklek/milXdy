@@ -51,16 +51,23 @@ describe("profile-view caching", () => {
 
   it("deduplicates trophy banner profile work through the shared identity service", () => {
     const remiStats = source("src/apps/remistats/content.js");
-    expect(remiStats).toContain("type: 'reminetIdentity:getProfile'");
+    const trophyMedia = source("src/apps/remistats/trophy-banner-media.ts");
+    expect(remiStats).toContain("createTrophyBannerMedia({");
+    expect(remiStats).toContain("send: (message, type) => runtimeSendMessage(message, type)");
+    expect(trophyMedia).toContain('type: "reminetIdentity:getProfile"');
     expect(remiStats).toContain("type: 'reminetIdentity:resolve'");
     expect(remiStats).not.toContain("type: 'remistats:getUser'");
   });
 
   it("keeps shared identity enrichment behind the persistent identity cache", () => {
-    const background = source("src/extension/background/index.ts");
-    expect(background).toContain("freshIdentityEntry(entry, maxAgeMs");
-    expect(background).toContain("fetchRemiliaPublicProfile(resolvedUsername, cache");
-    expect(background).toContain("remiliaApiClient.getUserProfile(clean)");
-    expect(background).not.toContain("/api/profile/~");
+    const [background, handlers] = [
+      source("src/extension/background/index.ts"),
+      source("src/extension/background/reminet-identity-handlers.ts"),
+    ];
+    expect(background).toContain("configureReminetIdentityNetworkFetch(budgetedFetch)");
+    expect(handlers).toContain("freshIdentityEntry(entry, maxAgeMs");
+    expect(handlers).toContain("fetchRemiliaPublicProfile(resolvedUsername, cache");
+    expect(handlers).toContain("remiliaApiClient.getUserProfile(clean)");
+    expect(handlers).not.toContain("/api/profile/~");
   });
 });

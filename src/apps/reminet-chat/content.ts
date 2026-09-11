@@ -53,6 +53,7 @@ import {
   legacyReplyId,
 } from "./legacy-content-adapter";
 import { LegacyMutationDispatcher } from "./legacy-mutation-dispatcher";
+import { avatarUrl, cleanUsername, connectedXHandle, displayName, findDeepXHandle, remiliaHandle, remiliaUserColor } from "./chat-user-formatting";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
@@ -90,6 +91,7 @@ const pokeCooldownSources = new Map<string, string>();
 const pokeEligibilityChecked = new Set<string>();
 const pokeCountdownTimers = new Map<HTMLElement, () => void>();
 const pokeButtonsByUsername = new Map<string, Set<HTMLElement>>();
+const currentUserReactionStates = new Map<string, boolean>();
 const hiddenNativeDmElements = new Set<HTMLElement>();
 const ROUTE_MOUNT_RETRY_DELAYS_MS = [120, 300, 700, 1500, 3000] as const;
 let audioContext: AudioContext | null = null;
@@ -356,6 +358,7 @@ function createChatRestController(): ChatRestController {
       sortAndTrimMessages(reason === "older" ? "oldest" : "newest");
       state.recoveryVisibleState = "none";
       state.recoveryMessage = "";
+      clearSuccessfulChatReadError();
       renderStatus("Live");
       render();
     },
@@ -488,6 +491,7 @@ function destroy(): void {
   pokeCooldowns.clear();
   pokeCooldownSources.clear();
   pokeEligibilityChecked.clear();
+  currentUserReactionStates.clear();
   removePseudoChatRow();
   restoreNativeDmPane();
   state.messages = [];
@@ -638,7 +642,8 @@ function findRightRail(): HTMLElement | null {
 }
 
 function findDmContainer(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-testid="dm-container"]')
+  return document.querySelector<HTMLElement>('[data-testid="dm-main-container"]')
+    || document.querySelector<HTMLElement>('[data-testid="dm-container"]')
     || document.querySelector<HTMLElement>('[aria-label="Timeline: Messages"]')
     || document.querySelector<HTMLElement>('main[role="main"]');
 }
@@ -646,6 +651,10 @@ function findDmContainer(): HTMLElement | null {
 function findDmListMount(): HTMLElement | null {
   const container = findDmContainer();
   if (!container) return null;
+  const modernConversationList = container.querySelector<HTMLElement>('[data-testid="x-chat-conversation-list"]');
+  if (modernConversationList) {
+    return modernConversationList.querySelector<HTMLElement>('[role="list"]') || modernConversationList;
+  }
   const conversationRow = findFirstDmConversationRow();
   if (conversationRow?.parentElement && container.contains(conversationRow.parentElement)) return conversationRow.parentElement;
   const existing = document.getElementById(PSEUDO_ROW_ID);
@@ -1017,7 +1026,25 @@ function createRoot(): HTMLElement {
     void addPendingFiles(files);
   });
   root.addEventListener("click", handleChatActionClick);
+  root.addEventListener("pointerout", handleChatMessagePointerOut);
   return root;
+}
+
+function handleChatMessagePointerOut(event: PointerEvent): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const message = target?.closest<HTMLElement>(".milxdy-chat-message");
+  if (!message) return;
+  const nextTarget = event.relatedTarget;
+  if (nextTarget instanceof Node && message.contains(nextTarget)) return;
+
+  const messageId = messageIdOrNull(message.dataset.messageId);
+  if (messageId !== null && state.activeMessageActionId === messageId) {
+    state.activeMessageActionId = null;
+  }
+  const actions = message.querySelector<HTMLElement>(".milxdy-chat-message-actions");
+  if (actions) actions.dataset.open = "false";
+  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (focused && message.contains(focused)) focused.blur();
 }
 
 function handleChatActionClick(event: MouseEvent): void {
@@ -1032,7 +1059,7 @@ function handleChatActionClick(event: MouseEvent): void {
   if (kind === "react") {
     const messageId = messageIdOrNull(action.dataset.messageId);
     state.activeMessageActionId = messageId;
-    if (messageId) reactToMessage(messageId, action.dataset.emoji || "");
+    if (messageId) reactToMessage(messageId, action.dataset.emoji || "", action);
   }
   if (kind === "reply") {
     const messageId = messageIdOrNull(action.dataset.messageId);
@@ -1145,6 +1172,15 @@ function handleOfficialChatFailure(error: RemiliaApiError, kind: ChatRestFailure
     status: error.status,
   });
   render();
+}
+
+function clearSuccessfulChatReadError(): void {
+  if (
+    state.composerError === "Reconnect Remilia from the milXdy popup, then recheck Chat."
+    || state.composerError === "Reconnect Remilia with Chat access from the milXdy popup, then recheck Chat."
+  ) {
+    state.composerError = "";
+  }
 }
 
 function ingestApiPayload(payload: unknown): void {
@@ -2037,7 +2073,6 @@ function renderStackedMessage(message: ApiMessage): string {
       ${renderReplyContext(message)}
       ${message.body ? `<div class="milxdy-chat-text">${formatBody(message.body)}</div>` : ""}
       ${renderAttachments(message)}
-      ${message.editedAt || message.edited_at ? `<span class="milxdy-chat-edited" title="Edited message">edited</span>` : ""}
       ${renderReactionCounts(message)}
       ${renderMessageActions(message)}
     </div>
@@ -2211,7 +2246,13 @@ function reactionCounts(message: ApiMessage): Map<string, number> {
 
 function currentUserReacted(message: ApiMessage, emoji: string): boolean {
   const normalized = normalizeReactionEmoji(emoji);
+  const remembered = currentUserReactionStates.get(reactionStateKey(message.id, normalized));
+  if (remembered !== undefined) return remembered;
   return (message.reactions || []).some((reaction) => normalizeReactionEmoji(reaction.emoji) === normalized && reactionBelongsToCurrentUser(reaction));
+}
+
+function reactionStateKey(messageId: MessageId, emoji: string): string {
+  return `${messageId}\u0000${emoji}`;
 }
 
 function reactionBelongsToCurrentUser(reaction: Reaction): boolean {
@@ -2336,19 +2377,48 @@ function compactText(value: string, maxLength: number): string {
   return compact.length > maxLength ? `${compact.slice(0, Math.max(0, maxLength - 1))}...` : compact;
 }
 
-function reactToMessage(messageId: MessageId, emoji: string): void {
+function reactToMessage(messageId: MessageId, emoji: string, control?: HTMLElement): void {
   const normalizedEmoji = normalizeReactionEmoji(emoji);
   if (!normalizedEmoji || state.socketState !== "open") return;
   const numericMessageId = legacyMessageId(messageId);
   if (typeof numericMessageId !== "number") return;
   const message = state.messages.find((item) => item.id === messageId);
-  const type = message && currentUserReacted(message, normalizedEmoji) ? "unreact" : "react";
+  const previouslyReacted = Boolean(message && currentUserReacted(message, normalizedEmoji));
+  const nextReacted = !previouslyReacted;
+  const type = nextReacted ? "react" : "unreact";
+  const stateKey = reactionStateKey(messageId, normalizedEmoji);
+  currentUserReactionStates.set(stateKey, nextReacted);
+  syncReactionControls(messageId, normalizedEmoji, nextReacted);
+  animateReactionInteraction(control);
   void dispatchLegacyMutation({
     type,
     payload: { chat_id: LEGACY_CHAT_ID, message_id: numericMessageId, emoji: normalizedEmoji },
   }).then((result) => {
+    if (!result.ok && currentUserReactionStates.get(stateKey) === nextReacted) {
+      currentUserReactionStates.set(stateKey, previouslyReacted);
+      syncReactionControls(messageId, normalizedEmoji, previouslyReacted);
+      return;
+    }
     if (result.ok && type === "react") playChatSound("react");
   });
+}
+
+function syncReactionControls(messageId: MessageId, emoji: string, reacted: boolean): void {
+  const selector = `[data-chat-action="react"][data-message-id="${cssEscape(messageId)}"][data-emoji="${cssEscape(emoji)}"]`;
+  for (const reactionControl of state.root?.querySelectorAll<HTMLElement>(selector) || []) {
+    reactionControl.dataset.active = String(reacted);
+    reactionControl.setAttribute("aria-pressed", String(reacted));
+  }
+}
+
+function animateReactionInteraction(control?: HTMLElement): void {
+  if (!control) return;
+  control.classList.remove("milxdy-chat-reaction-pulse");
+  void control.offsetWidth;
+  control.classList.add("milxdy-chat-reaction-pulse");
+  control.addEventListener("animationend", () => {
+    control.classList.remove("milxdy-chat-reaction-pulse");
+  }, { once: true });
 }
 
 function renderPokeButton(username: string): string {
@@ -2812,159 +2882,6 @@ function profileUserFromResponse(response: RuntimeRecord): ApiUser | null {
   if (!user) return null;
   const xHandle = connectedXHandle(user) || findDeepXHandle(data);
   return xHandle ? { ...user, xHandle } : user;
-}
-
-function displayName(user: ApiUser | null, authorId: number, message: ApiMessage): string {
-  const handleValue = remiliaHandle(user);
-  return user?.displayName || user?.display_name || user?.name || handleValue || (message.id.startsWith("local:") ? "You" : `User ${authorId || "?"}`);
-}
-
-function remiliaUserColor(user: ApiUser | null): string {
-  const hue = remiliaUserHue(user);
-  return hue === null ? "" : `hsl(${hue}, 60%, 45%)`;
-}
-
-function remiliaUserHue(user: ApiUser | null): number | null {
-  const raw = user?.color;
-  if (typeof raw === "number" && Number.isFinite(raw)) return normalizeHue(raw);
-  if (typeof raw === "string" && /^\d+(\.\d+)?$/.test(raw.trim())) return normalizeHue(Number(raw));
-  return null;
-}
-
-function normalizeHue(value: number): number {
-  return ((Math.round(value) % 360) + 360) % 360;
-}
-
-function remiliaHandle(user: ApiUser | null): string {
-  return user?.handle || user?.userHandle || user?.user_handle || user?.username || "";
-}
-
-function avatarUrl(user: ApiUser | null): string {
-  return user?.profilePicUrl || user?.profile_pic_url || user?.pfpUrl || user?.pfp_url || user?.avatar_url || user?.avatar_url_small || "";
-}
-
-function connectedXHandle(user: ApiUser | null): string {
-  const direct = user?.twitterHandle
-    || user?.twitter_handle
-    || user?.twitterUsername
-    || user?.twitter_username
-    || user?.xHandle
-    || user?.x_handle
-    || user?.xUsername
-    || user?.x_username
-    || handleFromUrl(user?.twitterUrl || user?.twitter_url || user?.xUrl || user?.x_url);
-  if (direct) return cleanXHandle(direct);
-  const record = objectValue(user);
-  const nestedHandle = findNestedXHandle(record);
-  if (nestedHandle) return nestedHandle;
-  const deepHandle = findDeepXHandle(record);
-  if (deepHandle) return deepHandle;
-  for (const item of user?.connections || []) {
-    const record = objectValue(item);
-    const provider = String(record.provider || record.type || record.platform || record.service || record.kind || "").toLowerCase();
-    if (!/twitter|x/.test(provider)) continue;
-    const handle = stringOrUndefined(record.handle
-      ?? record.username
-      ?? record.userName
-      ?? record.user_name
-      ?? record.screenName
-      ?? record.screen_name
-      ?? record.nickname
-      ?? record.name
-      ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-    if (handle) return cleanXHandle(handle);
-  }
-  return "";
-}
-
-function findDeepXHandle(value: unknown, depth = 0): string {
-  if (!value || typeof value !== "object" || depth > 4) return "";
-  const record = value as RuntimeRecord;
-  const direct = stringOrUndefined(record.twitterHandle
-    ?? record.twitter_handle
-    ?? record.twitterUsername
-    ?? record.twitter_username
-    ?? record.xHandle
-    ?? record.x_handle
-    ?? record.xUsername
-    ?? record.x_username
-    ?? record.screenName
-    ?? record.screen_name
-    ?? handleFromUrl(stringOrUndefined(record.twitterUrl ?? record.twitter_url ?? record.xUrl ?? record.x_url ?? record.url ?? record.href)));
-  if (direct) return cleanXHandle(direct);
-
-  const provider = String(record.provider || record.type || record.platform || record.service || record.kind || record.network || "").toLowerCase();
-  if (/twitter|^x$/.test(provider)) {
-    const handle = stringOrUndefined(record.handle
-      ?? record.username
-      ?? record.userName
-      ?? record.user_name
-      ?? record.name
-      ?? record.nickname
-      ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-    if (handle) return cleanXHandle(handle);
-  }
-
-  for (const [key, nested] of Object.entries(record)) {
-    if (!/(twitter|x|social|connection|account|profile|links?)/i.test(key) && depth > 0) continue;
-    if (Array.isArray(nested)) {
-      for (const item of nested) {
-        const handle = findDeepXHandle(item, depth + 1);
-        if (handle) return handle;
-      }
-      continue;
-    }
-    const handle = findDeepXHandle(nested, depth + 1);
-    if (handle) return handle;
-  }
-  return "";
-}
-
-function findNestedXHandle(record: RuntimeRecord): string {
-  for (const key of ["twitter", "x", "twitterAccount", "twitter_account", "xAccount", "x_account", "socials", "social"]) {
-    const value = record[key];
-    if (!value || typeof value !== "object") continue;
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const itemRecord = objectValue(item);
-        const provider = String(itemRecord.provider || itemRecord.type || itemRecord.platform || itemRecord.service || itemRecord.kind || "").toLowerCase();
-        if (!/twitter|x/.test(provider)) continue;
-        const handle = handleFromSocialRecord(itemRecord);
-        if (handle) return handle;
-      }
-      continue;
-    }
-    const handle = handleFromSocialRecord(value as RuntimeRecord);
-    if (handle) return handle;
-  }
-  return "";
-}
-
-function handleFromSocialRecord(record: RuntimeRecord): string {
-  const handle = stringOrUndefined(record.handle
-    ?? record.username
-    ?? record.userName
-    ?? record.user_name
-    ?? record.screenName
-    ?? record.screen_name
-    ?? record.nickname
-    ?? record.name
-    ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-  return handle ? cleanXHandle(handle) : "";
-}
-
-function handleFromUrl(value: string | undefined): string {
-  if (!value) return "";
-  const match = value.match(/(?:twitter\.com|x\.com)\/@?([^/?#]+)/i);
-  return match ? match[1] : "";
-}
-
-function cleanXHandle(value: string): string {
-  return value.replace(/^@/, "").replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\//i, "").split(/[/?#]/)[0];
-}
-
-function cleanUsername(value: string): string {
-  return value.trim().replace(/^[@~]/, "").replace(/[^a-zA-Z0-9_-]/g, "");
 }
 
 function currentUserId(): number {

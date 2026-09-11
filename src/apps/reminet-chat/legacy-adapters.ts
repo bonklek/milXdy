@@ -3,6 +3,7 @@ import { isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist"
 export const LEGACY_CHAT_ID = 1;
 export const LEGACY_SOCKET_URL = "wss://www.remilia.net/api/ws";
 export const LEGACY_SOCKET_ORIGIN = "https://www.remilia.net";
+export const LEGACY_SITE_ORIGINS = Object.freeze([LEGACY_SOCKET_ORIGIN, "https://remilia.net"] as const);
 export const LEGACY_MEDIA_UPLOAD_URL = "https://www.remilia.net/media/upload/";
 export const LEGACY_MEDIA_CONFIRM_URL = "https://www.remilia.net/media/upload/confirm";
 export const LEGACY_SOCKET_OPEN_TIMEOUT_MS = 12_000;
@@ -204,9 +205,9 @@ export function isAllowedLegacySender(
   try {
     const url = new URL(source);
     if (url.protocol !== "https:" || url.username || url.password) return false;
-    if (role === "remilia-bridge") return url.origin === LEGACY_SOCKET_ORIGIN;
+    if (role === "remilia-bridge") return LEGACY_SITE_ORIGINS.includes(url.origin as typeof LEGACY_SITE_ORIGINS[number]);
     if (role === "runtime-content") {
-      return url.origin === LEGACY_SOCKET_ORIGIN
+      return LEGACY_SITE_ORIGINS.includes(url.origin as typeof LEGACY_SITE_ORIGINS[number])
         || url.origin === "https://x.com"
         || url.origin === "https://twitter.com";
     }

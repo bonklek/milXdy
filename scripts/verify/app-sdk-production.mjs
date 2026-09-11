@@ -59,7 +59,8 @@ assert(accessibilityGuide.includes("screen-reader") && accessibilityGuide.includ
 assert(assetGuide.includes("package.webAccessibleAssets") && assetGuide.includes("license") && assetGuide.includes("not legal approval"), "asset guide must define declaration, licensing, and review boundaries");
 assert(readiness.includes("Supported Distribution Model"), "platform contract must define the supported distribution model");
 assert(readiness.includes("Post-reading is the production reference app"), "platform contract must identify the external integration proof");
-assert(compatibility.includes("Package-owned background module | Use host-provided declared services"), "compatibility policy must define the package background-service model");
+assert(compatibility.includes("APP_PLATFORM_PRODUCTION_READINESS.md#versioning-and-support"), "compatibility redirect must link the canonical support contract");
+assert(readiness.includes("| Package-owned background modules | Use host-provided declared services |"), "canonical platform contract must define the package background-service model");
 assert(docsIndex.includes("APP_SDK_COMPATIBILITY.md") && docsIndex.includes("APP_PLATFORM_PRODUCTION_READINESS.md"), "docs index must link SDK production policies");
 assert(docsIndex.includes("POST_READING_SDK_REFERENCE.md"), "docs index must link the external SDK reference");
 assert(referenceCompatibility.packageId === "post-reading", "external compatibility mirror must identify Post-reading");
@@ -77,6 +78,9 @@ assert(referenceDocs.includes("milxdy.acceptance.json") && referenceDocs.include
 assert(/^[0-9a-f]{40}$/.test(postReadingPolicy?.sourceCommit || ""), "external reference trust policy must pin a full Git commit");
 
 const checks = [
+  ["SDK adherence graph and regression fixtures", ["scripts/verify/app-sdk-adherence-fixtures.mjs"]],
+  ["SDK migration exception ratchet", ["scripts/verify/app-sdk-adherence.mjs"]],
+  ["Docked starter asynchronous lifecycle", ["scripts/verify/app-sdk-starter-lifecycle.mjs"]],
   ["Public SDK declarations and starter JavaScript", ["node_modules/typescript/bin/tsc", "-p", "sdk/tsconfig.json"]],
   ["App SDK author harness", ["scripts/verify/app-sdk-harness.mjs"]],
   ["App SDK compliance", ["scripts/verify/app-sdk-compliance.mjs"]],

@@ -80,6 +80,95 @@ describe("package Remilia capability client", () => {
       .toMatchObject({ ok: false, error: { code: "grant_revoked" } });
     expect(messages.some((message) => (message as Record<string, unknown>).type === "milxdy:remiliaCapability:revoke")).toBe(true);
   });
+
+  it("renews a lost background grant once for reads without replaying writes", async () => {
+    const messages: Array<Record<string, unknown>> = [];
+    let grantCount = 0;
+    const transport = vi.fn(async (message: unknown) => {
+      const record = message as Record<string, unknown>;
+      messages.push(record);
+      if (record.type === "milxdy:remiliaCapability:grant") {
+        grantCount += 1;
+        return { ok: true };
+      }
+      if (record.operation === "getUserProfile" && grantCount === 1) {
+        return { ok: false, error: { category: "broker", code: "package_not_granted", message: "worker restarted", status: 403 } };
+      }
+      return { ok: true, data: {}, status: 200 };
+    });
+    const client = createPackageRemiliaCapabilityClient(reviewedApp(), transport);
+    await expect(client.invoke("getUserProfile", { username: "milady" })).resolves.toMatchObject({ ok: true });
+    expect(messages.filter((message) => message.type === "milxdy:remiliaCapability:grant")).toHaveLength(2);
+    expect(messages.filter((message) => message.type === "milxdy:remiliaCapability:invoke")).toHaveLength(2);
+
+    const writeApp = reviewedApp();
+    writeApp.remiliaCapabilities = [{ id: "remilia.chat.write", operations: ["postGlobalChatMessage"], scopes: ["remilia:chat.write"], consent: "perInvocation", reason: "Explicit package chat submit control." }];
+    let writeGrantCount = 0;
+    const writeTransport = vi.fn(async (message: unknown) => {
+      if ((message as Record<string, unknown>).type === "milxdy:remiliaCapability:grant") {
+        writeGrantCount += 1;
+        return { ok: true };
+      }
+      return writeGrantCount === 1
+        ? { ok: false, error: { category: "broker", code: "package_not_granted", message: "worker restarted", status: 403 } }
+        : { ok: true, data: {}, status: 200 };
+    });
+    const writeClient = createPackageRemiliaCapabilityClient(writeApp, writeTransport, () => true);
+    await expect(writeClient.invoke("postGlobalChatMessage", { text: "hello" }))
+      .resolves.toMatchObject({ ok: false, error: { code: "package_not_granted" } });
+    expect(writeTransport).toHaveBeenCalledTimes(2); // initial grant plus the single write; no renewal/replay
+    await expect(writeClient.invoke("postGlobalChatMessage", { text: "hello" })).resolves.toMatchObject({ ok: true });
+    expect(writeTransport).toHaveBeenCalledTimes(4); // a later, explicit gesture may renew and invoke
+  });
+
+  it("shares a pending renewal without changing the grant identity underneath concurrent reads", async () => {
+    let random = 0;
+    vi.stubGlobal("crypto", { getRandomValues: (bytes: Uint8Array) => bytes.fill(++random), subtle });
+    let finishRenewal!: () => void;
+    const renewal = new Promise<void>((resolve) => { finishRenewal = resolve; });
+    let activeId: unknown;
+    let grants = 0;
+    const transport = vi.fn(async (value: unknown) => {
+      const message = value as Record<string, unknown>;
+      if (message.type === "milxdy:remiliaCapability:grant") {
+        grants += 1;
+        const id = message.grantId;
+        if (grants > 1) await renewal;
+        activeId = id;
+        return { ok: true };
+      }
+      return message.grantId === activeId
+        ? { ok: true, data: {}, status: 200 }
+        : { ok: false, error: { category: "broker", code: "package_not_granted" } };
+    });
+    const client = createPackageRemiliaCapabilityClient(reviewedApp(), transport);
+    await client.invoke("getUserProfile", { username: "first" });
+    activeId = null;
+    const pending = [client.invoke("getUserProfile", { username: "a" }), client.invoke("getUserProfile", { username: "b" })];
+    await vi.waitFor(() => expect(grants).toBe(2));
+    finishRenewal();
+    expect(await Promise.all(pending)).toEqual([expect.objectContaining({ ok: true }), expect.objectContaining({ ok: true })]);
+    expect(grants).toBe(2);
+  });
+
+  it("cleans up a grant that completes after revocation without invoking the operation", async () => {
+    let finishGrant!: () => void;
+    const pendingGrant = new Promise<void>((resolve) => { finishGrant = resolve; });
+    const messages: string[] = [];
+    const client = createPackageRemiliaCapabilityClient(reviewedApp(), async (value) => {
+      const message = value as Record<string, unknown>;
+      messages.push(String(message.type));
+      if (message.type === "milxdy:remiliaCapability:grant") await pendingGrant;
+      return { ok: true };
+    });
+    const call = client.invoke("getUserProfile", { username: "a" });
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    const revoke = client.revoke();
+    finishGrant();
+    await expect(call).resolves.toMatchObject({ ok: false, error: { code: "grant_revoked" } });
+    await revoke;
+    expect(messages).toEqual(["milxdy:remiliaCapability:grant", "milxdy:remiliaCapability:revoke"]);
+  });
 });
 
 function reviewedApp(): MilxdyAppManifest {

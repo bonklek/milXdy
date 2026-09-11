@@ -136,6 +136,19 @@ describe("Remilia API v1 endpoint fixtures", () => {
 });
 
 describe("Remilia API v1 security boundary", () => {
+  it("invokes fetch with the browser global receiver", async () => {
+    const fetchMock = vi.fn(function (this: typeof globalThis) {
+      if (this !== globalThis) throw new TypeError("Illegal invocation");
+      return Promise.resolve(jsonResponse(REMILIA_API_V1_SUCCESS_FIXTURES.getUserProfile));
+    }) as unknown as typeof fetch;
+    const client = new RemiliaApiClient({ auth: authProvider(), fetch: fetchMock });
+
+    const result = await client.getUserProfile("remilia");
+
+    expect(result.ok).toBe(true);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
   it("allows only exact documented method/path/query combinations", () => {
     expect(isAllowedRemiliaApiV1Request("GET", "https://www.remilia.net/api/v1/me/stats")).toBe(true);
     expect(isAllowedRemiliaApiV1Request("GET", "https://www.remilia.net/api/v1/users?limit=25&cursor=abc")).toBe(true);
@@ -233,6 +246,31 @@ describe("Remilia API v1 retry, rate limit, and cancellation", () => {
     expect(forbidden).toMatchObject({ ok: false, error: { category: "authorization", status: 403, code: "insufficient_scope" } });
     expect(cooldown).toMatchObject({ ok: false, error: { category: "cooldown", status: 429, code: "poke_cooldown" } });
     expect(auth.refresh).not.toHaveBeenCalled();
+  });
+
+  it("normalizes millisecond next_allowed_at cooldown timestamps to the seconds contract", async () => {
+    const now = 1_800_000_000_000;
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValueOnce(jsonResponse({
+      error: {
+        code: "poke_cooldown",
+        message: "cooldown",
+        next_allowed_at: now + 90_000,
+      },
+    }, 429));
+    const client = new RemiliaApiClient({
+      auth: authProvider(grant("token", [REMILIA_SCOPE_POKES_WRITE])),
+      fetch: fetchMock,
+      now: () => now,
+    });
+
+    await expect(client.pokeUser("alice")).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: "poke_cooldown",
+        nextAllowedAt: (now + 90_000) / 1000,
+        retryAfterMs: 90_000,
+      },
+    });
   });
 
   it("honors Retry-After locally before issuing another request", async () => {

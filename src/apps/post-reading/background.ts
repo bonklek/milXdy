@@ -16,6 +16,9 @@ type FetchBlobMessage = {
   url: string;
 };
 
+type OcrSessionMessage = { type: "post-reading:ocrSession" };
+type OcrSessionAuthorizationMessage = { type: "post-reading:authorizeOcrSession"; authToken: string };
+
 type GenerateAudioExportMessage = {
   type: "post-reading:generateAudioExport";
   requestId: string;
@@ -32,7 +35,7 @@ type CancelAudioExportMessage = {
 };
 
 type FetchResourceMessage = FetchJsonMessage | FetchTextMessage | FetchBlobMessage;
-type BackgroundMessage = FetchResourceMessage | GenerateAudioExportMessage | CancelAudioExportMessage;
+type BackgroundMessage = FetchResourceMessage | GenerateAudioExportMessage | CancelAudioExportMessage | OcrSessionMessage | OcrSessionAuthorizationMessage;
 const MAX_JSON_RESPONSE_BYTES = 512 * 1024;
 const MAX_TEXT_RESPONSE_BYTES = 2 * 1024 * 1024;
 const MAX_BLOB_RESPONSE_BYTES = 8 * 1024 * 1024;
@@ -41,6 +44,10 @@ const MAX_AUDIO_EXPORT_BYTES = 50 * 1024 * 1024;
 const MAX_AUDIO_EXPORT_ENVELOPE_BYTES = Math.ceil((MAX_AUDIO_EXPORT_BYTES * 4) / 3) + 1024 * 1024;
 const activeAudioExports = new Map<string, AbortController>();
 const canceledAudioExports = new Set<string>();
+const ocrSessions = new Map<string, { tabId: number; expiresAt: number }>();
+const OCR_SESSION_TTL_MS = 60_000;
+const MAX_PENDING_OCR_SESSIONS = 128;
+const OCR_PARENT_HOSTS = new Set(["x.com", "twitter.com", "remilia.wiki", "wiki.remilia.org"]);
 
 registerBackgroundMessageHandlers([{
   type: "post-reading:fetch",
@@ -49,9 +56,31 @@ registerBackgroundMessageHandlers([{
 }]);
 
 export async function handlePostReadingBackgroundMessage(message: BackgroundMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
+  if (message.type === "post-reading:ocrSession") return createOcrSession(sender);
+  if (message.type === "post-reading:authorizeOcrSession") return authorizeOcrSession(message, sender);
   if (message.type === "post-reading:generateAudioExport") return generateAudioExport(message, sender);
   if (message.type === "post-reading:cancelAudioExport") return cancelAudioExport(message, sender);
   return fetchPostReadingResource(message, sender);
+}
+
+function createOcrSession(sender: chrome.runtime.MessageSender): Record<string, unknown> {
+  if (!isOcrParentContentScriptSender(sender) || typeof sender.tab?.id !== "number") return { ok: false, error: "UNSUPPORTED_SENDER" };
+  const now = Date.now();
+  for (const [token, session] of ocrSessions) {
+    if (session.expiresAt <= now) ocrSessions.delete(token);
+  }
+  if (ocrSessions.size >= MAX_PENDING_OCR_SESSIONS) return { ok: false, error: "OCR_SESSION_CAPACITY" };
+  const authToken = crypto.randomUUID();
+  ocrSessions.set(authToken, { tabId: sender.tab.id, expiresAt: now + OCR_SESSION_TTL_MS });
+  return { ok: true, authToken };
+}
+
+function authorizeOcrSession(message: OcrSessionAuthorizationMessage, sender: chrome.runtime.MessageSender): Record<string, unknown> {
+  if (!isPostReadingOcrFrameSender(sender) || typeof sender.tab?.id !== "number") return { ok: false, error: "UNSUPPORTED_SENDER" };
+  const session = ocrSessions.get(message.authToken);
+  ocrSessions.delete(message.authToken);
+  if (!session || session.tabId !== sender.tab.id || session.expiresAt <= Date.now()) return { ok: false, error: "INVALID_OCR_SESSION" };
+  return { ok: true };
 }
 
 async function fetchPostReadingResource(message: FetchResourceMessage, sender: chrome.runtime.MessageSender): Promise<Record<string, unknown>> {
@@ -241,8 +270,23 @@ function normalizeAudioExportError(error: unknown): string {
 }
 
 function isAllowedPostReadingSender(message: BackgroundMessage, sender: chrome.runtime.MessageSender): boolean {
+  if (message.type === "post-reading:ocrSession") return isOcrParentContentScriptSender(sender);
+  if (message.type === "post-reading:authorizeOcrSession") return isPostReadingOcrFrameSender(sender);
   if (message.type === "post-reading:fetchBlob") return isPostReadingOcrFrameSender(sender);
   return isXContentScriptSender(sender);
+}
+
+function isOcrParentContentScriptSender(sender: chrome.runtime.MessageSender): boolean {
+  if (sender.id !== chrome.runtime.id) return false;
+  if (typeof sender.tab?.id !== "number") return false;
+  if (sender.frameId !== undefined && sender.frameId !== 0) return false;
+  const source = sender.url || sender.origin || sender.tab.url || "";
+  try {
+    const url = new URL(source);
+    return url.protocol === "https:" && OCR_PARENT_HOSTS.has(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function isXContentScriptSender(sender: chrome.runtime.MessageSender): boolean {
@@ -333,6 +377,8 @@ function isPostReadingOcrFrameSender(sender: chrome.runtime.MessageSender): bool
 function isBackgroundMessage(message: unknown): message is BackgroundMessage {
   if (!message || typeof message !== "object") return false;
   const record = message as Record<string, unknown>;
+  if (record.type === "post-reading:ocrSession") return true;
+  if (record.type === "post-reading:authorizeOcrSession") return typeof record.authToken === "string";
   return (
     record.type === "post-reading:fetchJson"
     || record.type === "post-reading:fetchText"

@@ -57,9 +57,13 @@ window.addEventListener("message", (event: MessageEvent<OcrInitMessage | OcrRequ
   if (event.source !== window.parent) return;
   if (!event.data) return;
   if (event.data.type === "post-reading-ocr-init") {
-    if (!isAllowedParentOrigin(event.origin) || typeof event.data.authToken !== "string" || event.data.authToken.length < 16) return;
-    parentAuthToken = event.data.authToken;
-    parentTargetOrigin = event.origin;
+    if (parentAuthToken !== "" || !isAllowedParentOrigin(event.origin) || typeof event.data.authToken !== "string") return;
+    void authorizeParentSession(event.data.authToken).then((authorized) => {
+      if (!authorized || parentAuthToken !== "") return;
+      parentAuthToken = event.data.authToken;
+      parentTargetOrigin = event.origin;
+      window.parent.postMessage({ type: "post-reading-ocr-authenticated" }, parentTargetOrigin);
+    });
     return;
   }
   if (!isAuthenticatedParentRequest(event)) return;
@@ -71,6 +75,15 @@ window.addEventListener("message", (event: MessageEvent<OcrInitMessage | OcrRequ
   canceledRequests.delete(event.data.id);
   void recognize(event.data, event.source as Window | null, event.origin);
 });
+
+async function authorizeParentSession(authToken: string): Promise<boolean> {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "post-reading:authorizeOcrSession", authToken }) as { ok?: unknown } | undefined;
+    return response?.ok === true;
+  } catch {
+    return false;
+  }
+}
 
 async function recognize(request: OcrRequest, target: Window | null, targetOrigin: string): Promise<void> {
   if (!target) return;

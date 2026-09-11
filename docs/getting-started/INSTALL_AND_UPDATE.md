@@ -60,14 +60,14 @@ unsupported and leaves unrelated features available.
 
 Prerequisites:
 
-- Node.js 20 or newer is recommended.
+- Node.js 24 and npm 11. The npm lockfile and `npm ci` define the supported build environment.
 - Chrome, Brave, Edge, another Chromium browser, or Firefox/Waterfox 140 or newer for beta testing.
 - Git, if cloning directly.
 
 ```powershell
 git clone https://github.com/bonklek/milXdy.git
 cd milXdy
-npm install
+npm ci
 npm run build:profiles
 ```
 
@@ -92,9 +92,10 @@ When an update is available:
 6. Click **Reload** in the milXdy popup or reload the existing extension card.
 7. Refresh open X/Twitter tabs.
 
-Keeping the same loaded folder preserves extension storage, including settings,
-Maxxer stats, diagnostics, and the Remilia account grant owned by the trusted
-extension background. Removing the extension, loading a different folder, or
+Keeping the same loaded folder preserves persistent extension storage, including
+settings, Maxxer stats, and diagnostics. Remilia credentials use trusted session
+storage and end when the extension reloads or updates, so reconnect from the
+popup if needed. Removing the extension, loading a different folder, or
 clearing extension storage can reset local data. After updating from 0.2.4 or
 earlier, follow the one-time [Remilia account migration](REMILIA_ACCOUNT.md);
 milXdy does not reuse the old browser-session connector.
@@ -105,7 +106,7 @@ For source installs:
 
 ```powershell
 git pull
-npm install
+npm ci
 npm run build:profiles
 ```
 

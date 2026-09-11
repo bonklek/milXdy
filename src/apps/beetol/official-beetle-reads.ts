@@ -142,127 +142,77 @@ export async function readOfficialBeetleSnapshot(
 export function normalizeOfficialBeetleSnapshot(
   statePayload: unknown,
   cardsPayload: unknown,
-  options: {
-    now?: number;
-    cardsAvailable?: boolean;
-    cardsReadError?: OfficialBeetleReadErrorCode;
-  } = {},
+  options: { now?: number; cardsAvailable?: boolean; cardsReadError?: OfficialBeetleReadErrorCode } = {},
 ): OfficialBeetleSnapshot {
   const now = options.now ?? Date.now();
-  const state = unwrapStatePayload(statePayload);
-  const inventorySource = firstDefined(state.inventory, state.items);
-  const hammerSource = firstDefined(
-    state.hammers,
-    state.hammer_durabilities,
-    state.hammerDurabilities,
-  );
-  const cooldownSource = firstDefined(
-    state.cooldowns,
-    state.action_cooldowns,
-    state.actionCooldowns,
-  );
-  const inventory = normalizeCountMap(inventorySource);
-  const hammers = normalizeHammers(hammerSource);
-  const cooldowns = normalizeCooldowns(cooldownSource, now);
-  const cooldownExpiresAt = Object.fromEntries(
-    Object.entries(cooldowns)
-      .filter(([, value]) => value > 0)
-      .map(([key, value]) => [key, now + value]),
-  );
-  const cardsAvailable = options.cardsAvailable ?? true;
-  const cards = cardsAvailable ? normalizeCards(cardsPayload) : {};
-  const xp = firstFiniteNumber(state.xp, state.experience, state.beetle_xp, state.beetleXp);
-  const level = firstFiniteNumber(state.level, state.beetle_level, state.beetleLevel);
-  const username = firstNonEmptyString(
-    state.username,
-    state.handle,
-    recordValue(state.user).username,
-    recordValue(state.user).handle,
-  );
-
-  const directCharges = firstFiniteNumber(
-    state.hunt_charges,
-    state.huntCharges,
-    state.beetle_hunt_charges,
-    state.beetleHuntCharges,
-    state.hunts_remaining,
-    state.huntsRemaining,
-    recordValue(state.charges).beetle_hunt,
-    recordValue(state.charges).beetleHunt,
-  );
-  const available = firstBoolean(
-    state.can_hunt,
-    state.canHunt,
-    state.beetle_hunt_available,
-    state.beetleHuntAvailable,
-    state.ready,
-    recordValue(state.beetle_hunt).available,
-    recordValue(state.beetleHunt).available,
-  );
-  const huntCooldown = cooldowns.beetleHunt;
-  const inferredCharges = directCharges === undefined
-    ? huntCooldown !== undefined && huntCooldown > 0
-      ? 0
-      : available === true
-        ? 3
-        : available === false
-          ? 0
-          : undefined
-    : clampInteger(directCharges, 0, 3);
-  const hasHuntSignal = inferredCharges !== undefined || huntCooldown !== undefined || available !== undefined;
-
-  const missingFields = [
-    ...(xp === undefined ? ["xp"] : []),
-    ...(level === undefined ? ["level"] : []),
-    ...(inventorySource === undefined ? ["inventory"] : []),
-    ...(hammerSource === undefined ? ["hammers"] : []),
-    ...(cooldownSource === undefined ? ["cooldowns"] : []),
-    ...(cardsAvailable ? [] : ["cards"]),
-  ];
-
-  const user: NormalizedOfficialBeetleUser = {
-    ...(username ? { username } : {}),
-    ...(xp === undefined ? {} : { xp }),
-    ...(level === undefined ? {} : { level }),
-    inventory,
-    hammers,
-    hammerDurabilities: Object.fromEntries(
-      Object.entries(hammers)
-        .filter(([, hammer]) => hammer.durability !== null)
-        .map(([key, hammer]) => [key, hammer.durability as number]),
-    ),
-    cards,
-    cooldowns,
-    cooldownExpiresAt,
-    ...(inferredCharges === undefined
-      ? {}
-      : {
-          charges: { beetleHunt: inferredCharges },
-          beetleHuntCharges: inferredCharges,
-        }),
-    ...(hasHuntSignal
-      ? {
-          beetleHunt: {
-            ...(inferredCharges === undefined ? {} : { charges: inferredCharges }),
-            ...(huntCooldown === undefined ? {} : { cooldownMs: huntCooldown }),
-            ...(huntCooldown && huntCooldown > 0 ? { cooldownUntil: now + huntCooldown } : {}),
-            ...(available === undefined ? {} : { available, ready: available }),
-          },
-        }
-      : {}),
-    officialRead: {
-      stateEndpoint: OFFICIAL_BEETLE_STATE_ENDPOINT,
-      cardsEndpoint: OFFICIAL_BEETLE_CARDS_ENDPOINT,
-      partial: missingFields.length > 0,
-      missingFields,
-      ...(options.cardsReadError ? { cardsReadError: options.cardsReadError } : {}),
-    },
-  };
-
+  const sources = normalizeSnapshotSources(statePayload, cardsPayload, now, options.cardsAvailable ?? true);
+  const hunt = normalizeHuntStatus(sources.state, sources.cooldowns);
+  const missingFields = missingSnapshotFields(sources, options.cardsAvailable ?? true);
   return {
-    user,
+    user: normalizedSnapshotUser(sources, hunt, now, missingFields, options.cardsReadError),
     fetchedAt: now,
     partial: missingFields.length > 0,
+  };
+}
+
+type SnapshotSources = {
+  state: Record<string, unknown>;
+  inventorySource: unknown;
+  hammerSource: unknown;
+  cooldownSource: unknown;
+  inventory: Record<string, number>;
+  hammers: Record<string, NormalizedBeetleHammer>;
+  cooldowns: Record<string, number>;
+  cooldownExpiresAt: Record<string, number>;
+  cards: Record<string, NormalizedBeetleCard>;
+  xp?: number;
+  level?: number;
+  username?: string;
+};
+
+type HuntStatus = { charges?: number; available?: boolean; cooldownMs?: number; hasSignal: boolean };
+
+function normalizeSnapshotSources(statePayload: unknown, cardsPayload: unknown, now: number, cardsAvailable: boolean): SnapshotSources {
+  const state = unwrapStatePayload(statePayload);
+  const inventorySource = firstDefined(state.inventory, state.items);
+  const hammerSource = firstDefined(state.hammers, state.hammer_durabilities, state.hammerDurabilities);
+  const cooldownSource = firstDefined(state.cooldowns, state.action_cooldowns, state.actionCooldowns);
+  const cooldowns = normalizeCooldowns(cooldownSource, now);
+  return {
+    state, inventorySource, hammerSource, cooldownSource, cooldowns,
+    inventory: normalizeCountMap(inventorySource), hammers: normalizeHammers(hammerSource),
+    cooldownExpiresAt: Object.fromEntries(Object.entries(cooldowns).filter(([, value]) => value > 0).map(([key, value]) => [key, now + value])),
+    cards: cardsAvailable ? normalizeCards(cardsPayload) : {},
+    xp: firstFiniteNumber(state.xp, state.experience, state.beetle_xp, state.beetleXp),
+    level: firstFiniteNumber(state.level, state.beetle_level, state.beetleLevel),
+    username: firstNonEmptyString(state.username, state.handle, recordValue(state.user).username, recordValue(state.user).handle),
+  };
+}
+
+function normalizeHuntStatus(state: Record<string, unknown>, cooldowns: Record<string, number>): HuntStatus {
+  const directCharges = firstFiniteNumber(state.hunt_charges, state.huntCharges, state.beetle_hunt_charges, state.beetleHuntCharges, state.hunts_remaining, state.huntsRemaining, recordValue(state.charges).beetle_hunt, recordValue(state.charges).beetleHunt);
+  const available = firstBoolean(state.can_hunt, state.canHunt, state.beetle_hunt_available, state.beetleHuntAvailable, state.ready, recordValue(state.beetle_hunt).available, recordValue(state.beetleHunt).available);
+  const cooldownMs = cooldowns.beetleHunt;
+  const charges = directCharges === undefined ? (cooldownMs !== undefined && cooldownMs > 0 ? 0 : available === true ? 3 : available === false ? 0 : undefined) : clampInteger(directCharges, 0, 3);
+  return { ...(charges === undefined ? {} : { charges }), ...(available === undefined ? {} : { available }), ...(cooldownMs === undefined ? {} : { cooldownMs }), hasSignal: charges !== undefined || cooldownMs !== undefined || available !== undefined };
+}
+
+function missingSnapshotFields(sources: SnapshotSources, cardsAvailable: boolean): string[] {
+  return [
+    ...(sources.xp === undefined ? ["xp"] : []), ...(sources.level === undefined ? ["level"] : []),
+    ...(sources.inventorySource === undefined ? ["inventory"] : []), ...(sources.hammerSource === undefined ? ["hammers"] : []),
+    ...(sources.cooldownSource === undefined ? ["cooldowns"] : []), ...(cardsAvailable ? [] : ["cards"]),
+  ];
+}
+
+function normalizedSnapshotUser(sources: SnapshotSources, hunt: HuntStatus, now: number, missingFields: string[], cardsReadError?: OfficialBeetleReadErrorCode): NormalizedOfficialBeetleUser {
+  const hammerDurabilities = Object.fromEntries(Object.entries(sources.hammers).filter(([, hammer]) => hammer.durability !== null).map(([key, hammer]) => [key, hammer.durability as number]));
+  return {
+    ...(sources.username ? { username: sources.username } : {}), ...(sources.xp === undefined ? {} : { xp: sources.xp }), ...(sources.level === undefined ? {} : { level: sources.level }),
+    inventory: sources.inventory, hammers: sources.hammers, hammerDurabilities, cards: sources.cards, cooldowns: sources.cooldowns, cooldownExpiresAt: sources.cooldownExpiresAt,
+    ...(hunt.charges === undefined ? {} : { charges: { beetleHunt: hunt.charges }, beetleHuntCharges: hunt.charges }),
+    ...(hunt.hasSignal ? { beetleHunt: { ...(hunt.charges === undefined ? {} : { charges: hunt.charges }), ...(hunt.cooldownMs === undefined ? {} : { cooldownMs: hunt.cooldownMs }), ...(hunt.cooldownMs && hunt.cooldownMs > 0 ? { cooldownUntil: now + hunt.cooldownMs } : {}), ...(hunt.available === undefined ? {} : { available: hunt.available, ready: hunt.available }) } } : {}),
+    officialRead: { stateEndpoint: OFFICIAL_BEETLE_STATE_ENDPOINT, cardsEndpoint: OFFICIAL_BEETLE_CARDS_ENDPOINT, partial: missingFields.length > 0, missingFields, ...(cardsReadError ? { cardsReadError } : {}) },
   };
 }
 

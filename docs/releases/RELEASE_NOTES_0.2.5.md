@@ -1,23 +1,23 @@
 # milXdy 0.2.5 Release Notes
 
-milXdy `0.2.5` — **Speaking Special** — was released as a GitHub-distributed
-beta for Chromium, Firefox, and Waterfox. It completed the move to explicit
-Remilia Login and official API-v1 services, expanded Reader Voice, and shipped
-the reviewed Post-Factory, Post-reading, and Share Kit package composition.
+**Candidate status:** This is candidate copy for milXdy `0.2.5` — **Speaking
+Special**. It is not a published release or a download claim; the latest
+published release is 0.2.4. The statements below describe candidate scope that
+still requires the recorded release acceptance evidence.
 
 ## Download and compatibility
 
-- Chromium users received `milXdy-0.2.5-chromium.zip`, built from the
+- Candidate Chromium archives use `milXdy-0.2.5-chromium.zip`, built from the
   authenticated Chromium beta profile with the registered Remilia Login
-  callback. SHA-256:
-  `08012dad1de7dff08f96077c83bdb41b48a83843a78f611e2ebb96b9c19a1768`.
-- Firefox and Waterfox users received `milXdy-0.2.5-firefox.zip`. That build
+  callback.
+- Candidate Firefox and Waterfox archives use `milXdy-0.2.5-firefox.zip`. That build
   remained intentionally keyless: authenticated Remilia features reported an
   unsupported state and did not fall back to cookies or a website session.
-  SHA-256:
-  `8f6371c43cd717d85872e63c8143a6fce5e603d1ca429d70195c84e82593db1a`.
 - milXdy remained an unpacked GitHub beta. Lite, Balanced, and Full remained
   setup choices inside the extension, not separate downloads.
+
+Publish checksums only with the accepted release archives. Earlier candidate
+hashes do not identify a build containing subsequent remediation changes.
 
 See [Install and update](https://github.com/bonklek/milXdy/blob/main/docs/getting-started/INSTALL_AND_UPDATE.md)
 for the browser-specific installation and safe-update steps.
@@ -59,6 +59,15 @@ for the browser-specific installation and safe-update steps.
 
 ## Official and temporary legacy behavior
 
+The candidate uses a temporary dual-auth holdover: milXdy connects through
+Remilia Login for supported API features, while native Hunt, Claim, and Craft
+continue on the visible RemiliaNET website under its separate sign-in.
+Connecting or disconnecting milXdy does not establish or end that website
+session. Settings place both paths under **RemiNet → Account access**, ahead
+of the feature controls. New API endpoints are required to retire these native
+website actions, not to use this documented holdover. Browser acceptance of
+the existing paths remains required before publication.
+
 - Made official REST history and text or reply posting RemiNet Chat's source of
   truth. The WebSocket remained a temporary acceleration adapter, and chat
   remained usable when it was unavailable.
@@ -76,10 +85,10 @@ for the browser-specific installation and safe-update steps.
 
 - Added native X Article extraction and read-aloud behavior while preserving
   the existing Post-reading review and highlighting model.
-- Added explicit DM read aloud through browser-local Web Speech. DM content was
-  excluded from custom TTS, audio export, OCR, full-quote fetches, background
-  routes, diagnostics, and persistent storage, and transient conversation state
-  was cleaned up on every lifecycle exit.
+- The external Post-reading package defines DM read-aloud acceptance. The base
+  reader does not claim DM conversation support. Where browser Web Speech is
+  used, milXdy bypasses custom HTTP TTS; the selected browser voice may be local
+  or remote, so this is not a guarantee that speech remains on-device.
 - Added review-first long-form audio export in the external Post-reading
   package. Users could edit extracted text and metadata, select the configured
   local-loopback TTS path, cancel active work, download labeled audio format

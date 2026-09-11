@@ -1,296 +1,39 @@
-import { parseAllowedUrl, type UrlAllowRule } from "../browser/url-allowlist";
+import type {
+  RemiliaApiAuthGrant, RemiliaApiAuthProvider, RemiliaApiBeetleCards, RemiliaApiBeetleState,
+  RemiliaApiChatMessage, RemiliaApiChatPage, RemiliaApiDiagnostic, RemiliaApiDirectoryIdentifier,
+  RemiliaApiClientOptions, RemiliaApiDirectoryPage, RemiliaApiDirectoryResolution, RemiliaApiFailure, RemiliaApiNotification,
+  RemiliaApiNotificationsPage, RemiliaApiOperation, RemiliaApiProfile, RemiliaApiPublicIdentity,
+  RemiliaApiPoke, RemiliaApiRateLimit, RemiliaApiResult, RemiliaApiScope, RemiliaApiStats, RemiliaApiSuccess,
+} from "./remilia-api-contract";
+import {
+  REMILIA_API_V1_BASE_URL, REMILIA_SCOPE_BEETLE_READ, REMILIA_SCOPE_CHAT_READ, REMILIA_SCOPE_CHAT_WRITE,
+  REMILIA_SCOPE_DIRECTORY_READ, REMILIA_SCOPE_NOTIFICATIONS_READ, REMILIA_SCOPE_POKES_WRITE,
+  REMILIA_SCOPE_STATS_READ, isAllowedRemiliaApiV1Request,
+} from "./remilia-api-contract";
 
-export const REMILIA_API_V1_ORIGIN = "https://www.remilia.net";
-export const REMILIA_API_V1_BASE_URL = `${REMILIA_API_V1_ORIGIN}/api/v1`;
-
-export const REMILIA_SCOPE_STATS_READ = "remilia:stats.read";
-export const REMILIA_SCOPE_NOTIFICATIONS_READ = "remilia:notifications.read";
-export const REMILIA_SCOPE_POKES_WRITE = "remilia:pokes.write";
-export const REMILIA_SCOPE_BEETLE_READ = "remilia:beetle.read";
-export const REMILIA_SCOPE_CHAT_READ = "remilia:chat.read";
-export const REMILIA_SCOPE_CHAT_WRITE = "remilia:chat.write";
-export const REMILIA_SCOPE_DIRECTORY_READ = "remilia:directory.read";
-
-export type RemiliaApiScope =
-  | typeof REMILIA_SCOPE_STATS_READ
-  | typeof REMILIA_SCOPE_NOTIFICATIONS_READ
-  | typeof REMILIA_SCOPE_POKES_WRITE
-  | typeof REMILIA_SCOPE_BEETLE_READ
-  | typeof REMILIA_SCOPE_CHAT_READ
-  | typeof REMILIA_SCOPE_CHAT_WRITE
-  | typeof REMILIA_SCOPE_DIRECTORY_READ;
-
-export const REMILIA_API_SCOPES: readonly RemiliaApiScope[] = [
-  REMILIA_SCOPE_STATS_READ,
-  REMILIA_SCOPE_NOTIFICATIONS_READ,
-  REMILIA_SCOPE_POKES_WRITE,
-  REMILIA_SCOPE_BEETLE_READ,
-  REMILIA_SCOPE_CHAT_READ,
-  REMILIA_SCOPE_CHAT_WRITE,
-  REMILIA_SCOPE_DIRECTORY_READ,
-];
-
-export type RemiliaApiAuthGrant = {
-  ok: true;
-  accessToken: string;
-  tokenType: "Bearer";
-  expiresAt: number;
-  grantedScopes: string[];
-} | {
-  ok: false;
-  error: string;
-  grantedScopes: string[];
-  missingScopes: string[];
-};
-
-/**
- * Implemented by the trusted background auth owner. The API client never
- * reads credential storage and never starts an interactive login flow.
- */
-export type RemiliaApiAuthProvider = {
-  prepare(requiredScopes?: readonly string[], options?: { signal?: AbortSignal }): Promise<RemiliaApiAuthGrant>;
-  refresh(requiredScopes?: readonly string[], options?: { signal?: AbortSignal }): Promise<RemiliaApiAuthGrant>;
-};
-
-export type RemiliaApiProfileUser = {
-  username: string;
-  displayName: string;
-  bio?: string;
-  location?: string;
-  pfpUrl?: string;
-  friendCount?: number;
-  achievementsCount?: number;
-  stats?: Record<string, unknown>;
-  aggregateScores?: Record<string, number>;
-  property?: Record<string, unknown>;
-  [key: string]: unknown;
-};
-
-export type RemiliaApiProfile = {
-  user: RemiliaApiProfileUser;
-  achievementContext: Record<string, unknown>;
-  viewerContext: { areFriends?: boolean; [key: string]: unknown };
-  isAuthenticated: boolean;
-  isOwnProfile: boolean;
-};
-
-export type RemiliaApiStats = {
-  handle: string;
-  display_name: string;
-  stats: Record<string, unknown>;
-  aggregate_scores: Record<string, number>;
-};
-
-export type RemiliaApiPublicIdentity = {
-  handle: string;
-  display_name: string;
-  avatar_url: string;
-  avatar_url_small?: string;
-};
-
-/**
- * Directory resolution authorizes an identity from the exact query/handle
- * pair. Presentation fields are optional in provider responses and must not
- * turn an otherwise authoritative mapping into a miss.
- */
-export type RemiliaApiDirectoryIdentity = {
-  handle: string;
-  display_name?: string | null;
-  avatar_url?: string | null;
-  avatar_url_small?: string | null;
-};
-
-export type RemiliaApiNotification = {
-  type: string;
-  read: boolean;
-  from?: RemiliaApiPublicIdentity;
-  created_at: number;
-  count?: number;
-  guild_name?: string;
-  message?: string;
-  [key: string]: unknown;
-};
-
-export type RemiliaApiNotificationsPage = {
-  notifications: RemiliaApiNotification[];
-  page: number;
-  limit: number;
-  has_more: boolean;
-};
-
-export type RemiliaApiBeetleState = {
-  xp?: number;
-  level?: number;
-  inventory?: unknown[] | Record<string, unknown>;
-  hammer_durabilities?: Record<string, number>;
-  cooldowns?: Record<string, unknown>;
-  [key: string]: unknown;
-};
-
-export type RemiliaApiBeetleCard = {
-  codename?: string;
-  [key: string]: unknown;
-};
-
-export type RemiliaApiBeetleCards = Record<string, RemiliaApiBeetleCard>;
-
-export type RemiliaApiPoke = {
-  target_handle: string;
-  poked_at: number;
-};
-
-export type RemiliaApiChatMedia = {
-  kind: string;
-  url: string;
-  thumbnail_url?: string;
-  width?: number;
-  height?: number;
-  is_animated?: boolean;
-};
-
-export type RemiliaApiChatReaction = { emoji: string; count: number };
-
-export type RemiliaApiChatMessage = {
-  id: string;
-  author: RemiliaApiPublicIdentity;
-  text: string;
-  created_at: number;
-  reply_to_id?: string;
-  media?: RemiliaApiChatMedia[];
-  reactions?: RemiliaApiChatReaction[];
-  edited_at?: number;
-};
-
-export type RemiliaApiChatPage = {
-  messages: RemiliaApiChatMessage[];
-  has_more: boolean;
-  next_cursor: string | null;
-};
-
-export type RemiliaApiDirectoryIdentifierType = "handle" | "x_handle" | "github" | "discord";
-export type RemiliaApiDirectoryIdentifier = { type: RemiliaApiDirectoryIdentifierType; value: string };
-export type RemiliaApiDirectoryResult = {
-  query: RemiliaApiDirectoryIdentifier;
-  identity: RemiliaApiDirectoryIdentity | null;
-};
-export type RemiliaApiDirectoryResolution = { results: RemiliaApiDirectoryResult[] };
-export type RemiliaApiDirectoryPage = {
-  users: RemiliaApiPublicIdentity[];
-  next_cursor: string | null;
-};
-
-export type RemiliaApiDocumentedErrorCode =
-  | "invalid_request"
-  | "unauthorized"
-  | "invalid_token"
-  | "insufficient_scope"
-  | "requires_user"
-  | "forbidden"
-  | "not_found"
-  | "user_not_found"
-  | "method_not_allowed"
-  | "rate_limited"
-  | "poke_cooldown"
-  | "internal_error"
-  | "invalid_reply";
-
-export type RemiliaApiLocalErrorCode =
-  | "invalid_response"
-  | "network_error"
-  | "request_timeout"
-  | "request_aborted"
-  | "auth_unavailable";
-
-export type RemiliaApiErrorCode = RemiliaApiDocumentedErrorCode | RemiliaApiLocalErrorCode | "unknown_error";
-export type RemiliaApiErrorCategory =
-  | "request"
-  | "authentication"
-  | "authorization"
-  | "not_found"
-  | "rate_limit"
-  | "cooldown"
-  | "server"
-  | "network"
-  | "timeout"
-  | "aborted"
-  | "invalid_response";
-
-export type RemiliaApiError = {
-  category: RemiliaApiErrorCategory;
-  code: RemiliaApiErrorCode;
-  message: string;
-  status: number;
-  retryAfterMs?: number;
-  nextAllowedAt?: number;
-};
-
-export type RemiliaApiRateLimit = {
-  limit?: number;
-  remaining?: number;
-  resetAt?: number;
-};
-
-export type RemiliaApiSuccess<T> = { ok: true; data: T; status: number; rateLimit?: RemiliaApiRateLimit };
-export type RemiliaApiFailure = { ok: false; error: RemiliaApiError };
-export type RemiliaApiResult<T> = RemiliaApiSuccess<T> | RemiliaApiFailure;
-
-export type RemiliaApiOperation =
-  | "getUserProfile"
-  | "getMe"
-  | "getMyStats"
-  | "listMyNotifications"
-  | "getMyBeetle"
-  | "getMyBeetleCards"
-  | "pokeUser"
-  | "listGlobalChatMessages"
-  | "postGlobalChatMessage"
-  | "resolveDirectory"
-  | "listDirectoryUsers";
-
-export type RemiliaApiDiagnostic = {
-  operation: RemiliaApiOperation;
-  ok: boolean;
-  attempt: 1 | 2;
-  status: number;
-  category?: RemiliaApiErrorCategory;
-  code?: RemiliaApiErrorCode;
-};
-
-export type RemiliaApiClientOptions = {
-  auth: RemiliaApiAuthProvider;
-  fetch?: typeof fetch;
-  timeoutMs?: number;
-  now?: () => number;
-  onDiagnostic?: (diagnostic: RemiliaApiDiagnostic) => void;
-};
-
+export {
+  REMILIA_API_SCOPES, REMILIA_API_V1_BASE_URL, REMILIA_API_V1_ORIGIN, REMILIA_SCOPE_BEETLE_READ,
+  REMILIA_SCOPE_CHAT_READ, REMILIA_SCOPE_CHAT_WRITE, REMILIA_SCOPE_DIRECTORY_READ,
+  REMILIA_SCOPE_NOTIFICATIONS_READ, REMILIA_SCOPE_POKES_WRITE, REMILIA_SCOPE_STATS_READ,
+  isAllowedRemiliaApiV1Request,
+} from "./remilia-api-contract";
+export type {
+  RemiliaApiAuthGrant, RemiliaApiAuthProvider, RemiliaApiBeetleCard, RemiliaApiBeetleCards,
+  RemiliaApiBeetleState, RemiliaApiChatMedia, RemiliaApiChatMessage, RemiliaApiChatPage,
+  RemiliaApiChatReaction, RemiliaApiClientOptions, RemiliaApiDiagnostic, RemiliaApiDirectoryIdentifier,
+  RemiliaApiDirectoryIdentifierType, RemiliaApiDirectoryIdentity, RemiliaApiDirectoryPage,
+  RemiliaApiDirectoryResolution, RemiliaApiDirectoryResult, RemiliaApiDocumentedErrorCode,
+  RemiliaApiError, RemiliaApiErrorCategory, RemiliaApiErrorCode, RemiliaApiFailure,
+  RemiliaApiLocalErrorCode, RemiliaApiNotification, RemiliaApiNotificationsPage, RemiliaApiOperation,
+  RemiliaApiPoke, RemiliaApiProfile, RemiliaApiProfileUser, RemiliaApiPublicIdentity,
+  RemiliaApiRateLimit, RemiliaApiResult, RemiliaApiScope, RemiliaApiStats, RemiliaApiSuccess,
+} from "./remilia-api-contract";
 type RequestOptions = { signal?: AbortSignal };
 type AuthenticatedProfileOptions = RequestOptions & { authenticated?: boolean };
 type NotificationsOptions = RequestOptions & { limit?: number; page?: number };
 type ChatListOptions = RequestOptions & { limit?: number; before?: string };
 type DirectoryListOptions = RequestOptions & { limit?: number; cursor?: string };
 type CollectOptions = RequestOptions & { maxPages?: number };
-
-type EndpointRule = UrlAllowRule & { method: "GET" | "POST" };
-const REMILIA_API_V1_REQUEST_RULES: readonly EndpointRule[] = [
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/users\/[^/]+$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/me$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/me\/stats$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/me\/notifications$/, allowedSearchParams: ["limit", "page"], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/me\/beetle$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/me\/beetle\/cards$/, allowedSearchParams: [], allowHash: false },
-  { method: "POST", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/users\/[^/]+\/poke$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/global-chat\/messages$/, allowedSearchParams: ["limit", "before"], allowHash: false },
-  { method: "POST", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/global-chat\/messages$/, allowedSearchParams: [], allowHash: false },
-  { method: "POST", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/directory\/resolve$/, allowedSearchParams: [], allowHash: false },
-  { method: "GET", origin: REMILIA_API_V1_ORIGIN, pathPattern: /^\/api\/v1\/users$/, allowedSearchParams: ["limit", "cursor"], allowHash: false },
-];
-
-export function isAllowedRemiliaApiV1Request(method: string, value: string): boolean {
-  if (method !== "GET" && method !== "POST") return false;
-  return REMILIA_API_V1_REQUEST_RULES.some((rule) => rule.method === method && parseAllowedUrl(value, [rule]) !== null);
-}
-
 type Endpoint<T> = {
   operation: RemiliaApiOperation;
   method: "GET" | "POST";
@@ -304,10 +47,12 @@ type Endpoint<T> = {
   bare?: boolean;
 };
 
-const DOCUMENTED_ERROR_CODES = new Set<RemiliaApiDocumentedErrorCode>([
-  "invalid_request", "unauthorized", "invalid_token", "insufficient_scope", "requires_user", "forbidden",
-  "not_found", "user_not_found", "method_not_allowed", "rate_limited", "poke_cooldown", "internal_error", "invalid_reply",
-]);
+import {
+  apiUrl, authGrantFailure, createDeadline, envelopeData, failure, inputFailure, invalidResponseFailure,
+  isBeetleCards, isChatMessage, isChatPage, isDirectoryIdentifier, isDirectoryPage, isDirectoryResultsEnvelopeData,
+  isNotificationsPage, isNumericId, isObject, isOpaqueCursor, isPoke, isProfile, isStats, normalizeHttpFailure, normalizeMaxPages,
+  parseResponse, readRateLimit, requestFailure, validateGrant, validateHandle, integerInRange,
+} from "./remilia-api-support";
 
 export class RemiliaApiClient {
   private readonly auth: RemiliaApiAuthProvider;
@@ -319,7 +64,7 @@ export class RemiliaApiClient {
 
   constructor(options: RemiliaApiClientOptions) {
     this.auth = options.auth;
-    this.fetchImpl = options.fetch ?? fetch;
+    this.fetchImpl = (options.fetch ?? globalThis.fetch).bind(globalThis);
     this.timeoutMs = Number.isFinite(options.timeoutMs) ? Math.max(1, Number(options.timeoutMs)) : 30_000;
     this.now = options.now ?? Date.now;
     this.onDiagnostic = options.onDiagnostic;
@@ -582,271 +327,4 @@ export class RemiliaApiClient {
       // Diagnostics are observational and must never change request behavior.
     }
   }
-}
-
-function apiUrl(path: string): URL {
-  return new URL(`${REMILIA_API_V1_BASE_URL}${path}`);
-}
-
-function createDeadline(externalSignal: AbortSignal | undefined, timeoutMs: number): {
-  signal: AbortSignal;
-  timedOut: () => boolean;
-  dispose: () => void;
-} {
-  const controller = new AbortController();
-  let timeoutReached = false;
-  const onAbort = () => controller.abort(externalSignal?.reason ?? new DOMException("Request aborted", "AbortError"));
-  if (externalSignal?.aborted) onAbort();
-  else externalSignal?.addEventListener("abort", onAbort, { once: true });
-  const timer = setTimeout(() => {
-    timeoutReached = true;
-    controller.abort(new DOMException("Request timed out", "TimeoutError"));
-  }, timeoutMs);
-  return {
-    signal: controller.signal,
-    timedOut: () => timeoutReached,
-    dispose: () => {
-      clearTimeout(timer);
-      externalSignal?.removeEventListener("abort", onAbort);
-    },
-  };
-}
-
-function validateGrant(
-  grant: RemiliaApiAuthGrant | null,
-  requiredScopes: readonly RemiliaApiScope[],
-  missingCode: "unauthorized" | "invalid_token" = "unauthorized",
-): RemiliaApiFailure | null {
-  if (!grant) return failure("authentication", "auth_unavailable", 0);
-  if (!grant.ok) return authGrantFailure(grant.error, missingCode);
-  if (!grant.accessToken.trim() || grant.tokenType !== "Bearer") return failure("authentication", missingCode, 401);
-  const issuedScopes = new Set(grant.grantedScopes);
-  if (requiredScopes.some((scope) => !issuedScopes.has(scope))) return failure("authorization", "insufficient_scope", 403);
-  return null;
-}
-
-function authGrantFailure(error: string, missingCode: "unauthorized" | "invalid_token"): RemiliaApiFailure {
-  if (error === "MISSING_SCOPE") return failure("authorization", "insufficient_scope", 403);
-  if (error === "AUTH_TIMEOUT") return failure("timeout", "request_timeout", 0);
-  if (error === "CANCELLED") return failure("aborted", "request_aborted", 0);
-  if (error === "OFFLINE") return failure("network", "network_error", 0);
-  if (["TOKEN_EXPIRED", "REFRESH_REJECTED", "REVOKED"].includes(error)) return failure("authentication", "invalid_token", 401);
-  return failure("authentication", missingCode, 401);
-}
-
-async function parseResponse(response: Response): Promise<unknown> {
-  const contentType = response.headers.get("content-type") ?? "";
-  if (!contentType.toLowerCase().includes("application/json")) return null;
-  return response.json().catch(() => null);
-}
-
-function envelopeData(value: unknown): unknown {
-  return isObject(value) && Object.hasOwn(value, "data") ? value.data : undefined;
-}
-
-function normalizeHttpFailure(response: Response, value: unknown, now: number): RemiliaApiFailure {
-  const error = isObject(value) && isObject(value.error) ? value.error : null;
-  const code = error && typeof error.code === "string" && DOCUMENTED_ERROR_CODES.has(error.code as RemiliaApiDocumentedErrorCode)
-    ? error.code as RemiliaApiDocumentedErrorCode
-    : "unknown_error";
-  const nextAllowedAt = error && typeof error.next_allowed_at === "number" && Number.isFinite(error.next_allowed_at)
-    ? error.next_allowed_at
-    : undefined;
-  const retryAfterMs = readRetryAfterMs(response.headers, now, nextAllowedAt);
-  return failure(categoryFor(response.status, code), code, response.status, { retryAfterMs, nextAllowedAt });
-}
-
-function categoryFor(status: number, code: RemiliaApiErrorCode): RemiliaApiErrorCategory {
-  if (code === "poke_cooldown") return "cooldown";
-  if (status === 429) return "rate_limit";
-  if (status === 401) return "authentication";
-  if (status === 403) return "authorization";
-  if (status === 404) return "not_found";
-  if (status >= 500) return "server";
-  return "request";
-}
-
-function failure(
-  category: RemiliaApiErrorCategory,
-  code: RemiliaApiErrorCode,
-  status: number,
-  optional: { retryAfterMs?: number; nextAllowedAt?: number } = {},
-): RemiliaApiFailure {
-  return {
-    ok: false,
-    error: {
-      category,
-      code,
-      status,
-      message: stableErrorMessage(code),
-      ...(optional.retryAfterMs === undefined ? {} : { retryAfterMs: optional.retryAfterMs }),
-      ...(optional.nextAllowedAt === undefined ? {} : { nextAllowedAt: optional.nextAllowedAt }),
-    },
-  };
-}
-
-function stableErrorMessage(code: RemiliaApiErrorCode): string {
-  const messages: Record<RemiliaApiErrorCode, string> = {
-    invalid_request: "The Remilia API request was invalid.",
-    unauthorized: "Remilia authentication is required.",
-    invalid_token: "The Remilia session expired or is invalid.",
-    insufficient_scope: "The Remilia connection has not granted the required permission.",
-    requires_user: "This Remilia API operation requires a signed-in user.",
-    forbidden: "The Remilia API operation is not permitted.",
-    not_found: "The requested Remilia resource was not found.",
-    user_not_found: "The requested Remilia user was not found.",
-    method_not_allowed: "The Remilia API operation is not supported.",
-    rate_limited: "The Remilia API is rate limiting this operation.",
-    poke_cooldown: "This Remilia poke is still on cooldown.",
-    internal_error: "The Remilia API could not complete the operation.",
-    invalid_reply: "The referenced Remilia chat message does not exist.",
-    invalid_response: "The Remilia API returned an invalid response.",
-    network_error: "The Remilia API could not be reached.",
-    request_timeout: "The Remilia API request timed out.",
-    request_aborted: "The Remilia API request was cancelled.",
-    auth_unavailable: "Remilia authentication is unavailable.",
-    unknown_error: "The Remilia API request failed.",
-  };
-  return messages[code];
-}
-
-function inputFailure(_reason: string): RemiliaApiFailure {
-  return failure("request", "invalid_request", 400);
-}
-
-function invalidResponseFailure(): RemiliaApiFailure {
-  return failure("invalid_response", "invalid_response", 0);
-}
-
-function requestFailure(error: unknown, timedOut: boolean, externallyAborted: boolean): RemiliaApiFailure {
-  if (timedOut) return failure("timeout", "request_timeout", 0);
-  if (externallyAborted || (error instanceof DOMException && error.name === "AbortError")) return failure("aborted", "request_aborted", 0);
-  return failure("network", "network_error", 0);
-}
-
-function readRetryAfterMs(headers: Headers, now: number, nextAllowedAt?: number): number | undefined {
-  if (nextAllowedAt !== undefined) return Math.max(0, nextAllowedAt * 1000 - now);
-  const value = headers.get("retry-after");
-  if (!value) return undefined;
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.round(seconds * 1000);
-  const date = Date.parse(value);
-  return Number.isFinite(date) ? Math.max(0, date - now) : undefined;
-}
-
-function readRateLimit(headers: Headers): RemiliaApiRateLimit | undefined {
-  const limit = finiteHeaderNumber(headers, "ratelimit-limit") ?? finiteHeaderNumber(headers, "x-ratelimit-limit");
-  const remaining = finiteHeaderNumber(headers, "ratelimit-remaining") ?? finiteHeaderNumber(headers, "x-ratelimit-remaining");
-  const reset = finiteHeaderNumber(headers, "ratelimit-reset") ?? finiteHeaderNumber(headers, "x-ratelimit-reset");
-  if (limit === undefined && remaining === undefined && reset === undefined) return undefined;
-  return {
-    ...(limit === undefined ? {} : { limit }),
-    ...(remaining === undefined ? {} : { remaining }),
-    ...(reset === undefined ? {} : { resetAt: reset * 1000 }),
-  };
-}
-
-function finiteHeaderNumber(headers: Headers, name: string): number | undefined {
-  const value = headers.get(name);
-  if (value === null) return undefined;
-  const number = Number(value);
-  return Number.isFinite(number) && number >= 0 ? number : undefined;
-}
-
-function validateHandle(value: string): string | null {
-  return /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? null : "handle is invalid";
-}
-
-function integerInRange(value: number, min: number, max: number): boolean {
-  return Number.isSafeInteger(value) && value >= min && value <= max;
-}
-
-function isNumericId(value: string): boolean {
-  return /^\d{1,32}$/.test(value);
-}
-
-function isOpaqueCursor(value: string): boolean {
-  return value.length > 0 && value.length <= 2048 && !/[\u0000-\u001f\u007f]/.test(value);
-}
-
-function normalizeMaxPages(value: number | undefined): number | null {
-  const normalized = value ?? 100;
-  return integerInRange(normalized, 1, 10_000) ? normalized : null;
-}
-
-function isObject(value: unknown): value is Record<string, any> {
-  return Boolean(value && typeof value === "object" && !Array.isArray(value));
-}
-
-function isProfile(value: unknown): value is RemiliaApiProfile {
-  return isObject(value) && isObject(value.user) && typeof value.user.username === "string" && typeof value.user.displayName === "string"
-    && isObject(value.achievementContext) && isObject(value.viewerContext)
-    && typeof value.isAuthenticated === "boolean" && typeof value.isOwnProfile === "boolean";
-}
-
-function isStats(value: unknown): value is RemiliaApiStats {
-  return isObject(value) && typeof value.handle === "string" && typeof value.display_name === "string"
-    && isObject(value.stats) && isObject(value.aggregate_scores);
-}
-
-function isPublicIdentity(value: unknown): value is RemiliaApiPublicIdentity {
-  return isObject(value) && typeof value.handle === "string" && typeof value.display_name === "string" && typeof value.avatar_url === "string";
-}
-
-function isNotification(value: unknown): value is RemiliaApiNotification {
-  return isObject(value) && typeof value.type === "string" && typeof value.read === "boolean" && typeof value.created_at === "number"
-    && (value.from === undefined || isPublicIdentity(value.from));
-}
-
-function isNotificationsPage(value: unknown): value is RemiliaApiNotificationsPage {
-  return isObject(value) && Array.isArray(value.notifications) && value.notifications.every(isNotification)
-    && integerInRange(value.page, 1, Number.MAX_SAFE_INTEGER) && integerInRange(value.limit, 1, 50) && typeof value.has_more === "boolean";
-}
-
-function isBeetleCards(value: unknown): value is RemiliaApiBeetleCards {
-  return isObject(value) && Object.values(value).every(isObject);
-}
-
-function isPoke(value: unknown): value is RemiliaApiPoke {
-  return isObject(value) && typeof value.target_handle === "string" && typeof value.poked_at === "number";
-}
-
-function isChatMessage(value: unknown): value is RemiliaApiChatMessage {
-  return isObject(value) && typeof value.id === "string" && isPublicIdentity(value.author)
-    && typeof value.text === "string" && typeof value.created_at === "number";
-}
-
-function isChatPage(value: unknown): value is RemiliaApiChatPage {
-  return isObject(value) && Array.isArray(value.messages) && value.messages.every(isChatMessage)
-    && typeof value.has_more === "boolean" && (value.next_cursor === null || typeof value.next_cursor === "string");
-}
-
-function isDirectoryIdentifier(value: unknown): value is RemiliaApiDirectoryIdentifier {
-  return isObject(value) && ["handle", "x_handle", "github", "discord"].includes(value.type)
-    && typeof value.value === "string" && value.value.length > 0 && value.value.length <= 256;
-}
-
-function isDirectoryResult(value: unknown): value is RemiliaApiDirectoryResult {
-  return isObject(value) && isDirectoryIdentifier(value.query) && (value.identity === null || isDirectoryIdentity(value.identity));
-}
-
-function isDirectoryIdentity(value: unknown): value is RemiliaApiDirectoryIdentity {
-  return isObject(value)
-    && typeof value.handle === "string"
-    && optionalNullableString(value.display_name)
-    && optionalNullableString(value.avatar_url)
-    && optionalNullableString(value.avatar_url_small);
-}
-
-function optionalNullableString(value: unknown): boolean {
-  return value === undefined || value === null || typeof value === "string";
-}
-
-function isDirectoryResultsEnvelopeData(value: unknown): value is RemiliaApiDirectoryResolution {
-  return isObject(value) && Array.isArray(value.results) && value.results.every(isDirectoryResult);
-}
-
-function isDirectoryPage(value: unknown): value is RemiliaApiDirectoryPage {
-  return isObject(value) && Array.isArray(value.users) && value.users.every(isPublicIdentity)
-    && (value.next_cursor === null || typeof value.next_cursor === "string");
 }

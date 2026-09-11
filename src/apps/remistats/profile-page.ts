@@ -35,3 +35,30 @@ export function findExactProfileBannerRoot(root: ParentNode, xHandleInput: unkno
   }
   return null;
 }
+
+export function profileBadgeIdentity(userNameSection: Element, pathname: string, blockedRoutes: ReadonlySet<string>, cleanExactXHandle: (value: string) => string, cleanUsername: (value: string) => string) {
+  // Extract username from URL or from the handle in the profile before
+  // deciding whether an existing badge is still valid. X reuses header DOM
+  // during SPA navigation, so stale profile badges can remain attached.
+  let username = null;
+  let exactProfileXHandle = '';
+
+  const urlMatch = pathname.match(/^\/([^\/\?]+)/);
+  if (urlMatch && urlMatch[1] && !blockedRoutes.has(urlMatch[1])) {
+    exactProfileXHandle = cleanExactXHandle(urlMatch[1]);
+    username = exactProfileXHandle;
+  }
+
+  if (!username) {
+    const handleElement = userNameSection.querySelector('[href^="/"]');
+    if (handleElement) {
+      const href = handleElement.getAttribute('href')!;
+      const match = href.match(/^\/([^\/\?]+)/);
+      if (match && !blockedRoutes.has(match[1])) {
+        username = cleanUsername(match[1]);
+      }
+    }
+  }
+
+  return { username, exactProfileXHandle };
+}

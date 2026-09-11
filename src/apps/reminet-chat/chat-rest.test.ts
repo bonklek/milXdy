@@ -3,6 +3,7 @@ import type { AppRuntimeScheduler } from "../../platform/app-sdk/app-platform";
 import type { RemiliaApiChatMessage } from "../../platform/auth/remilia-api";
 import {
   CHAT_REST_MESSAGE_LIMIT_BYTES,
+  CHAT_REST_PAGE_SIZE,
   CHAT_REST_POLL_INTERVAL_MS,
   CHAT_REST_POST_INTERVAL_MS,
   ChatRestController,
@@ -129,6 +130,25 @@ describe("official Remilia Chat REST controller", () => {
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(0);
     expect(invokeCapability).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps an older cursor request distinct from an in-flight latest-page request", async () => {
+    let resolveLatest!: (value: unknown) => void;
+    let resolveOlder!: (value: unknown) => void;
+    const invokeCapability = vi.fn().mockImplementation((_operation, params) => new Promise((resolve) => {
+      if (params.before) resolveOlder = resolve;
+      else resolveLatest = resolve;
+    }));
+    const controller = new ChatRestController({ invokeCapability, scheduler, onPage: vi.fn() });
+
+    const latest = controller.loadInitial();
+    const older = controller.loadOlder("20");
+    expect(invokeCapability).toHaveBeenNthCalledWith(1, "listGlobalChatMessages", { limit: CHAT_REST_PAGE_SIZE });
+    expect(invokeCapability).toHaveBeenNthCalledWith(2, "listGlobalChatMessages", { limit: CHAT_REST_PAGE_SIZE, before: "20" });
+    resolveLatest(pageResponse([message("30")], true, "20"));
+    resolveOlder(pageResponse([message("20")], false, null));
+    await expect(latest).resolves.toMatchObject({ ok: true });
+    await expect(older).resolves.toMatchObject({ ok: true });
   });
 
   it("stops polling while inactive and resumes with one immediate reconciliation", async () => {

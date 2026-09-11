@@ -503,6 +503,39 @@ describe("Remilia OIDC PKCE", () => {
     await expect(pending).resolves.toMatchObject({ ok: false, error: "OFFLINE" });
   });
 
+  it("keeps the token deadline active while a response body stalls", async () => {
+    installChrome();
+    let tokenBodyStarted = false;
+    let tokenSignal: AbortSignal | undefined;
+    vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {
+      const state = new URL(url).searchParams.get("state");
+      return `${REDIRECT_URI}?code=code&state=${state}`;
+    });
+    vi.stubGlobal("fetch", vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input) === DISCOVERY_URL) return jsonResponse(discovery());
+      if (String(input) === TOKEN_ENDPOINT) {
+        tokenBodyStarted = true;
+        tokenSignal = init?.signal || undefined;
+        return new Response(new ReadableStream({
+          start(controller) {
+            controller.enqueue(new TextEncoder().encode("{"));
+            tokenSignal?.addEventListener("abort", () => controller.error(tokenSignal?.reason), { once: true });
+          },
+        }), { headers: { "Content-Type": "application/json" } });
+      }
+      throw new Error("unexpected request");
+    }));
+    const auth = await loadAuth();
+    await auth.noteRemiliaAuthInstalled("install");
+
+    vi.useFakeTimers();
+    const pending = auth.connectRemiliaAuth();
+    await vi.waitFor(() => expect(tokenBodyStarted).toBe(true));
+    await vi.advanceTimersByTimeAsync(10_000);
+    await expect(pending).resolves.toMatchObject({ ok: false, error: "OFFLINE" });
+    expect(tokenSignal?.aborted).toBe(true);
+  });
+
   it("rejects oversized OIDC JSON before storing credentials", async () => {
     const fixture = installChrome();
     vi.mocked(chrome.identity.launchWebAuthFlow).mockImplementation(async ({ url }) => {

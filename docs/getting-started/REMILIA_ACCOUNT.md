@@ -6,9 +6,29 @@ abilities, and RemiliaNET returns control to the same installed extension.
 milXdy does not reuse a RemiliaNET browser session, read RemiliaNET cookies, or
 ask for a username, password, client secret, authorization code, or token.
 
+## Temporary dual-auth holdover
+
+During 0.2.5's transition, two separate sign-ins coexist:
+
+- **milXdy connection:** official Remilia Login grants access to supported API
+  features, including profile/stats reads, pokes, Beetle reads, and chat,
+  subject to the granted abilities. Its status appears in the popup.
+- **RemiliaNET website sign-in:** native Hunt, Claim, and Craft actions still
+  run on the visible website under its own session. Check and manage this
+  sign-in on RemiliaNET itself; milXdy does not inspect or adopt it.
+
+Connecting milXdy does not confirm website sign-in, and disconnecting milXdy
+does not sign out the website. The holdover retains native website actions
+until supported official API equivalents are implemented and accepted; it does
+not restore the removed browser-session connector. Temporary chat adapters
+are documented separately in the [API migration guide](../contributors/REMILIA_API_MIGRATION.md).
+
+Open **RemiNet → Account access** for the milXdy connection and a link to check
+website sign-in. RemiStats and Beetol feature controls follow underneath.
+
 ## Connect
 
-1. Open the milXdy popup and find **Official Remilia connection**.
+1. Open the milXdy popup and select **RemiNet → Account access → Official Remilia connection**.
 2. Review the boundary: “Connect through Remilia Login. milXdy does not reuse
    your website cookies or silently reconnect an old browser session.”
 3. Review the exact requested abilities. `openid` confirms the account;
@@ -17,7 +37,7 @@ ask for a username, password, client secret, authorization code, or token.
    `remilia:directory.read` load enabled read features. The
    `remilia:pokes.write` and `remilia:chat.write` abilities run only after the
    user chooses the corresponding poke or text-message action.
-4. Choose **Connect with Remilia**. Finish sign-in and consent on RemiliaNET.
+4. Choose **Connect milXdy with Remilia**. Finish sign-in and consent on RemiliaNET.
 5. Return to milXdy. Confirm that the connected identity and granted abilities
    are the ones you expected.
 
@@ -51,7 +71,7 @@ explicit deletion leaves milXdy disconnected and does not connect an account.
 Ordinary appearance, app, audio, and other settings are not part of that
 cleanup.
 
-Choose **Connect with Remilia** after migration when you want Remilia features. Dismissing or
+Choose **Connect milXdy with Remilia** after migration when you want Remilia features. Dismissing or
 cancelling login leaves milXdy disconnected; it does not fall back to cookies,
 hidden tabs, or browser-session reuse.
 

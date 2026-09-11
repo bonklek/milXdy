@@ -58,8 +58,8 @@ describe("multi-site manifest contract", () => {
     const { manifest } = await fixtures();
     const bridge = manifest.content_scripts?.find((entry) => entry.js?.includes("reminetChatBridge.js"));
     const fastPath = manifest.content_scripts?.find((entry) => entry.js?.includes("reminetCraftFastPath.js"));
-    expect(bridge?.matches).toEqual(["https://www.remilia.net/*"]);
-    expect(fastPath?.matches).toEqual(["https://www.remilia.net/*"]);
+    expect(bridge?.matches).toEqual(["https://www.remilia.net/*", "https://remilia.net/*"]);
+    expect(fastPath?.matches).toEqual(["https://www.remilia.net/*", "https://remilia.net/*"]);
   });
 
   it("keeps each non-X runtime limited to the accepted app set", async () => {

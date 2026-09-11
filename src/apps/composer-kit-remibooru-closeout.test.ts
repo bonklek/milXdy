@@ -31,7 +31,7 @@ describe("Post-Factory Remibooru closeout copy", () => {
     const source = await readFile(`${packageRoot}/src/content.js`, "utf8");
     const manifestSource = await readFile(`${packageRoot}/milxdy.app.json`, "utf8");
     const runtime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
-    const contextFlow = runtime.slice(runtime.indexOf("async function openContextMediaActionPanel"), runtime.indexOf("function contextualPostStatusUrl"));
+    const contextFlow = await readFile("src/platform/runtime/context-media-action-panel.ts", "utf8");
 
     expect(source).toContain("Publish to public Remibooru");
     expect(source).toContain('textContent: "Publish to Remibooru"');
@@ -44,7 +44,7 @@ describe("Post-Factory Remibooru closeout copy", () => {
     expect(source).not.toMatch(/right(?:s)? to contribute/iu);
     expect(manifestSource).not.toMatch(/rights acknowledgement|rights confirmation/iu);
     expect(runtime).not.toContain("Confirm that you have the right");
-    expect(runtime).toContain('type: "milxdy:mediaContributionSubmit"');
+    expect(contextFlow).toContain('type: "milxdy:mediaContributionSubmit"');
     expect(contextFlow).toContain("Open Remibooru's native uploader");
     expect(contextFlow.indexOf("document.body.append(panel)")).toBeLessThan(contextFlow.indexOf('type: "milxdy:contextMediaPrepare"'));
   });

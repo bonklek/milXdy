@@ -9,13 +9,13 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 
 ## Most Recent Release
 
-`0.2.5` is the current release. See its [release notes](../releases/RELEASE_NOTES_0.2.5.md) and the descending [changelog](../../CHANGELOG.md) for shipped details.
+`0.2.5` is the current release candidate. See its [release notes](../releases/RELEASE_NOTES_0.2.5.md) and the descending [changelog](../../CHANGELOG.md) for candidate scope and acceptance boundaries.
 
 ## Coming Platform Direction: Composable App/Mod System
 
 The long-term goal remains a reviewed composable app system where packages declare surfaces, permissions, assets, settings, privacy notes, performance cost, background services, and lifecycle hooks while sharing milXdy's scanners, schedulers, overlays, and network infrastructure. External installation and stable third-party compatibility remain future work.
 
-## Released: 0.2.5 - Speaking Special
+## Upcoming: 0.2.5 - Speaking Special
 
 Theme: official Remilia connection and API migration, Reader Voice, reviewed
 audio export, richer local sharing, and stronger package boundaries.

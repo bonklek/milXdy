@@ -1,3 +1,4 @@
+import { normalizeWikiUrl } from "./wiki-url";
 import {
   createOverlayAppFrame,
   type OverlayAppFrame,
@@ -25,7 +26,6 @@ const HEIGHT_KEY = "milxdy.wikiSidebar.height";
 const TOP_KEY = "milxdy.wikiSidebar.top";
 const LAST_URL_KEY = "milxdy.wikiSidebar.lastUrl";
 const WIKI_SETTINGS_KEY = "remiliaWikiHyperlink.settings";
-const PENDING_URL_KEY = "__milxdyPendingWikiSidebarUrl";
 
 type SidebarState = {
   root: HTMLElement | null;
@@ -113,33 +113,33 @@ const state: SidebarState = {
 let booted = false;
 let lifecycleSignal: AbortSignal | null = null;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
+let appStorage: MilxdyContentAppContext["storage"] | null = null;
+let activationGeneration = 0;
+let navigationGeneration = 0;
 
 export function boot(context?: MilxdyContentAppContext): void {
   if (booted) return;
   booted = true;
+  const generation = ++activationGeneration;
   lifecycleSignal = context?.signal || null;
   addRuntimeDisposable = context?.addDisposable || (() => undefined);
+  appStorage = context?.storage || null;
   injectStyles();
   ensureOverlayAppChromeStyles();
   registerDockItem();
   registerNavigationSync();
-  const pendingUrl = consumePendingWikiSidebarUrl();
-  if (pendingUrl) void openWikiUrl(pendingUrl);
-  void loadStoredState(pendingUrl);
-  const eventListener = (event: Event) => {
-    const detail = (event as CustomEvent<{ url?: string }>).detail;
-    void openWikiUrl(detail?.url);
-  };
-  document.addEventListener("milxdy:wiki-sidebar-open", eventListener);
-  addRuntimeDisposable(() => document.removeEventListener("milxdy:wiki-sidebar-open", eventListener));
+  void loadStoredState(generation);
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local" || !changes[WIKI_SETTINGS_KEY]) return;
     const settings = changes[WIKI_SETTINGS_KEY].newValue;
     state.followDarkMode = wikiSidebarFollowsDarkMode(settings);
     postWikiTheme();
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  addRuntimeDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  if (appStorage) addRuntimeDisposable(appStorage.local.onChanged((changes) => storageListener(changes, "local")));
+  else {
+    chrome.storage.onChanged.addListener(storageListener);
+    addRuntimeDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  }
 }
 
 function registerNavigationSync(): void {
@@ -195,6 +195,7 @@ export async function openWikiUrl(value?: string): Promise<void> {
 
 async function navigateToWikiUrl(value: unknown, options: { recordHistory: boolean }): Promise<void> {
   if (!lifecycleActive()) return;
+  const generation = ++navigationGeneration;
   const url = normalizeWikiUrl(value) || HOME_URL;
   if (options.recordHistory && state.open && state.currentUrl !== url) {
     state.backStack.push(state.currentUrl);
@@ -207,6 +208,7 @@ async function navigateToWikiUrl(value: unknown, options: { recordHistory: boole
   state.openedAt = Date.now();
   updateDisplayedUrl(url);
   await chrome.storage.local.set({ [LAST_URL_KEY]: url });
+  if (!navigationActive(generation)) return;
   ensureRoot();
   render();
   state.frame?.updateDock({ title: `Wiki: ${wikiPageLabel(url)}` });
@@ -221,6 +223,8 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  ++activationGeneration;
+  ++navigationGeneration;
   disable();
   clearLoadTimer();
   state.frame?.remove();
@@ -228,12 +232,17 @@ export function dispose(): void {
   state.root?.remove();
   state.root = null;
   addRuntimeDisposable = () => undefined;
+  appStorage = null;
   lifecycleSignal = null;
   booted = false;
 }
 
 function lifecycleActive(): boolean {
   return booted && lifecycleSignal?.aborted !== true;
+}
+
+function navigationActive(generation: number): boolean {
+  return lifecycleActive() && generation === navigationGeneration;
 }
 
 function registerDockItem(): void {
@@ -252,7 +261,7 @@ function registerDockItem(): void {
   });
 }
 
-async function loadStoredState(initialPendingUrl?: string | null): Promise<void> {
+async function loadStoredState(generation: number): Promise<void> {
   const startedAt = Date.now();
   const stored = await chrome.storage.local.get({
     [WIDTH_KEY]: state.width,
@@ -261,6 +270,7 @@ async function loadStoredState(initialPendingUrl?: string | null): Promise<void>
     [LAST_URL_KEY]: state.currentUrl,
     [WIKI_SETTINGS_KEY]: { sidebarFollowDarkMode: true },
   });
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   state.followDarkMode = wikiSidebarFollowsDarkMode(stored[WIKI_SETTINGS_KEY]);
   const layout = await restoreOverlayPanelBox("wikiSidebar", {
     side: state.side,
@@ -274,14 +284,12 @@ async function loadStoredState(initialPendingUrl?: string | null): Promise<void>
       topOffset: stored[TOP_KEY],
     },
   });
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   state.x = layout.x ?? state.x;
   state.width = layout.width;
   state.height = layout.height;
   state.topOffset = layout.topOffset;
-  const pendingUrl = normalizeWikiUrl(initialPendingUrl) || consumePendingWikiSidebarUrl();
-  if (pendingUrl) {
-    state.currentUrl = pendingUrl;
-  } else if (!state.open && state.openedAt <= startedAt) {
+  if (!state.open && state.openedAt <= startedAt) {
     state.currentUrl = normalizeWikiUrl(stored[LAST_URL_KEY]) || HOME_URL;
   }
   state.layoutReady = true;
@@ -289,16 +297,6 @@ async function loadStoredState(initialPendingUrl?: string | null): Promise<void>
   state.frame?.setSide(state.side);
   applyLayout();
   postWikiTheme();
-}
-
-function consumePendingWikiSidebarUrl(): string | null {
-  const host = window as unknown as Record<string, unknown>;
-  const value = host[PENDING_URL_KEY];
-  if (typeof value === "string") {
-    delete host[PENDING_URL_KEY];
-    return normalizeWikiUrl(value);
-  }
-  return null;
 }
 
 function ensureRoot(): HTMLElement {
@@ -611,6 +609,7 @@ function updateDisplayedUrl(url: string): void {
 }
 
 function closePanel(): void {
+  ++navigationGeneration;
   stopWikiReading();
   state.open = false;
   state.minimized = true;
@@ -708,22 +707,6 @@ function clearLoadTimer(): void {
   if (state.loadTimer === null) return;
   window.clearTimeout(state.loadTimer);
   state.loadTimer = null;
-}
-
-function normalizeWikiUrl(value: unknown): string | null {
-  if (typeof value !== "string" || !value.trim()) return null;
-  try {
-    const url = new URL(value, HOME_URL);
-    if (url.protocol !== "https:" || !["remilia.wiki", "wiki.remilia.org"].includes(url.hostname)) return null;
-    if (url.hostname === "remilia.wiki") url.hostname = "wiki.remilia.org";
-    url.searchParams.delete("mobileaction");
-    url.searchParams.delete("useskin");
-    url.username = "";
-    url.password = "";
-    return url.toString();
-  } catch {
-    return null;
-  }
 }
 
 function isWikiSidebarNavigatedMessage(message: unknown): message is WikiSidebarNavigatedMessage {
@@ -1040,3 +1023,10 @@ function injectStyles(): void {
   `;
   document.documentElement.appendChild(style);
 }
+
+export const __testing = {
+  activate(signal: AbortSignal): void {
+    booted = true;
+    lifecycleSignal = signal;
+  },
+};

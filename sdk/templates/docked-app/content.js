@@ -4,6 +4,7 @@ let appContext = null;
 let panel = null;
 /** @type {HTMLElement | null} */
 let previousFocus = null;
+let openOperation = 0;
 
 const openCountKey = "milxdy.local.docked-app.openCount";
 
@@ -16,9 +17,14 @@ export function boot(context) {
 
 export async function open() {
   if (!appContext || appContext.signal.aborted || panel) return;
-  const stored = await appContext.storage.local.get({ [openCountKey]: 0 });
-  if (!appContext || appContext.signal.aborted) return;
-  await appContext.storage.local.set({ [openCountKey]: Number(stored[openCountKey]) + 1 });
+  const context = appContext;
+  const operation = ++openOperation;
+  const isCurrentOpen = () => appContext === context && !context.signal.aborted && openOperation === operation && !panel;
+
+  const stored = await context.storage.local.get({ [openCountKey]: 0 });
+  if (!isCurrentOpen()) return;
+  await context.storage.local.set({ [openCountKey]: Number(stored[openCountKey]) + 1 });
+  if (!isCurrentOpen()) return;
 
   panel = document.createElement("aside");
   panel.setAttribute("role", "dialog");
@@ -32,7 +38,7 @@ export async function open() {
   header.className = "milxdy-sdk-overlay__header";
 
   const icon = document.createElement("img");
-  icon.src = appContext.resolveAssetUrl("assets/icon.svg");
+  icon.src = context.resolveAssetUrl("assets/icon.svg");
   icon.alt = "";
   icon.width = 32;
   icon.height = 32;
@@ -62,10 +68,12 @@ export async function open() {
   previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   document.body.append(panel);
   panel.focus();
-  appContext.recordDiagnostic("docked-app.open", true);
+  context.recordDiagnostic("docked-app.open", true);
 }
 
 export function close() {
+  // Invalidate an in-flight open before removing the visible panel.
+  openOperation += 1;
   removePanel();
   appContext?.recordDiagnostic("docked-app.open", false);
 }
@@ -75,6 +83,7 @@ export function disable() {
 }
 
 export function dispose() {
+  openOperation += 1;
   removePanel();
   appContext = null;
 }

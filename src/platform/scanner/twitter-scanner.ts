@@ -34,6 +34,7 @@ const pending = new Map<HTMLElement, TwitterSurfaceKind>();
 let observer: MutationObserver | null = null;
 let scanScheduled = false;
 let fullScanFrame: number | null = null;
+let fullScanCursor = 0;
 let flushTimer: number | null = null;
 let flushFrame: number | null = null;
 let safetyTimer: number | null = null;
@@ -218,6 +219,7 @@ function stopScanner(): void {
   counters.activeObserverCount = 0;
   counters.updatedAt = Date.now();
   pending.clear();
+  fullScanCursor = 0;
   scanScheduled = false;
   removeVisibilityListener?.();
   removeVisibilityListener = null;
@@ -335,21 +337,27 @@ function runFullScan(): void {
     counters.lastFullScanMs = Math.round((performance.now() - startedAt) * 10) / 10;
     return;
   }
-  let queued = 0;
-  let dropped = 0;
-  for (const surface of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
-    if (queued >= maxSurfacesPerFullScan) {
-      dropped += 1;
-      continue;
-    }
-    queueSurface(surface);
-    queued += 1;
-  }
+  const surfaces = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  const scanWindow = selectFullScanWindow(surfaces, maxSurfacesPerFullScan, fullScanCursor);
+  for (const surface of scanWindow.items) queueSurface(surface);
+  fullScanCursor = scanWindow.nextCursor;
+  const queued = scanWindow.items.length;
+  const dropped = Math.max(0, surfaces.length - queued);
   counters.lastFullScanQueued = queued;
   counters.lastFullScanDropped = dropped;
   counters.lastFullScanMs = Math.round((performance.now() - startedAt) * 10) / 10;
   counters.surfacesDropped += dropped;
   scheduleFlush();
+}
+
+export function selectFullScanWindow<T>(surfaces: readonly T[], limit: number, cursor: number): { items: T[]; nextCursor: number } {
+  if (surfaces.length === 0) return { items: [], nextCursor: 0 };
+  const start = Math.max(0, cursor) % surfaces.length;
+  const count = Math.min(Math.max(1, Math.floor(limit)), surfaces.length);
+  return {
+    items: Array.from({ length: count }, (_, index) => surfaces[(start + index) % surfaces.length]!),
+    nextCursor: (start + count) % surfaces.length,
+  };
 }
 
 function queueSurfacesFrom(node: HTMLElement): void {

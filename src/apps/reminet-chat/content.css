@@ -867,8 +867,11 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   padding: 3px 6px;
   border: 1px solid #9d78df;
   border-radius: 7px;
-  background: #f0e2ff;
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.72);
+  background: rgba(240, 226, 255, 0.58);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.78),
+    0 5px 14px rgba(70, 44, 112, 0.1);
+  backdrop-filter: blur(8px) saturate(1.18);
 }
 
 .milxdy-chat-reaction-counts {
@@ -889,14 +892,17 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   border-right: 2px solid #adadad;
   border-bottom: 2px solid #adadad;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.68);
+  background: rgba(255, 255, 255, 0.32);
   color: var(--rn-border-dark);
   cursor: pointer;
   font-family: var(--rn-font-ui);
   font-size: 11px;
   line-height: 1;
   text-transform: none;
-  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.62),
+    0 2px 6px rgba(70, 44, 112, 0.08);
+  backdrop-filter: blur(6px) saturate(1.12);
 }
 
 .milxdy-chat-reaction-counts button[data-active="true"],
@@ -919,25 +925,55 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   height: 24px;
   min-height: 24px;
   padding: 0;
-  border: 0;
+  border: 1px solid rgba(157, 120, 223, 0.34);
   border-radius: 4px;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.2);
   color: #5a2bbf;
   font-family: "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif;
   font-size: 17px;
   line-height: 1;
   text-transform: none;
-  box-shadow: none;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.58);
+  backdrop-filter: blur(5px) saturate(1.16);
 }
 
 .milxdy-chat-message-actions button[data-active="true"],
 .milxdy-chat-message-actions button:hover {
-  background: #f1b34e;
+  background: rgba(241, 179, 78, 0.52);
   color: #ffffff;
   filter: none;
   transform: none;
   border-right-width: 0;
   border-bottom-width: 0;
+}
+
+.milxdy-chat-message-actions button.milxdy-chat-reaction-pulse,
+.milxdy-chat-reaction-counts button.milxdy-chat-reaction-pulse {
+  animation: milxdy-chat-reaction-pulse 260ms cubic-bezier(0.2, 0.86, 0.3, 1.25);
+}
+
+@keyframes milxdy-chat-reaction-pulse {
+  0% {
+    transform: scale(0.82);
+    box-shadow: 0 0 0 0 rgba(241, 179, 78, 0.42);
+  }
+
+  55% {
+    transform: scale(1.18);
+    box-shadow: 0 0 0 5px rgba(241, 179, 78, 0.08);
+  }
+
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 8px rgba(241, 179, 78, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .milxdy-chat-message-actions button.milxdy-chat-reaction-pulse,
+  .milxdy-chat-reaction-counts button.milxdy-chat-reaction-pulse {
+    animation: none;
+  }
 }
 
 .milxdy-chat-message-actions .milxdy-chat-reply-action {
@@ -1433,6 +1469,13 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
   box-shadow: inset 2px 2px 4px rgba(0, 0, 0, 0.48);
 }
 
+#milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button {
+  background: rgba(26, 28, 42, 0.44);
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.1),
+    0 2px 7px rgba(0, 0, 0, 0.2);
+}
+
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[data-active="true"]:hover,
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reaction-counts button[aria-pressed="true"]:hover {
   background: #414875;
@@ -1450,22 +1493,23 @@ html[style*="color-scheme: dark"] .milxdy-chat-pseudo-copy span {
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions,
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-message-actions .milxdy-chat-reply-action {
   border-color: #9d78df;
-  background: #2b2140;
+  background: rgba(43, 33, 64, 0.7);
   box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px) saturate(1.12);
 }
 
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-message-actions button,
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button {
-  border: 0;
-  background: transparent;
+  border: 1px solid rgba(190, 164, 234, 0.24);
+  background: rgba(255, 255, 255, 0.06);
   color: #e9ddff;
-  box-shadow: none;
+  box-shadow: inset 1px 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-message-actions button[data-active="true"],
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-message-actions button:hover,
 #milxdy-reminet-chat-root[data-theme="dark"] .milxdy-chat-reactions button:hover {
-  background: #f1b34e;
+  background: rgba(241, 179, 78, 0.58);
   color: #ffffff;
 }
 

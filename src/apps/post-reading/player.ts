@@ -1,3 +1,4 @@
+import { createOcrProgressView } from "./ocr-progress-view";
 import { icon } from "./icons";
 import { postReadingAssetUrl } from "./assetUrl";
 import type { BoundarySupport } from "./speech";
@@ -158,20 +159,10 @@ export class MiniPlayer {
       this.close();
     }, { capture: true });
 
-    this.ocrStatus = document.createElement("div");
-    this.ocrStatus.className = "post-reading-ocr";
-    this.ocrStatus.hidden = true;
-    const ocrDetails = document.createElement("div");
-    ocrDetails.className = "post-reading-ocr-details";
-    this.ocrText = document.createElement("span");
-    this.ocrBar = document.createElement("div");
-    this.ocrBar.className = "post-reading-ocr-bar";
-    this.ocrBar.setAttribute("role", "progressbar");
-    this.ocrBar.setAttribute("aria-valuemin", "0");
-    this.ocrBar.setAttribute("aria-valuemax", "100");
-    this.ocrBar.innerHTML = '<span></span>';
-    ocrDetails.append(this.ocrText, this.ocrBar);
-    this.ocrStatus.append(ocrDetails);
+    const ocrProgress = createOcrProgressView();
+    this.ocrStatus = ocrProgress.status;
+    this.ocrText = ocrProgress.text;
+    this.ocrBar = ocrProgress.bar;
 
     this.settingsPanel = document.createElement("div");
     this.settingsPanel.className = "post-reading-settings";

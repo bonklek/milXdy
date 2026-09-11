@@ -76,7 +76,8 @@ export class ChatRestController {
   private readonly onFailure: NonNullable<ChatRestControllerOptions["onFailure"]>;
   private readonly recordDiagnostic: NonNullable<ChatRestControllerOptions["recordDiagnostic"]>;
   private cancelPollTimer: (() => void) | null = null;
-  private listInFlight: Promise<RemiliaApiResult<RemiliaApiChatPage>> | null = null;
+  private latestListInFlight: Promise<RemiliaApiResult<RemiliaApiChatPage>> | null = null;
+  private readonly olderListInFlight = new Map<string, Promise<RemiliaApiResult<RemiliaApiChatPage>>>();
   private postInFlight: Promise<RemiliaApiResult<RemiliaApiChatMessage>> | null = null;
   private pollingActive = false;
   private pendingReconciliation: ChatRestReconciliationReason | null = null;
@@ -121,9 +122,9 @@ export class ChatRestController {
       this.pendingReconciliation = reason;
       return null;
     }
-    if (this.listInFlight) {
+    if (this.latestListInFlight) {
       this.pendingReconciliation = reason;
-      return this.listInFlight;
+      return this.latestListInFlight;
     }
     return this.fetchPage(undefined, reason);
   }
@@ -173,7 +174,8 @@ export class ChatRestController {
     before: string | undefined,
     reason: ChatRestReconciliationReason | "older",
   ): Promise<RemiliaApiResult<RemiliaApiChatPage>> {
-    if (this.listInFlight) return this.listInFlight;
+    if (before === undefined && this.latestListInFlight) return this.latestListInFlight;
+    if (before !== undefined && this.olderListInFlight.has(before)) return this.olderListInFlight.get(before)!;
     this.clearPollTimer();
     const request = this.invokeCapability("listGlobalChatMessages", {
       limit: CHAT_REST_PAGE_SIZE,
@@ -207,7 +209,8 @@ export class ChatRestController {
         return result;
       })
       .finally(() => {
-        this.listInFlight = null;
+        if (before === undefined) this.latestListInFlight = null;
+        else this.olderListInFlight.delete(before);
         const pending = this.pendingReconciliation;
         this.pendingReconciliation = null;
         if (pending && this.pollingActive) {
@@ -216,7 +219,8 @@ export class ChatRestController {
         }
         if (this.pollingActive) this.schedulePoll(this.nextPollDelay(), "poll");
       });
-    this.listInFlight = request;
+    if (before === undefined) this.latestListInFlight = request;
+    else this.olderListInFlight.set(before, request);
     return request;
   }
 

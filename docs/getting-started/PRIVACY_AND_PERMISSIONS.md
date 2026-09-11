@@ -21,26 +21,29 @@ milXdy is a beta unpacked extension. Its permissions should remain explainable a
 - Miladychan Portal fetches public board and thread JSON from `https://boards.miladychan.org` when opened or refreshed.
 - Post-Factory queries public reaction metadata through `https://remibooru.com`; reviewed Maker handoffs open `https://maker.remilia.org` only after a declared user action.
 - Pets Maker contacts `https://maker.remilia.org` only after the user clicks **Fetch**; it sends the selected public Maker family and NFT number and receives public trait metadata.
-- Music enrichment calls `https://musicbrainz.org` when MusicBrainz lookup is used and `https://api.acoustid.org` only when the user provides an AcoustID key and starts enrichment.
+- Music remote enrichment is off by default. Enable **Remote metadata enrichment** in Music settings to allow track title, artist, and album lookups through `https://musicbrainz.org`; with an AcoustID key, fingerprints and duration may also go to `https://api.acoustid.org`. Disabling the setting stops further lookups; it cannot retract a request already sent.
 - Post-reading OCR and Maxxer avatar inference run locally in the extension context. When Post-reading OCR needs to read an attached X/Twitter image, it accepts only `https://pbs.twimg.com/media/...` URLs and fetches them without cookies.
 - Post-reading full-quote fetching is off by default. When enabled, it uses public X/Twitter embed (`publish.twitter.com`), syndication (`cdn.syndication.twimg.com`), or tweet HTML fallbacks without browser cookies, CSRF/session material, or site authorization tokens. The direct public-HTML fallback omits credentials, rejects redirects, sends no referrer, honors cancellation, rejects non-success HTTP status, and reads only the returned text.
 - Post-reading custom HTTP TTS is optional and local-only. When selected, milXdy sends the text being read plus speed, volume, and voice metadata only to a loopback endpoint such as `http://localhost`, `http://127.0.0.1`, or `http://[::1]`; remote custom TTS endpoints and returned remote audio URLs are rejected.
-- Direct-message read-aloud is a stricter local boundary: it always uses the
-  browser's Web Speech engine, even when custom HTTP TTS is selected. DM text is
-  excluded from custom TTS, audio export, OCR, full-quote retrieval, background
+- When an accepted external Post-reading composition provides direct-message
+  read-aloud, it uses the browser's Web Speech engine instead of custom HTTP
+  TTS. A browser voice can be local or remote; this does not establish an
+  on-device speech guarantee. The external package's acceptance contract requires
+  the following: DM text is excluded from custom TTS, audio export, OCR, full-quote retrieval, background
   routes, diagnostics, and persistent storage. Only metadata-only diagnostics
   are allowed; message references are transient and stop, completion,
   navigation, disable, disposal, and uninstall clear the active conversation
-  state.
+  state. These are acceptance requirements; this candidate does not establish
+  that an external package has completed that verification.
 
 ## Site Runtime Scope
 
 milXdy injects its shared runtime only on these reviewed HTTPS hosts:
 
 - `x.com` and `twitter.com`: full side rail, Apps & Features, X route service, and the shared Twitter surface scanner.
-- `www.remilia.net`: a filtered launcher for RemiNet Chat and Beetol. The
-  temporary socket bridge remains separately validated; it does not adopt the
-  website session or provide Remilia authentication.
+- `www.remilia.net` and `remilia.net`: bridge-only runtimes on these exact HTTPS hosts, with no milXdy launcher,
+  rail, hub, or overlay. The temporary socket bridge remains separately
+  validated; it does not adopt the website session or provide Remilia authentication.
 
 Beetol reads only token-free connection status in content code. When an
 official account connection is required, it passively tells the user to open
@@ -89,7 +92,9 @@ Local app packages must declare host permissions, background message
 capabilities, background services, remote APIs, Remilia capabilities, local-file
 access, workers, WASM, storage keys, and retention notes before the platform
 enables them. Local packages are privileged reviewed custom-build inputs, not
-sandboxed runtime plugins. Copied packages stay disabled until validation and
+sandboxed runtime plugins. Their reviewed metadata and gesture assertions are
+cooperative trusted-extension inputs; they are not an independent browser
+principal or browser-verified gesture proof. Copied packages stay disabled until validation and
 any required permission/data-use consent succeeds. Reviewed catalog entries and
 unreviewed local packages remain visibly distinct.
 

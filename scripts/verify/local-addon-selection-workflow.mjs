@@ -89,6 +89,26 @@ const petsManifest = JSON.parse(await readFile(`${addOnsRoot}/catalog/pets-maker
 assert.equal(petsManifest.defaultEnabled, false);
 assert.equal(petsManifest.settings.find((entry) => entry.role === "enablement")?.defaultValue, false);
 
+// Neither unchanged manifest identity nor ordinary consent authorizes new bytes.
+const stableIdentity = await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8");
+const petsCodePath = `${addOnsRoot}/catalog/pets-maker/dist/content.js`;
+const petsCode = await readFile(petsCodePath, "utf8");
+await writeFile(petsCodePath, `${petsCode}\n// harmless staged edit after Prepare\n`);
+const changedApply = spawn(["apply", "--acknowledge-package-consent"]);
+assert.notEqual(changedApply.status, 0);
+assert.match(`${changedApply.stdout}\n${changedApply.stderr}`, /selection-package-mismatch/u);
+assert.equal(await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8"), stableIdentity);
+assert.equal(JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8")).failureClass, "selection-package-mismatch");
+await writeFile(petsCodePath, petsCode);
+
+// Apply also rechecks the current catalog rather than trusting the saved boolean.
+await writeFile(catalogPath, JSON.stringify({ ...catalog, revision: `${catalog.revision}-changed` }));
+const staleApply = spawn(["apply", "--acknowledge-package-consent"]);
+assert.notEqual(staleApply.status, 0);
+assert.match(`${staleApply.stdout}\n${staleApply.stderr}`, /selection-catalog-revision/u);
+assert.equal(await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8"), stableIdentity);
+await writeFile(catalogPath, JSON.stringify(catalog));
+
 const combinedSelectionPath = `${root}/combined-selection.json`;
 await writeFile(combinedSelectionPath, JSON.stringify({
   ...selection,

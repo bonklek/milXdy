@@ -22,9 +22,10 @@ describe("Post-Factory reviewed maker handoff", () => {
   });
 
   it("retains exact declarations, sender checks, page execution, result validation, and composer insertion", async () => {
-    const [manifestText, contentRuntime, background, pageAdapter] = await Promise.all([
+    const [manifestText, contentRuntime, composerServices, background, pageAdapter] = await Promise.all([
       read("../../../examples/packages/local-dev/tweet-composer-kit/milxdy.app.json"),
       read("../../platform/runtime/content-runtime.ts"),
+      read("../../platform/runtime/composer-action-panel.ts"),
       read("./index.ts"),
       read("./external-handoff-page-adapters.ts"),
     ]);
@@ -48,12 +49,14 @@ describe("Post-Factory reviewed maker handoff", () => {
     ]);
     expect(manifest.background?.messageTypes || []).not.toContain("milxdy:externalHandoff");
 
-    expect(contentRuntime).toContain("if (!navigator.userActivation?.isActive)");
-    expect(contentRuntime).toContain('(app.externalHandoffs || []).find((candidate) => candidate.id === id)');
-    expect(contentRuntime).toContain('if (mode !== "captioned" && mode !== "randomMeme")');
-    expect(contentRuntime).not.toContain('options?.mode || "captioned"');
-    expect(contentRuntime).toContain('type: "milxdy:externalHandoff"');
-    expect(contentRuntime).toContain('await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")');
+    expect(contentRuntime).toContain("createComposerActionServices({");
+    expect(contentRuntime).toContain("safeRuntimeMessage<Result>(message)");
+    expect(composerServices).toContain("if (!navigator.userActivation?.isActive)");
+    expect(composerServices).toContain('(dependencies.app.externalHandoffs || []).find((candidate) => candidate.id === id)');
+    expect(composerServices).toContain('if (mode !== "captioned" && mode !== "randomMeme")');
+    expect(composerServices).not.toContain('options?.mode || "captioned"');
+    expect(composerServices).toContain('type: "milxdy:externalHandoff"');
+    expect(composerServices).toContain('await attachImageToComposer(dependencies, composerScope, response.imageDataUrl, "remilia-maker.png")');
 
     expect(background).toContain('type: "milxdy:externalHandoff"');
     expect(background).toContain("if (!isXContentScriptSender(sender)) return unsupportedSender()");

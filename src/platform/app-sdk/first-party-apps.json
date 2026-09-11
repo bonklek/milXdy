@@ -293,6 +293,7 @@
       "notification"
     ],
     "deliverySurfaces": [
+      "tweet",
       "notification"
     ],
     "siteScopes": [
@@ -867,9 +868,14 @@
       "local": [
         "remiliaWikiHyperlink.settings",
         "remiliaWikiHyperlink.localAliases",
-        "remiliaWikiHyperlink.denyTerms"
+        "remiliaWikiHyperlink.denyTerms",
+        "remiliaWikiHyperlink.laterItems",
+        "remiliaWikiHyperlink.performanceStats"
       ]
     },
+    "hostActions": [
+      "wiki.openPage"
+    ],
     "settings": [
       {
         "id": "wiki.enabled",
@@ -1111,7 +1117,33 @@
       "messageTypes": [
         "wiki:fetchImageDataUrl"
       ]
-    }
+    },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.localAliases",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.denyTerms",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.laterItems",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.performanceStats",
+        "kind": "cache",
+        "reset": "preserve"
+      }
+    ]
   },
   {
     "id": "wikiSidebar",
@@ -1126,7 +1158,10 @@
     "storageKeys": {
       "local": [
         "remiliaWikiHyperlink.settings",
-        "milxdy.wikiSidebar.lastUrl"
+        "milxdy.wikiSidebar.lastUrl",
+        "milxdy.wikiSidebar.width",
+        "milxdy.wikiSidebar.height",
+        "milxdy.wikiSidebar.top"
       ]
     },
     "settings": [
@@ -2231,14 +2266,16 @@
       {
         "site": "remiliaNet",
         "hosts": [
-          "https://www.remilia.net/*"
+          "https://www.remilia.net/*",
+          "https://remilia.net/*",
+          "wss://www.remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
           "directMessage"
         ],
         "notes": [
-        "Uses routed official Remilia API calls for delegated account stats, notifications, and pokes; public profile badges retain the separate unauthenticated RemiStats lookup."
+          "Uses routed official Remilia API calls for delegated account stats, notifications, and pokes; public profile badges retain the separate unauthenticated RemiStats lookup."
         ]
       }
     ],
@@ -2750,6 +2787,20 @@
     ],
     "requiredOutputs": [
       "worker.js"
+    ],
+    "storageResources": [
+      {
+        "area": "sync",
+        "key": "whitelistHandles",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "sync",
+        "key": "miladyListHandles",
+        "kind": "authoredData",
+        "reset": "preserve"
+      }
     ]
   },
   {
@@ -2767,9 +2818,25 @@
         "milxdy.remistats.beetol.enabled",
         "milxdy.bextol.enabled",
         "beetolColor",
-        "beetolMode"
+        "beetolMode",
+        "milxdy.settings.theme",
+        "beetol.hunterPosition",
+        "beetol.cooldownState"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "beetol.hunterPosition",
+        "kind": "settings"
+      },
+      {
+        "area": "local",
+        "key": "beetol.cooldownState",
+        "kind": "cache",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "beetol.enabled",
@@ -2902,7 +2969,8 @@
       {
         "site": "remiliaNet",
         "hosts": [
-          "https://www.remilia.net/*"
+          "https://www.remilia.net/*",
+          "https://remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
@@ -3190,7 +3258,7 @@
         "site": "remiliaNet",
         "hosts": [
           "https://www.remilia.net/*",
-          "wss://www.remilia.net/*"
+          "https://remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
@@ -3331,9 +3399,24 @@
         "milxdy.miladychan.width",
         "milxdy.miladychan.height",
         "milxdy.miladychan.top",
-        "milxdy.miladychan.postDraft"
+        "milxdy.miladychan.postDraft",
+        "milxdy.miladychan.watchedThreads"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "milxdy.miladychan.postDraft",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "milxdy.miladychan.watchedThreads",
+        "kind": "authoredData",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "miladychan.enabled",
@@ -3512,9 +3595,19 @@
         "milxdy.music.top",
         "milxdy.music.libraryMinimized",
         "milxdy.music.volume",
-        "milxdy.music.autoAcceptHighConfidenceIsrc"
+        "milxdy.music.autoAcceptHighConfidenceIsrc",
+        "milxdy.music.remoteEnrichmentConsent",
+        "milxdy.music.acoustIdClientKey"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "milxdy.music.acoustIdClientKey",
+        "kind": "sensitiveData",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "music.enabled",
@@ -3682,11 +3775,11 @@
         "target": "content.css"
       }
     ],
-  "assets": [
-    "music"
-  ],
-  "requiredOutputs": [
-    "features/chromaprint.wasm"
-  ]
-}
+    "assets": [
+      "music"
+    ],
+    "requiredOutputs": [
+      "features/chromaprint.wasm"
+    ]
+  }
 ]

@@ -9,6 +9,9 @@ const chatContent = readFileSync(new URL("../reminet-chat/content.ts", import.me
 const beetolBackground = readFileSync(new URL("../beetol/background.js", import.meta.url), "utf8");
 const popup = readFileSync(new URL("../../extension/popup/index.ts", import.meta.url), "utf8");
 const contentRuntime = readFileSync(new URL("../../platform/runtime/content-runtime.ts", import.meta.url), "utf8");
+const hubAppCard = readFileSync(new URL("../../platform/runtime/hub-app-card.ts", import.meta.url), "utf8");
+const trophyBannerMedia = readFileSync(new URL("./trophy-banner-media.ts", import.meta.url), "utf8");
+const profileBannerController = readFileSync(new URL("./profile-banner-controller.ts", import.meta.url), "utf8");
 
 describe("official RemiStats UI and legacy boundaries", () => {
   it("does not assume a fixed 24-hour poke cooldown in either consumer", () => {
@@ -74,45 +77,45 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("{ force: true, maxAgeMs: 0 }");
     expect(remiStatsContent).toContain("reserveForcedProfileRoute(cleanXHandle)");
     expect(remiStatsContent).toContain("'directory-sender-rejected'");
-    expect(remiStatsContent).toContain("recordRuntimePhase('profile', 'banner-control-mounted')");
-    expect(remiStatsContent).toContain("recordRuntimePhase('profile', 'banner-removed')");
+    expect(profileBannerController).toContain('deps.phase("profile", "banner-control-mounted")');
+    expect(profileBannerController).toContain('deps.phase("profile", "banner-removed")');
     expect(remiStatsContent).toContain("recordRuntimePhase('poke', 'control-mounted')");
     expect(contentRuntime).toContain('key === "runtimePhase"');
-    expect(contentRuntime).toContain('phaseSummary.dataset.remistatsRuntimePhase = "true"');
+    expect(hubAppCard).toContain('item.dataset.remistatsRuntimePhase = "true"');
     expect(contentRuntime).toContain('error: "MESSAGE_POLICY_REJECTED"');
     expect(contentRuntime).not.toContain("remistatsRuntimePhases.handle");
     expect(contentRuntime).not.toContain("remistatsRuntimePhases.token");
   });
 
   it("renders a directory-confirmed trophy shelf when public profile data is empty", () => {
-    expect(remiStatsContent).toContain("const trophyShelfUrl = legacyBeetleTrophyShelfUrl(clean, REMILIA_BASE_URL)");
-    expect(remiStatsContent).toContain("await preloadDisplayImage(trophyShelfUrl)");
-    expect(remiStatsContent).toContain("rememberTrophyBanner(clean, trophyShelfUrl)");
-    expect(remiStatsContent).toContain("await upgradeProfileTrophyBanner(identity.remiliaUsername, cleanXHandle, profilePath)");
+    expect(trophyBannerMedia).toContain("const shelfUrl = legacyBeetleTrophyShelfUrl(username, deps.baseUrl)");
+    expect(trophyBannerMedia).toContain("await loadImage(url, false)");
+    expect(trophyBannerMedia).toContain("remember(cache, username, url)");
+    expect(profileBannerController).toContain("await upgrade(identity.remiliaUsername, handle, path)");
     expect(remiStatsContent).toContain("findExactProfileBannerRoot(document, cleanExactXHandle(xHandle))");
-    expect(remiStatsContent).toContain("const delays = [0, 200, 600, 1400]");
+    expect(profileBannerController).toContain("for (const delay of [0, 200, 600, 1400])");
     expect(remiStatsContent).not.toContain("document.querySelector('[data-testid=\"UserProfileHeader_Items\"]')");
     expect(remiStatsContent).toContain("type: 'reminetIdentity:resolve'");
     expect(remiStatsContent).toContain("exactDirectoryProfileIdentity(response, cleanXHandle)");
     expect(remiStatsContent).toContain("void reconcileProfileTrophy(surface.handle || profileUsernameFromUrl())");
-    expect(remiStatsContent).toContain("exactXProfileHandle(profileUsernameFromUrl()) !== cleanXHandle");
+    expect(profileBannerController).toContain("deps.exactXHandle(deps.profileUsername()) !== handle");
     expect(remiStatsContent).toContain("function clearRemiStatsBadges() {\n  resetProfileTrophyBanner();");
     expect(remiStatsContent).not.toContain("type: 'remistats:resolveProfileIdentity'");
     expect(remiStatsBackground).not.toContain("resolveProfileIdentity");
-    expect(remiStatsContent).toContain("isConfirmedProfileIdentity(remiliaUsername, xHandle)");
+    expect(profileBannerController).toContain("deps.confirmed(username, handle)");
     expect(remiStatsContent).not.toContain("isConfirmedPokeTarget(remiliaUsername, xHandle)");
     expect(remiStatsContent).not.toContain("Edit profile");
   });
 
   it("suppresses stale or mismatched trophy results across SPA profile changes", () => {
-    expect(remiStatsContent).toContain("function profileTrophyRequestIsCurrent(requestGeneration, profilePath, remiliaUsername, xHandle)");
-    expect(remiStatsContent).toContain("&& profilePath === window.location.pathname");
-    expect(remiStatsContent).toContain("&& isConfirmedProfileIdentity(remiliaUsername, xHandle)");
+    expect(profileBannerController).toContain("const isCurrent = (generation: number, path: string, username: string, handle: string)");
+    expect(profileBannerController).toContain("path === deps.pathname()");
+    expect(profileBannerController).toContain("deps.confirmed(username, handle)");
     expect(remiStatsContent).toContain("export function onRouteChange(route)");
     expect(remiStatsContent).toContain("resetProfileTrophyBanner()");
     expect(remiStatsContent).toContain("processedProfiles.clear()");
-    expect(remiStatsContent).toContain("if (!profileTrophyRequestIsCurrent(requestGeneration, profilePath, clean, cleanXHandle)) return");
-    expect(remiStatsContent).toContain("document.querySelectorAll('[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]')");
+    expect(profileBannerController).toContain("if (!isCurrent(generation, path, clean, cleanHandle))");
+    expect(profileBannerController).toContain("[data-milxdy-trophy-banner-user], [data-milxdy-trophy-banner-state]");
     expect(remiStatsContent).not.toContain("root.dataset.milxdyTrophyBannerState === 'loading') return");
   });
 });

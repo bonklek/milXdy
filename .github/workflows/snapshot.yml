@@ -30,17 +30,17 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Check out pinned Post-reading SDK reference
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: bonklek/post-reading
           ref: 10febd3b62616138ba18a6c198d74009af09fd46
           path: post-reading-sdk
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 24
           cache: npm
@@ -70,6 +70,9 @@ jobs:
 
       - name: Build Chromium
         run: npm run build:chromium
+
+      - name: Build Chromium beta
+        run: npm run build:chromium:beta
 
       - name: Build Firefox
         run: npm run build:firefox
@@ -101,7 +104,7 @@ jobs:
         run: npm run package:release
 
       - name: Upload snapshot artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: milXdy-snapshot-${{ inputs.snapshot_label }}-${{ github.run_number }}-${{ github.sha }}
           path: |

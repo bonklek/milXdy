@@ -33,6 +33,9 @@ type OcrHostMessage =
       type: "post-reading-ocr-ready";
     }
   | {
+      type: "post-reading-ocr-authenticated";
+    }
+  | {
       type: "post-reading-ocr-progress";
       id: string;
       status: string;
@@ -90,7 +93,8 @@ export async function recognizeImageText(
       reject(new DOMException("OCR skipped", "AbortError"));
     };
     const onMessage = (event: MessageEvent<OcrHostMessage>) => {
-      if (!isTrustedHostMessage(event, frame) || event.data.type === "post-reading-ocr-ready" || event.data.id !== id) return;
+      if (!isTrustedHostMessage(event, frame) || event.data.type === "post-reading-ocr-ready"
+        || event.data.type === "post-reading-ocr-authenticated" || event.data.id !== id) return;
       if (event.data.type === "post-reading-ocr-progress") {
         const value = event.data.progress === null ? null : Math.max(lastProgress, event.data.progress);
         if (value !== null) lastProgress = value;
@@ -139,6 +143,7 @@ function ensureHostFrameReady(): Promise<HTMLIFrameElement> {
   if (hostReadyPromise) return hostReadyPromise;
   const frame = ensureHostFrame();
   hostReadyPromise = new Promise((resolve, reject) => {
+    let initializing = false;
     const cleanup = () => {
       window.removeEventListener("message", onMessage);
       frame.removeEventListener("error", onError);
@@ -149,8 +154,14 @@ function ensureHostFrameReady(): Promise<HTMLIFrameElement> {
       reject(new Error("OCR host failed to load"));
     };
     const onMessage = (event: MessageEvent<OcrHostMessage>) => {
-      if (event.source !== frame.contentWindow || event.origin !== extensionOrigin() || !event.data || event.data.type !== "post-reading-ocr-ready") return;
-      postToHost(frame, { type: "post-reading-ocr-init", authToken: authTokenForFrame(frame) });
+      if (event.source !== frame.contentWindow || event.origin !== extensionOrigin() || !event.data) return;
+      if (event.data.type === "post-reading-ocr-ready") {
+        if (initializing) return;
+        initializing = true;
+        void initializeOcrHost(frame, cleanup, reject);
+        return;
+      }
+      if (event.data.type !== "post-reading-ocr-authenticated") return;
       frame.dataset.postReadingOcrReady = "true";
       cleanup();
       resolve(frame);
@@ -159,6 +170,24 @@ function ensureHostFrameReady(): Promise<HTMLIFrameElement> {
     frame.addEventListener("error", onError, { once: true });
   });
   return hostReadyPromise;
+}
+
+async function initializeOcrHost(
+  frame: HTMLIFrameElement,
+  cleanup: () => void,
+  reject: (error: Error) => void,
+): Promise<void> {
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "post-reading:ocrSession" }) as { ok?: unknown; authToken?: unknown } | undefined;
+    if (!response || response.ok !== true || typeof response.authToken !== "string") throw new Error("OCR host authorization failed");
+    if (hostFrame !== frame || !frame.isConnected) return;
+    hostFrameAuthTokens.set(frame, response.authToken);
+    postToHost(frame, { type: "post-reading-ocr-init", authToken: response.authToken });
+  } catch (error) {
+    cleanup();
+    hostReadyPromise = null;
+    reject(error instanceof Error ? error : new Error("OCR host authorization failed"));
+  }
 }
 
 function resetHostFrame(): void {

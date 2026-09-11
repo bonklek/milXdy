@@ -8,13 +8,13 @@ milXdy is a beta Manifest V3 browser extension for X/Twitter. It combines severa
 
 This project is intended for GitHub beta distribution and local browser testing. It is not currently packaged through the Chrome Web Store or Firefox Add-ons.
 
-The current release is **0.2.5 — Speaking Special**. See the [0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
+The latest published release is **0.2.4**. Version 0.2.5 is a candidate in this workspace; its notes describe pending release work and are not a download claim.
 
 ## Features
 
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
-- **Reader Voice and audio export**: native X Article reading, browser-local DM read aloud, and review-first long-form audio export through the external Post-reading package.
+- **Reader Voice and audio export**: native X Article reading, browser Web Speech read aloud, and review-first long-form audio export through the external Post-reading package. DM support is defined by that external package's accepted composition, not the base release.
 - **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
 - **Post-Factory**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
@@ -30,7 +30,7 @@ The current release is **0.2.5 — Speaking Special**. See the [0.2.5 release no
 
 ## Quick Install
 
-Quickest Chrome install: [download `milXdy-0.2.5-chromium.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
+Download the browser-specific archive for the published version from [GitHub Releases](https://github.com/bonklek/milXdy/releases), unzip it, then load the folder from `chrome://extensions`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install decisions.
 
@@ -45,12 +45,12 @@ For release builds:
 
 Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/getting-started/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/contributors/FIREFOX_QA.md).
 
-For source builds:
+For source builds, use Node.js 24 and npm 11 with the canonical npm lockfile:
 
 ```powershell
 git clone https://github.com/bonklek/milXdy.git
 cd milXdy
-npm install
+npm ci
 npm run build:profiles
 ```
 
@@ -100,7 +100,7 @@ Start with the general docs, or jump directly to the guide for the app or featur
 ## Development
 
 ```powershell
-npm install
+npm ci
 npm run typecheck
 npm run build:profiles
 ```

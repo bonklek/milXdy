@@ -2,7 +2,7 @@
 
 ## 0.2.5
 
-Status: released.
+Status: candidate; not published. The latest published release is 0.2.4.
 
 See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 
@@ -16,9 +16,9 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 - Kept temporary RemiNet realtime/media and Beetle action adapters separate
   from official coverage, with documented removal conditions and no hidden
   browser-session fallback.
-- Added Reader Voice support for native X Articles and browser-local DM read
-  aloud with explicit privacy isolation, transient message custody, and cleanup
-  across route and conversation changes.
+- Added Reader Voice support for native X Articles. DM read-aloud is an
+  external Post-reading package acceptance item and is not claimed for the
+  base release.
 - Added review-first long-form audio export through the external Post-reading
   package, including editable text and metadata, local-loopback transport,
   cancellation, labeled format fallbacks, and a JSON sidecar.

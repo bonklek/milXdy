@@ -46,18 +46,7 @@ import {
   type VisualThemeSettings,
   type ProfileAudioSettings,
 } from "../../platform/visuals/reskin-profile";
-import {
-  REMILIA_AUTH_MESSAGE,
-  REMILIA_CONSENT_VERSION,
-  REMILIA_MIGRATION_VERSION,
-  instantBeetleResultsAvailability,
-  normalizeRemiliaAuthResponse,
-  remiliaConnectionView,
-  remiliaErrorMessage,
-  remiliaIdentityLabel,
-  remiliaScopeRows,
-  type RemiliaAuthStatus,
-} from "./remilia-connection";
+import { setupRemiliaConnectionPanel as setupRemiliaConnectionPanelModule } from "./remilia-connection-panel";
 
 type ControlBinding = {
   area: Area;
@@ -2233,7 +2222,7 @@ function updateStepsText(status: UpdateStatus | null): string {
     "5. Return to the milXdy popup and click Reload, or press reload on the existing chrome://extensions card.",
     "6. Refresh open X/Twitter tabs.",
     "",
-    "Keeping the same loaded folder preserves Chrome extension storage, including Maxxer stats, settings, diagnostics, and RemiNet/Beetol login state.",
+    "Keeping the same loaded folder preserves Chrome extension storage, including Maxxer stats, settings, and diagnostics. Reloading clears the milXdy Remilia connection; reconnect explicitly. The RemiliaNET website sign-in is separate.",
   ].join("\n");
 }
 
@@ -2714,204 +2703,7 @@ function escapeHtml(value: string): string {
 }
 
 async function setupRemiliaConnectionPanel(): Promise<void> {
-  const root = document.getElementById("remiliaConnection");
-  const migration = document.getElementById("remiliaMigration");
-  const consent = document.getElementById("remiliaConsent");
-  const statusTitle = document.getElementById("remiliaAuthTitle");
-  const statusDetail = document.getElementById("remiliaAuthDetail");
-  const identity = document.getElementById("remiliaIdentity");
-  const error = document.getElementById("remiliaAuthError");
-  const scopeList = document.getElementById("remiliaScopeList");
-  const connect = document.getElementById("remiliaConnect") as HTMLButtonElement | null;
-  const reconnect = document.getElementById("remiliaReconnect") as HTMLButtonElement | null;
-  const disconnect = document.getElementById("remiliaDisconnect") as HTMLButtonElement | null;
-  const revoke = document.getElementById("remiliaRevoke") as HTMLButtonElement | null;
-  const completeMigration = document.getElementById("remiliaCompleteMigration") as HTMLButtonElement | null;
-  const message = document.getElementById("remiliaAuthMessage");
-  const pokeDiagnostic = document.getElementById("beetolPokeDiagnostic");
-  const color = document.getElementById("beetolColor") as HTMLSelectElement | null;
-  const mode = document.getElementById("beetolMode") as HTMLSelectElement | null;
-  const instantResultsSetting = document.getElementById("beetleInstantResultsSetting");
-  const instantResultsControl = document.querySelector<HTMLInputElement>('[data-control="reminet.beetleInstantResults"]');
-  const instantResultsHelp = document.getElementById("beetleInstantResultsHelp");
-  const required = [
-    root, migration, consent, statusTitle, statusDetail, identity, error, scopeList, connect, reconnect,
-    disconnect, revoke, completeMigration, message, pokeDiagnostic, color, mode,
-    instantResultsSetting, instantResultsControl, instantResultsHelp,
-  ];
-  if (required.some((node) => !node)) return;
-
-  const actionButtons = [connect, reconnect, disconnect, revoke, completeMigration] as HTMLButtonElement[];
-  const stored = await chrome.storage.local.get(["beetolColor", "beetolMode"]);
-  color!.value = typeof stored.beetolColor === "string" ? stored.beetolColor : "red";
-  mode!.value = typeof stored.beetolMode === "string" ? stored.beetolMode : "settings";
-
-  const setMessage = (text: string, kind = "") => {
-    message!.textContent = text;
-    if (kind) message!.dataset.kind = kind;
-    else delete message!.dataset.kind;
-  };
-
-  const setBusy = (busy: boolean) => {
-    root!.toggleAttribute("aria-busy", busy);
-    for (const button of actionButtons) button.disabled = busy;
-  };
-
-  const renderStatus = async (authStatus: RemiliaAuthStatus, announceError = false): Promise<void> => {
-    const view = remiliaConnectionView(authStatus);
-    const instantResultsAvailability = instantBeetleResultsAvailability(authStatus);
-    root!.dataset.phase = view.phase;
-    root!.dataset.tone = view.tone;
-    statusTitle!.textContent = view.title;
-    statusDetail!.textContent = view.detail;
-    migration!.hidden = !view.showMigration;
-    consent!.hidden = !view.showConsent;
-    connect!.hidden = !view.showConnect;
-    reconnect!.hidden = !view.showReconnect;
-    disconnect!.hidden = !view.showDisconnect;
-    revoke!.hidden = !view.showRevoke;
-    instantResultsControl!.disabled = !instantResultsAvailability.active;
-    instantResultsSetting!.dataset.connectorAvailable = String(instantResultsAvailability.active);
-    instantResultsSetting!.setAttribute("aria-disabled", String(!instantResultsAvailability.active));
-    instantResultsHelp!.textContent = instantResultsAvailability.help;
-
-    const connectedIdentity = authStatus.phase === "connected" ? remiliaIdentityLabel(authStatus.identity) : "";
-    identity!.textContent = connectedIdentity;
-    identity!.hidden = !connectedIdentity;
-
-    scopeList!.textContent = "";
-    const rows = remiliaScopeRows(authStatus);
-    if (rows.length === 0) {
-      const item = document.createElement("li");
-      const marker = document.createElement("span");
-      marker.setAttribute("aria-hidden", "true");
-      const body = document.createElement("div");
-      const label = document.createElement("strong");
-      label.textContent = "Abilities unavailable";
-      const detail = document.createElement("small");
-      detail.textContent = "Reload after the connection service has been updated.";
-      body.append(label, detail);
-      item.append(marker, body);
-      scopeList!.append(item);
-    } else {
-      for (const row of rows) {
-        const item = document.createElement("li");
-        item.dataset.granted = String(row.granted);
-        item.setAttribute("aria-label", `${row.label}: ${row.granted ? "granted" : "not granted"}`);
-        const marker = document.createElement("span");
-        marker.setAttribute("aria-hidden", "true");
-        const body = document.createElement("div");
-        const label = document.createElement("strong");
-        label.textContent = row.label;
-        const detail = document.createElement("small");
-        detail.textContent = `${row.detail} ${row.granted ? "Granted." : "Not granted."}`;
-        body.append(label, detail);
-        item.append(marker, body);
-        scopeList!.append(item);
-      }
-    }
-
-    const showError = authStatus.phase !== "unsupported" && (authStatus.phase === "error" || Boolean(authStatus.lastError));
-    error!.hidden = !showError;
-    error!.textContent = showError ? remiliaErrorMessage(authStatus.lastError) : "";
-    if (announceError && showError) error!.focus({ preventScroll: false });
-
-    if (authStatus.phase === "connected") pokeDiagnostic!.hidden = true;
-    else await renderPokeDiagnostic(pokeDiagnostic!).catch(() => { pokeDiagnostic!.hidden = true; });
-  };
-
-  const fetchStatus = async (announceError = false): Promise<RemiliaAuthStatus> => {
-    const response = await chrome.runtime.sendMessage({ type: REMILIA_AUTH_MESSAGE.status })
-      .catch(() => ({ error: { code: "BACKGROUND_UNAVAILABLE" } }));
-    const authStatus = normalizeRemiliaAuthResponse(response);
-    await renderStatus(authStatus, announceError);
-    return authStatus;
-  };
-
-  const runAction = async (
-    request: Record<string, unknown>,
-    pendingText: string,
-    successText: string | ((response: Record<string, unknown>) => string),
-  ): Promise<void> => {
-    setBusy(true);
-    setMessage(pendingText);
-    try {
-      const response = await chrome.runtime.sendMessage(request)
-        .catch(() => ({ error: { code: "BACKGROUND_UNAVAILABLE" } }));
-      const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
-      if (!record || record.ok === false) {
-        const failure = normalizeRemiliaAuthResponse(response);
-        await renderStatus(failure, true);
-        setMessage("");
-        return;
-      }
-      const latest = await fetchStatus(true);
-      if (latest.phase === "error" || latest.lastError) {
-        setMessage("");
-        return;
-      }
-      setMessage(typeof successText === "function" ? successText(record) : successText, "success");
-      await renderOnboarding();
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  connect!.addEventListener("click", () => {
-    void runAction(
-      { type: REMILIA_AUTH_MESSAGE.connect, consentVersion: REMILIA_CONSENT_VERSION },
-      "Opening Remilia Login...",
-      "Remilia account connected.",
-    );
-  });
-  reconnect!.addEventListener("click", () => {
-    void runAction(
-      { type: REMILIA_AUTH_MESSAGE.reconnect, consentVersion: REMILIA_CONSENT_VERSION },
-      "Opening Remilia Login to reconnect...",
-      "Remilia account reconnected.",
-    );
-  });
-  completeMigration!.addEventListener("click", () => {
-    void runAction(
-      {
-        type: REMILIA_AUTH_MESSAGE.completeMigration,
-        migrationVersion: REMILIA_MIGRATION_VERSION,
-        decision: "delete-legacy",
-      },
-      "Deleting old login data...",
-      "Old login data deleted. No account was connected; connect only when you are ready.",
-    );
-  });
-  disconnect!.addEventListener("click", () => {
-    void runAction(
-      { type: REMILIA_AUTH_MESSAGE.disconnect },
-      "Disconnecting...",
-      "Disconnected. Your other milXdy settings were kept.",
-    );
-  });
-  revoke!.addEventListener("click", () => {
-    const confirmed = window.confirm("Revoke this Remilia authorization? milXdy will remove its local credentials but keep your other settings.");
-    if (!confirmed) return;
-    void runAction(
-      { type: REMILIA_AUTH_MESSAGE.revoke },
-      "Revoking authorization...",
-      (response) => response.remoteRevoked === false
-        ? "Local credentials removed. Remilia could not confirm remote revocation; you can review active authorizations on Remilia. Your other milXdy settings were kept."
-        : "Authorization revoked and local credentials removed. Your other milXdy settings were kept.",
-    );
-  });
-  color!.addEventListener("change", () => {
-    void chrome.storage.local.set({ beetolColor: color!.value });
-  });
-  mode!.addEventListener("change", () => {
-    void chrome.storage.local.set({ beetolMode: mode!.value });
-  });
-
-  await fetchStatus();
-  const statusTimer = setInterval(() => {
-    void fetchStatus();
-  }, 2_000);
-  addEventListener("pagehide", () => clearInterval(statusTimer), { once: true });
+  return setupRemiliaConnectionPanelModule({ renderOnboarding, renderPokeDiagnostic });
 }
 
 async function renderPokeDiagnostic(root: HTMLElement): Promise<void> {

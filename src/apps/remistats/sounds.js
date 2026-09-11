@@ -428,6 +428,15 @@ class SoundManager {
   }
 }
 
-// Global sound manager instance
-window.reminetSounds = new SoundManager();
+export function createSoundManager() {
+  return new SoundManager();
+}
 
+export async function disposeSoundManager() {
+  const context = audioCtx;
+  audioCtx = null;
+  compressor = null;
+  reverb = null;
+  delayNode = null;
+  await context?.close?.().catch(() => {});
+}

@@ -1,3 +1,4 @@
+import { findBodyRange } from "./spoken-text-range";
 import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
 import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
@@ -28,6 +29,10 @@ import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } 
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 
 const processed = new WeakMap<HTMLElement, string>();
+
+function reducedMotionBehavior(): ScrollBehavior {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
 let settings: PostReadingSettings;
 let speech: SpeechController;
 let player: MiniPlayer;
@@ -1361,14 +1366,14 @@ function playAdjacentExplicit(direction: 1 | -1, allowScroll = true): void {
   );
   if (next) {
     playTweet(next);
-    next.scrollIntoView({ block: "center", behavior: "smooth" });
+    next.scrollIntoView({ block: "center", behavior: reducedMotionBehavior() });
     return;
   }
   if (!allowScroll) {
     updatePostNavigationAvailability();
     return;
   }
-  window.scrollBy({ top: Math.round(window.innerHeight * 0.8) * direction, behavior: "smooth" });
+  window.scrollBy({ top: Math.round(window.innerHeight * 0.8) * direction, behavior: reducedMotionBehavior() });
   runtimeScheduler.timeout(() => {
     if (!lifecycleActive()) return;
     scheduleScan();
@@ -1388,7 +1393,7 @@ function playAdjacentAutoplay(): void {
     return;
   }
   if (settings.autoplayMode === "autoscroll" && Date.now() - userScrolledAt > 750) {
-    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: "smooth" });
+    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: reducedMotionBehavior() });
     runtimeScheduler.timeout(() => {
       if (!lifecycleActive()) return;
       scheduleScan();
@@ -1916,7 +1921,9 @@ function recordHighlightTokenizationSkip(
   });
 }
 
-function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
+export function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
+  const motionMode = reducedMotionHighlightMode(settings.bodyHighlightMode, window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if (motionMode !== "smooth") return motionMode;
   const performanceMode = document.documentElement.dataset.milxdyPerformanceMode || "balanced";
   const tokenEstimate = cachedHighlightTokenEstimate(target);
   const { mode, reason } = resolveContinuousHighlightMode(
@@ -1941,6 +1948,10 @@ function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
     });
   }
   return mode;
+}
+
+export function reducedMotionHighlightMode(mode: BodyHighlightMode, reducedMotion: boolean): BodyHighlightMode {
+  return mode === "smooth" && reducedMotion ? "word" : mode;
 }
 
 function recordHighlightPaintDiagnostic(
@@ -2046,7 +2057,7 @@ function updateWikiDocumentHighlight(state: { status: string; text?: string; chu
 
 function effectiveWikiHighlightMode(_target: WikiReadableDocument): BodyHighlightMode {
   if (settings.bodyHighlightMode !== "smooth") return settings.bodyHighlightMode;
-  return "smooth";
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "word" : "smooth";
 }
 
 function clearWikiDocumentSession(): void {
@@ -2606,37 +2617,6 @@ function restoreInactiveHighlightBodies(activeBody: HTMLElement): void {
 
 function isFullQuoteBody(body: HTMLElement): boolean {
   return Boolean(body.closest('[data-post-reading-full-quote="true"]'));
-}
-
-function findBodyRange(spokenText: string, bodyText: string, occurrence: "first" | "last", fromIndex = 0): { start: number; end: number; text: string } | null {
-  const text = bodyText.trim();
-  if (!text) return null;
-  const quoted = `"${text}"`;
-  const quotedStart = occurrence === "first" ? spokenText.indexOf(quoted, fromIndex) : spokenText.lastIndexOf(quoted);
-  let start = quotedStart >= 0 ? quotedStart + 1 : occurrence === "first" ? spokenText.indexOf(text, fromIndex) : spokenText.lastIndexOf(text);
-  if (start < 0) {
-    start = findNormalizedRangeStart(spokenText, text, occurrence, fromIndex);
-  }
-  if (start < 0) return null;
-  return { start, end: start + text.length, text };
-}
-
-function findNormalizedRangeStart(haystack: string, needle: string, occurrence: "first" | "last", fromIndex = 0): number {
-  const collapsedNeedle = needle.replace(/\s+/g, " ").trim();
-  if (!collapsedNeedle) return -1;
-  const pattern = collapsedNeedle
-    .split(" ")
-    .map((part) => escapeRegExp(part))
-    .join("\\s+");
-  const match = Array.from(haystack.matchAll(new RegExp(pattern, "g")))
-    .filter((item) => occurrence !== "first" || (item.index ?? -1) >= fromIndex);
-  if (!match || match.length === 0) return -1;
-  const selected = occurrence === "first" ? match[0] : match[match.length - 1];
-  return selected.index ?? -1;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElement | null {

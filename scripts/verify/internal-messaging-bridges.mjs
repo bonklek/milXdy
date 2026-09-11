@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 
 const files = {
+  imageHandlers: await readFile("src/extension/background/image-fetch-handlers.ts", "utf8"),
   background: await readFile("src/extension/background/index.ts", "utf8"),
   postReadingBackground: await readFile("src/apps/post-reading/background.ts", "utf8"),
   postReadingUrlPolicy: await readFile("src/apps/post-reading/urlPolicy.ts", "utf8"),
@@ -12,7 +13,8 @@ const files = {
   reminetChatBridge: await readFile("src/extension/frames/reminet-chat-bridge.ts", "utf8"),
   reminetBeetleFastControls: await readFile("src/extension/frames/reminet-beetle-fast-controls.ts", "utf8"),
   reminetLegacySocket: await readFile("src/extension/frames/reminet-chat-legacy-socket.ts", "utf8"),
-  reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
+  reminetCraftFastPath: await readFile("src/extension/frames/reminet-craft-fast-path-runtime.ts", "utf8"),
+  reminetCraftBootstrap: await readFile("src/extension/frames/reminet-craft-fast-path.ts", "utf8"),
   extensionManifest: await readFile("assets/extension/manifest.json", "utf8"),
   beetolBackground: await readFile("src/apps/beetol/background.js", "utf8"),
   beetolContent: await readFile("src/apps/beetol/content.js", "utf8"),
@@ -22,6 +24,7 @@ const files = {
 
 const failures = [];
 
+assertIncludes(files.reminetCraftBootstrap, "installReminetCraftFastPath();", "craft bootstrap must install the reviewed runtime");
 verifyReminetChatSocketBridge();
 verifyReminetChatRuntimeBridge();
 verifyReminetUploadCaps();
@@ -76,12 +79,12 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(socketTransport, "nextPort.onDisconnect.addListener", "RemiNet site bridge must handle extension-port shutdown");
   assertIncludes(socketTransport, "legacyPortReconnectDelay(portReconnectAttempts)", "RemiNet site bridge must use bounded reconnect backoff after a background-worker restart");
   assertIncludes(socketTransport, "closeSocket();", "RemiNet site bridge must release its socket when the extension port closes");
-  assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*"]', "RemiNet site bridge must be injected only on RemiliaNET pages");
+  assertIncludes(files.extensionManifest, '"matches": ["https://www.remilia.net/*", "https://remilia.net/*"]', "RemiNet site bridge must be injected only on the two exact RemiliaNET origins");
   assertIncludes(files.extensionManifest, '"js": ["reminetChatBridge.js"]', "RemiNet site bridge must be declared in the extension manifest");
   assertIncludes(files.extensionManifest, '"js": ["reminetCraftFastPath.js"]', "RemiNet crafting fast path must be declared in the extension manifest");
   assertIncludes(files.extensionManifest, '"world": "MAIN"', "RemiNet crafting fast path must run in the page world");
-  assertIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must limit acceleration to known staged timers");
-  assertIncludes(files.reminetCraftFastPath, "craftFastSubmissionIsActive", "RemiNet crafting fast path must gate acceleration to an active craft submission");
+  assertNotIncludes(files.reminetCraftFastPath, "window.setTimeout =", "RemiNet crafting fast path must retain native page timer ownership");
+  assertNotIncludes(files.reminetCraftFastPath, "FAST_TIMEOUTS", "RemiNet crafting fast path must not accelerate unrelated page timers");
   assertIncludes(bridge, "createBeetleReducedMotionCss", "RemiNet bridge must use the completion-safe Beetle motion policy");
   assertIncludes(beetleFastControls, "animation-iteration-count: 1", "RemiNet reduced motion must cover nested Beetle route animations");
   assertIncludes(beetleFastControls, 'candidate.nodeType === 1 && typeof candidate.closest === "function"', "RemiNet fast Beetle actions must resolve cross-realm click targets without instanceof");
@@ -114,7 +117,7 @@ function verifyReminetChatSocketBridge() {
   assertIncludes(senderPolicy, "sender.frameId !== undefined && sender.frameId !== 0", "RemiNet legacy sender policy must reject non-top frames");
   assertIncludes(senderPolicy, "sender.url || sender.origin || sender.tab.url", "RemiNet legacy sender policy must inspect sender URL sources");
   assertIncludes(senderPolicy, 'url.protocol !== "https:"', "RemiNet legacy sender policy must reject non-HTTPS senders");
-  assertIncludes(senderPolicy, 'url.origin === LEGACY_SOCKET_ORIGIN', "RemiNet site sender policy must require the exact RemiliaNET origin");
+  assertIncludes(senderPolicy, "LEGACY_SITE_ORIGINS.includes(url.origin", "RemiNet site sender policy must require one of the exact RemiliaNET origins");
   assertIncludes(senderPolicy, 'url.origin === "https://x.com" || url.origin === "https://twitter.com"', "RemiNet client sender policy must require exact X/Twitter origins");
   assertIncludes(senderPolicy, 'role === "runtime-content"', "RemiNet runtime sender policy must use an explicit typed role");
 }
@@ -228,12 +231,17 @@ function verifyPostReadingOcrBridge() {
   const ocrHostOrigin = functionBody(files.postReadingOcrHost, "isAllowedParentOrigin");
   assertIncludes(ocrContent, "hostFrameAuthTokens.set(frame, crypto.randomUUID())", "post-reading OCR content must mint a frame authentication token");
   assertIncludes(ocrContent, "type: \"post-reading-ocr-init\"", "post-reading OCR content must initialize host authentication");
+  assertIncludes(ocrContent, "post-reading:ocrSession", "post-reading OCR content must obtain a background-bound host session");
+  assertIncludes(ocrContent, "post-reading-ocr-authenticated", "post-reading OCR content must wait for host authorization before accepting requests");
   assertIncludes(ocrContent, "event.origin !== extensionOrigin()", "post-reading OCR content must validate extension-origin host responses");
   assertIncludes(ocrContent, "event.source !== frame.contentWindow", "post-reading OCR content must validate the OCR frame response source");
   assertIncludes(ocrContent, "event.data.id !== id", "post-reading OCR content must route OCR responses by request id");
   assertNotIncludes(ocrContent, "event.data.authToken === authToken", "post-reading OCR content must not require host responses to echo the parent auth token");
   assertIncludes(ocrHostListener, "event.source !== window.parent", "post-reading OCR host must accept messages only from its parent frame");
   assertIncludes(ocrHostListener, "isAuthenticatedParentRequest(event)", "post-reading OCR host must require authenticated parent requests");
+  assertIncludes(files.postReadingOcrHost, "post-reading:authorizeOcrSession", "post-reading OCR host must authorize setup through the extension background");
+  assertIncludes(files.postReadingOcrHost, "parentAuthToken !== \"\"", "post-reading OCR host must reject reinitialization after authorization");
+  assertIncludes(files.postReadingOcrHost, "post-reading-ocr-authenticated", "post-reading OCR host must acknowledge completed authorization");
   assertIncludes(ocrHostAuth, "event.origin === parentTargetOrigin", "post-reading OCR host must pin the initialized parent origin");
   assertIncludes(ocrHostAuth, "isAllowedParentOrigin(event.origin)", "post-reading OCR host must require an allowed parent origin");
   assertIncludes(ocrHostAuth, "event.data.authToken === parentAuthToken", "post-reading OCR host must require the content-issued authentication token");
@@ -342,17 +350,18 @@ function verifyCentralRoutedBridgePolicies() {
 }
 
 function verifyCentralImageBridgeCaps() {
-  assertIncludes(files.background, "MAX_IMAGE_RESPONSE_BYTES", "central image bridges must define a shared byte ceiling");
-  assertIncludes(files.background, "IMAGE_TOO_LARGE", "central image bridges must return a stable oversized image error");
-  assertIncludes(files.background, "readCappedResponseBytes", "central image bridges must read responses through a capped helper");
-  assertIncludes(functionBody(files.background, "readCappedResponseBytes"), "content-length", "central image bridge cap helper must check Content-Length before reading");
-  assertIncludes(functionBody(files.background, "readCappedResponseBytes"), "total > maxBytes", "central image bridge cap helper must enforce a hard streaming byte ceiling");
+  assertIncludes(files.imageHandlers, "MAX_IMAGE_RESPONSE_BYTES", "central image bridges must define a shared byte ceiling");
+  assertIncludes(files.imageHandlers, "IMAGE_TOO_LARGE", "central image bridges must return a stable oversized image error");
+  assertIncludes(files.imageHandlers, "readCappedResponseBytes", "central image bridges must read responses through a capped helper");
+  assertIncludes(functionBody(files.imageHandlers, "readCappedResponseBytes"), "content-length", "central image bridge cap helper must check Content-Length before reading");
+  assertIncludes(functionBody(files.imageHandlers, "readCappedResponseBytes"), "total > maxBytes", "central image bridge cap helper must enforce a hard streaming byte ceiling");
   for (const [label, fnName] of [
     ["music:image", "fetchMusicImageDataUrl"],
     ["wiki:image", "fetchWikiImageDataUrl"],
     ["milxdy:imageDataUrl", "fetchImageDataUrl"],
   ]) {
-    const body = functionBody(files.background, fnName);
+    assertIncludes(files.background, `${fnName}(url, budgetedFetch)`, `${label} must retain the budgeted fetch dependency in its sender wrapper`);
+    const body = functionBody(files.imageHandlers, fnName);
     assertIncludes(body, "readCappedResponseBytes(response, MAX_IMAGE_RESPONSE_BYTES)", `${label} must use the shared capped image reader`);
   }
 }
@@ -391,8 +400,8 @@ function verifyWikiSidebarFrameBridge() {
 function verifyDocsContract() {
   assertIncludes(files.appSdkDocs, "not local package APIs and not sandbox boundaries", "App SDK docs must state internal bridges are not package APIs or sandbox boundaries");
   assertIncludes(files.appSdkDocs, "same-extension top-frame X/Twitter and RemiliaNET senders", "App SDK docs must document both sides of RemiNet socket sender validation");
-  assertIncludes(files.appSdkDocs, "packaged `ocr.html` sender", "App SDK docs must document OCR frame sender validation");
-  assertIncludes(files.appSdkDocs, "content-issued frame authentication token", "App SDK docs must document OCR frame parent authentication");
+  assertIncludes(files.appSdkDocs, "packaged `ocr.html` frame redeems once", "App SDK docs must document packaged OCR-frame redemption");
+  assertIncludes(files.appSdkDocs, "trusted content script obtains from the background", "App SDK docs must document background-issued same-tab OCR sessions");
   assertIncludes(files.appSdkDocs, "same-extension non-top wiki frame senders", "App SDK docs must document Wiki iframe sender validation");
 }
 

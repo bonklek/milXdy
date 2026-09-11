@@ -1,14 +1,6 @@
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
-import {
-  clampOverlayPanelBox,
-  observeOverlayPanelTheme,
-  resolveOverlayPanelTheme,
-  restoreOverlayPanelBox,
-  startOverlayPanelDrag,
-  startOverlayPanelResize,
-} from "../../platform/overlay/panel-base";
-import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
-import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
+import { observeOverlayPanelTheme, resolveOverlayPanelTheme } from "../../platform/overlay/panel-base";
+import { ensureOverlayAppChromeStyles, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
 import type { AppStorageFacade, MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
 import type { OverlayDockSide } from "../../platform/overlay/dock";
 
@@ -55,18 +47,44 @@ let booted = false;
 let lifecycleSignal: AbortSignal | null = null;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let appStorage: AppStorageFacade | null = null;
+let activationGeneration = 0;
+let managedWindow: { open(): void; close(): void; focus(): void; dispose(): void; readonly element: HTMLElement; readonly isOpen: boolean } | null = null;
 
-export function boot(context?: MilxdyContentAppContext): void {
+export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
+  if (!context?.windows || !context.storage) throw new Error("Link Browser requires an SDK app context");
   booted = true;
+  const generation = ++activationGeneration;
   lifecycleSignal = context?.signal || null;
   addRuntimeDisposable = context?.addDisposable || (() => undefined);
   appStorage = context?.storage || null;
+  const stored = await appStorage.local.get({
+    [WIDTH_KEY]: state.width,
+    [HEIGHT_KEY]: state.height,
+    [TOP_KEY]: state.topOffset,
+    [LAST_URL_KEY]: state.currentUrl,
+  });
+  if (!lifecycleActive() || generation !== activationGeneration) return;
+  state.width = numberOr(stored[WIDTH_KEY], state.width);
+  state.height = numberOr(stored[HEIGHT_KEY], state.height);
+  state.topOffset = numberOr(stored[TOP_KEY], state.topOffset);
+  state.currentUrl = normalizeLinkUrl(stored[LAST_URL_KEY]) || state.currentUrl;
   injectStyles();
   ensureOverlayAppChromeStyles();
   registerDockItem();
   registerLinkInterceptor();
-  void loadStoredState();
+  const content = ensureRoot();
+  managedWindow = context.windows.create({
+    id: "link-browser",
+    title: "Link Browser",
+    content,
+    initialBounds: { width: state.width, height: state.height, top: state.topOffset, side: state.side },
+    minWidth: 360,
+    minHeight: 420,
+    resizable: true,
+    persistKey: "main",
+    onClose: handleManagedClose,
+  });
 }
 
 export function open(): void {
@@ -83,8 +101,11 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  ++activationGeneration;
   disable();
   clearLoadTimer();
+  managedWindow?.dispose();
+  managedWindow = null;
   state.frame?.remove();
   state.frame = null;
   state.root?.remove();
@@ -110,7 +131,6 @@ function registerDockItem(): void {
     onClose: closePanel,
     onSideChange: (side) => {
       state.side = side;
-      applyLayout();
     },
   });
 }
@@ -137,42 +157,10 @@ function openUrl(url: string): void {
   state.minimized = false;
   state.iframeLoaded = false;
   void appStorage?.local.set({ [LAST_URL_KEY]: url });
+  managedWindow?.open();
   ensureRoot();
   render();
   state.frame?.updateDock({ active: true, title: `Link: ${urlLabel(url)}` });
-}
-
-async function loadStoredState(): Promise<void> {
-  const stored = await appStorage?.local.get({
-    [WIDTH_KEY]: state.width,
-    [HEIGHT_KEY]: state.height,
-    [TOP_KEY]: state.topOffset,
-    [LAST_URL_KEY]: state.currentUrl,
-  }) || {
-    [WIDTH_KEY]: state.width,
-    [HEIGHT_KEY]: state.height,
-    [TOP_KEY]: state.topOffset,
-    [LAST_URL_KEY]: state.currentUrl,
-  };
-  const layout = await restoreOverlayPanelBox("linkBrowser", {
-    side: state.side,
-    minWidth: 360,
-    minHeight: 420,
-    defaultWidth: state.width,
-    defaultHeight: state.height,
-    legacy: {
-      width: stored[WIDTH_KEY],
-      height: stored[HEIGHT_KEY],
-      topOffset: stored[TOP_KEY],
-    },
-  });
-  state.x = layout.x ?? state.x;
-  state.width = layout.width;
-  state.height = layout.height;
-  state.topOffset = layout.topOffset;
-  state.currentUrl = normalizeLinkUrl(stored[LAST_URL_KEY]) || state.currentUrl;
-  state.layoutReady = true;
-  applyLayout();
 }
 
 function ensureRoot(): HTMLElement {
@@ -189,7 +177,6 @@ function ensureRoot(): HTMLElement {
   addRuntimeDisposable(observeOverlayPanelTheme(() => {
     root.dataset.theme = resolveOverlayPanelTheme();
   }));
-  document.body.appendChild(root);
   state.root = root;
   return root;
 }
@@ -198,51 +185,6 @@ function render(): void {
   const root = ensureRoot();
   root.textContent = "";
   root.dataset.open = String(state.open && !state.minimized);
-
-  const header = document.createElement("header");
-  header.className = "milxdy-link-browser-header milxdy-overlay-app-header";
-  header.addEventListener("pointerdown", (event) => {
-    if ((event.target as HTMLElement | null)?.closest("button, input")) return;
-    root.dataset.dragging = "true";
-    startOverlayPanelDrag(event, {
-      minWidth: 360,
-      minHeight: 420,
-      appId: "linkBrowser",
-      root,
-      side: () => state.side,
-      box: () => ({ x: state.x, width: state.width, height: state.height, topOffset: state.topOffset }),
-      setBox: (box) => {
-        state.x = box.x ?? state.x;
-        state.width = box.width ?? state.width;
-        state.height = box.height ?? state.height;
-        state.topOffset = box.topOffset ?? state.topOffset;
-      },
-      apply: applyLayout,
-      persist: (box) => {
-        state.x = box.x ?? state.x;
-        state.topOffset = box.topOffset;
-        root.dataset.dragging = "false";
-        void appStorage?.local.set({ [TOP_KEY]: state.topOffset });
-      },
-    });
-  });
-
-  const title = document.createElement("div");
-  title.className = "milxdy-link-browser-title";
-  const strong = document.createElement("strong");
-  strong.textContent = "Link Browser";
-  const current = document.createElement("span");
-  current.textContent = urlLabel(state.currentUrl);
-  title.append(strong, current);
-
-  const actions = document.createElement("div");
-  actions.className = "milxdy-link-browser-actions";
-  actions.append(
-    iconButton("Refresh", "refresh", reloadFrame),
-    iconButton("Open in new tab", "external", openCurrentInTab),
-    iconButton("Minimize", "minimize", closePanel),
-  );
-  header.append(title, actions);
 
   const iframe = document.createElement("iframe");
   iframe.className = "milxdy-link-browser-frame";
@@ -264,90 +206,28 @@ function render(): void {
   fallbackButton.type = "button";
   fallbackButton.textContent = "Open page";
   fallbackButton.addEventListener("click", openCurrentInTab);
-  fallback.append(fallbackText, fallbackButton);
+  const refreshButton = document.createElement("button");
+  refreshButton.type = "button";
+  refreshButton.textContent = "Refresh";
+  refreshButton.addEventListener("click", () => {
+    state.iframeLoaded = false;
+    render();
+  });
+  fallback.append(fallbackText, refreshButton, fallbackButton);
 
-  const resizeSide = document.createElement("button");
-  resizeSide.className = "milxdy-link-browser-resize-edge milxdy-link-browser-resize-edge-side";
-  resizeSide.type = "button";
-  resizeSide.dataset.resizeAxis = "x";
-  resizeSide.setAttribute("aria-label", "Resize Link Browser width");
-  resizeSide.addEventListener("pointerdown", startResize);
-
-  const resizeBottom = document.createElement("button");
-  resizeBottom.className = "milxdy-link-browser-resize-edge milxdy-link-browser-resize-edge-bottom";
-  resizeBottom.type = "button";
-  resizeBottom.dataset.resizeAxis = "y";
-  resizeBottom.setAttribute("aria-label", "Resize Link Browser height");
-  resizeBottom.addEventListener("pointerdown", startResize);
-
-  root.append(header, iframe, fallback, resizeSide, resizeBottom);
-  applyLayout();
+  root.append(iframe, fallback);
   scheduleFrameFallback(root);
 }
 
-function startResize(event: PointerEvent): void {
-  const root = state.root;
-  if (!root) return;
-  startOverlayPanelResize(event, {
-    minWidth: 360,
-    minHeight: 420,
-    appId: "linkBrowser",
-    root,
-    side: () => state.side,
-    box: () => ({ x: state.x, width: state.width, height: state.height, topOffset: state.topOffset }),
-    setBox: (box) => {
-      state.x = box.x ?? state.x;
-      state.width = box.width ?? state.width;
-      state.height = box.height ?? state.height;
-      state.topOffset = box.topOffset ?? state.topOffset;
-    },
-    apply: applyLayout,
-    persist: (box) => {
-      state.x = box.x ?? state.x;
-      state.width = box.width;
-      state.height = box.height;
-      state.topOffset = box.topOffset;
-      void appStorage?.local.set({ [WIDTH_KEY]: state.width, [HEIGHT_KEY]: state.height, [TOP_KEY]: state.topOffset });
-    },
-  }, resizeAxis(event.currentTarget));
-}
-
-function applyLayout(): void {
-  if (!state.root) return;
-  registerOverlayAppRoot("linkBrowser", state.root);
-  state.width = clampNumber(state.width, 360, Math.min(860, window.innerWidth - 120), 520);
-  const clamped = clampOverlayPanelBox({
-    x: state.x,
-    width: state.width,
-    height: state.height,
-    topOffset: state.topOffset,
-  }, { minWidth: 360, minHeight: 420, dockSide: state.side });
-  state.x = clamped.x ?? state.x;
-  state.width = clamped.width;
-  state.height = clamped.height;
-  state.topOffset = clamped.topOffset;
-  state.root.dataset.side = state.side;
-  state.root.style.left = `${state.x}px`;
-  state.root.style.right = "auto";
-  state.root.style.width = `${state.width}px`;
-  state.root.style.height = `${state.height}px`;
-  state.root.style.top = `${state.topOffset}px`;
-  markOverlayAppLayoutReady(state.root, state.layoutReady);
-}
-
 function closePanel(): void {
+  managedWindow?.close();
+}
+
+function handleManagedClose(): void {
   state.open = false;
   state.minimized = true;
   clearLoadTimer();
-  const root = state.root;
-  state.root = null;
   state.frame?.updateDock({ active: false });
-  animateOverlayAppClose(root, () => root?.remove());
-}
-
-function reloadFrame(): void {
-  state.iframeLoaded = false;
-  render();
 }
 
 function openCurrentInTab(): void {
@@ -365,6 +245,10 @@ function normalizeLinkUrl(value: unknown): string | null {
   } catch {
     return null;
   }
+}
+
+function numberOr(value: unknown, fallback: number): number {
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
 function shouldIgnoreAnchor(anchor: HTMLAnchorElement, url: string): boolean {
@@ -406,45 +290,11 @@ function urlLabel(value: string): string {
   }
 }
 
-function resizeAxis(target: EventTarget | null): "both" | "x" | "y" {
-  if (!(target instanceof HTMLElement)) return "both";
-  return target.dataset.resizeAxis === "x" || target.dataset.resizeAxis === "y" ? target.dataset.resizeAxis : "both";
-}
-
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   const number = typeof value === "number" && Number.isFinite(value) ? value : fallback;
   return Math.max(min, Math.min(max, Math.round(number)));
 }
 
-type IconName = "refresh" | "external" | "minimize";
-
-function iconButton(label: string, iconName: IconName, onClick: () => void): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.title = label;
-  button.setAttribute("aria-label", label);
-  button.append(createIcon(iconName));
-  button.addEventListener("click", onClick);
-  return button;
-}
-
-function createIcon(name: IconName): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("aria-hidden", "true");
-  svg.setAttribute("focusable", "false");
-  const paths: Record<IconName, string[]> = {
-    refresh: ["M20 6v5h-5", "M19 11a7 7 0 1 0-2.05 4.95"],
-    external: ["M14 4h6v6", "M10 14 20 4", "M20 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1h5"],
-    minimize: ["M6 18h12"],
-  };
-  for (const d of paths[name]) {
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
-  return svg;
-}
 
 function linkBrowserIcon(): string {
   const svg = [

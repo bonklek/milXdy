@@ -93,29 +93,26 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
   },
 };
 
+let wikiSettingsWriteQueue: Promise<void> = Promise.resolve();
+
+function updateWikiSettings(update: (settings: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
+  const write = wikiSettingsWriteQueue.then(async () => {
+    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
+    await chrome.storage.local.set({ "remiliaWikiHyperlink.settings": update(objectValue(stored["remiliaWikiHyperlink.settings"])) });
+  });
+  wikiSettingsWriteQueue = write.catch(() => undefined);
+  return write;
+}
+
 const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | undefined> = {
   composerTools: async (enabled) => {
     await chrome.storage.local.set({ "milxdy.composerTools.enabled": enabled });
   },
   wiki: async (enabled) => {
-    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
-    const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
-    await chrome.storage.local.set({
-      "remiliaWikiHyperlink.settings": {
-        ...settings,
-        enabled,
-      },
-    });
+    await updateWikiSettings((settings) => ({ ...settings, enabled }));
   },
   wikiSidebar: async (enabled) => {
-    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
-    const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
-    await chrome.storage.local.set({
-      "remiliaWikiHyperlink.settings": {
-        ...settings,
-        sidebarEnabled: enabled,
-      },
-    });
+    await updateWikiSettings((settings) => ({ ...settings, sidebarEnabled: enabled }));
   },
   linkBrowser: async (enabled) => {
     await chrome.storage.local.set({ "milxdy.linkBrowser.enabled": enabled });

@@ -128,6 +128,26 @@ describe("content app lifecycle owner", () => {
     expect(events).toEqual(["route", "abort", "disable", "dispose", "cleanup"]);
   });
 
+  it("does not invoke operational hooks before asynchronous activation finishes", async () => {
+    const boot = deferred();
+    const events: string[] = [];
+    const owner = createOwner({
+      boot: async () => { events.push("boot"); await boot.promise; },
+      enable: async () => { events.push("enable"); },
+      onRouteChange: async () => { events.push("route"); },
+      open: async () => { events.push("open"); },
+    });
+
+    const activation = owner.activate();
+    const route = owner.route(ROUTE);
+    const open = owner.open();
+    expect(events).toEqual(["boot"]);
+    boot.resolve();
+
+    await Promise.all([activation, route, open]);
+    expect(events).toEqual(["boot", "enable", "route", "open"]);
+  });
+
   it.each([
     ["route", (owner: ContentAppLifecycleOwner) => owner.route(ROUTE)],
     ["open", (owner: ContentAppLifecycleOwner) => owner.open()],

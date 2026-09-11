@@ -69,6 +69,44 @@ function failure(error: Partial<RemiliaApiError> & Pick<RemiliaApiError, "catego
 }
 
 describe("RemiStats official API service", () => {
+  it("resolves a subject-only login through /me and still excludes self-pokes", async () => {
+    const getMe = vi.fn().mockResolvedValue({ ok: true, data: { user: { username: "alice" } } });
+    const resolveDirectory = vi.fn().mockResolvedValue({ ok: true, data: { results: [
+      { query: { type: "x_handle", value: "alice_x" }, identity: { handle: "alice" } },
+      { query: { type: "x_handle", value: "bob_x" }, identity: { handle: "bob" } },
+    ] } });
+    const service = new RemiStatsOfficialService(apiClient({ getMe, resolveDirectory }), new MemoryStorage(), Date.now,
+      async () => ({ phase: "connected", identity: { id: "subject-alice" } }));
+    const results = await Promise.all([service.resolvePokeTargets(["alice_x", "bob_x"]), service.resolvePokeTargets(["bob_x"])]);
+    for (const result of results) expect(result.targets).toEqual([{ xHandle: "bob_x", remiliaUsername: "bob" }]);
+    expect(getMe).toHaveBeenCalledOnce();
+  });
+
+  it("retries an unavailable /me lookup without caching a missing username", async () => {
+    const getMe = vi.fn().mockResolvedValueOnce({ ok: false }).mockResolvedValueOnce({ ok: true, data: { user: { username: "alice" } } });
+    const resolveDirectory = vi.fn().mockResolvedValue({ ok: true, data: { results: [
+      { query: { type: "x_handle", value: "bob_x" }, identity: { handle: "bob" } },
+    ] } });
+    const service = new RemiStatsOfficialService(apiClient({ getMe, resolveDirectory }), new MemoryStorage(), Date.now,
+      async () => ({ phase: "connected", identity: { id: "subject-alice" } }));
+    expect((await service.resolvePokeTargets(["bob_x"])).targets).toEqual([]);
+    expect((await service.resolvePokeTargets(["bob_x"])).targets).toHaveLength(1);
+    expect(getMe).toHaveBeenCalledTimes(2);
+  });
+
+  it("discards a /me result when the connected account changes during lookup", async () => {
+    let id = "subject-alice";
+    const getMe = vi.fn().mockImplementation(async () => {
+      id = "subject-bob";
+      return { ok: true, data: { user: { username: "alice" } } };
+    });
+    const resolveDirectory = vi.fn();
+    const service = new RemiStatsOfficialService(apiClient({ getMe, resolveDirectory }), new MemoryStorage(), Date.now,
+      async () => ({ phase: "connected", identity: { id } }));
+    expect((await service.resolvePokeTargets(["bob_x"])).targets).toEqual([]);
+    expect(resolveDirectory).not.toHaveBeenCalled();
+  });
+
   it("declares the exact delegated scopes", () => {
     expect(REMISTATS_OFFICIAL_SCOPES).toEqual([
       "remilia:stats.read",
@@ -631,6 +669,98 @@ describe("RemiStats official API service", () => {
       cooldownMs: 30_000,
       cooldownSource: "offline-fallback",
     });
+    await expect(service.getPokeEligibility("alice")).resolves.toMatchObject({
+      ok: true,
+      canPoke: false,
+      cooldownMs: 30_000,
+      cooldownSource: "offline-fallback",
+    });
+  });
+
+  it("does not reuse one connected account's cooldown for another account", async () => {
+    const now = 1_800_000_000_000;
+    let username = "alice";
+    const storage = new MemoryStorage();
+    storage.values.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, {
+      schemaVersion: 3,
+      accounts: {
+        alice: { target: { until: now + 30_000, observedAt: now, source: "official" } },
+      },
+    });
+    const service = new RemiStatsOfficialService(
+      apiClient({ pokeUser: vi.fn().mockResolvedValue(failure({ category: "network", code: "network_error" })) } as Partial<RemiliaApiClient>),
+      storage,
+      () => now,
+      async () => ({ phase: "connected", identity: { username } }),
+    );
+
+    await expect(service.getPokeEligibility("target")).resolves.toMatchObject({ canPoke: false, cooldownMs: 30_000 });
+    username = "bob";
+    await expect(service.getPokeEligibility("target")).resolves.toMatchObject({ canPoke: true, cooldownMs: 0 });
+  });
+
+  it("stores a delayed poke response under the account that initiated it", async () => {
+    const now = 1_800_000_000_000;
+    let username = "alice";
+    let resolvePoke!: (value: ReturnType<typeof failure>) => void;
+    const pokeUser = vi.fn().mockImplementation(() => new Promise((resolve) => { resolvePoke = resolve; }));
+    const storage = new MemoryStorage();
+    const service = new RemiStatsOfficialService(
+      apiClient({ pokeUser } as Partial<RemiliaApiClient>), storage, () => now,
+      async () => ({ phase: "connected", identity: { username } }),
+    );
+
+    const result = service.pokeUser("target");
+    await vi.waitFor(() => expect(pokeUser).toHaveBeenCalledOnce());
+    username = "bob";
+    resolvePoke(failure({ category: "cooldown", code: "poke_cooldown", status: 429, nextAllowedAt: now / 1000 + 30 }));
+    await result;
+
+    expect(storage.values.get(REMISTATS_POKE_COOLDOWN_STORAGE_KEY)).toMatchObject({
+      schemaVersion: 3,
+      accounts: { alice: { target: expect.any(Object) } },
+    });
+    expect(storage.values.get(REMISTATS_POKE_COOLDOWN_STORAGE_KEY)).not.toMatchObject({ accounts: { bob: expect.anything() } });
+  });
+
+  it("removes an expired cooldown from the account selected before a delayed storage read", async () => {
+    const now = 1_800_000_000_000;
+    let username = "alice";
+    let resolveGet!: (value: unknown) => void;
+    const state = { schemaVersion: 3, accounts: {
+      alice: { target: { until: now - 1, observedAt: now - 100, source: "official" } },
+      bob: { target: { until: now + 30_000, observedAt: now, source: "official" } },
+    } };
+    const storage = {
+      get: vi.fn().mockImplementationOnce(() => new Promise<unknown>((resolve) => { resolveGet = resolve; })).mockResolvedValue(state),
+      set: vi.fn(async () => undefined),
+    };
+    const service = new RemiStatsOfficialService(apiClient(), storage, () => now, async () => ({ phase: "connected", identity: { username } }));
+    const eligibility = service.getPokeEligibility("target");
+    await vi.waitFor(() => expect(storage.get).toHaveBeenCalledOnce());
+    username = "bob";
+    resolveGet(state);
+    await eligibility;
+    expect(storage.set).toHaveBeenCalledWith(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, expect.objectContaining({
+      accounts: expect.objectContaining({ bob: expect.objectContaining({ target: expect.any(Object) }) }),
+    }));
+  });
+
+  it("repairs cooldown deadlines poisoned by a millisecond timestamp multiplied as seconds", async () => {
+    const now = 1_800_000_000_000;
+    const storage = new MemoryStorage();
+    storage.values.set(REMISTATS_POKE_COOLDOWN_STORAGE_KEY, {
+      schemaVersion: 2,
+      targets: {
+        alice: {
+          until: (now + 30_000) * 1000,
+          observedAt: now - 1_000,
+          source: "official",
+        },
+      },
+    });
+    const service = new RemiStatsOfficialService(apiClient(), storage, () => now);
+
     await expect(service.getPokeEligibility("alice")).resolves.toMatchObject({
       ok: true,
       canPoke: false,

@@ -1,3 +1,5 @@
+import { createBuildPlanCases } from "./trust-gate-build-plan-cases.mjs";
+import { runCapabilityDeclarationTrustCases } from "./trust-gate-capability-cases.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -15,6 +17,9 @@ await mkdir(workspaceTmpParent, { recursive: true });
 const buildTmpRoot = await mkdtemp(path.join(workspaceTmpParent, "case-"));
 const failures = [];
 const notes = [];
+const { composeBuildPlan, runBuildPlanCase } = createBuildPlanCases({
+  composer, builder, buildTmpRoot, failures, notes, toPosix, safeFixtureName,
+});
 
 try {
   const fixturesDir = path.join(tmpRoot, "fixtures");
@@ -123,16 +128,12 @@ try {
     ], 1, "repo-owned first-party replacement policy match");
   }
 
-  const missingEnablementPackage = await copyLocalPackage("dev-note", "missing-enablement-package");
-  const missingEnablementManifest = await readManifest(missingEnablementPackage);
-  delete missingEnablementManifest.settings;
-  missingEnablementManifest.storageKeys = { local: [] };
-  await writeManifest(missingEnablementPackage, missingEnablementManifest);
-  await runRejectedComposerCaseWithoutPlan("novel package without enablement is rejected before plan emission", [
-    `--package=${missingEnablementPackage}`,
-    "--allow-local-review",
-    "--acknowledge-package-consent",
-  ], "novel local package must declare a toggle setting with role \"enablement\"");
+  await runCapabilityDeclarationTrustCases({
+    copyLocalPackage,
+    readManifest,
+    runRejectedComposerCaseWithoutPlan,
+    writeManifest,
+  });
 
   const privilegedDefaultPackage = await copyLocalPackage("dev-note", "privileged-default-package");
   const privilegedDefaultManifest = await readManifest(privilegedDefaultPackage);
@@ -1112,62 +1113,6 @@ function assertGeneratedRuntimeMetadata(plan) {
   }
   notes.push("generated runtime metadata strips authoring $schema: ok");
   notes.push("generated WAR resources expose content entries and hide inspection metadata: ok");
-}
-
-async function composeBuildPlan(label, options = {}) {
-  const fixtureRoot = path.join(buildTmpRoot, label, "packages");
-  await mkdir(path.dirname(fixtureRoot), { recursive: true });
-  const packageDir = path.join(fixtureRoot, "tweetPng");
-  const packagePath = options.packagePath || path.join("examples/packages/first-party-replacements", "tweetPng");
-  if (!options.packagePath) {
-    await mkdir(packageDir, { recursive: true });
-  }
-  const planPath = path.join(buildTmpRoot, label, "build-plan.json");
-  const result = spawnSync(process.execPath, [
-    composer,
-    `--package=${toPosix(packagePath)}`,
-    `--plan-out=${toPosix(planPath)}`,
-    "--allow-local-review",
-    "--acknowledge-package-consent",
-    "--acknowledge-first-party-replacement",
-    ...(options.extraArgs || []),
-  ], {
-    encoding: "utf8",
-  });
-  const output = `${result.stdout || ""}${result.stderr || ""}`;
-  if ((result.status ?? 1) !== 0) {
-    failures.push(`${label}: unable to compose build plan\n${output}`);
-    return null;
-  }
-  const plan = JSON.parse(await readFile(planPath, "utf8"));
-  plan.outputDir = toPosix(path.join(buildTmpRoot, label, "out"));
-  return plan;
-}
-
-async function runBuildPlanCase(label, basePlan, mutatePlan, expectedStatus, expectedText) {
-  if (!basePlan) return;
-  const plan = JSON.parse(JSON.stringify(basePlan));
-  mutatePlan(plan);
-  const planPath = path.join(buildTmpRoot, `${safeFixtureName(label).replaceAll("_", "-")}.json`);
-  await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
-  const build = spawnSync(process.execPath, [
-    builder,
-    "--target=chromium",
-    `--local-app-plan=${toPosix(planPath)}`,
-  ], {
-    encoding: "utf8",
-  });
-  const output = `${build.stdout || ""}${build.stderr || ""}`;
-  const actualStatus = build.status ?? 1;
-  if (actualStatus !== expectedStatus) {
-    failures.push(`${label}: expected exit ${expectedStatus}, got ${actualStatus}\n${output}`);
-    return;
-  }
-  if (expectedText && !output.includes(expectedText)) {
-    failures.push(`${label}: expected output to include ${JSON.stringify(expectedText)}\n${output}`);
-    return;
-  }
-  notes.push(`${label}: ok`);
 }
 
 function toPosix(value) {

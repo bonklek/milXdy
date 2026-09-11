@@ -25,13 +25,20 @@ Release tags should be semantic versions with an optional `v` prefix, such as `v
 ## Build
 
 ```powershell
-npm install
+npm ci
 npm run verify:release:gates
 ```
 
 For reproducible release archives, use the npm lockfile as the canonical dependency input (`npm ci` in clean release environments) and run packaging through the checked-in Node scripts. `scripts/release/package-release.mjs` writes ZIP files with sorted entries, normalized permissions, forward-slash paths, deterministic deflate output, and a fixed timestamp from `SOURCE_DATE_EPOCH` when set. If `SOURCE_DATE_EPOCH` is unset, the release tooling uses its built-in fixed timestamp so repeated packages from the same `dist` tree are byte-for-byte identical.
 
 `scripts/release/verify-reproducible-release.mjs` compares the checked release archives against two freshly packaged deterministic archive sets from the same `dist` tree. Keep `npm run verify:release:reproducible` in the final gate whenever release packaging, browser builds, copied assets, or archive metadata changes.
+
+`npm run verify:build:reproducible` separately compiles each release target twice
+into fresh temporary directories and compares their deterministic ZIP hashes.
+It leaves normal `dist` and `release` outputs untouched. Keep source fixed during
+the check and run it after `npm ci` with Node.js 24 and npm 11. It verifies
+repeatability with that source and installed dependency tree; it does not prove
+agreement across independent machines or dependency installations.
 
 The release build emits the authenticated browser-ready Chromium beta under
 `dist/chromium-beta` and the compatibility build under `dist/firefox`. The

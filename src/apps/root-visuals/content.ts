@@ -85,7 +85,9 @@ function setupPageFavicon(context: MilxdyContentAppContext): void {
   };
   ensureFavicon();
   const observer = new MutationObserver(scheduleEnsure);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  // Favicon replacement only mutates <head>; observing the page body makes
+  // every timeline update wake this app without improving favicon recovery.
+  observer.observe(document.head, { childList: true });
   context.addDisposable(() => {
     observer.disconnect();
     document.getElementById(PAGE_FAVICON_ID)?.remove();
@@ -101,8 +103,7 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
     if (area !== "local" || (!changes[RESKIN_PROFILE_KEY] && !changes[VISUAL_THEME_KEY])) return;
     void loadVisualTheme().then(() => refreshHomeLogo?.());
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  context.addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  context.addDisposable(context.storage.local.onChanged((changes) => storageListener(changes, "local")));
   setupMaxPostSound(context);
   injectHomeLogoStyles();
   setupPageFavicon(context);
