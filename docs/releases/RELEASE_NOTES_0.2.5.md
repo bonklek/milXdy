@@ -125,8 +125,10 @@ the existing paths remains required before publication.
 - Made brokered capabilities the sole production Remilia API path for content
   and packages. Packages received no OAuth controls, tokens, cookies, raw
   private responses, or authenticated arbitrary fetch.
-- Shipped a reviewed three-package composition containing Post-reading,
-  Post-Factory, and Share Kit.
+- Added support for reviewed custom compositions containing Post-reading,
+  Post-Factory, and Share Kit. These external packages are not included in the
+  standard browser archives; package-specific features require a separately
+  reviewed custom build.
 
 ## Remilia Maker pet import
 
@@ -155,6 +157,16 @@ for the local workflow and evidence boundary.
 - Updated account, installation, privacy, troubleshooting, RemiStats, Beetol,
   RemiNet Chat, contributor, App SDK, roadmap, and release documentation to
   match the shipped behavior.
+
+## Outstanding candidate acceptance
+
+- The current Pets Maker source and its catalog trust record disagree. Catalog
+  Prepare/Apply rejects this candidate with `selection-package-mismatch`;
+  reconcile the reviewed package and recorded hash before release.
+- The 29 Chromium/Firefox migration cases have no recorded live acceptance for
+  the final candidate. Automated tests do not establish account/browser acceptance.
+- The bundled Chromaprint engine still requires completion of the provenance
+  review described in `THIRD_PARTY_NOTICES.md`.
 
 ## Known boundaries
 

@@ -56,8 +56,8 @@ algorithms and mismatched keys are rejected, and no credentials are stored.
 
 The 0.2.5 Firefox build is intentionally keyless and does not include a Remilia
 identity client or registered login callback. Its Remilia connection status is
-`UNSUPPORTED`; the popup says **Remilia connection is unavailable in Firefox**
-and explains that the build is intentionally keyless. It shows no consent,
+`UNSUPPORTED`; the popup says **Remilia connection is unavailable in this build**
+and directs users to the authenticated Chromium beta. It shows no consent,
 Connect, Reconnect, Disconnect, or Revoke controls. milXdy does not fall back to website
 cookies, session adoption, or hidden tabs. Public/non-auth behavior and other
 Firefox-supported settings and features remain available.

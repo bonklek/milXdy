@@ -223,7 +223,7 @@ describe("Remilia connection UI contract", () => {
 
   it("renders one primary connection action when the account is known disconnected", () => {
     const html = readFileSync(resolve(process.cwd(), "assets/extension/popup/popup.html"), "utf8");
-    expect(html.match(/>Connect to RemiliaNET<\/button>/gu)).toHaveLength(1);
+    expect(html.match(/>Connect milXdy with Remilia<\/button>/gu)).toHaveLength(1);
     expect(html.match(/class="remilia-auth-error"/gu)).toHaveLength(1);
     expect(html).not.toContain("Review Remilia connection");
     expect(html).not.toContain("Check connection");

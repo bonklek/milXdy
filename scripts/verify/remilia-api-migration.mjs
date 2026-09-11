@@ -37,7 +37,7 @@ const [beetolContent, beetolBackground, reminetBeetleBridge, postReadingFullQuot
 
 const staleInstructions = [
   [/\bRetry session\b/i, "Retry session instruction"],
-  [/\bOpen RemiliaNET\b/i, "Open RemiliaNET instruction"],
+  [/\bOpen RemiliaNET\b[^.\n]*(?:reuse|adopt|restore|refresh)[^.\n]*(?:milXdy|connector|extension)[^.\n]*(?:session|login|connection)/i, "website-session connector restoration instruction"],
   [/reus(?:e|es|ing) the RemiliaNET browser session/i, "browser-session reuse instruction"],
   [/browser-session SSO/i, "browser-session SSO instruction"],
   [/RemiliaNET `authToken` cookie/i, "authToken-cookie instruction"],
@@ -222,9 +222,9 @@ for (const required of [
   "Official Remilia connection",
   "Connect through Remilia Login",
   "Delete old login data",
-  "Connect with Remilia",
+  "Connect milXdy with Remilia",
   "Revoke authorization",
-  "Remilia connection is unavailable in Firefox",
+  "Remilia connection is unavailable in this build",
   "Popup close/reopen and an MV3 worker restart",
   "extension reload or a full browser restart",
   "completed migration remains durable",

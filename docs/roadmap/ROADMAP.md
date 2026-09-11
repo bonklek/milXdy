@@ -7,7 +7,7 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 - `0.1.x` releases were early integrated-extension beta releases.
 - `0.2.x` releases are platform beta releases. They can change architecture, app surfaces, packaging expectations, and public product framing without implying final product stability.
 
-## Most Recent Release
+## Current Release Candidate
 
 `0.2.5` is the current release candidate. See its [release notes](../releases/RELEASE_NOTES_0.2.5.md) and the descending [changelog](../../CHANGELOG.md) for candidate scope and acceptance boundaries.
 
@@ -28,8 +28,10 @@ audio export, richer local sharing, and stronger package boundaries.
   Remilia API-v1 services.
 - Kept temporary RemiNet realtime/media and Beetle action adapters explicitly
   separated from official coverage and removed hidden session fallbacks.
-- Added native X Article reading and private browser-local DM read aloud.
-- Added review-first long-form audio export with editable text and metadata,
+- Added native X Article reading. DM reading requires the external Post-reading
+  package and separate acceptance; browser Web Speech may use remote voices.
+- Added external Post-reading package support for review-first long-form audio
+  export with editable text and metadata,
   local-loopback TTS, cancellation, labeled format fallbacks, and a JSON sidecar.
 - Added Unicode-aware Share Kit layout and accessible local rich-text editing
   with same-blob preview, copy, download, and RemiNet staging.
@@ -40,7 +42,7 @@ audio export, richer local sharing, and stronger package boundaries.
 - Completed the Milady, Remilio, Bonkler, and Kagami Maker pet-import templates,
   deterministic envelope QA, cache/resume, and recovery tooling.
 - Added the host capability broker and reviewed Post-reading, Post-Factory, and
-  Share Kit composition without exposing credentials or arbitrary authenticated
+  Share Kit custom-composition support without exposing credentials or arbitrary authenticated
   fetch to packages.
 - Added deterministic Chromium and Firefox archives, checksum and
   reproducibility gates, package-trust evidence, and source-and-built privacy

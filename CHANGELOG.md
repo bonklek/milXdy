@@ -16,6 +16,9 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
 - Kept temporary RemiNet realtime/media and Beetle action adapters separate
   from official coverage, with documented removal conditions and no hidden
   browser-session fallback.
+- Made the temporary dual-auth holdover explicit: official milXdy connection
+  for API features, separate website sign-in for native Beetle actions. Moved
+  account access ahead of RemiStats and Beetol controls in settings.
 - Added Reader Voice support for native X Articles. DM read-aloud is an
   external Post-reading package acceptance item and is not claimed for the
   base release.
@@ -34,7 +37,7 @@ See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
   for Milady, Remilio, Bonkler, and Kagami templates, including cache/resume and
   recovery checks in the packaged skill archive.
 - Added a host-owned App SDK capability broker and reviewed Post-Factory,
-  Post-reading, and Share Kit composition without exposing OAuth, tokens,
+  Post-reading, and Share Kit custom-composition support without exposing OAuth, tokens,
   cookies, raw private responses, or authenticated arbitrary fetch to packages.
 - Hardened authenticated transports with first-401-only retry, redirect
   rejection, no-referrer behavior, exact final-URL checks, and explicit Firefox

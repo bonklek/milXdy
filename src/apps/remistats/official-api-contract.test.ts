@@ -48,7 +48,7 @@ describe("official RemiStats UI and legacy boundaries", () => {
     expect(remiStatsContent).toContain("expectedRemiliaUsername: username");
     expect(remiStatsBackground).toContain("remiStatsOfficialService.pokeXAuthor(message.xHandle, message.expectedRemiliaUsername)");
     expect(remiStatsContent).not.toContain("confirmPokeIdentity(userData.remiliaUsername)");
-    expect(remiStatsOfficialApi).toContain('authStatus.phase === "connected" || authStatus.phase === "missing-scope"');
+    expect(remiStatsOfficialApi).toContain('authStatus.phase !== "connected" && authStatus.phase !== "missing-scope"');
     expect(remiStatsOfficialApi).not.toContain('private async connectedAuthUsername()');
     expect(remiStatsOfficialApi).toContain("target.remiliaUsername !== authUsername");
   });

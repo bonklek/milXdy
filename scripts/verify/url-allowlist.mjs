@@ -159,11 +159,14 @@ function verifyPostReadingOembedFixtures() {
 }
 
 async function verifyBackgroundRuleContracts() {
-  const [background, reminetBackground, reminetContent] = await Promise.all([
+  const [backgroundEntry, imageHandlers, reminetBackground, reminetContent] = await Promise.all([
     readFile("src/extension/background/index.ts", "utf8"),
+    readFile("src/extension/background/image-fetch-handlers.ts", "utf8"),
     readFile("src/apps/reminet-chat/background.ts", "utf8"),
     readFile("src/apps/reminet-chat/content.ts", "utf8"),
   ]);
+  assert(backgroundEntry.includes('from "./image-fetch-handlers"'), "central background must import its image allowlist handlers");
+  const background = `${backgroundEntry}\n${imageHandlers}`;
   for (const expected of [
     'origin: "https://musicbrainz.org", pathPrefix: "/ws/2/"',
     'origin: "https://boards.miladychan.org", pathPrefix: "/json/"',

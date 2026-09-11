@@ -12,7 +12,7 @@ For beta builds, keep the same extension folder on disk.
 4. Press reload on the milXdy extension card.
 5. Refresh open X/Twitter tabs.
 
-Do not remove the extension or load a second unpacked folder unless you intend to reset local extension settings and RemiNet/Beetol login state.
+Do not remove the extension or load a second unpacked folder unless you intend to reset local extension settings. Reloading clears the milXdy Remilia connection; reconnect after an update.
 
 The Suite tab provides a guided version of this flow:
 
@@ -233,7 +233,7 @@ Enable **Show RemiliaNET chat on X home** to mount RemiNet Chat on supported X/T
 - In X Messages, the **RemiliaNET Chat** entry opens a larger milXdy RemiNet surface in the conversation area.
 - The setting is off by default while beta performance and auth behavior are validated.
 
-If the chat does not connect, check **Remilia account** first, then refresh the
+If the chat does not connect, check **RemiNet → Account access** first, then refresh the
 X/Twitter tab. Missing `remilia:chat.read` or `remilia:chat.write`, expiry,
 revocation, rate limiting, and offline state are reported separately.
 
@@ -243,7 +243,7 @@ One official Remilia Login grant powers RemiStats stats/notifications/pokes,
 Beetle reads, directory resolution, and RemiNet Chat according to the abilities
 the user approves.
 
-- Open **Remilia account** and review the requested abilities.
+- Open **RemiNet → Account access** and review the requested abilities.
 - Choose **Connect** and finish the visible RemiliaNET authorization flow.
 - Confirm the connected identity and granted abilities in milXdy.
 - Use **Reconnect** after an unrecoverable expiry, revocation, or missing scope.
@@ -260,9 +260,9 @@ diagnostics. See [Connect a Remilia account](../getting-started/REMILIA_ACCOUNT.
 
 The browser `cookies` permission is not used for Remilia authentication.
 
-## Beetol Hunter Panel
+## Beetol Status Panel
 
-Enable **Show Beetol hunt panel** to mount the Beetol Game hover panel on X/Twitter.
+Enable **Show Beetol status panel** to mount the Beetol Game hover panel on X/Twitter.
 
 - **Beetol color** controls the panel accent.
 - **Beetol mode** controls dark/light styling.
@@ -342,4 +342,4 @@ For performance reports, enable **Performance diagnostics**, reproduce briefly, 
   fixed API-v1 endpoints. Credentials stay in the trusted extension background;
   local packages receive only approved normalized capabilities.
 
-Settings and login state persist only while Chrome keeps the same extension identity. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.
+Ordinary settings persist under the same extension identity. The milXdy Remilia connection is session-only and clears when the extension reloads or the browser session ends. Removing the extension, loading a different unpacked folder, clearing extension storage, or browser profile cleanup can reset local state.

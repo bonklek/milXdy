@@ -20,7 +20,7 @@ The latest published release is **0.2.4**. Version 0.2.5 is a candidate in this 
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that can fetch public Maker traits by family and NFT number, then turns an explicitly selected Maker PNG and reviewed traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
-- **Remilia account connection**: explicit Remilia Login in the Chromium beta, background-only credentials, and typed API-v1 access for supported account, stats, poke, Beetle, and chat features. Firefox remains keyless and fails closed for authenticated features.
+- **Remilia account connection**: explicit Remilia Login in the Chromium beta, background-only credentials, and typed API-v1 access for supported account, stats, poke, Beetle, and chat features. Firefox remains keyless and fails closed for authenticated features. During the temporary dual-auth holdover, native Beetle actions use a separate RemiliaNET website sign-in; see [account access](docs/getting-started/REMILIA_ACCOUNT.md).
 - **Beetol Game**: official Beetle state/card reads plus clearly separated
   temporary legacy game actions, using the shared Remilia account connection.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
@@ -56,7 +56,7 @@ npm run build:profiles
 
 Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen.
 
-Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
+Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, and diagnostics. Reloading or updating clears the milXdy Remilia connection and requires an explicit reconnect; the RemiliaNET website sign-in is separate.
 
 ## Documentation
 

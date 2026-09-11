@@ -4,7 +4,10 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, download `milXdy-0.2.5-chromium.zip`. This is the
+The 0.2.5 archives below describe the release candidate. Use the latest published
+version on GitHub Releases until 0.2.5 is published.
+
+For Chrome, Brave, or Edge, the candidate archive is `milXdy-0.2.5-chromium.zip`. This is the
 authenticated Chromium beta profile: its pinned public manifest key preserves
 extension ID `idlmhjcedjkmbkndigbiobfjadhlmgki` and the exact registered Remilia
 callback `https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth`.
@@ -32,7 +35,7 @@ The normal release archive contains the base extension. The checked-in
 [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) prepares a separate
 Chromium custom build from reviewed local package sources:
 
-- **Pets Maker** is the first selectable maintainer add-on and remains disabled after installation until enabled in **Apps & Features**.
+- **Pets Maker** is listed in the catalog, but this candidate currently fails Prepare/Apply because its source and recorded package hash disagree. Do not bypass that check. Once accepted and installed, the app remains disabled until enabled in **Apps & Features**.
 - **Share Kit** is a selectable reviewed first-party replacement that preserves the existing Tweet PNG identity and settings.
 - **Post-Factory** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
 

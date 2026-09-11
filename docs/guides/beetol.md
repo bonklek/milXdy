@@ -10,7 +10,7 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 
 ## Common Tasks
 
-- Open the milXdy extension popup, find **Remilia connection**, review the
+- Open the milXdy extension popup, find **RemiNet → Account access → Official Remilia connection**, review the
   requested abilities, and use **Connect** or **Reconnect**. Beetol's panel only
   shows this passive instruction; it does not open or reuse a RemiliaNET website
   session.
@@ -19,8 +19,15 @@ Beetol adds the Beetol RemiStats game panel to the milXdy side rail.
 - The X/Twitter panel is read-only. Use its single **Play Beetle on RemiliaNET**
   link to open the visible Beetle cartridge, then use RemiliaNET's native
   controls for claim, hunt, faucet, and craft actions.
-- Enable **Show Beetol hunt panel** when you want the hover panel.
+- Enable **Show Beetol status panel** when you want the hover panel.
 - Adjust **Beetol color** and **Beetol mode** for the panel style.
+
+## Temporary dual-auth holdover
+
+The milXdy connection powers official reads. Native Hunt, Claim, and Craft
+still use the separate RemiliaNET website sign-in. Check that sign-in on the
+website: a connected milXdy status does not confirm it, and disconnecting
+milXdy does not sign out the website.
 
 ## Notes
 
