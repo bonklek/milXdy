@@ -130,7 +130,7 @@ function verifyCatalog(value, policy, reviews) {
   }
   if (packages.length !== 3) failures.push("current maintainer catalog must contain exactly Pets Maker, Post-Factory, and Share Kit");
   if (packageById.get("pets-maker")?.availability !== "published") failures.push("reviewed checked-in Pets Maker must be selectable");
-  if (packageById.get("tweet-composer-kit")?.availability !== "under-review") failures.push("Post-Factory must fail closed until its source and trusted review are checked in");
+  if (packageById.get("tweet-composer-kit")?.availability !== "published") failures.push("reviewed maintainer Post-Factory must be selectable");
   if (packageById.get("tweetPng")?.availability !== "published") failures.push("reviewed checked-in Share Kit must be selectable");
   if (packages.some((pkg) => ["booru", "memeMaker", "composerTools"].includes(pkg.id))) failures.push("feature concepts and the built-in typing helper must not appear as standalone add-ons");
 
@@ -179,7 +179,10 @@ function verifyCatalog(value, policy, reviews) {
 }
 
 async function verifySelectionModule(catalog) {
-  const { resolveSelection, selectionFor } = await import(new URL("../../catalog/assets/selection.js", import.meta.url));
+  const { isDefaultSelected, resolveSelection, selectionFor } = await import(new URL("../../catalog/assets/selection.js", import.meta.url));
+  const defaults = catalog.sections.flatMap(section => section.packages).filter(pkg => isDefaultSelected(pkg));
+  if (defaults.map(pkg => pkg.id).sort().join(",") !== "tweet-composer-kit,tweetPng") failures.push("fresh selections must enable reviewed Share Kit and Composer only");
+  if (isDefaultSelected({ ...defaults[0], availability: "under-review" })) failures.push("unavailable default packages must stay deselected");
   const empty = selectionFor(catalog, []);
   if (empty.schemaVersion !== 2 || empty.catalog.id !== catalog.catalogId || empty.catalog.revision !== catalog.revision) failures.push("empty selection must preserve catalog identity and schema 2");
   if (empty.build.target !== "chromium" || empty.build.recipeId !== "maintainer-local-v1" || empty.packages.length !== 0) failures.push("empty selection must be an explicit Chromium baseline recipe");
@@ -196,7 +199,10 @@ async function verifySelectionModule(catalog) {
   if (resolveSelection(fixture, ["dependency", "conflicting"]).ok) failures.push("selection resolver must reject conflicts");
   const valid = resolveSelection(fixture, ["dependent", "dependency"]);
   if (!valid.ok || valid.selected.map((pkg) => pkg.id).join(",") !== "dependency,dependent") failures.push("selection resolver must sort and accept a valid explicit dependency set");
-  if (resolveSelection(catalog, ["tweet-composer-kit"]).ok) failures.push("selection resolver must reject under-review packages");
+  if (!resolveSelection(catalog, ["tweet-composer-kit"]).ok) failures.push("selection resolver must accept reviewed maintainer Post-Factory");
+  const underReview = structuredClone(catalog);
+  underReview.sections[0].packages.find((pkg) => pkg.id === "tweet-composer-kit").availability = "under-review";
+  if (resolveSelection(underReview, ["tweet-composer-kit"]).ok) failures.push("selection resolver must reject under-review packages");
   if (!resolveSelection(catalog, ["pets-maker"]).ok) failures.push("selection resolver must accept published Pets Maker");
   if (!resolveSelection(catalog, ["pets-maker", "tweetPng"]).ok) failures.push("selection resolver must accept the compatible Pets Maker and Share Kit pair");
   if (!resolveSelection(catalog, ["tweetPng"]).ok) failures.push("selection resolver must accept published Share Kit");

@@ -100,9 +100,9 @@ describe("RemiNet crafting placement behavior", () => {
   });
 
   it("removes only occupied material and hammer selections through native store actions", async () => {
-    const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
+    const source = await readFile(new URL("./reminet-craft-fast-path-runtime.ts", import.meta.url), "utf8");
 
-    expect(source).toContain('document.addEventListener("contextmenu"');
+    expect(source).toContain('listen("contextmenu", onCraftContextMenu)');
     expect(source).toContain('const storeAnchor = craft.querySelector(".crafting-module__beetle-item")');
     expect(source).toContain('typeof record.removeFromSlot === "function"');
     expect(source).toContain('typeof record.clearHammer === "function"');
@@ -124,12 +124,24 @@ describe("RemiNet chat marker dismissal", () => {
   });
 
   it("keeps dismissal document-local and free of network or storage mutation", async () => {
-    const source = await readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8");
+    const [source, bootstrap] = await Promise.all([
+      readFile(new URL("./reminet-craft-fast-path-runtime.ts", import.meta.url), "utf8"),
+      readFile(new URL("./reminet-craft-fast-path.ts", import.meta.url), "utf8"),
+    ]);
+    expect(bootstrap).toContain("installReminetCraftFastPath()");
     expect(source).toContain("Dismiss chat position marker");
     expect(source).toContain(":hover .milxdy-last-read-dismiss");
     expect(source).toContain(":focus-within .milxdy-last-read-dismiss");
     expect(source).not.toContain("chrome.storage");
     expect(source).not.toContain("fetch(");
     expect(source).not.toContain("/api/beetle/action/craft");
+  });
+});
+
+describe("RemiNet craft timer ownership", () => {
+  it("never replaces the page's native timer while crafting is active", async () => {
+    const source = await readFile(new URL("./reminet-craft-fast-path-runtime.ts", import.meta.url), "utf8");
+    expect(source).not.toMatch(/window\.setTimeout\s*=/u);
+    expect(source).not.toContain("FAST_TIMEOUTS");
   });
 });

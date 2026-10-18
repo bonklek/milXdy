@@ -1,6 +1,6 @@
 # milXdy App SDK
 
-milXdy App SDK 0.2.4 builds reviewed app packages into custom Chromium editions
+milXdy App SDK 0.2.5 builds reviewed app packages into custom Chromium editions
 of milXdy. Packages declare their features, lifecycle, settings, storage,
 assets, permissions, privacy effects, and performance cost through a versioned
 manifest. milXdy supplies the shared runtime, Apps & Features integration,
@@ -59,12 +59,15 @@ required for the manual trusted-ZIP workflow.
 - Apps, features, themes, and generated Apps & Features metadata
 - Shared X/Twitter routes, surfaces, scheduling, cancellation, and diagnostics
 - Declared storage, assets, host access, privacy, and host-provided services
+- Typed host-owned Remilia capabilities with package declaration, consent, and
+  delegated-scope enforcement; credentials remain background-only
 - Stable output, transactional promotion, composition identity, and reload
   detection
 
 Runtime package installation, automatic marketplace updates, arbitrary-site
 content execution, and package-owned background modules are outside the App SDK
-0.2.4 contract.
+0.2.5 contract. Authenticated arbitrary fetch, OAuth/token/cookie access, and
+package-owned Remilia credentials are also outside the contract.
 
 ## Additional Resources
 

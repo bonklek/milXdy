@@ -31,9 +31,13 @@
     "look": "Eyes and eyelids lead, then head, neck, hair, and upper body follow in an even clockwise loop."
   },
   "geometry": {
+    "alphaRegistration": {
+      "centroid": [0.5, 0.45],
+      "baseline": 0.976
+    },
     "permittedEnvelope": [0.2, 0.03, 0.8, 0.95],
     "requiredInnerRegions": [
-      { "id": "head-core", "rect": [0.4, 0.17, 0.6, 0.38], "minimumCoverage": 0.41 },
+      { "id": "head-core", "rect": [0.4, 0.17, 0.6, 0.38], "minimumCoverage": 0.39 },
       { "id": "torso-core", "rect": [0.4, 0.39, 0.6, 0.7], "minimumCoverage": 0.5 },
       { "id": "lower-body-core", "rect": [0.41, 0.65, 0.59, 0.91], "minimumCoverage": 0.34 },
       { "id": "foot-contact", "rect": [0.38, 0.87, 0.62, 0.94], "minimumCoverage": 0.18 }

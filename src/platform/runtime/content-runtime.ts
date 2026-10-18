@@ -1,3 +1,24 @@
+import { tweetOwnsNode, quotedTweetRoot, tweetBadgeAnchor } from "../scanner/tweet-ownership";
+import { handleHubEscape, focusHubInitialControl } from "./hub-focus";
+import { playCatalogLaunchSound } from "./catalog-launch-sound";
+import { registerAddonsCatalogAction, createCatalogFeedback } from "./addons-catalog-action";
+import { createEnablementCoordinator } from "./enablement-coordinator";
+import { showPresetResult } from "../settings/preset-review";
+import { createAppPresetService } from "../settings/app-presets";
+import { openNativeReply, hasVisibleNativeReplyComposer } from "./native-reply-insertion";
+import { replyTemplateStorageDefaults, resolveReplyTemplates, reconcileReplySelection } from "./reply-action-templates";
+import { markTweetHeaderScaffold, tweetHeaderScaffoldPresent } from "./tweet-header-scaffold";
+import {
+  appChromeSummary,
+  chromeStyleLabel,
+  appSettingsSummary,
+  settingsLocationLabel,
+  settingsPresetLabel,
+  appHubNote,
+  listText,
+  appStorageKeys,
+  storageKeySummary,
+} from "./hub-metadata-format";
 import {
   configureTwitterScanner,
   getTwitterScannerCounters,
@@ -9,18 +30,45 @@ import {
 } from "../scanner/twitter-scanner";
 import { hasExtensionRuntime, markExtensionInvalidated, safeLocalGet, safeLocalRemove, safeLocalSet, safeRuntimeMessage, safeSyncRemove } from "../background/extension-runtime";
 import { DisposableStore } from "./disposables";
+import { persistManifestSetting } from "./manifest-setting-storage";
 import { createComposerActionRefreshScheduler } from "./composer-action-refresh";
 import { composerActionButtonIdentity, findPackageComposerActionButton } from "./composer-action-identity";
 import { eligibleContextualPostActions } from "./contextual-post-actions";
 import { eligibleContextMediaActions } from "./context-media-actions";
-import { deriveComposerKeywordSuggestions } from "./composer-keyword-suggestions";
+import { createComposerActionContext, createComposerActionPanel, createComposerActionServices } from "./composer-action-panel";
+import { openContextMediaActionPanel as openContextMediaActionPanelService } from "./context-media-action-panel";
+import { createHubPanelRenderer } from "./hub-panel-renderer";
+import { createHubAppCard } from "./hub-app-card";
+import { createHubGeneratedFeatureSettings } from "./hub-generated-settings";
+import { createHubCardFailure } from "./hub-card-failure";
+import { createHubEnableControl } from "./hub-enable-control";
+import { createHubSectionServices } from "./hub-section-services";
+import {
+  injectComposerActionStyles,
+  injectContextualPostActionStyles,
+  injectTweetScaffoldStyles,
+} from "./runtime-static-styles";
 import { resolveReplyActionPanelPosition } from "./reply-action-position";
 import { syncLongPostStandardBoundaryCounters } from "./composer-standard-counter";
 import { dispatchAuthorizedBackgroundMessage } from "./background-message-dispatch";
+import { createPackageRemiliaCapabilityClient, type PackageRemiliaCapabilityClient } from "./remilia-capability-client";
 import { ContentAppLifecycleOwner } from "./content-app-lifecycle";
+import { migratePostReadingRailDefault, POST_READING_RAIL_DEFAULT_MIGRATION_KEY } from "./post-reading-rail-default";
+import { diagnosticStorageEntry } from "./reminet-chat-diagnostics";
+import {
+  applyRemiStatsRuntimePhaseUpdate,
+  emptyRemiStatsRuntimePhaseState,
+  formatRemiStatsRuntimePhaseState,
+  sanitizeRemiStatsRuntimePhaseUpdate,
+  type RemiStatsRuntimePhaseState,
+} from "./remistats-runtime-phase";
+import { contentScriptScopeForApp, loadTriggersForApp, routeScopeMatches, surfacesForApp } from "./site-runtime";
 import { createAppStorageFacade, type AppStorageAreaName, type AppStorageChanges } from "../app-sdk/app-storage";
 import { createAppAssetResolver } from "../app-sdk/app-assets";
-import { splitExternalHandoffText, validateExternalHandoffCaptions } from "../app-sdk/external-handoff";
+import { createActivationScheduler } from "./scheduler";
+import { createAppWindowService } from "./app-window-service";
+import { invokeWikiHostAction } from "./wiki-host-action";
+import { createAppResetPlan, hasResetWork as planHasResetWork, resetConfirmationMessage as resetPlanConfirmationMessage, type AppResetPlan, type ResetStorageArea } from "./app-reset-plan";
 import { recordFeatureTiming } from "../diagnostics/performance-diagnostics";
 import { getOverlayDock, type OverlayDockRegistration } from "../overlay/dock";
 import { MILXDY_ADDONS_CATALOG_URL } from "../app-sdk/addons-catalog";
@@ -39,18 +87,15 @@ import type {
   AppIconAsset,
   AppContextualPostAction,
   AppDiagnostics,
-  AppExternalHandoff,
   AppLoadState,
   AppPreset,
   AppRuntimeScheduler,
   AppSettingDefinition,
-  AppSiteId,
-  AppSiteScope,
   MilxdyAppId,
   MilxdyAppManifest,
-  MilxdyComposerActionContext,
   MilxdyContentAppModule,
   MilxdyRouteChange,
+  MilxdyRuntimeSite,
 } from "../app-sdk/app-platform";
 
 declare const MILXDY_BUILD_PROFILE: "lite" | "balanced" | "full" | undefined;
@@ -90,6 +135,7 @@ function normalizedStringSet(value: unknown): Set<string> {
 }
 
 type RuntimeState = {
+  site: MilxdyRuntimeSite;
   apps: readonly MilxdyAppManifest[];
   enabledApps: Set<MilxdyAppId>;
   loaded: Map<MilxdyAppId, MilxdyContentAppModule>;
@@ -98,10 +144,13 @@ type RuntimeState = {
   unloadingApps: Set<MilxdyAppId>;
   appDisposables: Map<MilxdyAppId, DisposableStore>;
   appAbortControllers: Map<MilxdyAppId, AbortController>;
+  remiliaCapabilityClients: Map<MilxdyAppId, PackageRemiliaCapabilityClient>;
   diagnostics: Map<MilxdyAppId, AppDiagnostics>;
+  remistatsRuntimePhases: RemiStatsRuntimePhaseState;
   route: MilxdyRouteChange;
   disposed: boolean;
   diagnosticsTimer: number | null;
+  diagnosticsEnabled: boolean;
   unsubscribeSurfaces: (() => void) | null;
   unpatchHistory: (() => void) | null;
   performanceMode: PerformanceMode;
@@ -114,6 +163,7 @@ type RuntimeState = {
   hubDockRegistration: OverlayDockRegistration | null;
   addOnsCatalogDockRegistration: OverlayDockRegistration | null;
   hubPanelRoot: HTMLElement | null;
+  hubOpener: HTMLElement | null;
   hubSearchQuery: string;
   hubExpandedApps: Set<MilxdyAppId>;
   hubDockSettingsOpen: boolean;
@@ -134,7 +184,9 @@ type RuntimeState = {
   railPinnedApps: Set<MilxdyAppId>;
   railUnpinnedApps: Set<MilxdyAppId>;
   railPinsExplicit: boolean;
+  postReadingRailDefaultMigrated: boolean;
   idlePreloadTimer: number | null;
+  idlePreloadCursor: number;
   routeSurfaceImports: number;
   pendingSurfaceImports: Set<MilxdyAppId>;
   importAvoidance: Record<string, number>;
@@ -243,18 +295,7 @@ type SurfaceImportDecision =
   | { mode: "blocked"; reason: string };
 
 type ScaffoldResult = "created" | "present" | "missing";
-type ResetStorageArea = "local" | "sync";
 type AppSettingUiValue = string | number | boolean | null | string[];
-
-type AppResetPlan = {
-  localKeys: string[];
-  syncKeys: string[];
-  settingDefaults: Array<{ area: ResetStorageArea; key: string; value: unknown; settingId: string; behavior: string }>;
-  propertyDefaults: Array<{ area: ResetStorageArea; key: string; property: string; value: unknown; settingId: string; behavior: string }>;
-  propertyRemovals: Array<{ area: ResetStorageArea; key: string; property: string; settingId: string; behavior: string }>;
-  skippedSharedKeys: Array<{ area: ResetStorageArea; key: string; owners: string[]; reason: string }>;
-  skippedSettings: Array<{ settingId: string; area: ResetStorageArea; key: string; property?: string; behavior: string; reason: string }>;
-};
 
 type TweetScaffoldStats = {
   attempts: number;
@@ -274,7 +315,7 @@ export type ContentRuntime = {
   diagnostics: () => AppDiagnostics[];
 };
 
-export function createContentRuntime(apps: readonly MilxdyAppManifest[]): ContentRuntime {
+export function createContentRuntime(apps: readonly MilxdyAppManifest[], site: MilxdyRuntimeSite): ContentRuntime {
   // Chrome keeps content-script DOM across an extension reload, while the old
   // script's event listeners disappear with its runtime. A per-runtime token
   // elects one delegated composer-action owner without depending on toolbar
@@ -282,6 +323,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   const composerActionBindingToken = `${Date.now()}:${Math.random().toString(36).slice(2)}`;
   let composerActionOwnerSequence = 0;
   const state: RuntimeState = {
+    site,
     apps,
     enabledApps: new Set(),
     loaded: new Map(),
@@ -290,10 +332,13 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     unloadingApps: new Set(),
     appDisposables: new Map(),
     appAbortControllers: new Map(),
+    remiliaCapabilityClients: new Map(),
     diagnostics: new Map(apps.map((app) => [app.id, appDiagnosticsBase(app, "pending")])),
-    route: currentRoute(null),
+    remistatsRuntimePhases: emptyRemiStatsRuntimePhaseState(),
+    route: currentRoute(null, site),
     disposed: false,
     diagnosticsTimer: null,
+    diagnosticsEnabled: false,
     unsubscribeSurfaces: null,
     unpatchHistory: null,
     performanceMode: "balanced",
@@ -306,6 +351,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     hubDockRegistration: null,
     addOnsCatalogDockRegistration: null,
     hubPanelRoot: null,
+    hubOpener: null,
     hubSearchQuery: "",
     hubExpandedApps: new Set(),
     hubDockSettingsOpen: false,
@@ -322,7 +368,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     railPinnedApps: new Set(),
     railUnpinnedApps: new Set(),
     railPinsExplicit: false,
+    postReadingRailDefaultMigrated: false,
     idlePreloadTimer: null,
+    idlePreloadCursor: 0,
     routeSurfaceImports: 0,
     pendingSurfaceImports: new Set(),
     importAvoidance: {},
@@ -390,28 +438,35 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   async function boot(): Promise<void> {
     const bootStartedAt = performance.now();
     resetRuntimeCounters();
-    resetTwitterScannerCounters();
+    if (isXRuntime()) resetTwitterScannerCounters();
     state.performanceMode = await loadPerformanceMode();
+    await observeDiagnosticsSettings();
     state.budget = budgetForPerformanceMode(state.performanceMode);
     activateStartupBudgetWindow();
     applyRuntimeDocumentMarkers(state.performanceMode);
-    injectTweetScaffoldStyles();
+    if (isXRuntime()) injectTweetScaffoldStyles();
     await loadFirstRunState();
-    configureTwitterScannerFromEffectiveBudget();
+    if (isXRuntime()) configureTwitterScannerFromEffectiveBudget();
     configurePerformanceObservers();
     startRouteService();
     await loadRailPins();
     await loadInterfaceSoundSettings();
     registerHubDockMetadata();
-    installComposerActionHost();
-    installReplyActionHost();
-    installContextualPostActionHost();
-    installContextMediaActionHost();
+    if (isXRuntime()) {
+      installComposerActionHost();
+      installReplyActionHost();
+      installContextualPostActionHost();
+      installContextMediaActionHost();
+    }
     const enablementStartedAt = performance.now();
     const enablement = await Promise.all(state.apps.map(async (app) => ({
       app,
       enabled: app.available !== false && await app.isEnabled(),
     })));
+    const postReadingEnablement = enablement.find(({ app }) => app.id === "post-reading");
+    if (postReadingEnablement) {
+      await applyPostReadingRailDefault(postReadingEnablement.app, postReadingEnablement.enabled);
+    }
     const startupApps: MilxdyAppManifest[] = [];
     const metadataStartedAt = performance.now();
     for (const { app, enabled } of enablement) {
@@ -421,15 +476,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         if (shouldLoadAtStartup(app)) startupApps.push(app);
         else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
       }
-      else updateAppDiagnostics(app, "disabled");
+      else {
+        updateAppDiagnostics(app, "disabled");
+        updateDockRegistration(app);
+      }
     }
-    syncContextMediaMenuState();
+    if (isXRuntime()) syncContextMediaMenuState();
     registerAddOnsCatalogDockItem();
-    refreshComposerActionButtons();
+    if (isXRuntime()) refreshComposerActionButtons();
     syncHiddenRailItems();
     updateScannerConfiguration();
     recordRuntimeDiagnostic("runtime.metadata", {
       appCount: state.apps.length,
+      site: state.site,
       enabledApps: Array.from(state.enabledApps).sort(),
       enablementMs: Math.round((metadataStartedAt - enablementStartedAt) * 10) / 10,
       metadataMs: Math.round((performance.now() - metadataStartedAt) * 10) / 10,
@@ -437,7 +496,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     for (const app of startupApps) await loadApp(app, "startup");
     loadRouteApps("routeInitial");
-    state.unsubscribeSurfaces = subscribeTwitterSurfaces(handleSurface);
+    if (isXRuntime()) state.unsubscribeSurfaces = subscribeTwitterSurfaces(handleSurface);
     observeEnablement();
     observeRailPins();
     observePerformanceMode();
@@ -497,17 +556,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       const abortController = new AbortController();
       state.appDisposables.set(app.id, disposables);
       state.appAbortControllers.set(app.id, abortController);
+      const appScheduler = createActivationScheduler(scheduler, abortController.signal, (disposable) => disposables.add(disposable));
+      const remiliaCapabilityClient = getRemiliaCapabilityClient(app);
       const lifecycle = new ContentAppLifecycleOwner(module, {
         manifest: app,
+        site: state.site,
         signal: abortController.signal,
-        requestSurfaceRescan: scheduleTwitterScan,
-        scheduleScan: scheduleTwitterScan,
+        requestSurfaceRescan: requestRuntimeSurfaceRescan,
+        scheduleScan: requestRuntimeSurfaceRescan,
         loadAppById,
-        scheduler,
+        scheduler: appScheduler,
+        windows: createAppWindowService(app.id, abortController.signal, (disposable) => disposables.add(disposable)),
         storage: createRuntimeAppStorage(app),
         resolveAssetUrl: createAppAssetResolver(app, (path) => chrome.runtime.getURL(path)),
         sendMessage: (message, label) => sendAppMessage(app, message, label),
-        recordDiagnostic: (key, value) => recordRuntimeDiagnostic(`${app.id}.${key}`, value),
+        openWikiPage: (url) => openWikiForApp(app, abortController.signal, url),
+        remiliaCapabilities: remiliaCapabilityClient.declarations,
+        invokeRemiliaCapability: (operation, params) => remiliaCapabilityClient.invoke(operation, params),
+        recordDiagnostic: (key, value) => recordAppDiagnostic(app, key, value),
         addDisposable: (disposable) => disposables.add(disposable),
       }, () => state.enabledApps.has(app.id) && !state.disposed, () => cleanupAppResources(app.id), () => abortAppWork(app.id));
       lifecycleOwnsTeardown = true;
@@ -585,6 +651,43 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     await invokeAppLifecycleHook(app, "open", () => lifecycle.open());
   }
 
+  async function openRailApp(app: MilxdyAppManifest): Promise<void> {
+    if (!state.enabledApps.has(app.id)) {
+      if (!isRailDiscoverableWhenDisabled(app) || !app.setEnabled) return;
+      const performanceBlock = appEnableBlockedByPerformance(app);
+      if (performanceBlock) {
+        window.alert(performanceBlock);
+        return;
+      }
+      try {
+        await app.setEnabled(true);
+        if (!await app.isEnabled()) return;
+        state.enabledApps.add(app.id);
+        ensureDefaultRailPin(app);
+        updateScannerConfiguration();
+        updateDockRegistration(app);
+        updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
+        refreshComposerActionButtons();
+        syncContextMediaMenuState();
+        syncHiddenRailItems();
+        renderHubPanel();
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          enabled: true,
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+      } catch (error) {
+        recordRuntimeDiagnostic(`rail.enablement.${app.id}`, {
+          error: errorMessage(error),
+          source: "railLauncher",
+          updatedAt: Date.now(),
+        });
+        return;
+      }
+    }
+    await openApp(app, "dockOpen");
+  }
+
   async function closeApp(app: MilxdyAppManifest): Promise<void> {
     const lifecycle = state.appLifecycles.get(app.id);
     if (!lifecycle) return;
@@ -592,7 +695,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function notifyRoute(): void {
-    const next = currentRoute(state.route.href);
+    const next = currentRoute(state.route.href, state.site);
     if (next.href === state.route.href && next.visible === state.route.visible) return;
     state.route = next;
     state.routeSurfaceImports = 0;
@@ -608,7 +711,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }
       if (shouldLoadForRoute(app, next)) void loadApp(app, "route");
     }
-    scheduleTwitterScan();
+    requestRuntimeSurfaceRescan();
     scheduleIdlePreloads();
     flushDiagnosticsSoon();
   }
@@ -641,6 +744,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.hubPanelRoot = null;
     clearSurfaceDeliveryQueues();
     for (const appId of Array.from(state.appAbortControllers.keys())) abortAppWork(appId);
+    await Promise.allSettled(Array.from(state.remiliaCapabilityClients.values(), (client) => client.revoke()));
+    state.remiliaCapabilityClients.clear();
     const teardownResults = await Promise.allSettled(Array.from(state.appLifecycles.entries()).map(async ([appId, lifecycle]) => {
       await lifecycle.dispose();
       return appId;
@@ -666,6 +771,33 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const app = state.apps.find((candidate) => candidate.id === id);
     if (!app) return Promise.resolve(null);
     return loadApp(app, reason);
+  }
+
+  function recordAppDiagnostic(app: MilxdyAppManifest, key: string, value: unknown): void {
+          if (app.id === "remistats" && key === "runtimePhase") {
+            const sanitized = sanitizeRemiStatsRuntimePhaseUpdate(value);
+            if (sanitized) {
+              state.remistatsRuntimePhases = applyRemiStatsRuntimePhaseUpdate(state.remistatsRuntimePhases, sanitized);
+              refreshRemiStatsRuntimePhaseSummary();
+              recordRuntimeDiagnostic(`${app.id}.${key}`, sanitized);
+            }
+            return;
+          }
+          recordRuntimeDiagnostic(`${app.id}.${key}`, value);
+          }
+
+  function openWikiForApp(app: MilxdyAppManifest, signal: AbortSignal, url: string) {
+    return invokeWikiHostAction({
+      caller: app,
+      signal,
+      apps: state.apps,
+      site: state.site,
+      isDisposed: () => state.disposed,
+      isEnabled: (id) => state.enabledApps.has(id),
+      isUnloading: (id) => state.unloadingApps.has(id),
+      load: (target) => loadApp(target, "hostAction:wiki.openPage"),
+      url,
+    });
   }
 
   function createRuntimeAppStorage(app: MilxdyAppManifest) {
@@ -700,6 +832,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return dispatchAuthorizedBackgroundMessage(message, app.background?.messageTypes, {
       denied(authorization) {
         recordDeniedAppMessage(app, label, authorization.messageType);
+        if (app.id === "remistats") {
+          return Promise.resolve({ ok: false, error: "MESSAGE_POLICY_REJECTED" } as T);
+        }
         return Promise.resolve(null);
       },
       authorized() {
@@ -732,29 +867,33 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     notifyRoute();
   }
 
+  const appDisableTasks = new Map<string, Promise<void>>();
+  const enablementCoordinator = createEnablementCoordinator<MilxdyAppManifest>({
+    active: () => !state.disposed,
+    apply: reconcileAppEnablement,
+    failure: (app, error) => reportAppLifecycleFailure(app, "enablement", error),
+  });
+
+  async function reconcileAppEnablement(app: MilxdyAppManifest, enabled: boolean, current: () => boolean, explicit: boolean): Promise<void> {
+    if (!current()) return;
+    if (enabled) {
+      state.enabledApps.add(app.id);
+      if (!explicit) { await applyPostReadingRailDefault(app, true); if (!current()) return; ensureDefaultRailPin(app); }
+      updateScannerConfiguration(); updateDockRegistration(app);
+      if (shouldLoadForRoute(app, state.route) || shouldLoadAtStartup(app)) {
+        const loaded = await loadApp(app, explicit ? "preset" : "enablement");
+        if (current() && !loaded) throw new Error(`Could not activate ${app.name}.`);
+      } else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
+    } else await disableApp(app, true);
+    if (!current()) return;
+    refreshComposerActionButtons(); syncHiddenRailItems(); renderHubPanel();
+  }
+
   function observeEnablement(): void {
     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       for (const app of state.apps) {
         const keys = area === "local" ? app.storageKeys.local : area === "sync" ? app.storageKeys.sync : undefined;
-        if (!keys?.some((key) => changes[key])) continue;
-        void app.isEnabled().then((enabled) => {
-          if (enabled) {
-            state.enabledApps.add(app.id);
-            updateScannerConfiguration();
-            updateDockRegistration(app);
-            if (shouldLoadForRoute(app, state.route)) void loadApp(app, "enablementRoute");
-            else if (shouldLoadAtStartup(app)) void loadApp(app, "enablement");
-            else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
-          }
-          else {
-            state.enabledApps.delete(app.id);
-            updateScannerConfiguration();
-            void disableApp(app);
-          }
-          refreshComposerActionButtons();
-          syncHiddenRailItems();
-          renderHubPanel();
-        });
+        if (keys?.some(key => changes[key])) enablementCoordinator.observe(app);
       }
     };
     chrome.storage.onChanged.addListener(listener);
@@ -803,7 +942,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       ["sync", new Set()],
     ]);
     for (const app of state.apps) {
-      for (const setting of hubGeneratedFeatureSettings(app)) {
+      for (const setting of (app.settings || []).filter((candidate) => candidate.location === "appsAndFeatures" && candidate.advanced !== true && (candidate.scope === "feature" || candidate.scope === "app") && candidate.control.type !== "action" && candidate.control.type !== "status")) {
         tracked.get(setting.storage.area)?.add(setting.storage.key);
       }
     }
@@ -842,7 +981,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
   }
 
-  function disableApp(app: MilxdyAppManifest): void {
+  function disableApp(app: MilxdyAppManifest, strict = false): Promise<void> {
     state.enabledApps.delete(app.id);
     updateScannerConfiguration();
     updateAppDiagnostics(app, "disabled");
@@ -852,24 +991,40 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.pendingSurfaceImports.delete(app.id);
     clearSurfaceDeliveryQueueForApp(app.id);
     cancelNetworkQueueForApp(app.id);
+    void revokeRemiliaCapabilityClient(app.id);
     const module = state.loaded.get(app.id);
     const lifecycle = state.appLifecycles.get(app.id);
-    if (state.unloadingApps.has(app.id)) return;
-    if (!module || !lifecycle) return;
+    if (state.unloadingApps.has(app.id)) { const task = appDisableTasks.get(app.id) || Promise.resolve(); return strict ? task : task.catch(() => undefined); }
+    if (!module || !lifecycle) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return Promise.resolve();
+    }
     state.unloadingApps.add(app.id);
     abortAppWork(app.id);
-    void lifecycle.deactivate()
-      .catch((error) => reportAppLifecycleFailure(app, "disable", error))
+    const task = lifecycle.deactivate()
+      .catch((error) => { reportAppLifecycleFailure(app, "disable", error); throw error; })
       .finally(() => {
         state.unloadingApps.delete(app.id);
+        appDisableTasks.delete(app.id);
         updateScannerConfiguration();
         reconcileAppAfterUnload(app);
         flushDiagnosticsSoon();
       });
+    appDisableTasks.set(app.id, task);
+    void task.catch(() => undefined);
+    return strict ? task : task.catch(() => undefined);
   }
 
   function reconcileAppAfterUnload(app: MilxdyAppManifest): void {
-    if (state.disposed || !state.enabledApps.has(app.id)) return;
+    if (state.disposed) return;
+    if (!state.enabledApps.has(app.id)) {
+      updateDockRegistration(app);
+      syncHiddenRailItems();
+      renderHubPanel();
+      return;
+    }
     updateDockRegistration(app);
     if (shouldLoadAtStartup(app)) void loadApp(app, "reenableAfterUnload");
     else updateAppDiagnostics(app, "pending", { deferredReason: deferredReason(app) });
@@ -890,6 +1045,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.appLifecycles.delete(appId);
     state.loaded.delete(appId);
     state.unloadingApps.delete(appId);
+  }
+
+  function getRemiliaCapabilityClient(app: MilxdyAppManifest): PackageRemiliaCapabilityClient {
+    const existing = state.remiliaCapabilityClients.get(app.id);
+    if (existing) return existing;
+    const client = createPackageRemiliaCapabilityClient(app, async (message) => {
+      if (state.disposed || !state.enabledApps.has(app.id) || !hasExtensionRuntime()) return null;
+      return chrome.runtime.sendMessage(message).catch(() => null);
+    });
+    state.remiliaCapabilityClients.set(app.id, client);
+    return client;
+  }
+
+  async function revokeRemiliaCapabilityClient(appId: MilxdyAppId): Promise<void> {
+    const client = state.remiliaCapabilityClients.get(appId);
+    if (!client) return;
+    state.remiliaCapabilityClients.delete(appId);
+    await client.revoke();
   }
 
   function resetRuntimeCounters(): void {
@@ -937,7 +1110,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       state.effectiveBudget = state.budget;
       state.startupBudgetActive = false;
       updateScannerConfiguration();
-      scheduleTwitterScan();
+      requestRuntimeSurfaceRescan();
       drainNetworkQueue();
       scheduleIdlePreloads();
       flushDiagnosticsSoon();
@@ -957,6 +1130,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function updateScannerConfiguration(): void {
+    if (!isXRuntime()) return;
     state.surfaceAppIndex = buildSurfaceAppIndex();
     configureTwitterScannerFromEffectiveBudget(Array.from(state.surfaceAppIndex.keys()));
   }
@@ -996,7 +1170,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function scannerSurfacesForApp(app: MilxdyAppManifest): readonly (TwitterSurfaceKind | string)[] {
     if (state.loaded.has(app.id) && app.deliverySurfaces) return app.deliverySurfaces;
-    return app.surfaces;
+    return surfacesForApp(app, state.site);
   }
 
   function handleSurface(surface: TwitterSurface): void {
@@ -1019,7 +1193,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         prepareTweetFeatureScaffold(app, surface);
       }
       if (!module?.onSurface) {
-        const importDecision = app.loadTriggers.includes("surface")
+        const importDecision = loadTriggersForApp(app, state.site).includes("surface")
           ? surfaceImportDecision(app, surface, surfaceIsWithinBudget)
           : { mode: "blocked" as const, reason: "noSurfaceTrigger" };
         if (importDecision.mode === "immediate") {
@@ -1145,7 +1319,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     applyTweetScaffold(surface, {
       headerMarkers: state.enabledApps.has("rootVisuals"),
       postReadingSlot: false,
-      remistatsSlots: false,
+      remistatsSlots: state.enabledApps.has("remistats"),
     });
   }
 
@@ -1190,7 +1364,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const startedAt = performance.now();
     injectTweetScaffoldStyles();
     if (surface.element.dataset.milxdyTweetScaffold !== "true") surface.element.dataset.milxdyTweetScaffold = "true";
-    if (options.headerMarkers && !completedTokens.has("header") && markTweetHeaderScaffold(surface.element)) {
+    if (options.headerMarkers && !completedTokens.has("header") && markTweetHeaderScaffold(surface.element, (node) => tweetNodeBelongsToSurface(surface, node))) {
       completedTokens.add("header");
     }
     if (options.postReadingSlot && !completedTokens.has(`post:${placement}`)) {
@@ -1215,7 +1389,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function tweetScaffoldTokenPresent(surface: TwitterSurface, token: string): boolean {
     if (token === "header") {
-      return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-header="true"], [data-milxdy-display-name="true"], [data-milxdy-metadata-row="true"]'));
+      return tweetHeaderScaffoldPresent(surface.element, (node) => tweetNodeBelongsToSurface(surface, node));
     }
     if (token === "post:header") {
       return Boolean(findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="post-reading-header-action"]'));
@@ -1238,16 +1412,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function tweetNodeBelongsToSurface(surface: { element: HTMLElement }, node: HTMLElement | null | undefined): boolean {
-    if (!node || !surface.element.contains(node)) return false;
-    const ownerTweet = node.closest<HTMLElement>('[data-testid="tweet"]');
-    if (ownerTweet && ownerTweet !== surface.element && surface.element.contains(ownerTweet)) return false;
-    const quoteTweet = node.closest<HTMLElement>('[data-testid="quoteTweet"]');
-    if (quoteTweet && quoteTweet !== surface.element && surface.element.contains(quoteTweet)) return false;
-    return true;
+    return tweetOwnsNode(surface.element, node);
   }
 
   function tweetSurfaceIsInsideQuote(surface: { element: HTMLElement }): boolean {
-    const quoteTweet = surface.element.closest<HTMLElement>('[data-testid="quoteTweet"]');
+    const quoteTweet = quotedTweetRoot(surface.element);
     return Boolean(quoteTweet && quoteTweet !== surface.element);
   }
 
@@ -1341,14 +1510,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function ensureRemistatsBadgeSlot(surface: TwitterSurface): ScaffoldResult {
     if (findOwnedTweetNode(surface, '[data-milxdy-tweet-slot="remistats-badge"]')) return "present";
-    const anchor = findOwnedTweetNode(surface, "time")
-      || findOwnedTweetNode(surface, '[data-testid="User-Name"] [dir="ltr"], [data-testid="User-Name"]');
+    const anchor = tweetBadgeAnchor(surface.element);
     const parent = anchor?.parentElement;
     if (!anchor || !parent) return "missing";
     const slot = document.createElement("span");
     slot.dataset.milxdyTweetSlot = "remistats-badge";
     slot.dataset.reminetBadgeSlot = "true";
     slot.dataset.reminetState = "reserved";
+    if (document.documentElement.dataset.milxdyVisualPokePlacement === "top") slot.dataset.reminetActionPoke = "true";
     slot.className = "reminet-badge-slot";
     slot.setAttribute("aria-hidden", "true");
     parent.insertBefore(slot, anchor.nextSibling);
@@ -1372,57 +1541,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return "created";
   }
 
-  function markTweetHeaderScaffold(tweet: HTMLElement): boolean {
-    let marked = false;
-    for (const userName of Array.from(tweet.querySelectorAll<HTMLElement>('[data-testid="User-Name"]'))) {
-      if (!tweetNodeBelongsToSurface({ element: tweet }, userName)) continue;
-      const displayNameLink = findDisplayNameLink(userName);
-      if (!displayNameLink) continue;
-      const displayRow = displayNameLink.parentElement;
-      const displayCluster = displayRow?.parentElement;
-      const metadataRow = findMetadataRow(userName, displayRow);
-      userName.dataset.milxdyTweetHeader = "true";
-      if (displayCluster && displayCluster.parentElement === userName) {
-        displayCluster.setAttribute("data-milxdy-display-name-cluster", "true");
-      }
-      displayRow?.setAttribute("data-milxdy-display-name-row", "true");
-      displayNameLink.setAttribute("data-milxdy-display-name", "true");
-      metadataRow?.setAttribute("data-milxdy-metadata-row", "true");
-      marked = true;
-    }
-    return marked;
-  }
-
   function isShowMoreExpansionControl(button: HTMLElement): boolean {
     const text = (button.innerText || button.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
     const label = (button.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase();
     return text === "show more" || label === "show more";
-  }
-
-  function findDisplayNameLink(userName: HTMLElement): HTMLElement | null {
-    const links = Array.from(userName.querySelectorAll<HTMLElement>('a[role="link"], a[href^="/"]'));
-    return links.find((link) => {
-      if (link.querySelector("time")) return false;
-      const text = (link.textContent || "").trim();
-      return Boolean(text) && !text.startsWith("@");
-    }) || null;
-  }
-
-  function findMetadataRow(userName: HTMLElement, displayRow: HTMLElement | null): HTMLElement | null {
-    const time = userName.querySelector("time");
-    const handle = Array.from(userName.querySelectorAll<HTMLElement>("span")).find((span) => {
-      return (span.textContent || "").trim().startsWith("@");
-    });
-    const candidates = [time, handle].flatMap((element): HTMLElement[] => {
-      const rows: HTMLElement[] = [];
-      let current = element?.parentElement;
-      while (current && current !== userName) {
-        if (current.tagName === "DIV") rows.push(current);
-        current = current.parentElement;
-      }
-      return rows;
-    });
-    return candidates.find((row) => row !== displayRow && !row.contains(displayRow)) || (displayRow?.parentElement ?? null);
   }
 
   function installContextualPostActionHost(): void {
@@ -1465,7 +1587,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       }, 80);
     };
     document.addEventListener("click", onClick, true);
-    injectContextualPostActionStyles();
+    const contextualPostActionStyle = injectContextualPostActionStyles();
+    if (contextualPostActionStyle) state.runtimeDisposables.add(() => contextualPostActionStyle.remove());
     state.runtimeDisposables.add(() => document.removeEventListener("click", onClick, true));
     state.runtimeDisposables.add(() => {
       stopObserver();
@@ -1574,14 +1697,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
         return { connected: Boolean(record?.signedIn) };
       },
-      openRemiNetSession: async () => {
-        const response = await chrome.runtime.sendMessage({ type: "milxdy:openRemiNetSession" }).catch(() => null);
-        const record = response && typeof response === "object" ? response as Record<string, unknown> : null;
-        return {
-          ok: record?.ok === true,
-          error: typeof record?.error === "string" ? record.error : undefined,
-        };
-      },
       stageRemiNetChatPng: async ({ blob, fileName }) => {
         if (blob.type && blob.type !== "image/png") return { ok: false, error: "Only PNG images can be staged." };
         if (blob.size > 10 * 1024 * 1024) return { ok: false, error: "Images must be 10 MB or smaller." };
@@ -1654,7 +1769,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
   }
 
-  async function openContextMediaActionPanel(
+  function openContextMediaActionPanel(
     app: MilxdyAppManifest,
     actionId: string,
     contributionId: string,
@@ -1663,134 +1778,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     currentClose: () => (() => void) | null,
     setClose: (close: (() => void) | null) => void,
   ): Promise<void> {
-    currentClose()?.();
-    const module = await loadApp(app, `userAction:contextMedia:${actionId}`);
-    if (!isCurrent() || !module?.onContextMediaAction) return;
-    const prepared = await safeRuntimeMessage<{ ok?: boolean; error?: string; mediaHandle?: string; media?: { mimeType: string; width: number | null; height: number | null; altAvailable: boolean } }>({
-      type: "milxdy:contextMediaPrepare",
-      appId: app.id,
-      actionId,
-      sourceUrl: selected.sourceUrl,
-      width: selected.width,
-      height: selected.height,
-      altAvailable: selected.altAvailable,
-    });
-    if (!isCurrent()) return;
-    if (!prepared?.ok || !prepared.mediaHandle || !prepared.media) {
-      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: prepared?.error || "The selected image could not be prepared." });
-      return;
-    }
-    const controller = new AbortController();
-    const panel = document.createElement("section");
-    panel.className = "milxdy-context-media-panel";
-    panel.dataset.appId = app.id;
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", `${app.name} media contribution`);
-    panel.style.cssText = `color-scheme:light dark;position:fixed;z-index:2147483646;left:${Math.max(8, Math.min(selected.x, window.innerWidth - 380))}px;top:${Math.max(8, Math.min(selected.y, window.innerHeight - 440))}px;max-width:360px;max-height:calc(100vh - 16px);overflow:auto;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.28);padding:10px`;
-    const shadow = panel.attachShadow({ mode: "open" });
-    const hostStyle = document.createElement("style");
-    hostStyle.textContent = `:host{all:initial}.preview{display:block;max-width:100%;max-height:180px;margin:0 auto 10px;border-radius:8px;object-fit:contain}.surface{font:14px/1.35 system-ui,sans-serif}.assistant{position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:#fff;color:#0f1419;border:1px solid #536471;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)}.assistant textarea{box-sizing:border-box;width:100%;min-height:100px}.assistant button{margin:8px 6px 0 0}`;
-    const preview = document.createElement("img");
-    preview.className = "preview";
-    preview.alt = "Selected X image preview";
-    preview.src = selected.sourceUrl;
-    const surface = document.createElement("div");
-    surface.className = "surface";
-    shadow.append(hostStyle, preview, surface);
-    let assistantPanel: HTMLElement | null = null;
-    const close = () => {
-      controller.abort();
-      panel.remove();
-      assistantPanel?.remove();
-      if (currentClose() === close) setClose(null);
-      document.removeEventListener("pointerdown", dismiss, true);
-      window.removeEventListener("keydown", escape, true);
-    };
-    const dismiss = (event: PointerEvent) => {
-      if (event.composedPath().includes(panel)) return;
-      close();
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      close();
-    };
-    const openVisibleAssistantPrompt = async () => {
-      assistantPanel?.remove();
-      const assistant = document.createElement("section");
-      assistantPanel = assistant;
-      assistant.className = "milxdy-context-media-assistant";
-      assistant.setAttribute("role", "dialog");
-      assistant.setAttribute("aria-label", "Grok tag helper");
-      assistant.style.cssText = "color-scheme:light dark;position:fixed;right:16px;bottom:16px;z-index:2147483647;width:300px;padding:10px;background:Canvas;color:CanvasText;border:1px solid GrayText;border-radius:10px;box-shadow:0 6px 22px rgba(0,0,0,.3)";
-      const prompt = document.createElement("textarea");
-      prompt.readOnly = true;
-      prompt.value = `Suggest concise Remibooru tags for this X image: ${selected.sourceUrl}\nReturn tags only; do not upload or post anything.`;
-      prompt.style.cssText = "box-sizing:border-box;width:100%;min-height:96px";
-      const copy = document.createElement("button");
-      copy.textContent = "Copy prompt";
-      copy.addEventListener("click", () => void navigator.clipboard.writeText(prompt.value));
-      const open = document.createElement("button");
-      open.textContent = "Open Grok";
-      open.addEventListener("click", () => window.open(`https://x.com/i/grok?text=${encodeURIComponent(prompt.value)}`, "_blank", "noopener,noreferrer"));
-      assistant.append(prompt, copy, open);
-      document.body.append(assistant);
-      return { ok: true };
-    };
-    document.body.append(panel);
-    setClose(close);
-    document.addEventListener("pointerdown", dismiss, true);
-    window.addEventListener("keydown", escape, true);
-    try {
-      await installComposerActionPackageStyles(app, shadow);
-      await Promise.resolve(module.onContextMediaAction({
-        actionId,
-        panel: surface,
-        signal: controller.signal,
-        close,
-        mediaHandle: prepared.mediaHandle,
-        media: prepared.media,
-        openVisibleAssistantPrompt: async (promptId) => promptId === "remibooru-tags" ? openVisibleAssistantPrompt() : { ok: false, error: "Unsupported assistant prompt." },
-        submitMediaContribution: async ({ id, mediaHandle, tags }) => {
-          if (id !== contributionId || mediaHandle !== prepared.mediaHandle) return { ok: false, error: "The contribution does not match this selected image." };
-          return await safeRuntimeMessage<{ ok: boolean; canonicalUrl?: string; error?: string }>({ type: "milxdy:mediaContributionSubmit", appId: app.id, actionId, contributionId, mediaHandle, tags }) || { ok: false, error: "The contribution service is unavailable." };
-        },
-      }));
-    } catch (error) {
-      close();
-      recordRuntimeDiagnostic(`contextMedia.${app.id}`, { error: errorMessage(error) });
-    }
+    return openContextMediaActionPanelService({
+      loadApp,
+      installPackageStyles: installComposerActionPackageStyles,
+      recordDiagnostic: recordRuntimeDiagnostic,
+    }, { app, actionId, contributionId, selected, isCurrent, currentClose, setClose });
   }
 
   function contextualPostStatusUrl(post: HTMLElement): string | null {
     const link = Array.from(post.querySelectorAll<HTMLAnchorElement>('a[href*="/status/"]'))
       .find((anchor) => !anchor.closest('[data-testid="quoteTweet"]'));
     return link?.href || null;
-  }
-
-  function injectContextualPostActionStyles(): void {
-    if (document.getElementById("milxdy-contextual-post-action-styles")) return;
-    const style = document.createElement("style");
-    style.id = "milxdy-contextual-post-action-styles";
-    style.textContent = `
-      [data-milxdy-contextual-post-action] {
-        transition: background-color 120ms ease, color 120ms ease, transform 80ms ease !important;
-      }
-      [data-milxdy-contextual-post-action]:hover,
-      [data-milxdy-contextual-post-action]:focus-visible {
-        background: rgba(15, 20, 25, 0.1) !important;
-        color: inherit !important;
-      }
-      [data-milxdy-contextual-post-action]:active,
-      [data-milxdy-contextual-post-action][data-milxdy-contextual-post-action-busy="true"] {
-        background: rgba(15, 20, 25, 0.16) !important;
-        color: inherit !important;
-        transform: translateY(1px) !important;
-      }
-      .milxdy-contextual-post-action-icon { flex: 0 0 auto; height: 20px; width: 20px; }
-    `;
-    document.documentElement.appendChild(style);
-    state.runtimeDisposables.add(() => style.remove());
   }
 
   function installComposerActionHost(): void {
@@ -1840,6 +1838,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     state.runtimeDisposables.add(closeComposerActionPanel);
   }
 
+  let activeNativeReplyInsertionCancel: (() => void) | null = null;
   let activeReplyActionClose: (() => void) | null = null;
   let activeReplyActionButton: HTMLElement | null = null;
 
@@ -1867,7 +1866,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     };
     document.addEventListener("click", onReplyClick, true);
     state.runtimeDisposables.add(() => document.removeEventListener("click", onReplyClick, true));
-    state.runtimeDisposables.add(() => activeReplyActionClose?.());
+    state.runtimeDisposables.add(() => { activeReplyActionClose?.(); activeNativeReplyInsertionCancel?.(); });
   }
 
   async function openReplyActionPanel(button: HTMLElement, apps: MilxdyAppManifest[]): Promise<void> {
@@ -1896,7 +1895,88 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     surface.className = "milxdy-reply-action-surface";
     shadow.append(surface);
     let panelSizeObserver: ResizeObserver | null = null;
-    const positionReplyActionPanel = () => {
+    const positionReplyActionPanel = () => positionReplyActionPanelFor(button, panel);
+    const close = () => {
+      if (!panel.isConnected) return;
+      controller.abort();
+      panelSizeObserver?.disconnect();
+      panelSizeObserver = null;
+      panel.remove();
+      document.removeEventListener("pointerdown", dismiss, true);
+      window.removeEventListener("keydown", dismissOnEscape, true);
+      document.removeEventListener("scroll", positionReplyActionPanel, true);
+      window.removeEventListener("resize", positionReplyActionPanel);
+      if (activeReplyActionClose === close) activeReplyActionClose = null;
+      if (activeReplyActionButton === button) activeReplyActionButton = null;
+      if (button.isConnected) button.focus({ preventScroll: true });
+    };
+    const dismiss = (event: PointerEvent) => {
+      if (panel.contains(event.target as Node) || button.contains(event.target as Node)) return;
+      close();
+    };
+    const dismissOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" && event.key !== "Esc" && event.code !== "Escape" && event.keyCode !== 27) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      close();
+    };
+    const storageDefaults = replyTemplateStorageDefaults(app.replyAction?.templates || []);
+    const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
+    const templates = resolveReplyTemplates(app.replyAction?.templates || [], app.settings || [], stored);
+    document.body.append(panel);
+    positionReplyActionPanel();
+    if (typeof ResizeObserver !== "undefined") {
+      panelSizeObserver = new ResizeObserver(positionReplyActionPanel);
+      panelSizeObserver.observe(panel);
+    }
+    activeReplyActionClose = close;
+    activeReplyActionButton = button;
+    document.addEventListener("pointerdown", dismiss, true);
+    // Window capture runs before X's document handlers and also receives keys
+    // dispatched from the package panel's shadow root.
+    window.addEventListener("keydown", dismissOnEscape, true);
+    document.addEventListener("scroll", positionReplyActionPanel, true);
+    window.addEventListener("resize", positionReplyActionPanel);
+    try {
+      await installReplyActionPackageStyles(app, shadow);
+      let replySelectionClaimed = false;
+      await Promise.resolve(module.onReplyAction({
+        panel: surface,
+        signal: controller.signal,
+        close,
+        templates: templates.map(({ id, label, sendAfterInsert }) => ({ id, label, sendAfterInsert })),
+        openNativeReply: () => {
+          if (controller.signal.aborted || replySelectionClaimed) return;
+          replySelectionClaimed = true;
+          close();
+          triggerNativeReply(button);
+        },
+        selectTemplate: async (id) => {
+          if (controller.signal.aborted || replySelectionClaimed) return;
+          const selected = templates.find((candidate) => candidate.id === id);
+          if (!selected) return;
+          replySelectionClaimed = true;
+          const currentStored = await safeLocalGet(storageDefaults);
+          const current = resolveReplyTemplates(app.replyAction?.templates || [], app.settings || [], currentStored).find((candidate) => candidate.id === id);
+          if (controller.signal.aborted) return;
+          if (hasVisibleNativeReplyComposer()) { replySelectionClaimed = false; throw new Error("Close the existing reply draft before inserting a quick reply."); }
+          const template = reconcileReplySelection(selected, current);
+          if (!template) { replySelectionClaimed = false; throw new Error("Reply phrase changed; reopen quick replies."); }
+          close();
+          triggerNativeReply(button, template.text, {
+            sendAfterInsert: template.sendAfterInsert,
+          });
+          recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: id, updatedAt: Date.now() });
+        },
+      }));
+      surface.querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus();
+    } catch (error) {
+      close();
+      recordRuntimeDiagnostic(`replyAction.${app.id}`, { error: errorMessage(error) });
+    }
+  }
+
+  function positionReplyActionPanelFor(button: HTMLElement, panel: HTMLElement): void {
       const rect = button.getBoundingClientRect();
       const primaryColumn = button.closest<HTMLElement>('[data-testid="primaryColumn"]');
       const stickyHeaderBottom = Array.from(primaryColumn?.querySelectorAll<HTMLElement>("header, div") || [])
@@ -1922,185 +2002,22 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       panel.style.visibility = position.hidden ? "hidden" : "visible";
       panel.setAttribute("aria-hidden", String(position.hidden));
       panel.style.maxHeight = `${position.maxHeight}px`;
-    };
-    const close = () => {
-      if (!panel.isConnected) return;
-      controller.abort();
-      panelSizeObserver?.disconnect();
-      panelSizeObserver = null;
-      panel.remove();
-      document.removeEventListener("pointerdown", dismiss, true);
-      window.removeEventListener("keydown", dismissOnEscape, true);
-      document.removeEventListener("scroll", positionReplyActionPanel, true);
-      window.removeEventListener("resize", positionReplyActionPanel);
-      if (activeReplyActionClose === close) activeReplyActionClose = null;
-      if (activeReplyActionButton === button) activeReplyActionButton = null;
-      if (button.isConnected) button.focus({ preventScroll: true });
-    };
-    const dismiss = (event: PointerEvent) => {
-      if (panel.contains(event.target as Node) || button.contains(event.target as Node)) return;
-      close();
-    };
-    const dismissOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape" && event.key !== "Esc" && event.code !== "Escape" && event.keyCode !== 27) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      close();
-    };
-    const storageDefaults = Object.fromEntries((app.replyAction?.templates || [])
-      .flatMap((template) => [template.storageKey, template.storageListKey].filter(Boolean))
-      .map((storageKey) => [storageKey!, ""]));
-    const stored = Object.keys(storageDefaults).length > 0 ? await safeLocalGet(storageDefaults) : null;
-    const templates = (app.replyAction?.templates || []).flatMap((template) => {
-      if (template.storageListKey) {
-        const setting = (app.settings || []).find((candidate) => candidate.storage.key === template.storageListKey && candidate.control.type === "textList");
-        const maxItems = setting?.control.maxItems || 0;
-        const maxLength = setting?.control.maxLength || 0;
-        const rawValues = stored?.[template.storageListKey];
-        const values: unknown[] = Array.isArray(rawValues) ? rawValues : [];
-        return values
-          .filter((value): value is string => typeof value === "string" && value.trim().length > 0 && value.length <= maxLength)
-          .slice(0, maxItems)
-          .map((text, index) => ({ id: `${template.id}.${index}`, label: text, text, sendAfterInsert: template.sendAfterInsert === true }));
-      }
-      const text = template.text ?? String(template.storageKey ? stored?.[template.storageKey] || "" : "");
-      return template.storageKey && !text.trim() ? [] : [{ id: template.id, label: template.label, text, sendAfterInsert: template.sendAfterInsert === true }];
-    });
-    document.body.append(panel);
-    positionReplyActionPanel();
-    if (typeof ResizeObserver !== "undefined") {
-      panelSizeObserver = new ResizeObserver(positionReplyActionPanel);
-      panelSizeObserver.observe(panel);
-    }
-    activeReplyActionClose = close;
-    activeReplyActionButton = button;
-    document.addEventListener("pointerdown", dismiss, true);
-    // Window capture runs before X's document handlers and also receives keys
-    // dispatched from the package panel's shadow root.
-    window.addEventListener("keydown", dismissOnEscape, true);
-    document.addEventListener("scroll", positionReplyActionPanel, true);
-    window.addEventListener("resize", positionReplyActionPanel);
-    try {
-      await installReplyActionPackageStyles(app, shadow);
-      await Promise.resolve(module.onReplyAction({
-        panel: surface,
-        signal: controller.signal,
-        close,
-        templates: templates.map(({ id, label }) => ({ id, label })),
-        openNativeReply: () => {
-          close();
-          triggerNativeReply(button);
-        },
-        selectTemplate: (id) => {
-          const template = templates.find((candidate) => candidate.id === id);
-          if (!template) return;
-          const replyTweet = button.closest<HTMLElement>('article[data-testid="tweet"]');
-          close();
-          triggerNativeReply(button, template.text, {
-            sendAfterInsert: template.sendAfterInsert,
-            likeAfterInsert: template.id === "milady" && template.text.trim().toLowerCase() === "milady",
-            likeTweet: replyTweet,
-          });
-          recordRuntimeDiagnostic(`replyAction.${app.id}`, { template: id, updatedAt: Date.now() });
-        },
-      }));
-      surface.querySelector<HTMLElement>("button, [href], input, select, textarea, [tabindex]:not([tabindex='-1'])")?.focus();
-    } catch (error) {
-      close();
-      recordRuntimeDiagnostic(`replyAction.${app.id}`, { error: errorMessage(error) });
-    }
   }
 
-  function triggerNativeReply(button: HTMLElement, text = "", options: { sendAfterInsert?: boolean; likeAfterInsert?: boolean; likeTweet?: HTMLElement | null } = {}): void {
-    if (text) waitForReplyComposerText(text, options);
-    button.dataset.milxdyNativeReply = "true";
-    button.click();
-  }
-
-  function waitForReplyComposerText(text: string, { sendAfterInsert = false, likeAfterInsert = false, likeTweet = null }: { sendAfterInsert?: boolean; likeAfterInsert?: boolean; likeTweet?: HTMLElement | null } = {}): void {
-    let inserted = false;
-    let insertionAttempted = false;
-    let verificationFrames = 0;
-    let submitted = false;
-    let attempts = 0;
-    let observer: MutationObserver | null = null;
-    let timeout = 0;
-    const normalizedText = (value: string) => value.replace(/\u00a0/gu, " ").trim();
-    const submitWhenReady = (editor: HTMLElement) => {
-      if (submitted) return;
-      const submit = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="dialog"] [data-testid="tweetButton"]'))
-        .find((candidate) => candidate.offsetParent !== null && !candidate.disabled && candidate.getAttribute("aria-disabled") !== "true");
-      // Fail closed: never submit if X has not rendered exactly the explicit
-      // reviewed template the user chose.
-      if (!submit || normalizedText(editor.innerText || editor.textContent || "") !== normalizedText(text)) {
-        if (++attempts < 30) window.requestAnimationFrame(() => submitWhenReady(editor));
-        return;
-      }
-      submitted = true;
-      submit.click();
-      if (likeAfterInsert && likeTweet) likeTweetIfNeeded(likeTweet);
-    };
-    const tryInsert = () => {
-      if (inserted || insertionAttempted) return inserted;
-      // X gives its rich-text input and several wrapping containers matching
-      // `tweetTextarea_*` IDs. `isContentEditable` is inherited, so it also
-      // matches those wrappers. Restrict this bridge to the real editor: a
-      // wrapper's text includes X's placeholder and makes both verification
-      // and React's editor state unreliable.
-      const editor = Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"] [contenteditable="true"][data-testid^="tweetTextarea_"]'))
-        .find((candidate) => candidate.offsetParent !== null);
-      if (!editor) return false;
-      // A template action must never append to an existing native draft. It
-      // is safer to leave that draft alone than to guess whether it is stale
-      // platform text or user-authored content.
-      if (normalizedText(editor.innerText || editor.textContent || "")) return false;
-      insertionAttempted = true;
-      editor.focus();
-      // X's reply composer is DraftJS. Raw DOM insertion and synthetic
-      // beforeinput can be ignored by its controlled editor, leaving a visual
-      // artifact and a disabled Reply button. DraftJS owns text pasted into
-      // its focused editor, so use that text-transfer contract and verify its
-      // rendered controlled value before ever considering submission.
-      const clipboardData = new DataTransfer();
-      clipboardData.setData("text/plain", text);
-      editor.dispatchEvent(new ClipboardEvent("paste", {
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-        clipboardData,
-      }));
-      const verifyControlledInsertion = () => {
-        if (normalizedText(editor.innerText || editor.textContent || "") === normalizedText(text)) {
-          inserted = true;
-          if (sendAfterInsert) window.requestAnimationFrame(() => submitWhenReady(editor));
-          return;
-        }
-        // State updates can render on the following animation frame. Do not
-        // mutate the DOM or dispatch a second insertion while waiting.
-        if (++verificationFrames < 30) window.requestAnimationFrame(verifyControlledInsertion);
-      };
-      window.requestAnimationFrame(verifyControlledInsertion);
-      return true;
-    };
-    if (tryInsert()) return;
-    observer = new MutationObserver(() => {
-      if (!tryInsert()) return;
-      observer?.disconnect();
-      window.clearTimeout(timeout);
-    });
-    timeout = window.setTimeout(() => observer?.disconnect(), 1500);
-    observer.observe(document.documentElement, { childList: true, subtree: true });
-  }
-
-  function likeTweetIfNeeded(tweet: HTMLElement): void {
-    const unlike = tweet.querySelector<HTMLElement>('[data-testid="unlike"]');
-    if (unlike) return;
-    const like = tweet.querySelector<HTMLElement>('[data-testid="like"]');
-    if (like && like.offsetParent !== null) like.click();
+  function triggerNativeReply(button: HTMLElement, text = "", options: { sendAfterInsert?: boolean } = {}): void {
+    activeNativeReplyInsertionCancel?.();
+    activeNativeReplyInsertionCancel = openNativeReply(button, text, options);
   }
 
   function refreshComposerActionButtons(): void {
     const apps = state.apps.filter((app) => state.enabledApps.has(app.id) && app.available !== false && app.composerAction);
+    const actionRows = collectComposerActionRows();
+    if (actionRows.size === 0) return;
+    syncComposerActionRows(actionRows, apps);
+    injectComposerActionStyles();
+  }
+
+  function collectComposerActionRows(): Set<HTMLElement> {
     const actionRows = new Set<HTMLElement>();
     for (const composer of Array.from(document.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))) {
       if (composer.closest('[data-testid="dm-composer-form"], [data-testid="dm-container"]')) continue;
@@ -2121,7 +2038,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     // A zero-row pass is an X reconciliation transient. Existing slots are
     // removed naturally with their discarded toolbar; do not proactively
     // erase a live action before the replacement editor is discoverable.
-    if (actionRows.size === 0) return;
+    return actionRows;
+  }
+
+  function syncComposerActionRows(actionRows: Set<HTMLElement>, apps: MilxdyAppManifest[]): void {
     for (const slot of Array.from(document.querySelectorAll<HTMLElement>("[data-milxdy-composer-actions]"))) {
       if (!Array.from(actionRows).some((row) => row.contains(slot))) slot.remove();
     }
@@ -2195,7 +2115,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         }
       }
     }
-    injectComposerActionStyles();
   }
 
   function composerActionRowFor(composer: HTMLElement): HTMLElement | null {
@@ -2288,17 +2207,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
     button = request.button;
     const controller = new AbortController();
-    const panel = document.createElement("section");
-    panel.className = "milxdy-composer-action-panel";
-    panel.dataset.appId = app.id;
-    panel.setAttribute("role", "dialog");
-    panel.setAttribute("aria-label", app.composerAction?.label || app.name);
-    const shadow = panel.attachShadow({ mode: "open" });
-    const surface = document.createElement("div");
-    surface.className = "milxdy-composer-action-surface";
-    shadow.append(surface);
-    panel.style.visibility = "hidden";
-    document.body.append(panel);
+    const { panel, shadow, surface } = createComposerActionPanel(app);
     button.setAttribute("aria-expanded", "true");
     const currentButton = () => activeComposerAction?.appId === app.id && activeComposerAction.ownerId === ownerId
       ? activeComposerAction.button
@@ -2367,256 +2276,37 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       close();
     };
     const openNativeDrafts = () => openNativeDraftsFor(currentButton(), close);
-    type ComposerImageReplacement = {
-      composerScope: ParentNode;
-      removeButton: HTMLButtonElement;
-      originalDataUrl: string;
-      contentType: string;
-      attachmentIdentity:
-        | { kind: "file"; input: HTMLInputElement; name: string; size: number; type: string; lastModified: number }
-        | { kind: "preview"; image: HTMLImageElement; src: string };
-    };
-    const blobToDataUrl = (blob: Blob): Promise<string> => new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The composer image could not be read."));
-      reader.onerror = () => reject(reader.error || new Error("The composer image could not be read."));
-      reader.readAsDataURL(blob);
+    const services = createComposerActionServices({
+      app,
+      composerSelector: COMPOSER_SELECTOR,
+      currentButton,
+      sendRuntimeMessage: <Result>(message: unknown) => safeRuntimeMessage<Result>(message),
+      recordDiagnostic: recordRuntimeDiagnostic,
+      playLaunchSound: playInterfaceLaunchSound,
+      errorMessage,
     });
-    const prepareComposerImageReplacement = async (composerScope: ParentNode, handoff: AppExternalHandoff): Promise<ComposerImageReplacement | { error: string }> => {
-      const transfer = handoff.mediaTransfer;
-      if (!transfer || transfer.source !== "initiatingComposerImage" || transfer.result !== "replaceSameAttachment" || transfer.consent !== "perInvocation") {
-        return { error: "This package does not declare reviewed composer-image replacement." };
-      }
-      const removeButtons = Array.from(composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
-      if (removeButtons.length !== 1) return { error: "CheeseWorld requires exactly one existing composer image." };
-      const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
-        .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
-      const originalFile = input?.files?.length === 1 ? input.files[0] : null;
-      let blob: Blob | null = originalFile;
-      let attachmentIdentity: ComposerImageReplacement["attachmentIdentity"] | null = originalFile && input
-        ? { kind: "file", input, name: originalFile.name, size: originalFile.size, type: originalFile.type, lastModified: originalFile.lastModified }
-        : null;
-      if (!blob) {
-        const previews = Array.from(composerScope.querySelectorAll<HTMLImageElement>('[data-testid="attachments"] img[src]'))
-          .filter((candidate) => candidate.offsetParent !== null && /^(?:blob:|data:image\/)/u.test(candidate.src));
-        if (previews.length !== 1) return { error: "The existing composer image cannot be transferred safely." };
-        try {
-          blob = await fetch(previews[0].src).then((response) => response.blob());
-          attachmentIdentity = { kind: "preview", image: previews[0], src: previews[0].src };
-        } catch (error) {
-          return { error: errorMessage(error) };
-        }
-      }
-      if (!blob || !attachmentIdentity) return { error: "The existing composer image cannot be transferred safely." };
-      if (!transfer.allowedMimeTypes.some((type) => type === blob.type) || blob.size < 1 || blob.size > transfer.maxBytes) {
-        return { error: "The composer image type or size is outside the reviewed CheeseWorld limits." };
-      }
-      return {
-        composerScope,
-        removeButton: removeButtons[0],
-        originalDataUrl: await blobToDataUrl(blob),
-        contentType: blob.type,
-        attachmentIdentity,
-      };
-    };
-    const launchExternalHandoff = async (id: string, options?: {
-      mode?: "captioned" | "randomMeme";
-      captions?: { topText: string; bottomText: string };
-    }): Promise<{ ok: boolean; error?: string }> => {
-      if (!navigator.userActivation?.isActive) {
-        return { ok: false, error: "Open a maker directly from its control." };
-      }
-      const handoff = (app.externalHandoffs || []).find((candidate) => candidate.id === id);
-      if (!handoff) return { ok: false, error: "This handoff is not declared by the package." };
-      const mode = options?.mode || "captioned";
-      if (!(handoff.modes || ["captioned"]).includes(mode)) return { ok: false, error: "This handoff mode is not declared by the package." };
-      // The package owns its loading treatment; the host owns optional audio
-      // feedback so it remains consistent, user-preference-respecting, and
-      // unavailable to unreviewed package code.
-      playInterfaceLaunchSound();
-      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
-      const usesPackageFields = handoff.captionSource === "packageFields";
-      const explicitCaptions = usesPackageFields
-        ? validateExternalHandoffCaptions(options?.captions, handoff.captionMaxLength)
-        : null;
-      if (usesPackageFields && !explicitCaptions) return { ok: false, error: "Enter the reviewed top and bottom captions before opening a maker." };
-      const editor = usesPackageFields
-        ? null
-        : Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
-          .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
-      const split = explicitCaptions || splitExternalHandoffText(editor?.innerText || editor?.textContent || "");
-      if ((!split?.topText && !split?.bottomText) && mode !== "randomMeme" && !handoff.mediaTransfer) return { ok: false, error: usesPackageFields ? "Enter a top or bottom caption before opening a maker." : "Write a draft before opening a maker." };
-      let replacement: ComposerImageReplacement | null = null;
-      if (handoff.mediaTransfer) {
-        const prepared = await prepareComposerImageReplacement(composerScope, handoff);
-        if ("error" in prepared) return { ok: false, error: prepared.error };
-        replacement = prepared;
-      }
-      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string }>({
-        type: "milxdy:externalHandoff",
-        appId: app.id,
-        handoffId: handoff.id,
-        adapter: handoff.adapter,
-        target: handoff.target,
-        mode,
-        ...(split || { topText: "", bottomText: "" }),
-        ...(replacement ? { imageDataUrl: replacement.originalDataUrl } : {}),
-      });
-      const result = response && response.ok === true
-        ? replacement
-          ? await replaceComposerImage(replacement, response.imageDataUrl)
-          : await attachImageToComposer(composerScope, response.imageDataUrl, "remilia-maker.png")
-        : { ok: false, error: response?.error || "The maker handoff could not start." };
-      recordRuntimeDiagnostic(`externalHandoff.${app.id}`, { handoff: handoff.id, ok: result.ok, updatedAt: Date.now() });
-      return result;
-    };
-    const queryRemoteService: MilxdyComposerActionContext["queryRemoteService"] = async (id, request) => {
-      if (!navigator.userActivation?.isActive) return { ok: false, error: "Open the gallery from its control." };
-      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
-      if (!query) return { ok: false, error: "This remote gallery is not declared by the package." };
-      if (!query.resources.includes(request.resource)) return { ok: false, error: "This remote gallery resource is not declared by the package." };
-      const response = await safeRuntimeMessage<Awaited<ReturnType<MilxdyComposerActionContext["queryRemoteService"]>>>({
-        type: "milxdy:remoteQuery", appId: app.id, queryId: query.id, request,
-      });
-      return response?.ok === true
-        ? { ok: true, page: response.page, facets: response.facets }
-        : { ok: false, error: response?.error || "The remote gallery is unavailable." };
-    };
-    const suggestRemoteQueryFacets: MilxdyComposerActionContext["suggestRemoteQueryFacets"] = async (id) => {
-      if (!navigator.userActivation?.isActive) return { ok: false, error: "Request suggestions from the Tags control.", suggestions: [] };
-      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
-      const declaration = query?.composerSuggestions;
-      if (!query || !declaration || !query.resources.includes("facets")) {
-        return { ok: false, error: "Composer suggestions are not declared for this gallery.", suggestions: [] };
-      }
-      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
-      const editor = Array.from(composerScope.querySelectorAll<HTMLElement>(COMPOSER_SELECTOR))
-        .find((candidate) => candidate.isContentEditable && candidate.offsetParent !== null);
-      const suggestions = deriveComposerKeywordSuggestions(editor?.innerText || editor?.textContent || "", declaration);
-      return { ok: true, suggestions };
-    };
-    const remoteQueryAttachmentFileName = (contentType: string | undefined): string => {
-      const extension = contentType === "image/png" ? "png"
-        : contentType === "image/jpeg" ? "jpg"
-          : contentType === "image/gif" ? "gif"
-            : "webp";
-      return `remibooru-result.${extension}`;
-    };
-    const composerImageAttachmentCount = (composerScope: ParentNode): number =>
-      composerScope.querySelectorAll('button[aria-label*="remove media" i], button[data-testid="removeMedia"]').length;
-    const attachRemoteQueryResult: MilxdyComposerActionContext["attachRemoteQueryResult"] = async (id, itemId) => {
-      if (!navigator.userActivation?.isActive) return { ok: false, error: "Attach a gallery result from its control." };
-      const query = (app.remoteQueries || []).find((candidate) => candidate.id === id);
-      if (!query || !query.resultActions?.includes("attachToInitiatingComposer")) {
-        return { ok: false, error: "This gallery does not declare composer attachment." };
-      }
-      if (typeof itemId !== "string" || itemId.length < 1 || itemId.length > 128) {
-        return { ok: false, error: "This gallery result is invalid." };
-      }
-      const composerScope = currentButton().closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
-      if (composerImageAttachmentCount(composerScope) >= 4) {
-        return { ok: false, error: "X's composer supports up to 4 images." };
-      }
-      const response = await safeRuntimeMessage<{ ok?: boolean; error?: string; imageDataUrl?: string; contentType?: string }>({
-        type: "milxdy:remoteQueryAttach", appId: app.id, queryId: query.id, itemId,
-      });
-      const result = response?.ok === true
-        ? await attachImageToComposer(composerScope, response.imageDataUrl, remoteQueryAttachmentFileName(response.contentType))
-        : { ok: false, error: response?.error || "The gallery result could not be attached." };
-      recordRuntimeDiagnostic(`remoteQueryAttachment.${app.id}`, { query: query.id, ok: result.ok, updatedAt: Date.now() });
-      return result;
-    };
-    const replaceComposerImage = async (replacement: ComposerImageReplacement, imageDataUrl: string | undefined): Promise<{ ok: boolean; error?: string }> => {
-      const invoker = currentButton();
-      const currentScope = invoker.closest<HTMLElement>('[role="dialog"], [aria-modal="true"], form') || document;
-      const scopeNode = replacement.composerScope as Node;
-      const removeButtons = Array.from(replacement.composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
-      const identityMatches = replacement.attachmentIdentity.kind === "file"
-        ? (() => {
-          const current = replacement.attachmentIdentity.input.files?.length === 1 ? replacement.attachmentIdentity.input.files[0] : null;
-          return replacement.attachmentIdentity.input.isConnected && current?.name === replacement.attachmentIdentity.name
-            && current.size === replacement.attachmentIdentity.size && current.type === replacement.attachmentIdentity.type
-            && current.lastModified === replacement.attachmentIdentity.lastModified;
-        })()
-        : replacement.attachmentIdentity.image.isConnected && replacement.attachmentIdentity.image.src === replacement.attachmentIdentity.src;
-      if (!invoker.isConnected || !scopeNode.isConnected || currentScope !== replacement.composerScope || removeButtons.length !== 1 || removeButtons[0] !== replacement.removeButton || !replacement.removeButton.isConnected || !identityMatches) {
-        return { ok: false, error: "The initiating composer or its image changed before CheeseWorld finished." };
-      }
-      replacement.removeButton.click();
-      const deadline = Date.now() + 3_000;
-      while (replacement.removeButton.isConnected && Date.now() < deadline) {
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
-      }
-      if (replacement.removeButton.isConnected) return { ok: false, error: "X did not release the original composer image." };
-      const attached = await attachImageToComposer(replacement.composerScope, imageDataUrl, "cheeseworld-deepfry.png", false);
-      const replacementAccepted = attached.ok && await waitForComposerImage(replacement.composerScope, replacement.removeButton);
-      if (replacementAccepted) return { ok: true };
-      const restored = await attachImageToComposer(replacement.composerScope, replacement.originalDataUrl, "cheeseworld-original", false);
-      const restoreAccepted = restored.ok && await waitForComposerImage(replacement.composerScope, replacement.removeButton);
-      const replacementError = attached.error || "X did not accept the CheeseWorld replacement image.";
-      return { ok: false, error: restoreAccepted ? `${replacementError} The original image was restored.` : `${replacementError} The original image could not be restored.` };
-    };
-    const waitForComposerImage = async (composerScope: ParentNode, previousRemoveButton: HTMLButtonElement): Promise<boolean> => {
-      const deadline = Date.now() + 5_000;
-      while (Date.now() < deadline) {
-        const removeButtons = Array.from(composerScope.querySelectorAll<HTMLButtonElement>('button[aria-label*="remove media" i], button[data-testid="removeMedia"]'));
-        if (removeButtons.length === 1 && removeButtons[0] !== previousRemoveButton && removeButtons[0].isConnected) return true;
-        await new Promise<void>((resolve) => window.setTimeout(resolve, 50));
-      }
-      return false;
-    };
-    const attachImageToComposer = async (composerScope: ParentNode, imageDataUrl: string | undefined, fileName: string, preserveExisting = true): Promise<{ ok: boolean; error?: string }> => {
-      if (typeof imageDataUrl !== "string" || !/^data:image\/(?:png|jpeg|gif|webp);base64,/u.test(imageDataUrl)) {
-        return { ok: false, error: "The image handoff returned unsupported media." };
-      }
-      try {
-        const blob = await fetch(imageDataUrl).then((response) => response.blob());
-        if (!["image/png", "image/jpeg", "image/gif", "image/webp"].includes(blob.type) || blob.size === 0 || blob.size > 10 * 1024 * 1024) {
-          return { ok: false, error: "The image is unavailable or too large." };
-        }
-        const input = Array.from(composerScope.querySelectorAll<HTMLInputElement>('input[type="file"]'))
-          .find((candidate) => candidate.accept.includes("image") || candidate.getAttribute("data-testid") === "fileInput");
-        if (!input) return { ok: false, error: "X's media control is unavailable." };
-        // X accepts a bounded image FileList. Preserve its current draft files so
-        // successive explicit gallery clicks accumulate instead of replacing them.
-        const existingFiles = preserveExisting ? Array.from(input.files || []) : [];
-        const maxAttachments = 4;
-        if (existingFiles.length >= maxAttachments) {
-          return { ok: false, error: `X's composer supports up to ${maxAttachments} images.` };
-        }
-        const transfer = new DataTransfer();
-        for (const existingFile of existingFiles) transfer.items.add(existingFile);
-        transfer.items.add(new File([blob], fileName, { type: blob.type }));
-        input.files = transfer.files;
-        if (input.files?.length !== existingFiles.length + 1) return { ok: false, error: "X's media control rejected the selected image." };
-        input.dispatchEvent(new Event("input", { bubbles: true }));
-        input.dispatchEvent(new Event("change", { bubbles: true }));
-        return { ok: true };
-      } catch (error) {
-        return { ok: false, error: errorMessage(error) };
-      }
-    };
     activeComposerAction = { appId: app.id, ownerId, button, panel, close };
     document.addEventListener("pointerdown", dismiss, true);
     window.addEventListener("keydown", dismissOnEscape, true);
     document.addEventListener("scroll", scheduleComposerActionPosition, true);
     window.addEventListener("resize", scheduleComposerActionPosition);
     try {
-      await installComposerActionPackageStyles(app, shadow);
+      void installComposerActionPackageStyles(app, shadow).catch((error) => {
+        recordRuntimeDiagnostic(`packageStyles.${app.id}`, {
+          error: errorMessage(error),
+          fallback: "host-style",
+        });
+      });
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
-      await Promise.resolve(module.onComposerAction({
+      await Promise.resolve(module.onComposerAction(createComposerActionContext({
+        app,
         kind: currentButton().closest('[role="dialog"]') ? "reply" : "post",
         panel: surface,
         signal: controller.signal,
         close,
         openNativeDrafts,
-        externalHandoffs: (app.externalHandoffs || []).map(({ id, label }) => ({ id, label })),
-        launchExternalHandoff,
-        remoteQueries: (app.remoteQueries || []).map(({ id, label }) => ({ id, label })),
-        queryRemoteService,
-        suggestRemoteQueryFacets,
-        attachRemoteQueryResult,
-      }));
+        services,
+      })));
       if (controller.signal.aborted || !panel.isConnected || activeComposerAction?.close !== close) return;
       panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);
       panelSizeObserver.observe(surface);
@@ -2657,28 +2347,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function injectComposerActionStyles(): void {
-    if (document.getElementById("milxdy-composer-action-styles")) return;
-    const style = document.createElement("style");
-    style.id = "milxdy-composer-action-styles";
-    style.textContent = `
-      .milxdy-composer-actions { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: 4px; vertical-align: middle; }
-      .milxdy-composer-action { display: inline-grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: rgb(83, 100, 113); font: 700 15px/1 system-ui; line-height: 0; cursor: pointer; }
-      .milxdy-composer-action:hover, .milxdy-composer-action:focus-visible, .milxdy-composer-action[aria-expanded="true"] { background: rgba(15, 20, 25, .10); outline: none; }
-      .milxdy-composer-action img { display: block; width: 18px; height: 18px; margin: 0; object-fit: contain; }
-      .milxdy-composer-drafts-icon { display: block; width: 20px; height: 20px; margin: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-      .milxdy-standard-counter-zero-fallback { color: rgb(83, 100, 113); font: 400 13px/10.4px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
-      html[data-milxdy-x-theme="dark"] .milxdy-composer-action,
-      html[data-milxdy-x-theme="dim"] .milxdy-composer-action { color: rgb(139, 152, 165); }
-      html[data-milxdy-x-theme="dark"] .milxdy-standard-counter-zero-fallback,
-      html[data-milxdy-x-theme="dim"] .milxdy-standard-counter-zero-fallback,
-      html[data-milxdy-settings-theme="dark"] .milxdy-standard-counter-zero-fallback { color: rgb(139, 152, 165); }
-      .milxdy-composer-action-panel { position: fixed; z-index: 2147483646; width: max-content; max-width: calc(100vw - 16px); max-height: min(560px, calc(100vh - 16px)); overflow: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: #1d1b19; box-shadow: none; }
-      .milxdy-reply-action-panel { position: fixed; z-index: 2147483646; width: min(300px, calc(100vw - 16px)); overflow: auto; padding: 0; }
-    `;
-    document.documentElement.append(style);
-  }
-
   async function installReplyActionPackageStyles(app: MilxdyAppManifest, shadow: ShadowRoot): Promise<void> {
     const hostStyle = document.createElement("style");
     hostStyle.textContent = `
@@ -2710,7 +2378,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       title: app.name,
       active: false,
       onActivate: () => {
-        void openApp(app, "dockOpen");
+        void openRailApp(app);
       },
       onDeactivate: () => {
         void closeApp(app);
@@ -2729,7 +2397,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function updateDockRegistration(app: MilxdyAppManifest): void {
     if (!app.dock) return;
-    if (state.enabledApps.has(app.id) && isRailPinned(app)) {
+    if (isRailPinned(app)) {
       registerDockMetadata(app);
       return;
     }
@@ -2738,9 +2406,39 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   async function loadRailPins(): Promise<void> {
-    const stored = await safeLocalGet({ [RAIL_PIN_KEY]: null, [RAIL_UNPIN_KEY]: [] });
+    const stored = await safeLocalGet({
+      [RAIL_PIN_KEY]: null,
+      [RAIL_UNPIN_KEY]: [],
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: false,
+    });
     applyStoredRailPins(stored?.[RAIL_PIN_KEY]);
     applyStoredRailUnpins(stored?.[RAIL_UNPIN_KEY]);
+    state.postReadingRailDefaultMigrated = stored?.[POST_READING_RAIL_DEFAULT_MIGRATION_KEY] === true;
+  }
+
+  async function applyPostReadingRailDefault(app: MilxdyAppManifest, enabled: boolean): Promise<void> {
+    const migration = migratePostReadingRailDefault({
+      appId: app.id,
+      enabled,
+      available: app.available !== false,
+      hasDock: Boolean(app.dock),
+      railSupported: app.hub?.rail.supported !== false,
+      railDefaultPinned: app.hub?.rail.defaultPinned === true,
+      alreadyMigrated: state.postReadingRailDefaultMigrated,
+      pinnedAppIds: state.railPinnedApps,
+      unpinnedAppIds: state.railUnpinnedApps,
+    });
+    if (!migration.changed) return;
+    state.railPinnedApps = new Set(migration.pinnedAppIds as Set<MilxdyAppId>);
+    state.railUnpinnedApps = new Set(migration.unpinnedAppIds as Set<MilxdyAppId>);
+    state.railPinsExplicit = true;
+    state.postReadingRailDefaultMigrated = migration.migrated;
+    const persisted = await safeLocalSet({
+      [RAIL_PIN_KEY]: Array.from(state.railPinnedApps),
+      [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
+      [POST_READING_RAIL_DEFAULT_MIGRATION_KEY]: true,
+    });
+    if (!persisted) state.postReadingRailDefaultMigrated = false;
   }
 
   async function loadFirstRunState(): Promise<void> {
@@ -2769,8 +2467,16 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function isRailPinned(app: MilxdyAppManifest): boolean {
     if (!app.dock || app.available === false || app.hub?.rail.supported === false) return false;
     if (state.railUnpinnedApps.has(app.id)) return false;
+    if (!state.enabledApps.has(app.id) && !isRailDiscoverableWhenDisabled(app)) return false;
     if (state.railPinnedApps.has(app.id)) return true;
-    return state.enabledApps.has(app.id) && app.hub?.rail.defaultPinned === true;
+    return app.hub?.rail.defaultPinned === true;
+  }
+
+  function isRailDiscoverableWhenDisabled(app: MilxdyAppManifest): boolean {
+    return state.site.id === "x"
+      && app.id === "reminetChat"
+      && app.defaultEnabled === false
+      && app.hub?.rail.defaultPinned === true;
   }
 
   function currentRailPins(): MilxdyAppId[] {
@@ -2842,9 +2548,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     const startedAt = performance.now();
     void app.setEnabled(enabled)
       .then(() => app.isEnabled())
-      .then((isEnabled) => {
+      .then(async (isEnabled) => {
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);
@@ -2877,17 +2584,15 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function resetAppSettings(app: MilxdyAppManifest): void {
     if (app.available === false) return;
     const plan = appResetPlan(app);
-    if (!hasResetWork(plan)) return;
-    const authoredDataWarning = app.id === "wikiLinks" || app.id === "miladymaxxer"
-      ? " This also resets user-authored aliases, deny terms, and handle lists for this app."
-      : "";
-    if (!window.confirm(`Reset ${app.name} settings to their defaults?${authoredDataWarning}`)) return;
+    if (!planHasResetWork(plan)) return;
+    if (!window.confirm(resetPlanConfirmationMessage(app, plan))) return;
     const startedAt = performance.now();
     void executeAppResetPlan(plan)
       .then(async (result) => {
         const isEnabled = await app.isEnabled();
         if (isEnabled) {
           state.enabledApps.add(app.id);
+          await applyPostReadingRailDefault(app, true);
           ensureDefaultRailPin(app);
           updateScannerConfiguration();
           updateDockRegistration(app);
@@ -2910,6 +2615,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           propertyRemovals: plan.propertyRemovals.map((entry) => settingResetDiagnostic(entry)),
           skippedSharedKeys: plan.skippedSharedKeys,
           skippedSettings: plan.skippedSettings,
+          preservedResources: plan.preservedResources,
+          authoredData: plan.authoredData,
           localRemoved: result.localRemoved,
           syncRemoved: result.syncRemoved,
           localSet: result.localSet,
@@ -2924,6 +2631,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
           syncKeys: plan.syncKeys,
           skippedSharedKeys: plan.skippedSharedKeys,
           skippedSettings: plan.skippedSettings,
+          preservedResources: plan.preservedResources,
+          authoredData: plan.authoredData,
           error: errorMessage(error),
           updatedAt: Date.now(),
         });
@@ -2937,84 +2646,36 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     renderHubPanel();
   }
 
+  const appPresetService = createAppPresetService({
+    storage: chrome.storage,
+    apps: () => state.apps.filter(app => app.available !== false && app.setEnabled),
+    blocked: (app, mode) => Boolean(appEnableBlockedForPerformance(app, mode, budgetForPerformanceMode(mode))),
+    active: () => !state.disposed,
+    parent: () => ensureHubPanel(),
+    refresh: refreshPresetRuntime,
+    prepare: () => enablementCoordinator.pause(),
+    release: () => enablementCoordinator.resume(),
+    diagnostic: data => recordRuntimeDiagnostic("hub.preset", data),
+  });
+
   function applyAppPreset(preset: AppPreset): void {
-    const startedAt = performance.now();
-    const performanceMode: PerformanceMode = preset === "lite" ? "fast" : preset === "full" ? "full" : "balanced";
-    const performanceBudget = budgetForPerformanceMode(performanceMode);
-    const toggleableApps = state.apps
-      .filter((app) => app.available !== false && app.setEnabled);
-    const presetApps = toggleableApps
-      .filter((app) => app.hub?.presets.includes(preset) === true);
-    const desiredEnabledAppIds = new Set<MilxdyAppId>(presetApps.map((app) => app.id));
-    const blockedApps = presetApps
-      .filter((app) => appEnableBlockedForPerformance(app, performanceMode, performanceBudget));
-    const blockedAppIds = new Set<MilxdyAppId>(blockedApps.map((app) => app.id));
-    const convergenceTasks = toggleableApps
-      .map(async (app) => {
-        const enabled = desiredEnabledAppIds.has(app.id) && !blockedAppIds.has(app.id);
-        await app.setEnabled?.(enabled);
-        if (enabled) state.enabledApps.add(app.id);
-        else state.enabledApps.delete(app.id);
-        updateDockRegistration(app);
-      });
-    const disabledTargetApps = toggleableApps
-      .filter((app) => !desiredEnabledAppIds.has(app.id) || blockedAppIds.has(app.id));
-    const pinned = state.apps
-      .filter((app) => app.available !== false && app.setEnabled)
-      .filter((app) => app.dock && app.hub?.rail.supported !== false && app.hub?.rail.defaultPinned && desiredEnabledAppIds.has(app.id) && !blockedAppIds.has(app.id))
-      .map((app) => app.id);
-    state.railPinsExplicit = true;
-    state.railPinnedApps = new Set(pinned);
-    for (const appId of pinned) state.railUnpinnedApps.delete(appId);
-    void Promise.all(convergenceTasks)
-      .then(() => safeLocalSet({
-        [RAIL_PIN_KEY]: pinned,
-        [RAIL_UNPIN_KEY]: Array.from(state.railUnpinnedApps),
-        [FIRST_RUN_STATUS_KEY]: "complete",
-        [PERFORMANCE_MODE_KEY]: performanceMode,
-      }))
-      .then(async () => {
-        state.firstRunPending = false;
-        state.performanceMode = performanceMode;
-        state.budget = budgetForPerformanceMode(performanceMode);
-        activateStartupBudgetWindow();
-        applyRuntimeDocumentMarkers(performanceMode);
-        configureTwitterScannerFromEffectiveBudget(interestedSurfaceKinds());
-        for (const app of state.apps) {
-          if (await app.isEnabled()) {
-            state.enabledApps.add(app.id);
-            updateDockRegistration(app);
-          } else {
-            state.enabledApps.delete(app.id);
-            updateDockRegistration(app);
-          }
-        }
-        updateScannerConfiguration();
-        syncHiddenRailItems();
-        scheduleIdlePreloads();
-        renderHubPanel();
-        recordRuntimeDiagnostic("hub.preset", {
-          preset,
-          performanceMode: state.performanceMode,
-          enabledTargetCount: desiredEnabledAppIds.size - blockedAppIds.size,
-          disabledTargetCount: disabledTargetApps.length,
-          blockedTargetCount: blockedApps.length,
-          blockedApps: blockedApps.map((app) => app.id),
-          disabledTargetApps: disabledTargetApps.map((app) => app.id),
-          enabledApps: Array.from(state.enabledApps),
-          railPinnedApps: pinned,
-          updateMs: Math.round((performance.now() - startedAt) * 10) / 10,
-          updatedAt: Date.now(),
-        });
-      })
-      .catch((error) => {
-        recordRuntimeDiagnostic("hub.preset", {
-          preset,
-          error: errorMessage(error),
-          updatedAt: Date.now(),
-        });
-        renderHubPanel();
-      });
+    void appPresetService.apply(preset).catch(() => {
+      showPresetResult({ status: "failed", message: "Could not review this preset. Your settings were not changed." }, ensureHubPanel());
+    });
+  }
+
+  async function refreshPresetRuntime(): Promise<void> {
+    const stored = await chrome.storage.local.get([RAIL_PIN_KEY, RAIL_UNPIN_KEY, FIRST_RUN_STATUS_KEY, PERFORMANCE_MODE_KEY]);
+    state.railPinsExplicit = Array.isArray(stored[RAIL_PIN_KEY]);
+    state.railPinnedApps = new Set(Array.isArray(stored[RAIL_PIN_KEY]) ? stored[RAIL_PIN_KEY] : []);
+    state.railUnpinnedApps = new Set(Array.isArray(stored[RAIL_UNPIN_KEY]) ? stored[RAIL_UNPIN_KEY] : []);
+    state.firstRunPending = stored[FIRST_RUN_STATUS_KEY] !== "complete" && stored[FIRST_RUN_STATUS_KEY] !== "skipped";
+    state.performanceMode = normalizePerformanceMode(stored[PERFORMANCE_MODE_KEY]);
+    state.budget = budgetForPerformanceMode(state.performanceMode);
+    activateStartupBudgetWindow();
+    applyRuntimeDocumentMarkers(state.performanceMode);
+    await enablementCoordinator.reconcile(state.apps.filter(app => app.available !== false));
+    updateScannerConfiguration(); syncHiddenRailItems(); scheduleIdlePreloads(); renderHubPanel();
   }
 
   function syncHiddenRailItems(): void {
@@ -3057,19 +2718,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   function registerAddOnsCatalogDockItem(): void {
     if (state.addOnsCatalogDockRegistration) return;
-    state.addOnsCatalogDockRegistration = getOverlayDock().register({
-      id: "milxdyAddOnsCatalog",
-      label: "Get more add-ons",
-      icon: "+",
-      stackable: false,
-      title: "Get more add-ons",
-      active: false,
-      onActivate: () => {
-        // Create and schedule the cue while this click still has a user gesture,
-        // but let the new tab take focus before the first note lands.
-        playInterfaceLaunchSound(0.25);
-        void chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" });
-      },
+    const dock = getOverlayDock();
+    const feedback = createCatalogFeedback(() => dock.getSide());
+    state.runtimeDisposables.add(() => feedback.dispose());
+    state.addOnsCatalogDockRegistration = registerAddonsCatalogAction({
+      dock,
+      send: () => chrome.runtime.sendMessage({ type: "milxdy:openAddonsCatalog" }),
+      playCue: () => playInterfaceLaunchSound(0.25),
+      feedback: feedback.show,
     });
   }
 
@@ -3080,7 +2736,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     });
     state.interfaceSoundsEnabled = stored?.[INTERFACE_SOUNDS_ENABLED_KEY] !== false;
     const volume = Number(stored?.[INTERFACE_SOUNDS_VOLUME_KEY]);
-    state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
+    state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(2, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
   }
 
   function observeInterfaceSoundSettings(): void {
@@ -3089,7 +2745,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       if (changes[INTERFACE_SOUNDS_ENABLED_KEY]) state.interfaceSoundsEnabled = changes[INTERFACE_SOUNDS_ENABLED_KEY].newValue !== false;
       if (changes[INTERFACE_SOUNDS_VOLUME_KEY]) {
         const volume = Number(changes[INTERFACE_SOUNDS_VOLUME_KEY].newValue);
-        state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
+        state.interfaceSoundsVolume = Number.isFinite(volume) ? Math.min(2, Math.max(0, volume)) : DEFAULT_INTERFACE_SOUNDS_VOLUME;
       }
     };
     chrome.storage.onChanged.addListener(listener);
@@ -3097,48 +2753,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function playInterfaceLaunchSound(delay = 0): void {
-    if (!state.interfaceSoundsEnabled || state.interfaceSoundsVolume <= 0) return;
-    try {
-      const AudioCtor = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-      if (!AudioCtor) return;
-      const context = new AudioCtor();
-      void context.resume();
-      const now = context.currentTime + delay;
-      const master = context.createGain();
-      // Ten percent below the previous cue's compensation, while preserving the
-      // user's global 0–1 Interface sounds preference.
-      master.gain.setValueAtTime(Math.max(0.0001, Math.min(0.702, state.interfaceSoundsVolume * 1.035)), now);
-      master.connect(context.destination);
-      const notes = [
-        { frequency: 783.99, offset: 0, level: 0.38, release: 0.65 },
-        { frequency: 987.77, offset: 0.13, level: 0.30, release: 0.55 },
-        { frequency: 1174.66, offset: 0.27, level: 0.23, release: 0.27 },
-      ];
-      const partials = [
-        { ratio: 1, level: 1 },
-        { ratio: 2.01, level: 0.32 },
-        { ratio: 3.44, level: 0.15 },
-      ];
-      for (const note of notes) {
-        for (const partial of partials) {
-          const oscillator = context.createOscillator();
-          const envelope = context.createGain();
-          const start = now + note.offset;
-          const peak = Math.max(0.0001, note.level * partial.level);
-          oscillator.type = "sine";
-          oscillator.frequency.setValueAtTime(note.frequency * partial.ratio, start);
-          envelope.gain.setValueAtTime(0.0001, start);
-          envelope.gain.exponentialRampToValueAtTime(peak, start + 0.009);
-          envelope.gain.exponentialRampToValueAtTime(0.0001, start + note.release);
-          oscillator.connect(envelope).connect(master);
-          oscillator.start(start);
-          oscillator.stop(start + note.release + 0.02);
-        }
-      }
-      window.setTimeout(() => void context.close(), Math.ceil((delay + 1) * 1_000));
-    } catch {
-      // Audio restrictions must never block the catalog tab.
-    }
+    playCatalogLaunchSound(state.interfaceSoundsEnabled, state.interfaceSoundsVolume, delay);
   }
 
   function registerHideAllDockMetadata(): void {
@@ -3181,17 +2796,28 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function openHubPanel(): void {
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && !state.hubPanelRoot?.contains(active)) state.hubOpener = active;
     ensureHubPanel();
     renderHubPanel();
+    if (state.hubPanelRoot && !state.hubPanelRoot.contains(active)) focusHubInitialControl(state.hubPanelRoot);
     state.hubDockRegistration?.update({ active: true, title: "Apps & Features" });
   }
 
   function closeHubPanel(): void {
     const root = state.hubPanelRoot;
+    const ownedFocus = Boolean(root?.contains(document.activeElement));
     state.hubPanelRoot = null;
+    root?.removeAttribute("id");
     state.hubDockSettingsOpen = false;
     state.hubDockRegistration?.update({ active: false });
-    animateOverlayAppClose(root, () => root?.remove());
+    const opener = state.hubOpener;
+    state.hubOpener = null;
+    animateOverlayAppClose(root, () => {
+      const focusStillOwned = root?.contains(document.activeElement) || document.activeElement === document.body;
+      root?.remove();
+      if (!state.hubPanelRoot && ownedFocus && focusStillOwned && opener?.isConnected) opener.focus({ preventScroll: true });
+    });
   }
 
   function ensureHubPanel(): HTMLElement {
@@ -3206,6 +2832,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       prepareOverlayAppRoot(root);
       root.setAttribute("role", "region");
       root.setAttribute("aria-label", "Apps & Features");
+      root.addEventListener("keydown", (event) => {
+        handleHubEscape(event, root!, closeHubPanel);
+      });
     } else {
       root.classList.add("milxdy-overlay-app-shell");
     }
@@ -3214,173 +2843,23 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return root;
   }
 
-  function renderHubPanel(): void {
-    const root = state.hubPanelRoot;
-    if (!root?.isConnected) return;
-    const dockSide = getOverlayDock().getSide();
-    root.dataset.side = dockSide;
-    root.dataset.theme = currentHubTheme();
-    root.style.setProperty("--milxdy-overlay-app-transform-origin", dockSide === "right" ? "top right" : "top left");
-    root.innerHTML = "";
+  const { orderedHubApps, appendHubSection } = createHubSectionServices({
+      getOrder: () => getOverlayDock().getAppOrder(), isHubRailApp, appHubCard: (app) => appHubCard(app), appHubCardFailure: (app) => appHubCardFailure(app), recordDiagnostic: recordRuntimeDiagnostic
+  });
+  const renderHubPanel = createHubPanelRenderer({
+      state, getDock: getOverlayDock, currentTheme: currentHubTheme, presetActions, completeFirstRun, closeHubPanel, appHubSetupSettings, appHubRuntimeSummary, appMatchesSearch: appMatchesHubSearch, hubPackageKind, orderedHubApps, appendHubSection, markLayoutReady: markOverlayAppLayoutReady
+  });
+  const appHubGeneratedFeatureSettings = createHubGeneratedFeatureSettings({
+      hubPackageKind, read: readManifestSettingValue, write: writeManifestSettingValue, setValue: setGeneratedControlValue, optionValue: settingOptionValue, persist: persistGeneratedControl, textValues: textListValues
+  });
 
-    const header = document.createElement("div");
-    header.className = "milxdy-app-hub-header";
-    const title = document.createElement("strong");
-    title.textContent = "Apps & Features";
-    const headerActions = document.createElement("div");
-    headerActions.className = "milxdy-app-hub-header-actions";
-    const settings = document.createElement("button");
-    settings.type = "button";
-    settings.className = "milxdy-app-hub-settings-button";
-    settings.title = state.hubDockSettingsOpen ? "Back to apps and features" : "Rail settings";
-    settings.setAttribute("aria-label", settings.title);
-    settings.setAttribute("aria-expanded", String(state.hubDockSettingsOpen));
-    settings.setAttribute("aria-pressed", String(state.hubDockSettingsOpen));
-    settings.textContent = state.hubDockSettingsOpen ? "\u2190" : "\u2699";
-    settings.addEventListener("click", () => {
-      state.hubDockSettingsOpen = !state.hubDockSettingsOpen;
-      renderHubPanel();
-    });
-    const close = document.createElement("button");
-    close.type = "button";
-    close.textContent = "Minimize";
-    close.title = "Minimize Apps & Features";
-    close.setAttribute("aria-label", "Minimize Apps & Features");
-    close.addEventListener("click", closeHubPanel);
-    headerActions.append(settings, close);
-    header.append(title, headerActions);
-
-    if (state.firstRunPending) {
-      const firstRun = document.createElement("section");
-      firstRun.className = "milxdy-app-hub-first-run";
-      const heading = document.createElement("strong");
-      heading.textContent = "Light Start";
-      const copy = document.createElement("p");
-      copy.textContent = "Choose an exact app set, default rail pins, and matching Performance mode.";
-      const actions = presetActions();
-      const skip = document.createElement("button");
-      skip.type = "button";
-      skip.textContent = "Keep defaults";
-      skip.addEventListener("click", () => completeFirstRun("skipped"));
-      actions.append(skip);
-      firstRun.append(heading, copy, actions);
-      root.append(header, firstRun);
-    } else {
-      root.append(header);
-    }
-
-    if (state.hubDockSettingsOpen) {
-      const dockSettings = getOverlayDock().createSettingsPanel(renderHubPanel, {
-        excludeActionIds: ["milxdy.addApps"],
-      });
-      dockSettings.classList.add("milxdy-app-hub-dock-settings");
-      dockSettings.append(appHubSetupSettings());
-      root.append(dockSettings);
-      markOverlayAppLayoutReady(root, true);
-      return;
-    }
-
-    root.append(appHubRuntimeSummary());
-
-    const search = document.createElement("label");
-    search.className = "milxdy-app-hub-search";
-    const searchLabel = document.createElement("span");
-    searchLabel.textContent = "Search apps and features";
-    const searchInput = document.createElement("input");
-    searchInput.type = "search";
-    searchInput.placeholder = "Search by name, category, setting, data, or permissions";
-    searchInput.value = state.hubSearchQuery;
-    searchInput.addEventListener("input", () => {
-      state.hubSearchQuery = searchInput.value;
-      renderHubPanel();
-      const nextInput = state.hubPanelRoot?.querySelector<HTMLInputElement>(".milxdy-app-hub-search input");
-      nextInput?.focus();
-      const position = nextInput?.value.length ?? 0;
-      nextInput?.setSelectionRange(position, position);
-    });
-    search.append(searchLabel, searchInput);
-    root.append(search);
-
-    const list = document.createElement("div");
-    list.className = "milxdy-app-hub-list";
-    const hubApps = state.apps
-      .filter((candidate) => candidate.hub)
-      .filter((app) => appMatchesHubSearch(app, state.hubSearchQuery));
-    const appCards = orderedHubApps(hubApps.filter((app) => hubPackageKind(app) === "app"));
-    const featureApps = hubApps.filter((app) => hubPackageKind(app) === "feature");
-    const packageApps = hubApps.filter((app) => hubPackageKind(app) === "theme");
-    appendHubSection(list, "Apps", appCards);
-    appendHubSection(list, "Features", featureApps);
-    appendHubSection(list, "Themes", packageApps);
-    if (hubApps.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "milxdy-app-hub-empty";
-      empty.textContent = "No apps or features match that search.";
-      list.append(empty);
-    }
-    root.append(list);
-    markOverlayAppLayoutReady(root, true);
-  }
-
-  function orderedHubApps(apps: MilxdyAppManifest[]): MilxdyAppManifest[] {
-    const railApps = apps.filter(isHubRailApp);
-    const nonRailApps = apps.filter((app) => !isHubRailApp(app));
-    const byId = new Map(railApps.map((app) => [app.id, app]));
-    const ordered: MilxdyAppManifest[] = [];
-    for (const id of getOverlayDock().getAppOrder()) {
-      const app = byId.get(id as MilxdyAppId);
-      if (!app) continue;
-      ordered.push(app);
-      byId.delete(id as MilxdyAppId);
-    }
-    ordered.push(...Array.from(byId.values()));
-    return [...ordered, ...nonRailApps];
-  }
-
-  function appendHubSection(list: HTMLElement, label: string, apps: MilxdyAppManifest[]): void {
-    if (!apps.length) return;
-    const section = document.createElement("section");
-    section.className = "milxdy-app-hub-section";
-    section.dataset.section = label.toLowerCase();
-    const heading = document.createElement("div");
-    heading.className = "milxdy-app-hub-section-title";
-    const headingLabel = document.createElement("strong");
-    headingLabel.textContent = label;
-    heading.append(headingLabel);
-    if (label === "Apps" && apps.some((app) => isHubRailApp(app))) {
-      const hint = document.createElement("span");
-      hint.textContent = "reorder rail apps to change stacking priority";
-      heading.append(hint);
-    }
-    section.append(heading);
-    for (const app of apps) {
-      try {
-        section.append(appHubCard(app));
-      } catch {
-        // One malformed app must not prevent the remaining, independently
-        // valid Apps & Features cards from rendering.
-        recordRuntimeDiagnostic(`hub.card.${app.id}`, {
-          error: "card render failed",
-          updatedAt: Date.now(),
-        });
-        section.append(appHubCardFailure(app));
-      }
-    }
-    list.append(section);
-  }
-
-  function appHubCardFailure(app: MilxdyAppManifest): HTMLElement {
-    const card = document.createElement("section");
-    card.className = "milxdy-app-hub-card milxdy-app-hub-card-error";
-    card.dataset.hubAppId = app.id;
-    card.dataset.tier = hubPackageKind(app);
-    const title = document.createElement("strong");
-    title.textContent = app.name;
-    const detail = document.createElement("p");
-    detail.textContent = "This app could not be rendered.";
-    card.append(title, detail);
-    return card;
-  }
+  const appHubCardFailure = createHubCardFailure(hubPackageKind);
+  const appHubEnableControl = createHubEnableControl({
+      state, blocked: appEnableBlockedByPerformance, setEnabled: setAppEnabled
+  });
+  const appHubCard = createHubAppCard({
+      state, hubPackageKind, isHubRailApp, isRailPinned, appHubLifecycle, runtimeAssetUrl, resolveIcon: resolveAppIconAsset, startDrag: startHubAppDrag, renderHubPanel, appHubEnableControl, packageKindLabel, appHubMetadataNotes, appRuntimeSummary, formatPhase: formatRemiStatsRuntimePhaseState, setRailPinned, openApp, getDock: getOverlayDock, moveHubAppBy, hasResettableStorage, resetAppSettings, appHubDetails, generatedSettings: appHubGeneratedFeatureSettings
+  });
 
   function isHubRailApp(app: MilxdyAppManifest): boolean {
     return Boolean(app.dock && app.hub?.rail.supported !== false);
@@ -3404,7 +2883,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   function presetActions(): HTMLElement {
     const actions = document.createElement("div");
     actions.className = "milxdy-app-hub-preset-actions";
+    const restore = document.createElement("button"); restore.type = "button";
+    restore.textContent = "Saved setups…";
+    restore.addEventListener("click", () => void appPresetService.restore().catch(() => undefined));
     actions.append(
+      restore,
       presetButton("Lite apps", "lite"),
       presetButton("Balanced apps", "balanced"),
       presetButton("All apps", "full"),
@@ -3798,359 +3281,6 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return panel;
   }
 
-  function appHubCard(app: MilxdyAppManifest): HTMLElement {
-    const card = document.createElement("section");
-    card.className = "milxdy-app-hub-card";
-    card.dataset.hubAppId = app.id;
-    card.dataset.tier = hubPackageKind(app);
-    card.dataset.available = String(app.available !== false);
-    card.dataset.enabled = String(state.enabledApps.has(app.id));
-    card.dataset.railApp = String(isHubRailApp(app));
-    card.dataset.pinned = String(isRailPinned(app));
-    card.dataset.expanded = String(state.hubExpandedApps.has(app.id));
-    const lifecycle = appHubLifecycle(app);
-    card.dataset.lifecycle = lifecycle.state;
-
-    const icon = document.createElement("span");
-    icon.className = "milxdy-app-hub-icon";
-    if (app.dock?.icon) {
-      const image = document.createElement("img");
-      image.className = "milxdy-app-hub-icon-img";
-      image.src = runtimeAssetUrl(resolveAppIconAsset(app.dock.icon));
-      image.alt = "";
-      image.decoding = "async";
-      icon.appendChild(image);
-    } else {
-      icon.textContent = (app.dock?.label || app.name).slice(0, 1).toUpperCase();
-    }
-
-    const summary = document.createElement("button");
-    summary.className = "milxdy-app-hub-card-summary";
-    summary.type = "button";
-    summary.setAttribute("aria-expanded", String(state.hubExpandedApps.has(app.id)));
-    summary.setAttribute("aria-label", `${state.hubExpandedApps.has(app.id) ? "Collapse" : "Expand"} ${app.name}`);
-    if (isHubRailApp(app)) {
-      const dragHandle = document.createElement("span");
-      dragHandle.className = "milxdy-app-hub-drag-handle";
-      dragHandle.title = "Drag to reorder app stacking";
-      dragHandle.setAttribute("aria-hidden", "true");
-      dragHandle.textContent = "⋮⋮";
-      dragHandle.addEventListener("pointerdown", (event) => startHubAppDrag(event, app.id));
-      summary.append(dragHandle);
-    }
-    const summaryTitle = document.createElement("strong");
-    summaryTitle.textContent = app.name;
-    summaryTitle.title = app.name;
-    const summaryText = document.createElement("span");
-    summaryText.className = "milxdy-app-hub-card-title";
-    const lifecycleBadge = document.createElement("span");
-    lifecycleBadge.className = "milxdy-app-hub-lifecycle";
-    lifecycleBadge.dataset.state = lifecycle.state;
-    lifecycleBadge.textContent = lifecycle.label;
-    summaryText.append(summaryTitle, lifecycleBadge);
-    const expandIcon = document.createElement("span");
-    expandIcon.className = "milxdy-app-hub-expand-icon";
-    summary.append(icon, summaryText, expandIcon);
-    summary.addEventListener("click", () => {
-      if (state.hubExpandedApps.has(app.id)) state.hubExpandedApps.delete(app.id);
-      else state.hubExpandedApps.add(app.id);
-      renderHubPanel();
-    });
-
-    const body = document.createElement("div");
-    body.className = "milxdy-app-hub-body";
-    const enableControl = appHubEnableControl(app);
-    const description = document.createElement("p");
-    description.textContent = app.hub?.shortDescription || app.description;
-    const meta = document.createElement("span");
-    meta.textContent = `${packageKindLabel(app)} | ${app.hub?.category || "app"} | ${app.available === false ? "Unavailable in this build" : state.enabledApps.has(app.id) ? "On" : "Off"}`;
-    const notes = appHubMetadataNotes(app);
-    const runtime = document.createElement("span");
-    runtime.className = "milxdy-app-hub-runtime-state";
-    runtime.textContent = `${lifecycle.detail} | ${appRuntimeSummary(app)}`;
-    if (enableControl) body.append(enableControl);
-    body.append(description, meta, notes);
-    if (app.available === false && app.unavailableReason) {
-      const unavailable = document.createElement("span");
-      unavailable.className = "milxdy-app-hub-unavailable";
-      unavailable.textContent = app.unavailableReason;
-      body.append(unavailable);
-    }
-    body.append(runtime);
-
-    const controls = document.createElement("div");
-    controls.className = "milxdy-app-hub-controls";
-    if (app.available !== false && app.dock && app.hub?.rail.supported !== false) {
-      const pin = document.createElement("button");
-      pin.type = "button";
-      pin.textContent = isRailPinned(app) ? "Unpin" : "Pin";
-      pin.disabled = !state.enabledApps.has(app.id);
-      pin.addEventListener("click", () => setRailPinned(app.id, !isRailPinned(app)));
-      controls.append(pin);
-    }
-    if (app.available !== false && app.dock && state.enabledApps.has(app.id)) {
-      const open = document.createElement("button");
-      open.type = "button";
-      open.textContent = "Open";
-      open.addEventListener("click", () => {
-        void openApp(app, "hubOpen");
-      });
-      controls.append(open);
-    }
-    if (isHubRailApp(app)) {
-      const order = getOverlayDock().getAppOrder();
-      const index = order.indexOf(app.id);
-      for (const [label, delta] of [["Move up", -1], ["Move down", 1]] as const) {
-        const move = document.createElement("button");
-        move.type = "button";
-        move.textContent = label;
-        move.setAttribute("aria-label", `${label} ${app.name}`);
-        move.disabled = index < 0 || index + delta < 0 || index + delta >= order.length;
-        move.addEventListener("click", () => moveHubAppBy(app.id, delta, label));
-        controls.append(move);
-      }
-    }
-    if (app.available !== false && hasResettableStorage(app)) {
-      const reset = document.createElement("button");
-      reset.type = "button";
-      reset.textContent = "Reset";
-      reset.title = "Reset app settings";
-      reset.addEventListener("click", () => resetAppSettings(app));
-      controls.append(reset);
-    }
-    body.append(appHubDetails(app));
-    const generatedSettings = appHubGeneratedFeatureSettings(app);
-    if (generatedSettings) body.append(generatedSettings);
-
-    card.append(summary, body, controls);
-    return card;
-  }
-
-  function appHubEnableControl(app: MilxdyAppManifest): HTMLElement {
-    const row = document.createElement("div");
-    row.className = "milxdy-app-hub-enable-row";
-    const toggle = document.createElement("button");
-    toggle.type = "button";
-    toggle.className = "milxdy-app-hub-switch";
-    const switchKnob = document.createElement("span");
-    switchKnob.className = "milxdy-app-hub-switch-knob";
-    const switchText = document.createElement("span");
-    switchText.className = "milxdy-app-hub-switch-text";
-    const detail = document.createElement("span");
-    detail.className = "milxdy-app-hub-enable-detail";
-
-    if (app.available === false) {
-      toggle.disabled = true;
-      toggle.dataset.checked = "false";
-      toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-checked", "false");
-      toggle.setAttribute("aria-disabled", "true");
-      toggle.setAttribute("aria-label", `${app.name} unavailable in this build`);
-      switchText.textContent = "Unavailable";
-      detail.textContent = app.unavailableReason || "This app cannot be enabled right now.";
-    } else if (!app.setEnabled) {
-      toggle.disabled = true;
-      toggle.dataset.checked = "true";
-      toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-checked", "true");
-      toggle.setAttribute("aria-disabled", "true");
-      toggle.setAttribute("aria-label", `${app.name} is always on`);
-      switchText.textContent = "Always on";
-      detail.textContent = "Core feature";
-    } else {
-      const enabled = state.enabledApps.has(app.id);
-      const performanceBlock = enabled ? null : appEnableBlockedByPerformance(app);
-      toggle.dataset.checked = String(enabled);
-      toggle.setAttribute("role", "switch");
-      toggle.setAttribute("aria-checked", String(enabled));
-      if (performanceBlock) {
-        toggle.dataset.performanceBlocked = "true";
-        toggle.setAttribute("aria-disabled", "true");
-      }
-      toggle.setAttribute("aria-label", performanceBlock || `${enabled ? "Disable" : "Enable"} ${app.name}`);
-      toggle.title = performanceBlock || "";
-      switchText.textContent = enabled ? "On" : "Off";
-      detail.textContent = performanceBlock || (enabled ? "Click to disable this app." : "Click to enable this app.");
-      toggle.addEventListener("click", () => setAppEnabled(app, !state.enabledApps.has(app.id)));
-    }
-
-    toggle.append(switchKnob, switchText);
-    row.append(toggle, detail);
-    return row;
-  }
-
-  function appHubGeneratedFeatureSettings(app: MilxdyAppManifest): HTMLElement | null {
-    const settings = hubGeneratedFeatureSettings(app);
-    if (!settings.length) return null;
-    const section = document.createElement("section");
-    section.className = "milxdy-app-hub-generated-settings";
-    const title = document.createElement("strong");
-    title.textContent = "Settings";
-    section.append(title);
-    for (const setting of settings) section.append(appHubGeneratedSettingRow(setting));
-    return section;
-  }
-
-  function hubGeneratedFeatureSettings(app: MilxdyAppManifest): AppSettingDefinition[] {
-    if (hubPackageKind(app) !== "feature" && hubPackageKind(app) !== "app") return [];
-    return (app.settings || []).filter((setting) => (
-      setting.location === "appsAndFeatures"
-      && setting.advanced !== true
-      && (setting.scope === "feature" || setting.scope === "app")
-      && setting.control.type !== "action"
-      && setting.control.type !== "status"
-    ));
-  }
-
-  function appHubGeneratedSettingRow(setting: AppSettingDefinition): HTMLElement {
-    const row = document.createElement("label");
-    row.className = "milxdy-app-hub-generated-setting";
-    row.dataset.settingId = setting.id;
-    const text = document.createElement("span");
-    text.className = "milxdy-app-hub-generated-setting-text";
-    const label = document.createElement("strong");
-    label.textContent = setting.label;
-    text.append(label);
-    if (setting.description) {
-      const description = document.createElement("small");
-      description.textContent = setting.description;
-      text.append(description);
-    }
-    const control = appHubGeneratedSettingControl(setting);
-    row.append(text, control);
-    void readManifestSettingValue(setting).then((value) => {
-      if (!row.isConnected) return;
-      setGeneratedControlValue(control, value);
-    });
-    return row;
-  }
-
-  function appHubGeneratedSettingControl(setting: AppSettingDefinition): HTMLElement {
-    switch (setting.control.type) {
-      case "toggle":
-        return appHubGeneratedToggle(setting);
-      case "select":
-      case "segmented":
-        return appHubGeneratedSelect(setting);
-      case "slider":
-      case "number":
-        return appHubGeneratedNumber(setting);
-      case "text":
-      case "textarea":
-        return appHubGeneratedText(setting);
-      case "textList":
-        return appHubGeneratedTextList(setting);
-      default:
-        return appHubUnsupportedSetting(setting);
-    }
-  }
-
-  function appHubGeneratedToggle(setting: AppSettingDefinition): HTMLElement {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "milxdy-app-hub-switch milxdy-app-hub-generated-toggle";
-    button.dataset.checked = "false";
-    button.setAttribute("role", "switch");
-    button.setAttribute("aria-checked", "false");
-    button.setAttribute("aria-label", setting.label);
-    const knob = document.createElement("span");
-    knob.className = "milxdy-app-hub-switch-knob";
-    const text = document.createElement("span");
-    text.className = "milxdy-app-hub-switch-text";
-    text.textContent = "Off";
-    button.append(knob, text);
-    button.addEventListener("click", () => {
-      const next = button.dataset.checked !== "true";
-      setGeneratedControlValue(button, next);
-      void writeManifestSettingValue(setting, next).catch(() => {
-        setGeneratedControlValue(button, !next);
-      });
-    });
-    return button;
-  }
-
-  function appHubGeneratedSelect(setting: AppSettingDefinition): HTMLElement {
-    const select = document.createElement("select");
-    select.className = setting.control.type === "segmented"
-      ? "milxdy-app-hub-generated-segmented"
-      : "milxdy-app-hub-generated-select";
-    select.setAttribute("aria-label", setting.label);
-    for (const option of setting.control.options || []) {
-      const element = document.createElement("option");
-      element.value = settingOptionValue(option.value);
-      element.textContent = option.label;
-      select.append(element);
-    }
-    select.addEventListener("change", () => {
-      void persistGeneratedControl(setting, select);
-    });
-    return select;
-  }
-
-  function appHubGeneratedNumber(setting: AppSettingDefinition): HTMLElement {
-    const input = document.createElement("input");
-    input.className = "milxdy-app-hub-generated-number";
-    input.type = setting.control.type === "slider" ? "range" : "number";
-    input.setAttribute("aria-label", setting.label);
-    if (typeof setting.control.min === "number") input.min = String(setting.control.min);
-    if (typeof setting.control.max === "number") input.max = String(setting.control.max);
-    if (typeof setting.control.step === "number") input.step = String(setting.control.step);
-    input.addEventListener("change", () => {
-      void persistGeneratedControl(setting, input);
-    });
-    return input;
-  }
-
-  function appHubGeneratedText(setting: AppSettingDefinition): HTMLElement {
-    const input = setting.control.type === "textarea"
-      ? document.createElement("textarea")
-      : document.createElement("input");
-    input.className = "milxdy-app-hub-generated-text";
-    input.setAttribute("aria-label", setting.label);
-    if (input instanceof HTMLInputElement) input.type = "text";
-    if (setting.control.placeholder) input.placeholder = setting.control.placeholder;
-    input.addEventListener("change", () => {
-      void persistGeneratedControl(setting, input);
-    });
-    return input;
-  }
-
-  function appHubGeneratedTextList(setting: AppSettingDefinition): HTMLElement {
-    const control = document.createElement("div");
-    control.className = "milxdy-app-hub-generated-text-list";
-    control.dataset.maxItems = String(setting.control.maxItems || 0);
-    control.dataset.maxLength = String(setting.control.maxLength || 0);
-    control.setAttribute("aria-label", setting.label);
-    const items = document.createElement("div");
-    items.className = "milxdy-app-hub-generated-text-list-items";
-    const input = document.createElement("input");
-    input.type = "text";
-    input.placeholder = setting.control.placeholder || "Add item";
-    input.maxLength = setting.control.maxLength || 280;
-    const add = document.createElement("button");
-    add.type = "button";
-    add.textContent = "Add";
-    const persist = () => void writeManifestSettingValue(setting, textListValues(control));
-    add.addEventListener("click", () => {
-      const value = input.value.trim();
-      const values = textListValues(control);
-      if (!value || values.length >= (setting.control.maxItems || 0)) return;
-      values.push(value);
-      input.value = "";
-      setGeneratedControlValue(control, values);
-      persist();
-    });
-    control.append(items, input, add);
-    return control;
-  }
-
-  function appHubUnsupportedSetting(setting: AppSettingDefinition): HTMLElement {
-    const value = document.createElement("span");
-    value.className = "milxdy-app-hub-generated-unsupported";
-    value.textContent = `${setting.control.type} unsupported`;
-    return value;
-  }
-
   async function readManifestSettingValue(setting: AppSettingDefinition): Promise<AppSettingUiValue> {
     const stored = await safeStorageGet(setting.storage.area, { [setting.storage.key]: setting.storage.property ? {} : setting.defaultValue });
     const raw = setting.storage.property
@@ -4160,30 +3290,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   async function writeManifestSettingValue(setting: AppSettingDefinition, value: AppSettingUiValue): Promise<void> {
-    if (!setting.storage.property) {
-      await safeStorageSet(setting.storage.area, { [setting.storage.key]: value });
-      return;
-    }
-    const stored = await safeStorageGet(setting.storage.area, { [setting.storage.key]: {} });
-    await safeStorageSet(setting.storage.area, {
-      [setting.storage.key]: {
-        ...plainObjectValue(stored?.[setting.storage.key]),
-        [setting.storage.property]: value,
-      },
-    });
+    await persistManifestSetting(setting, value, { get: safeStorageGet, set: safeStorageSet });
   }
 
   async function persistGeneratedControl(setting: AppSettingDefinition, control: HTMLElement): Promise<void> {
-    control.removeAttribute("aria-invalid");
-    control.removeAttribute("data-write-error");
-    try {
-      await writeManifestSettingValue(setting, readGeneratedControlValue(setting, control));
-    } catch (error) {
-      setGeneratedControlValue(control, await readManifestSettingValue(setting));
-      control.setAttribute("aria-invalid", "true");
-      control.dataset.writeError = "true";
-      control.title = `Could not save ${setting.label}: ${errorMessage(error)}`;
-    }
+    await writeManifestSettingValue(setting, readGeneratedControlValue(setting, control));
   }
 
   function recordDeniedAppMessage(app: MilxdyAppManifest, label: string, messageType: string | null): void {
@@ -4291,10 +3402,23 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       .slice(0, Number(control.dataset.maxItems) || 0);
   }
 
-  function writeManifestSettingValueFromControl(control: HTMLElement, value: string[]): Promise<void> {
+  async function writeManifestSettingValueFromControl(control: HTMLElement, value: string[]): Promise<void> {
     const settingId = control.closest<HTMLElement>("[data-setting-id]")?.dataset.settingId;
     const setting = state.apps.flatMap((app) => app.settings || []).find((candidate) => candidate.id === settingId);
-    return setting ? writeManifestSettingValue(setting, value) : Promise.resolve();
+    if (!setting) return;
+    const row = control.closest<HTMLFieldSetElement>("fieldset[data-setting-id]");
+    const status = row?.querySelector<HTMLElement>('[role="status"]');
+    if (row) row.disabled = true;
+    if (status) status.textContent = "Saving…";
+    try {
+      await writeManifestSettingValue(setting, value);
+      if (status) status.textContent = "";
+    } catch {
+      try { setGeneratedControlValue(control, await readManifestSettingValue(setting)); } catch { /* Keep the last visible value. */ }
+      if (status) status.textContent = "Could not save. Reload this page and try again.";
+    } finally {
+      if (row) row.disabled = false;
+    }
   }
 
   function settingOptionValue(value: string | number | boolean | null): string {
@@ -4390,7 +3514,7 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
         setting.control.type,
         ...(setting.presets || []),
       ]),
-      ...app.loadTriggers,
+      ...loadTriggersForApp(app, state.site),
     ].filter(Boolean).join(" ").toLowerCase();
     return searchable.includes(normalized);
   }
@@ -4401,7 +3525,10 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     details.append(
       appHubDetailRow("Does", app.hub?.longDescription || app.description),
       appHubDetailRow("Performance", `Startup ${app.cost.startup}; per-surface ${app.cost.perSurface}; network ${app.cost.network}; worker ${app.cost.worker}; DOM ${app.cost.domWrite}.`),
-      appHubDetailRow("Loads", app.loadTriggers.join(", ")),
+      appHubDetailRow("Site", `${state.site.id} (${state.site.mode})`),
+      appHubDetailRow("Surfaces", surfacesForApp(app, state.site).join(", ")),
+      appHubDetailRow("Loads", loadTriggersForApp(app, state.site).join(", ")),
+      appHubDetailRow("Fallback", appSiteFallbackSummary(app)),
       appHubDetailRow("Chrome", appChromeSummary(app)),
       appHubDetailRow("Settings", appSettingsSummary(app)),
       appHubDetailRow("Settings home", appSettingsHome(app)),
@@ -4443,57 +3570,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     return notes;
   }
 
-  function appChromeSummary(app: MilxdyAppManifest): string {
-    if (!app.chrome) return "Not declared.";
-    const supported = app.chrome.supportedStyles.map(chromeStyleLabel).join(", ");
-    const notes = listText(app.chrome.notes);
-    return [
-      `Native ${chromeStyleLabel(app.chrome.nativeStyle)}.`,
-      supported ? `Supports ${supported}.` : "",
-      notes,
-    ].filter(Boolean).join(" ");
-  }
 
-  function chromeStyleLabel(style: string): string {
-    switch (style) {
-      case "native":
-        return "app defaults";
-      case "reminet":
-        return "RemiNet";
-      case "classic":
-        return "Classic bevel";
-      case "maxxer":
-        return "Maxxer";
-      case "reader":
-        return "Reader";
-      case "miladychan":
-        return "Miladychan";
-      case "music":
-        return "Music";
-      case "wiki":
-        return "Wiki";
-      default:
-        return style;
-    }
-  }
 
-  function appSettingsSummary(app: MilxdyAppManifest): string {
-    if (!app.settings?.length) return "No settings schema declared.";
-    const byLocation = app.settings.reduce<Record<string, number>>((summary, setting) => {
-      summary[setting.location] = (summary[setting.location] || 0) + 1;
-      return summary;
-    }, {});
-    const locationText = Object.entries(byLocation)
-      .map(([location, count]) => `${settingsLocationLabel(location)} ${count}`)
-      .join("; ");
-    const presetText = Array.from(new Set(app.settings.flatMap((setting) => setting.presets || [])))
-      .map(settingsPresetLabel)
-      .join(", ");
-    return [
-      locationText,
-      presetText ? `Preset participation: ${presetText}.` : "",
-    ].filter(Boolean).join(" ");
-  }
+
 
   function appSettingsHome(app: MilxdyAppManifest): string {
     if (hubPackageKind(app) === "feature") {
@@ -4516,163 +3595,19 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }
   }
 
-  function settingsLocationLabel(location: string): string {
-    switch (location) {
-      case "appearance":
-        return "Appearance";
-      case "appsAndFeatures":
-        return "Apps & Features";
-      case "appSurface":
-        return "App surface";
-      case "advanced":
-        return "Advanced";
-      default:
-        return location;
-    }
-  }
 
-  function settingsPresetLabel(preset: string): string {
-    switch (preset) {
-      case "firstRun":
-        return "first run";
-      case "profilePack":
-        return "profile packs";
-      default:
-        return preset;
-    }
-  }
 
-  function appHubNote(text: string): HTMLElement {
-    const note = document.createElement("span");
-    note.className = "milxdy-app-hub-note";
-    note.textContent = text;
-    return note;
-  }
 
-  function listText(values: readonly string[] | undefined): string {
-    return values?.filter(Boolean).join("; ") || "";
-  }
+
 
   function hasResettableStorage(app: MilxdyAppManifest): boolean {
-    return hasResetWork(appResetPlan(app));
+    return planHasResetWork(appResetPlan(app));
   }
 
-  function appStorageKeys(app: MilxdyAppManifest): { local: readonly string[]; sync: readonly string[] } {
-    return {
-      local: app.storageKeys.local || [],
-      sync: app.storageKeys.sync || [],
-    };
-  }
 
-  function storageKeySummary(app: MilxdyAppManifest): string {
-    const storageKeys = appStorageKeys(app);
-    const keys = [
-      ...storageKeys.local.map((key) => `local:${key}`),
-      ...storageKeys.sync.map((key) => `sync:${key}`),
-    ];
-    return keys.join("; ");
-  }
 
   function appResetPlan(app: MilxdyAppManifest): AppResetPlan {
-    const storageKeys = appStorageKeys(app);
-    const plan: AppResetPlan = {
-      localKeys: [],
-      syncKeys: [],
-      settingDefaults: [],
-      propertyDefaults: [],
-      propertyRemovals: [],
-      skippedSharedKeys: [],
-      skippedSettings: [],
-    };
-    const representedKeys = new Set<string>();
-    for (const setting of app.settings || []) {
-      const area = setting.storage.area;
-      const keyId = storageKeyId(area, setting.storage.key);
-      representedKeys.add(keyId);
-      appendSettingReset(plan, setting);
-    }
-    for (const key of storageKeys.local) appendWholeKeyReset(plan, app, "local", key, representedKeys);
-    for (const key of storageKeys.sync) appendWholeKeyReset(plan, app, "sync", key, representedKeys);
-    return plan;
-  }
-
-  function appendSettingReset(plan: AppResetPlan, setting: AppSettingDefinition): void {
-    const area = setting.storage.area;
-    const key = setting.storage.key;
-    const property = setting.storage.property;
-    const behavior = setting.reset.behavior;
-    if (behavior === "custom") {
-      plan.skippedSettings.push({ settingId: setting.id, area, key, property, behavior, reason: "customResetBehavior" });
-      return;
-    }
-    if (property) {
-      if (behavior === "removeKey") {
-        plan.propertyRemovals.push({ area, key, property, settingId: setting.id, behavior });
-        return;
-      }
-      if (setting.defaultValue !== undefined) {
-        plan.propertyDefaults.push({ area, key, property, value: setting.defaultValue, settingId: setting.id, behavior });
-        return;
-      }
-      plan.skippedSettings.push({ settingId: setting.id, area, key, property, behavior, reason: "missingDefaultValue" });
-      return;
-    }
-    if (behavior === "removeKey") {
-      appendWholeKey(plan, area, key);
-      return;
-    }
-    if (setting.defaultValue !== undefined) {
-      plan.settingDefaults.push({ area, key, value: setting.defaultValue, settingId: setting.id, behavior });
-      return;
-    }
-    plan.skippedSettings.push({ settingId: setting.id, area, key, behavior, reason: "missingDefaultValue" });
-  }
-
-  function appendWholeKeyReset(
-    plan: AppResetPlan,
-    app: MilxdyAppManifest,
-    area: ResetStorageArea,
-    key: string,
-    representedKeys: Set<string>,
-  ): void {
-    if (representedKeys.has(storageKeyId(area, key))) return;
-    const owners = storageKeyOwners(area, key);
-    if (owners.length > 1) {
-      plan.skippedSharedKeys.push({ area, key, owners, reason: "sharedStorageKey" });
-      return;
-    }
-    appendWholeKey(plan, area, key);
-  }
-
-  function appendWholeKey(plan: AppResetPlan, area: ResetStorageArea, key: string): void {
-    const keys = area === "local" ? plan.localKeys : plan.syncKeys;
-    if (!keys.includes(key)) keys.push(key);
-  }
-
-  function storageKeyOwners(area: ResetStorageArea, key: string): string[] {
-    return state.apps
-      .filter((app) => {
-        const keys = appStorageKeys(app)[area];
-        const hasStorageKey = keys.includes(key);
-        const hasSettingStorage = app.settings?.some((setting) => setting.storage.area === area && setting.storage.key === key) === true;
-        return hasStorageKey || hasSettingStorage;
-      })
-      .map((app) => app.id)
-      .sort();
-  }
-
-  function storageKeyId(area: ResetStorageArea, key: string): string {
-    return `${area}:${key}`;
-  }
-
-  function hasResetWork(plan: AppResetPlan): boolean {
-    return plan.localKeys.length > 0
-      || plan.syncKeys.length > 0
-      || plan.settingDefaults.length > 0
-      || plan.propertyDefaults.length > 0
-      || plan.propertyRemovals.length > 0
-      || plan.skippedSharedKeys.length > 0
-      || plan.skippedSettings.length > 0;
+    return createAppResetPlan(app, state.apps);
   }
 
   async function executeAppResetPlan(plan: AppResetPlan): Promise<{
@@ -4762,7 +3697,8 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
       app.available === false ? "app:unavailable" : "app:available",
       `state:${diagnostic?.state || "pending"}`,
       isRailPinned(app) ? "rail:pinned" : "rail:hidden",
-      `load:${app.loadTriggers.join(",")}`,
+      `site:${state.site.id}`,
+      `load:${loadTriggersForApp(app, state.site).join(",")}`,
       `cost:${app.cost.startup}/${app.cost.perSurface}`,
     ];
     if (diagnostic?.deferredReason) parts.push(`defer:${diagnostic.deferredReason}`);
@@ -4771,6 +3707,11 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.loading.has(app.id)) parts.push("import:loading");
     if (state.loaded.has(app.id)) parts.push("import:loaded");
     return parts.join(" | ");
+  }
+
+  function refreshRemiStatsRuntimePhaseSummary(): void {
+    const summary = document.querySelector<HTMLElement>("[data-remistats-runtime-phase='true']");
+    if (summary) summary.textContent = formatRemiStatsRuntimePhaseState(state.remistatsRuntimePhases);
   }
 
   function appHubLifecycle(app: MilxdyAppManifest): { state: string; label: string; detail: string } {
@@ -4794,26 +3735,27 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (app.available === false || !app.setEnabled) return null;
     if (app.id === "reminetChat" && mode !== "fast") return null;
     if (allowsFastModerateSurfaceImport(app)) return null;
-    if (mode === "fast" && app.loadTriggers.includes("surface") && !isCheapSurfaceImport(app)) {
+    const triggers = loadTriggersForApp(app, state.site);
+    if (mode === "fast" && triggers.includes("surface") && !isCheapSurfaceImport(app)) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.startup === "heavy" && app.loadTriggers.includes("startup") && !budget.allowHeavyStartup) {
+    if (app.cost.startup === "heavy" && triggers.includes("startup") && !budget.allowHeavyStartup) {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.perSurface === "heavy" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
+    if (app.cost.perSurface === "heavy" && triggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
     if (app.cost.worker === "heavy" && mode !== "full" && mode !== "developer") {
       return "Please change your performance settings to enable";
     }
-    if (app.cost.domWrite === "large" && app.loadTriggers.includes("surface") && !budget.allowHeavySurfaceImports) {
+    if (app.cost.domWrite === "large" && triggers.includes("surface") && !budget.allowHeavySurfaceImports) {
       return "Please change your performance settings to enable";
     }
     return null;
   }
 
   function shouldLoadAtStartup(app: MilxdyAppManifest): boolean {
-    if (!app.loadTriggers.includes("startup")) return false;
+    if (!loadTriggersForApp(app, state.site).includes("startup")) return false;
     if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyStartup) return false;
     if (app.cost.worker === "heavy" && !state.effectiveBudget.allowWorkerPreload) return false;
     return true;
@@ -4901,7 +3843,14 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function appDeliversSurface(app: MilxdyAppManifest, surfaceKind: TwitterSurfaceKind): boolean {
-    return app.deliverySurfaces ? app.deliverySurfaces.includes(surfaceKind) : app.surfaces.includes(surfaceKind);
+    return app.deliverySurfaces ? app.deliverySurfaces.includes(surfaceKind) : surfacesForApp(app, state.site).includes(surfaceKind);
+  }
+
+  function appSiteFallbackSummary(app: MilxdyAppManifest): string {
+    const fallback = contentScriptScopeForApp(app, state.site)?.fallback;
+    if (!fallback) return "No separate fallback is declared for this site.";
+    const target = fallback.url ? ` ${fallback.url}` : "";
+    return `${fallback.mode}.${target} ${fallback.note}`.trim();
   }
 
   function surfaceWithinBudget(surface: TwitterSurface): boolean {
@@ -4920,22 +3869,17 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.effectiveBudget.idlePreloadDelayMs === null || document.hidden) return;
     state.idlePreloadTimer = window.setTimeout(() => {
       state.idlePreloadTimer = null;
-      for (const app of state.apps) {
-        if (!app.loadTriggers.includes("idle") || state.loaded.has(app.id)) continue;
+      const candidates = state.apps.filter((app) => {
+        if (!loadTriggersForApp(app, state.site).includes("idle") || state.loaded.has(app.id)) return false;
         if (app.cost.startup === "heavy" && !state.effectiveBudget.allowHeavyIdlePreload) {
           recordImportAvoided(app, "idle:heavy");
-          continue;
+          return false;
         }
-        void app.isEnabled().then((enabled) => {
-          if (enabled) {
-            void loadApp(app, "idle")
-              .finally(() => scheduleProgressiveIdlePreload());
-          } else {
-            scheduleProgressiveIdlePreload();
-          }
-        });
-        break;
-      }
+        return true;
+      });
+      void advanceIdlePreload(candidates, state.idlePreloadCursor, (app) => app.isEnabled(), (app) => loadApp(app, "idle"))
+        .then((cursor) => { state.idlePreloadCursor = cursor; })
+        .finally(() => scheduleProgressiveIdlePreload());
     }, state.effectiveBudget.idlePreloadDelayMs);
   }
 
@@ -4946,53 +3890,26 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   function deferredReason(app: MilxdyAppManifest): string {
-    if (app.dock && app.loadTriggers.includes("dockOpen")) return "metadataDock";
-    if (app.loadTriggers.includes("userAction")) return "userAction";
-    if (app.loadTriggers.includes("surface")) return "surface";
-    if (app.loadTriggers.includes("idle")) return "idle";
+    const triggers = loadTriggersForApp(app, state.site);
+    if (app.dock && triggers.includes("dockOpen")) return "metadataDock";
+    if (triggers.includes("userAction")) return "userAction";
+    if (triggers.includes("surface")) return "surface";
+    if (triggers.includes("idle")) return "idle";
     return "performanceMode";
   }
 
   function shouldLoadForRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
     if (!state.enabledApps.has(app.id) || state.loaded.has(app.id) || state.loading.has(app.id)) return false;
-    if (!app.surfaces.includes("route") || !app.loadTriggers.includes("surface")) return false;
-    return appRouteScopesMatchRoute(app, route);
+    if (!surfacesForApp(app, state.site).includes("route") || !loadTriggersForApp(app, state.site).includes("surface")) return false;
+    return routeScopeMatches(app, state.site, route.pathname);
   }
 
-  function appRouteScopesMatchRoute(app: MilxdyAppManifest, route: MilxdyRouteChange): boolean {
-    const currentSite = currentAppSiteId();
-    if (!currentSite) return false;
-    for (const scope of app.siteScopes || []) {
-      if (!siteScopeMatchesCurrentHost(scope, currentSite)) continue;
-      for (const routePattern of scope.routes || []) {
-        if (routePattern.type === "exact" && routePattern.path === route.pathname) return true;
-        if (routePattern.type === "prefix" && route.pathname.startsWith(routePattern.path)) return true;
-      }
-    }
-    return false;
+  function isXRuntime(): boolean {
+    return state.site.id === "x";
   }
 
-  function currentAppSiteId(): AppSiteId | null {
-    const host = window.location.hostname.toLowerCase();
-    if (host === "x.com" || host === "twitter.com") return "x";
-    if (host === "www.remilia.net" || host === "remilia.net") return "remiliaNet";
-    if (host === "wiki.remilia.org" || host === "remilia.wiki") return "remiliaWiki";
-    if (host === "boards.miladychan.org") return "miladychan";
-    return null;
-  }
-
-  function siteScopeMatchesCurrentHost(scope: AppSiteScope, currentSite: AppSiteId): boolean {
-    if (scope.site !== currentSite) return false;
-    const hosts = scope.hosts || [];
-    return hosts.length === 0 || hosts.some((host) => hostPatternMatchesCurrentLocation(host));
-  }
-
-  function hostPatternMatchesCurrentLocation(pattern: string): boolean {
-    const match = pattern.match(/^(https?|wss):\/\/([^/]+)\/\*$/);
-    if (!match) return false;
-    const [, protocol, host] = match;
-    if (`${protocol}:` !== window.location.protocol) return false;
-    return host.toLowerCase() === window.location.hostname.toLowerCase();
+  function requestRuntimeSurfaceRescan(): void {
+    if (isXRuntime()) scheduleTwitterScan();
   }
 
   function recordImportAvoided(app: MilxdyAppManifest, reason: string): void {
@@ -5161,8 +4078,9 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
 
   async function notifyLoadedAppOfRoute(app: MilxdyAppManifest, module: MilxdyContentAppModule, lifecycle: ContentAppLifecycleOwner): Promise<boolean> {
     if (!module.onRouteChange) return true;
+    const routeStartedAt = performance.now();
     return invokeAppLifecycleHook(app, "route", () => lifecycle.route(state.route), () => {
-      recordFeatureTiming(app.id, "route.initial", performance.now());
+      recordFeatureTiming(app.id, "route.initial", routeStartedAt);
     });
   }
 
@@ -5181,12 +4099,12 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     if (state.diagnosticsTimer !== null) return;
     state.diagnosticsTimer = window.setTimeout(async () => {
       state.diagnosticsTimer = null;
-      const stored = await safeLocalGet({ "milxdy.diagnostics.enabled": false });
-      if (stored?.["milxdy.diagnostics.enabled"] !== true) return;
+      if (!state.diagnosticsEnabled) return;
       await safeLocalSet({
         "milxdy.diagnostics.apps": diagnostics(),
         "milxdy.diagnostics.runtime": {
           mode: state.performanceMode,
+          site: state.site,
           budget: state.budget,
           effectiveBudget: state.effectiveBudget,
           startupBudgetActive: state.startupBudgetActive,
@@ -5230,11 +4148,20 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
     }, DIAGNOSTIC_FLUSH_MS);
   }
 
+  async function observeDiagnosticsSettings(): Promise<void> {
+    const key = "milxdy.diagnostics.enabled";
+    state.diagnosticsEnabled = (await safeLocalGet({ [key]: false }))?.[key] === true;
+    if (state.disposed) return;
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === "local" && changes[key]) state.diagnosticsEnabled = changes[key].newValue === true;
+    };
+    chrome.storage.onChanged.addListener(listener);
+    state.runtimeDisposables.add(() => chrome.storage.onChanged.removeListener(listener));
+  }
+
   function recordRuntimeDiagnostic(key: string, value: unknown): void {
-    void safeLocalGet({ "milxdy.diagnostics.enabled": false }).then((stored) => {
-      if (stored?.["milxdy.diagnostics.enabled"] !== true) return;
-      void safeLocalSet({ [`milxdy.diagnostics.${key}`]: value });
-    });
+    if (!state.diagnosticsEnabled) return;
+    void safeLocalSet(diagnosticStorageEntry(key, value));
   }
 
   function loadedAppsByCost(matches: (app: MilxdyAppManifest) => boolean): MilxdyAppId[] {
@@ -5293,6 +4220,24 @@ export function createContentRuntime(apps: readonly MilxdyAppManifest[]): Conten
   }
 
   return { boot, loadApp, notifyRoute, dispose, diagnostics };
+}
+
+export async function advanceIdlePreload<T>(
+  candidates: readonly T[],
+  cursor: number,
+  isEnabled: (candidate: T) => Promise<boolean>,
+  load: (candidate: T) => Promise<unknown>,
+): Promise<number> {
+  if (candidates.length === 0) return 0;
+  for (let offset = 0; offset < candidates.length; offset += 1) {
+    const index = (Math.max(0, cursor) + offset) % candidates.length;
+    const candidate = candidates[index]!;
+    const nextCursor = (index + 1) % candidates.length;
+    if (!await isEnabled(candidate)) continue;
+    await load(candidate);
+    return nextCursor;
+  }
+  return (Math.max(0, cursor) + 1) % candidates.length;
 }
 
 type LocalAddonZipEntry = {
@@ -5571,1219 +4516,6 @@ function injectStylesheets(app: MilxdyAppManifest): void {
   }
 }
 
-function injectTweetScaffoldStyles(): void {
-  if (document.getElementById(TWEET_SCAFFOLD_STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = TWEET_SCAFFOLD_STYLE_ID;
-  style.textContent = `
-    [data-milxdy-tweet-slot] {
-      box-sizing: border-box;
-      contain: layout style paint;
-    }
-    [data-milxdy-tweet-slot="post-reading-action"]:empty,
-    [data-milxdy-tweet-slot="remistats-badge"]:empty,
-    [data-milxdy-tweet-slot="remistats-badge"][data-reminet-state="reserved"] {
-      display: inline-flex;
-      width: 0;
-      min-width: 0;
-      height: 0;
-      margin: 0;
-      padding: 0;
-      overflow: visible;
-      pointer-events: none;
-      vertical-align: top;
-    }
-    [data-milxdy-tweet-slot="post-reading-header-action"] {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 22px;
-      width: 22px;
-      min-width: 22px;
-      height: 20px;
-      min-height: 20px;
-      margin: 0;
-      padding: 0;
-      overflow: visible;
-      pointer-events: none;
-      vertical-align: middle;
-    }
-    [data-milxdy-post-reading-header-controls="true"] {
-      align-items: center !important;
-      min-height: 20px !important;
-      height: 20px !important;
-    }
-    [data-milxdy-post-reading-header-controls="true"] [aria-label="Grok actions"],
-    [data-milxdy-post-reading-header-controls="true"] [data-testid="caret"],
-    [data-milxdy-post-reading-header-controls="true"] [data-milxdy-tweet-slot="post-reading-header-action"],
-    [data-milxdy-post-reading-header-controls="true"] .post-reading-button {
-      min-height: 20px !important;
-      height: 20px !important;
-    }
-    [data-milxdy-tweet-slot="post-reading-header-action"] > .post-reading-button {
-      pointer-events: auto;
-    }
-    [data-milxdy-tweet-slot="remistats-action-poke"] {
-      display: flex;
-      position: relative;
-      align-items: center;
-      justify-content: flex-start;
-      flex: 1 1 0%;
-      align-self: center;
-      width: auto;
-      min-width: 0;
-      height: 0;
-      margin: 0;
-      overflow: visible;
-      pointer-events: none;
-      opacity: 0;
-    }
-    #${HUB_PANEL_ID} {
-      --milxdy-hub-face: #1f222a;
-      --milxdy-hub-panel: #101218;
-      --milxdy-hub-list: #08090d;
-      --milxdy-hub-input: #08090d;
-      --milxdy-hub-border-light: #454953;
-      --milxdy-hub-border-dark: #050608;
-      --milxdy-hub-outline: #8f7932;
-      --milxdy-hub-title: #081d68;
-      --milxdy-hub-title-text: #fff2b8;
-      --milxdy-hub-button: #20232b;
-      --milxdy-hub-row: #101218;
-      --milxdy-hub-row-hover: #1b1d1d;
-      --milxdy-hub-row-line: rgba(191, 151, 38, 0.48);
-      --milxdy-hub-text: #f2ecd5;
-      --milxdy-hub-muted: rgba(242, 236, 213, 0.62);
-      --milxdy-hub-soft: rgba(242, 236, 213, 0.76);
-      --milxdy-hub-accent: #f0b72d;
-      --milxdy-hub-button-border: rgba(191, 151, 38, 0.52);
-      --milxdy-hub-switch-on: #0f6b52;
-      --milxdy-hub-switch-on-border: #69e0af;
-      --milxdy-hub-switch-on-text: #ffffff;
-      --milxdy-hub-danger: #ff9a95;
-      position: fixed;
-      top: 16px;
-      bottom: 136px;
-      width: min(360px, calc(100vw - 92px));
-      z-index: 2147483002;
-      box-sizing: border-box;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 10px;
-      color: var(--milxdy-hub-text, var(--milxdy-text, #eef0ff));
-      background: var(--milxdy-hub-face);
-      border: 2px solid var(--milxdy-hub-outline);
-      border-radius: 0;
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-light),
-        inset -2px -2px 0 var(--milxdy-hub-border-dark),
-        8px 8px 0 rgba(0, 0, 0, 0.34);
-      font-family: TwitterChirp, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }
-    #${HUB_PANEL_ID}[data-theme="light"] {
-      --milxdy-hub-face: #f4f1e9;
-      --milxdy-hub-panel: #fffdf7;
-      --milxdy-hub-list: #ebe6da;
-      --milxdy-hub-input: #ffffff;
-      --milxdy-hub-border-light: #ffffff;
-      --milxdy-hub-border-dark: #756e64;
-      --milxdy-hub-outline: #514b43;
-      --milxdy-hub-title: #1f5f92;
-      --milxdy-hub-title-text: #ffffff;
-      --milxdy-hub-button: #f7f3e8;
-      --milxdy-hub-row: #fffdf7;
-      --milxdy-hub-row-hover: #fff3c5;
-      --milxdy-hub-row-line: #c9c1b7;
-      --milxdy-hub-text: #1d1b19;
-      --milxdy-hub-muted: #625c54;
-      --milxdy-hub-soft: #47423c;
-      --milxdy-hub-accent: #075f9f;
-      --milxdy-hub-button-border: #8c8478;
-      --milxdy-hub-switch-on: #08724d;
-      --milxdy-hub-switch-on-border: #07583d;
-      --milxdy-hub-switch-on-text: #ffffff;
-      --milxdy-hub-danger: #a51212;
-    }
-    #${HUB_PANEL_ID}[data-theme="dim"] {
-      --milxdy-hub-face: #182a3a;
-      --milxdy-hub-panel: #132331;
-      --milxdy-hub-list: #0d1b27;
-      --milxdy-hub-input: #10202e;
-      --milxdy-hub-border-light: #42627a;
-      --milxdy-hub-border-dark: #08141e;
-      --milxdy-hub-outline: #a48b46;
-      --milxdy-hub-title: #234f77;
-      --milxdy-hub-title-text: #fff3c5;
-      --milxdy-hub-button: #1c3447;
-      --milxdy-hub-row: #132331;
-      --milxdy-hub-row-hover: #1c384b;
-      --milxdy-hub-row-line: rgba(215, 186, 99, 0.46);
-      --milxdy-hub-text: #f2ecd5;
-      --milxdy-hub-muted: rgba(242, 236, 213, 0.67);
-      --milxdy-hub-soft: rgba(242, 236, 213, 0.83);
-      --milxdy-hub-accent: #ffd36c;
-      --milxdy-hub-button-border: rgba(215, 186, 99, 0.58);
-      --milxdy-hub-switch-on: #0d7c5a;
-      --milxdy-hub-switch-on-border: #70e0af;
-      --milxdy-hub-switch-on-text: #ffffff;
-      --milxdy-hub-danger: #ffaaa3;
-    }
-    #${HUB_PANEL_ID}[data-side="left"] { left: 76px; }
-    #${HUB_PANEL_ID}[data-side="right"] { right: 76px; }
-    .milxdy-app-hub-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      justify-content: space-between;
-      min-height: 34px;
-      margin: -4px -4px 4px;
-      padding: 3px 4px 3px 9px;
-      border: 2px solid var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-title);
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-light),
-        inset -2px -2px 0 rgba(0, 0, 0, 0.76);
-    }
-    .milxdy-app-hub-header strong {
-      color: var(--milxdy-hub-title-text);
-      font-size: 15px;
-      line-height: 1.2;
-      text-transform: none;
-    }
-    .milxdy-app-hub-header-actions {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .milxdy-app-hub-settings-button {
-      display: inline-grid;
-      width: 34px;
-      min-height: 34px;
-      place-items: center;
-      padding: 0;
-      font-family: "Segoe UI Symbol", "Apple Symbols", var(--milxdy-font-ui, system-ui, sans-serif);
-      font-size: 20px;
-      line-height: 1;
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings {
-      position: static;
-      display: grid;
-      width: auto;
-      min-height: 0;
-      box-sizing: border-box;
-      overflow: auto;
-      padding: 10px;
-      border: 2px solid var(--milxdy-hub-outline);
-      border-radius: 0;
-      background: var(--milxdy-hub-panel);
-      color: inherit;
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-dark),
-        inset -1px -1px 0 var(--milxdy-hub-border-light);
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings button {
-      min-height: 30px;
-      border: 1px solid var(--milxdy-hub-button-border);
-      border-radius: 0;
-      background: var(--milxdy-hub-button);
-      color: inherit;
-      cursor: pointer;
-      font: inherit;
-      font-size: 12px;
-      line-height: 1;
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings .milxdy-overlay-dock-settings-row {
-      grid-template-columns: 24px minmax(0, 1fr) 30px 30px;
-      min-height: 30px;
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings {
-      display: grid;
-      gap: 8px;
-      padding-top: 7px;
-      border-top: 1px solid var(--milxdy-hub-button-border);
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings summary {
-      cursor: pointer;
-      color: var(--milxdy-hub-accent);
-      font-size: 12px;
-      font-weight: 700;
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-setup-settings:not([open]) > :not(summary) {
-      display: none;
-    }
-    .milxdy-app-hub-list {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      overflow: auto;
-      padding: 3px;
-      border: 2px solid var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-list);
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-dark),
-        inset -2px -2px 0 rgba(255, 244, 207, 0.12);
-      scrollbar-width: auto;
-      scrollbar-color: var(--milxdy-hub-outline) var(--milxdy-hub-panel);
-    }
-    .milxdy-app-hub-list::-webkit-scrollbar {
-      width: 16px;
-    }
-    .milxdy-app-hub-list::-webkit-scrollbar-track {
-      border-left: 1px solid var(--milxdy-hub-border-dark);
-      background: var(--milxdy-hub-panel);
-    }
-    .milxdy-app-hub-list::-webkit-scrollbar-thumb {
-      border: 2px solid var(--milxdy-hub-panel);
-      background: var(--milxdy-hub-outline);
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-light),
-        inset -1px -1px 0 var(--milxdy-hub-border-dark);
-    }
-    .milxdy-app-hub-section {
-      display: grid;
-      gap: 0;
-      border-bottom: 2px solid var(--milxdy-hub-outline);
-    }
-    .milxdy-app-hub-section:last-child {
-      border-bottom: 0;
-    }
-    .milxdy-app-hub-section-title {
-      position: sticky;
-      top: 0;
-      z-index: 2;
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      gap: 6px;
-      padding: 5px 7px;
-      border-bottom: 1px solid var(--milxdy-hub-row-line);
-      background: var(--milxdy-hub-panel);
-      color: var(--milxdy-hub-accent);
-      line-height: 1.2;
-    }
-    .milxdy-app-hub-section-title strong {
-      font-size: 11px;
-      line-height: 1.2;
-      text-transform: uppercase;
-    }
-    .milxdy-app-hub-section-title span {
-      color: var(--milxdy-hub-muted);
-      font-size: 10px;
-      line-height: 1.2;
-      text-transform: none;
-      white-space: nowrap;
-    }
-    .milxdy-app-hub-search {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      padding: 8px 10px;
-      border: 2px solid var(--milxdy-hub-outline);
-      border-radius: 0;
-      background: var(--milxdy-hub-panel);
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-dark),
-        inset -1px -1px 0 var(--milxdy-hub-border-light);
-    }
-    .milxdy-app-hub-search span {
-      color: var(--milxdy-hub-muted);
-      font-size: 11px;
-      font-weight: 700;
-      line-height: 1.2;
-    }
-    .milxdy-app-hub-search input {
-      min-height: 32px;
-      box-sizing: border-box;
-      border: 2px solid var(--milxdy-hub-outline);
-      border-radius: 0;
-      background: var(--milxdy-hub-input);
-      color: inherit;
-      font: inherit;
-      font-size: 12px;
-      padding: 0 9px;
-      outline: none;
-    }
-    .milxdy-app-hub-search input:focus {
-      border-color: var(--milxdy-hub-accent);
-      box-shadow: 0 0 0 2px rgba(248, 211, 93, 0.12);
-    }
-    .milxdy-app-hub-empty {
-      margin: 0;
-      padding: 10px;
-      color: var(--milxdy-hub-muted);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .milxdy-app-hub-runtime {
-      display: flex;
-      flex-direction: column;
-      gap: 3px;
-      padding: 8px 10px;
-      border: 2px solid var(--milxdy-hub-outline);
-      border-radius: 0;
-      background: var(--milxdy-hub-panel);
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-dark),
-        inset -1px -1px 0 var(--milxdy-hub-border-light);
-    }
-    .milxdy-app-hub-runtime strong {
-      font-size: 12px;
-      line-height: 1.2;
-    }
-    .milxdy-app-hub-addons {
-      --milxdy-addon-surface: #171820;
-      --milxdy-addon-surface-muted: #20222d;
-      --milxdy-addon-line: #4c5064;
-      --milxdy-addon-line-strong: #858cc9;
-      --milxdy-addon-highlight: rgba(255, 255, 255, 0.12);
-      --milxdy-addon-text: #f0f1f8;
-      --milxdy-addon-muted: rgba(240, 241, 248, 0.62);
-      --milxdy-addon-accent: #9ea7ff;
-      --milxdy-addon-accent-strong: #cbd0ff;
-      --milxdy-addon-accent-soft: color-mix(in srgb, #9ea7ff 12%, #171820);
-      --milxdy-addon-warn: #ffd978;
-      --milxdy-addon-warn-soft: color-mix(in srgb, #ffd978 12%, #171820);
-      --milxdy-addon-focus: #ffc2d2;
-      display: grid;
-      gap: 8px;
-      max-height: min(390px, 52vh);
-      overflow: auto;
-      padding: 9px;
-      border: 1px solid var(--milxdy-addon-line);
-      border-right: 3px solid color-mix(in srgb, var(--milxdy-addon-line-strong) 78%, var(--milxdy-addon-line));
-      border-bottom: 4px solid color-mix(in srgb, var(--milxdy-addon-line-strong) 78%, var(--milxdy-addon-line));
-      border-radius: 6px;
-      background:
-        linear-gradient(180deg, color-mix(in srgb, var(--milxdy-addon-highlight) 72%, transparent) 0, transparent 42px),
-        var(--milxdy-addon-surface);
-      color: var(--milxdy-addon-text);
-      box-shadow: inset 2px 2px 1px color-mix(in srgb, var(--milxdy-addon-highlight) 78%, transparent);
-      font-size: 11px;
-      line-height: 1.35;
-      scrollbar-width: thin;
-    }
-    .milxdy-app-hub-addon-header {
-      display: grid;
-      grid-template-columns: 40px minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 8px;
-    }
-    .milxdy-app-hub-addon-header img {
-      width: 40px;
-      height: 40px;
-      border: 1px solid var(--milxdy-addon-line);
-      border-radius: 6px;
-      object-fit: cover;
-      box-shadow: 0 4px 2px rgba(0, 0, 0, 0.2);
-    }
-    .milxdy-app-hub-addon-header > div { display: grid; gap: 1px; min-width: 0; }
-    .milxdy-app-hub-addon-header strong { color: var(--milxdy-addon-text); font-size: 14px; line-height: 1.15; }
-    .milxdy-app-hub-addon-eyebrow {
-      color: var(--milxdy-addon-accent-strong);
-      font-size: 9px;
-      font-weight: 800;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-    .milxdy-app-hub-addon-badge,
-    .milxdy-app-hub-addon-section-heading > span {
-      display: inline-grid;
-      min-height: 20px;
-      place-items: center;
-      border: 1px solid var(--milxdy-addon-line);
-      border-radius: 999px;
-      background: var(--milxdy-addon-surface-muted);
-      color: var(--milxdy-addon-muted);
-      padding: 2px 6px;
-      font-size: 9px;
-      font-weight: 800;
-      white-space: nowrap;
-    }
-    .milxdy-app-hub-addon-badge[data-tone="active"] { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
-    .milxdy-app-hub-addon-badge[data-tone="warning"] { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
-    .milxdy-app-hub-addon-summary { margin: 0; color: var(--milxdy-addon-muted); }
-    .milxdy-app-hub-addon-workflow {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      margin: 0;
-      padding: 7px 0;
-      border-top: 1px solid var(--milxdy-addon-line);
-      border-bottom: 1px solid var(--milxdy-addon-line);
-      list-style: none;
-    }
-    .milxdy-app-hub-addon-workflow li {
-      position: relative;
-      display: grid;
-      min-width: 0;
-      justify-items: center;
-      gap: 1px;
-      padding: 2px 4px;
-      color: var(--milxdy-addon-muted);
-      text-align: center;
-    }
-    .milxdy-app-hub-addon-workflow li:not(:last-child)::after {
-      position: absolute;
-      top: 15px;
-      right: -3px;
-      color: var(--milxdy-addon-line-strong);
-      content: ">";
-    }
-    .milxdy-app-hub-addon-step-icon {
-      display: grid;
-      width: 30px;
-      height: 30px;
-      place-items: center;
-      border: 1px solid var(--milxdy-addon-line-strong);
-      border-radius: 6px;
-      background: color-mix(in srgb, var(--milxdy-addon-surface-muted) 82%, var(--milxdy-addon-highlight));
-      color: var(--milxdy-addon-accent-strong);
-      box-shadow:
-        inset 1px 1px 0 color-mix(in srgb, var(--milxdy-addon-highlight) 64%, transparent),
-        inset -1px -1px 0 color-mix(in srgb, var(--milxdy-addon-line-strong) 44%, transparent);
-      font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace;
-    }
-    .milxdy-app-hub-addon-workflow li[data-state="pending"] { opacity: 0.5; }
-    .milxdy-app-hub-addon-workflow li[data-state="current"] .milxdy-app-hub-addon-step-icon,
-    .milxdy-app-hub-addon-workflow li[data-state="complete"] .milxdy-app-hub-addon-step-icon { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); }
-    .milxdy-app-hub-addon-workflow li[data-state="error"] .milxdy-app-hub-addon-step-icon { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
-    .milxdy-app-hub-addon-step-number { font: 8px ui-monospace, SFMono-Regular, Consolas, monospace; }
-    .milxdy-app-hub-addon-workflow strong { color: inherit; font-size: 9px; line-height: 1.15; }
-    .milxdy-app-hub-addon-workflow small { max-width: 100%; font-size: 8px; line-height: 1.15; overflow-wrap: anywhere; }
-    .milxdy-app-hub-addon-packages { display: grid; }
-    .milxdy-app-hub-addon-section-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 4px; }
-    .milxdy-app-hub-addon-section-heading > strong { color: var(--milxdy-addon-accent-strong); font-size: 10px; text-transform: uppercase; }
-    .milxdy-app-hub-addon-package-list { max-height: 94px; margin: 0; padding: 0; overflow: auto; border-top: 1px solid var(--milxdy-addon-line); list-style: none; }
-    .milxdy-app-hub-addon-package-list li,
-    .milxdy-app-hub-addon-empty {
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      align-items: center;
-      gap: 8px;
-      padding: 6px 2px;
-      border-bottom: 1px solid var(--milxdy-addon-line);
-    }
-    .milxdy-app-hub-addon-package-list li > span:last-child,
-    .milxdy-app-hub-addon-empty > span:last-child { display: grid; min-width: 0; gap: 1px; }
-    .milxdy-app-hub-addon-package-list strong,
-    .milxdy-app-hub-addon-empty strong { color: var(--milxdy-addon-text); font-size: 11px; }
-    .milxdy-app-hub-addon-package-list small,
-    .milxdy-app-hub-addon-empty small { color: var(--milxdy-addon-muted); font-size: 9px; overflow-wrap: anywhere; }
-    .milxdy-app-hub-addon-package-mark,
-    .milxdy-app-hub-addon-empty > span:first-child {
-      display: grid;
-      width: 30px;
-      height: 30px;
-      place-items: center;
-      border: 1px solid var(--milxdy-addon-line);
-      border-radius: 6px;
-      background: var(--milxdy-addon-surface-muted);
-      color: var(--milxdy-addon-accent-strong);
-      font-weight: 800;
-    }
-    .milxdy-app-hub-addon-queue { display: grid; gap: 3px; }
-    .milxdy-app-hub-addon-queue-list { max-height: 112px; margin: 0; padding: 0; overflow: auto; border-top: 1px solid var(--milxdy-addon-line); list-style: none; }
-    .milxdy-app-hub-addon-queue-list li {
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      align-items: center;
-      gap: 8px;
-      padding: 6px 2px;
-      border-bottom: 1px solid var(--milxdy-addon-line);
-    }
-    .milxdy-app-hub-addon-queue-list li > span:last-child { display: grid; min-width: 0; gap: 1px; }
-    .milxdy-app-hub-addon-queue-list strong { color: var(--milxdy-addon-text); font-size: 11px; }
-    .milxdy-app-hub-addon-queue-list small,
-    .milxdy-app-hub-addon-queue-empty,
-    .milxdy-app-hub-addon-queue-message { margin: 0; color: var(--milxdy-addon-muted); font-size: 9px; overflow-wrap: anywhere; }
-    .milxdy-app-hub-addon-queue-empty { padding: 5px 2px; border-top: 1px solid var(--milxdy-addon-line); }
-    .milxdy-app-hub-addon-queue-message { padding: 5px 7px; border-left: 2px solid var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); }
-    .milxdy-app-hub-addon-queue-mark {
-      display: grid;
-      width: 30px;
-      height: 30px;
-      place-items: center;
-      border: 1px solid var(--milxdy-addon-line);
-      border-radius: 6px;
-      background: var(--milxdy-addon-surface-muted);
-      color: var(--milxdy-addon-muted);
-      font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace;
-    }
-    .milxdy-app-hub-addon-queue-list li[data-state="accepted"] .milxdy-app-hub-addon-queue-mark { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
-    .milxdy-app-hub-addon-queue-list li[data-state="rejected"] .milxdy-app-hub-addon-queue-mark { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
-    .milxdy-app-hub-addon-notices { margin: 0; padding: 6px 8px 6px 22px; border: 1px solid var(--milxdy-addon-line); border-radius: 6px; background: var(--milxdy-addon-surface-muted); color: var(--milxdy-addon-muted); }
-    .milxdy-app-hub-addon-notices[data-tone="warning"] { border-color: var(--milxdy-addon-warn); background: var(--milxdy-addon-warn-soft); color: var(--milxdy-addon-warn); }
-    .milxdy-app-hub-addon-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
-    .milxdy-app-hub-addon-picker { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
-    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button,
-    .milxdy-app-hub-addon-picker-label {
-      display: grid;
-      min-height: 32px;
-      place-items: center;
-      box-sizing: border-box;
-      border: 1px solid var(--milxdy-addon-line);
-      border-radius: 6px;
-      background: var(--milxdy-addon-surface-muted);
-      color: var(--milxdy-addon-text);
-      padding: 5px 6px;
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.14);
-      cursor: pointer;
-      font-size: 9px;
-      font-weight: 800;
-      line-height: 1.2;
-      text-align: center;
-    }
-    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:first-child { border-color: var(--milxdy-addon-accent); background: var(--milxdy-addon-accent-soft); color: var(--milxdy-addon-accent-strong); }
-    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:disabled { cursor: not-allowed; opacity: 0.48; }
-    #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button:focus-visible,
-    .milxdy-app-hub-addon-picker-label:focus-visible,
-    .milxdy-app-hub-addon-details summary:focus-visible { outline: 2px solid var(--milxdy-addon-focus); outline-offset: 2px; }
-    .milxdy-app-hub-addon-details { display: grid; gap: 3px; padding-top: 2px; color: var(--milxdy-addon-muted); }
-    .milxdy-app-hub-addon-details summary { cursor: pointer; color: var(--milxdy-addon-accent-strong); font-size: 10px; font-weight: 700; }
-    .milxdy-app-hub-addon-details:not([open]) > :not(summary) { display: none; }
-    .milxdy-app-hub-addon-details > span { overflow-wrap: anywhere; }
-    @media (forced-colors: active) {
-      .milxdy-app-hub-addons,
-      .milxdy-app-hub-addon-step-icon,
-      .milxdy-app-hub-addon-package-mark,
-      .milxdy-app-hub-addon-queue-mark,
-      .milxdy-app-hub-addon-badge,
-      #${HUB_PANEL_ID} .milxdy-app-hub-addon-actions button,
-      .milxdy-app-hub-addon-picker-label { border-color: CanvasText; forced-color-adjust: auto; }
-      .milxdy-app-hub-addon-workflow li[data-state="current"] .milxdy-app-hub-addon-step-icon { outline: 2px solid Highlight; }
-    }
-    .milxdy-app-hub-runtime span,
-    .milxdy-app-hub-runtime-state {
-      color: var(--milxdy-hub-muted);
-      font-size: 11px;
-      line-height: 1.3;
-      word-break: break-word;
-    }
-    .milxdy-app-hub-first-run {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      padding: 10px;
-      border: 1px solid rgba(248, 211, 93, 0.28);
-      border-radius: 0;
-      background: rgba(248, 211, 93, 0.1);
-    }
-    .milxdy-app-hub-first-run strong {
-      font-size: 13px;
-      line-height: 1.2;
-    }
-    .milxdy-app-hub-first-run p {
-      margin: 0;
-      color: var(--milxdy-hub-soft);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .milxdy-app-hub-preset-actions {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .milxdy-app-hub-setup-settings {
-      display: grid;
-      gap: 6px;
-      padding-top: 8px;
-      margin-top: 8px;
-      border-top: 1px solid var(--milxdy-hub-row-line);
-    }
-    .milxdy-app-hub-setup-settings span {
-      color: var(--milxdy-hub-soft);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .milxdy-app-hub-card {
-      display: grid;
-      gap: 5px;
-      padding: 6px 7px;
-      border: 0;
-      border-bottom: 1px solid var(--milxdy-hub-row-line);
-      border-radius: 0;
-      background: var(--milxdy-hub-row);
-      box-shadow: none;
-    }
-    .milxdy-app-hub-card:last-child {
-      border-bottom: 0;
-    }
-    .milxdy-app-hub-card:hover {
-      background: var(--milxdy-hub-row-hover);
-    }
-    .milxdy-app-hub-card[data-enabled="false"] {
-      opacity: 0.62;
-    }
-    .milxdy-app-hub-card[data-available="false"] {
-      opacity: 0.52;
-    }
-    .milxdy-app-hub-card-summary {
-      display: grid;
-      grid-template-columns: 32px minmax(0, 1fr) 18px;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      padding: 0;
-      border: 0;
-      background: transparent;
-      color: inherit;
-      cursor: pointer;
-      font: inherit;
-      text-align: left;
-    }
-    .milxdy-app-hub-card[data-tier="app"][data-rail-app="true"] .milxdy-app-hub-card-summary {
-      grid-template-columns: 14px 32px minmax(0, 1fr) 18px;
-    }
-    .milxdy-app-hub-drag-handle {
-      display: inline-grid;
-      width: 14px;
-      height: 28px;
-      place-items: center;
-      color: var(--milxdy-hub-muted);
-      cursor: grab;
-      font-size: 12px;
-      line-height: 1;
-      touch-action: none;
-    }
-    html[data-milxdy-hub-reordering="true"] .milxdy-app-hub-drag-handle,
-    .milxdy-app-hub-drag-handle:active {
-      color: var(--milxdy-hub-accent);
-      cursor: grabbing;
-    }
-    .milxdy-app-hub-card-title {
-      display: grid;
-      min-width: 0;
-      gap: 2px;
-    }
-    .milxdy-app-hub-card-summary strong {
-      min-width: 0;
-      overflow: hidden;
-      color: inherit;
-      font-size: 13px;
-      line-height: 1.2;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .milxdy-app-hub-card[data-rail-app="false"] .milxdy-app-hub-card-summary strong {
-      overflow: visible;
-      text-overflow: clip;
-      white-space: normal;
-    }
-    .milxdy-app-hub-lifecycle {
-      width: fit-content;
-      max-width: 100%;
-      overflow: hidden;
-      color: var(--milxdy-hub-muted);
-      font-size: 10px;
-      font-weight: 700;
-      line-height: 1.2;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .milxdy-app-hub-lifecycle[data-state="ready"] { color: var(--milxdy-hub-accent); }
-    .milxdy-app-hub-lifecycle[data-state="failed"],
-    .milxdy-app-hub-lifecycle[data-state="unavailable"] { color: var(--milxdy-hub-danger); }
-    .milxdy-app-hub-lifecycle[data-state="loading"] { color: var(--milxdy-hub-soft); }
-    .milxdy-app-hub-expand-icon {
-      position: relative;
-      display: inline-grid;
-      width: 16px;
-      height: 16px;
-      justify-self: center;
-      place-items: center;
-      border: 1px solid var(--milxdy-hub-button-border);
-      background: var(--milxdy-hub-button);
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-light),
-        inset -1px -1px 0 rgba(0, 0, 0, 0.58);
-      transform: rotate(0deg);
-      transform-origin: 50% 35%;
-      transition: transform 140ms ease;
-    }
-    .milxdy-app-hub-expand-icon::before {
-      content: "";
-      width: 0;
-      height: 0;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 6px solid var(--milxdy-hub-accent);
-    }
-    .milxdy-app-hub-card[data-expanded="true"] .milxdy-app-hub-expand-icon {
-      transform: rotate(180deg);
-    }
-    .milxdy-app-hub-icon {
-      flex: 0 0 30px;
-      width: 32px;
-      height: 32px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      overflow: hidden;
-      border-radius: 0;
-      background: rgba(248, 211, 93, 0.16);
-      color: var(--milxdy-hub-accent);
-      font-size: 14px;
-      font-weight: 800;
-      box-shadow:
-        inset 1px 1px 0 var(--milxdy-hub-border-light),
-        inset -1px -1px 0 rgba(0, 0, 0, 0.5);
-    }
-    .milxdy-app-hub-icon-img {
-      width: 100%;
-      height: 100%;
-      object-fit: contain;
-      display: block;
-    }
-    .milxdy-app-hub-body {
-      min-width: 0;
-      display: none;
-      flex-direction: column;
-      gap: 3px;
-    }
-    .milxdy-app-hub-card[data-expanded="true"] .milxdy-app-hub-body {
-      display: flex;
-    }
-    .milxdy-app-hub-body p {
-      margin: 0;
-      color: var(--milxdy-hub-soft);
-      font-size: 12px;
-      line-height: 1.35;
-    }
-    .milxdy-app-hub-unavailable {
-      color: var(--milxdy-hub-accent);
-      font-size: 11px;
-      line-height: 1.3;
-    }
-    .milxdy-app-hub-notes {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-    }
-    .milxdy-app-hub-note {
-      max-width: 100%;
-      box-sizing: border-box;
-      padding: 2px 5px;
-      border: 1px solid var(--milxdy-hub-button-border);
-      border-radius: 0;
-      background: rgba(255, 255, 255, 0.035);
-      overflow-wrap: anywhere;
-      text-transform: none;
-    }
-    .milxdy-app-hub-details {
-      display: flex;
-      flex-direction: column;
-      gap: 5px;
-      margin-top: 3px;
-      padding-top: 6px;
-      border-top: 1px solid var(--milxdy-hub-row-line);
-    }
-    .milxdy-app-hub-detail-row {
-      display: grid;
-      grid-template-columns: 72px minmax(0, 1fr);
-      gap: 6px;
-      align-items: start;
-    }
-    .milxdy-app-hub-detail-row strong,
-    .milxdy-app-hub-detail-row span {
-      font-size: 11px;
-      line-height: 1.3;
-    }
-    .milxdy-app-hub-detail-row strong {
-      color: var(--milxdy-hub-accent);
-    }
-    .milxdy-app-hub-detail-row span {
-      color: var(--milxdy-hub-muted);
-      overflow-wrap: anywhere;
-      text-transform: none;
-    }
-    .milxdy-app-hub-generated-settings {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      margin-top: 4px;
-      padding-top: 7px;
-      border-top: 1px solid var(--milxdy-hub-row-line);
-    }
-    .milxdy-app-hub-generated-settings > strong {
-      color: var(--milxdy-hub-accent);
-      font-size: 11px;
-      line-height: 1.2;
-    }
-    .milxdy-app-hub-generated-setting {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(96px, 36%);
-      align-items: center;
-      gap: 8px;
-      min-height: 30px;
-    }
-    .milxdy-app-hub-generated-setting-text {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-      text-transform: none;
-    }
-    .milxdy-app-hub-generated-setting-text strong {
-      color: var(--milxdy-hub-text);
-      font-size: 11px;
-      line-height: 1.2;
-      text-transform: none;
-    }
-    .milxdy-app-hub-generated-setting-text small {
-      color: var(--milxdy-hub-muted);
-      font-size: 10px;
-      line-height: 1.2;
-      overflow-wrap: anywhere;
-      text-transform: none;
-    }
-    .milxdy-app-hub-generated-setting select,
-    .milxdy-app-hub-generated-setting input,
-    .milxdy-app-hub-generated-setting textarea {
-      width: 100%;
-      min-width: 0;
-      box-sizing: border-box;
-      border: 1px solid var(--milxdy-hub-button-border);
-      border-radius: 0;
-      background: var(--milxdy-hub-input);
-      color: var(--milxdy-hub-text);
-      font: inherit;
-      font-size: 11px;
-      line-height: 1.2;
-      padding: 5px 6px;
-    }
-    .milxdy-app-hub-generated-setting input[type="range"] {
-      padding: 0;
-      accent-color: var(--milxdy-hub-accent);
-    }
-    .milxdy-app-hub-generated-setting textarea {
-      min-height: 54px;
-      resize: vertical;
-    }
-    .milxdy-app-hub-generated-setting .milxdy-app-hub-generated-toggle {
-      min-height: 30px;
-      padding: 5px 7px;
-    }
-    .milxdy-app-hub-generated-unsupported {
-      color: var(--milxdy-hub-muted);
-      font-size: 11px;
-      line-height: 1.2;
-      text-transform: none;
-    }
-    .milxdy-app-hub-body span {
-      color: var(--milxdy-hub-muted);
-      font-size: 11px;
-      line-height: 1.2;
-      text-transform: capitalize;
-    }
-    .milxdy-app-hub-enable-row {
-      display: grid;
-      grid-template-columns: minmax(112px, auto) minmax(0, 1fr);
-      align-items: center;
-      gap: 8px;
-      padding: 3px 0 5px;
-    }
-    .milxdy-app-hub-enable-row .milxdy-app-hub-enable-detail {
-      color: var(--milxdy-hub-soft);
-      font-size: 11px;
-      line-height: 1.25;
-      text-transform: none;
-    }
-    .milxdy-app-hub-controls {
-      display: none;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-    }
-    .milxdy-app-hub-card[data-expanded="true"] .milxdy-app-hub-controls {
-      display: grid;
-    }
-    .milxdy-app-hub-header button,
-    .milxdy-app-hub-preset-actions button,
-    .milxdy-app-hub-enable-row button,
-    .milxdy-app-hub-controls button {
-      border: 2px solid var(--milxdy-hub-button-border);
-      border-radius: 0;
-      background: var(--milxdy-hub-button);
-      color: inherit;
-      font: inherit;
-      font-size: 12px;
-      line-height: 1;
-      padding: 7px 9px;
-      cursor: pointer;
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-light),
-        inset -2px -2px 0 rgba(0, 0, 0, 0.58);
-    }
-    .milxdy-app-hub-header button:active,
-    .milxdy-app-hub-preset-actions button:active,
-    .milxdy-app-hub-enable-row button:active,
-    .milxdy-app-hub-controls button:active {
-      box-shadow:
-        inset 2px 2px 0 rgba(0, 0, 0, 0.58),
-        inset -2px -2px 0 rgba(255, 244, 207, 0.18);
-      transform: translate(1px, 1px);
-    }
-    .milxdy-app-hub-enable-row button:disabled,
-    .milxdy-app-hub-controls button:disabled {
-      cursor: default;
-      opacity: 0.52;
-    }
-    .milxdy-app-hub-enable-row button:disabled:active {
-      transform: none;
-    }
-    .milxdy-app-hub-enable-row .milxdy-app-hub-switch,
-    .milxdy-app-hub-controls .milxdy-app-hub-switch,
-    .milxdy-app-hub-generated-setting .milxdy-app-hub-switch {
-      grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: 30px minmax(0, 1fr);
-      align-items: center;
-      gap: 7px;
-      min-height: 32px;
-      text-align: left;
-    }
-    .milxdy-app-hub-enable-row .milxdy-app-hub-switch {
-      grid-column: auto;
-    }
-    .milxdy-app-hub-enable-row .milxdy-app-hub-switch[data-checked="true"],
-    .milxdy-app-hub-controls .milxdy-app-hub-switch[data-checked="true"],
-    .milxdy-app-hub-generated-setting .milxdy-app-hub-switch[data-checked="true"] {
-      border-color: var(--milxdy-hub-switch-on-border);
-      background: var(--milxdy-hub-switch-on);
-      color: var(--milxdy-hub-switch-on-text);
-      box-shadow:
-        inset 2px 2px 0 rgba(255, 255, 255, 0.22),
-        inset -2px -2px 0 rgba(0, 0, 0, 0.46);
-    }
-    .milxdy-app-hub-switch-knob {
-      position: relative;
-      width: 30px;
-      height: 16px;
-      border-radius: 999px;
-      background: rgba(238, 240, 255, 0.2);
-      box-shadow: inset 0 0 0 1px rgba(238, 240, 255, 0.18);
-    }
-    .milxdy-app-hub-switch-knob::after {
-      content: "";
-      position: absolute;
-      top: 3px;
-      left: 3px;
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: rgba(238, 240, 255, 0.88);
-      transition: transform 140ms ease;
-    }
-    .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-knob {
-      background: rgba(255, 255, 255, 0.24);
-      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.52);
-    }
-    .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-knob::after {
-      transform: translateX(14px);
-      background: #ffffff;
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.28);
-    }
-    .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-text {
-      color: #ffffff;
-    }
-    .milxdy-app-hub-switch[data-performance-blocked="true"] {
-      cursor: help;
-      opacity: 0.54;
-      filter: grayscale(0.75);
-    }
-    .milxdy-app-hub-switch[data-performance-blocked="true"] .milxdy-app-hub-switch-knob {
-      border-color: rgba(128, 128, 128, 0.52);
-      background: rgba(128, 128, 128, 0.22);
-    }
-    .milxdy-app-hub-switch-text {
-      min-width: 0;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    html[data-milxdy-x-theme="light"] #${HUB_PANEL_ID},
-    html[data-milxdy-settings-theme="light"] #${HUB_PANEL_ID},
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) #${HUB_PANEL_ID} {
-      --milxdy-hub-face: #d4d0c8;
-      --milxdy-hub-panel: #ece9df;
-      --milxdy-hub-list: #ffffff;
-      --milxdy-hub-input: #ffffff;
-      --milxdy-hub-border-light: #ffffff;
-      --milxdy-hub-border-dark: #404040;
-      --milxdy-hub-outline: #808080;
-      --milxdy-hub-title: #000080;
-      --milxdy-hub-title-text: #ffffff;
-      --milxdy-hub-button: #d4d0c8;
-      --milxdy-hub-row: #ece9df;
-      --milxdy-hub-row-hover: #fff6cb;
-      --milxdy-hub-row-line: rgba(64, 64, 64, 0.42);
-      --milxdy-hub-text: #101014;
-      --milxdy-hub-muted: rgba(16, 16, 20, 0.62);
-      --milxdy-hub-soft: rgba(16, 16, 20, 0.74);
-      --milxdy-hub-accent: #000080;
-      --milxdy-hub-button-border: #808080;
-      --milxdy-hub-switch-on: #005c3b;
-      --milxdy-hub-switch-on-border: #003f29;
-      --milxdy-hub-switch-on-text: #ffffff;
-      color: var(--milxdy-hub-text);
-      background: var(--milxdy-hub-face);
-      border-color: var(--milxdy-hub-outline);
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-light),
-        inset -2px -2px 0 var(--milxdy-hub-border-dark),
-        8px 8px 0 rgba(15, 23, 42, 0.18);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-addons,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-addons,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-addons {
-      --milxdy-addon-surface: #fbfbfb;
-      --milxdy-addon-surface-muted: #e5e5e5;
-      --milxdy-addon-line: #b4b4b4;
-      --milxdy-addon-line-strong: #464a6c;
-      --milxdy-addon-highlight: #ffffff;
-      --milxdy-addon-text: #19191d;
-      --milxdy-addon-muted: rgba(0, 0, 0, 0.56);
-      --milxdy-addon-accent: #626bb2;
-      --milxdy-addon-accent-strong: #171f82;
-      --milxdy-addon-accent-soft: color-mix(in srgb, #626bb2 10%, #fbfbfb);
-      --milxdy-addon-warn: #8c6800;
-      --milxdy-addon-warn-soft: color-mix(in srgb, #f2bc21 14%, #fbfbfb);
-      --milxdy-addon-focus: #b35e7d;
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-card,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-card,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-card {
-      border-color: var(--milxdy-hub-row-line);
-      background: var(--milxdy-hub-row);
-    }
-    html[data-milxdy-x-theme="light"] #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings,
-    html[data-milxdy-settings-theme="light"] #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings {
-      border-color: var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-panel);
-    }
-    html[data-milxdy-x-theme="light"] #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings button,
-    html[data-milxdy-settings-theme="light"] #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings button,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) #${HUB_PANEL_ID} .milxdy-app-hub-dock-settings button {
-      border-color: var(--milxdy-hub-button-border);
-      background: var(--milxdy-hub-button);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-runtime,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-runtime,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-runtime {
-      border-color: var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-panel);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-search,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-search,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-search {
-      border-color: var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-panel);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-search span,
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-empty,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-search span,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-empty,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-search span,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-empty {
-      color: var(--milxdy-hub-muted);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-search input,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-search input,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-search input {
-      border-color: var(--milxdy-hub-outline);
-      background: var(--milxdy-hub-input);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-first-run,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-first-run,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-first-run {
-      border-color: rgba(98, 107, 178, 0.28);
-      background: rgba(98, 107, 178, 0.1);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-first-run p,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-first-run p,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-first-run p {
-      color: var(--milxdy-hub-soft);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-body p,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-body p,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-body p {
-      color: var(--milxdy-hub-soft);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-body span,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-body span,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-body span {
-      color: var(--milxdy-hub-muted);
-    }
-    .milxdy-app-hub-body .milxdy-app-hub-switch[data-checked="true"] .milxdy-app-hub-switch-text {
-      color: #ffffff !important;
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-unavailable,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-unavailable,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-unavailable {
-      color: rgba(126, 86, 20, 0.78);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-note,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-note,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-note {
-      border-color: var(--milxdy-hub-button-border);
-      background: var(--milxdy-hub-input);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-details,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-details,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-details {
-      border-color: var(--milxdy-hub-row-line);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-detail-row strong,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-detail-row strong,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-detail-row strong {
-      color: rgba(126, 86, 20, 0.82);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-detail-row span,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-detail-row span,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-detail-row span {
-      color: var(--milxdy-hub-muted);
-    }
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-runtime span,
-    html[data-milxdy-x-theme="light"] .milxdy-app-hub-runtime-state,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-runtime span,
-    html[data-milxdy-settings-theme="light"] .milxdy-app-hub-runtime-state,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-runtime span,
-    html:not([data-milxdy-x-theme="dark"]):not([data-milxdy-x-theme="dim"]) .milxdy-app-hub-runtime-state {
-      color: var(--milxdy-hub-muted);
-    }
-    html[data-milxdy-x-theme="dark"] #${HUB_PANEL_ID},
-    html[data-milxdy-x-theme="dim"] #${HUB_PANEL_ID},
-    html[data-milxdy-settings-theme="dark"] #${HUB_PANEL_ID} {
-      --milxdy-hub-face: #1f222a;
-      --milxdy-hub-panel: #101218;
-      --milxdy-hub-list: #08090d;
-      --milxdy-hub-input: #08090d;
-      --milxdy-hub-border-light: #454953;
-      --milxdy-hub-border-dark: #050608;
-      --milxdy-hub-outline: #8f7932;
-      --milxdy-hub-title: #081d68;
-      --milxdy-hub-title-text: #fff2b8;
-      --milxdy-hub-button: #20232b;
-      --milxdy-hub-row: #101218;
-      --milxdy-hub-row-hover: #1b1d1d;
-      --milxdy-hub-row-line: rgba(191, 151, 38, 0.48);
-      --milxdy-hub-text: #f2ecd5;
-      --milxdy-hub-muted: rgba(242, 236, 213, 0.62);
-      --milxdy-hub-soft: rgba(242, 236, 213, 0.76);
-      --milxdy-hub-accent: #f0b72d;
-      --milxdy-hub-button-border: rgba(191, 151, 38, 0.52);
-      color: var(--milxdy-hub-text);
-      background: var(--milxdy-hub-face);
-      border-color: var(--milxdy-hub-outline);
-      box-shadow:
-        inset 2px 2px 0 var(--milxdy-hub-border-light),
-        inset -2px -2px 0 var(--milxdy-hub-border-dark),
-        8px 8px 0 rgba(0, 0, 0, 0.34);
-    }
-  `;
-  document.documentElement.appendChild(style);
-}
-
 function dockIconForApp(app: MilxdyAppManifest): string {
   const letter = (app.dock?.label || app.name || app.id).trim().slice(0, 1).toUpperCase() || "?";
   const svg = [
@@ -6840,8 +4572,10 @@ function runtimeAssetUrl(value: string): string {
     : chrome.runtime.getURL(value);
 }
 
-function currentRoute(previousHref: string | null): MilxdyRouteChange {
+function currentRoute(previousHref: string | null, site: MilxdyRuntimeSite): MilxdyRouteChange {
   return {
+    site: site.id,
+    origin: site.origin,
     href: location.href,
     pathname: location.pathname,
     previousHref,

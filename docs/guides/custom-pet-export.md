@@ -20,7 +20,8 @@ pet, or post to X.
    range: Milady 0-9999, Remilio 1-10000, Bonkler 1-150, Kagami 1-3000.
 5. Click **Fetch** to populate the visible trait fields from public Maker
    metadata, or enter the traits manually. Review every populated value.
-6. Choose the transparent PNG downloaded from that Maker.
+6. Choose the transparent PNG downloaded from that Maker (at most 12 MB and
+   4096×4096 pixels).
 7. Enter or correct every stable Maker trait ID. Use `none` for an absent trait;
    no missing trait is invented.
 8. Choose leg coverage, a compatible bottom and color, and footwear and color.
@@ -49,6 +50,8 @@ dimensions, stable trait IDs, omission/adaptation policy, versioned body assets,
 derived leg color, and Pets Maker generator version.
 
 - If the PNG is opaque, return to the Maker and export a transparent avatar.
+- If you change a selection during Fetch, preview, or export, review the new
+  values and repeat the action. Closing the panel cancels pending output.
 - If public Maker metadata cannot be fetched, keep the form open and enter the
   visible traits manually; no image or account data is required by the request.
 - If a trait is absent, enter the explicit ID `none`.

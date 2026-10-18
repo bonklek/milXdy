@@ -4,7 +4,7 @@ import { spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import path from "node:path";
 import { assertSafeGeneratedOutputDir } from "../build/generated-output-dir-safety.mjs";
-import { loadSelection, materializeSelectionPackages, verifyMaterializedSelection } from "./selection.mjs";
+import { loadSelection, materializeSelectionPackages, revalidatePreparedSelection, verifyMaterializedSelection } from "./selection.mjs";
 
 const command = process.argv[2] ?? "status";
 if (!new Set(["prepare", "apply", "status", "rebuild"]).has(command)) {
@@ -55,6 +55,7 @@ if (command === "prepare") {
   process.exit(0);
 }
 
+let preparedPackages = null;
 if (command === "apply") {
   const lock = await readJson(selectionLockPath, null);
   if (!lock) {
@@ -62,12 +63,14 @@ if (command === "apply") {
     fail("selection-not-prepared", `No prepared selection found. Run npm run addons:prepare -- --selection=<file> first.`);
   }
   try {
+    preparedPackages = await revalidatePreparedSelection(lock, catalogPath,
+      "scripts/addons/catalog-policy.json", "scripts/addons/trusted-catalog-reviews.json");
     await verifyMaterializedSelection(lock.packages || [], catalogPackagesDirectory);
   } catch (error) {
     await recordFailure("validation-failed", error.code || "materialized-package", null, await activeBuildIdentity());
     fail(error.code || "materialized-package", error.message);
   }
-  if (lock.packages?.some((entry) => entry.reviewTrusted !== true) && !forwardedTrustFlags.includes("--allow-local-review")) {
+  if (preparedPackages.some((entry) => entry.reviewTrusted !== true) && !forwardedTrustFlags.includes("--allow-local-review")) {
     await recordFailure("validation-failed", "catalog-review-untrusted", null, await activeBuildIdentity());
     fail("catalog-review-untrusted", "Selection includes packages without a checked-in trusted catalog review. Inspect them, then pass --allow-local-review to continue.");
   }
@@ -82,6 +85,14 @@ if (composeResult.status !== 0 || !report) {
   await recordFailure("validation-failed", "composition", report, await activeBuildIdentity());
   console.error(`Local add-on validation failed. See ${managerStatusPath}. The stable build was not replaced.`);
   process.exit(composeResult.status ?? 1);
+}
+if (preparedPackages) {
+  try {
+    verifySelectionAgainstReport(preparedPackages, report, catalogPackagesDirectory);
+  } catch (error) {
+    await recordFailure("validation-failed", error.code || "selection-package-mismatch", report, await activeBuildIdentity());
+    throw error;
+  }
 }
 printCapabilitySummary(report);
 
@@ -109,6 +120,7 @@ if (buildResult.status !== 0) {
 }
 
 const selectionLock = await readJson(selectionLockPath, null);
+if (selectionLock && preparedPackages) selectionLock.packages = preparedPackages;
 const ready = managerStatus("built", report, {
   buildId: plan.buildId,
   compositionFingerprint: plan.compositionFingerprint,

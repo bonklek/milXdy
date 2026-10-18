@@ -58,7 +58,28 @@
     "proofRetrievedAt": "2026-07-30",
     "proofSha256": "f6140e867889268d68ccac1aa4da5d8bbf4ac87cde7805890b7a091f48f45d3b",
     "scopeNote": "Synthetic proof exists only to exercise required manifest fields.",
-    "additionalRestrictions": []
+    "additionalRestrictions": [],
+    "compatibility": {
+      "decision": "compatible",
+      "basis": "license",
+      "sourceSha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a",
+      "permissions": {
+        "copy": true,
+        "modify": true,
+        "redistribute": true,
+        "appSdkUse": true
+      },
+      "rationale": "Synthetic validator scenario only; not a production rights determination.",
+      "reviewedBy": "Synthetic rights reviewer fixture",
+      "reviewedAt": "2026-07-30T12:00:00Z",
+      "notices": [
+        {
+          "path": "LICENSES/VPL.txt",
+          "sha256": "145f5a008fee1ff432a007b832b5c20ba5f1f1e39079b0d94c258aee20aaaa10"
+        }
+      ],
+      "obligations": []
+    }
   },
   "attribution": {
     "requiredText": null,

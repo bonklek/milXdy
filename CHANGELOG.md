@@ -1,5 +1,54 @@
 # Changelog
 
+## 0.2.5
+
+Status: experimental prerelease. The latest stable release is 0.2.4.
+
+See [milXdy 0.2.5 release notes](docs/releases/RELEASE_NOTES_0.2.5.md).
+
+- Consolidated Chromium into one normal milXdy build with the registered Remilia
+  identity; removed the separate beta build and kept developer QA isolated.
+- Removed horizontal overflow from the audio-review dialog.
+
+- Replaced RemiliaNET browser-session and cookie adoption with explicit Remilia
+  Login using Authorization Code with PKCE, background-only credential custody,
+  a one-time migration prompt, and visible connect, reconnect, disconnect, and
+  revoke controls.
+- Moved profile and directory resolution, RemiStats, notifications, pokes,
+  Beetle reads, and global RemiNet Chat history and text replies to typed,
+  scope-gated Remilia API v1 services.
+- Kept temporary RemiNet realtime/media and Beetle action adapters separate
+  from official coverage, with documented removal conditions and no hidden
+  browser-session fallback.
+- Made the temporary dual-auth holdover explicit: official milXdy connection
+  for API features, separate website sign-in for native Beetle actions. Moved
+  account access ahead of RemiStats and Beetol controls in settings.
+- Added Reader Voice support for native X Articles and an explicit browser-voice
+  review action for supported DM conversations.
+- Added built-in review-first long-form audio export through a configured local
+  speech backend, including editable text and metadata, local-loopback transport,
+  cancellation, labeled format fallbacks, and a JSON sidecar.
+- Added Unicode-aware Share Kit layout with exact-pinned Pretext 0.0.8 and local
+  rich-text editing for bullets, bold, italic, strikethrough, combined styles,
+  accessible controls, and same-blob preview/copy/download/RemiNet parity.
+- Added explicit Remibooru media contribution from Post-Factory with reviewed
+  tags, one-use short-lived host media custody, clear public-destination copy,
+  and native-uploader fallback.
+- Added the multi-site runtime and reviewed page-context actions while keeping
+  site, sender, frame, host, and privileged-operation boundaries fail closed.
+- Completed the Remilia Maker pet-import adapter and deterministic pipeline QA
+  for Milady, Remilio, Bonkler, and Kagami templates, including cache/resume and
+  recovery checks in the packaged skill archive.
+- Added a host-owned App SDK capability broker and reviewed Post-Factory,
+  Post-reading, and Share Kit custom-composition support without exposing OAuth, tokens,
+  cookies, raw private responses, or authenticated arbitrary fetch to packages.
+- Hardened authenticated transports with first-401-only retry, redirect
+  rejection, no-referrer behavior, exact final-URL checks, and explicit Firefox
+  keyless compatibility behavior.
+- Added deterministic release archives, exact checksums, reproducibility and
+  package-trust gates, migration evidence, secret/machine-path scans, and
+  source-and-built regression coverage for retired session-login paths.
+
 ## 0.2.4
 
 Status: released.
@@ -24,7 +73,7 @@ See [milXdy 0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md).
 - Hardens shared startup, teardown, surface delivery, idle work, and network queues so one failed app, stalled request, or early-page timing race cannot strand unrelated features.
 - Protects user-authored settings during reset, restores controls after failed saves, and keeps onboarding presets consistent with the selected performance mode.
 - Repairs stuck or stale states across Chat, Wiki, Music, Miladychan, Beetol, Maxxer, RemiStats, and Post-reading, including socket cleanup, history retention, cancelable work, bounded caches, retryable workers, and reversible disable/re-enable behavior.
-- Adds keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete user-facing inventory is in the [0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md#reliability-and-accessibility-fixes-in-plain-english).
+- Adds keyboard and assistive-technology fixes: named popup controls, keyboard app reordering, reduced-motion-safe rail behavior, modal focus management, keyboard-operable RemiStats links, and less disruptive Chat/Beetol announcements. The complete user-facing inventory is in the [0.2.3 release notes](docs/releases/RELEASE_NOTES_0.2.3.md#included-fixes).
 - Returns Beetol hunt results immediately after the action request and reconciles inventory/cooldowns separately, preventing successful hunts from appearing stuck behind sequential state refreshes.
 - Keeps fast RemiliaNET Hunt available for all three charges, immediately darkens Claim and exhausted Hunt controls, and refreshes the fast-result display from the current Beetle state.
 - Reuses recent RemiliaNET authentication for RemiNet Chat and bounds both authentication and WebSocket opening, so readable history cannot leave live chat stuck on Connecting indefinitely.

@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "channel": "production",
+  "target": "chromium",
+  "name": "milXdy",
+  "manifestKey": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAqEbT6sGyvzfWevqj1r0oMxc86vHjqQYh09ukA4E80QrO840X5PKbuVGEHkhyDJVadQdWolbhvruJHttGYq1R7gBWGQcuySWCJAF6qZ0mDPlwkAE7m38EBXuWA9aPvijFNGQgHT7CNIuEJCBpMn51QSveEJJKGbz0PknqVxUPU4KjVyVucBNtNo/NuGUjcyMSwvksMHn/Ew4eowTk5dyU49y3FEZmg7+WGxf03y53qeTXFTjvNQ/GRSXEgm5XOu0bxWCxA1ofjEMqDUYr5uGx+o5JK3KPZiF/UhqxNXa5LRYDLcaBPl98ixq3+zVk05n/5wPWmSBcgHhCmlHFRyXjHQIDAQAB",
+  "extensionId": "idlmhjcedjkmbkndigbiobfjadhlmgki",
+  "identityPermission": "identity",
+  "remiliaLogin": {
+    "clientId": "tpa-milxdy",
+    "issuerUri": "https://www.remilia.net/oidc/realms/remilia",
+    "redirectPath": "remilia-oauth",
+    "redirectUri": "https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth"
+  }
+}

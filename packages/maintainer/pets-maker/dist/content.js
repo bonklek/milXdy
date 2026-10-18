@@ -453,26 +453,72 @@ function makerMetadataUrl(family, tokenId) {
   if (!familyName || !Number.isInteger(tokenId) || tokenId < 0) throw new Error("Unsupported Maker metadata request.");
   return `${MAKER_METADATA_ORIGIN}/metadata/${encodeURIComponent(familyName)}/${tokenId}`;
 }
-async function fetchMakerTraits(family, tokenId, { signal, fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(makerMetadataUrl(family, tokenId), {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    credentials: "omit",
-    referrerPolicy: "no-referrer",
-    signal
-  });
-  if (!response.ok) throw new Error(`Maker metadata request failed (${response.status}).`);
+async function fetchMakerTraits(family, tokenId, options = {}) {
+  const { signal, fetchImpl = fetch } = options;
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timeout = setTimeout(() => controller.abort(new DOMException("Maker metadata request timed out.", "TimeoutError")), 15e3);
+  try {
+    const url = makerMetadataUrl(family, tokenId);
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+      signal: controller.signal
+    });
+    controller.signal.throwIfAborted();
+    if (response.url && response.url !== url) throw new Error("Maker metadata response changed destination.");
+    if (!response.ok) throw new Error(`Maker metadata request failed (${response.status}).`);
+    const text = await readMetadataText(response, controller.signal);
+    let metadata;
+    try {
+      metadata = JSON.parse(text);
+    } catch {
+      throw new Error("Maker metadata response was not valid JSON.");
+    }
+    return traitsFromMakerMetadata(family, metadata);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+async function readMetadataText(response, signal) {
   const declaredLength = Number(response.headers.get("content-length") || 0);
   if (declaredLength > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
-  const text = await response.text();
-  if (text.length > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
-  let metadata;
+  if (!response.body) throw new Error("Maker metadata response was empty.");
+  const reader = response.body.getReader();
+  const cancel = () => void reader.cancel().catch(() => void 0);
+  signal.addEventListener("abort", cancel, { once: true });
+  const chunks = [];
+  let size = 0;
   try {
-    metadata = JSON.parse(text);
-  } catch {
-    throw new Error("Maker metadata response was not valid JSON.");
+    for (; ; ) {
+      signal.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_METADATA_BYTES) {
+        await reader.cancel().catch(() => void 0);
+        throw new Error("Maker metadata response is too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    reader.releaseLock();
   }
-  return traitsFromMakerMetadata(family, metadata);
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
 }
 function traitsFromMakerMetadata(family, metadata) {
   const traitTypes = FAMILY_TRAIT_TYPES[family];
@@ -501,408 +547,7 @@ function makerAssetId(family, traitType, value) {
   return `${family}-${slug}-v1`;
 }
 
-// packages/maintainer/pets-maker/src/custom-pet-ui.js
-var FAMILY_LABELS = Object.freeze({
-  milady: "Milady",
-  remilio: "Remilio",
-  bonkler: "Bonkler",
-  kagami: "Kagami"
-});
-function buildCustomPetExport({ signal }) {
-  const section = element("section", {
-    className: "tweet-composer-kit__pet-export",
-    ariaLabel: "Custom Pet export"
-  });
-  const summary = element(
-    "div",
-    { className: "tweet-composer-kit__pet-heading" },
-    element("strong", { textContent: "Custom Pet export" }),
-    element("span", {
-      className: "tweet-composer-kit__pet-local-note",
-      textContent: "Local download only. Nothing is uploaded."
-    })
-  );
-  const form = element("form", {
-    className: "tweet-composer-kit__pet-form",
-    noValidate: true
-  });
-  const family = blankSelect("Maker template family", PET_REQUEST_FAMILIES.map((id) => ({ id, label: FAMILY_LABELS[id] })));
-  family.select.name = "templateFamily";
-  const nftNumberInput = element("input", {
-    className: "tweet-composer-kit__pet-input",
-    type: "number",
-    step: "1",
-    inputMode: "numeric",
-    autocomplete: "off",
-    ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help"
-  });
-  const fetchTraitsButton = element("button", {
-    className: "tweet-composer-kit__pet-secondary tweet-composer-kit__pet-fetch",
-    type: "button",
-    textContent: "Fetch",
-    disabled: true
-  });
-  const nftNumberRow = element("div", { className: "tweet-composer-kit__pet-nft-row" }, nftNumberInput, fetchTraitsButton);
-  const nftNumber = labeledControl("NFT number (optional)", nftNumberRow);
-  nftNumber.hidden = true;
-  const nftNumberHelp = element("p", {
-    id: "tweet-composer-kit-pet-nft-number-help",
-    className: "tweet-composer-kit__pet-help",
-    hidden: true
-  });
-  const avatar = element("input", {
-    className: "tweet-composer-kit__pet-file",
-    type: "file",
-    accept: "image/png,.png",
-    required: true,
-    ariaDescribedBy: "tweet-composer-kit-pet-avatar-help"
-  });
-  const avatarHelp = element("p", {
-    id: "tweet-composer-kit-pet-avatar-help",
-    className: "tweet-composer-kit__pet-help",
-    textContent: "Choose the transparent PNG downloaded from the selected Maker. Opaque backgrounds are rejected."
-  });
-  const traitInputs = Object.fromEntries(PET_REQUEST_TRAITS.map((trait) => {
-    const assetId = element("input", {
-      className: "tweet-composer-kit__pet-input",
-      type: "text",
-      maxLength: 80,
-      required: true,
-      autocomplete: "off",
-      placeholder: `${trait} asset ID or none`,
-      ariaLabel: `${friendlyTrait(trait)} stable asset ID`
-    });
-    const label = element("input", {
-      className: "tweet-composer-kit__pet-input",
-      type: "text",
-      maxLength: 120,
-      autocomplete: "off",
-      placeholder: "Readable label (optional)",
-      ariaLabel: `${friendlyTrait(trait)} readable label`
-    });
-    return [trait, { assetId, label }];
-  }));
-  const coverage = blankSelect("Leg coverage", BODY_COMPLETION_CATALOG.legCoverage);
-  const bottom = blankSelect("Bottom garment", BODY_COMPLETION_CATALOG.bottoms.map((item) => ({
-    id: item.assetId,
-    label: item.label
-  })));
-  const bottomColor = blankSelect("Bottom color", BODY_COMPLETION_CATALOG.colors);
-  const footwear = blankSelect("Footwear", BODY_COMPLETION_CATALOG.footwear.map((item) => ({
-    id: item.assetId,
-    label: item.label
-  })));
-  const footwearColor = blankSelect("Footwear color", BODY_COMPLETION_CATALOG.colors);
-  const petName = labeledInput("Pet name (optional)", 80);
-  const personality = labeledInput("Personality (optional)", 280);
-  const preview = element("canvas", {
-    className: "tweet-composer-kit__pet-preview",
-    width: 1024,
-    height: 1024,
-    hidden: true,
-    ariaLabel: "Completed Maker avatar preview",
-    role: "img"
-  });
-  const previewButton = element("button", {
-    className: "tweet-composer-kit__pet-secondary",
-    type: "button",
-    textContent: "Preview completed avatar"
-  });
-  const exportButton = element("button", {
-    className: "tweet-composer-kit__pet-primary",
-    type: "submit",
-    textContent: "Download remilia-pet-request.zip"
-  });
-  const status = element("p", {
-    className: "tweet-composer-kit__pet-status",
-    role: "status",
-    ariaLive: "polite"
-  });
-  const instruction = element("textarea", {
-    className: "tweet-composer-kit__pet-instruction",
-    readOnly: true,
-    rows: 2,
-    value: PET_REQUEST_INSTRUCTION,
-    hidden: true,
-    ariaLabel: "Codex handoff instruction"
-  });
-  const copyInstruction = element("button", {
-    className: "tweet-composer-kit__pet-secondary",
-    type: "button",
-    textContent: "Copy Codex instruction",
-    hidden: true
-  });
-  form.append(
-    fieldset("Maker source", [
-      family.root,
-      nftNumber,
-      nftNumberHelp,
-      labeledControl("Transparent Maker PNG", avatar),
-      avatarHelp
-    ]),
-    fieldset("Exact Maker traits", [
-      element("p", {
-        className: "tweet-composer-kit__pet-help",
-        textContent: 'Enter the Maker asset ID for every trait. Use the explicit ID "none" for a trait that is absent.'
-      }),
-      ...Object.entries(traitInputs).map(([trait, controls]) => element(
-        "div",
-        {
-          className: "tweet-composer-kit__pet-trait"
-        },
-        element("span", { className: "tweet-composer-kit__pet-trait-name", textContent: friendlyTrait(trait) }),
-        controls.assetId,
-        controls.label
-      ))
-    ]),
-    fieldset("Avatar completion", [
-      coverage.root,
-      bottom.root,
-      bottomColor.root,
-      footwear.root,
-      footwearColor.root,
-      element("p", {
-        className: "tweet-composer-kit__pet-help",
-        textContent: "Leg color follows the selected Maker family's race trait. Only compatible bottoms can be selected; garments and footwear are never inferred."
-      })
-    ]),
-    fieldset("Pet handoff", [
-      petName,
-      personality
-    ]),
-    element("div", { className: "tweet-composer-kit__pet-actions" }, previewButton, exportButton),
-    preview,
-    status,
-    instruction,
-    copyInstruction
-  );
-  section.append(summary, form);
-  const state = { avatarBytes: null, image: null, previewBytes: null };
-  avatar.addEventListener("change", async () => {
-    state.avatarBytes = null;
-    state.image?.close?.();
-    state.image = null;
-    state.previewBytes = null;
-    preview.hidden = true;
-    const file = avatar.files?.[0];
-    if (!file) return;
-    try {
-      if (file.type && file.type !== "image/png") throw new Error("Choose a PNG file.");
-      if (file.size > 12 * 1024 * 1024) throw new Error("The Maker PNG must be 12 MB or smaller.");
-      state.avatarBytes = new Uint8Array(await file.arrayBuffer());
-      state.image = await decodePng(file);
-      await requireTransparentImage(state.image);
-      status.textContent = "Maker PNG loaded locally. Complete every explicit selection.";
-    } catch (error) {
-      avatar.value = "";
-      state.avatarBytes = null;
-      state.image?.close?.();
-      state.image = null;
-      status.textContent = error instanceof Error ? error.message : "The Maker PNG could not be read.";
-    }
-  }, { signal });
-  coverage.select.addEventListener("change", () => {
-    updateBottomCompatibility(bottom.select, coverage.select.value, status);
-    state.previewBytes = null;
-  }, { signal });
-  family.select.addEventListener("change", () => {
-    const range = nftNumberRangeForFamily(family.select.value);
-    nftNumber.hidden = !range;
-    nftNumberHelp.hidden = !range;
-    if (!range) {
-      nftNumberInput.value = "";
-      fetchTraitsButton.disabled = true;
-      return;
-    }
-    nftNumberInput.min = String(range.min);
-    nftNumberInput.max = String(range.max);
-    nftNumberInput.placeholder = `${range.min}\u2013${range.max}`;
-    nftNumberHelp.textContent = `${FAMILY_LABELS[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
-    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
-  }, { signal });
-  nftNumberInput.addEventListener("input", () => {
-    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
-  }, { signal });
-  fetchTraitsButton.addEventListener("click", async () => {
-    const templateFamily = requiredValue(family.select, "Choose a Maker template family.");
-    const sourceNftNumber = optionalNftNumber(nftNumberInput, templateFamily);
-    if (sourceNftNumber == null) {
-      nftNumberInput.focus();
-      status.textContent = "Enter an NFT number before fetching traits.";
-      return;
-    }
-    fetchTraitsButton.disabled = true;
-    fetchTraitsButton.textContent = "Fetching\u2026";
-    status.textContent = `Fetching ${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits\u2026`;
-    try {
-      const traits = await fetchMakerTraits(templateFamily, sourceNftNumber, { signal });
-      for (const [trait, value] of Object.entries(traits)) {
-        traitInputs[trait].assetId.value = value.assetId;
-        traitInputs[trait].label.value = value.label;
-      }
-      state.previewBytes = null;
-      status.textContent = `${FAMILY_LABELS[templateFamily]} #${sourceNftNumber} traits populated from Maker metadata.`;
-    } catch (error) {
-      status.textContent = error instanceof Error ? error.message : "Maker traits could not be fetched.";
-    } finally {
-      if (!signal.aborted) {
-        fetchTraitsButton.textContent = "Fetch";
-        updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
-      }
-    }
-  }, { signal });
-  for (const control of form.querySelectorAll("select, input, textarea")) {
-    if (control === avatar || control === coverage.select || control === instruction) continue;
-    control.addEventListener("change", () => {
-      state.previewBytes = null;
-    }, { signal });
-  }
-  previewButton.addEventListener("click", async () => {
-    status.textContent = "";
-    try {
-      const selection = collectSelection({
-        family,
-        nftNumberInput,
-        traitInputs,
-        coverage,
-        bottom,
-        bottomColor,
-        footwear,
-        footwearColor,
-        petName,
-        personality,
-        state
-      });
-      state.previewBytes = await renderCompletedAvatar(state.image, selection, preview);
-      preview.hidden = false;
-      status.textContent = "Preview ready. Review the completed lower half before downloading.";
-    } catch (error) {
-      status.textContent = error instanceof Error ? error.message : "The completed avatar could not be previewed.";
-    }
-  }, { signal });
-  form.addEventListener("submit", async (event) => {
-    event.preventDefault();
-    exportButton.disabled = true;
-    previewButton.disabled = true;
-    status.textContent = "Validating the local bundle\u2026";
-    try {
-      const selection = collectSelection({
-        family,
-        nftNumberInput,
-        traitInputs,
-        coverage,
-        bottom,
-        bottomColor,
-        footwear,
-        footwearColor,
-        petName,
-        personality,
-        state
-      });
-      const avatarPng = await renderCompletedAvatar(state.image, selection, preview);
-      state.previewBytes = avatarPng;
-      preview.hidden = false;
-      const imageSha256 = await sha256Hex(avatarPng);
-      const request = makePetRequest({ ...selection, imageSha256 });
-      const validation = await validatePetRequest(request, avatarPng);
-      if (!validation.ok) throw new Error(validation.errors.join(" "));
-      const requestBytes = new TextEncoder().encode(stableJson(request));
-      const zipBytes = createStoredZip([
-        { name: "avatar.png", bytes: avatarPng },
-        { name: "request.json", bytes: requestBytes }
-      ]);
-      await validateFinishedArchive(zipBytes);
-      downloadBytes(zipBytes, "remilia-pet-request.zip", "application/zip");
-      instruction.hidden = false;
-      copyInstruction.hidden = false;
-      status.textContent = "Bundle validated and downloaded. Attach it to Codex with the instruction below.";
-    } catch (error) {
-      status.textContent = error instanceof Error ? error.message : "The bundle could not be exported.";
-    } finally {
-      if (!signal.aborted) {
-        exportButton.disabled = false;
-        previewButton.disabled = false;
-      }
-    }
-  }, { signal });
-  copyInstruction.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(PET_REQUEST_INSTRUCTION);
-      status.textContent = "Codex instruction copied.";
-    } catch {
-      instruction.hidden = false;
-      instruction.focus();
-      instruction.select();
-      status.textContent = "Clipboard access is unavailable. The instruction is selected for manual copy.";
-    }
-  }, { signal });
-  signal.addEventListener("abort", () => state.image?.close?.(), { once: true });
-  return section;
-}
-function collectSelection(controls) {
-  if (!controls.state.image || !controls.state.avatarBytes) throw new Error("Choose a transparent Maker PNG.");
-  const templateFamily = requiredValue(controls.family.select, "Choose a Maker template family.");
-  const sourceNftNumber = optionalNftNumber(controls.nftNumberInput, templateFamily);
-  const traits = Object.fromEntries(Object.entries(controls.traitInputs).map(([trait, input]) => {
-    const assetId = requiredValue(input.assetId, `Enter the ${friendlyTrait(trait)} asset ID, or "none".`);
-    return [trait, { assetId, ...input.label.value.trim() ? { label: input.label.value.trim() } : {} }];
-  }));
-  const legCoverage = requiredValue(controls.coverage.select, "Choose leg coverage.");
-  const legColorVariant = legColorForRace(templateFamily, traits.race);
-  if (!legColorVariant) {
-    controls.traitInputs.race.assetId.focus();
-    throw new Error(`The ${FAMILY_LABELS[templateFamily]} race is not mapped to a leg color yet. Enter its exact race asset ID or label.`);
-  }
-  const bottomAssetId = requiredValue(controls.bottom.select, "Choose a compatible bottom garment.");
-  const bottomItem = bottomForAssetId(bottomAssetId);
-  if (!bottomItem || !bottomItem.compatibleLegCoverage.includes(legCoverage)) {
-    throw new Error("The selected bottom garment is not compatible with the chosen leg coverage.");
-  }
-  const bottomColorVariant = requiredValue(controls.bottomColor.select, "Choose a bottom color.");
-  const footwearAssetId = requiredValue(controls.footwear.select, "Choose footwear.");
-  const footwearItem = footwearForAssetId(footwearAssetId);
-  if (!footwearItem) throw new Error("Choose footwear from the maintained catalog.");
-  const footwearColorVariant = requiredValue(controls.footwearColor.select, "Choose a footwear color.");
-  return {
-    templateFamily,
-    ...sourceNftNumber == null ? {} : { sourceNftNumber },
-    traits,
-    bodyCompletion: {
-      legCoverage,
-      legColorVariant,
-      bottom: {
-        category: bottomItem.category,
-        assetId: bottomItem.assetId,
-        assetVersion: bottomItem.assetVersion,
-        colorVariant: bottomColorVariant
-      },
-      footwear: {
-        category: footwearItem.category,
-        assetId: footwearItem.assetId,
-        assetVersion: footwearItem.assetVersion,
-        colorVariant: footwearColorVariant
-      }
-    },
-    petName: controls.petName.querySelector("input").value,
-    personality: controls.personality.querySelector("input").value
-  };
-}
-function optionalNftNumber(control, templateFamily) {
-  const raw = control.value.trim();
-  if (!raw) return null;
-  const value = Number(raw);
-  const range = nftNumberRangeForFamily(templateFamily);
-  if (!Number.isInteger(value) || !range || value < range.min || value > range.max) {
-    control.focus();
-    throw new Error(`Enter a whole ${FAMILY_LABELS[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
-  }
-  return value;
-}
-function updateFetchButton(button, family, rawNumber) {
-  const range = nftNumberRangeForFamily(family);
-  const value = Number(String(rawNumber).trim());
-  button.disabled = !range || !Number.isInteger(value) || value < range.min || value > range.max;
-}
+// packages/maintainer/pets-maker/src/custom-pet-avatar-renderer.js
 async function renderCompletedAvatar(image, selection, canvas) {
   const context = canvas.getContext("2d", { alpha: true });
   if (!context) throw new Error("Canvas rendering is unavailable.");
@@ -1001,31 +646,38 @@ function drawFootwear(context, category, color, leftX, rightX, legWidth) {
     }
   }
 }
-async function validateFinishedArchive(zipBytes) {
-  const entries = listStoredZip(zipBytes);
-  if (entries.length !== 2 || entries[0]?.name !== "avatar.png" || entries[1]?.name !== "request.json") {
-    throw new Error("The bundle must contain exactly avatar.png and request.json.");
-  }
-  const request = JSON.parse(new TextDecoder().decode(entries[1].bytes));
-  const validation = await validatePetRequest(request, entries[0].bytes);
-  if (!validation.ok) throw new Error(validation.errors.join(" "));
+function canvasBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG encoding failed.")), "image/png");
+  });
 }
-function updateBottomCompatibility(select, legCoverage, status) {
-  const compatible = new Set(compatibleBottoms(legCoverage).map((item) => item.assetId));
-  let invalidated = false;
-  for (const option of select.options) {
-    if (!option.value) continue;
-    option.disabled = !compatible.has(option.value);
-    option.textContent = `${bottomForAssetId(option.value)?.label ?? option.value}${option.disabled ? " \u2014 unavailable" : ""}`;
-    if (option.selected && option.disabled) invalidated = true;
-  }
-  if (invalidated) {
-    select.value = "";
-    status.textContent = "That bottom garment conflicts with the new leg coverage. Choose one of the available options.";
-  } else if (legCoverage) {
-    status.textContent = "Compatible bottom garments are available.";
-  }
+function roundedRect(context, x, y, width, height, radius) {
+  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.lineTo(x + width - r, y);
+  context.quadraticCurveTo(x + width, y, x + width, y + r);
+  context.lineTo(x + width, y + height - r);
+  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  context.lineTo(x + r, y + height);
+  context.quadraticCurveTo(x, y + height, x, y + height - r);
+  context.lineTo(x, y + r);
+  context.quadraticCurveTo(x, y, x + r, y);
+  context.closePath();
+  context.fill();
 }
+function shade(hex, amount) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  const red = clamp((value >> 16) + amount);
+  const green = clamp((value >> 8 & 255) + amount);
+  const blue = clamp((value & 255) + amount);
+  return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
+}
+function clamp(value) {
+  return Math.max(0, Math.min(255, value));
+}
+
+// packages/maintainer/pets-maker/src/custom-pet-ui-primitives.js
 function blankSelect(label, options) {
   const select = element("select", { className: "tweet-composer-kit__pet-select", required: true, ariaLabel: label });
   select.append(element("option", { value: "", textContent: `Choose ${label.toLowerCase()}`, selected: true }));
@@ -1068,6 +720,17 @@ function friendlyTrait(value) {
   return value.replace(/([A-Z])/gu, " $1").replace(/^./u, (letter) => letter.toUpperCase());
 }
 async function decodePng(file) {
+  const bytes = new Uint8Array(await file.slice(0, 24).arrayBuffer());
+  const signature = [137, 80, 78, 71, 13, 10, 26, 10];
+  if (bytes.length < 24 || !signature.every((value, index) => bytes[index] === value) || String.fromCharCode(...bytes.slice(12, 16)) !== "IHDR") {
+    throw new Error("Choose a valid PNG file.");
+  }
+  const view = new DataView(bytes.buffer);
+  const width = view.getUint32(16, false);
+  const height = view.getUint32(20, false);
+  if (!width || !height || width > 4096 || height > 4096) {
+    throw new Error("The Maker PNG must be 4096\xD74096 pixels or smaller.");
+  }
   if (typeof createImageBitmap === "function") return createImageBitmap(file);
   const url = URL.createObjectURL(file);
   try {
@@ -1095,11 +758,6 @@ async function requireTransparentImage(image) {
     throw new Error("This PNG appears opaque. Export a transparent Maker avatar so background material is not included.");
   }
 }
-function canvasBlob(canvas) {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error("PNG encoding failed.")), "image/png");
-  });
-}
 function downloadBytes(bytes, fileName, type) {
   const url = URL.createObjectURL(new Blob([bytes], { type }));
   const anchor = document.createElement("a");
@@ -1111,36 +769,515 @@ function downloadBytes(bytes, fileName, type) {
   anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 0);
 }
-function roundedRect(context, x, y, width, height, radius) {
-  const r = Math.min(radius, Math.abs(width) / 2, Math.abs(height) / 2);
-  context.beginPath();
-  context.moveTo(x + r, y);
-  context.lineTo(x + width - r, y);
-  context.quadraticCurveTo(x + width, y, x + width, y + r);
-  context.lineTo(x + width, y + height - r);
-  context.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
-  context.lineTo(x + r, y + height);
-  context.quadraticCurveTo(x, y + height, x, y + height - r);
-  context.lineTo(x, y + r);
-  context.quadraticCurveTo(x, y, x + r, y);
-  context.closePath();
-  context.fill();
-}
-function shade(hex, amount) {
-  const value = Number.parseInt(hex.slice(1), 16);
-  const red = clamp((value >> 16) + amount);
-  const green = clamp((value >> 8 & 255) + amount);
-  const blue = clamp((value & 255) + amount);
-  return `#${[red, green, blue].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-function clamp(value) {
-  return Math.max(0, Math.min(255, value));
-}
 function element(tag, props = {}, ...children) {
   const node = document.createElement(tag);
   Object.assign(node, props);
   node.append(...children);
   return node;
+}
+
+// packages/maintainer/pets-maker/src/custom-pet-export-events.js
+function attachPetExportEvents(controls) {
+  const state = { avatarBytes: null, image: null, previewBytes: null, avatarGeneration: 0, selectionGeneration: 0, fetchGeneration: 0, rendering: false };
+  attachAvatarEvents(controls, state);
+  attachTraitFetchEvents(controls, state);
+  attachPreviewEvents(controls, state);
+  attachExportEvents(controls, state);
+  attachInstructionCopy(controls);
+  controls.signal.addEventListener("abort", () => {
+    state.avatarGeneration += 1;
+    state.selectionGeneration += 1;
+    state.image?.close?.();
+  }, { once: true });
+}
+function attachAvatarEvents(controls, state) {
+  const { avatar, bottom, coverage, preview, signal, status, updateBottomCompatibility: updateBottomCompatibility2 } = controls;
+  avatar.addEventListener("change", async () => {
+    const generation = ++state.avatarGeneration;
+    resetAvatar(state, preview);
+    const file = avatar.files?.[0];
+    if (!file) return;
+    let image = null;
+    try {
+      if (file.type && file.type !== "image/png") throw new Error("Choose a PNG file.");
+      if (file.size > 12 * 1024 * 1024) throw new Error("The Maker PNG must be 12 MB or smaller.");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      image = await decodePng(file);
+      await requireTransparentImage(image);
+      if (signal.aborted || generation !== state.avatarGeneration) return;
+      state.avatarBytes = bytes;
+      state.image = image;
+      image = null;
+      status.textContent = "Maker PNG loaded locally. Complete every explicit selection.";
+    } catch (error) {
+      if (signal.aborted || generation !== state.avatarGeneration) return;
+      avatar.value = "";
+      resetAvatar(state, preview);
+      status.textContent = error instanceof Error ? error.message : "The Maker PNG could not be read.";
+    } finally {
+      image?.close?.();
+    }
+  }, { signal });
+  coverage.select.addEventListener("change", () => {
+    updateBottomCompatibility2(bottom.select, coverage.select.value, status);
+    state.previewBytes = null;
+  }, { signal });
+}
+function resetAvatar(state, preview) {
+  state.avatarBytes = null;
+  state.image?.close?.();
+  state.image = null;
+  state.previewBytes = null;
+  preview.hidden = true;
+}
+function attachTraitFetchEvents(controls, state) {
+  const { family, fetchTraitsButton, nftNumberInput, signal } = controls;
+  family.select.addEventListener("change", () => updateNftRange(controls), { signal });
+  nftNumberInput.addEventListener("input", () => {
+    updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+  }, { signal });
+  fetchTraitsButton.addEventListener("click", () => void fetchTraits(controls, state), { signal });
+}
+function updateNftRange(controls) {
+  const { family, familyLabels, fetchTraitsButton, nftNumber, nftNumberHelp, nftNumberInput } = controls;
+  const range = nftNumberRangeForFamily(family.select.value);
+  nftNumber.hidden = !range;
+  nftNumberHelp.hidden = !range;
+  if (!range) {
+    nftNumberInput.value = "";
+    fetchTraitsButton.disabled = true;
+    return;
+  }
+  nftNumberInput.min = String(range.min);
+  nftNumberInput.max = String(range.max);
+  nftNumberInput.placeholder = `${range.min}\u2013${range.max}`;
+  nftNumberHelp.textContent = `${familyLabels[family.select.value]} NFT numbers run from ${range.min} to ${range.max}.`;
+  updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+}
+async function fetchTraits(controls, state) {
+  const { family, familyLabels, fetchTraitsButton, nftNumberInput, signal, status, traitInputs } = controls;
+  const generation = state.selectionGeneration;
+  const requestGeneration = ++state.fetchGeneration;
+  try {
+    const templateFamily = requiredValue(family.select, "Choose a Maker template family.");
+    const sourceNftNumber = optionalNftNumber(nftNumberInput, templateFamily, familyLabels);
+    if (sourceNftNumber == null) {
+      nftNumberInput.focus();
+      status.textContent = "Enter an NFT number before fetching traits.";
+      return;
+    }
+    fetchTraitsButton.disabled = true;
+    fetchTraitsButton.textContent = "Fetching\u2026";
+    status.textContent = `Fetching ${familyLabels[templateFamily]} #${sourceNftNumber} traits\u2026`;
+    const traits = await fetchMakerTraits(templateFamily, sourceNftNumber, { signal });
+    if (signal.aborted || generation !== state.selectionGeneration || requestGeneration !== state.fetchGeneration) return;
+    for (const [trait, value] of Object.entries(traits)) {
+      traitInputs[trait].assetId.value = value.assetId;
+      traitInputs[trait].label.value = value.label;
+    }
+    state.previewBytes = null;
+    state.selectionGeneration += 1;
+    status.textContent = `${familyLabels[templateFamily]} #${sourceNftNumber} traits populated from Maker metadata.`;
+  } catch (error) {
+    if (!signal.aborted && generation === state.selectionGeneration && requestGeneration === state.fetchGeneration) {
+      status.textContent = error instanceof Error ? error.message : "Maker traits could not be fetched.";
+    }
+  } finally {
+    if (!signal.aborted && requestGeneration === state.fetchGeneration) {
+      fetchTraitsButton.textContent = "Fetch";
+      updateFetchButton(fetchTraitsButton, family.select.value, nftNumberInput.value);
+    }
+  }
+}
+function attachPreviewEvents(controls, state) {
+  const { avatar, coverage, form, instruction, previewButton, signal } = controls;
+  for (const control of form.querySelectorAll("select, input, textarea")) {
+    if (control === instruction) continue;
+    const invalidate = () => {
+      state.previewBytes = null;
+      state.selectionGeneration += 1;
+      controls.preview.hidden = true;
+    };
+    control.addEventListener("change", invalidate, { signal });
+    control.addEventListener("input", invalidate, { signal });
+  }
+  previewButton.addEventListener("click", () => void renderPreview(controls, state), { signal });
+}
+async function renderPreview(controls, state) {
+  if (state.rendering || controls.signal.aborted) return;
+  state.rendering = true;
+  controls.previewButton.disabled = true;
+  controls.exportButton.disabled = true;
+  controls.status.textContent = "";
+  try {
+    const generation = state.selectionGeneration;
+    const selection = collectSelection(controls, state);
+    const bytes = await renderCompletedAvatar(state.image, selection, controls.preview);
+    if (controls.signal.aborted || generation !== state.selectionGeneration) return;
+    state.previewBytes = bytes;
+    controls.preview.hidden = false;
+    controls.status.textContent = "Preview ready. Review the completed lower half before downloading.";
+  } catch (error) {
+    if (!controls.signal.aborted) controls.status.textContent = error instanceof Error ? error.message : "The completed avatar could not be previewed.";
+  } finally {
+    state.rendering = false;
+    if (!controls.signal.aborted) {
+      controls.previewButton.disabled = false;
+      controls.exportButton.disabled = false;
+    }
+  }
+}
+function attachExportEvents(controls, state) {
+  controls.form.addEventListener("submit", (event) => {
+    void exportPetRequest(event, controls, state);
+  }, { signal: controls.signal });
+}
+async function exportPetRequest(event, controls, state) {
+  event.preventDefault();
+  if (state.rendering || controls.signal.aborted) return;
+  state.rendering = true;
+  controls.exportButton.disabled = true;
+  controls.previewButton.disabled = true;
+  controls.status.textContent = "Validating the local bundle\u2026";
+  try {
+    const generation = state.selectionGeneration;
+    const selection = collectSelection(controls, state);
+    const avatarPng = await renderCompletedAvatar(state.image, selection, controls.preview);
+    state.previewBytes = avatarPng;
+    controls.preview.hidden = false;
+    const request = makePetRequest({ ...selection, imageSha256: await sha256Hex(avatarPng) });
+    const validation = await validatePetRequest(request, avatarPng);
+    if (!validation.ok) throw new Error(validation.errors.join(" "));
+    const zipBytes = createStoredZip([
+      { name: "avatar.png", bytes: avatarPng },
+      { name: "request.json", bytes: new TextEncoder().encode(stableJson(request)) }
+    ]);
+    await validateFinishedArchive(zipBytes);
+    if (controls.signal.aborted) return;
+    if (generation !== state.selectionGeneration) throw new Error("The selection changed. Review the preview and export again.");
+    downloadBytes(zipBytes, "remilia-pet-request.zip", "application/zip");
+    controls.instruction.hidden = false;
+    controls.copyInstruction.hidden = false;
+    controls.status.textContent = "Bundle validated and downloaded. Attach it to Codex with the instruction below.";
+  } catch (error) {
+    if (!controls.signal.aborted) controls.status.textContent = error instanceof Error ? error.message : "The bundle could not be exported.";
+  } finally {
+    state.rendering = false;
+    if (!controls.signal.aborted) {
+      controls.exportButton.disabled = false;
+      controls.previewButton.disabled = false;
+    }
+  }
+}
+function attachInstructionCopy(controls) {
+  controls.copyInstruction.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(controls.instruction.value);
+      controls.status.textContent = "Codex instruction copied.";
+    } catch {
+      controls.instruction.hidden = false;
+      controls.instruction.focus();
+      controls.instruction.select();
+      controls.status.textContent = "Clipboard access is unavailable. The instruction is selected for manual copy.";
+    }
+  }, { signal: controls.signal });
+}
+function collectSelection(controls, state) {
+  if (!state.image || !state.avatarBytes) throw new Error("Choose a transparent Maker PNG.");
+  const templateFamily = requiredValue(controls.family.select, "Choose a Maker template family.");
+  const sourceNftNumber = optionalNftNumber(controls.nftNumberInput, templateFamily, controls.familyLabels);
+  const traits = Object.fromEntries(Object.entries(controls.traitInputs).map(([trait, input]) => {
+    const assetId = requiredValue(input.assetId, `Enter the ${friendlyTrait(trait)} asset ID, or "none".`);
+    return [trait, { assetId, ...input.label.value.trim() ? { label: input.label.value.trim() } : {} }];
+  }));
+  const legCoverage = requiredValue(controls.coverage.select, "Choose leg coverage.");
+  const legColorVariant = legColorForRace(templateFamily, traits.race);
+  if (!legColorVariant) {
+    controls.traitInputs.race.assetId.focus();
+    throw new Error(`The ${controls.familyLabels[templateFamily]} race is not mapped to a leg color yet. Enter its exact race asset ID or label.`);
+  }
+  const bottomItem = bottomForAssetId(requiredValue(controls.bottom.select, "Choose a compatible bottom garment."));
+  const footwearItem = footwearForAssetId(requiredValue(controls.footwear.select, "Choose footwear."));
+  if (!bottomItem || !bottomItem.compatibleLegCoverage.includes(legCoverage)) throw new Error("The selected bottom garment is not compatible with the chosen leg coverage.");
+  if (!footwearItem) throw new Error("Choose footwear from the maintained catalog.");
+  return buildSelection(templateFamily, sourceNftNumber, traits, legCoverage, legColorVariant, bottomItem, footwearItem, controls);
+}
+function buildSelection(templateFamily, sourceNftNumber, traits, legCoverage, legColorVariant, bottom, footwear, controls) {
+  return {
+    templateFamily,
+    ...sourceNftNumber == null ? {} : { sourceNftNumber },
+    traits,
+    bodyCompletion: {
+      legCoverage,
+      legColorVariant,
+      bottom: { category: bottom.category, assetId: bottom.assetId, assetVersion: bottom.assetVersion, colorVariant: requiredValue(controls.bottomColor.select, "Choose a bottom color.") },
+      footwear: { category: footwear.category, assetId: footwear.assetId, assetVersion: footwear.assetVersion, colorVariant: requiredValue(controls.footwearColor.select, "Choose a footwear color.") }
+    },
+    petName: controls.petName.querySelector("input").value,
+    personality: controls.personality.querySelector("input").value
+  };
+}
+function optionalNftNumber(control, templateFamily, labels) {
+  const raw = control.value.trim();
+  if (!raw) return null;
+  const value = Number(raw);
+  const range = nftNumberRangeForFamily(templateFamily);
+  if (!Number.isInteger(value) || !range || value < range.min || value > range.max) {
+    control.focus();
+    throw new Error(`Enter a whole ${labels[templateFamily]} NFT number from ${range?.min ?? "?"} to ${range?.max ?? "?"}.`);
+  }
+  return value;
+}
+function updateFetchButton(button, family, rawNumber) {
+  const range = nftNumberRangeForFamily(family);
+  const value = Number(String(rawNumber).trim());
+  button.disabled = !range || !Number.isInteger(value) || value < range.min || value > range.max;
+}
+async function validateFinishedArchive(zipBytes) {
+  const entries = listStoredZip(zipBytes);
+  if (entries.length !== 2 || entries[0]?.name !== "avatar.png" || entries[1]?.name !== "request.json") {
+    throw new Error("The bundle must contain exactly avatar.png and request.json.");
+  }
+  const request = JSON.parse(new TextDecoder().decode(entries[1].bytes));
+  const validation = await validatePetRequest(request, entries[0].bytes);
+  if (!validation.ok) throw new Error(validation.errors.join(" "));
+}
+
+// packages/maintainer/pets-maker/src/custom-pet-ui.js
+var FAMILY_LABELS = Object.freeze({
+  milady: "Milady",
+  remilio: "Remilio",
+  bonkler: "Bonkler",
+  kagami: "Kagami"
+});
+function buildCustomPetExport({ signal }) {
+  const section = element("section", {
+    className: "tweet-composer-kit__pet-export",
+    ariaLabel: "Custom Pet export"
+  });
+  const form = element("form", {
+    className: "tweet-composer-kit__pet-form",
+    noValidate: true
+  });
+  const controls = createPetControls();
+  appendPetForm(form, controls);
+  section.append(createHeading(), form);
+  attachPetExportEvents({
+    ...controls,
+    signal,
+    familyLabels: FAMILY_LABELS,
+    form,
+    updateBottomCompatibility
+  });
+  return section;
+}
+function createHeading() {
+  return element(
+    "div",
+    { className: "tweet-composer-kit__pet-heading" },
+    element("strong", { textContent: "Custom Pet export" }),
+    element("span", {
+      className: "tweet-composer-kit__pet-local-note",
+      textContent: "Local download only. Nothing is uploaded."
+    })
+  );
+}
+function createPetControls() {
+  const family = blankSelect("Maker template family", PET_REQUEST_FAMILIES.map((id) => ({
+    id,
+    label: FAMILY_LABELS[id]
+  })));
+  family.select.name = "templateFamily";
+  const nft = createNftControls();
+  const avatar = createAvatarControl();
+  return {
+    family,
+    ...nft,
+    ...avatar,
+    traitInputs: createTraitInputs(),
+    coverage: blankSelect("Leg coverage", BODY_COMPLETION_CATALOG.legCoverage),
+    bottom: blankSelect("Bottom garment", BODY_COMPLETION_CATALOG.bottoms.map(asAssetOption)),
+    bottomColor: blankSelect("Bottom color", BODY_COMPLETION_CATALOG.colors),
+    footwear: blankSelect("Footwear", BODY_COMPLETION_CATALOG.footwear.map(asAssetOption)),
+    footwearColor: blankSelect("Footwear color", BODY_COMPLETION_CATALOG.colors),
+    petName: labeledInput("Pet name (optional)", 80),
+    personality: labeledInput("Personality (optional)", 280),
+    ...createOutputControls()
+  };
+}
+function asAssetOption(item) {
+  return { id: item.assetId, label: item.label };
+}
+function createNftControls() {
+  const nftNumberInput = element("input", {
+    className: "tweet-composer-kit__pet-input",
+    type: "number",
+    step: "1",
+    inputMode: "numeric",
+    autocomplete: "off",
+    ariaDescribedBy: "tweet-composer-kit-pet-nft-number-help"
+  });
+  const fetchTraitsButton = element("button", {
+    className: "tweet-composer-kit__pet-secondary tweet-composer-kit__pet-fetch",
+    type: "button",
+    textContent: "Fetch",
+    disabled: true
+  });
+  const nftNumber = labeledControl("NFT number (optional)", element(
+    "div",
+    { className: "tweet-composer-kit__pet-nft-row" },
+    nftNumberInput,
+    fetchTraitsButton
+  ));
+  nftNumber.hidden = true;
+  const nftNumberHelp = element("p", {
+    id: "tweet-composer-kit-pet-nft-number-help",
+    className: "tweet-composer-kit__pet-help",
+    hidden: true
+  });
+  return { nftNumber, nftNumberInput, nftNumberHelp, fetchTraitsButton };
+}
+function createAvatarControl() {
+  const avatar = element("input", {
+    className: "tweet-composer-kit__pet-file",
+    type: "file",
+    accept: "image/png,.png",
+    required: true,
+    ariaDescribedBy: "tweet-composer-kit-pet-avatar-help"
+  });
+  const avatarHelp = element("p", {
+    id: "tweet-composer-kit-pet-avatar-help",
+    className: "tweet-composer-kit__pet-help",
+    textContent: "Choose the transparent PNG downloaded from the selected Maker. Opaque backgrounds are rejected."
+  });
+  return { avatar, avatarHelp };
+}
+function createTraitInputs() {
+  return Object.fromEntries(PET_REQUEST_TRAITS.map((trait) => [trait, {
+    assetId: element("input", {
+      className: "tweet-composer-kit__pet-input",
+      type: "text",
+      maxLength: 80,
+      required: true,
+      autocomplete: "off",
+      placeholder: `${trait} asset ID or none`,
+      ariaLabel: `${friendlyTrait(trait)} stable asset ID`
+    }),
+    label: element("input", {
+      className: "tweet-composer-kit__pet-input",
+      type: "text",
+      maxLength: 120,
+      autocomplete: "off",
+      placeholder: "Readable label (optional)",
+      ariaLabel: `${friendlyTrait(trait)} readable label`
+    })
+  }]));
+}
+function createOutputControls() {
+  const preview = element("canvas", {
+    className: "tweet-composer-kit__pet-preview",
+    width: 1024,
+    height: 1024,
+    hidden: true,
+    ariaLabel: "Completed Maker avatar preview",
+    role: "img"
+  });
+  const previewButton = element("button", {
+    className: "tweet-composer-kit__pet-secondary",
+    type: "button",
+    textContent: "Preview completed avatar"
+  });
+  const exportButton = element("button", {
+    className: "tweet-composer-kit__pet-primary",
+    type: "submit",
+    textContent: "Download remilia-pet-request.zip"
+  });
+  const status = element("p", {
+    className: "tweet-composer-kit__pet-status",
+    role: "status",
+    ariaLive: "polite"
+  });
+  const instruction = element("textarea", {
+    className: "tweet-composer-kit__pet-instruction",
+    readOnly: true,
+    rows: 2,
+    value: PET_REQUEST_INSTRUCTION,
+    hidden: true,
+    ariaLabel: "Codex handoff instruction"
+  });
+  const copyInstruction = element("button", {
+    className: "tweet-composer-kit__pet-secondary",
+    type: "button",
+    textContent: "Copy Codex instruction",
+    hidden: true
+  });
+  return { preview, previewButton, exportButton, status, instruction, copyInstruction };
+}
+function appendPetForm(form, controls) {
+  form.append(
+    makerSourceSection(controls),
+    traitSection(controls.traitInputs),
+    completionSection(controls),
+    fieldset("Pet handoff", [controls.petName, controls.personality]),
+    element("div", { className: "tweet-composer-kit__pet-actions" }, controls.previewButton, controls.exportButton),
+    controls.preview,
+    controls.status,
+    controls.instruction,
+    controls.copyInstruction
+  );
+}
+function makerSourceSection({ avatar, avatarHelp, family, nftNumber, nftNumberHelp }) {
+  return fieldset("Maker source", [
+    family.root,
+    nftNumber,
+    nftNumberHelp,
+    labeledControl("Transparent Maker PNG", avatar),
+    avatarHelp
+  ]);
+}
+function traitSection(traitInputs) {
+  return fieldset("Exact Maker traits", [
+    element("p", {
+      className: "tweet-composer-kit__pet-help",
+      textContent: 'Enter the Maker asset ID for every trait. Use the explicit ID "none" for a trait that is absent.'
+    }),
+    ...Object.entries(traitInputs).map(([trait, controls]) => element(
+      "div",
+      { className: "tweet-composer-kit__pet-trait" },
+      element("span", { className: "tweet-composer-kit__pet-trait-name", textContent: friendlyTrait(trait) }),
+      controls.assetId,
+      controls.label
+    ))
+  ]);
+}
+function completionSection({ bottom, bottomColor, coverage, footwear, footwearColor }) {
+  return fieldset("Avatar completion", [
+    coverage.root,
+    bottom.root,
+    bottomColor.root,
+    footwear.root,
+    footwearColor.root,
+    element("p", {
+      className: "tweet-composer-kit__pet-help",
+      textContent: "Leg color follows the selected Maker family's race trait. Only compatible bottoms can be selected; garments and footwear are never inferred."
+    })
+  ]);
+}
+function updateBottomCompatibility(select, legCoverage, status) {
+  const compatible = new Set(compatibleBottoms(legCoverage).map((item) => item.assetId));
+  let invalidated = false;
+  for (const option of select.options) {
+    if (!option.value) continue;
+    option.disabled = !compatible.has(option.value);
+    option.textContent = `${bottomForAssetId(option.value)?.label ?? option.value}${option.disabled ? " \u2014 unavailable" : ""}`;
+    if (option.selected && option.disabled) invalidated = true;
+  }
+  if (invalidated) {
+    select.value = "";
+    status.textContent = "That bottom garment conflicts with the new leg coverage. Choose one of the available options.";
+  } else if (legCoverage) {
+    status.textContent = "Compatible bottom garments are available.";
+  }
 }
 
 // packages/maintainer/pets-maker/src/content.js

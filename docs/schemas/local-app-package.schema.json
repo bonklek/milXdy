@@ -46,6 +46,33 @@
         { "pattern": "\\.m?js$" }
       ]
     },
+    "pageContextActions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "label", "entry", "documentUrlPatterns"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]*$" },
+          "label": { "type": "string", "minLength": 1 },
+          "entry": {
+            "allOf": [
+              { "$ref": "#/$defs/relativePath" },
+              { "pattern": "\\.js$" }
+            ]
+          },
+          "documentUrlPatterns": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": { "enum": ["http://*/*", "https://*/*"] }
+          }
+        }
+      }
+    },
     "css": {
       "type": "array",
       "items": {
@@ -138,6 +165,13 @@
       "uniqueItems": true,
       "maxItems": 1
     },
+    "hostActions": {
+      "description": "Reviewed cross-app host actions. A package receives no action that it has not declared.",
+      "type": "array",
+      "items": { "enum": ["wiki.openPage"] },
+      "uniqueItems": true,
+      "maxItems": 1
+    },
     "replyAction": {
       "type": "object",
       "additionalProperties": false,
@@ -157,7 +191,8 @@
               "text": { "type": "string" },
               "storageKey": { "type": "string", "minLength": 1 },
               "storageListKey": { "type": "string", "minLength": 1 },
-              "sendAfterInsert": { "type": "boolean" }
+              "sendAfterInsert": { "type": "boolean" },
+              "sendAfterInsertStorageKey": { "type": "string", "minLength": 1 }
             },
             "oneOf": [
               { "required": ["text"] },
@@ -203,6 +238,68 @@
         }
       }
     },
+    "remiliaCapabilities": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "operations", "scopes", "consent", "reason"],
+        "properties": {
+          "id": {
+            "enum": [
+              "remilia.profile.public",
+              "remilia.profile.me",
+              "remilia.directory.read",
+              "remilia.stats.read",
+              "remilia.notifications.read",
+              "remilia.pokes.write",
+              "remilia.beetle.read",
+              "remilia.chat.read",
+              "remilia.chat.write"
+            ]
+          },
+          "operations": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "getUserProfile",
+                "getMe",
+                "getMyStats",
+                "listMyNotifications",
+                "getMyBeetle",
+                "getMyBeetleCards",
+                "pokeUser",
+                "listGlobalChatMessages",
+                "postGlobalChatMessage",
+                "resolveDirectory",
+                "listDirectoryUsers"
+              ]
+            }
+          },
+          "scopes": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "enum": [
+                "remilia:stats.read",
+                "remilia:notifications.read",
+                "remilia:pokes.write",
+                "remilia:beetle.read",
+                "remilia:chat.read",
+                "remilia:chat.write",
+                "remilia:directory.read"
+              ]
+            }
+          },
+          "consent": { "enum": ["enablement", "perInvocation"] },
+          "reason": { "type": "string", "minLength": 8, "maxLength": 280 }
+        }
+      }
+    },
     "chrome": {
       "type": "object",
       "additionalProperties": false,
@@ -224,6 +321,21 @@
       "properties": {
         "local": { "$ref": "#/$defs/stringArray" },
         "sync": { "$ref": "#/$defs/stringArray" }
+      }
+    },
+    "storageResources": {
+      "description": "Retention policy for a declared storage key. Access remains governed by storageKeys.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["area", "key", "kind"],
+        "properties": {
+          "area": { "enum": ["local", "sync"] },
+          "key": { "type": "string", "minLength": 1 },
+          "kind": { "enum": ["settings", "cache", "authoredData", "sensitiveData"] },
+          "reset": { "enum": ["reset", "preserve"] }
+        }
       }
     },
     "settings": {
@@ -283,7 +395,22 @@
               }
             }
           },
+          "loadTriggers": {
+            "type": "array",
+            "items": { "enum": ["startup", "surface", "dockOpen", "idle", "userAction"] },
+            "minItems": 1
+          },
           "presentation": { "enum": ["sideRailOverlay", "hostRouteOverlay", "userAction"] },
+          "fallback": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["mode", "note"],
+            "properties": {
+              "mode": { "enum": ["nativeSite", "externalPage", "none"] },
+              "url": { "type": "string", "pattern": "^https://" },
+              "note": { "type": "string", "minLength": 1 }
+            }
+          },
           "notes": { "$ref": "#/$defs/stringArray" }
         }
       }
@@ -404,7 +531,7 @@
       "items": { "type": "string" }
     },
     "surface": {
-      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]
+      "enum": ["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "document", "route", "overlayApp", "composerAction", "replyAction"]
     },
     "setting": {
       "type": "object",

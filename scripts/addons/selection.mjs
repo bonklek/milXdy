@@ -113,6 +113,30 @@ export function validateSelection(selection, catalog, policy) {
   }
 }
 
+// A prepared lock is a selection, not a permanent grant of catalog review trust.
+export async function revalidatePreparedSelection(lock, catalogPath, policyPath, reviewsPath) {
+  const [catalog, policy, reviews] = await Promise.all([
+    readJsonRequired(catalogPath), readJsonRequired(policyPath), readJsonRequired(reviewsPath),
+  ]);
+  const selection = {
+    schemaVersion: lock.selectionSchemaVersion,
+    catalog: lock.catalog,
+    build: lock.build,
+    packages: (lock.packages || []).map(({ id, version, packageSha256 }) => ({ id, version, packageSha256 })),
+  };
+  validateSelection(selection, catalog, policy);
+  const catalogById = new Map(catalog.sections.flatMap((section) => section.packages).map((entry) => [entry.id, entry]));
+  const trusted = new Set((reviews.reviews || []).map(reviewKey));
+  return lock.packages.map((entry) => {
+    const review = catalogById.get(entry.id).review;
+    return {
+      ...entry,
+      review,
+      reviewTrusted: trusted.has(reviewKey({ ...entry, reviewedBy: review.reviewedBy, reviewedAt: review.reviewedAt })),
+    };
+  });
+}
+
 export async function materializeSelectionPackages(loaded, { stagingDirectory }) {
   await rm(stagingDirectory, { recursive: true, force: true });
   await mkdir(stagingDirectory, { recursive: true });

@@ -21,3 +21,15 @@ Link Browser keeps you on X while you inspect a link. Enable it, then Alt-click 
 Link Browser points a sandboxed panel at the link you choose. milXdy does not fetch or process that page’s contents. It stores the panel placement and most recently opened link locally in your browser.
 
 Some websites prevent embedded display. When that happens, use **Open in new tab**.
+
+## External page themes
+
+The Link Browser frame follows the X/milXdy light or dark theme. The embedded
+website keeps its own appearance. There is currently no Wikipedia dark-mode
+setting or Wikipedia theme bridge in milXdy; the Remilia Wiki sidebar’s dark-mode
+setting applies only to Remilia Wiki.
+
+To change Wikipedia’s appearance, use **Open in new tab** and its native appearance
+controls. milXdy does not override Wikipedia’s embedded page or request access
+to its contents. Adding a scoped Wikipedia theme integration remains a product
+and permission decision; it is not included in the current Link Browser.

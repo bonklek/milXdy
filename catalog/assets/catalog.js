@@ -1,4 +1,4 @@
-import { isSelectable, resolveSelection, selectionJson } from "./selection.js";
+import { isDefaultSelected, isSelectable, resolveSelection, selectionJson } from "./selection.js";
 
 const dataUrl = new URL("../data/catalog.json", import.meta.url);
 const catalogRootUrl = new URL("../", dataUrl);
@@ -181,7 +181,7 @@ function packageCard(pkg, section) {
     <article class="package-card">
       <div class="package-card-heading">
         <label class="package-check">
-          <input type="checkbox" data-package-id="${escapeHtml(pkg.id)}" ${selectable ? "" : "disabled"}>
+          <input type="checkbox" data-package-id="${escapeHtml(pkg.id)}" ${selectable ? "" : "disabled"} ${isDefaultSelected(pkg) ? "checked" : ""}>
           <span class="sr-only">Add ${escapeHtml(pkg.name)} to the selection file</span>
         </label>
         <img src="${escapeHtml(new URL(pkg.icon.src, catalogRootUrl).href)}" alt="${escapeHtml(pkg.icon.alt)}" width="42" height="42">

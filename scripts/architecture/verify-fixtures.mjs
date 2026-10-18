@@ -23,6 +23,8 @@ for (const authority of ["globalThis", "self", "fetch", "localStorage", "indexed
 }
 rejects("UI ambient Chrome", { ...file("src/features/alpha/ui/view.ts", "feature-ui"), ambientGlobals: { chrome: 1 } }, "ui code cannot use ambient chrome");
 rejects("new unchecked production", { ...file("src/new.js", "other"), checked: false, projects: [] }, "not checked by an environment TypeScript project");
+const assetDeclaration = { ...file("src/panel.css.d.ts", "other"), declaration: true, checked: false, projects: [] };
+assert.deepEqual(verifyArchitecture({ files: [assetDeclaration] }, baseline).failures, [], "type declarations do not require executable-source compiler coverage");
 assert.equal(classifyArchitecturePath("packages/app-sdk/src/index.ts"), "public-sdk", "future packaged SDK sources must be classified as public SDK");
 rejects("future packaged public SDK to runtime", file(
   "packages/app-sdk/src/index.ts",

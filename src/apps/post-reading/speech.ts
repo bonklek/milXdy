@@ -1,6 +1,7 @@
 import type { PostReadingSettings, SpeechState, SpeechStatus } from "./shared/types";
 import { createTtsEngine, type TtsEngine, type TtsSession } from "./ttsEngines";
 
+const SUPERSEDED_VOICE_PROBE = Symbol("superseded voice recheck");
 type Listener = (state: SpeechState) => void;
 type SpeechChunk = {
   text: string;
@@ -18,6 +19,7 @@ export class SpeechController {
   private generation = 0;
   private pendingAbort: AbortController | null = null;
   private primingAbort: AbortController | null = null;
+  private voiceProbeAbort: AbortController | null = null;
   private currentStartPrimed = false;
   private activeHasSyncedBoundaries = false;
   private activeStarted = false;
@@ -92,8 +94,35 @@ export class SpeechController {
     return this.engine.getPreferredVoice?.() ?? null;
   }
 
-  async probeBoundarySupport(voice: SpeechSynthesisVoice, signal?: AbortSignal): Promise<boolean> {
-    return this.engine.probeBoundarySupport?.(voice, signal) ?? false;
+  async probeBoundarySupport(voice: SpeechSynthesisVoice, signal?: AbortSignal, peers: readonly SpeechController[] = []): Promise<boolean> {
+    if (signal?.aborted || !this.engine.probeBoundarySupport) return false;
+    const abort = new AbortController();
+    const cancel = () => abort.abort();
+    signal?.addEventListener("abort", cancel, { once: true });
+    const restores = [...new Set([this, ...peers])].map(controller => controller.suspendForVoiceProbe(abort));
+    try {
+      // Let cancelled Web Speech session promises settle before the probe owns the global queue.
+      await Promise.resolve();
+      return abort.signal.aborted ? false : await this.engine.probeBoundarySupport(voice, abort.signal);
+    }
+    finally { signal?.removeEventListener("abort", cancel); restores.forEach(restore => restore()); }
+  }
+
+  private suspendForVoiceProbe(abort: AbortController): () => void {
+    const { status, text, title, charIndex } = this.state;
+    const active = Boolean(text && (status === "speaking" || status === "paused"));
+    const position = charIndex ?? this.chunks[this.index]?.offset ?? 0;
+    this.stopActiveSession();
+    const generation = this.generation;
+    this.voiceProbeAbort = abort;
+    if (active) this.setState(status, title, text, null, position, null, null, true);
+    return () => {
+      if (this.voiceProbeAbort === abort) this.voiceProbeAbort = null;
+      if (!active || generation !== this.generation) return;
+      if (abort.signal.reason === SUPERSEDED_VOICE_PROBE) this.stop();
+      else if (this.state.status === "paused") this.setState("paused", title, text, null, position, null);
+      else this.restartFrom(text, title, position, false);
+    };
   }
 
   onComplete(callback: (() => void) | null): void {
@@ -138,7 +167,7 @@ export class SpeechController {
     const restartGeneration = this.generation;
     // Web Speech must observe cancel before its replacement is queued.
     // A macrotask also keeps stale cancellation callbacks from reviving it.
-    (window.setTimeout || globalThis.setTimeout)(() => {
+    (globalThis.window?.setTimeout || globalThis.setTimeout)(() => {
       if (restartGeneration !== this.generation) return;
       this.startCurrentChunk(title, text, pauseAfterStart);
     }, 0);
@@ -159,8 +188,10 @@ export class SpeechController {
   }
 
   pauseOrResume(): void {
+    const probe = this.voiceProbeAbort;
     if (this.state.status === "paused") {
-      this.session?.resume();
+      if (!this.session) { this.restartFrom(this.state.text, this.state.title, this.state.charIndex ?? this.chunks[this.index]?.offset ?? 0, false); return; }
+      this.session.resume();
       this.setState("speaking", this.state.title, this.state.text, null, this.state.charIndex, this.state.charLength, this.state.boundaryElapsedTime);
     } else if (this.state.status === "speaking") {
       const pauseAt = this.state.charIndex ?? this.state.chunkStart ?? null;
@@ -173,6 +204,7 @@ export class SpeechController {
     } else if (this.state.text) {
       this.speak(this.state.text, this.state.title || "Post-reading");
     }
+    probe?.abort();
   }
 
   stop(): void {
@@ -206,12 +238,22 @@ export class SpeechController {
       const primeGeneration = ++this.generation;
       const primingAbort = new AbortController();
       this.primingAbort = primingAbort;
-      void this.engine.primeSelectedVoice(this.settings, primingAbort.signal).finally(() => {
+      this.startWatchdog = (globalThis.window?.setTimeout || globalThis.setTimeout)(() => {
+        if (primeGeneration !== this.generation) return;
+        this.setState("error", title, fullText, "The selected browser voice could not be prepared. Choose another voice in Settings and retry.");
+        this.stopActiveSession();
+      }, 5_000);
+      void this.engine.primeSelectedVoice(this.settings, primingAbort.signal).then(() => {
         if (this.primingAbort === primingAbort) this.primingAbort = null;
         if (primingAbort.signal.aborted || primeGeneration !== this.generation) return;
+        this.clearStartWatchdog();
         (globalThis.window?.setTimeout || globalThis.setTimeout)(() => {
           if (primeGeneration === this.generation && !primingAbort.signal.aborted) this.startCurrentChunk(title, fullText, pauseAfterStart);
         }, 0);
+      }, (error) => {
+        if (primeGeneration !== this.generation || primingAbort.signal.aborted) return;
+        this.setState("error", title, fullText, error instanceof Error ? error.message : "The selected browser voice could not be prepared.");
+        this.stopActiveSession();
       });
       return;
     }
@@ -255,6 +297,7 @@ export class SpeechController {
       onError: (message) => {
         if (generation !== this.generation) return;
         this.setState("error", title, fullText, message);
+        this.stopActiveSession();
       },
     }).then((session) => {
       if (this.pendingAbort === pendingAbort) this.pendingAbort = null;
@@ -265,9 +308,9 @@ export class SpeechController {
       this.session = session;
       this.activeHasSyncedBoundaries = session.hasSyncedBoundaries && this.activeHasSyncedBoundaries;
       this.setState(this.state.status, title, fullText, null, this.state.charIndex, this.state.charLength, this.state.boundaryElapsedTime);
-      this.startWatchdog = (window.setTimeout || globalThis.setTimeout)(() => {
+      this.startWatchdog = (globalThis.window?.setTimeout || globalThis.setTimeout)(() => {
         if (generation !== this.generation || this.activeStarted) return;
-        this.setState("error", title, fullText, "Speech playback did not start.");
+        this.setState("error", title, fullText, "Speech playback did not start. Choose another voice in Settings and retry.");
         this.stopActiveSession();
       }, 5_000);
       if (pauseAfterStart || this.state.status === "paused") {
@@ -283,6 +326,8 @@ export class SpeechController {
 
   private stopActiveSession(): void {
     this.generation += 1;
+    this.voiceProbeAbort?.abort(SUPERSEDED_VOICE_PROBE);
+    this.voiceProbeAbort = null;
     this.primingAbort?.abort();
     this.primingAbort = null;
     this.pendingAbort?.abort();
@@ -300,7 +345,7 @@ export class SpeechController {
   }
 
   private clearStartWatchdog(): void {
-    if (this.startWatchdog !== null) (window.clearTimeout || globalThis.clearTimeout)(this.startWatchdog);
+    if (this.startWatchdog !== null) (globalThis.window?.clearTimeout || globalThis.clearTimeout)(this.startWatchdog);
     this.startWatchdog = null;
   }
 

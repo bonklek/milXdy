@@ -1,0 +1,492 @@
+{
+  "version": 1,
+  "scope": "Runtime imports reachable from registered first-party content entries. Excludes host internals, type-only imports, tests and separately loaded frame/background entries. Syntax-based observations do not follow aliased browser globals or certify behavior.",
+  "exceptions": [
+    {
+      "app": "beetol",
+      "file": "src/apps/beetol/content.js",
+      "rule": "native-scheduling",
+      "count": 2,
+      "owner": "beetol",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "beetol",
+      "file": "src/apps/beetol/content.js",
+      "rule": "private-platform-import",
+      "count": 3,
+      "owner": "beetol",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "linkBrowser",
+      "file": "src/apps/link-browser/content.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "linkBrowser",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "linkBrowser",
+      "file": "src/apps/link-browser/content.ts",
+      "rule": "private-platform-import",
+      "count": 3,
+      "owner": "linkBrowser",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "miladychanSpotlight",
+      "file": "src/apps/miladychan-portal/content.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "miladychanSpotlight",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "miladychanSpotlight",
+      "file": "src/apps/miladychan-portal/content.ts",
+      "rule": "private-platform-import",
+      "count": 4,
+      "owner": "miladychanSpotlight",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/content.ts",
+      "rule": "browser-assets",
+      "count": 1,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/content.ts",
+      "rule": "browser-storage",
+      "count": 4,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/content.ts",
+      "rule": "private-platform-import",
+      "count": 6,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/detection.ts",
+      "rule": "browser-assets",
+      "count": 4,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/detection.ts",
+      "rule": "native-scheduling",
+      "count": 2,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/detection.ts",
+      "rule": "private-platform-import",
+      "count": 1,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/shared/storage.ts",
+      "rule": "browser-storage",
+      "count": 14,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "miladymaxxer",
+      "file": "src/apps/milady-maxxer/sounds.ts",
+      "rule": "native-scheduling",
+      "count": 11,
+      "owner": "miladymaxxer",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "music",
+      "file": "src/apps/music/content.ts",
+      "rule": "native-scheduling",
+      "count": 3,
+      "owner": "music",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "music",
+      "file": "src/apps/music/content.ts",
+      "rule": "private-platform-import",
+      "count": 4,
+      "owner": "music",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/content.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/content.ts",
+      "rule": "private-platform-import",
+      "count": 4,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/extractText.ts",
+      "rule": "private-platform-import",
+      "count": 1,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/fullQuote.ts",
+      "rule": "private-platform-import",
+      "count": 1,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/ocr.ts",
+      "rule": "browser-messaging",
+      "count": 1,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use declared host messaging; retain reviewed frame/stream bridges with sender validation."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/ocr.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/player.ts",
+      "rule": "private-platform-import",
+      "count": 3,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "post-reading",
+      "file": "src/apps/post-reading/ttsEngines.ts",
+      "rule": "native-scheduling",
+      "count": 5,
+      "owner": "post-reading",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/chat-user-formatting.ts",
+      "rule": "private-platform-import",
+      "count": 1,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/content.ts",
+      "rule": "browser-assets",
+      "count": 1,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/content.ts",
+      "rule": "browser-messaging",
+      "count": 1,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use declared host messaging; retain reviewed frame/stream bridges with sender validation."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/content.ts",
+      "rule": "browser-storage",
+      "count": 7,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/content.ts",
+      "rule": "document-observer",
+      "count": 2,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use shared surfaces or constrain an app observer to its owned container and activation."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/content.ts",
+      "rule": "private-platform-import",
+      "count": 7,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/legacy-adapters.ts",
+      "rule": "private-platform-import",
+      "count": 1,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "reminetChat",
+      "file": "src/apps/reminet-chat/legacy-mutation-dispatcher.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "reminetChat",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/banner-overlay-view.ts",
+      "rule": "native-scheduling",
+      "count": 2,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/content.js",
+      "rule": "browser-assets",
+      "count": 5,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/content.js",
+      "rule": "browser-storage",
+      "count": 8,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/content.js",
+      "rule": "native-scheduling",
+      "count": 5,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/content.js",
+      "rule": "private-platform-import",
+      "count": 3,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "remistats",
+      "file": "src/apps/remistats/sounds.js",
+      "rule": "browser-storage",
+      "count": 3,
+      "owner": "remistats",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "rootVisuals",
+      "file": "src/apps/root-visuals/content.ts",
+      "rule": "browser-assets",
+      "count": 3,
+      "owner": "rootVisuals",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "rootVisuals",
+      "file": "src/apps/root-visuals/content.ts",
+      "rule": "browser-storage",
+      "count": 1,
+      "owner": "rootVisuals",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "rootVisuals",
+      "file": "src/apps/root-visuals/content.ts",
+      "rule": "document-observer",
+      "count": 3,
+      "owner": "rootVisuals",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use shared surfaces or constrain an app observer to its owned container and activation."
+    },
+    {
+      "app": "rootVisuals",
+      "file": "src/apps/root-visuals/content.ts",
+      "rule": "private-platform-import",
+      "count": 2,
+      "owner": "rootVisuals",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/content.ts",
+      "rule": "browser-assets",
+      "count": 1,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/content.ts",
+      "rule": "browser-storage",
+      "count": 2,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/content.ts",
+      "rule": "native-scheduling",
+      "count": 4,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/content.ts",
+      "rule": "private-platform-import",
+      "count": 2,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/localData.ts",
+      "rule": "browser-storage",
+      "count": 8,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/preview.ts",
+      "rule": "browser-storage",
+      "count": 3,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/preview.ts",
+      "rule": "native-scheduling",
+      "count": 3,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "wiki",
+      "file": "src/apps/wiki-links/settings.ts",
+      "rule": "browser-storage",
+      "count": 4,
+      "owner": "wiki",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "wikiSidebar",
+      "file": "src/apps/wiki-sidebar/content.ts",
+      "rule": "browser-assets",
+      "count": 1,
+      "owner": "wikiSidebar",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Resolve packaged assets through context.resolveAssetUrl or an injected asset adapter."
+    },
+    {
+      "app": "wikiSidebar",
+      "file": "src/apps/wiki-sidebar/content.ts",
+      "rule": "browser-storage",
+      "count": 7,
+      "owner": "wikiSidebar",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Inject declared context.storage access and own subscriptions with the activation lifecycle."
+    },
+    {
+      "app": "wikiSidebar",
+      "file": "src/apps/wiki-sidebar/content.ts",
+      "rule": "native-scheduling",
+      "count": 1,
+      "owner": "wikiSidebar",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Use activation-scoped context.scheduler, or document and test a necessary animation/timing adapter."
+    },
+    {
+      "app": "wikiSidebar",
+      "file": "src/apps/wiki-sidebar/content.ts",
+      "rule": "private-platform-import",
+      "count": 4,
+      "owner": "wikiSidebar",
+      "reason": "Existing bundled implementation retained during staged SDK migration; this exception does not establish public portability.",
+      "removeWhen": "Replace private platform imports with an approved public capability or package-owned adapter."
+    }
+  ]
+}

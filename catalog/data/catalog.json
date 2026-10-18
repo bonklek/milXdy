@@ -2,7 +2,7 @@
   "$schema": "./catalog.schema.json",
   "schemaVersion": 2,
   "catalogId": "milxdy-maintainer-catalog",
-  "revision": "2026-08-03.1",
+  "revision": "2026-10-17.4",
   "catalogStatus": "preview",
   "supportedBuildTargets": [
     "chromium"
@@ -31,7 +31,7 @@
           },
           "summary": "Prepare a validated local Remilia Maker avatar bundle for the Custom Pet pipeline.",
           "packageKind": "app",
-          "version": "0.1.1-pilot",
+          "version": "0.1.2-pilot",
           "sdk": {
             "minVersion": "0.2.4",
             "targetVersion": "0.2.4"
@@ -50,17 +50,18 @@
           "artifact": {
             "kind": "maintainer-source",
             "path": "packages/maintainer/pets-maker",
-            "packageSha256": "9e835e324bed1784bd184b4ac4e23f03734dd612832a9ac58103004243291b4f",
+            "packageSha256": "5028d15f4c8a5f95ac1029b86d6e9d359fec4522e9bcbe1331d97c9debf369ab",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
-            "reviewedBy": "milxdy-maintainer-pets-maker",
-            "reviewedAt": "2026-08-03",
+            "reviewedBy": "milxdy-automated-review",
+            "reviewedAt": "2026-10-05",
             "notes": [
               "Reviewed optional package moved from the local pilot into the pinned maintainer catalog source tree.",
               "Installation leaves the enablement setting false; the user must explicitly enable Pets Maker in Apps & Features.",
-              "The 0.1.1 review covers the explicit public Maker metadata Fetch action; the selected image is never sent to that service."
+              "The 0.1.1 review covers the explicit public Maker metadata Fetch action; the selected image is never sent to that service.",
+              "The 0.1.2 local review adds bounded metadata and PNG decoding, selection ownership, and cancellation checks."
             ]
           },
           "capabilities": [
@@ -130,14 +131,18 @@
           "packageKind": "app",
           "version": "0.2.0-pilot",
           "sdk": {
-            "minVersion": "0.2.4",
-            "targetVersion": "0.2.4"
+            "minVersion": "0.2.5",
+            "targetVersion": "0.2.5",
+            "notes": [
+              "Built only against the published App SDK declarations and authoring guides.",
+              "Uses the reviewed composer and reply callback contracts only; it does not access X's DOM, caret, clipboard, media, or post controls."
+            ]
           },
-          "availability": "under-review",
+          "availability": "published",
           "publisher": "milXdy maintainers",
           "source": {
             "repositoryUrl": "https://github.com/bonklek/milXdy",
-            "path": null,
+            "path": "packages/maintainer/tweet-composer-kit",
             "issues": [
               "https://github.com/bonklek/milXdy/issues/17",
               "https://github.com/bonklek/milXdy/issues/25",
@@ -145,12 +150,21 @@
               "https://github.com/bonklek/milXdy/issues/188"
             ]
           },
-          "artifact": null,
+          "artifact": {
+            "kind": "maintainer-source",
+            "path": "packages/maintainer/tweet-composer-kit",
+            "packageSha256": "37061f80c7eb40db531f70bdce08bce582390d4358bcd65b6a11e640f5af0d41",
+            "recipeId": "maintainer-local-v1"
+          },
           "review": {
-            "status": "in-progress",
+            "status": "approved",
+            "reviewedBy": "milXdy release code review",
+            "reviewedAt": "2026-10-17",
             "notes": [
-              "Post-Factory is active in cumulative QA as a locally reviewed package, but its maintainer source is not yet checked into an allowlisted catalog artifact path.",
-              "It remains non-selectable until source, package hash, and trusted catalog review are committed together."
+              "External-author SDK capability pilot reviewed for the declared host-only Remilia public-profile operation; package consent remains mandatory.",
+              "Maker images are package-local with source and derivative records in AUTHORING_LOG.md. Their source origin does not assert VPL, copyright, redistribution, or other licence approval.",
+              "Promoted the existing reviewed SDK pilot into the maintainer artifact tree with exact package/manifest hash pins; all package consent and host-mediated action gates remain required.",
+              "Quick replies insert text by default; automatic sending requires separate persisted consent for each declared template."
             ]
           },
           "capabilities": [
@@ -158,12 +172,13 @@
             "Manage local quick-reply phrases and explicitly select one for the host reply action.",
             "Browse reviewed Remibooru reaction metadata, explicitly attach a sanitized thumbnail to the initiating composer, or open its canonical source page.",
             "Open declared Milady, Remilio, Bonkler, and Kagami maker handoffs after explicit caption review.",
-            "Open CHEESEWORLD as an ordinary explicit external link."
+            "Invoke reviewed CHEESEWORLD caption generation with per-invocation host consent for one bounded initiating-composer image."
           ],
           "permissions": {
             "hosts": [
               "https://maker.remilia.org/*",
-              "https://remibooru.com/*"
+              "https://remibooru.com/*",
+              "https://cult.inc/*"
             ],
             "optional": [],
             "privilegedSurfaces": [
@@ -193,6 +208,18 @@
               "origin": "https://remibooru.com",
               "purpose": "Query public reaction-media posts and facets and open canonical source or native upload pages.",
               "dataSent": "Explicit public query facets, pagination cursor, and page-size limit only; no X account, draft, cookie, authentication, image, tag, or upload data."
+            },
+            {
+              "name": "CULT/IN CheeseWorld",
+              "origin": "https://cult.inc",
+              "purpose": "User-invoked captions and exactly one initiating-composer image after per-invocation host consent.",
+              "dataSent": "Reviewed caption fields and one PNG, JPEG, GIF or WebP image up to 10 MiB; the host replaces the same attachment and never posts."
+            },
+            {
+              "name": "Remilia public profile",
+              "origin": "https://www.remilia.net",
+              "purpose": "Declared public-profile operation through the host capability broker.",
+              "dataSent": "Public identifier only; the package receives normalized public results and no credentials, cookies or authorization headers."
             }
           ],
           "storage": {
@@ -207,20 +234,25 @@
             ]
           },
           "privacyNotes": [
-            "The package cannot inspect X drafts, maker pages, Remibooru pages, tabs, clipboard contents, or authentication state.",
-            "Maker captions transfer only after an explicit package action; generated media remains user-reviewed and is never posted automatically.",
-            "Remibooru results are sanitized metadata and thumbnails. An explicit result click may ask the host to attach that recently returned thumbnail to the initiating composer; the package does not cache, expose original-media URLs, upload, or post media.",
-            "A selected quick reply is submitted by the reviewed host action only after the user explicitly clicks that reply row."
+            "Stores only enablement and up to 20 custom reply phrases in browser-local storage.",
+            "The host-owned D action opens native X Drafts; this package cannot inspect X drafts.",
+            "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. After an explicit reply-menu click, the host types and immediately submits the selected local literal to X.",
+            "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.",
+            "Only after an explicit Milady, Remilio, Bonkler, or Kagami selection, an explicit Captioned or Random meme selection, and activation of Generate are the user-entered Top text and Bottom text captions transferred to that named reviewed maker. Random meme permits both caption fields to be empty; no empty-caption or maker fallback chooses a mode or destination. This package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.",
+            "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
+            "After an explicit X image context-menu selection and explicit Publish to Remibooru click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed public Remibooru contribution flow. The host retains image bytes and session data and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
+            "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
+            "Only after explicit CHEESEWORLD and Captioned selection followed by Generate are the Top text and Bottom text captions transferred to CULT/IN CheeseWorld. With per-invocation consent, the host transfers exactly one bounded initiating-composer image and replaces that same attachment with the result. The host never posts, and this package receives no image bytes, URLs, DOM, tabs, file handles, or browser APIs.",
+            "The reviewed Remilia public-profile capability accepts only an explicit username. The host retains OAuth credentials, authorization headers, and cookies; Post-Factory receives only a normalized result and has no URL, token, cookie, direct-authentication, or authenticated-fetch access.",
+            "The reviewed Remilia-maker adapter opens only after explicit maker and mode selection followed by Generate. The host validates the exact declared captioned or randomMeme mode before transferring bounded captions to the selected named maker; no maker or mode is defaulted.",
+            "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or publishes an explicitly requested reviewed media contribution after the package's visible Publish to Remibooru action.",
+            "The reviewed CULT/IN CheeseWorld adapter runs only after explicit CHEESEWORLD and Captioned selection followed by Generate and per-invocation host consent. The host transfers the entered captions and exactly one initiating-composer PNG, JPEG, GIF, or WebP image up to 10 MiB, then replaces only that same attachment with the CheeseWorld result; the host never posts.",
+            "The host-owned Remilia capability broker exposes only the declared public-profile operation and returns normalized results without credentials, authorization headers, cookies, direct authentication, or arbitrary fetch."
           ],
           "dependencies": [],
           "conflicts": [],
           "replacement": null,
-          "blockers": [
-            {
-              "issue": "https://github.com/bonklek/milXdy/issues/188",
-              "reason": "The current Post-Factory 0.2.0-pilot source and exact package hash must be synchronized into this catalog checkout and receive trusted catalog review before selection can be enabled."
-            }
-          ]
+          "blockers": []
         },
         {
           "id": "tweetPng",
@@ -231,10 +263,10 @@
           },
           "summary": "Review and export a local PNG from an explicitly selected X/Twitter post share action.",
           "packageKind": "feature",
-          "version": "0.2.4",
+          "version": "0.2.5",
           "sdk": {
-            "minVersion": "0.2.4",
-            "targetVersion": "0.2.4"
+            "minVersion": "0.2.5",
+            "targetVersion": "0.2.5"
           },
           "availability": "published",
           "publisher": "milXdy maintainers",
@@ -242,21 +274,24 @@
             "repositoryUrl": "https://github.com/bonklek/milXdy",
             "path": "examples/packages/first-party-replacements/tweetPng",
             "issues": [
-              "https://github.com/bonklek/milXdy/issues/16"
+              "https://github.com/bonklek/milXdy/issues/16",
+              "https://github.com/bonklek/milXdy/issues/224"
             ]
           },
           "artifact": {
             "kind": "maintainer-source",
             "path": "examples/packages/first-party-replacements/tweetPng",
-            "packageSha256": "000079e70475e856a7f39f944e89dbc51dbdf0a633c0f644cf894f2e27d9fe48",
+            "packageSha256": "ad4f6673801cfd347f0bb27baf857a9c2c885d295bde9f4ffa80061270ab5031",
             "recipeId": "maintainer-local-v1"
           },
           "review": {
             "status": "approved",
-            "reviewedBy": "milxdy-first-party-share-kit",
-            "reviewedAt": "2026-08-03",
+            "reviewedBy": "milXdy release code review",
+            "reviewedAt": "2026-10-17",
             "notes": [
-              "Reviewed first-party replacement preserving the stable tweetPng identity and existing visual/profile settings."
+              "Reviewed first-party replacement preserving the stable tweetPng identity and existing visual/profile settings.",
+              "Exact-pinned @chenglou/pretext 0.0.8 is bundled under MIT for local Unicode-aware Canvas layout.",
+              "Export identity and appearance choices stay temporary until Save as defaults. Direct RemiNet PNG sharing remains unavailable with the implemented API contract."
             ]
           },
           "capabilities": [

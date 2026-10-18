@@ -1,9 +1,9 @@
 # Contributing visual elements
 
-There are two distinct contribution lanes. Choose the lane before preparing
+There are two distinct contribution scopes. Choose the scope before preparing
 metadata or asking for review.
 
-## Lane A: local custom modification
+## Local custom modification
 
 Local packages belong to their users. Authors can use original work, personal
 files, generated output, third-party material, or other assets according to
@@ -24,7 +24,7 @@ Recommended local practice:
 Unknown or informal provenance may produce a warning, but it does not prevent a
 user from composing and running a local custom package.
 
-## Lane B: default/upstream inclusion
+## Default/upstream inclusion
 
 An asset proposed for the milXdy codebase, default packages, or official
 published visual bundle must have exact license-or-permission evidence
@@ -66,8 +66,10 @@ npm run verify
 
 Mechanical validation is not legal advice and does not transfer rights. For
 local entries it verifies structure and safety while reporting rights metadata
-as informational. The current upstream validator still enforces the older
-VPL-only gate and must be generalized and re-reviewed before publication.
+as informational. Upstream entries require a compatible exact-file rights
+decision covering all four required permissions, hashed terms/proof/notices,
+fulfilled obligations, and final human review records. A license identifier or
+an AI-generated approval alone is insufficient.
 
 ## Versioning and removal
 

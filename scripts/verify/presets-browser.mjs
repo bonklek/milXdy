@@ -1,0 +1,64 @@
+import { spawn } from 'node:child_process';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import esbuild from 'esbuild';
+const root = await mkdtemp(path.join(tmpdir(), 'milxdy-misc-browser-'));
+let child, websocket;
+try {
+  await esbuild.build({ entryPoints: ['scripts/verify/presets-browser.ts'], outfile: path.join(root, 'fixture.js'), bundle: true, format: 'iife', platform: 'browser', target: 'chrome120', loader: { '.css': 'text' } });
+  const script = await readFile(path.join(root, 'fixture.js'), 'utf8');
+  const css = await readFile('assets/extension/popup/popup.css', 'utf8');
+  const popup = (await readFile('assets/extension/popup/popup.html', 'utf8')).replace(/<script[\s\S]*?<\/script>/gi, '').replace(/<link[^>]+>/gi, '');
+  await writeFile(path.join(root, 'fixture.html'), popup.replace('</head>', `<style>${css}</style></head>`).replace('</body>', `<script>${script}</script></body>`));
+  const chrome = process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+  child = spawn(chrome, ['--headless=new', '--disable-gpu', '--disable-extensions', '--no-first-run', '--user-data-dir=' + path.join(root, 'profile'), '--remote-debugging-port=0', 'about:blank']);
+  const endpoint = await new Promise((resolve, reject) => {
+    let stderr = ''; const timeout = setTimeout(() => reject(new Error('Chrome debugging endpoint unavailable')), 15000);
+    child.stderr.on('data', data => { stderr += data; const match = stderr.match(/DevTools listening on (ws:\/\/[^\s]+)/); if (match) { clearTimeout(timeout); resolve(match[1]); } });
+    child.on('error', error => { clearTimeout(timeout); reject(error); });
+  });
+  const origin = endpoint.replace(/^ws:/, 'http:').replace(/\/devtools\/browser\/.+$/, '');
+  const page = await (await fetch(`${origin}/json/new?${encodeURIComponent("about:blank")}`, { method: 'PUT' })).json();
+  websocket = new WebSocket(page.webSocketDebuggerUrl);
+  await new Promise((resolve, reject) => { websocket.onopen = resolve; websocket.onerror = reject; });
+  let sequence = 0; const pending = new Map();
+  let pageLoaded; const loaded = new Promise(resolve => { pageLoaded = resolve; });
+  websocket.onmessage = event => { const message = JSON.parse(event.data); if (message.method === "Page.loadEventFired") pageLoaded(); if (message.id && pending.has(message.id)) { const handler = pending.get(message.id); pending.delete(message.id); message.error ? handler.reject(new Error(JSON.stringify(message.error))) : handler.resolve(message.result); } };
+  const send = (method, params) => new Promise((resolve, reject) => { const id = ++sequence; pending.set(id, { resolve, reject }); websocket.send(JSON.stringify({ id, method, params })); });
+  await send('Page.enable', {});
+  await send('Page.navigate', { url: pathToFileURL(path.join(root, 'fixture.html')).href });
+  await loaded;
+  await send('Emulation.setDeviceMetricsOverride', { width: 480, height: 850, deviceScaleFactor: 1, mobile: false });
+  const evaluate = async expression => {
+    const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+    if (response.exceptionDetails) throw new Error(JSON.stringify(response.exceptionDetails));
+    return response.result.value;
+  };
+  const check = async (expression, label) => { if (!await evaluate(expression)) throw new Error(label); };
+  await evaluate(`document.querySelector('section button').focus(); document.querySelector('section button').click()`);
+  await check(`new Promise(r => setTimeout(() => r(!!document.querySelector('dialog[open]')), 100))`, 'App review absent');
+  await check(`document.activeElement.textContent.includes('Cancel')`, 'Safe initial focus missing');
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 });
+  await check(`document.activeElement.textContent.includes('Discard')`, 'Keyboard Tab cannot reach apply');
+  const screenshots = path.resolve('internal/issue-review/all-feature-audit/handoffs');
+  await mkdir(screenshots, { recursive: true });
+  const screenshot = await send('Page.captureScreenshot', { format: 'png' });
+  await writeFile(path.join(screenshots, 'presets-review-apps.png'), Buffer.from(screenshot.data, 'base64'));
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+  await check(`new Promise(r => setTimeout(() => r(!document.querySelector('dialog[open]') && document.activeElement.textContent === 'Review all apps' && Object.keys(presetFixture.values.local).length === 0), 50))`, 'Cancel mutated settings or lost opener focus');
+  await evaluate(`document.querySelector('section button').click()`);
+  await check(`new Promise(r => setTimeout(() => r(!!document.querySelector('dialog[open]')), 50))`, 'Second review absent');
+  await evaluate(`Array.from(document.querySelectorAll('dialog button')).find(b => b.textContent === 'Save as custom and apply').click()`);
+  await check(`new Promise(r => setTimeout(() => r(presetFixture.values.local['milxdy.settings.savedPresets']?.length === 1 && presetFixture.values.local['milxdy.performance.mode'] === 'full'), 100))`, 'Save/apply failed');
+  await evaluate(`presetFixture.fail(); Array.from(document.querySelectorAll('section button')).find(b => b.textContent === 'Review appearance and audio').click()`);
+  await check(`new Promise(r => setTimeout(() => r(!!document.querySelector('dialog[open]')), 50))`, 'Audio review absent');
+  await check(`document.querySelector('dialog').textContent.includes('Post reading completion ding')`, 'Audio mutation missing from preview');
+  const audioShot = await send('Page.captureScreenshot', { format: 'png' });
+  await writeFile(path.join(screenshots, 'presets-review-audio.png'), Buffer.from(audioShot.data, 'base64'));
+  await evaluate(`Array.from(document.querySelectorAll('dialog button')).find(b => b.textContent === 'Discard current choices and apply').click()`);
+  await check(`new Promise(r => setTimeout(() => r(document.querySelector('[data-preset-status][role=alert]')?.textContent.includes('previous settings were restored') && !Object.hasOwn(presetFixture.values.local, 'theme')), 100))`, 'Failure did not restore or report recovery');
+  console.log(JSON.stringify({ passed: true, safeFocus: true, tabAndEscape: true, cancelNoWrites: true, customSave: true, rollback: true, screenshots: ['presets-review-apps.png', 'presets-review-audio.png'] }, null, 2));
+
+} finally { websocket?.close(); child?.kill(); await new Promise(resolve => setTimeout(resolve, 100)); await rm(root, { recursive: true, force: true, maxRetries: 8, retryDelay: 200 }); }

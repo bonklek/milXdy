@@ -1,6 +1,6 @@
 # App Platform Support Contract
 
-milXdy App SDK 0.2.4 is the supported platform for building reviewed apps into
+milXdy App SDK 0.2.5 is the supported platform for building reviewed apps into
 custom Chromium distributions of milXdy. It gives app authors a versioned
 manifest, typed lifecycle, declared capabilities, shared runtime services,
 starter templates, deterministic packaging, and fail-closed trust checks.
@@ -32,9 +32,12 @@ they are not downloaded into an already-installed browser extension. Package
 JavaScript therefore receives extension content-script authority and must pass
 milXdy's review and trust gates.
 
-## Platform Guarantees
+## Platform Contracts And Verification
 
-The App SDK provides:
+The following describes the SDK contract and implemented interfaces. It is not
+an acceptance result for every package or browser. The verification commands
+below check selected contracts; retain their output and the package's browser
+acceptance evidence for the exact revision being reviewed.
 
 - **Versioned contracts:** App SDK SemVer, manifest schema versioning, package
   versions, compatibility ranges, and documented migration rules.
@@ -42,8 +45,8 @@ The App SDK provides:
   `onSurface`, `open`, `close`, and `dispose` hooks owned by the shared runtime.
 - **Bounded context:** declared-key storage, guarded asset URLs, app-scoped
   messaging, shared scheduling, cancellation, diagnostics, and surface rescans.
-- **Shared X runtime:** route tracking, surface delivery, visibility-aware
-  scheduling, performance budgets, app loading, and cleanup.
+- **Site-aware runtime:** route tracking and lifecycle for declared reviewed
+  sites. X/Twitter alone has scanner surface delivery and the full rail.
 - **App surfaces:** Apps & Features metadata, side-rail registration, shared
   overlay patterns, settings ownership, reset behavior, and disclosure.
 - **Deterministic composition:** folder and ZIP inputs, normalized package
@@ -60,7 +63,7 @@ The App SDK provides:
 - **Durable identity and status:** a new `buildInstanceId` for every successful
   rebuild, a deterministic `compositionFingerprint` for equivalent package
   sets, classified stage failures, and Apps & Features reload state.
-- **Fail-closed trust:** incompatible versions, malformed archives, unsafe
+- **Trust validation:** incompatible versions, malformed archives, unsafe
   paths, undeclared privileges, storage or route conflicts, asset collisions,
   tampered plans, blocked review status, and unacknowledged sensitive surfaces
   stop before package code reaches a generated build.
@@ -74,9 +77,11 @@ The composer treats every app package as privileged build input. Validation and
 static scanning enforce the declared package contract and expose review data;
 they do not claim to sandbox arbitrary JavaScript.
 
-Direct package access to runtime messaging is blocked. Apps communicate through
-`context.sendMessage()` using manifest-declared message namespaces. Package
-storage and assets are limited to declared keys and paths. Host permissions,
+The supported API is `context.sendMessage()` with manifest-declared namespaces;
+static package checks reject direct runtime messaging patterns they recognize.
+Context storage and asset helpers enforce declared keys and paths. Those
+wrappers and static checks do not isolate arbitrary privileged JavaScript.
+Host permissions,
 remote services, background routes, data use, and consent requirements remain
 visible in both package reports and Apps & Features.
 
@@ -88,7 +93,9 @@ Package-authored and selection-authored review claims are not trust roots. A
 catalog package is accepted as reviewed only when its ID, version, package
 hash, reviewer, and review date match the checked-in trusted-review registry.
 Otherwise the user must explicitly pass `--allow-local-review`. Prepare never
-executes package code, and the extension never imports package code at runtime.
+executes package code. The build packages reviewed entries, and after reload the
+runtime dynamically imports enabled packaged content entries; that is why entry
+validation and review are required before composition.
 
 ## Supported Capabilities
 
@@ -104,18 +111,21 @@ executes package code, and the extension never imports package code at runtime.
 | Composition fingerprint and reload detection | Supported in generated Apps & Features metadata |
 | Feature and docked overlay packages | Supported |
 | Manifest-generated enablement and reset | Supported |
-| X route and surface lifecycle | Supported |
+| X/Twitter route, scanner-surface, and rail lifecycle | Supported |
+| Remilia Wiki document/route feature lifecycle | Supported for matching reviewed `contentScript` scopes; no rail |
+| Miladychan app launcher | Supported for matching reviewed `contentScript` scopes; no X scanner surfaces |
+| RemiliaNET page launcher or overlay runtime | Not supported; its `bridgeOnly` mode has no package UI runtime |
 | Declared storage and asset access | Supported |
-| App-scoped host background services | Supported |
+| Public package background services | Not supported; local packages may declare only reviewed `background.messageTypes` routes |
 | Shared scheduler, cancellation, and diagnostics | Supported |
 | Public UI and accessibility kit | Supported |
 | Runtime injection into an installed extension | Outside this distribution model |
 | Package-owned background modules | Use host-provided declared services |
-| General content runtime on arbitrary websites | X runtime only; other sites use declared host integrations |
+| General content runtime on arbitrary websites | Not supported; only the reviewed site modes listed above are available |
 
 ## External Reference
 
-Post-reading is the production reference app for App SDK 0.2.4. Its standalone
+Post-reading is the production reference app for App SDK 0.2.5. Its standalone
 repository builds the same feature source as a milXdy package, targets the
 public SDK declarations, uses declared storage and assets, and is pinned by
 source commit and package hash. The cross-repository verification gate builds,

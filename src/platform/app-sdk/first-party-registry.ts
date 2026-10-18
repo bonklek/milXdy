@@ -93,29 +93,26 @@ const isEnabledById: Record<string, () => Promise<boolean>> = {
   },
 };
 
+let wikiSettingsWriteQueue: Promise<void> = Promise.resolve();
+
+function updateWikiSettings(update: (settings: Record<string, unknown>) => Record<string, unknown>): Promise<void> {
+  const write = wikiSettingsWriteQueue.then(async () => {
+    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
+    await chrome.storage.local.set({ "remiliaWikiHyperlink.settings": update(objectValue(stored["remiliaWikiHyperlink.settings"])) });
+  });
+  wikiSettingsWriteQueue = write.catch(() => undefined);
+  return write;
+}
+
 const setEnabledById: Record<string, ((enabled: boolean) => Promise<void>) | undefined> = {
   composerTools: async (enabled) => {
     await chrome.storage.local.set({ "milxdy.composerTools.enabled": enabled });
   },
   wiki: async (enabled) => {
-    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
-    const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
-    await chrome.storage.local.set({
-      "remiliaWikiHyperlink.settings": {
-        ...settings,
-        enabled,
-      },
-    });
+    await updateWikiSettings((settings) => ({ ...settings, enabled }));
   },
   wikiSidebar: async (enabled) => {
-    const stored = await chrome.storage.local.get("remiliaWikiHyperlink.settings");
-    const settings = objectValue(stored["remiliaWikiHyperlink.settings"]);
-    await chrome.storage.local.set({
-      "remiliaWikiHyperlink.settings": {
-        ...settings,
-        sidebarEnabled: enabled,
-      },
-    });
+    await updateWikiSettings((settings) => ({ ...settings, sidebarEnabled: enabled }));
   },
   linkBrowser: async (enabled) => {
     await chrome.storage.local.set({ "milxdy.linkBrowser.enabled": enabled });
@@ -160,11 +157,17 @@ export const FIRST_PARTY_APPS: readonly MilxdyAppManifest[] = registry.map((app)
     // Registry build metadata authorizes a first-party app to use the host
     // assets it ships with. Keep it separate from package.assets: local and
     // third-party packages remain limited to their declared package files.
-    hostAssetAccess: [...(assets ?? []), ...(requiredOutputs ?? [])],
+    hostAssetAccess: firstPartyHostAssetAccess(app),
     isEnabled,
     setEnabled,
   };
 });
+
+export function firstPartyHostAssetAccess(
+  app: Pick<MilxdyAppManifest, "assets" | "requiredOutputs" | "hostAssetAccess">,
+): string[] {
+  return [...(app.hostAssetAccess ?? [...(app.assets ?? []), ...(app.requiredOutputs ?? [])])];
+}
 
 export const FIRST_PARTY_APP_IDS = FIRST_PARTY_APPS.map((app) => app.id);
 

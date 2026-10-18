@@ -1,6 +1,7 @@
+import { verifyFamilyBundles, verifyCorruptBundles, makeQaAtlas, verifyTraitDiffs } from "./remilia-pet-import-fixtures.mjs";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { PNG } from "pngjs";
 import {
@@ -19,68 +20,35 @@ const families = ["milady", "remilio", "bonkler", "kagami"];
 await rm(temp, { recursive: true, force: true });
 await mkdir(temp, { recursive: true });
 try {
-  for (const family of families) {
-    const bundle = path.join(fixtures, family, "remilia-pet-request.zip");
-    const validation = path.join(temp, `${family}-validation.json`);
-    const selected = path.join(temp, `${family}-template.json`);
-    const run = path.join(temp, family);
-    runPython([
-      path.join(scripts, "validate_bundle.py"),
-      bundle,
-      "--json-out",
-      validation,
-    ]);
-    runPython([
-      path.join(scripts, "select_template.py"),
-      "--bundle",
-      bundle,
-      "--json-out",
-      selected,
-    ]);
-    runPython([
-      path.join(scripts, "prepare_import.py"),
-      bundle,
-      "--output-dir",
-      run,
-    ]);
-    const validationJson = JSON.parse(await readFile(validation, "utf8"));
-    const selectedJson = JSON.parse(await readFile(selected, "utf8"));
-    const identity = JSON.parse(await readFile(path.join(run, "identity-brief.json"), "utf8"));
-    const handoff = JSON.parse(await readFile(path.join(run, "hatch-pet-handoff.json"), "utf8"));
-    const provenance = JSON.parse(await readFile(path.join(run, "provenance.json"), "utf8"));
-    assert(validationJson.ok === true, `${family}: bundle validation did not pass`);
-    assert(validationJson.templateId === `${family}-v1`, `${family}: wrong validated template`);
-    assert(selectedJson.templateId === `${family}-v1`, `${family}: wrong selected template`);
-    assert(selectedJson.motionProfile.runtimeRows.length === 11, `${family}: missing runtime rows`);
-    assert(identity.family === family && identity.bodyCompletion, `${family}: incomplete identity brief`);
-    assert(handoff.delegateSkill === "hatch-pet", `${family}: adapter did not delegate to hatch-pet`);
-    assert(handoff.runtimeRows.length === 11, `${family}: hatch handoff missing rows`);
-    assert(/^[a-f0-9]{64}$/.test(provenance.inputFingerprint), `${family}: invalid provenance fingerprint`);
-    assert(
-      provenance.localDataPolicy.rawBundleCached === false &&
-        provenance.localDataPolicy.finalValidatedAtlasCache === "user-selected-local-directory-only",
-      `${family}: local cache privacy policy is incomplete`,
-    );
-  }
+  await verifyFamilyBundles({ families, fixtures, temp, scripts, runPython, assert });
 
-  const validZip = await readFile(path.join(fixtures, "milady", "remilia-pet-request.zip"));
-  const entries = listStoredZip(validZip);
-  const request = JSON.parse(new TextDecoder().decode(entries[1].bytes));
-  request.imageSha256 = "0".repeat(64);
-  const corruptZip = createStoredZip([
-    { name: "avatar.png", bytes: entries[0].bytes },
-    { name: "request.json", bytes: new TextEncoder().encode(stableJson(request)) },
-  ]);
-  const corruptPath = path.join(temp, "corrupt-hash.zip");
-  await writeFile(corruptPath, corruptZip);
-  const rejected = spawnSync(python, [path.join(scripts, "validate_bundle.py"), corruptPath], {
-    encoding: "utf8",
-    env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
-  });
-  assert(rejected.status !== 0, "corrupt image hash was accepted");
+  const { entries, request } = await verifyCorruptBundles({ python, fixtures, temp, scripts, pythonOptions, assert });
+
+  const templateCopy = path.join(temp, "templates");
+  await cp(path.join(skillRoot, "assets", "templates"), templateCopy, { recursive: true });
+  const invalidMotionPath = path.join(templateCopy, "motion-profile-v1.json");
+  const invalidMotion = JSON.parse(await readFile(invalidMotionPath, "utf8"));
+  delete invalidMotion.runtimeRows[0].phases;
+  await writeFile(invalidMotionPath, `${JSON.stringify(invalidMotion, null, 2)}\n`);
+  const invalidTemplate = spawnSync(
+    python,
+    [
+      "-c",
+      [
+        "import sys",
+        `sys.path.insert(0, ${JSON.stringify(path.resolve(scripts))})`,
+        "from pathlib import Path",
+        "from select_template import select_template",
+        "select_template('milady', 1, Path(sys.argv[1]))",
+      ].join("; "),
+      path.resolve(templateCopy),
+    ],
+    pythonOptions(),
+  );
+  assert(invalidTemplate.status !== 0, "motion template without a full phase sequence was accepted");
   assert(
-    `${rejected.stdout}\n${rejected.stderr}`.includes("SHA-256 mismatch"),
-    "corrupt image hash rejection was not actionable",
+    `${invalidTemplate.stdout}\n${invalidTemplate.stderr}`.includes("invalid phase sequence"),
+    "invalid motion-template rejection was not actionable",
   );
 
   for (const mismatch of [
@@ -149,6 +117,37 @@ try {
     semantic.status === "pending" && semantic.checks.identity === null,
     "deterministic QA improperly approved semantic review",
   );
+  await writeFile(path.join(qaDir, "diagnostics", "row-99-frame-99.png"), "stale");
+  semantic.status = "approved";
+  semantic.deterministicQaSha256 = "0".repeat(64);
+  semantic.reviewer = "stale-review-fixture";
+  semantic.reviewedAt = "1999-01-01T00:00:00.000Z";
+  semantic.checks = Object.fromEntries(
+    Object.keys(semantic.checks).map((key) => [key, true]),
+  );
+  await writeFile(path.join(qaDir, "semantic-review.json"), `${JSON.stringify(semantic, null, 2)}\n`);
+  runPython([
+    path.join(scripts, "compare_pose_envelope.py"),
+    "--atlas",
+    atlasPath,
+    "--selected-template",
+    path.join(miladyRun, "selected-template.json"),
+    "--identity-brief",
+    path.join(miladyRun, "identity-brief.json"),
+    "--output-dir",
+    qaDir,
+  ]);
+  const refreshedSemantic = JSON.parse(
+    await readFile(path.join(qaDir, "semantic-review.json"), "utf8"),
+  );
+  assert(
+    refreshedSemantic.status === "pending" && refreshedSemantic.reviewer === null,
+    "a semantic approval bound to stale deterministic QA was preserved",
+  );
+  assert(
+    !(await readdir(path.join(qaDir, "diagnostics"))).includes("row-99-frame-99.png"),
+    "a stale frame diagnostic survived a deterministic QA rerun",
+  );
 
   const noExpansionDir = path.join(temp, "qa-no-expansion");
   const noExpansion = spawnSync(
@@ -200,14 +199,55 @@ try {
   assert(
     clippingFailure?.diagnosticArtifact &&
       clippingFailure.templateId === "milady-v1" &&
+      clippingFailure.templateVersion === 1 &&
       clippingFailure.threshold.maximum === 0,
     "clipping failure evidence is incomplete",
   );
 
+  for (const motionFault of [
+    { name: "adjacent", option: "adjacentFault", check: "adjacent-centroid-continuity" },
+    { name: "loop", option: "loopFault", check: "loop-closure" },
+  ]) {
+    const faultyAtlas = makeQaAtlas({ [motionFault.option]: true });
+    const faultyPath = path.join(temp, `${motionFault.name}-motion-fault.png`);
+    const faultyDir = path.join(temp, `qa-${motionFault.name}-motion-fault`);
+    await writeFile(faultyPath, PNG.sync.write(faultyAtlas));
+    const faultyResult = spawnSync(
+      python,
+      [
+        path.join(scripts, "compare_pose_envelope.py"),
+        "--atlas",
+        faultyPath,
+        "--selected-template",
+        path.join(miladyRun, "selected-template.json"),
+        "--identity-brief",
+        path.join(miladyRun, "identity-brief.json"),
+        "--output-dir",
+        faultyDir,
+      ],
+      pythonOptions(),
+    );
+    assert(faultyResult.status === 1, `${motionFault.name} motion fault was accepted`);
+    const faultyQa = JSON.parse(
+      await readFile(path.join(faultyDir, "deterministic-qa.json"), "utf8"),
+    );
+    const motionFailure = faultyQa.failures.find(
+      (failure) => failure.check === motionFault.check,
+    );
+    assert(
+      motionFailure?.diagnosticArtifact &&
+        motionFailure.templateVersion === 1 &&
+        faultyQa.sequenceChecks.some(
+          (check) => check.check === motionFault.check && check.passed === false,
+        ),
+      `${motionFault.name} motion failure evidence is incomplete`,
+    );
+  }
+
   const baseRequest = JSON.parse(
     await readFile(path.join(fixtures, "milady", "request.json"), "utf8"),
   );
-  await verifyTraitDiffs(baseRequest);
+  await verifyTraitDiffs(baseRequest, { temp, scripts, runPython, assert });
 
   const cacheDir = path.join(temp, "cache");
   const firstPlanPath = path.join(temp, "resume-plan-first.json");
@@ -227,6 +267,26 @@ try {
   const runStatePath = path.join(miladyRun, "run-state.json");
   const runState = JSON.parse(await readFile(runStatePath, "utf8"));
   runState.rows[0].status = "completed";
+  runState.rows[0].contentSha256 = "not-a-content-hash";
+  await writeFile(runStatePath, `${JSON.stringify(runState, null, 2)}\n`);
+  const invalidRowPath = path.join(temp, "resume-plan-invalid-row.json");
+  runPython([
+    path.join(scripts, "cache_resume.py"),
+    "plan",
+    "--run-dir",
+    miladyRun,
+    "--cache-dir",
+    cacheDir,
+    "--json-out",
+    invalidRowPath,
+  ]);
+  const invalidRow = JSON.parse(await readFile(invalidRowPath, "utf8"));
+  assert(
+    invalidRow.action === "generate-all-rows" &&
+      invalidRow.nextRow.index === 0 &&
+      invalidRow.nextRow.invalidationReason === "completed-row-content-hash-invalid",
+    "an invalid completed-row hash was trusted for resume",
+  );
   runState.rows[0].contentSha256 = "1".repeat(64);
   await writeFile(runStatePath, `${JSON.stringify(runState, null, 2)}\n`);
   const interruptedPath = path.join(temp, "resume-plan-interrupted.json");
@@ -278,6 +338,31 @@ try {
   );
   semantic.notes = "Synthetic geometry fixture approval for cache-contract verification only.";
   await writeFile(path.join(qaDir, "semantic-review.json"), `${JSON.stringify(semantic, null, 2)}\n`);
+  semantic.checks.motionQuality = false;
+  await writeFile(path.join(qaDir, "semantic-review.json"), `${JSON.stringify(semantic, null, 2)}\n`);
+  const rejectedIncompleteReview = spawnSync(
+    python,
+    [
+      path.join(scripts, "cache_resume.py"),
+      "store",
+      "--run-dir",
+      miladyRun,
+      "--atlas",
+      atlasPath,
+      "--cache-dir",
+      cacheDir,
+    ],
+    pythonOptions(),
+  );
+  assert(
+    rejectedIncompleteReview.status !== 0 &&
+      `${rejectedIncompleteReview.stdout}\n${rejectedIncompleteReview.stderr}`.includes(
+        "must pass every required semantic check",
+      ),
+    "cache accepted an approval with a failed semantic check",
+  );
+  semantic.checks.motionQuality = true;
+  await writeFile(path.join(qaDir, "semantic-review.json"), `${JSON.stringify(semantic, null, 2)}\n`);
   runPython([
     path.join(scripts, "cache_resume.py"),
     "store",
@@ -301,6 +386,79 @@ try {
   ]);
   const exact = JSON.parse(await readFile(exactPath, "utf8"));
   assert(exact.action === "reuse-validated-atlas", "exact validated rerun was not reused");
+
+  const provenance = JSON.parse(await readFile(path.join(miladyRun, "provenance.json"), "utf8"));
+  const cacheEntryPath = path.join(cacheDir, provenance.inputFingerprint, "cache-entry.json");
+  const cacheEntry = JSON.parse(await readFile(cacheEntryPath, "utf8"));
+  cacheEntry.adapterVersion = "tampered-adapter";
+  await writeFile(cacheEntryPath, `${JSON.stringify(cacheEntry, null, 2)}\n`);
+  const invalidatedPath = path.join(temp, "resume-plan-invalidated-cache.json");
+  runPython([
+    path.join(scripts, "cache_resume.py"),
+    "plan",
+    "--run-dir",
+    miladyRun,
+    "--cache-dir",
+    cacheDir,
+    "--json-out",
+    invalidatedPath,
+  ]);
+  const invalidated = JSON.parse(await readFile(invalidatedPath, "utf8"));
+  assert(
+    invalidated.action !== "reuse-validated-atlas" &&
+      invalidated.cacheEntryRejection === "adapter-version-mismatch",
+    "cache provenance did not invalidate an adapter-version change",
+  );
+  cacheEntry.adapterVersion = provenance.adapterVersion;
+  cacheEntry.atlasFile = "../private-input.png";
+  await writeFile(cacheEntryPath, `${JSON.stringify(cacheEntry, null, 2)}\n`);
+  const unsafePath = path.join(temp, "resume-plan-unsafe-cache-path.json");
+  runPython([
+    path.join(scripts, "cache_resume.py"),
+    "plan",
+    "--run-dir",
+    miladyRun,
+    "--cache-dir",
+    cacheDir,
+    "--json-out",
+    unsafePath,
+  ]);
+  const unsafe = JSON.parse(await readFile(unsafePath, "utf8"));
+  assert(
+    unsafe.action !== "reuse-validated-atlas" &&
+      unsafe.cacheEntryRejection === "cached-atlas-path-unsafe",
+    "cache reuse accepted an atlas path outside its fingerprint directory",
+  );
+  cacheEntry.atlasFile = "validated-atlas.png";
+  await writeFile(cacheEntryPath, `${JSON.stringify(cacheEntry, null, 2)}\n`);
+
+  const recoveryCache = path.join(temp, "recovery-cache");
+  const recoveryEntry = path.join(recoveryCache, provenance.inputFingerprint);
+  await mkdir(recoveryEntry, { recursive: true });
+  await writeFile(
+    path.join(recoveryEntry, "validated-atlas.png"),
+    await readFile(atlasPath),
+  );
+  const recoveryResultPath = path.join(temp, "cache-recovery-result.json");
+  runPython([
+    path.join(scripts, "cache_resume.py"),
+    "store",
+    "--run-dir",
+    miladyRun,
+    "--atlas",
+    atlasPath,
+    "--cache-dir",
+    recoveryCache,
+    "--json-out",
+    recoveryResultPath,
+  ]);
+  const recovery = JSON.parse(await readFile(recoveryResultPath, "utf8"));
+  assert(
+    recovery.status === "stored" &&
+      JSON.parse(await readFile(path.join(recoveryEntry, "cache-entry.json"), "utf8")).atlasSha256 ===
+        cacheEntry.atlasSha256,
+    "an interrupted cache write did not recover deterministically",
+  );
 
   console.log(
     "Remilia Maker Pet Import verification passed for four families, deterministic QA, trait diff, and cache/resume.",
@@ -326,94 +484,6 @@ function pythonOptions() {
     encoding: "utf8",
     env: { ...process.env, PYTHONDONTWRITEBYTECODE: "1" },
   };
-}
-
-function makeQaAtlas({ includeHairExpansion = false, clipped = false } = {}) {
-  const png = new PNG({ width: 1536, height: 2288 });
-  const frameCounts = [6, 8, 8, 4, 5, 8, 6, 6, 6, 8, 8];
-  for (let row = 0; row < frameCounts.length; row += 1) {
-    for (let column = 0; column < frameCounts[row]; column += 1) {
-      fillRect(png, column * 192 + 78, row * 208 + 38, 36, 157, [40, 90, 180, 255]);
-      if (includeHairExpansion && row === 0 && column === 0) {
-        fillRect(png, column * 192 + 30, row * 208 + 38, 11, 35, [120, 50, 170, 255]);
-      }
-    }
-  }
-  fillRect(png, 6 * 192 + 78, 38, 36, 157, [40, 90, 180, 255]);
-  if (clipped) {
-    fillRect(png, 0, 80, 4, 24, [255, 20, 20, 255]);
-  }
-  return png;
-}
-
-function fillRect(png, left, top, width, height, rgba) {
-  for (let y = top; y < top + height; y += 1) {
-    for (let x = left; x < left + width; x += 1) {
-      const offset = (png.width * y + x) << 2;
-      png.data[offset] = rgba[0];
-      png.data[offset + 1] = rgba[1];
-      png.data[offset + 2] = rgba[2];
-      png.data[offset + 3] = rgba[3];
-    }
-  }
-}
-
-async function verifyTraitDiffs(baseRequest) {
-  const cases = [
-    {
-      name: "exact",
-      mutate: () => {},
-      classification: "exact-match",
-      action: "reuse-validated-atlas-candidate",
-    },
-    {
-      name: "non-pet",
-      mutate: (request) => {
-        request.traitPolicy.background = "omit-updated";
-      },
-      classification: "non-pet-only",
-      action: "reuse-validated-atlas-candidate",
-    },
-    {
-      name: "small",
-      mutate: (request) => {
-        request.traits.eyes.assetId = "fixture-eyes-2";
-      },
-      classification: "small-appearance-change",
-      action: "targeted-row-edits",
-    },
-    {
-      name: "major",
-      mutate: (request) => {
-        request.traits.hair.assetId = "fixture-major-hair";
-      },
-      classification: "major-silhouette-change",
-      action: "regenerate-character-imagery",
-    },
-  ];
-  const previous = path.join(temp, "diff-previous.json");
-  await writeFile(previous, `${JSON.stringify(baseRequest, null, 2)}\n`);
-  for (const fixture of cases) {
-    const currentRequest = structuredClone(baseRequest);
-    fixture.mutate(currentRequest);
-    const current = path.join(temp, `diff-${fixture.name}.json`);
-    const output = path.join(temp, `diff-${fixture.name}-plan.json`);
-    await writeFile(current, `${JSON.stringify(currentRequest, null, 2)}\n`);
-    runPython([
-      path.join(scripts, "plan_trait_diff.py"),
-      "--previous",
-      previous,
-      "--current",
-      current,
-      "--json-out",
-      output,
-    ]);
-    const result = JSON.parse(await readFile(output, "utf8"));
-    assert(
-      result.classification === fixture.classification && result.action === fixture.action,
-      `${fixture.name}: trait diff was misclassified`,
-    );
-  }
 }
 
 function assert(condition, message) {

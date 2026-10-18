@@ -36,6 +36,7 @@ if (existsSync("node_modules/@tesseract.js-data/eng/4.0.0/eng.traineddata.gz")) 
 
 const common = {
   bundle: true,
+  loader: { ".css": "text" },
   platform: "browser",
   target: "es2022",
   sourcemap: false,

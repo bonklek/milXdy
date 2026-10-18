@@ -126,3 +126,40 @@ describe("SpeechController selected-voice priming", () => {
     expect(speak).not.toHaveBeenCalled();
   });
 });
+
+
+describe("SpeechController bounded initialization", () => {
+  it("reports a stalled voice prime without advancing transport chunks", async () => {
+    vi.useFakeTimers();
+    const controller = new SpeechController({...DEFAULT_SETTINGS});
+    const speak = vi.fn();
+    (controller as unknown as { engine: TtsEngine }).engine = { id:"web-speech",label:"Stalled native prime",capabilities:{voices:true,boundaryEvents:true,seek:false},primeSelectedVoice:()=>new Promise<void>(()=>undefined),speak };
+    try {
+      controller.speak("First synthetic paragraph.\n\nSecond synthetic paragraph.", "Synthetic diagnostic");
+      expect(controller.getState()).toMatchObject({hasStarted:false,isPriming:true,chunkIndex:1});
+      await vi.advanceTimersByTimeAsync(5001);
+      expect(controller.getState()).toMatchObject({status:"error",hasStarted:false,chunkIndex:1});
+      expect(controller.getState().error).toContain("could not be prepared"); expect(speak).not.toHaveBeenCalled();
+    } finally { controller.stop(); vi.useRealTimers(); }
+  });
+  it("handles rejected preparation without scheduling the real utterance", async () => {
+    const controller = new SpeechController({...DEFAULT_SETTINGS}); const speak = vi.fn();
+    (controller as unknown as { engine: TtsEngine }).engine = {id:"web-speech",label:"Rejected native prime",capabilities:{voices:true,boundaryEvents:true,seek:false},primeSelectedVoice:async()=>{throw new Error("Voice unavailable");},speak};
+    try { controller.speak("Synthetic diagnostic.", "Diagnostic"); await Promise.resolve(); expect(controller.getState()).toMatchObject({status:"error",error:"Voice unavailable"}); expect(speak).not.toHaveBeenCalled(); } finally {controller.stop();}
+  });
+});
+
+
+describe("rapid native speech replacement", () => {
+  it("stale asynchronous session resolution never cancels the replacement utterance", async () => {
+    const queue: Array<{text:string}> = [];
+    class Utterance {onstart=null;onboundary=null;onend=null;onerror=null;voice=null;rate=1;volume=1;constructor(readonly text:string){}}
+    const synthesis={speaking:false,pending:false,paused:false,getVoices:()=>[],cancel:vi.fn(()=>{queue.length=0;}),resume:vi.fn(),pause:vi.fn(),speak:(utterance:Utterance)=>{queue.push(utterance);}};
+    vi.stubGlobal("window",{speechSynthesis:synthesis,SpeechSynthesisUtterance:Utterance,setTimeout,clearTimeout});vi.stubGlobal("SpeechSynthesisUtterance",Utterance);
+    const controller=new SpeechController({...DEFAULT_SETTINGS});(controller as unknown as {engine:TtsEngine}).engine.primeSelectedVoice=undefined;
+    try {
+      controller.speak("Synthetic first.","First");controller.speak("Synthetic replacement.","Replacement");await Promise.resolve();await Promise.resolve();
+      expect(queue.map(utterance=>utterance.text)).toEqual(["Synthetic replacement."]);expect(synthesis.cancel).toHaveBeenCalledOnce();
+    } finally {controller.stop();vi.unstubAllGlobals();}
+  });
+});

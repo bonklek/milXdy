@@ -130,7 +130,7 @@ function verifySizeRatchet(file, baseline, failures, warnings) {
 }
 
 function verifyCompilerCoverage(file, allowedUnchecked, failures) {
-  if (!file.path.startsWith("src/") || file.test) return;
+  if (!file.path.startsWith("src/") || file.test || file.declaration) return;
   if (file.checked && file.projects.length > 0) return;
   if (!allowedUnchecked.has(file.path)) failures.push(`${file.path}: production source is not checked by an environment TypeScript project`);
 }

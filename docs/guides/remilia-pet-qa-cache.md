@@ -18,6 +18,12 @@ frame, phase, measured value, threshold, template ID/version, and diagnostic
 path. It also initializes `semantic-review.json` with `status: pending`;
 deterministic success never changes that status.
 
+Each run refreshes the generated frame diagnostics so evidence from an older
+atlas cannot survive beside a newer report. A semantic decision is preserved
+only while its `deterministicQaSha256` still matches the current report;
+otherwise the review is reset to `pending`. Failure records include both the
+template ID and its explicit version.
+
 Run the checks with the bundled workspace Python runtime, which supplies
 Pillow:
 
@@ -71,9 +77,34 @@ selects one of:
 small face/accessory edits, and identity/major-silhouette changes. It never
 infers that a visual row is safe merely from raw silhouette similarity.
 
+Exact reuse verifies the image, template ID/hash, adapter, prompt, policy, style,
+atlas path confinement, and atlas hash in addition to the fingerprint. Resume
+accepts only the contiguous completed-row prefix whose row identities and
+SHA-256 values match the current run/template contract. A stale run fingerprint,
+changed row contract, or malformed completed-row hash is reported as an
+invalidation and regeneration begins at the first unsafe row.
+
 Cache roots are explicitly user selected. Entries contain only the final
 validated atlas and provenance/review hashes—not the raw bundle, request
 sidecar, or canonical input image. `cache_resume.py store` refuses an atlas
 unless deterministic QA passed, semantic review is independently approved and
 bound to the current QA report, and the atlas hash matches the measured
 artifact.
+All five semantic checks, the reviewer, and the review time must be present.
+Cache writes promote the atlas and entry metadata separately and can finish an
+interrupted write that contains only the expected cache artifacts; unexpected
+files stop recovery rather than being deleted or overwritten.
+
+## Rollout evidence
+
+`scripts/verify/remilia-pet-import.mjs` exercises all four Maker families and
+injects undeclared expansion, edge clipping, adjacent-motion discontinuity, and
+loop-closure faults. Each fault must be rejected with frame/template/threshold
+evidence before the verifier accepts the rollout. It also covers exact reuse,
+invalid completed-row recovery, cache provenance/path invalidation, incomplete
+semantic-review rejection, and interrupted cache-write recovery. The sanitized
+real-path result in `docs/evidence/custom-pet-mvp/milady-integrated-run.json`
+adds a 74-frame Milady-family atlas that passes deterministic QA before its
+separately recorded semantic review. Together the fault injections and real
+atlas show that objective retry/motion defects are caught without replacing
+visual judgment.

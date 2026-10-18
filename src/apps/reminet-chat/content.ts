@@ -1,3 +1,12 @@
+import { clampVolume, normalizeThemeMode, normalizePokePlacement, formatTime, mediaId, formatBody, numberOrUndefined, numberOrNull, stringOrUndefined, stringOrNull, objectValue, asRecord, escapeHtml, compactText } from "./chat-value-format";
+import { playTone, playPokeTone } from "./chat-sound-synthesis";
+import { renderChatReconnectState } from "./chat-connection-view";
+import { AudioCueVolumes } from "../../lib/audio-cue-volumes";
+const cueVolumes = new AudioCueVolumes(["chatSend", "chatReact", "chatReactToMe", "chatMessage", "chatPoke"]);
+import { readPokeCooldownMs, formatPokeCooldown } from "../remistats/poke-cooldown-time";
+import { chatRootMarkup, CHAT_MEDIA_UNAVAILABLE } from "./chat-root-markup";
+import { renderLoadOlderButton } from "./chat-markup";
+import { CHAT_JUMP_CONTROLS, installChatJumpControl, syncChatJumpControl } from "./jump-control";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
 import {
@@ -11,8 +20,49 @@ import {
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyRouteChange } from "../../platform/app-sdk/app-platform";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
+import { sanitizeReminetChatDiagnostic } from "../../platform/runtime/reminet-chat-diagnostics";
 import { absoluteRemiliaMediaUrl, isRemiliaMediaUrl } from "../../platform/media/remilia-media-allowlist";
 import { canMountRemiNetChatRoute } from "./route-policy";
+import {
+  CHAT_REST_MESSAGE_LIMIT_BYTES,
+  ChatRestController,
+  chatRestUtf8Bytes,
+  type ChatRestCapabilityInvoker,
+  type ChatRestFailureKind,
+  type ChatRestReconciliationReason,
+} from "./chat-rest";
+import type { RemiliaApiChatMessage, RemiliaApiChatPage, RemiliaApiError, RemiliaApiResult } from "../../platform/auth/remilia-api";
+import {
+  SHOCKED_REACTION,
+  legacyMessageId,
+  messageIdOrNull,
+  normalizeChatMessage,
+  normalizeMedia,
+  normalizeReactionEmoji,
+  officialChatMessageRecord,
+  officialIdentityToApiUser,
+  type ApiMessage,
+  type ApiUser,
+  type MediaAttachment,
+  type MessageId,
+  type Reaction,
+  type ReplyReference,
+} from "./chat-model";
+import {
+  LEGACY_CHAT_ID,
+  LEGACY_SOCKET_IDLE_TIMEOUT_MS,
+  parseLegacyMediaUploadOutcome,
+  parseLegacySocketBridgeEvent,
+  type LegacySocketMutation,
+} from "./legacy-adapters";
+import {
+  legacyMediaAttachment,
+  legacyMediaFailureMessage,
+  legacyMediaSubmitMutation,
+  legacyReplyId,
+} from "./legacy-content-adapter";
+import { LegacyMutationDispatcher } from "./legacy-mutation-dispatcher";
+import { avatarUrl, cleanUsername, connectedXHandle, displayName, findDeepXHandle, remiliaHandle, remiliaUserColor } from "./chat-user-formatting";
 
 const ROOT_ID = "milxdy-reminet-chat-root";
 const PSEUDO_ROW_ID = "milxdy-reminet-chat-pseudo-row";
@@ -31,34 +81,33 @@ const WIDTH_KEY = "milxdy.reminetChat.width";
 const HEIGHT_KEY = "milxdy.reminetChat.height";
 const TOP_KEY = "milxdy.reminetChat.top";
 const MAX_MESSAGES = 1200;
-const HISTORY_PAGE_SIZE = 30;
 const PROFILE_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const LEFT_RAIL_BOTTOM_CLEARANCE_PX = 24;
 const LEFT_RAIL_MIN_HEIGHT_PX = 260;
-const SOCKET_STALE_TIMEOUT_MS = 70_000;
 const SOCKET_RECOVERY_MIN_GAP_MS = 5_000;
-const RECENT_REFRESH_LIMIT = 20;
-const SHOCKED_REACTION = "\u{1f62e}";
+const POKE_PLACEMENT_KEY = "milxdy.reminetChat.pokePlacement";
+let extensionAuthPhase = "checking";
+let pokePlacement: "reactions" | "name" | "both" = "reactions";
+
+
 const REACTIONS = [SHOCKED_REACTION, "\u{1f525}", "\u{1f639}", "\u{1f90d}", "\u{1f44d}"];
-const REACTION_ALIASES = new Map([
-  ["\u{1f62e}", SHOCKED_REACTION],
-  ["\u{1f632}", SHOCKED_REACTION],
-  ["\u{1f631}", SHOCKED_REACTION],
-  ["\u{1f633}", SHOCKED_REACTION],
-]);
 const IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 const POKE_ICON = "\u{1faf5}";
-const DEFAULT_POKE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 const REMINET_CHAT_ICON = chrome.runtime.getURL("remistats/star.svg");
 const mediaDataUrlCache = new Map<string, string>();
 const mediaDataUrlPending = new Set<string>();
 const xHandleByRemiliaHandle = new Map<string, string>();
 const profileLookupPending = new Set<string>();
 const profileLookupDone = new Set<string>();
+const pokeFeedback = new Map<string, { state: "loading" | "success" | "error"; label: string; celebrateUntil?: number }>();
+const reactionFeedback = new Map<string, "pending" | "error">();
 const pokeCooldowns = new Map<string, number>();
+const pokeCooldownSources = new Map<string, string>();
+const pokeEligibilityChecked = new Set<string>();
 const pokeCountdownTimers = new Map<HTMLElement, () => void>();
 const pokeButtonsByUsername = new Map<string, Set<HTMLElement>>();
+const currentUserReactionStates = new Map<string, boolean>();
 const hiddenNativeDmElements = new Set<HTMLElement>();
 const ROUTE_MOUNT_RETRY_DELAYS_MS = [120, 300, 700, 1500, 3000] as const;
 let audioContext: AudioContext | null = null;
@@ -70,98 +119,14 @@ let cancelSendResetTimer: (() => void) | null = null;
 let cancelMountRetryTimer: (() => void) | null = null;
 const unavailableRuntimeSendMessage: MilxdyContentAppContext["sendMessage"] = () => Promise.resolve(null);
 let runtimeSendMessage: MilxdyContentAppContext["sendMessage"] = unavailableRuntimeSendMessage;
+let invokeRemiliaCapability: ChatRestCapabilityInvoker | null = null;
 let recordDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({ idleTimeoutMs: 16 });
+let chatRestController: ChatRestController | null = null;
+const legacyMutationDispatcher = new LegacyMutationDispatcher();
 
 type RuntimeRecord = Record<string, unknown>;
-
-type ApiUser = {
-  id?: number;
-  userId?: number;
-  user_id?: number;
-  handle?: string;
-  userHandle?: string;
-  user_handle?: string;
-  username?: string;
-  twitterHandle?: string;
-  twitter_handle?: string;
-  twitterUsername?: string;
-  twitter_username?: string;
-  twitterUrl?: string;
-  twitter_url?: string;
-  xHandle?: string;
-  x_handle?: string;
-  xUsername?: string;
-  x_username?: string;
-  xUrl?: string;
-  x_url?: string;
-  displayName?: string;
-  display_name?: string;
-  name?: string;
-  profilePicUrl?: string;
-  profile_pic_url?: string;
-  pfpUrl?: string;
-  pfp_url?: string;
-  color?: number | string;
-  theme?: string;
-  connections?: unknown[];
-};
-
-type MediaAttachment = {
-  mediaId?: number | null;
-  media_id?: number | null;
-  url?: string | null;
-  width?: number | null;
-  height?: number | null;
-  mimeType?: string | null;
-  mime_type?: string | null;
-  thumbnailUrl?: string | null;
-  thumbnail_url?: string | null;
-};
-
-type Reaction = {
-  userId?: number;
-  user_id?: number;
-  user?: ApiUser | null;
-  username?: string;
-  handle?: string;
-  name?: string;
-  emoji?: string;
-};
-
-type ReplyReference = {
-  id: number;
-  authorId?: number;
-  author_id?: number;
-  body?: string;
-};
-
-type ApiMessage = {
-  id: number;
-  chatId?: number;
-  chat_id?: number;
-  authorId?: number;
-  author_id?: number;
-  userId?: number;
-  user_id?: number;
-  body?: string;
-  createdAt?: number;
-  created_at?: number;
-  isDeleted?: boolean;
-  is_deleted?: boolean;
-  images?: MediaAttachment[] | null;
-  video?: MediaAttachment | null;
-  reactions?: Reaction[] | null;
-  replyToMessageId?: number | null;
-  reply_to_message_id?: number | null;
-  inReplyToId?: number;
-  in_reply_to_id?: number;
-  replyTo?: ReplyReference | null;
-  reply_to?: ReplyReference | null;
-  inReplyTo?: ReplyReference | null;
-  in_reply_to?: ReplyReference | null;
-};
 
 type PendingAttachment = {
   id: string;
@@ -169,10 +134,11 @@ type PendingAttachment = {
   mimeType: string;
   dataUrl: string;
   status: "ready" | "uploading" | "error";
+  uploadedMedia?: MediaAttachment;
 };
 
 type MessageGroup = {
-  authorId: number;
+  authorKey: string;
   messages: ApiMessage[];
 };
 
@@ -196,6 +162,7 @@ type ChatState = {
   loadingOlder: boolean;
   hasMoreOlder: boolean;
   showOlderButton: boolean;
+  olderCursor: string | null;
   sending: boolean;
   signedIn: boolean;
   enabled: boolean;
@@ -221,7 +188,7 @@ type ChatState = {
   appFrame: OverlayAppFrame | null;
   layoutReady: boolean;
   hostImageViewerOpen: boolean;
-  activeMessageActionId: number | null;
+  activeMessageActionId: MessageId | null;
 };
 
 const state: ChatState = {
@@ -244,6 +211,7 @@ const state: ChatState = {
   loadingOlder: false,
   hasMoreOlder: true,
   showOlderButton: false,
+  olderCursor: null,
   sending: false,
   signedIn: false,
   enabled: true,
@@ -280,13 +248,18 @@ export function boot(context?: MilxdyContentAppContext): void {
   lifecycleSignal = context?.signal || null;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   runtimeSendMessage = context?.sendMessage || unavailableRuntimeSendMessage;
+  invokeRemiliaCapability = context?.invokeRemiliaCapability
+    ? (operation, params) => context.invokeRemiliaCapability!(operation, params)
+    : null;
   recordDiagnostic = context?.recordDiagnostic || recordDiagnostic;
+  chatRestController = createChatRestController();
   ensureOverlayAppChromeStyles();
   registerDockItem();
   ensureRoot();
   scheduleMountRetry();
   void loadLayoutSettings();
   void loadTheme();
+  if (context) void cueVolumes.start(addRuntimeDisposable, context.storage.local);
   void loadSoundSettings();
   addRuntimeDisposable(observeOverlayPanelTheme(applyTheme));
   observeLayoutSignals();
@@ -303,6 +276,7 @@ export function onRouteChange(_route: MilxdyRouteChange): void {
   ensureRoot();
   scheduleMountRetry();
   void refreshAuthAndHistory();
+  updateOfficialPolling();
 }
 
 export function open(): void {
@@ -314,6 +288,7 @@ export function open(): void {
   scheduleMountRetry();
   render();
   void refreshAuthAndHistory();
+  updateOfficialPolling();
 }
 
 export async function stageLocalAttachment(file: File): Promise<{ ok: boolean; error?: string }> {
@@ -354,15 +329,74 @@ export function disable(): void {
 
 export function dispose(): void {
   disable();
+  legacyMutationDispatcher.rejectAll();
+  chatRestController?.dispose();
+  chatRestController = null;
   state.appFrame?.remove();
   state.appFrame = null;
   addRuntimeDisposable = () => undefined;
+  invokeRemiliaCapability = null;
   lifecycleSignal = null;
   booted = false;
 }
 
 function lifecycleActive(): boolean {
   return booted && state.enabled && lifecycleSignal?.aborted !== true;
+}
+
+function createChatRestController(): ChatRestController {
+  return new ChatRestController({
+    invokeCapability: (operation, params) => invokeRemiliaCapability?.(operation, params)
+      ?? Promise.resolve({
+        ok: false,
+        error: {
+          category: "broker",
+          code: "client_unavailable",
+          message: "The Remilia capability service is unavailable.",
+          status: 0,
+        },
+      }),
+    scheduler: runtimeScheduler,
+    onPage: ({ page, reason }) => {
+      if (!lifecycleActive()) return;
+      ingestOfficialChatPage(page);
+      state.signedIn = true;
+      if (reason === "initial" || reason === "manual") {
+        state.olderCursor = page.next_cursor;
+        state.hasMoreOlder = page.has_more;
+        state.showOlderButton = page.has_more;
+      } else if (reason === "older") {
+        state.olderCursor = page.next_cursor;
+        state.hasMoreOlder = page.has_more;
+        state.showOlderButton = page.has_more;
+      } else if (reason === "post" && page.messages[0]) {
+        state.currentUser = officialIdentityToApiUser(page.messages[0].author);
+      }
+      sortAndTrimMessages(reason === "older" ? "oldest" : "newest");
+      state.recoveryVisibleState = "none";
+      state.recoveryMessage = "";
+      clearSuccessfulChatReadError();
+      renderStatus("Live");
+      render();
+    },
+    onFailure: handleOfficialChatFailure,
+    recordDiagnostic: (key, value) => recordChatDiagnostic(key, value),
+  });
+}
+
+export function requestOfficialChatReconciliation(reason: ChatRestReconciliationReason): Promise<RemiliaApiResult<RemiliaApiChatPage> | null> {
+  return chatRestController?.requestReconciliation(reason) ?? Promise.resolve(null);
+}
+
+function updateOfficialPolling(): void {
+  chatRestController?.setPollingActive(Boolean(
+    lifecycleActive()
+      && state.enabled
+      && state.signedIn
+      && !state.minimized
+      && !document.hidden
+      && isChatRoute(),
+  ));
 }
 
 function registerDockItem(): void {
@@ -405,11 +439,18 @@ function observeLayoutSignals(): void {
   window.addEventListener("resize", scheduleLayout, { passive: true });
   addRuntimeDisposable(() => window.removeEventListener("resize", scheduleLayout));
   const visibilityListener = () => {
-    if (document.hidden) closeSocket();
+    if (document.hidden) {
+      closeSocket();
+      updateOfficialPolling();
+    }
     else if (lifecycleActive()) {
       ensureRoot();
       scheduleMountRetry();
-      if (state.signedIn && isChatRoute()) void recoverChatConnection("visibility-resume", { visible: false, force: true });
+      updateOfficialPolling();
+      if (state.signedIn && isChatRoute()) {
+        void requestOfficialChatReconciliation("visibility-resume");
+        connectSocket();
+      }
     }
   };
   document.addEventListener("visibilitychange", visibilityListener);
@@ -433,7 +474,15 @@ function observeEnablement(): void {
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area === "sync") {
       applySoundSettingChanges(changes);
+      if (changes[POKE_PLACEMENT_KEY]) {
+        pokePlacement = normalizePokePlacement(changes[POKE_PLACEMENT_KEY].newValue);
+        render();
+      }
       return;
+    }
+    if ((area === "local" && changes["milxdy.remiliaAuth.control.v1"])
+      || (area === "session" && changes["milxdy.remiliaAuth.credentials.v1"])) {
+      void refreshAuthAndHistory(true);
     }
     if (area !== "local") return;
     if (changes[SETTINGS_THEME_KEY]) {
@@ -464,11 +513,21 @@ function destroy(): void {
   for (const cancelTimer of pokeCountdownTimers.values()) cancelTimer();
   pokeCountdownTimers.clear();
   pokeButtonsByUsername.clear();
+  pokeCooldowns.clear();
+  pokeFeedback.clear();
+  reactionFeedback.clear();
+  pokeCooldownSources.clear();
+  pokeEligibilityChecked.clear();
+  currentUserReactionStates.clear();
   removePseudoChatRow();
   restoreNativeDmPane();
   state.messages = [];
+  state.olderCursor = null;
+  state.hasMoreOlder = true;
+  state.showOlderButton = false;
   state.users.clear();
   state.pendingAttachments = [];
+  updateOfficialPolling();
   state.composerError = "";
   state.replyTo = null;
   state.signedIn = false;
@@ -581,7 +640,7 @@ function ensureRoot(): void {
   root.classList.add("milxdy-overlay-app-shell");
   root.querySelector(".milxdy-chat-card")?.classList.add("milxdy-overlay-app-card");
   root.querySelector(".milxdy-chat-header")?.classList.add("milxdy-overlay-app-header");
-  const mount = isMessagesRoute() ? "messages" : "rail";
+  const mount = isMessagesRoute() && mountTarget !== document.body ? "messages" : "rail";
   const changed = !existing || root.parentElement !== mountTarget || root.dataset.mount !== mount;
   if (root.parentElement !== mountTarget) {
     mountTarget.appendChild(root);
@@ -599,7 +658,12 @@ function ensureRoot(): void {
 }
 
 function findMountTarget(): HTMLElement | null {
-  if (isMessagesRoute()) return findDmConversationPane();
+  if (isMessagesRoute()) {
+    const pane = findDmConversationPane();
+    // A dock click must still open Chat when X's embedded or narrow DM layout
+    // does not expose a conversation pane we can safely replace.
+    return pane || (state.explicitlyOpened ? document.body : null);
+  }
   return document.body;
 }
 
@@ -610,7 +674,8 @@ function findRightRail(): HTMLElement | null {
 }
 
 function findDmContainer(): HTMLElement | null {
-  return document.querySelector<HTMLElement>('[data-testid="dm-container"]')
+  return document.querySelector<HTMLElement>('[data-testid="dm-main-container"]')
+    || document.querySelector<HTMLElement>('[data-testid="dm-container"]')
     || document.querySelector<HTMLElement>('[aria-label="Timeline: Messages"]')
     || document.querySelector<HTMLElement>('main[role="main"]');
 }
@@ -618,6 +683,10 @@ function findDmContainer(): HTMLElement | null {
 function findDmListMount(): HTMLElement | null {
   const container = findDmContainer();
   if (!container) return null;
+  const modernConversationList = container.querySelector<HTMLElement>('[data-testid="x-chat-conversation-list"]');
+  if (modernConversationList) {
+    return modernConversationList.querySelector<HTMLElement>('[role="list"]') || modernConversationList;
+  }
   const conversationRow = findFirstDmConversationRow();
   if (conversationRow?.parentElement && container.contains(conversationRow.parentElement)) return conversationRow.parentElement;
   const existing = document.getElementById(PSEUDO_ROW_ID);
@@ -932,42 +1001,14 @@ function createRoot(): HTMLElement {
   root.id = ROOT_ID;
   root.className = "milxdy-overlay-app-shell";
   prepareOverlayAppRoot(root);
-  root.innerHTML = `
-    <div class="milxdy-chat-card milxdy-overlay-app-card">
-      <header class="milxdy-chat-header milxdy-overlay-app-header">
-        <div>
-          <strong>RemiliaNET Chat</strong>
-          <span data-role="status">Connecting...</span>
-        </div>
-        <div class="milxdy-chat-header-actions">
-          <button type="button" data-role="refresh" title="Refresh chat">Refresh</button>
-          <button type="button" data-role="minimize" title="Minimize chat" aria-label="Minimize chat">-</button>
-        </div>
-      </header>
-      <div class="milxdy-chat-surface-notice">RemiNet Global Chat</div>
-      <div class="milxdy-chat-load-older" data-role="load-older" hidden></div>
-      <div class="milxdy-chat-messages" data-role="messages"></div>
-      <div class="milxdy-chat-attachment-preview" data-role="attachments" hidden></div>
-      <div class="milxdy-chat-error" data-role="error" hidden></div>
-      <div class="milxdy-chat-reply-preview" data-role="reply" hidden></div>
-      <form class="milxdy-chat-composer" data-role="form">
-        <input data-role="file" type="file" accept="image/*,video/mp4,video/webm,video/quicktime" hidden>
-        <button data-role="attach" data-chat-action="attach" type="button" title="Attach media">+</button>
-        <input data-role="input" type="text" maxlength="500" autocomplete="off" placeholder="Say something">
-        <button data-role="send" type="submit">Send</button>
-      </form>
-      <div class="milxdy-chat-resize-grip" data-role="resize" data-resize-axis="y" title="Drag to resize chat height"></div>
-      <div class="milxdy-chat-resize-corner milxdy-chat-resize-corner-left" data-role="resize" data-resize-axis="both" data-resize-side="left" title="Drag to resize chat"></div>
-      <div class="milxdy-chat-resize-corner milxdy-chat-resize-corner-right" data-role="resize" data-resize-axis="both" data-resize-side="right" title="Drag to resize chat"></div>
-      <div class="milxdy-chat-resize-edge milxdy-chat-resize-edge-side" data-role="resize" data-resize-axis="x" title="Drag to resize chat width"></div>
-    </div>
-  `;
+  root.innerHTML = chatRootMarkup(CHAT_JUMP_CONTROLS);
   root.querySelector<HTMLButtonElement>('[data-role="refresh"]')?.addEventListener("click", () => {
     void refreshAuthAndHistory(true);
   });
   root.querySelector<HTMLButtonElement>('[data-role="minimize"]')?.addEventListener("click", () => {
     closeChatPanel();
   });
+  root.querySelector<HTMLButtonElement>('[data-role="close"]')?.addEventListener("click", closeChatPanel);
   for (const handle of Array.from(root.querySelectorAll<HTMLElement>('[data-role="resize"]'))) {
     handle.addEventListener("pointerdown", startResize);
   }
@@ -986,98 +1027,133 @@ function createRoot(): HTMLElement {
     const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
     if (!files.length) return;
     event.preventDefault();
-    void addPendingFiles(files);
+    state.composerError = CHAT_MEDIA_UNAVAILABLE;
+    render();
   });
-  root.addEventListener("click", (event) => {
-    const target = event.target instanceof Element ? event.target : null;
-    const action = target?.closest<HTMLElement>("[data-chat-action]");
-    if (!action) return;
-    event.preventDefault();
-    const kind = action.dataset.chatAction;
-    if (kind === "attach") root.querySelector<HTMLInputElement>('[data-role="file"]')?.click();
-    if (kind === "remove-attachment") removePendingAttachment(action.dataset.attachmentId || "");
-    if (kind === "react") {
-      const messageId = Number(action.dataset.messageId);
-      state.activeMessageActionId = Number.isFinite(messageId) ? messageId : null;
-      reactToMessage(messageId, action.dataset.emoji || "");
-    }
-    if (kind === "reply") setReplyTo(Number(action.dataset.messageId));
-    if (kind === "cancel-reply") clearReplyTo();
-    if (kind === "poke") void pokeUser(action.dataset.username || "");
-    if (kind === "load-older") void loadOlderMessages();
-    if (kind === "retry-session") void recoverChatConnection("manual-retry", { visible: true, force: true });
-  });
+  root.addEventListener("click", handleChatActionClick);
+  root.addEventListener("pointerout", handleChatMessagePointerOut);
+  installChatJumpControl(root);
   return root;
+}
+
+function handleChatMessagePointerOut(event: PointerEvent): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const message = target?.closest<HTMLElement>(".milxdy-chat-message");
+  if (!message) return;
+  const nextTarget = event.relatedTarget;
+  if (nextTarget instanceof Node && message.contains(nextTarget)) return;
+
+  const messageId = messageIdOrNull(message.dataset.messageId);
+  if (messageId !== null && state.activeMessageActionId === messageId) {
+    state.activeMessageActionId = null;
+  }
+  const actions = message.querySelector<HTMLElement>(".milxdy-chat-message-actions");
+  if (actions) actions.dataset.open = "false";
+  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  if (focused && message.contains(focused)) focused.blur();
+}
+
+function handleChatActionClick(event: MouseEvent): void {
+  const root = event.currentTarget instanceof HTMLElement ? event.currentTarget : null;
+  const target = event.target instanceof Element ? event.target : null;
+  const action = target?.closest<HTMLElement>("[data-chat-action]");
+  if (!root || !action) return;
+  event.preventDefault();
+  const kind = action.dataset.chatAction;
+  if (kind === "attach") { state.composerError = CHAT_MEDIA_UNAVAILABLE; render(); }
+  if (kind === "remove-attachment") removePendingAttachment(action.dataset.attachmentId || "");
+  if (kind === "react") {
+    const messageId = messageIdOrNull(action.dataset.messageId);
+    state.activeMessageActionId = messageId;
+    if (messageId) reactToMessage(messageId, action.dataset.emoji || "", action);
+  }
+  if (kind === "reply") {
+    const messageId = messageIdOrNull(action.dataset.messageId);
+    if (messageId) setReplyTo(messageId);
+  }
+  if (kind === "cancel-reply") clearReplyTo();
+  if (kind === "poke") void pokeUser(action.dataset.username || "");
+  if (kind === "load-older") void loadOlderMessages();
+  if (kind === "retry-connection") void refreshAuthAndHistory(true);
+  if (kind === "login") {
+    void runtimeSendMessage({ type: "reminetChat:openLogin" }, "reminetChat:openLogin")
+      .then(asRecord).then((result) => {
+        if (!lifecycleActive()) return;
+        renderStatus(result.ok ? "Use the RemiliaNET login button in milXdy." : "Could not open login. Open the milXdy extension popup.");
+      }).catch(() => renderStatus("Could not open login. Open the milXdy extension popup."));
+  }
 }
 
 async function refreshAuthAndHistory(force = false): Promise<void> {
   if (!lifecycleActive()) return;
   if (state.minimized) return;
   if (!state.enabled || !isChatRoute() || state.loading && !force) return;
+  const controller = chatRestController;
+  if (!controller) return;
   state.loading = true;
   state.recoveryVisibleState = "none";
   state.recoveryMessage = "";
   if (force) {
     state.hasMoreOlder = true;
     state.showOlderButton = false;
+    state.olderCursor = null;
   }
-  renderStatus("Checking RemiNet session...");
-  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:authStatus").then(asRecord).catch(() => null);
+  renderStatus("Checking RemiliaNET connection...");
+  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:authStatus")
+    .then(asRecord).catch(() => asRecord({}));
   if (!lifecycleActive()) return;
-  state.signedIn = Boolean(auth?.signedIn);
-  state.currentUser = state.signedIn ? normalizeCurrentUser(auth?.user) : null;
-  if (!state.signedIn) {
+  extensionAuthPhase = auth.ok && typeof auth.phase === "string" ? auth.phase : "unknown";
+  if (auth.ok && auth.signedIn === false) {
+    state.signedIn = false;
     state.loading = false;
+    state.composerError = "";
     closeSocket();
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
+    updateOfficialPolling();
+    renderStatus(extensionAuthPhase === "disconnected" ? "Log in to use Chat."
+      : extensionAuthPhase === "connecting" ? "RemiliaNET login in progress…"
+      : extensionAuthPhase === "expired" ? "RemiliaNET connection expired."
+      : extensionAuthPhase === "missing-scope" ? "Chat access required."
+      : "RemiliaNET connection required.");
     render();
     return;
   }
-
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE }, "reminetChat:getHistory")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  renderStatus("Loading official chat...");
+  const history = force
+    ? await controller.requestReconciliation("manual")
+    : await controller.loadInitial();
   if (!lifecycleActive()) return;
-  if (history.ok) {
-    ingestApiPayload(history.data);
-    sortAndTrimMessages();
-    state.hasMoreOlder = state.messages.some((message) => message.id > 0);
-    renderStatus("Live");
+  if (history?.ok) {
+    state.signedIn = true;
     connectSocket();
-  } else {
-    if (history.authRequired) setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    else renderStatus("Could not load chat.");
+  } else if (!state.signedIn) {
+    closeSocket();
   }
   state.loading = false;
+  updateOfficialPolling();
   render();
 }
 
 async function loadOlderMessages(): Promise<void> {
   if (!lifecycleActive()) return;
-  if (!state.signedIn || state.loadingOlder || state.messages.length === 0) return;
-  const before = oldestMessageId();
-  if (!before) return;
+  const controller = chatRestController;
+  const before = state.olderCursor;
+  if (!controller || !state.signedIn || state.loadingOlder || !before) return;
   const scroller = state.root?.querySelector<HTMLElement>('[data-role="messages"]') || null;
   const previousHeight = scroller?.scrollHeight || 0;
   const previousTop = scroller?.scrollTop || 0;
   const previousIds = new Set(state.messages.map((message) => message.id));
   state.loadingOlder = true;
   render();
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: HISTORY_PAGE_SIZE, before }, "reminetChat:getHistoryOlder")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  const history = await controller.loadOlder(before);
   if (!lifecycleActive()) return;
   if (history.ok) {
-    const historyCount = countPayloadMessages(history.data);
-    ingestApiPayload(history.data);
-    sortAndTrimMessages("oldest");
     const addedMessages = state.messages.some((message) => !previousIds.has(message.id));
-    state.hasMoreOlder = addedMessages;
+    state.hasMoreOlder = history.data.has_more && Boolean(history.data.next_cursor) && addedMessages;
     state.showOlderButton = state.hasMoreOlder;
   } else {
     state.hasMoreOlder = false;
     state.showOlderButton = false;
-    renderStatus(history.authRequired ? "Sign in to RemiliaNET." : "Could not load older chat.");
+    renderStatus("Could not load older chat.");
   }
   state.loadingOlder = false;
   render();
@@ -1088,6 +1164,57 @@ async function loadOlderMessages(): Promise<void> {
     const delta = nextScroller.scrollHeight - previousHeight;
     nextScroller.scrollTop = Math.max(0, previousTop + delta);
   });
+}
+
+function ingestOfficialChatPage(page: RemiliaApiChatPage): void {
+  for (const message of page.messages) ingestOfficialChatMessage(message);
+}
+
+function ingestOfficialChatMessage(message: RemiliaApiChatMessage): void {
+  const normalized = normalizeChatMessage(message.id, officialChatMessageRecord(message));
+  if (normalized) upsertMessage(normalized);
+}
+
+function handleOfficialChatFailure(error: RemiliaApiError, kind: ChatRestFailureKind): void {
+  if (!lifecycleActive()) return;
+  if (kind === "auth-expired" || kind === "missing-scope") {
+    state.signedIn = false;
+    updateOfficialPolling();
+  }
+  if (kind === "auth-expired") {
+    extensionAuthPhase = "expired";
+    setRecoveryVisibleState("auth-required", "Log in");
+    state.composerError = "Your RemiliaNET connection has expired. Log in again.";
+  } else if (kind === "missing-scope") {
+    extensionAuthPhase = "missing-scope";
+    setRecoveryVisibleState("auth-required", "Reconnect");
+    state.composerError = "Reconnect RemiliaNET with Chat access.";
+  } else if (kind === "rate-limited") {
+    renderStatus("Chat is rate limited.");
+    state.composerError = "Wait before trying Chat again.";
+  } else if (kind === "offline") {
+    renderStatus("Chat offline — retrying");
+    state.composerError = "Remilia Chat is offline. Nothing was sent.";
+  } else if (kind !== "cancelled") {
+    renderStatus("Could not refresh chat.");
+    state.composerError = "Remilia Chat could not complete the request.";
+  }
+  recordChatDiagnostic("official-rest.failure", {
+    kind,
+    category: error.category,
+    code: error.code,
+    status: error.status,
+  });
+  render();
+}
+
+function clearSuccessfulChatReadError(): void {
+  if (
+    state.composerError === "Reconnect Remilia from the milXdy popup, then recheck Chat."
+    || state.composerError === "Reconnect Remilia with Chat access from the milXdy popup, then recheck Chat."
+  ) {
+    state.composerError = "";
+  }
 }
 
 function ingestApiPayload(payload: unknown): void {
@@ -1124,7 +1251,7 @@ function ingestMessages(value: unknown): void {
   for (const [id, message] of entries) {
     if (!message || typeof message !== "object") continue;
     ingestMessageUser(message as RuntimeRecord);
-    const next = normalizeMessage(Number(id), message as RuntimeRecord);
+    const next = normalizeChatMessage(id, message as RuntimeRecord);
     if (next) upsertMessage(next);
   }
 }
@@ -1139,99 +1266,6 @@ function ingestMessageUser(message: RuntimeRecord): void {
   queueProfileLookup(authorId, record);
 }
 
-function normalizeMessage(id: number, value: RuntimeRecord): ApiMessage | null {
-  const messageId = Number(value.id ?? id);
-  if (!Number.isFinite(messageId)) return null;
-  return {
-    id: messageId,
-    chatId: numberOrUndefined(value.chatId ?? value.chat_id),
-    chat_id: numberOrUndefined(value.chat_id ?? value.chatId),
-    authorId: numberOrUndefined(value.authorId ?? value.author_id ?? value.userId ?? value.user_id),
-    author_id: numberOrUndefined(value.author_id ?? value.authorId ?? value.user_id ?? value.userId),
-    userId: numberOrUndefined(value.userId ?? value.user_id ?? value.authorId ?? value.author_id),
-    user_id: numberOrUndefined(value.user_id ?? value.userId ?? value.author_id ?? value.authorId),
-    body: typeof value.body === "string" ? value.body : "",
-    createdAt: numberOrUndefined(value.createdAt ?? value.created_at),
-    created_at: numberOrUndefined(value.created_at ?? value.createdAt),
-    isDeleted: Boolean(value.isDeleted ?? value.is_deleted),
-    is_deleted: Boolean(value.is_deleted ?? value.isDeleted),
-    images: normalizeImages(value.images),
-    video: normalizeMedia(value.video),
-    reactions: normalizeReactions(value.reactions),
-    replyToMessageId: numberOrNull(value.replyToMessageId ?? value.reply_to_message_id ?? value.inReplyToId ?? value.in_reply_to_id),
-    reply_to_message_id: numberOrNull(value.reply_to_message_id ?? value.replyToMessageId ?? value.in_reply_to_id ?? value.inReplyToId),
-    inReplyToId: numberOrUndefined(value.inReplyToId ?? value.in_reply_to_id ?? value.replyToMessageId ?? value.reply_to_message_id),
-    in_reply_to_id: numberOrUndefined(value.in_reply_to_id ?? value.inReplyToId ?? value.reply_to_message_id ?? value.replyToMessageId),
-    replyTo: normalizeReplyReference(value.replyTo ?? value.replyToMessage ?? value.parentMessage),
-    reply_to: normalizeReplyReference(value.reply_to ?? value.reply_to_message ?? value.parent_message),
-    inReplyTo: normalizeReplyReference(value.inReplyTo ?? value.inReplyToMessage),
-    in_reply_to: normalizeReplyReference(value.in_reply_to ?? value.in_reply_to_message),
-  };
-}
-
-function normalizeImages(value: unknown): MediaAttachment[] | null {
-  if (!Array.isArray(value)) return null;
-  return value.map(normalizeMedia).filter((item): item is MediaAttachment => Boolean(item));
-}
-
-function normalizeMedia(value: unknown): MediaAttachment | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  return {
-    mediaId: numberOrNull(record.mediaId ?? record.media_id),
-    media_id: numberOrNull(record.media_id ?? record.mediaId),
-    url: stringOrNull(record.url ?? record.src ?? record.mediaUrl ?? record.media_url ?? record.videoUrl ?? record.video_url ?? record.sourceUrl ?? record.source_url),
-    width: numberOrNull(record.width),
-    height: numberOrNull(record.height),
-    mimeType: stringOrNull(record.mimeType ?? record.mime_type),
-    mime_type: stringOrNull(record.mime_type ?? record.mimeType),
-    thumbnailUrl: stringOrNull(record.thumbnailUrl ?? record.thumbnail_url ?? record.thumbUrl ?? record.thumb_url ?? record.posterUrl ?? record.poster_url),
-    thumbnail_url: stringOrNull(record.thumbnail_url ?? record.thumbnailUrl ?? record.thumb_url ?? record.thumbUrl ?? record.poster_url ?? record.posterUrl),
-  };
-}
-
-function normalizeReactions(value: unknown): Reaction[] | null {
-  if (!Array.isArray(value)) return null;
-  return value.map((item) => {
-    const record = objectValue(item);
-    const user = normalizeReactionUser(record.user ?? record.author ?? record.profile);
-    return {
-      userId: numberOrUndefined(record.userId ?? record.user_id),
-      user_id: numberOrUndefined(record.user_id ?? record.userId),
-      user,
-      username: stringOrUndefined(record.username ?? record.userName ?? record.user_name ?? record.handle),
-      handle: stringOrUndefined(record.handle ?? record.userHandle ?? record.user_handle),
-      name: stringOrUndefined(record.name ?? record.displayName ?? record.display_name),
-      emoji: normalizeReactionEmoji(stringOrUndefined(record.emoji ?? record.reaction)),
-    };
-  }).filter((item) => item.emoji);
-}
-
-function normalizeReactionEmoji(value: unknown): string {
-  if (typeof value !== "string") return "";
-  const normalized = value.trim().replace(/\ufe0f/g, "");
-  return REACTION_ALIASES.get(normalized) || normalized;
-}
-
-function normalizeReactionUser(value: unknown): ApiUser | null {
-  return value && typeof value === "object" ? value as ApiUser : null;
-}
-
-function normalizeReplyReference(value: unknown): ReplyReference | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  const id = numberOrUndefined(record.id ?? record.messageId ?? record.message_id);
-  const authorId = numberOrUndefined(record.authorId ?? record.author_id ?? record.userId ?? record.user_id);
-  const body = stringOrUndefined(record.body ?? record.text ?? record.message);
-  if (!id) return null;
-  return {
-    id,
-    authorId,
-    author_id: authorId,
-    body: body || "",
-  };
-}
-
 function upsertMessage(message: ApiMessage): void {
   if ((message.chatId ?? message.chat_id) !== CHAT_ID) return;
   const index = state.messages.findIndex((item) => item.id === message.id);
@@ -1242,7 +1276,7 @@ function upsertMessage(message: ApiMessage): void {
 function connectSocket(): void {
   if (!lifecycleActive() || document.hidden || state.socketState === "open" || state.socketState === "connecting") return;
   state.reconnectAttempts += 1;
-  recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts, route: location.pathname });
+  recordChatDiagnostic("socket.connect", { attempt: state.reconnectAttempts });
   if (!state.socketPort) {
     try {
       state.socketPort = chrome.runtime.connect({ name: SOCKET_PORT_NAME });
@@ -1254,6 +1288,7 @@ function connectSocket(): void {
     state.socketPort.onDisconnect.addListener(() => {
       state.socketPort = null;
       state.socketState = "closed";
+      legacyMutationDispatcher.rejectAll();
       clearSocketStaleTimer();
       void recoverChatConnection("port-disconnect", { visible: false });
     });
@@ -1268,6 +1303,7 @@ function closeSocket(): void {
   cancelReconnectTimer = null;
   state.reconnectTimer = null;
   clearSocketStaleTimer();
+  legacyMutationDispatcher.rejectAll();
   if (state.socketPort) {
     try {
       state.socketPort.postMessage({ type: "close" });
@@ -1301,13 +1337,13 @@ function markSocketActivity(reason: string): void {
 function scheduleSocketStaleTimer(): void {
   clearSocketStaleTimer();
   if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
-  const dueIn = Math.max(1_000, state.lastSocketActivityAt + SOCKET_STALE_TIMEOUT_MS - Date.now());
+  const dueIn = Math.max(1_000, state.lastSocketActivityAt + LEGACY_SOCKET_IDLE_TIMEOUT_MS - Date.now());
   cancelStaleTimer = runtimeScheduler.timeout(() => {
     cancelStaleTimer = null;
     state.staleTimer = null;
     if (!lifecycleActive() || document.hidden || state.socketState !== "open") return;
     const idleMs = Date.now() - state.lastSocketActivityAt;
-    if (idleMs >= SOCKET_STALE_TIMEOUT_MS) {
+    if (idleMs >= LEGACY_SOCKET_IDLE_TIMEOUT_MS) {
       void recoverChatConnection("socket-stale-timeout", { visible: false });
     } else {
       scheduleSocketStaleTimer();
@@ -1335,79 +1371,25 @@ async function recoverChatConnection(
   if (!options.force && now - state.lastRecoveryAt < SOCKET_RECOVERY_MIN_GAP_MS) return;
   state.lastRecoveryAt = now;
   state.recoveryInFlight = true;
-  if (options.visible) setRecoveryVisibleState("recovering", "Checking RemiNet session...");
+  if (options.visible) setRecoveryVisibleState("recovering", "Checking Remilia Chat authorization...");
   else renderStatus("Reconnecting...");
   recordChatDiagnostic("recovery.start", { reason, visible: Boolean(options.visible), socketState: state.socketState });
 
   closeSocket();
-  const auth = await runtimeSendMessage({ type: "reminetChat:authStatus" }, "reminetChat:recoveryAuthStatus")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
+  const history = await requestOfficialChatReconciliation(options.force ? "manual" : "realtime-gap");
   if (!lifecycleActive()) return;
-  const signedIn = Boolean(auth?.signedIn);
-  recordChatDiagnostic("recovery.auth", { reason, signedIn, ok: auth?.ok !== false, error: auth?.error });
-  state.signedIn = signedIn;
-  state.currentUser = signedIn ? normalizeCurrentUser(auth?.user) : null;
-  if (!signedIn) {
-    state.recoveryInFlight = false;
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required" });
-    render();
-    return;
-  }
-
-  const history = await runtimeSendMessage({ type: "reminetChat:getHistory", limit: RECENT_REFRESH_LIMIT }, "reminetChat:recoveryHistory")
-    .then(asRecord)
-    .catch((error) => asRecord({ ok: false, error: String(error) }));
-  if (!lifecycleActive()) return;
-  if (history.ok) {
-    ingestApiPayload(history.data);
-    sortAndTrimMessages();
+  if (history?.ok) {
+    state.signedIn = true;
     state.recoveryVisibleState = "none";
     state.recoveryMessage = "";
     connectSocket();
     renderStatus("Live");
     recordChatDiagnostic("recovery.finalState", { reason, state: "reconnected", messages: state.messages.length });
-  } else if (history.authRequired) {
-    state.signedIn = false;
-    setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "auth-required-history" });
-  } else {
-    setRecoveryVisibleState("failed", "Reconnect / Retry session");
-    recordChatDiagnostic("recovery.finalState", { reason, state: "failed", error: history.error, status: history.status });
+  } else if (history) {
+    recordChatDiagnostic("recovery.finalState", { reason, state: "failed" });
   }
   state.recoveryInFlight = false;
   render();
-}
-
-function handleSocketFrame(data: unknown): void {
-  if (typeof data !== "string") return;
-  let frame: RuntimeRecord;
-  try {
-    frame = JSON.parse(data);
-  } catch {
-    return;
-  }
-  const payload = frame.payload;
-  if (frame.type === "deliver" || frame.type === "message_edit" || frame.type === "reaction") {
-    const previousMessages = new Map(state.messages.map((message) => [message.id, message]));
-    ingestApiPayload(payload);
-    const messageId = payload && typeof payload === "object" ? Number((payload as RuntimeRecord).message_id) : NaN;
-    if (Number.isFinite(messageId)) removeOptimisticForServerEcho(messageId);
-    playSocketFrameSound(frame.type, payload, previousMessages);
-    sortAndTrimMessages();
-    render();
-  }
-  if (frame.type === "message_delete" && payload && typeof payload === "object") {
-    const id = Number((payload as RuntimeRecord).message_id);
-    const message = state.messages.find((item) => item.id === id);
-    if (message) message.isDeleted = true;
-    render();
-  }
-  if (frame.type === "error") {
-    const message = payload && typeof payload === "object" ? String((payload as RuntimeRecord).message || "") : "";
-    renderStatus(message || "Chat error.");
-  }
 }
 
 async function submitMessage(): Promise<void> {
@@ -1417,9 +1399,27 @@ async function submitMessage(): Promise<void> {
   if (!input || state.sending) return;
   const text = input.value.trim();
   if (!text && state.pendingAttachments.length === 0) return;
+  if (text && chatRestUtf8Bytes(text) > CHAT_REST_MESSAGE_LIMIT_BYTES) {
+    state.composerError = "Chat messages must be 8,192 UTF-8 bytes or fewer.";
+    render();
+    return;
+  }
+
+  if (state.pendingAttachments.length === 0) {
+    await submitOfficialTextMessage(input, text);
+    return;
+  }
+
   if (state.socketState !== "open") connectSocket();
   if (state.socketState !== "open") {
     renderStatus("Chat is reconnecting.");
+    return;
+  }
+  const replyToId = state.replyTo?.id;
+  const legacyReplyToId = legacyReplyId(replyToId);
+  if (replyToId && legacyReplyToId === null) {
+    state.composerError = "This legacy media adapter cannot reply to that message. Remove the reply or the attachment and try again.";
+    render();
     return;
   }
 
@@ -1434,43 +1434,50 @@ async function submitMessage(): Promise<void> {
     render();
     return;
   }
+  await submitUploadedLegacyMedia(input, text, replyToId, legacyReplyToId, uploaded);
+}
 
-  const optimisticId = -Date.now();
+async function submitUploadedLegacyMedia(
+  input: HTMLInputElement,
+  text: string,
+  replyToId: MessageId | undefined,
+  legacyReplyToId: number | null,
+  uploaded: { images: MediaAttachment[]; video: MediaAttachment | null },
+): Promise<void> {
+  const mutation = legacyMediaSubmitMutation(text, legacyReplyToId, [...uploaded.images, ...(uploaded.video ? [uploaded.video] : [])]);
+  if (!mutation) {
+    state.sending = false;
+    state.composerError = legacyMediaFailureMessage("LEGACY_CONFIRM_RESPONSE_INVALID");
+    render();
+    return;
+  }
+  const sent = await dispatchLegacyMutation(mutation);
+  if (!lifecycleActive()) return;
+  if (!sent.ok) {
+    state.sending = false;
+    state.pendingAttachments.forEach((attachment) => { attachment.status = "error"; });
+    state.composerError = legacyMediaFailureMessage(sent.error);
+    render();
+    return;
+  }
   upsertMessage({
-    id: optimisticId,
+    id: `local:${Date.now()}`,
     chatId: CHAT_ID,
     authorId: currentUserId(),
     body: text,
     createdAt: Date.now(),
     images: uploaded.images,
     video: uploaded.video,
-    inReplyToId: state.replyTo?.id,
-    in_reply_to_id: state.replyTo?.id,
+    inReplyToId: replyToId,
+    in_reply_to_id: replyToId,
     replyTo: state.replyTo,
   });
   sortAndTrimMessages();
-  render();
-  const mediaIds = [...uploaded.images.map(mediaId), mediaId(uploaded.video)].filter((id): id is number => typeof id === "number");
-  const inReplyToId = state.replyTo?.id;
-  const sent = sendSocketPayload({
-    type: "submit",
-    payload: {
-      chat_id: CHAT_ID,
-      text,
-      in_reply_to_id: Number.isFinite(inReplyToId) ? inReplyToId : undefined,
-      media_ids: mediaIds.length ? mediaIds : undefined,
-    },
-  });
-  if (!sent) {
-    state.sending = false;
-    renderStatus("Chat is reconnecting.");
-    render();
-    return;
-  }
   playChatSound("send");
   input.value = "";
   clearPendingAttachments();
   state.replyTo = null;
+  void requestOfficialChatReconciliation("post");
   cancelSendResetTimer?.();
   cancelSendResetTimer = runtimeScheduler.timeout(() => {
     cancelSendResetTimer = null;
@@ -1480,15 +1487,41 @@ async function submitMessage(): Promise<void> {
   }, 350);
 }
 
+async function submitOfficialTextMessage(input: HTMLInputElement, text: string): Promise<void> {
+  const controller = chatRestController;
+  if (!controller || !text) return;
+  state.sending = true;
+  state.composerError = "";
+  render();
+  const result = await controller.postMessage(text, state.replyTo?.id);
+  if (!lifecycleActive()) return;
+  state.sending = false;
+  if (!result.ok) {
+    state.composerError = result.error.message;
+    render();
+    return;
+  }
+  input.value = "";
+  state.replyTo = null;
+  state.composerError = "";
+  playChatSound("send");
+  render();
+}
+
 function handleSocketPortMessage(message: unknown): void {
-  const record = asRecord(message);
-  if (record.type === "socket:connecting") {
+  const event = parseLegacySocketBridgeEvent(message);
+  if (!event) {
+    void requestOfficialChatReconciliation("realtime-invalid");
+    return;
+  }
+  if (legacyMutationDispatcher.accept(event)) return;
+  if (event.type === "socket:connecting") {
     state.socketState = "connecting";
     renderStatus("Connecting...");
     markSocketActivity("connecting");
     return;
   }
-  if (record.type === "socket:open") {
+  if (event.type === "socket:open") {
     state.socketState = "open";
     state.reconnectAttempts = 0;
     state.recoveryVisibleState = "none";
@@ -1498,64 +1531,58 @@ function handleSocketPortMessage(message: unknown): void {
     render();
     return;
   }
-  if (record.type === "socket:heartbeat") {
-    if (record.ok === false) {
-      void recoverChatConnection(String(record.reason || "heartbeat-not-open"), { visible: false });
-      return;
-    }
+  if (event.type === "socket:heartbeat") {
     markSocketActivity("heartbeat");
     return;
   }
-  if (record.type === "socket:frame") {
-    markSocketActivity("frame");
-    handleSocketFrame(record.data);
+  if (event.type === "socket:hint") {
+    markSocketActivity("hint");
+    if (event.event === "error") {
+      renderStatus("Chat update unavailable.");
+      void requestOfficialChatReconciliation("realtime-invalid");
+    } else {
+      void requestOfficialChatReconciliation("realtime-hint");
+    }
     return;
   }
-  if (record.type === "socket:close") {
+  if (event.type === "socket:reconcile") {
+    void requestOfficialChatReconciliation(event.reason === "legacy-frame-dropped" ? "realtime-invalid" : "realtime-gap");
+    return;
+  }
+  if (event.type === "socket:close") {
     state.socketState = "closed";
     clearSocketStaleTimer();
     recordChatDiagnostic("socket.close", {
-      code: record.code,
-      reason: record.reason,
-      wasClean: record.wasClean,
+      code: event.code,
+      reason: event.reason,
+      wasClean: event.wasClean,
     });
     void recoverChatConnection("socket-close", { visible: false });
     return;
   }
-  if (record.type === "socket:error") {
+  if (event.type === "socket:error") {
     clearSocketStaleTimer();
     recordChatDiagnostic("socket.error", {
-      error: record.error,
-      reason: record.reason,
-      authRequired: record.authRequired,
+      reason: event.reason,
     });
-    if (record.authRequired) {
-      state.signedIn = false;
-      setRecoveryVisibleState("auth-required", "Reconnect / Retry session");
-      render();
-      return;
-    }
-    if (record.reason === "site-bridge-required") {
+    if (event.reason === "site-bridge-required") {
       state.socketState = "closed";
       state.composerError = "Open or refresh a signed-in RemiliaNET tab to enable live chat.";
-      setRecoveryVisibleState("failed", "Retry connection");
+      setRecoveryVisibleState("failed", "Reconnect Chat");
       render();
       return;
     }
-    void recoverChatConnection(String(record.reason || "socket-error"), { visible: true });
+    void recoverChatConnection(event.reason, { visible: true });
   }
 }
 
-function sendSocketPayload(payload: Record<string, unknown>): boolean {
-  if (!state.socketPort || state.socketState !== "open") return false;
-  try {
-    state.socketPort.postMessage({ type: "send", payload });
-    return true;
-  } catch {
-    state.socketState = "closed";
-    void recoverChatConnection("send-port-failed", { visible: true });
-    return false;
-  }
+function dispatchLegacyMutation(mutation: LegacySocketMutation) {
+  if (state.socketState !== "open") return Promise.resolve({
+    ok: false,
+    error: "LEGACY_MEDIA_SUBMIT_UNAVAILABLE",
+    retryable: true,
+  } as const);
+  return legacyMutationDispatcher.dispatch(state.socketPort, mutation);
 }
 
 function render(): void {
@@ -1587,6 +1614,7 @@ function render(): void {
   send.disabled = !state.signedIn || state.sending;
 
   if (!state.signedIn) {
+    syncChatJumpControl(root, false);
     messages.innerHTML = renderReconnectState();
     attachments.hidden = true;
     error.hidden = true;
@@ -1595,6 +1623,7 @@ function render(): void {
     return;
   }
   if (state.loading && state.messages.length === 0) {
+    syncChatJumpControl(root, false);
     loadOlder.hidden = true;
     messages.innerHTML = `<div class="milxdy-chat-empty">Loading chat...</div>`;
     return;
@@ -1602,20 +1631,21 @@ function render(): void {
 
   const focusedMessageControl = captureFocusedMessageControl(messages);
   const atBottom = messages.scrollHeight - messages.scrollTop <= messages.clientHeight + 48;
-  const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && state.messages.some((message) => message.id > 0));
+  const canRequestOlder = state.loadingOlder || (state.hasMoreOlder && Boolean(state.olderCursor));
   loadOlder.hidden = true;
   loadOlder.innerHTML = "";
   const messageHtml = groupMessages(state.messages.filter((message) => !message.isDeleted && !message.is_deleted))
     .map(renderMessageGroup)
     .join("");
   const recoveryHtml = state.recoveryVisibleState !== "none" ? renderReconnectState() : "";
-  messages.innerHTML = `${recoveryHtml}${canRequestOlder ? renderLoadOlderButton() : ""}${messageHtml || `<div class="milxdy-chat-empty">No messages yet.</div>`}`;
+  messages.innerHTML = `${recoveryHtml}${canRequestOlder ? renderLoadOlderButton(state.loadingOlder) : ""}${messageHtml || `<div class="milxdy-chat-empty">No messages yet.</div>`}`;
   attachments.hidden = state.pendingAttachments.length === 0;
   attachments.innerHTML = state.pendingAttachments.map(renderPendingAttachment).join("");
   error.hidden = !state.composerError;
   error.textContent = state.composerError;
   renderReplyPreview(reply);
   if (atBottom) messages.scrollTop = messages.scrollHeight;
+  syncChatJumpControl(root, true);
   hydrateInlineMedia(messages);
   restoreFocusedMessageControl(messages, focusedMessageControl);
   syncPokeCooldownButtons(root);
@@ -1657,26 +1687,12 @@ function setRecoveryVisibleState(next: ChatState["recoveryVisibleState"], messag
   recordChatDiagnostic("visibleState", { state: next, message });
 }
 
-function renderReconnectState(): string {
-  const label = state.recoveryMessage || "Reconnect / Retry session";
-  const copy = state.recoveryVisibleState === "recovering"
-    ? "Checking your existing RemiliaNET browser session..."
-    : state.recoveryVisibleState === "failed"
-      ? state.composerError || "Chat connection stalled. Retry your current browser session."
-      : "RemiliaNET needs your browser session again. Sign in if prompted, then retry.";
-  const disabled = state.recoveryVisibleState === "recovering" ? " disabled" : "";
-  return `
-    <div class="milxdy-chat-empty milxdy-chat-reconnect">
-      <span>${escapeHtml(copy)}</span>
-      <button type="button" data-chat-action="retry-session"${disabled}>${escapeHtml(label)}</button>
-      <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Open RemiliaNET</a>
-    </div>
-  `;
-}
+function renderReconnectState(): string { return renderChatReconnectState(extensionAuthPhase, state, escapeHtml); }
 
 function recordChatDiagnostic(key: string, value: Record<string, unknown>): void {
+  const sanitized = sanitizeReminetChatDiagnostic(key, value);
   recordDiagnostic(key, {
-    ...value,
+    ...sanitized,
     socketState: state.socketState,
     signedIn: state.signedIn,
     visibleState: state.recoveryVisibleState,
@@ -1684,15 +1700,6 @@ function recordChatDiagnostic(key: string, value: Record<string, unknown>): void
   });
 }
 
-function renderLoadOlderButton(): string {
-  const disabled = state.loadingOlder ? " disabled" : "";
-  const label = state.loadingOlder ? "Loading..." : "Show more";
-  return `
-    <div class="milxdy-chat-load-older">
-      <button type="button" data-chat-action="load-older"${disabled}>${label}</button>
-    </div>
-  `;
-}
 
 async function loadTheme(): Promise<void> {
   const stored: Record<string, unknown> = await chrome.storage.local.get(SETTINGS_THEME_KEY).catch(() => ({}));
@@ -1705,6 +1712,7 @@ function closeChatPanel(): void {
   state.minimized = true;
   state.explicitlyOpened = false;
   closeSocket();
+  updateOfficialPolling();
   const root = state.root;
   state.root = null;
   state.mountMode = null;
@@ -1731,6 +1739,7 @@ async function loadSoundSettings(): Promise<void> {
     [SOUND_REACT_TO_ME_KEY]: true,
     [SOUND_MESSAGE_KEY]: true,
     [SOUND_POKE_KEY]: true,
+    [POKE_PLACEMENT_KEY]: "reactions",
   }).catch(() => ({}));
   if (!lifecycleActive()) return;
   state.soundEnabled = stored[SOUND_ENABLED_KEY] !== false;
@@ -1740,6 +1749,8 @@ async function loadSoundSettings(): Promise<void> {
   state.soundReactToMe = stored[SOUND_REACT_TO_ME_KEY] !== false;
   state.soundMessage = stored[SOUND_MESSAGE_KEY] !== false;
   state.soundPoke = stored[SOUND_POKE_KEY] !== false;
+  pokePlacement = normalizePokePlacement(stored[POKE_PLACEMENT_KEY]);
+  render();
 }
 
 function applySoundSettingChanges(changes: Record<string, chrome.storage.StorageChange>): void {
@@ -1752,51 +1763,6 @@ function applySoundSettingChanges(changes: Record<string, chrome.storage.Storage
   if (changes[SOUND_POKE_KEY]) state.soundPoke = changes[SOUND_POKE_KEY].newValue !== false;
 }
 
-function playSocketFrameSound(type: unknown, payload: unknown, previousMessages: Map<number, ApiMessage>): void {
-  if (type === "deliver") {
-    const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
-    if (!message || messageAuthorId(message) === currentUserId()) return;
-    if (!previousMessages.has(message.id)) playChatSound("message");
-    return;
-  }
-  if (type !== "reaction") return;
-  const message = messageFromSocketPayload(payload) || messageFromPayloadId(payload);
-  if (!message || messageAuthorId(message) !== currentUserId()) return;
-  const previous = previousMessages.get(message.id);
-  if (reactionSignature(previous) !== reactionSignature(message)) playChatSound("reactToMe");
-}
-
-function messageFromPayloadId(payload: unknown): ApiMessage | null {
-  if (!payload || typeof payload !== "object") return null;
-  const id = Number((payload as RuntimeRecord).message_id ?? (payload as RuntimeRecord).messageId ?? (payload as RuntimeRecord).id);
-  return Number.isFinite(id) ? state.messages.find((message) => message.id === id) || null : null;
-}
-
-function messageFromSocketPayload(payload: unknown): ApiMessage | null {
-  if (!payload || typeof payload !== "object") return null;
-  const record = payload as RuntimeRecord;
-  const candidates = [
-    record.message,
-    record.chatMessage,
-    record.chat_message,
-    record.data,
-    payload,
-  ];
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== "object") continue;
-    const message = normalizeMessage(Number(objectValue(candidate).id ?? objectValue(candidate).message_id), candidate as RuntimeRecord);
-    if (message) return message;
-  }
-  return null;
-}
-
-function reactionSignature(message: ApiMessage | undefined): string {
-  return (message?.reactions || [])
-    .map((reaction) => `${normalizeReactionEmoji(reaction.emoji) || ""}:${reaction.userId ?? reaction.user_id ?? reaction.username ?? reaction.handle ?? reaction.name ?? ""}`)
-    .sort()
-    .join("|");
-}
-
 type ChatSoundKind = "send" | "react" | "reactToMe" | "message" | "poke";
 
 function playChatSound(kind: ChatSoundKind): void {
@@ -1806,60 +1772,18 @@ function playChatSound(kind: ChatSoundKind): void {
   if (kind === "reactToMe" && !state.soundReactToMe) return;
   if (kind === "message" && !state.soundMessage) return;
   if (kind === "poke" && !state.soundPoke) return;
+  const cue = { send: "chatSend", react: "chatReact", reactToMe: "chatReactToMe", message: "chatMessage", poke: "chatPoke" } as const;
+  const volume = state.soundVolume * cueVolumes.get(cue[kind]);
+  if (volume <= 0) return;
   const context = getAudioContext();
   if (!context) return;
   if (context.state === "suspended") void context.resume().catch(() => undefined);
   const now = context.currentTime + 0.01;
-  if (kind === "send") playTone(context, now, [520, 700], 0.055, "triangle", 0.8);
-  if (kind === "react") playTone(context, now, [860, 620], 0.045, "square", 0.45);
-  if (kind === "reactToMe") playTone(context, now, [480, 720, 960], 0.05, "sine", 0.75);
-  if (kind === "message") playTone(context, now, [660, 880], 0.065, "sine", 0.65);
-  if (kind === "poke") playPokeTone(context, now);
-}
-
-function playTone(context: AudioContext, start: number, frequencies: number[], step: number, type: OscillatorType, gainScale: number): void {
-  frequencies.forEach((frequency, index) => {
-    const oscillator = context.createOscillator();
-    const gain = context.createGain();
-    const when = start + index * step;
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(frequency, when);
-    gain.gain.setValueAtTime(0.0001, when);
-    gain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.08 * gainScale), when + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, when + step);
-    oscillator.connect(gain);
-    gain.connect(context.destination);
-    oscillator.start(when);
-    oscillator.stop(when + step + 0.02);
-  });
-}
-
-function playPokeTone(context: AudioContext, start: number): void {
-  const tap = context.createOscillator();
-  const tapGain = context.createGain();
-  tap.type = "square";
-  tap.frequency.setValueAtTime(220, start);
-  tapGain.gain.setValueAtTime(0.0001, start);
-  tapGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.035), start + 0.006);
-  tapGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.055);
-  tap.connect(tapGain);
-  tapGain.connect(context.destination);
-  tap.start(start);
-  tap.stop(start + 0.06);
-
-  const chirp = context.createOscillator();
-  const chirpGain = context.createGain();
-  const chirpStart = start + 0.035;
-  chirp.type = "triangle";
-  chirp.frequency.setValueAtTime(740, chirpStart);
-  chirp.frequency.exponentialRampToValueAtTime(1180, start + 0.18);
-  chirpGain.gain.setValueAtTime(0.0001, chirpStart);
-  chirpGain.gain.exponentialRampToValueAtTime(Math.max(0.0001, state.soundVolume * 0.025), chirpStart + 0.02);
-  chirpGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
-  chirp.connect(chirpGain);
-  chirpGain.connect(context.destination);
-  chirp.start(chirpStart);
-  chirp.stop(start + 0.24);
+  if (kind === "send") playTone(context, now, [520, 700], 0.055, "triangle", 0.8, volume);
+  if (kind === "react") playTone(context, now, [860, 620], 0.045, "square", 0.45, volume);
+  if (kind === "reactToMe") playTone(context, now, [480, 720, 960], 0.05, "sine", 0.75, volume);
+  if (kind === "message") playTone(context, now, [660, 880], 0.065, "sine", 0.65, volume);
+  if (kind === "poke") playPokeTone(context, now, volume);
 }
 
 function getAudioContext(): AudioContext | null {
@@ -1870,11 +1794,6 @@ function getAudioContext(): AudioContext | null {
   return audioContext;
 }
 
-function clampVolume(value: unknown): number {
-  const numeric = Number(value);
-  if (!Number.isFinite(numeric)) return 0.55;
-  return Math.max(0, Math.min(1, numeric));
-}
 
 async function loadLayoutSettings(): Promise<void> {
   const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
@@ -1900,9 +1819,6 @@ async function loadLayoutSettings(): Promise<void> {
   ensureRoot();
 }
 
-function normalizeThemeMode(value: unknown): "light" | "dark" | "system" {
-  return value === "light" || value === "dark" || value === "system" ? value : "system";
-}
 
 function applyTheme(): void {
   const root = state.root;
@@ -2068,12 +1984,12 @@ function rightDockMinTop(): number {
 function groupMessages(messages: ApiMessage[]): MessageGroup[] {
   const groups: MessageGroup[] = [];
   for (const message of messages) {
-    const authorId = messageAuthorId(message);
+    const authorKey = messageAuthorKey(message);
     const last = groups[groups.length - 1];
-    if (last && last.authorId === authorId && messageTime(message) - messageTime(last.messages[last.messages.length - 1]) < 10 * 60 * 1000) {
+    if (last && last.authorKey === authorKey && messageTime(message) - messageTime(last.messages[last.messages.length - 1]) < 10 * 60 * 1000) {
       last.messages.push(message);
     } else {
-      groups.push({ authorId, messages: [message] });
+      groups.push({ authorKey, messages: [message] });
     }
   }
   return groups;
@@ -2081,9 +1997,10 @@ function groupMessages(messages: ApiMessage[]): MessageGroup[] {
 
 function renderMessageGroup(group: MessageGroup): string {
   const first = group.messages[0];
-  const user = userForAuthor(group.authorId, first);
+  const authorId = messageAuthorId(first);
+  const user = userForAuthor(authorId, first);
   const handleValue = remiliaHandle(user);
-  const name = displayName(user, group.authorId, first);
+  const name = displayName(user, authorId, first);
   const avatar = renderAvatarImage(user);
   const color = remiliaUserColor(user);
   const profileUrl = handleValue ? `https://www.remilia.net/~${encodeURIComponent(handleValue)}` : "https://www.remilia.net";
@@ -2100,7 +2017,7 @@ function renderMessageGroup(group: MessageGroup): string {
           <time>${escapeHtml(formatTime(messageTime(first)))}</time>
           <span class="milxdy-chat-inline-actions">
             ${xHandle ? `<a class="milxdy-chat-x-link" href="https://x.com/${encodeURIComponent(xHandle)}" target="_blank" rel="noopener noreferrer" title="Open X profile" aria-label="Open X profile">${xLogoSvg()}</a>` : ""}
-            ${handleValue ? renderPokeButton(handleValue) : ""}
+            ${handleValue && pokePlacement !== "reactions" ? renderPokeButton(handleValue) : ""}
           </span>
         </div>
         <div class="milxdy-chat-stack">${group.messages.map(renderStackedMessage).join("")}</div>
@@ -2133,6 +2050,11 @@ function messageAuthorId(message: ApiMessage): number {
   return message.authorId ?? message.author_id ?? message.userId ?? message.user_id ?? 0;
 }
 
+function messageAuthorKey(message: ApiMessage): string {
+  const handleValue = remiliaHandle(message.author || null).toLowerCase();
+  return handleValue ? `handle:${handleValue}` : `id:${messageAuthorId(message)}`;
+}
+
 function xLogoSvg(): string {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817-5.966 6.817H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"></path></svg>`;
 }
@@ -2154,15 +2076,21 @@ function renderReplyContext(message: ApiMessage): string {
 }
 
 function renderAttachments(message: ApiMessage): string {
-  const images = message.images || [];
-  const video = message.video;
-  if (!images.length && !video) return "";
+  const media = message.media?.length
+    ? message.media
+    : [...(message.images || []), ...(message.video ? [message.video] : [])];
+  if (!media.length) return "";
   return `
     <div class="milxdy-chat-media">
-      ${images.map(renderImageAttachment).join("")}
-      ${video ? renderVideoAttachment(video) : ""}
+      ${media.map((attachment) => isVideoAttachment(attachment) ? renderVideoAttachment(attachment) : renderImageAttachment(attachment)).join("")}
     </div>
   `;
+}
+
+function isVideoAttachment(media: MediaAttachment): boolean {
+  return media.kind?.toLowerCase().includes("video") === true
+    || media.mimeType?.toLowerCase().startsWith("video/") === true
+    || media.mime_type?.toLowerCase().startsWith("video/") === true;
 }
 
 function renderImageAttachment(media: MediaAttachment): string {
@@ -2235,9 +2163,10 @@ function cssEscape(value: string): string {
 
 function renderMessageActions(message: ApiMessage): string {
   const open = state.activeMessageActionId === message.id;
+  const handleValue = remiliaHandle(userForAuthor(messageAuthorId(message), message));
   return `
     <div class="milxdy-chat-message-actions" data-open="${String(open)}">
-      ${renderReactions(message)}
+      ${renderReactions(message, handleValue)}
       <button class="milxdy-chat-reply-action" type="button" data-chat-action="reply" data-message-id="${message.id}" title="Reply" aria-label="Reply">${replyIconSvg()}</button>
     </div>
   `;
@@ -2247,15 +2176,15 @@ function replyIconSvg(): string {
   return `<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M5.5 5.5h13v9h-7l-5 4v-4h-1z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
 }
 
-function renderReactions(message: ApiMessage): string {
+function renderReactions(message: ApiMessage, handleValue: string): string {
   const counts = reactionCounts(message);
   return `
     <div class="milxdy-chat-reactions">
       ${REACTIONS.map((emoji) => {
         const count = counts.get(emoji) || 0;
-        const reacted = currentUserReacted(message, emoji);
-        return `<button type="button" data-active="${String(reacted)}" data-chat-action="react" data-message-id="${message.id}" data-emoji="${emoji}" title="${escapeHtml(reactionTooltip(message, emoji, count))}" aria-pressed="${String(reacted)}">${emoji}</button>`;
+        return renderReactionButton(message, emoji, count, false);
       }).join("")}
+      ${handleValue && pokePlacement !== "name" ? renderPokeButton(handleValue) : ""}
     </div>
   `;
 }
@@ -2266,11 +2195,22 @@ function renderReactionCounts(message: ApiMessage): string {
     .map((emoji) => {
       const count = counts.get(emoji) || 0;
       if (count < 1) return "";
-      const reacted = currentUserReacted(message, emoji);
-      return `<button type="button" data-active="${String(reacted)}" data-chat-action="react" data-message-id="${message.id}" data-emoji="${emoji}" title="${escapeHtml(reactionTooltip(message, emoji, count))}" aria-pressed="${String(reacted)}">${emoji} ${count}</button>`;
+      return renderReactionButton(message, emoji, count, true);
     })
     .filter(Boolean);
   return items.length ? `<div class="milxdy-chat-reaction-counts">${items.join("")}</div>` : "";
+}
+
+function renderReactionButton(message: ApiMessage, emoji: string, count: number, showCount: boolean): string {
+  const feedback = reactionFeedback.get(`${message.id}:${emoji}`);
+  const unavailable = state.socketState !== "open" || typeof legacyMessageId(message.id) !== "number";
+  const status = unavailable ? "unavailable" : feedback || "ready";
+  const label = unavailable ? (state.socketState !== "open"
+    ? "Reactions unavailable: the RemiliaNET chat bridge is not connected."
+    : "Reactions unavailable for this message.")
+    : status === "error" ? "Reaction failed. Click to try again."
+    : status === "pending" ? "Sending reaction…" : reactionTooltip(message, emoji, count);
+  return `<button type="button" data-active="${String(currentUserReacted(message, emoji))}" data-reaction-state="${status}" data-chat-action="react" data-message-id="${escapeHtml(message.id)}" data-emoji="${escapeHtml(emoji)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(`${emoji}: ${label}`)}" aria-pressed="${String(currentUserReacted(message, emoji))}" ${unavailable || status === "pending" ? "disabled" : ""}>${emoji}${showCount ? ` ${count}` : ""}${status === "error" ? '<span aria-hidden="true"> !</span>' : status === "pending" ? '<span aria-hidden="true"> …</span>' : ""}</button>`;
 }
 
 function reactionCounts(message: ApiMessage): Map<string, number> {
@@ -2278,14 +2218,20 @@ function reactionCounts(message: ApiMessage): Map<string, number> {
   for (const reaction of message.reactions || []) {
     const emoji = normalizeReactionEmoji(reaction.emoji);
     if (!emoji) continue;
-    counts.set(emoji, (counts.get(emoji) || 0) + 1);
+    counts.set(emoji, (counts.get(emoji) || 0) + Math.max(1, Math.floor(reaction.count ?? 1)));
   }
   return counts;
 }
 
 function currentUserReacted(message: ApiMessage, emoji: string): boolean {
   const normalized = normalizeReactionEmoji(emoji);
+  const remembered = currentUserReactionStates.get(reactionStateKey(message.id, normalized));
+  if (remembered !== undefined) return remembered;
   return (message.reactions || []).some((reaction) => normalizeReactionEmoji(reaction.emoji) === normalized && reactionBelongsToCurrentUser(reaction));
+}
+
+function reactionStateKey(messageId: MessageId, emoji: string): string {
+  return `${messageId}\u0000${emoji}`;
 }
 
 function reactionBelongsToCurrentUser(reaction: Reaction): boolean {
@@ -2342,8 +2288,7 @@ function renderReplyPreview(container: HTMLElement): void {
   `;
 }
 
-function setReplyTo(messageId: number): void {
-  if (!Number.isFinite(messageId)) return;
+function setReplyTo(messageId: MessageId): void {
   const message = state.messages.find((item) => item.id === messageId);
   if (!message) return;
   state.replyTo = {
@@ -2406,18 +2351,65 @@ function reactionAuthorName(reaction: Reaction): string {
     || (userId ? `User ${userId}` : "");
 }
 
-function compactText(value: string, maxLength: number): string {
-  const compact = value.replace(/\s+/g, " ").trim();
-  return compact.length > maxLength ? `${compact.slice(0, Math.max(0, maxLength - 1))}...` : compact;
+function reactToMessage(messageId: MessageId, emoji: string, control?: HTMLElement): void {
+  const normalizedEmoji = normalizeReactionEmoji(emoji);
+  if (!normalizedEmoji) return;
+  const key = `${messageId}:${normalizedEmoji}`;
+  if (reactionFeedback.get(key) === "pending") return;
+  const numericMessageId = legacyMessageId(messageId);
+  if (state.socketState !== "open" || typeof numericMessageId !== "number") {
+    reactionFeedback.set(key, "error");
+    render();
+    return;
+  }
+  const message = state.messages.find((item) => item.id === messageId);
+  const previouslyReacted = Boolean(message && currentUserReacted(message, normalizedEmoji));
+  const nextReacted = !previouslyReacted;
+  const type = nextReacted ? "react" : "unreact";
+  const stateKey = reactionStateKey(messageId, normalizedEmoji);
+  currentUserReactionStates.set(stateKey, nextReacted);
+  syncReactionControls(messageId, normalizedEmoji, nextReacted);
+  animateReactionInteraction(control);
+  reactionFeedback.set(key, "pending");
+  render();
+  void dispatchLegacyMutation({
+    type,
+    payload: { chat_id: LEGACY_CHAT_ID, message_id: numericMessageId, emoji: normalizedEmoji },
+  }).then((result) => {
+    if (!lifecycleActive()) return;
+    if (!result.ok && currentUserReactionStates.get(stateKey) === nextReacted) {
+      currentUserReactionStates.set(stateKey, previouslyReacted);
+      syncReactionControls(messageId, normalizedEmoji, previouslyReacted);
+    }
+    if (result.ok) {
+      reactionFeedback.delete(key);
+      if (type === "react") playChatSound("react");
+    } else reactionFeedback.set(key, "error");
+    render();
+  }).catch(() => {
+    if (!lifecycleActive()) return;
+    if (currentUserReactionStates.get(stateKey) === nextReacted) currentUserReactionStates.set(stateKey, previouslyReacted);
+    reactionFeedback.set(key, "error");
+    render();
+  });
 }
 
-function reactToMessage(messageId: number, emoji: string): void {
-  const normalizedEmoji = normalizeReactionEmoji(emoji);
-  if (!Number.isFinite(messageId) || !normalizedEmoji || state.socketState !== "open") return;
-  const message = state.messages.find((item) => item.id === messageId);
-  const type = message && currentUserReacted(message, normalizedEmoji) ? "unreact" : "react";
-  if (!sendSocketPayload({ type, payload: { chat_id: CHAT_ID, message_id: messageId, emoji: normalizedEmoji } })) return;
-  if (type === "react") playChatSound("react");
+function syncReactionControls(messageId: MessageId, emoji: string, reacted: boolean): void {
+  const selector = `[data-chat-action="react"][data-message-id="${cssEscape(messageId)}"][data-emoji="${cssEscape(emoji)}"]`;
+  for (const reactionControl of state.root?.querySelectorAll<HTMLElement>(selector) || []) {
+    reactionControl.dataset.active = String(reacted);
+    reactionControl.setAttribute("aria-pressed", String(reacted));
+  }
+}
+
+function animateReactionInteraction(control?: HTMLElement): void {
+  if (!control) return;
+  control.classList.remove("milxdy-chat-reaction-pulse");
+  void control.offsetWidth;
+  control.classList.add("milxdy-chat-reaction-pulse");
+  control.addEventListener("animationend", () => {
+    control.classList.remove("milxdy-chat-reaction-pulse");
+  }, { once: true });
 }
 
 function renderPokeButton(username: string): string {
@@ -2425,8 +2417,12 @@ function renderPokeButton(username: string): string {
   if (!clean) return "";
   const cooldownUntil = pokeCooldowns.get(clean.toLowerCase()) || 0;
   if (cooldownUntil > Date.now()) {
-    return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="cooldown" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} again in ${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}" aria-label="Poke ${escapeHtml(clean)} again later">${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}</button>`;
+    const fallback = pokeCooldownSources.get(clean.toLowerCase()) === "offline-fallback" ? " (offline fallback)" : "";
+    const celebrate = (pokeFeedback.get(clean.toLowerCase())?.celebrateUntil || 0) > Date.now();
+    return `<button ${celebrate ? 'data-poke-celebrate="true"' : ""} class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="cooldown" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} again in ${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}${fallback}" aria-label="Poke ${escapeHtml(clean)} again later${fallback}">${escapeHtml(formatPokeCooldown(cooldownUntil - Date.now()))}</button>`;
   }
+  const feedback = pokeFeedback.get(clean.toLowerCase());
+  if (feedback) return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="${feedback.state}" data-username="${escapeHtml(clean)}" title="${escapeHtml(feedback.label)}" aria-label="${escapeHtml(feedback.label)}" ${feedback.state === "loading" ? "disabled" : ""}>${feedback.state === "success" ? "✓" : feedback.state === "error" ? "!" : "…"}</button>`;
   return `<button class="milxdy-chat-poke" type="button" data-chat-action="poke" data-poke-state="idle" data-username="${escapeHtml(clean)}" title="Poke ${escapeHtml(clean)} on RemiliaNET" aria-label="Poke ${escapeHtml(clean)} on RemiliaNET">${POKE_ICON}</button>`;
 }
 
@@ -2435,45 +2431,70 @@ async function pokeUser(username: string): Promise<void> {
   const clean = cleanUsername(username);
   if (!clean) return;
   const key = clean.toLowerCase();
+  if (pokeFeedback.get(key)?.state === "loading") return;
   const cooldownUntil = pokeCooldowns.get(key) || 0;
   const button = pokeButtonsForUsername(clean)[0] || null;
   if (cooldownUntil > Date.now()) {
     if (button) startPokeCooldown(button, clean, cooldownUntil - Date.now());
     return;
   }
-  playChatSound("poke");
-  if (button) setPokeButtonState(button, "loading", `Poking ${clean}...`);
+  pokeFeedback.set(key, { state: "loading", label: `Poking ${clean}…` });
+  for (const target of pokeButtonsForUsername(clean)) setPokeButtonState(target, "loading", `Poking ${clean}…`);
   renderStatus(`Poking ${clean}...`);
   const response = await runtimeSendMessage({ type: "beetol:poke", username: clean }, "beetol:poke").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
   if (!lifecycleActive()) return;
-  const cooldownMs = extractPokeCooldownMs(response);
-  if (response.ok || cooldownMs > 0) {
-    startPokeCooldownForUser(clean, cooldownMs || DEFAULT_POKE_COOLDOWN_MS);
-    renderStatus("Poke sent.");
+  const cooldownMs = readPokeCooldownMs(response);
+  if (response.ok) {
+    pokeCooldowns.delete(key);
+    pokeCooldownSources.delete(key);
+    pokeFeedback.set(key, { state: "success", label: `Poked ${clean}`, celebrateUntil: Date.now() + 650 });
+    for (const target of pokeButtonsForUsername(clean)) {
+      setPokeButtonState(target, "success", `Poked ${clean}`);
+      target.dataset.pokeCelebrate = "true";
+      runtimeScheduler.timeout(() => {
+        for (const current of pokeButtonsForUsername(clean)) {
+          delete current.dataset.pokeCelebrate;
+          if (current.dataset.pokeState === "cooldown") {
+            current.textContent = formatPokeCooldown(Math.max(0, Number(current.dataset.pokeCooldownUntil) - Date.now()));
+          }
+        }
+      }, 650);
+    }
+    playChatSound("poke");
+    if (cooldownMs > 0) startPokeCooldownForUser(clean, cooldownMs);
+    renderStatus(response.localPokeStatsRecorded === false ? "Poke sent. Local poke count could not be saved; do not retry the poke." : "Poke sent.");
     return;
   }
-  if (isExplicitPokeCooldownResponse(response)) {
-    const message = stringOrUndefined(response.error) || stringOrUndefined(asRecord(response.data).error) || stringOrUndefined(asRecord(response.data).message) || "Already poked.";
+  if (cooldownMs > 0 || isExplicitPokeCooldownResponse(response)) {
+    if (cooldownMs > 0) startPokeCooldownForUser(clean, cooldownMs, stringOrUndefined(response.cooldownSource));
+    const message = stringOrUndefined(response.message) || "Already poked.";
     if (button) setPokeButtonState(button, "error", message);
     renderStatus(message);
     return;
   }
-  if (button) setPokeButtonState(button, "error", String(response.error || "Poke failed."));
-  renderStatus("Poke failed.");
+  const message = response.scopeRequired
+    ? "Reconnect Remilia with poke permission."
+    : response.authRequired
+      ? "Reconnect Remilia to poke."
+      : stringOrUndefined(response.message) || "Poke failed.";
+  pokeFeedback.set(key, { state: "error", label: message });
+  for (const target of pokeButtonsForUsername(clean)) setPokeButtonState(target, "error", message);
+  renderStatus(message);
 }
 
-function startPokeCooldownForUser(username: string, cooldownMs: number): void {
+function startPokeCooldownForUser(username: string, cooldownMs: number, source = "official"): void {
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   pokeCooldowns.set(clean.toLowerCase(), until);
+  pokeCooldownSources.set(clean.toLowerCase(), source);
   const buttons = pokeButtonsForUsername(clean);
   if (!buttons.length) {
     render();
     return;
   }
   for (const button of buttons) {
-    startPokeCooldown(button, clean, until - Date.now(), until);
+    startPokeCooldown(button, clean, until - Date.now(), until, source);
   }
 }
 
@@ -2483,7 +2504,7 @@ function syncPokeCooldownButtons(root: HTMLElement): void {
     if (!username) continue;
     registerPokeButton(button, username);
     const cooldownUntil = pokeCooldowns.get(username.toLowerCase()) || 0;
-    if (cooldownUntil > Date.now()) startPokeCooldown(button, username, cooldownUntil - Date.now(), cooldownUntil);
+    if (cooldownUntil > Date.now()) startPokeCooldown(button, username, cooldownUntil - Date.now(), cooldownUntil, pokeCooldownSources.get(username.toLowerCase()));
   }
 }
 
@@ -2497,6 +2518,18 @@ function registerPokeButton(button: HTMLElement, username: string): void {
     pokeButtonsByUsername.set(key, buttons);
   }
   buttons.add(button);
+  if (!pokeEligibilityChecked.has(key)) {
+    pokeEligibilityChecked.add(key);
+    void refreshPokeEligibility(clean);
+  }
+}
+
+async function refreshPokeEligibility(username: string): Promise<void> {
+  const response = await runtimeSendMessage({ type: "beetol:pokeEligibility", username }, "beetol:pokeEligibility").then(asRecord).catch(() => asRecord({}));
+  const cooldownMs = readPokeCooldownMs(response);
+  if (response.ok && cooldownMs > 0) {
+    startPokeCooldownForUser(username, cooldownMs, stringOrUndefined(response.cooldownSource));
+  }
 }
 
 function pokeButtonsForUsername(username: string): HTMLElement[] {
@@ -2517,13 +2550,14 @@ function pokeButtonsForUsername(username: string): HTMLElement[] {
   return connected;
 }
 
-function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: number, knownUntil?: number): void {
+function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: number, knownUntil?: number, source = "official"): void {
   if (!lifecycleActive()) return;
   const clean = cleanUsername(username);
   if (!clean) return;
   const until = knownUntil || Date.now() + Math.max(1000, Number(cooldownMs) || 0);
   if (button.dataset.pokeCooldownUntil === String(until) && pokeCountdownTimers.has(button)) return;
   pokeCooldowns.set(clean.toLowerCase(), until);
+  pokeCooldownSources.set(clean.toLowerCase(), source);
   clearPokeCountdown(button);
   setPokeButtonState(button, "cooldown", `Already poked ${clean}`);
   button.dataset.pokeCooldownUntil = String(until);
@@ -2539,14 +2573,17 @@ function startPokeCooldown(button: HTMLElement, username: string, cooldownMs: nu
     if (remaining <= 0) {
       clearPokeCountdown(button);
       pokeCooldowns.delete(clean.toLowerCase());
+      pokeCooldownSources.delete(clean.toLowerCase());
+      pokeFeedback.delete(clean.toLowerCase());
       delete button.dataset.pokeCooldownUntil;
       setPokeButtonState(button, "idle", `Poke ${clean} on RemiliaNET`);
       button.textContent = POKE_ICON;
       return;
     }
     const label = formatPokeCooldown(remaining);
-    button.textContent = label;
-    button.title = `Poke ${clean} again in ${label}`;
+    button.textContent = button.dataset.pokeCelebrate === "true" ? "✓" : label;
+    const fallback = source === "offline-fallback" ? " (offline fallback)" : "";
+    button.title = `Poke ${clean} again in ${label}${fallback}`;
     button.setAttribute("aria-label", button.title);
     cancelNextTick = runtimeScheduler.timeout(update, 1000);
     pokeCountdownTimers.set(button, cancelNextTick);
@@ -2562,74 +2599,20 @@ function clearPokeCountdown(button: HTMLElement): void {
   pokeCountdownTimers.delete(button);
 }
 
-function setPokeButtonState(button: HTMLElement, stateValue: "idle" | "loading" | "cooldown" | "error", label: string): void {
+function setPokeButtonState(button: HTMLElement, stateValue: "idle" | "loading" | "cooldown" | "error" | "success", label: string): void {
   button.dataset.pokeState = stateValue;
   button.title = label;
   button.setAttribute("aria-label", label);
   button.toggleAttribute("disabled", stateValue === "loading" || stateValue === "cooldown");
   if (stateValue !== "cooldown") {
     clearPokeCountdown(button);
-    button.textContent = POKE_ICON;
+    button.textContent = stateValue === "success" ? "✓" : stateValue === "error" ? "!" : stateValue === "loading" ? "…" : POKE_ICON;
   }
-}
-
-function extractPokeCooldownMs(response: RuntimeRecord): number {
-  const data = objectValue(response.data);
-  const nested = objectValue(data.data);
-  const values = [
-    response.cooldownMs,
-    data.cooldownMs,
-    data.cooldown,
-    data.cooldownRemaining,
-    data.cooldownRemainingMs,
-    data.remainingMs,
-    data.remaining,
-    data.retryAfterMs,
-    data.retryAfter,
-    data.nextPokeInMs,
-    data.nextPokeIn,
-    data.pokeCooldownMs,
-    data.pokeCooldown,
-    data.pokeCooldownSeconds,
-    nested.cooldownMs,
-    nested.cooldown,
-    nested.cooldownRemaining,
-    nested.cooldownRemainingMs,
-    nested.remainingMs,
-    nested.remaining,
-    nested.retryAfterMs,
-    nested.retryAfter,
-    nested.nextPokeInMs,
-    nested.nextPokeIn,
-    nested.pokeCooldownMs,
-    nested.pokeCooldown,
-    nested.pokeCooldownSeconds,
-  ];
-  for (const value of values) {
-    const ms = normalizeCooldownMs(value);
-    if (ms > 0) return ms;
-  }
-
-  const untilValues = [
-    response.cooldownUntil,
-    data.cooldownUntil,
-    data.nextPokeAt,
-    data.pokeAvailableAt,
-    data.availableAt,
-    nested.cooldownUntil,
-    nested.nextPokeAt,
-    nested.pokeAvailableAt,
-    nested.availableAt,
-  ];
-  for (const value of untilValues) {
-    const timestamp = typeof value === "string" ? Date.parse(value) : NaN;
-    if (Number.isFinite(timestamp) && timestamp > Date.now()) return timestamp - Date.now();
-  }
-  return 0;
 }
 
 function isExplicitPokeCooldownResponse(response: RuntimeRecord): boolean {
   if (!response || response.authRequired) return false;
+  if (response.code === "poke_cooldown") return true;
   const data = asRecord(response.data);
   const nested = asRecord(data.data);
   return [
@@ -2650,38 +2633,6 @@ function isExplicitPokeCooldownResponse(response: RuntimeRecord): boolean {
   });
 }
 
-function normalizeCooldownMs(value: unknown): number {
-  if (value == null || value === false) return 0;
-  if (typeof value === "number") {
-    if (!Number.isFinite(value) || value <= 0) return 0;
-    return value < 1000 ? value * 1000 : value;
-  }
-  if (typeof value === "string") {
-    const trimmed = value.trim();
-    if (!trimmed) return 0;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) return normalizeCooldownMs(numeric);
-    const match = trimmed.match(/(?:(\d+)\s*d)?\s*(?:(\d+)\s*h)?\s*(?:(\d+)\s*m)?\s*(?:(\d+)\s*s)?/i);
-    if (match && match[0].trim()) {
-      const days = Number(match[1] || 0);
-      const hours = Number(match[2] || 0);
-      const minutes = Number(match[3] || 0);
-      const seconds = Number(match[4] || 0);
-      return (((days * 24 + hours) * 60 + minutes) * 60 + seconds) * 1000;
-    }
-  }
-  return 0;
-}
-
-function formatPokeCooldown(ms: number): string {
-  const totalSeconds = Math.max(0, Math.ceil(ms / 1000));
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
-  if (hours > 0) return `${hours}h`;
-  if (minutes > 0) return `${minutes}m`;
-  return `${seconds}s`;
-}
 
 async function addPendingFiles(files: FileList | File[] | null): Promise<void> {
   if (!files?.length) return;
@@ -2730,24 +2681,30 @@ async function uploadPendingAttachments(): Promise<{ ok: true; images: MediaAtta
   let video: MediaAttachment | null = null;
   for (const attachment of state.pendingAttachments) {
     if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
+    if (attachment.uploadedMedia) {
+      if (attachment.mimeType.startsWith("video/")) video = attachment.uploadedMedia;
+      else images.push(attachment.uploadedMedia);
+      continue;
+    }
     attachment.status = "uploading";
     render();
     const response = await runtimeSendMessage({
-      type: "reminetChat:uploadAttachment",
-      name: attachment.name,
+      type: "reminetChat:legacy:uploadAttachment",
       mimeType: attachment.mimeType,
       dataUrl: attachment.dataUrl,
-    }, "reminetChat:uploadAttachment").then(asRecord).catch((error) => asRecord({ ok: false, error: String(error) }));
+    }, "reminetChat:legacy:uploadAttachment").catch(() => null);
     if (!lifecycleActive()) return { ok: false, error: "Chat closed." };
-    if (!response.ok) {
+    const outcome = parseLegacyMediaUploadOutcome(response);
+    if (!outcome || !outcome.ok) {
       attachment.status = "error";
-      return { ok: false, error: String(response.error || "Upload failed.") };
+      return { ok: false, error: legacyMediaFailureMessage(outcome?.error ?? "LEGACY_ADAPTER_UNAVAILABLE") };
     }
-    const media = normalizeMedia(response.media) || {};
+    const media = legacyMediaAttachment(outcome.media);
     if (mediaId(media) === null) {
       attachment.status = "error";
       return { ok: false, error: "RemiNet did not confirm the attachment. The image was not sent; try again." };
     }
+    attachment.uploadedMedia = media;
     if (attachment.mimeType.startsWith("video/")) video = media;
     else images.push(media);
   }
@@ -2765,7 +2722,10 @@ function removePendingAttachment(id: string): void {
 }
 
 function userForAuthor(authorId: number, message: ApiMessage): ApiUser | null {
-  return state.users.get(authorId) || (authorId && authorId === currentUserId() ? state.currentUser : null) || (message.id < 0 ? state.currentUser : null);
+  return message.author
+    || state.users.get(authorId)
+    || (authorId && authorId === currentUserId() ? state.currentUser : null)
+    || (message.id.startsWith("local:") ? state.currentUser : null);
 }
 
 function queueProfileLookup(authorId: number, user: ApiUser): void {
@@ -2795,8 +2755,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
       if (profileResponse.ok && enriched) {
         if (profileResponse.partial === true) {
           recordChatDiagnostic("profileLookupPartial", {
-            handle: cacheKey,
-            warnings: Array.isArray(profileResponse.warnings) ? profileResponse.warnings : [],
+            warningCount: Array.isArray(profileResponse.warnings) ? profileResponse.warnings.length : 0,
           });
         }
         const enrichedXHandle = connectedXHandle(enriched);
@@ -2807,8 +2766,7 @@ function queueProfileLookup(authorId: number, user: ApiUser): void {
         return;
       }
       recordChatDiagnostic("profileLookupFailed", {
-        handle: cacheKey,
-        error: String(profileResponse.error || "PROFILE_LOOKUP_FAILED"),
+        code: "PROFILE_LOOKUP_FAILED",
       });
       profileLookupDone.add(cacheKey);
     } finally {
@@ -2850,195 +2808,8 @@ function profileUserFromResponse(response: RuntimeRecord): ApiUser | null {
   return xHandle ? { ...user, xHandle } : user;
 }
 
-function displayName(user: ApiUser | null, authorId: number, message: ApiMessage): string {
-  const handleValue = remiliaHandle(user);
-  return user?.displayName || user?.display_name || user?.name || handleValue || (message.id < 0 ? "You" : `User ${authorId || "?"}`);
-}
-
-function remiliaUserColor(user: ApiUser | null): string {
-  const hue = remiliaUserHue(user);
-  return hue === null ? "" : `hsl(${hue}, 60%, 45%)`;
-}
-
-function remiliaUserHue(user: ApiUser | null): number | null {
-  const raw = user?.color;
-  if (typeof raw === "number" && Number.isFinite(raw)) return normalizeHue(raw);
-  if (typeof raw === "string" && /^\d+(\.\d+)?$/.test(raw.trim())) return normalizeHue(Number(raw));
-  return null;
-}
-
-function normalizeHue(value: number): number {
-  return ((Math.round(value) % 360) + 360) % 360;
-}
-
-function remiliaHandle(user: ApiUser | null): string {
-  return user?.handle || user?.userHandle || user?.user_handle || user?.username || "";
-}
-
-function avatarUrl(user: ApiUser | null): string {
-  return user?.profilePicUrl || user?.profile_pic_url || user?.pfpUrl || user?.pfp_url || "";
-}
-
-function connectedXHandle(user: ApiUser | null): string {
-  const direct = user?.twitterHandle
-    || user?.twitter_handle
-    || user?.twitterUsername
-    || user?.twitter_username
-    || user?.xHandle
-    || user?.x_handle
-    || user?.xUsername
-    || user?.x_username
-    || handleFromUrl(user?.twitterUrl || user?.twitter_url || user?.xUrl || user?.x_url);
-  if (direct) return cleanXHandle(direct);
-  const record = objectValue(user);
-  const nestedHandle = findNestedXHandle(record);
-  if (nestedHandle) return nestedHandle;
-  const deepHandle = findDeepXHandle(record);
-  if (deepHandle) return deepHandle;
-  for (const item of user?.connections || []) {
-    const record = objectValue(item);
-    const provider = String(record.provider || record.type || record.platform || record.service || record.kind || "").toLowerCase();
-    if (!/twitter|x/.test(provider)) continue;
-    const handle = stringOrUndefined(record.handle
-      ?? record.username
-      ?? record.userName
-      ?? record.user_name
-      ?? record.screenName
-      ?? record.screen_name
-      ?? record.nickname
-      ?? record.name
-      ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-    if (handle) return cleanXHandle(handle);
-  }
-  return "";
-}
-
-function findDeepXHandle(value: unknown, depth = 0): string {
-  if (!value || typeof value !== "object" || depth > 4) return "";
-  const record = value as RuntimeRecord;
-  const direct = stringOrUndefined(record.twitterHandle
-    ?? record.twitter_handle
-    ?? record.twitterUsername
-    ?? record.twitter_username
-    ?? record.xHandle
-    ?? record.x_handle
-    ?? record.xUsername
-    ?? record.x_username
-    ?? record.screenName
-    ?? record.screen_name
-    ?? handleFromUrl(stringOrUndefined(record.twitterUrl ?? record.twitter_url ?? record.xUrl ?? record.x_url ?? record.url ?? record.href)));
-  if (direct) return cleanXHandle(direct);
-
-  const provider = String(record.provider || record.type || record.platform || record.service || record.kind || record.network || "").toLowerCase();
-  if (/twitter|^x$/.test(provider)) {
-    const handle = stringOrUndefined(record.handle
-      ?? record.username
-      ?? record.userName
-      ?? record.user_name
-      ?? record.name
-      ?? record.nickname
-      ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-    if (handle) return cleanXHandle(handle);
-  }
-
-  for (const [key, nested] of Object.entries(record)) {
-    if (!/(twitter|x|social|connection|account|profile|links?)/i.test(key) && depth > 0) continue;
-    if (Array.isArray(nested)) {
-      for (const item of nested) {
-        const handle = findDeepXHandle(item, depth + 1);
-        if (handle) return handle;
-      }
-      continue;
-    }
-    const handle = findDeepXHandle(nested, depth + 1);
-    if (handle) return handle;
-  }
-  return "";
-}
-
-function findNestedXHandle(record: RuntimeRecord): string {
-  for (const key of ["twitter", "x", "twitterAccount", "twitter_account", "xAccount", "x_account", "socials", "social"]) {
-    const value = record[key];
-    if (!value || typeof value !== "object") continue;
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const itemRecord = objectValue(item);
-        const provider = String(itemRecord.provider || itemRecord.type || itemRecord.platform || itemRecord.service || itemRecord.kind || "").toLowerCase();
-        if (!/twitter|x/.test(provider)) continue;
-        const handle = handleFromSocialRecord(itemRecord);
-        if (handle) return handle;
-      }
-      continue;
-    }
-    const handle = handleFromSocialRecord(value as RuntimeRecord);
-    if (handle) return handle;
-  }
-  return "";
-}
-
-function handleFromSocialRecord(record: RuntimeRecord): string {
-  const handle = stringOrUndefined(record.handle
-    ?? record.username
-    ?? record.userName
-    ?? record.user_name
-    ?? record.screenName
-    ?? record.screen_name
-    ?? record.nickname
-    ?? record.name
-    ?? handleFromUrl(stringOrUndefined(record.url ?? record.href ?? record.profileUrl ?? record.profile_url)));
-  return handle ? cleanXHandle(handle) : "";
-}
-
-function handleFromUrl(value: string | undefined): string {
-  if (!value) return "";
-  const match = value.match(/(?:twitter\.com|x\.com)\/@?([^/?#]+)/i);
-  return match ? match[1] : "";
-}
-
-function cleanXHandle(value: string): string {
-  return value.replace(/^@/, "").replace(/^https?:\/\/(?:www\.)?(?:twitter\.com|x\.com)\//i, "").split(/[/?#]/)[0];
-}
-
-function cleanUsername(value: string): string {
-  return value.trim().replace(/^[@~]/, "").replace(/[^a-zA-Z0-9_-]/g, "");
-}
-
-function normalizeCurrentUser(value: unknown): ApiUser | null {
-  if (!value || typeof value !== "object") return null;
-  const record = value as RuntimeRecord;
-  const nested = record.user && typeof record.user === "object" ? record.user as RuntimeRecord : record;
-  return {
-    id: numberOrUndefined(nested.id ?? nested.userId ?? nested.user_id),
-    userId: numberOrUndefined(nested.userId ?? nested.user_id ?? nested.id),
-    handle: stringOrUndefined(nested.handle ?? nested.userHandle ?? nested.user_handle ?? nested.username),
-    userHandle: stringOrUndefined(nested.userHandle ?? nested.user_handle ?? nested.handle ?? nested.username),
-    username: stringOrUndefined(nested.username ?? nested.handle ?? nested.userHandle),
-    displayName: stringOrUndefined(nested.displayName ?? nested.display_name ?? nested.name),
-    name: stringOrUndefined(nested.name ?? nested.displayName ?? nested.display_name),
-    profilePicUrl: stringOrUndefined(nested.profilePicUrl ?? nested.profile_pic_url ?? nested.pfpUrl ?? nested.pfp_url),
-    pfpUrl: stringOrUndefined(nested.pfpUrl ?? nested.pfp_url ?? nested.profilePicUrl ?? nested.profile_pic_url),
-    color: stringOrUndefined(nested.color),
-    theme: stringOrUndefined(nested.theme),
-    connections: Array.isArray(nested.connections) ? nested.connections : undefined,
-  };
-}
-
 function currentUserId(): number {
   return state.currentUser?.userId || state.currentUser?.user_id || state.currentUser?.id || 0;
-}
-
-function removeOptimisticForServerEcho(serverMessageId: number): void {
-  const serverMessage = state.messages.find((message) => message.id === serverMessageId);
-  if (!serverMessage) return;
-  const serverBody = serverMessage.body || "";
-  const serverAuthor = messageAuthorId(serverMessage);
-  const currentAuthor = currentUserId();
-  state.messages = state.messages.filter((message) => {
-    if (message.id >= 0) return true;
-    if ((message.body || "") !== serverBody) return true;
-    if (currentAuthor && serverAuthor && currentAuthor !== serverAuthor) return true;
-    return Math.abs(messageTime(serverMessage) - messageTime(message)) > 60_000;
-  });
 }
 
 function sortAndTrimMessages(_anchor: "newest" | "oldest" = "newest"): void {
@@ -3046,80 +2817,7 @@ function sortAndTrimMessages(_anchor: "newest" | "oldest" = "newest"): void {
   state.messages = state.messages.slice(-MAX_MESSAGES);
 }
 
-function oldestMessageId(): number | null {
-  let oldest: ApiMessage | null = null;
-  for (const message of state.messages) {
-    if (!Number.isFinite(message.id) || message.id <= 0) continue;
-    if (!oldest || messageTime(message) < messageTime(oldest)) oldest = message;
-  }
-  return oldest?.id ?? null;
-}
-
-function countPayloadMessages(payload: unknown): number {
-  if (Array.isArray(payload)) return payload.length;
-  if (!payload || typeof payload !== "object") return 0;
-  const record = payload as RuntimeRecord;
-  let count = 0;
-  if (record.global && typeof record.global === "object") count = Math.max(count, countPayloadMessages(record.global));
-  if (record.data && typeof record.data === "object") count = Math.max(count, countPayloadMessages(record.data));
-  if (record.results && typeof record.results === "object") count = Math.max(count, countPayloadMessages(record.results));
-  if (record.items && typeof record.items === "object") count = Math.max(count, countPayloadMessages(record.items));
-  if (Array.isArray(record.messages)) return Math.max(count, record.messages.length);
-  if (record.messages && typeof record.messages === "object") return Math.max(count, Object.keys(record.messages).length);
-  return count;
-}
-
 function messageTime(message: ApiMessage): number {
   const raw = message.createdAt ?? message.created_at ?? 0;
   return raw > 10_000_000_000 ? raw : raw * 1000;
-}
-
-function formatTime(value: number): string {
-  return new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-}
-
-function mediaId(media: MediaAttachment | null): number | null {
-  return media?.mediaId || media?.media_id || null;
-}
-
-function formatBody(value: string): string {
-  return escapeHtml(value)
-    .replace(/\bhttps?:\/\/[^\s<]+/g, (url) => `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`)
-    .replace(/\n/g, "<br>");
-}
-
-function numberOrUndefined(value: unknown): number | undefined {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : undefined;
-}
-
-function numberOrNull(value: unknown): number | null {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : null;
-}
-
-function stringOrUndefined(value: unknown): string | undefined {
-  return typeof value === "string" && value ? value : undefined;
-}
-
-function stringOrNull(value: unknown): string | null {
-  return typeof value === "string" && value ? value : null;
-}
-
-function objectValue(value: unknown): RuntimeRecord {
-  return value && typeof value === "object" ? value as RuntimeRecord : {};
-}
-
-function asRecord(value: unknown): RuntimeRecord {
-  return objectValue(value);
-}
-
-function escapeHtml(value: string): string {
-  return value.replace(/[&<>"']/g, (char) => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    '"': "&quot;",
-    "'": "&#39;",
-  })[char] ?? char);
 }

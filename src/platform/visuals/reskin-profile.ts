@@ -11,6 +11,11 @@ export type VisualThemeSettings = {
   tweetFont: "twitter" | "hei" | "mincho" | "menlo";
   uiFont: "twitter" | "hei" | "menlo" | "system";
   backgroundFade: boolean;
+  useRemiliaProfileColor: boolean;
+  mediaAdvanced: boolean;
+  pfpRounding: number;
+  mediaRounding: number;
+  quoteSpacing: number;
   squareMedia: boolean;
   pfpShape: "circle" | "rounded-square" | "square";
   pfpFeed: boolean;
@@ -28,6 +33,7 @@ export type VisualThemeSettings = {
   newPostsSound: boolean;
   notificationUnreadTint: boolean;
   hideMessageRequestDot: boolean;
+  hideBoostButton: boolean;
   remistatsBox: boolean;
   incomingPokeGold: boolean;
   reminetChatOverlay: boolean;
@@ -38,6 +44,8 @@ export type VisualThemeSettings = {
   maxxerIntensity: "subtle" | "marked" | "card";
   maxxerSeparators: "subtle" | "beveled" | "none";
   maxxerShimmer: boolean;
+  tweetPngIncludeDisplayName: boolean;
+  tweetPngIncludeHandle: boolean;
   tweetPngIncludeImages: boolean;
   tweetPngIncludeQuoteText: boolean;
   tweetPngIncludeQuoteImages: boolean;
@@ -46,7 +54,8 @@ export type VisualThemeSettings = {
   tweetPngIncludeWatermark: boolean;
   tweetPngIncludeStats: boolean;
   tweetPngBorder: boolean;
-  tweetPngBorderPalette: "purple" | "gray" | "blue" | "green";
+  tweetPngBorderPalette: "purple" | "gray" | "blue" | "green" | `#${string}`;
+  interfaceAccentColor: string;
   tweetPngBackgroundColor: string;
   tweetPngFontColor: string;
 };
@@ -69,7 +78,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     owner: "root-visuals",
     scope: "global-x",
     profilePackSafe: true,
-    settings: ["profile", "tweetFont", "uiFont", "backgroundFade"],
+    settings: ["profile", "tweetFont", "uiFont", "backgroundFade", "useRemiliaProfileColor", "interfaceAccentColor"],
   },
   {
     id: "root-avatars-media",
@@ -77,7 +86,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     owner: "root-visuals",
     scope: "global-x",
     profilePackSafe: true,
-    settings: ["pfpShape", "pfpFeed", "pfpNotifications", "pfpChat", "squareMedia", "quoteMediaGap", "maxMediaHeight"],
+    settings: ["mediaAdvanced", "pfpRounding", "mediaRounding", "quoteSpacing", "pfpShape", "pfpFeed", "pfpNotifications", "pfpChat", "squareMedia", "quoteMediaGap", "maxMediaHeight"],
   },
   {
     id: "root-notifications",
@@ -94,6 +103,7 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     scope: "global-x",
     profilePackSafe: true,
     settings: [
+      "hideBoostButton",
       "postButtonClickly",
       "postSound",
       "sidebarBevel",
@@ -117,6 +127,8 @@ export const VISUAL_THEME_CONTROL_GROUPS: readonly VisualThemeControlGroup[] = [
     scope: "feature-mirror",
     profilePackSafe: true,
     settings: [
+      "tweetPngIncludeDisplayName",
+      "tweetPngIncludeHandle",
       "tweetPngIncludeImages",
       "tweetPngIncludeQuoteText",
       "tweetPngIncludeQuoteImages",
@@ -168,13 +180,15 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   profile: DEFAULT_RESKIN_PROFILE,
   tweetFont: "twitter",
   uiFont: "twitter",
+  useRemiliaProfileColor: true,
   backgroundFade: true,
-  squareMedia: true,
-  pfpShape: "rounded-square",
+  mediaAdvanced: false,
+  squareMedia: true, mediaRounding: 0,
+  pfpShape: "rounded-square", pfpRounding: 25,
   pfpFeed: true,
   pfpNotifications: true,
   pfpChat: true,
-  quoteMediaGap: false,
+  quoteMediaGap: false, quoteSpacing: 0,
   appWindowStyle: "reminet",
   appShadows: true,
   maxMediaHeight: 520,
@@ -186,6 +200,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   newPostsSound: true,
   notificationUnreadTint: true,
   hideMessageRequestDot: false,
+  hideBoostButton: true,
   remistatsBox: false,
   incomingPokeGold: true,
   reminetChatOverlay: false,
@@ -196,6 +211,8 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   maxxerIntensity: "marked",
   maxxerSeparators: "subtle",
   maxxerShimmer: true,
+  tweetPngIncludeDisplayName: true,
+  tweetPngIncludeHandle: true,
   tweetPngIncludeImages: true,
   tweetPngIncludeQuoteText: true,
   tweetPngIncludeQuoteImages: true,
@@ -204,6 +221,7 @@ export const DEFAULT_VISUAL_THEME: VisualThemeSettings = {
   tweetPngIncludeWatermark: true,
   tweetPngIncludeStats: true,
   tweetPngBorder: true,
+  interfaceAccentColor: "",
   tweetPngBorderPalette: "purple",
   tweetPngBackgroundColor: "#fffaff",
   tweetPngFontColor: "#20122f",
@@ -216,12 +234,12 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetFont: "hei",
     uiFont: "twitter",
     backgroundFade: true,
-    squareMedia: true,
-    pfpShape: "rounded-square",
+    squareMedia: true, mediaRounding: 0,
+    pfpShape: "rounded-square", pfpRounding: 25,
     pfpFeed: true,
     pfpNotifications: true,
     pfpChat: true,
-    quoteMediaGap: false,
+    quoteMediaGap: false, quoteSpacing: 0,
     appWindowStyle: "reminet",
     appShadows: true,
     maxMediaHeight: 480,
@@ -242,6 +260,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "card",
     maxxerSeparators: "beveled",
     maxxerShimmer: true,
+    tweetPngIncludeDisplayName: true,
+    tweetPngIncludeHandle: true,
     tweetPngIncludeImages: true,
     tweetPngIncludeQuoteText: true,
     tweetPngIncludeQuoteImages: true,
@@ -250,6 +270,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
+    interfaceAccentColor: "",
     tweetPngBorderPalette: "purple",
     tweetPngBackgroundColor: "#fffaff",
     tweetPngFontColor: "#20122f",
@@ -260,12 +281,12 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetFont: "twitter",
     uiFont: "twitter",
     backgroundFade: true,
-    squareMedia: true,
-    pfpShape: "rounded-square",
+    squareMedia: true, mediaRounding: 0,
+    pfpShape: "rounded-square", pfpRounding: 25,
     pfpFeed: true,
     pfpNotifications: true,
     pfpChat: false,
-    quoteMediaGap: true,
+    quoteMediaGap: true, quoteSpacing: 12,
     appWindowStyle: "reminet",
     appShadows: true,
     maxMediaHeight: 560,
@@ -286,6 +307,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "marked",
     maxxerSeparators: "subtle",
     maxxerShimmer: false,
+    tweetPngIncludeDisplayName: true,
+    tweetPngIncludeHandle: true,
     tweetPngIncludeImages: true,
     tweetPngIncludeQuoteText: true,
     tweetPngIncludeQuoteImages: true,
@@ -294,6 +317,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: true,
+    interfaceAccentColor: "",
     tweetPngBorderPalette: "purple",
     tweetPngBackgroundColor: "#fffaff",
     tweetPngFontColor: "#20122f",
@@ -304,12 +328,12 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetFont: "twitter",
     uiFont: "twitter",
     backgroundFade: false,
-    squareMedia: false,
-    pfpShape: "circle",
+    squareMedia: false, mediaRounding: 16,
+    pfpShape: "circle", pfpRounding: 100,
     pfpFeed: false,
     pfpNotifications: false,
     pfpChat: false,
-    quoteMediaGap: true,
+    quoteMediaGap: true, quoteSpacing: 12,
     appWindowStyle: "reminet",
     appShadows: false,
     maxMediaHeight: 0,
@@ -330,6 +354,8 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     maxxerIntensity: "subtle",
     maxxerSeparators: "none",
     maxxerShimmer: false,
+    tweetPngIncludeDisplayName: true,
+    tweetPngIncludeHandle: true,
     tweetPngIncludeImages: true,
     tweetPngIncludeQuoteText: true,
     tweetPngIncludeQuoteImages: true,
@@ -338,6 +364,7 @@ export const VISUAL_PRESETS: Record<ReskinProfile, VisualThemeSettings> = {
     tweetPngIncludeWatermark: true,
     tweetPngIncludeStats: true,
     tweetPngBorder: false,
+    interfaceAccentColor: "",
     tweetPngBorderPalette: "gray",
     tweetPngBackgroundColor: "#fffaff",
     tweetPngFontColor: "#20122f",
@@ -383,6 +410,11 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     tweetFont: oneOf(record.tweetFont, ["twitter", "hei", "mincho", "menlo"], fallback.tweetFont),
     uiFont: oneOf(record.uiFont, ["twitter", "hei", "menlo", "system"], fallback.uiFont),
     backgroundFade: booleanValue(record.backgroundFade, fallback.backgroundFade),
+    useRemiliaProfileColor: booleanValue(record.useRemiliaProfileColor, true),
+    mediaAdvanced: booleanValue(record.mediaAdvanced, false),
+    pfpRounding: numberValue(record.pfpRounding, (record.pfpShape ?? fallback.pfpShape) === "circle" ? 100 : (record.pfpShape ?? fallback.pfpShape) === "square" ? 0 : 25, 0, 100),
+    mediaRounding: numberValue(record.mediaRounding, booleanValue(record.squareMedia, fallback.squareMedia) ? 0 : 16, 0, 100),
+    quoteSpacing: numberValue(record.quoteSpacing, booleanValue(record.quoteMediaGap, fallback.quoteMediaGap) ? 12 : 0, 0, 32),
     squareMedia: booleanValue(record.squareMedia, fallback.squareMedia),
     pfpShape: oneOf(record.pfpShape, ["circle", "rounded-square", "square"], fallback.pfpShape),
     pfpFeed: booleanValue(record.pfpFeed, fallback.pfpFeed),
@@ -400,6 +432,7 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     newPostsSound: booleanValue(record.newPostsSound, fallback.newPostsSound),
     notificationUnreadTint: booleanValue(record.notificationUnreadTint, fallback.notificationUnreadTint),
     hideMessageRequestDot: booleanValue(record.hideMessageRequestDot, fallback.hideMessageRequestDot),
+    hideBoostButton: booleanValue(record.hideBoostButton, fallback.hideBoostButton),
     remistatsBox: booleanValue(record.remistatsBox, fallback.remistatsBox),
     incomingPokeGold: booleanValue(record.incomingPokeGold, fallback.incomingPokeGold),
     reminetChatOverlay: booleanValue(record.reminetChatOverlay, fallback.reminetChatOverlay),
@@ -410,6 +443,8 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     maxxerIntensity: oneOf(record.maxxerIntensity, ["subtle", "marked", "card"], fallback.maxxerIntensity),
     maxxerSeparators: oneOf(record.maxxerSeparators, ["subtle", "beveled", "none"], fallback.maxxerSeparators),
     maxxerShimmer: booleanValue(record.maxxerShimmer, fallback.maxxerShimmer),
+    tweetPngIncludeDisplayName: booleanValue(record.tweetPngIncludeDisplayName, fallback.tweetPngIncludeDisplayName),
+    tweetPngIncludeHandle: booleanValue(record.tweetPngIncludeHandle, fallback.tweetPngIncludeHandle),
     tweetPngIncludeImages: booleanValue(record.tweetPngIncludeImages, fallback.tweetPngIncludeImages),
     tweetPngIncludeQuoteText: booleanValue(record.tweetPngIncludeQuoteText, fallback.tweetPngIncludeQuoteText),
     tweetPngIncludeQuoteImages: booleanValue(record.tweetPngIncludeQuoteImages, fallback.tweetPngIncludeQuoteImages),
@@ -418,7 +453,10 @@ export function normalizeVisualTheme(value: unknown, profileFallback: ReskinProf
     tweetPngIncludeWatermark: booleanValue(record.tweetPngIncludeWatermark, fallback.tweetPngIncludeWatermark),
     tweetPngIncludeStats: booleanValue(record.tweetPngIncludeStats, fallback.tweetPngIncludeStats),
     tweetPngBorder: booleanValue(record.tweetPngBorder, fallback.tweetPngBorder),
-    tweetPngBorderPalette: oneOf(record.tweetPngBorderPalette, ["purple", "gray", "blue", "green"], fallback.tweetPngBorderPalette),
+    interfaceAccentColor: typeof record.interfaceAccentColor === "string" && /^#[0-9a-f]{6}$/i.test(record.interfaceAccentColor) ? record.interfaceAccentColor.toLowerCase() : "",
+    tweetPngBorderPalette: typeof record.tweetPngBorderPalette === "string" && /^#[0-9a-f]{6}$/i.test(record.tweetPngBorderPalette)
+      ? record.tweetPngBorderPalette.toLowerCase() as `#${string}`
+      : oneOf(record.tweetPngBorderPalette, ["purple", "gray", "blue", "green"], fallback.tweetPngBorderPalette),
     tweetPngBackgroundColor: colorValue(record.tweetPngBackgroundColor, fallback.tweetPngBackgroundColor),
     tweetPngFontColor: colorValue(record.tweetPngFontColor, fallback.tweetPngFontColor),
   };
@@ -439,4 +477,22 @@ function booleanValue(value: unknown, fallback: boolean): boolean {
 function numberValue(value: unknown, fallback: number, min: number, max: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
+}
+
+/** Sanitized profile personalization shared by settings and Full X appearance. */
+export const REMILIA_PROFILE_ACCENT_KEY = "milxdy.remilia.profileAccent";
+export function remiliaHueAccent(hue: unknown): string {
+  if (typeof hue !== "number" || !Number.isFinite(hue)) return "";
+  const h = ((hue % 360) + 360) % 360;
+  const s = .55, l = .45, a = s * Math.min(l, 1 - l);
+  const channel = (n: number) => {
+    const k = (n + h / 30) % 12;
+    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1)))).toString(16).padStart(2, "0");
+  };
+  return `#${channel(0)}${channel(8)}${channel(4)}`;
+}
+export function resolveXProfileAccent(theme: VisualThemeSettings, accent: unknown): string {
+  const profileColor = typeof accent === "string" && /^#[0-9a-f]{6}$/i.test(accent) ? accent : "";
+  return theme.profile === "max" ? (theme.useRemiliaProfileColor ? profileColor : "") || theme.interfaceAccentColor
+    : "";
 }

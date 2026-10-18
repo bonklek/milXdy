@@ -1,3 +1,6 @@
+import { createMaxxerAccountStateLoader } from "./account-state-loader";
+import { pokeStatisticsSection, observeRemiNetPokeCredits } from "./poke-statistics-panel";
+import { normalizePokeStatistics, readPokeStatisticsFromHost, type PokeStatistics } from "./shared/poke-statistics";
 import { DEFAULT_SETTINGS, DEFAULT_STATS, DEFAULT_PLAYER_STATS } from "./shared/constants";
 import { getLevel, getLevelProgress, getPlayerLevel, getPlayerLevelProgress } from "./shared/levels";
 import { normalizeProfileImageUrl } from "./shared/image-core";
@@ -58,13 +61,8 @@ import {
 import {
   setSoundSettings,
   attachSoundEvents,
-  attachPostButtonSound,
-  attachDMSounds,
   attachGlobalMediaHoverSounds,
   initializeSurfaceSoundRuntime,
-  observeIncomingMessages,
-  handleIncomingMessageSurface,
-  syncIncomingMessageRoute,
   initializeSoundRuntime,
   playCatchSound,
   playLevelUpSound,
@@ -116,6 +114,7 @@ let matchedAccounts: MatchedAccountMap | null = null;
 let collectedAvatars: CollectedAvatarMap | null = null;
 let playerStats: PlayerStats = DEFAULT_PLAYER_STATS;
 let accountScope: string | null = null;
+let pokeStats: PokeStatistics | null = null;
 let maxxerAppFrame: OverlayAppFrame | null = null;
 let maxxerPanelRoot: HTMLElement | null = null;
 let maxxerPanelSide: OverlayDockSide = "left";
@@ -155,7 +154,7 @@ let runtimeScheduler: AppRuntimeScheduler = createFallbackRuntimeScheduler({
 });
 
 // ---------------------------------------------------------------------------
-// Effects context â€” wires effects module to our shared state
+// Effects context — wires effects module to our shared state
 // ---------------------------------------------------------------------------
 
 function effectsCtx(): EffectsContext {
@@ -201,7 +200,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   setSoundSettings(settings);
   prevPlayerLevel = getPlayerLevel(playerStats.totalLikesGiven);
   registerMaxxerDockApp();
-  observeRemiNetPokeCredits();
+  observeRemiNetPokeCredits(creditMiladyInteraction, normalizeHandle, addRuntimeDisposable);
   observeStorage();
   const resizeListener = () => {
     applyMaxxerPanelLayout();
@@ -219,14 +218,11 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   addRuntimeDisposable(() => document.removeEventListener("visibilitychange", visibilityListener));
   runtimeScheduleScan();
   initializeSurfaceSoundRuntime(addRuntimeDisposable);
-  attachPostButtonSound(addRuntimeDisposable);
-  initializeSoundRuntime(addRuntimeDisposable);
-  attachDMSounds(addRuntimeDisposable);
+  initializeSoundRuntime(addRuntimeDisposable, context?.storage.local);
   attachGlobalMediaHoverSounds(addRuntimeDisposable);
   updatePlayerLevelBadge();
   void processProfilePage();
   scheduleRouteRecoveryPasses();
-  observeIncomingMessages(addRuntimeDisposable);
 }
 
 function scheduleRouteRecoveryPasses(): void {
@@ -361,7 +357,6 @@ export function onSurface(surface: TwitterSurface): void {
   if (surface.kind === "userCell") processWhenVisible(surface.element, () => processUserCell(surface.element));
   if (surface.kind === "notification") void processNotificationGroup(surface.element);
   if (surface.kind === "directMessage") {
-    handleIncomingMessageSurface(surface.element);
     processWhenVisible(surface.element, () => processDirectMessage(surface.element));
   }
   if (surface.kind === "profile") scheduleIdleWork(surface.element, () => processProfilePage());
@@ -370,7 +365,6 @@ export function onSurface(surface: TwitterSurface): void {
 export function onRouteChange(_route: MilxdyRouteChange): void {
   if (!lifecycleActive()) return;
   void syncAccountScope();
-  syncIncomingMessageRoute();
   runtimeScheduleScan();
   updatePlayerLevelBadge();
   void processProfilePage();
@@ -588,6 +582,7 @@ function renderMaxxerPanel(): void {
     <div class="miladymaxxer-panel-resize-edge miladymaxxer-panel-resize-edge-side" data-maxxer-resize="true" data-resize-axis="x" title="Drag to resize width"></div>
     <div class="miladymaxxer-panel-resize-edge miladymaxxer-panel-resize-edge-bottom" data-maxxer-resize="true" data-resize-axis="y" title="Drag to resize height"></div>
   `;
+  root.querySelector(".miladymaxxer-panel-grid")?.after(pokeStatisticsSection(pokeStats, accountScope, async scope => (await runtimeSendMessage?.<{ ok?: boolean }>({ type: "milady:resetPokeStats", scope }))?.ok === true, refreshMaxxerPanel, accountStateLoader.retry));
   root.querySelector<HTMLElement>(".miladymaxxer-panel-header")?.addEventListener("pointerdown", startMaxxerPanelDrag);
   for (const handle of Array.from(root.querySelectorAll<HTMLElement>("[data-maxxer-resize='true']"))) {
     handle.addEventListener("pointerdown", startMaxxerPanelResize);
@@ -865,7 +860,7 @@ async function processTweet(tweet: HTMLElement): Promise<void> {
       return;
     }
 
-    // Manual milady list â€” skip detection, treat as match
+    // Manual milady list — skip detection, treat as match
     if (author && settings.miladyListHandles.includes(author.handle)) {
       tweet.dataset.miladymaxxer = "manual";
       tweet.dataset.miladymaxxerState = "match";
@@ -1031,7 +1026,7 @@ async function processProfilePage(): Promise<void> {
   if (processed.get(userProfileContainer as HTMLElement) === normalizedUrl) return;
   processed.set(userProfileContainer as HTMLElement, normalizedUrl);
 
-  // Manual milady list â€” skip detection for profile page too
+  // Manual milady list — skip detection for profile page too
   if (profileHandle && settings.miladyListHandles.includes(profileHandle)) {
     const primaryColumn = document.querySelector<HTMLElement>(PRIMARY_COLUMN);
     trackMaxxerElement(primaryColumn);
@@ -1044,7 +1039,7 @@ async function processProfilePage(): Promise<void> {
     return;
   }
 
-  // Player level is shown next to the logo â€” don't duplicate on profile
+  // Player level is shown next to the logo — don't duplicate on profile
 
   if (profileHandle && await hasRemiStatsBeetles(profileHandle)) {
     if (!maxxerSurfaceActive()) return;
@@ -1539,7 +1534,7 @@ function injectProfileLevelBadge(handle: string): void {
   const postsLiked = account?.postsLiked ?? 0;
   const progress = getLevelProgress(postsLiked);
 
-  // Check if we already have a badge with the same content â€” skip if unchanged
+  // Check if we already have a badge with the same content — skip if unchanged
   const existingBadge = document.querySelector(".miladymaxxer-profile-level");
 
   const pct = progress.needed > 0 ? Math.round((progress.current / progress.needed) * 100) : 0;
@@ -1558,7 +1553,7 @@ function injectProfileLevelBadge(handle: string): void {
     tooltipLines.push(`Detection score: ${(account.lastDetectionScore * 100).toFixed(0)}%`);
   }
 
-  // Detect if user follows this milady â€” grey pill if not following
+  // Detect if user follows this milady — grey pill if not following
   // Scope follow button search to profile header area (above the tab bar)
   const profileUserNameEl = document.querySelector<HTMLElement>(PROFILE_USER_NAME);
   const profileHeaderArea = profileUserNameEl?.closest('[data-testid="primaryColumn"] > div > div') ?? document.querySelector<HTMLElement>(PRIMARY_COLUMN);
@@ -1751,14 +1746,14 @@ function resolveSelfHandle(): string | null {
   return selfHandle;
 }
 
-async function loadAccountState(scope: string | null): Promise<void> {
-  [stats, matchedAccounts, collectedAvatars, playerStats] = await Promise.all([
-    loadStats(scope),
-    loadMatchedAccounts(scope),
-    loadCollectedAvatars(scope),
-    loadPlayerStats(scope),
-  ]);
-}
+const accountStateLoader = createMaxxerAccountStateLoader({
+  currentScope: () => accountScope,
+  readBase: scope => Promise.all([loadStats(scope), loadMatchedAccounts(scope), loadCollectedAvatars(scope), loadPlayerStats(scope)]),
+  readPokes: scope => readPokeStatisticsFromHost(runtimeSendMessage, scope),
+  applyBase: loaded => { [stats, matchedAccounts, collectedAvatars, playerStats] = loaded; pokeStats = null; },
+  applyPokes: value => { pokeStats = value; refreshMaxxerPanel(); },
+});
+const loadAccountState = accountStateLoader.load;
 
 async function syncAccountScope(): Promise<void> {
   const nextScope = resolveSelfHandle();
@@ -1788,7 +1783,7 @@ function findReplyToHandle(tweet: HTMLElement): string | null {
 }
 
 function checkReplyXP(_tweet: HTMLElement, _author: { handle: string } | null): void {
-  // Disabled â€” XP should only come from like actions
+  // Disabled — XP should only come from like actions
 }
 
 function extractDisplayName(userName: HTMLElement): string | null {
@@ -1910,17 +1905,6 @@ function handleLevelUp(handle: string, _newLevel: number): void {
       triggerLevelUpAnimation(tweet);
     }
   }
-}
-
-function observeRemiNetPokeCredits(): void {
-  const pokeCreditListener = (event: Event) => {
-    const detail = (event as CustomEvent<{ handle?: unknown }>).detail;
-    const handle = normalizeHandle(typeof detail?.handle === "string" ? detail.handle : null);
-    if (!handle) return;
-    creditMiladyInteraction(handle);
-  };
-  window.addEventListener("milxdy:remistats-poke-credit", pokeCreditListener);
-  addRuntimeDisposable(() => window.removeEventListener("milxdy:remistats-poke-credit", pokeCreditListener));
 }
 
 function creditMiladyInteraction(handle: string): void {
@@ -2203,6 +2187,7 @@ function observeStorage(): void {
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (!lifecycleActive()) return;
     const statsKey = storageKeyForScope("stats", accountScope);
+    if (area === "local" && changes[storageKeyForScope("pokeStats", accountScope)]) { pokeStats = normalizePokeStatistics(changes[storageKeyForScope("pokeStats", accountScope)].newValue); refreshMaxxerPanel(); }
     const matchedAccountsKey = storageKeyForScope("matchedAccounts", accountScope);
     const collectedAvatarsKey = storageKeyForScope("collectedAvatars", accountScope);
     const playerStatsKey = storageKeyForScope("playerStats", accountScope);

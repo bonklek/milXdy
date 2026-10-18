@@ -10,9 +10,26 @@
     "contentEntry": "features/rootVisuals.js",
     "defaultEnabled": true,
     "storageKeys": {
+      "sync": [
+        "soundEnabled",
+        "mode"
+      ],
       "local": [
         "milxdy.settings.reskinProfile",
-        "milxdy.settings.visualTheme"
+        "milxdy.settings.visualTheme",
+        "milxdy.remilia.profileAccent",
+        "milxdy.audio.volume.post",
+        "milxdy.audio.volume.sidebar",
+        "milxdy.audio.volume.newPosts",
+        "milxdy.audio.volume.x",
+        "milxdy.audio.volume.xChat",
+        "milxdy.audio.volume.xChatSend",
+        "milxdy.audio.volume.xChatMessage",
+        "milxdy.audio.x.enabled",
+        "milxdy.audio.xChat.enabled",
+        "milxdy.audio.xChat.eventsMigrated",
+        "milxdy.audio.xChat.send.enabled",
+        "milxdy.audio.xChat.message.enabled"
       ]
     },
     "settings": [
@@ -286,14 +303,43 @@
         "presetBehavior": {
           "saveAsCustom": true
         }
+      },
+      {
+        "id": "rootVisuals.hideBoostButton",
+        "label": "Hide Boost button",
+        "description": "Hide the paid Boost action on X posts; turn off to restore it.",
+        "scope": "feature",
+        "location": "appearance",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "hideBoostButton"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ],
+        "presetBehavior": {
+          "saveAsCustom": true
+        }
       }
     ],
     "surfaces": [
       "tweet",
-      "notification"
+      "notification",
+      "directMessage"
     ],
     "deliverySurfaces": [
-      "notification"
+      "tweet",
+      "notification",
+      "directMessage"
     ],
     "siteScopes": [
       {
@@ -305,7 +351,8 @@
         "integration": "contentScript",
         "surfaces": [
           "tweet",
-          "notification"
+          "notification",
+          "directMessage"
         ],
         "notes": [
           "Applies lightweight X/Twitter visual state and notification affordances through the shared scanner and route service."
@@ -354,6 +401,9 @@
       "privacyLabels": [
         "local-only"
       ]
+    },
+    "lifecycle": {
+      "mode": "runtime"
     }
   },
   {
@@ -394,6 +444,52 @@
         },
         "presets": [
           "firstRun",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeDisplayName",
+        "label": "Include display names",
+        "description": "Include display names on the post and quoted post in PNG exports. Source metadata remains available for filenames and attribution.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeDisplayName"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "tweetPng.includeHandle",
+        "label": "Include @handles",
+        "description": "Include @handles on the post and quoted post in PNG exports. Source metadata remains available for filenames and attribution.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.settings.visualTheme",
+          "property": "tweetPngIncludeHandle"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "visual",
           "profilePack"
         ]
       },
@@ -867,9 +963,14 @@
       "local": [
         "remiliaWikiHyperlink.settings",
         "remiliaWikiHyperlink.localAliases",
-        "remiliaWikiHyperlink.denyTerms"
+        "remiliaWikiHyperlink.denyTerms",
+        "remiliaWikiHyperlink.laterItems",
+        "remiliaWikiHyperlink.performanceStats"
       ]
     },
+    "hostActions": [
+      "wiki.openPage"
+    ],
     "settings": [
       {
         "id": "wiki.enabled",
@@ -1111,7 +1212,33 @@
       "messageTypes": [
         "wiki:fetchImageDataUrl"
       ]
-    }
+    },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.localAliases",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.denyTerms",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.laterItems",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "remiliaWikiHyperlink.performanceStats",
+        "kind": "cache",
+        "reset": "preserve"
+      }
+    ]
   },
   {
     "id": "wikiSidebar",
@@ -1126,7 +1253,10 @@
     "storageKeys": {
       "local": [
         "remiliaWikiHyperlink.settings",
-        "milxdy.wikiSidebar.lastUrl"
+        "milxdy.wikiSidebar.lastUrl",
+        "milxdy.wikiSidebar.width",
+        "milxdy.wikiSidebar.height",
+        "milxdy.wikiSidebar.top"
       ]
     },
     "settings": [
@@ -1160,6 +1290,21 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens validated Remilia Wiki pages from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "remiliaWiki",
         "hosts": [
           "https://remilia.wiki/*",
@@ -1171,7 +1316,7 @@
         ],
         "presentation": "hostRouteOverlay",
         "notes": [
-          "The X side-rail app embeds validated Remilia Wiki pages and uses the separate wiki frame script; it is not a general Remilia Wiki app runtime yet."
+          "The X side-rail app embeds validated Remilia Wiki pages and uses the separate wiki frame script."
         ]
       }
     ],
@@ -1449,8 +1594,8 @@
         "control": {
           "type": "slider",
           "min": 0.5,
-          "max": 2,
-          "step": 0.05
+          "max": 10,
+          "step": 0.1
         },
         "reset": {
           "behavior": "restoreDefault"
@@ -1733,6 +1878,8 @@
     "surfaces": [
       "tweet",
       "xArticle",
+      "document",
+      "route",
       "overlayApp"
     ],
     "siteScopes": [
@@ -1746,11 +1893,30 @@
         "surfaces": [
           "tweet",
           "xArticle",
+          "route",
           "overlayApp"
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Adds read-aloud controls to X/Twitter post and article surfaces while keeping the player in the shared overlay rail."
+          "Adds read-aloud controls to X/Twitter post and article surfaces while keeping the player in the shared overlay rail.",
+          "Open X conversations expose an explicit review and browser-only reading action for currently rendered messages; no DM text is sent to custom TTS services."
+        ],
+        "routes": [
+          {
+            "type": "prefix",
+            "path": "/messages/",
+            "surface": "route"
+          },
+          {
+            "type": "exact",
+            "path": "/i/chat",
+            "surface": "route"
+          },
+          {
+            "type": "prefix",
+            "path": "/i/chat/",
+            "surface": "route"
+          }
         ]
       },
       {
@@ -1765,6 +1931,39 @@
         ],
         "notes": [
           "Can read validated wiki-frame article text sent from the Wiki sidebar frame; it does not load the full app runtime directly on the wiki host."
+        ]
+      },
+      {
+        "site": "remiliaWiki",
+        "hosts": [
+          "https://remilia.wiki/*",
+          "https://wiki.remilia.org/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "document",
+          "route",
+          "overlayApp"
+        ],
+        "routes": [
+          {
+            "type": "prefix",
+            "path": "/",
+            "surface": "route"
+          }
+        ],
+        "loadTriggers": [
+          "startup",
+          "dockOpen"
+        ],
+        "presentation": "hostRouteOverlay",
+        "fallback": {
+          "mode": "nativeSite",
+          "url": "https://wiki.remilia.org/",
+          "note": "When Post-reading is disabled, the native Wiki remains unchanged and no reader control is added."
+        },
+        "notes": [
+          "Loads the shared scheduler, route service, settings, diagnostics, and direct article read-aloud surface on approved top-level Remilia Wiki pages."
         ]
       }
     ],
@@ -1805,7 +2004,9 @@
       ],
       "permissionNotes": [
         "OCR uses packaged local worker assets when image text is requested.",
-        "Full-quote fetching uses public X/Twitter embed, syndication, or tweet HTML fallbacks without browser cookies or session tokens."
+        "Full-quote fetching uses public X/Twitter embed, syndication, or tweet HTML fallbacks without browser cookies or session tokens.",
+        "On approved Remilia Wiki hosts, Post-reading reads only the visible article text after the user starts read-aloud.",
+        "Direct-message reading is an explicit reviewed snapshot of visible messages and uses browser speech only."
       ],
       "dataNotes": [
         "Reads selected post text, quote text, and optional image text.",
@@ -1848,7 +2049,9 @@
         "https://twitter.com/*",
         "https://pbs.twimg.com/*",
         "https://publish.twitter.com/*",
-        "https://cdn.syndication.twimg.com/*"
+        "https://cdn.syndication.twimg.com/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*"
       ]
     },
     "assets": [
@@ -1858,6 +2061,24 @@
     "requiredOutputs": [
       "ocr.html",
       "ocrHost.js"
+    ],
+    "contextualPostActions": [
+      {
+        "id": "reviewMp3",
+        "label": "Export as MP3",
+        "placement": "shareMenu"
+      }
+    ],
+    "pageContextActions": [
+      {
+        "id": "convert-audio",
+        "label": "Post-reading: Review and download as MP3",
+        "entry": "postReadingAudioConversion.js",
+        "documentUrlPatterns": [
+          "http://*/*",
+          "https://*/*"
+        ]
+      }
     ]
   },
   {
@@ -1881,12 +2102,16 @@
         "milxdy.remistats.likeAutoPoke",
         "milxdy.remistats.pokeAutoLike",
         "soundsEnabled",
-        "soundVolume"
+        "soundVolume",
+        "milxdy.remistats.banners.nft",
+        "milxdy.remistats.banners.shelf",
+        "milxdy.remistats.banners.original"
       ],
       "local": [
         "milxdy.settings.visualTheme",
         "milxdy.remistats.pokeCooldowns",
-        "milxdy.remistats.incomingPokeCache"
+        "milxdy.remistats.notificationReadState",
+        "milxdy.remistats.lastPokeDiagnostic"
       ]
     },
     "settings": [
@@ -2031,7 +2256,7 @@
         "control": {
           "type": "slider",
           "min": 0,
-          "max": 1,
+          "max": 2,
           "step": 0.05
         },
         "reset": {
@@ -2120,6 +2345,60 @@
           "visual",
           "profilePack"
         ]
+      },
+      {
+        "id": "remistats.banners.nft",
+        "label": "Banners NFT",
+        "description": "Include random Banners NFTs in the profile banner cycle.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.banners.nft"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        }
+      },
+      {
+        "id": "remistats.banners.shelf",
+        "label": "Trophy shelf",
+        "description": "Show the trophy shelf in the profile banner.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.banners.shelf"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        }
+      },
+      {
+        "id": "remistats.banners.original",
+        "label": "X banner",
+        "description": "Include the original X profile banner in the banner cycle.",
+        "scope": "feature",
+        "location": "appsAndFeatures",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.remistats.banners.original"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        }
       }
     ],
     "surfaces": [
@@ -2177,14 +2456,16 @@
       {
         "site": "remiliaNet",
         "hosts": [
-          "https://www.remilia.net/*"
+          "https://www.remilia.net/*",
+          "https://remilia.net/*",
+          "wss://www.remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
           "directMessage"
         ],
         "notes": [
-          "Uses routed RemiliaNET and RemiStats service calls for profile, poke, and trophy data; it does not inject into RemiliaNET pages."
+          "Uses routed official Remilia API calls for delegated account stats, notifications, and pokes; public profile badges retain the separate unauthenticated RemiStats lookup."
         ]
       }
     ],
@@ -2220,10 +2501,10 @@
         "full"
       ],
       "permissionNotes": [
-        "Fetches RemiStats and RemiliaNET profile data for visible handles, Remilia profile images for tooltips, and Milady Maker banner images for profile banners."
+        "Fetches public RemiStats profile data for visible handles and delegated official Remilia account stats, notifications, and poke actions after connection."
       ],
       "dataNotes": [
-        "Sends X handles to the RemiStats API when badge data is needed, may resolve verified PFP owners through Ethereum RPC, loads Remilia profile images from pfp.remilia.net, and background-proxies Milady Maker NFT banner images without account credentials or cookies."
+        "Sends X handles to the public RemiStats API for optional badge data. Official /me stats render only on the connected user's own X profile after the background verifies an exact OIDC username, official directory mapping, and stats-handle match. For non-self profiles and posts, the background separately resolves exact official directory identities before enabling a Poke or trophy shelf, revalidates the identity before Poke, and fails closed on disconnect, ambiguity, or mismatch. Paged notifications and pokes use background-held delegated credentials and exact scopes; content code receives no token or auth state."
       ],
       "remoteServices": [
         "api.remistats.net",
@@ -2233,7 +2514,7 @@
         "ethereum.publicnode.com"
       ],
       "localStorageNotes": [
-        "Stores badge, poke cooldown, and theme state."
+        "Stores badge/theme state, authoritative poke deadlines for labeled offline fallback, and opaque local notification read keys without notification payloads."
       ],
       "privacyLabels": [
         "remote-api"
@@ -2242,8 +2523,15 @@
     "background": {
       "messageTypes": [
         "remistats:getUser",
+        "remistats:getMyStats",
+        "remistats:getMyStatsForXProfile",
+        "remistats:resolvePokeTargets",
+        "remistats:pokeXAuthor",
+        "remistats:markNotificationsRead",
+        "reminetIdentity:resolve",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "beetol:incomingPokes",
         "milxdy:fetchImageDataUrl"
       ]
@@ -2293,7 +2581,8 @@
       ],
       "local": [
         "milxdy.settings.reskinProfile",
-        "milxdy.settings.visualTheme"
+        "milxdy.settings.visualTheme",
+        "milxdy.audio.volume.maxxer"
       ]
     },
     "settings": [
@@ -2546,6 +2835,30 @@
         "presetBehavior": {
           "saveAsCustom": true
         }
+      },
+      {
+        "id": "miladymaxxer.soundVolume",
+        "label": "Sound volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.maxxer"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
       }
     ],
     "surfaces": [
@@ -2652,7 +2965,8 @@
         "ethereum.publicnode.com"
       ],
       "localStorageNotes": [
-        "Stores matched accounts, collected avatars, local player stats, and settings."
+        "Stores matched accounts, collected avatars, local player stats, and settings.",
+        "Successful outgoing poke totals and last success time stay local to the initiating X account until reset; no target names are retained. Up to 256 hashed success receipts expire after 90 days for duplicate protection. Reset leaves XP and collection unchanged."
       ],
       "privacyLabels": [
         "local-only",
@@ -2667,7 +2981,9 @@
     "background": {
       "messageTypes": [
         "milady:*",
-        "reminetIdentity:getProfile"
+        "reminetIdentity:getProfile",
+        "milady:resetPokeStats",
+        "milady:readPokeStats"
       ],
       "services": [
         "onnx"
@@ -2689,6 +3005,20 @@
     ],
     "requiredOutputs": [
       "worker.js"
+    ],
+    "storageResources": [
+      {
+        "area": "sync",
+        "key": "whitelistHandles",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "sync",
+        "key": "miladyListHandles",
+        "kind": "authoredData",
+        "reset": "preserve"
+      }
     ]
   },
   {
@@ -2706,9 +3036,25 @@
         "milxdy.remistats.beetol.enabled",
         "milxdy.bextol.enabled",
         "beetolColor",
-        "beetolMode"
+        "beetolMode",
+        "milxdy.settings.theme",
+        "beetol.hunterPosition",
+        "beetol.cooldownState"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "beetol.hunterPosition",
+        "kind": "settings"
+      },
+      {
+        "area": "local",
+        "key": "beetol.cooldownState",
+        "kind": "cache",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "beetol.enabled",
@@ -2824,9 +3170,25 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens Beetol from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "remiliaNet",
         "hosts": [
-          "https://www.remilia.net/*"
+          "https://www.remilia.net/*",
+          "https://remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
@@ -2834,7 +3196,7 @@
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Uses the browser RemiliaNET session through routed background services after user interaction; no RemiliaNET content-script runtime loads today."
+          "Uses the browser RemiliaNET session through routed background services after user interaction."
         ]
       }
     ],
@@ -2921,7 +3283,7 @@
     "id": "reminetChat",
     "name": "RemiNet Chat",
     "version": "0.1.5",
-    "description": "Provides a docked RemiliaNET chat client and X messages integration.",
+    "description": "Provides a docked RemiliaNET chat client with official REST authority and isolated legacy realtime/media adapters.",
     "packageKind": "app",
     "entryName": "features/reminetChat",
     "entryPoint": "src/apps/reminet-chat/entry.ts",
@@ -2934,7 +3296,12 @@
         "milxdy.reminetChat.width",
         "milxdy.reminetChat.height",
         "milxdy.reminetChat.top",
-        "milxdy.reminetChat.profileCache.v3"
+        "milxdy.reminetChat.profileCache.v3",
+        "milxdy.audio.volume.chatSend",
+        "milxdy.audio.volume.chatReact",
+        "milxdy.audio.volume.chatReactToMe",
+        "milxdy.audio.volume.chatMessage",
+        "milxdy.audio.volume.chatPoke"
       ],
       "sync": [
         "milxdy.reminetChat.sounds.enabled",
@@ -3006,7 +3373,7 @@
         "control": {
           "type": "slider",
           "min": 0,
-          "max": 1,
+          "max": 2,
           "step": 0.05
         },
         "reset": {
@@ -3052,6 +3419,192 @@
         "defaultValue": true,
         "control": {
           "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.poke",
+        "label": "Pokes",
+        "description": "Play audio feedback for pokes.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.poke"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.react",
+        "label": "Your reactions",
+        "description": "Play audio feedback for your reactions.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.react"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.reactToMe",
+        "label": "Reactions to you",
+        "description": "Play audio feedback for reactions to you.",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "sync",
+          "key": "milxdy.reminetChat.sounds.reactToMe"
+        },
+        "defaultValue": true,
+        "control": {
+          "type": "toggle"
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.send.volume",
+        "label": "Sent messages volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.chatSend"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.message.volume",
+        "label": "New messages volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.chatMessage"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.poke.volume",
+        "label": "Pokes volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.chatPoke"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.react.volume",
+        "label": "Your reactions volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.chatReact"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
+        },
+        "reset": {
+          "behavior": "restoreDefault"
+        },
+        "presets": [
+          "audio",
+          "profilePack"
+        ]
+      },
+      {
+        "id": "reminetChat.sounds.reactToMe.volume",
+        "label": "Reactions to you volume",
+        "scope": "app",
+        "location": "appSurface",
+        "storage": {
+          "area": "local",
+          "key": "milxdy.audio.volume.chatReactToMe"
+        },
+        "defaultValue": 1,
+        "control": {
+          "type": "slider",
+          "min": 0,
+          "max": 2,
+          "step": 0.01
         },
         "reset": {
           "behavior": "restoreDefault"
@@ -3114,7 +3667,7 @@
         "site": "remiliaNet",
         "hosts": [
           "https://www.remilia.net/*",
-          "wss://www.remilia.net/*"
+          "https://remilia.net/*"
         ],
         "integration": "backgroundService",
         "surfaces": [
@@ -3122,7 +3675,7 @@
         ],
         "presentation": "sideRailOverlay",
         "notes": [
-          "Uses RemiliaNET HTTP and WebSocket services through background routing and the browser session; it does not inject the app runtime into RemiliaNET pages yet."
+          "Uses the official Remilia API for authoritative chat REST behavior. A same-extension RemiliaNET top-frame bridge retains the undocumented WebSocket only as optional acceleration, and explicit media sends retain isolated legacy upload/confirm behavior until official equivalents exist."
         ]
       }
     ],
@@ -3160,10 +3713,10 @@
         "full"
       ],
       "permissionNotes": [
-        "Uses the browser RemiliaNET session and a background WebSocket port."
+        "Official chat REST uses the trusted API client. Optional legacy realtime/media adapters remain first-party-only, require exact RemiliaNET origins, and are not exposed to local packages."
       ],
       "dataNotes": [
-        "Sends chat reads, sends, reactions, RemiliaNET media fetches, pfp.remilia.net avatar fetches, and profile lookups to RemiliaNET."
+        "Sends official chat reads and text/reply posts to the Remilia API. When explicitly selected attachments are sent, a legacy adapter uploads and confirms them before a legacy media-bearing message mutation; pending files are never uploaded merely by selecting them."
       ],
       "remoteServices": [
         "www.remilia.net",
@@ -3187,6 +3740,7 @@
         "reminetChat:*",
         "reminetIdentity:getProfile",
         "beetol:poke",
+        "beetol:pokeEligibility",
         "remistats:getUser",
         "reminetIdentity:getProfile"
       ],
@@ -3194,6 +3748,30 @@
         "remiliaAuth"
       ]
     },
+    "remiliaCapabilities": [
+      {
+        "id": "remilia.chat.read",
+        "operations": [
+          "listGlobalChatMessages"
+        ],
+        "scopes": [
+          "remilia:chat.read"
+        ],
+        "consent": "enablement",
+        "reason": "Read official Remilia global chat history while RemiNet Chat is enabled."
+      },
+      {
+        "id": "remilia.chat.write",
+        "operations": [
+          "postGlobalChatMessage"
+        ],
+        "scopes": [
+          "remilia:chat.write"
+        ],
+        "consent": "perInvocation",
+        "reason": "Post text or replies to official Remilia global chat after an explicit Send action."
+      }
+    ],
     "permissions": {
       "hosts": [
         "https://www.remilia.net/*",
@@ -3230,9 +3808,24 @@
         "milxdy.miladychan.width",
         "milxdy.miladychan.height",
         "milxdy.miladychan.top",
-        "milxdy.miladychan.postDraft"
+        "milxdy.miladychan.postDraft",
+        "milxdy.miladychan.watchedThreads"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "milxdy.miladychan.postDraft",
+        "kind": "authoredData",
+        "reset": "preserve"
+      },
+      {
+        "area": "local",
+        "key": "milxdy.miladychan.watchedThreads",
+        "kind": "authoredData",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "miladychan.enabled",
@@ -3263,6 +3856,21 @@
     ],
     "siteScopes": [
       {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Opens the Miladychan Portal from the X/Twitter side rail."
+        ]
+      },
+      {
         "site": "miladychan",
         "hosts": [
           "https://boards.miladychan.org/*"
@@ -3274,6 +3882,28 @@
         "presentation": "sideRailOverlay",
         "notes": [
           "Fetches public Miladychan board and thread JSON and can explicitly submit a text-only post through fixed native endpoints with credentials omitted; the visible poster pseudonym defaults to milXdy and is not derived from an account."
+        ]
+      },
+      {
+        "site": "miladychan",
+        "hosts": [
+          "https://boards.miladychan.org/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "loadTriggers": [
+          "dockOpen"
+        ],
+        "presentation": "sideRailOverlay",
+        "fallback": {
+          "mode": "nativeSite",
+          "url": "https://boards.miladychan.org/",
+          "note": "Native boards remain the full posting, CAPTCHA, media, and session-bound fallback."
+        },
+        "notes": [
+          "Appears in the scoped Miladychan launcher and keeps all public JSON and text-only posting calls on the existing allowlisted background routes."
         ]
       }
     ],
@@ -3374,9 +4004,20 @@
         "milxdy.music.top",
         "milxdy.music.libraryMinimized",
         "milxdy.music.volume",
-        "milxdy.music.autoAcceptHighConfidenceIsrc"
+        "milxdy.music.autoAcceptHighConfidenceIsrc",
+        "milxdy.music.remoteEnrichmentConsent",
+        "milxdy.music.acoustIdClientKey",
+        "milxdy.music.enrichmentServices"
       ]
     },
+    "storageResources": [
+      {
+        "area": "local",
+        "key": "milxdy.music.acoustIdClientKey",
+        "kind": "sensitiveData",
+        "reset": "preserve"
+      }
+    ],
     "settings": [
       {
         "id": "music.enabled",
@@ -3448,6 +4089,23 @@
     "surfaces": [
       "overlayApp"
     ],
+    "siteScopes": [
+      {
+        "site": "x",
+        "hosts": [
+          "https://x.com/*",
+          "https://twitter.com/*"
+        ],
+        "integration": "contentScript",
+        "surfaces": [
+          "overlayApp"
+        ],
+        "presentation": "sideRailOverlay",
+        "notes": [
+          "Keeps local music and optional enrichment in the X/Twitter side rail."
+        ]
+      }
+    ],
     "cost": {
       "startup": "heavy",
       "perSurface": "cheap",
@@ -3485,10 +4143,11 @@
         "Requires user-selected local folder access for music indexing."
       ],
       "dataNotes": [
-        "Reads selected local audio files and may send track metadata to MusicBrainz during enrichment."
+        "Folder add/rescan reads selected local files without remote requests. Explicit Enrich sends title, artist, album and recording IDs to selected MusicBrainz; optional AcoustID sends fingerprint, duration and client key only when separately selected."
       ],
       "remoteServices": [
-        "musicbrainz.org"
+        "musicbrainz.org",
+        "api.acoustid.org"
       ],
       "localStorageNotes": [
         "Stores music library metadata, playlists, layout, volume, and enrichment settings."
@@ -3527,11 +4186,11 @@
         "target": "content.css"
       }
     ],
-  "assets": [
-    "music"
-  ],
-  "requiredOutputs": [
-    "features/chromaprint.wasm"
-  ]
-}
+    "assets": [
+      "music"
+    ],
+    "requiredOutputs": [
+      "features/chromaprint.wasm"
+    ]
+  }
 ]

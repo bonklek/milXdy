@@ -41,7 +41,7 @@
         "allOf": [{
           "if": { "properties": { "distributionScope": { "const": "upstream-default" } }, "required": ["distributionScope"] },
           "then": { "properties": {
-            "licenseStatus": { "const": "declared" }, "licenseId": { "const": "VPL" },
+            "licenseStatus": { "const": "declared" }, "licenseId": { "type": "string", "minLength": 1 },
             "manifestSha256": { "$ref": "#/$defs/sha256" }, "decisionId": { "type": "string", "minLength": 1 }
           } }
         }]

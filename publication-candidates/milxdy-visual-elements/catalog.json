@@ -10,7 +10,7 @@
   },
   "policies": {
     "contribution": "docs/ASSET_AND_CONTRIBUTION_POLICY.md",
-    "upstreamReview": "CONTRIBUTING.md#lane-b-defaultupstream-inclusion",
+    "upstreamReview": "CONTRIBUTING.md#defaultupstream-inclusion",
     "removal": "docs/ASSET_AND_CONTRIBUTION_POLICY.md#deprecation-replacement-and-removal"
   },
   "entries": []

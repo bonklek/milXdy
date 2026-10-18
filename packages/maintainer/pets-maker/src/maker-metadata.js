@@ -21,26 +21,71 @@ export function makerMetadataUrl(family, tokenId) {
   return `${MAKER_METADATA_ORIGIN}/metadata/${encodeURIComponent(familyName)}/${tokenId}`;
 }
 
-export async function fetchMakerTraits(family, tokenId, { signal, fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(makerMetadataUrl(family, tokenId), {
-    method: "GET",
-    headers: { Accept: "application/json" },
-    credentials: "omit",
-    referrerPolicy: "no-referrer",
-    signal,
-  });
-  if (!response.ok) throw new Error(`Maker metadata request failed (${response.status}).`);
+/** @param {{ signal?: AbortSignal, fetchImpl?: typeof fetch }} [options] */
+export async function fetchMakerTraits(family, tokenId, options = {}) {
+  const { signal, fetchImpl = fetch } = options;
+  const controller = new AbortController();
+  const abort = () => controller.abort(signal.reason);
+  if (signal?.aborted) abort();
+  else signal?.addEventListener("abort", abort, { once: true });
+  const timeout = setTimeout(() => controller.abort(new DOMException("Maker metadata request timed out.", "TimeoutError")), 15_000);
+  try {
+    const url = makerMetadataUrl(family, tokenId);
+    const response = await fetchImpl(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      redirect: "error",
+      signal: controller.signal,
+    });
+    controller.signal.throwIfAborted();
+    if (response.url && response.url !== url) throw new Error("Maker metadata response changed destination.");
+    if (!response.ok) throw new Error(`Maker metadata request failed (${response.status}).`);
+    const text = await readMetadataText(response, controller.signal);
+    let metadata;
+    try {
+      metadata = JSON.parse(text);
+    } catch {
+      throw new Error("Maker metadata response was not valid JSON.");
+    }
+    return traitsFromMakerMetadata(family, metadata);
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener("abort", abort);
+  }
+}
+
+async function readMetadataText(response, signal) {
   const declaredLength = Number(response.headers.get("content-length") || 0);
   if (declaredLength > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
-  const text = await response.text();
-  if (text.length > MAX_METADATA_BYTES) throw new Error("Maker metadata response is too large.");
-  let metadata;
+  if (!response.body) throw new Error("Maker metadata response was empty.");
+  const reader = response.body.getReader();
+  const cancel = () => void reader.cancel().catch(() => undefined);
+  signal.addEventListener("abort", cancel, { once: true });
+  const chunks = [];
+  let size = 0;
   try {
-    metadata = JSON.parse(text);
-  } catch {
-    throw new Error("Maker metadata response was not valid JSON.");
+    for (;;) {
+      signal.throwIfAborted();
+      const { done, value } = await reader.read();
+      signal.throwIfAborted();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_METADATA_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        throw new Error("Maker metadata response is too large.");
+      }
+      chunks.push(value);
+    }
+  } finally {
+    signal.removeEventListener("abort", cancel);
+    reader.releaseLock();
   }
-  return traitsFromMakerMetadata(family, metadata);
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(bytes);
 }
 
 export function traitsFromMakerMetadata(family, metadata) {

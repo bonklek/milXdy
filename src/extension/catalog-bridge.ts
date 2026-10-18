@@ -10,6 +10,10 @@ function postBridgeReady(): void {
 }
 
 if (isCatalogPage()) {
+  chrome.runtime.onMessage.addListener((message, sender, respond) => {
+    if (sender.id !== chrome.runtime.id || message?.type !== "milxdy:confirmCatalogTab") return;
+    respond({ catalog: isCatalogPage() && location.pathname.startsWith("/milXdy/addons/") });
+  });
   window.addEventListener("message", (event) => {
     if (event.source !== window || event.origin !== CATALOG_ORIGIN) return;
     const message = event.data as Record<string, unknown> | null;

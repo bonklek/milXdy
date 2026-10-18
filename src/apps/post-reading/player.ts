@@ -1,3 +1,6 @@
+import { readingMotionDisclosure } from "./motion-policy";
+import { createReadingStatusView, type ReadingSchedule } from "./reading-status";
+import { createOcrProgressView, updateOcrProgressView } from "./ocr-progress-view";
 import { icon } from "./icons";
 import { postReadingAssetUrl } from "./assetUrl";
 import type { BoundarySupport } from "./speech";
@@ -31,6 +34,7 @@ type PlayerActions = {
 
 export class MiniPlayer {
   private root: HTMLDivElement;
+  private accessibility: ReturnType<typeof createReadingStatusView>;
   private originalParent: HTMLElement | null = null;
   private title: HTMLSpanElement;
   private playButton: HTMLButtonElement;
@@ -62,8 +66,8 @@ export class MiniPlayer {
   private probingVoices = false;
   private probeAbort: AbortController | null = null;
 
-  constructor(settings: PostReadingSettings, actions: PlayerActions) {
-    this.settings = settings;
+  constructor(settings: PostReadingSettings, actions: PlayerActions, schedule: ReadingSchedule) {
+    this.accessibility = createReadingStatusView(schedule); this.settings = settings;
     this.actions = actions;
     ensureOverlayAppChromeStyles();
     this.root = document.createElement("div");
@@ -158,20 +162,10 @@ export class MiniPlayer {
       this.close();
     }, { capture: true });
 
-    this.ocrStatus = document.createElement("div");
-    this.ocrStatus.className = "post-reading-ocr";
-    this.ocrStatus.hidden = true;
-    const ocrDetails = document.createElement("div");
-    ocrDetails.className = "post-reading-ocr-details";
-    this.ocrText = document.createElement("span");
-    this.ocrBar = document.createElement("div");
-    this.ocrBar.className = "post-reading-ocr-bar";
-    this.ocrBar.setAttribute("role", "progressbar");
-    this.ocrBar.setAttribute("aria-valuemin", "0");
-    this.ocrBar.setAttribute("aria-valuemax", "100");
-    this.ocrBar.innerHTML = '<span></span>';
-    ocrDetails.append(this.ocrText, this.ocrBar);
-    this.ocrStatus.append(ocrDetails);
+    const ocrProgress = createOcrProgressView();
+    this.ocrStatus = ocrProgress.status;
+    this.ocrText = ocrProgress.text;
+    this.ocrBar = ocrProgress.bar;
 
     this.settingsPanel = document.createElement("div");
     this.settingsPanel.className = "post-reading-settings";
@@ -183,7 +177,7 @@ export class MiniPlayer {
     headerActions.append(settingsButton, minimize, quit);
     header.append(heading, headerActions);
     controls.append(prev, prevChunk, this.playButton, nextChunk, next, this.skipOcrButton);
-    shell.append(header, controls, this.ocrStatus);
+    shell.append(header, controls, this.accessibility.progress, this.ocrStatus, this.accessibility.live);
     card.append(shell, this.settingsPanel, resizeSide, resizeBottom, resizeGripLeft, resizeGripRight);
     this.root.append(card);
     document.body.appendChild(this.root);
@@ -203,13 +197,16 @@ export class MiniPlayer {
   }
 
   updateState(state: SpeechState): void {
+    this.accessibility.speech(state);
     if (!this.minimized && !(this.closing && state.status === "idle" && !state.title)) {
-      this.setVisible(!(state.status === "idle" && !state.title));
+      this.setVisible(Boolean(state.error) || !(state.status === "idle" && !state.title));
     }
     const progress = state.chunkCount > 1 ? ` ${state.chunkIndex}/${state.chunkCount}` : "";
     this.title.textContent = state.error || (state.isPriming
       ? "Preparing selected voice…"
-      : `${state.title || "Post-reading"}${progress}`);
+      : state.status === "speaking" && state.hasStarted === false
+        ? "Starting playback…"
+        : `${state.title || "Post-reading"}${progress}`);
     this.lastSpeechStatus = state.status;
     this.setPlayButtonIcon(state.status === "speaking");
   }
@@ -218,10 +215,23 @@ export class MiniPlayer {
     // Explicit navigation may scroll and rescan beyond currently mounted posts.
     // Availability is informational only; never turn a discoverable direction
     // into a dead control.
+    this.previousPostButton.setAttribute("aria-label", "Previous post");
+    this.nextPostButton.setAttribute("aria-label", "Next post");
     this.previousPostButton.disabled = false;
     this.nextPostButton.disabled = false;
     this.previousPostButton.title = availability.previous ? "Previous post" : "Find previous post";
     this.nextPostButton.title = availability.next ? "Next post" : "Find next post";
+  }
+
+  setArticleNavigationAvailability(availability: { previous: boolean; next: boolean }): void {
+    for (const [button, label, enabled] of [
+      [this.previousPostButton, "Previous paragraph", availability.previous],
+      [this.nextPostButton, "Next paragraph", availability.next],
+    ] as const) {
+      button.setAttribute("aria-label", label);
+      button.title = label;
+      button.disabled = !enabled;
+    }
   }
 
   updateSettings(settings: PostReadingSettings): void {
@@ -253,23 +263,11 @@ export class MiniPlayer {
       && /\b(ocr|image)\b/i.test(progress.status)
       && !/\b(quoted|found no|failed|skipped)\b/i.test(progress.status));
     this.setOcrSkipAvailable(skippableOcrProgress);
+    const message = updateOcrProgressView(this.ocrText, this.ocrBar, progress);
+    this.accessibility.ocr(progress);
     if (!progress) {
-      this.ocrText.textContent = "";
-      this.ocrBar.style.setProperty("--post-reading-ocr-progress", "0%");
-      this.ocrBar.removeAttribute("aria-valuenow");
       if (this.title.textContent?.startsWith("OCR")) this.title.textContent = "Post-reading";
       return;
-    }
-    const imageLabel = progress.imageCount > 1 ? ` image ${progress.imageIndex + 1}/${progress.imageCount}` : "";
-    const progressValue = typeof progress.progress === "number" ? Math.max(0, Math.min(1, progress.progress)) : null;
-    const stage = progressValue === null ? "" : `Stage ${Math.round(progressValue * 100)}%: `;
-    const message = `${stage}${progress.status}${imageLabel}`;
-    this.ocrText.textContent = message;
-    this.ocrBar.style.setProperty("--post-reading-ocr-progress", `${Math.round((progressValue ?? 0) * 100)}%`);
-    if (progressValue === null) {
-      this.ocrBar.removeAttribute("aria-valuenow");
-    } else {
-      this.ocrBar.setAttribute("aria-valuenow", String(Math.round(progressValue * 100)));
     }
     this.title.textContent = `OCR: ${message}`;
     if (!this.minimized && !this.closing) this.setVisible(true);
@@ -314,6 +312,7 @@ export class MiniPlayer {
   }
 
   dispose(): void {
+    this.accessibility.dispose();
     this.stopProbe();
     this.appFrame = null;
     this.root.remove();
@@ -657,7 +656,7 @@ export class MiniPlayer {
         ["smooth", "Smooth character fill"],
       ], (value) => this.update({ bodyHighlightMode: value as PostReadingSettings["bodyHighlightMode"] }));
       if (!isWikiAttached) body.append(activeTweet);
-      body.append(bodyMode);
+      body.append(bodyMode, readingMotionDisclosure());
     }
   }
 
@@ -676,7 +675,6 @@ export class MiniPlayer {
     try {
       for (const voice of voices) {
         if (signal.aborted) break;
-        if (this.boundarySupport.get(voice.voiceURI) === "supported") continue;
         const supported = await this.actions.probeBoundarySupport(voice, signal);
         if (signal.aborted) break;
         this.boundarySupport.set(voice.voiceURI, supported ? "supported" : "unsupported");

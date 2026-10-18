@@ -1,0 +1,16 @@
+<main>
+  <div data-testid="primaryColumn">
+    <section data-fixture="stale-profile-header">
+      <a id="stale-banner" href="/PreviousUser/header_photo">
+        <img alt="" src="https://pbs.twimg.com/profile_banners/1/old" />
+      </a>
+    </section>
+    <section data-fixture="current-profile-header">
+      <a id="current-banner" href="/FixtureMember/header_photo">
+        <div><img alt="" src="https://pbs.twimg.com/profile_banners/2/current" /></div>
+      </a>
+      <div data-testid="UserName"><span>Fixture Member</span><span>@FixtureMember</span></div>
+      <!-- Current X profiles need not mount UserProfileHeader_Items before UserName. -->
+    </section>
+  </div>
+</main>

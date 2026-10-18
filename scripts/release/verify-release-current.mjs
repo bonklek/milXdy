@@ -16,6 +16,8 @@ const releaseGate = await readFile("scripts/release/verify-release-gates.mjs", "
 const packageRelease = await readFile("scripts/release/package-release.mjs", "utf8");
 const releaseChecksums = await readFile("scripts/release/verify-release-checksums.mjs", "utf8");
 const releaseReproducible = await readFile("scripts/release/verify-reproducible-release.mjs", "utf8");
+const remiliaMigration = await readFile("scripts/verify/remilia-api-migration.mjs", "utf8");
+const remiliaArtifactScan = await readFile("scripts/release/verify-remilia-migration-artifacts.mjs", "utf8");
 const releaseLock = await readFile("scripts/release/release-artifact-lock.mjs", "utf8");
 const roadmap = await readFile("docs/roadmap/ROADMAP.md", "utf8");
 const releaseNotes = await readFile(`docs/releases/RELEASE_NOTES_${packageJson.version}.md`, "utf8");
@@ -31,18 +33,31 @@ if (branchVersion) {
   assert(packageJson.appSdkVersion === branchVersion, `release branch ${releaseBranch} requires appSdkVersion ${branchVersion}`);
 }
 assert(typeof packageJson.scripts?.["verify:release"] === "string", "package scripts must include verify:release");
+assert(typeof packageJson.scripts?.["verify:remilia-migration"] === "string", "package scripts must include verify:remilia-migration");
+assert(typeof packageJson.scripts?.["verify:remilia-migration:live"] === "string", "package scripts must include verify:remilia-migration:live");
+assert(typeof packageJson.scripts?.["verify:remilia-migration:artifacts"] === "string", "package scripts must include verify:remilia-migration:artifacts");
+assert(typeof packageJson.scripts?.["verify:remilia-migration:artifact-scan"] === "string", "package scripts must include verify:remilia-migration:artifact-scan");
 assert(typeof packageJson.scripts?.["verify:release:gates"] === "string", "package scripts must include verify:release:gates");
+assert(typeof packageJson.scripts?.["verify:chromium-identity"] === "string", "package scripts must include verify:chromium-identity");
 assert(typeof packageJson.scripts?.["verify:app-smoke"] === "string", "package scripts must include verify:app-smoke");
 assert(typeof packageJson.scripts?.["verify:post-reading:distribution"] === "string", "package scripts must include verify:post-reading:distribution");
 assert(typeof packageJson.scripts?.["verify:post-reading:standalone"] === "string", "package scripts must include verify:post-reading:standalone");
 assert(typeof packageJson.scripts?.["verify:remistats-tooltip-escaping"] === "string", "package scripts must include verify:remistats-tooltip-escaping");
 assert(packageJson.scripts["verify:release"] === "node scripts/release/verify-release-current.mjs", "verify:release must run the current release contract verifier");
+assert(packageJson.scripts["verify:remilia-migration"] === "node scripts/verify/remilia-api-migration.mjs", "verify:remilia-migration must run the migration contract verifier");
+assert(packageJson.scripts["verify:remilia-migration:live"] === "node scripts/verify/remilia-api-migration.mjs --require-live", "verify:remilia-migration:live must require live evidence");
+assert(packageJson.scripts["verify:remilia-migration:artifacts"] === "node scripts/release/verify-remilia-migration-artifacts.mjs", "verify:remilia-migration:artifacts must scan release archives");
+assert(packageJson.scripts["verify:remilia-migration:artifact-scan"] === "node scripts/verify/remilia-migration-artifact-scan.mjs", "verify:remilia-migration:artifact-scan must run scanner fixtures");
 assert(packageJson.scripts["verify:release:gates"] === "node scripts/release/verify-release-gates.mjs", "verify:release:gates must run the current release gate");
+assert(packageJson.scripts["verify:chromium-identity"] === "node scripts/verify/chromium-identity.mjs", "verify:chromium-identity must run the release identity verifier");
 assert(packageJson.scripts["verify:app-smoke"] === "node scripts/smoke/app-smoke.mjs", "verify:app-smoke must run the current app smoke verifier");
 assert(packageJson.scripts["verify:post-reading:distribution"] === "node scripts/verify/post-reading-distribution.mjs", "verify:post-reading:distribution must run the Post-reading distribution verifier");
 assert(packageJson.scripts["verify:post-reading:standalone"] === packageJson.scripts["verify:post-reading:distribution"], "verify:post-reading:standalone must remain a compatibility alias for verify:post-reading:distribution");
 assert(packageJson.scripts["verify:remistats-tooltip-escaping"] === "node scripts/verify/remistats-tooltip-escaping.mjs", "verify:remistats-tooltip-escaping must run the RemiStats tooltip escaping verifier");
 assert(releaseGate.includes("scripts/release/verify-release-current.mjs"), "current release gate must run current release contracts");
+assert(releaseGate.includes("scripts/verify/chromium-identity.mjs"), "current release gate must verify the Chromium release identity contract");
+assert(releaseGate.includes("scripts/verify/remilia-api-migration.mjs"), "current release gate must verify Remilia migration docs/evidence contracts");
+assert(releaseGate.includes("scripts/verify/remilia-migration-artifact-scan.mjs"), "current release gate must run Remilia migration artifact scan fixtures");
 assert(releaseGate.includes("scripts/build/build-profiles.mjs"), "current release gate must rebuild profile outputs");
 assert(releaseGate.includes("scripts/verify/filesystem-layout.mjs"), "current release gate must verify filesystem layout");
 assert(releaseGate.includes("scripts/build/build-post-reading-distribution.mjs"), "current release gate must rebuild Post-reading distribution output");
@@ -51,6 +66,7 @@ assert(releaseGate.includes("scripts/verify/remistats-tooltip-escaping.mjs"), "c
 assert(releaseGate.includes("scripts/smoke/app-smoke.mjs"), "current release gate must run current app smoke");
 assert(!releaseGate.includes("[\"App smoke\", [\"scripts/smoke/app-smoke-020.mjs\"]]"), "current release gate must not use the historical app smoke script as its App smoke gate");
 assert(releaseGate.includes("scripts/release/package-release.mjs"), "current release gate must package release archives");
+assert(releaseGate.includes("scripts/release/verify-remilia-migration-artifacts.mjs"), "current release gate must scan Remilia migration release artifacts");
 assert(releaseGate.includes("scripts/release/verify-reproducible-release.mjs"), "current release gate must verify reproducible release archives");
 assert(releaseGate.includes("scripts/verify/firefox-lint.mjs"), "current release gate must run Firefox lint through the warning classifier");
 assert(releaseGate.includes("withReleaseArtifactLock"), "current release gate must hold the release artifact lock across package/checksum/repro subprocesses");
@@ -59,6 +75,8 @@ assert(!packageRelease.includes("await rm(archive") && !packageRelease.includes(
 assert(packageRelease.includes('startsWith("user-downloads/")'), "release packaging must reject user-download web-accessible resource prefixes");
 assert(releaseChecksums.includes("withReleaseArtifactLock"), "release checksum verification must take the release artifact lock while reading shared artifacts");
 assert(releaseReproducible.includes("withReleaseArtifactLock"), "release reproducibility verification must take the release artifact lock while reading shared artifacts");
+assert(remiliaMigration.includes("--require-live") && remiliaMigration.includes("chromium") && remiliaMigration.includes("firefox"), "Remilia migration verifier must support strict Chromium/Firefox live evidence");
+assert(remiliaArtifactScan.includes("listZipEntries") && remiliaArtifactScan.includes("reportSha256") && remiliaArtifactScan.includes("withReleaseArtifactLock"), "Remilia artifact scan must inspect ZIP entries reproducibly under the release lock");
 assert(releaseLock.includes("tmp") && releaseLock.includes("release-artifacts.lock") && releaseLock.includes("process.kill(pid, 0)"), "release artifact lock must be checkout-local and detect stale owner processes");
 assert(releases.includes("npm run verify:release:gates"), "release docs must use the current version-neutral release gate");
 assert(releases.includes("npm.cmd run verify:release:gates"), "release docs must include the Windows current release gate command");

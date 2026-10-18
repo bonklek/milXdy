@@ -1,4 +1,13 @@
-import { cleanText, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
+import { readingScrollBehavior, reducedMotionHighlightMode, scrollFullQuoteWordIntoView } from "./motion-policy";
+export { reducedMotionHighlightMode } from "./motion-policy";
+import { postReadingPerformancePolicy, type PostReadingPerformancePolicy } from "./performance-policy";
+import { type ExportMessenger } from "./audio-conversion";
+import { createReadAloudButton } from "./read-button";
+import { reviewPostAudio } from "./post-audio-action";
+import { setupConversationReadAction, type ConversationReading } from "./direct-messages";
+import { createConversationHighlight } from "./direct-message-highlighting";
+import { findBodyRange, findOcrSpeechRanges, type OcrSpeechRange } from "./spoken-text-range";
+import { cleanText, extractReadableArticleBlock, extractReadablePost, formatReadablePost, isNonReadableTweetTextArtifact, isReadableHyperlink } from "./extractText";
 import { configurePostReadingAssetResolver, postReadingAssetUrl } from "./assetUrl";
 import { configureFullQuoteRuntimeMessage, fetchEmbeddedQuote, fetchFullQuote, getLastEmbeddedQuoteDiagnostic, type FullQuoteFetchResult } from "./fullQuote";
 import { TextHighlightEngine, estimateHighlightTokenCount as estimateSharedHighlightTokenCount } from "./highlightEngine";
@@ -14,7 +23,7 @@ import {
 } from "./navigation";
 import { recognizeImageText, type OcrImage } from "./ocr";
 import { MiniPlayer } from "./player";
-import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT, X_ARTICLE_BODY } from "./selectors";
+import { ACTION_BUTTONS, POST_READING_BUTTON, QUOTE_TWEET, TWEET, TWEET_PHOTO, TWEET_TEXT } from "./selectors";
 import type { BodyHighlightMode, PostReadingSettings, ReadablePost } from "./shared/types";
 import { playEndDing } from "./sounds";
 import { SpeechController, type BoundarySupport } from "./speech";
@@ -22,11 +31,13 @@ import { injectStyles } from "./styles";
 import { configurePostReadingStorage, loadSettings, loadVoiceBoundarySupport, observeSettings, saveSettings, saveVoiceBoundarySupport } from "./storage";
 import { createOverlayAppFrame, type OverlayAppFrame } from "../../platform/overlay/app-frame";
 import type { TwitterSurface } from "../../platform/scanner/twitter-scanner";
+import { extractXArticleTextContainers, isXArticleSurface } from "../../platform/scanner/x-article";
 import { recordFeatureTiming } from "../../platform/diagnostics/performance-diagnostics";
-import type { AppRuntimeScheduler, MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
+import type { AppRuntimeScheduler, MilxdyContentAppContext, MilxdyContextualPostActionContext, MilxdyRouteChange } from "../../platform/app-sdk/app-platform";
 import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
 
 const processed = new WeakMap<HTMLElement, string>();
+
 let settings: PostReadingSettings;
 let speech: SpeechController;
 let player: MiniPlayer;
@@ -34,6 +45,11 @@ let wikiSpeech: SpeechController;
 let wikiPlayer: MiniPlayer;
 let appFrame: OverlayAppFrame | null = null;
 let currentTweet: HTMLElement | null = null;
+let articleSessionIncludesHyperlinks = false;
+let readingPrivateConversation = false;
+const conversationHighlight = createConversationHighlight();
+let conversionSendMessage: ExportMessenger = async () => null;
+let closeConversion: (() => void) | null = null;
 const pendingTweets = new Map<HTMLElement, { kind: TwitterSurface["kind"]; actionRow: HTMLElement | null; textContainers: HTMLElement[] }>();
 const POST_READING_BUTTON_SLOT = '[data-post-reading-button-slot="true"]';
 const RUNTIME_POST_READING_SLOT = '[data-milxdy-tweet-slot="post-reading-action"]';
@@ -85,14 +101,6 @@ const highlightEngine = new TextHighlightEngine({
   },
 });
 
-type PostReadingPerformancePolicy = {
-  batchSize: number;
-  maxPendingTweets: number;
-  maxTextCharsForButton: number;
-  maxHighlightChars: number;
-  maxHighlightTokens: number;
-};
-
 type HighlightTarget = {
   body: HTMLElement;
   bodies?: HTMLElement[];
@@ -116,13 +124,6 @@ const highlightTokenEstimateCache = new WeakMap<HighlightTarget, { text: string;
 const SMOOTH_SEGMENT_TEXT_THRESHOLD = 1400;
 const SMOOTH_SEGMENT_MAX_CHARS = 720;
 const SMOOTH_SEGMENT_MIN_BREAK_CHARS = 280;
-
-type OcrSpeechRange = {
-  start: number;
-  end: number;
-  imageIndex: number;
-  imageCount: number;
-};
 
 type WikiReadableDocument = {
   id: string;
@@ -169,11 +170,12 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   runtimeScheduleScan = context?.requestSurfaceRescan || context?.scheduleScan || runtimeScheduleScan;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
+  conversionSendMessage = (message) => context?.sendMessage(message) || Promise.resolve(null);
   configureFullQuoteRuntimeMessage(context?.sendMessage || null);
   configurePostReadingStorage(context?.storage || null);
   configurePostReadingAssetResolver(context?.resolveAssetUrl || null);
   const addDisposable = context?.addDisposable || (() => undefined);
-  injectStyles();
+  injectStyles(addDisposable, () => clearSmoothAnimation({ completePending: true }));
   settings = await loadSettings();
   document.documentElement.dataset.milxdyPostReadingButtonPlacement = settings.buttonPlacement;
   speech = new SpeechController(settings);
@@ -192,7 +194,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onSkipOcr: () => skipOcrLoadingOrActiveSpeech(),
     onSettingsChange: (next) => {
       settings = next;
-      speech.applySettings(next);
+      speech.applySettings(readingPrivateConversation ? { ...next, ttsEngine: "web-speech", autoplayNext: false } : next);
       wikiSpeech.applySettings(next);
       player.updateSettings(next);
       wikiPlayer.updateSettings(next);
@@ -203,8 +205,8 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => speech.getVoices(),
     getPreferredVoice: () => speech.getPreferredVoice(),
-    probeBoundarySupport: (voice, signal) => speech.probeBoundarySupport(voice, signal),
-  });
+    probeBoundarySupport: (voice, signal) => speech.probeBoundarySupport(voice, signal, [wikiSpeech]),
+  }, (callback, delay) => runtimeScheduler.timeout(callback, delay));
   wikiSpeech = new SpeechController(settings);
   wikiPlayer = new MiniPlayer(settings, {
     onPauseResume: () => {
@@ -226,7 +228,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     onSkipOcr: () => undefined,
     onSettingsChange: (next) => {
       settings = next;
-      speech.applySettings(next);
+      speech.applySettings(readingPrivateConversation ? { ...next, ttsEngine: "web-speech", autoplayNext: false } : next);
       wikiSpeech.applySettings(next);
       player.updateSettings(next);
       wikiPlayer.updateSettings(next);
@@ -237,8 +239,8 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     },
     getVoices: () => wikiSpeech.getVoices(),
     getPreferredVoice: () => wikiSpeech.getPreferredVoice(),
-    probeBoundarySupport: (voice, signal) => wikiSpeech.probeBoundarySupport(voice, signal),
-  });
+    probeBoundarySupport: (voice, signal) => wikiSpeech.probeBoundarySupport(voice, signal, [speech]),
+  }, (callback, delay) => runtimeScheduler.timeout(callback, delay));
   appFrame = createOverlayAppFrame({
     id: "post-reading",
     label: "Post-reading",
@@ -283,7 +285,7 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   speech.onComplete(() => {
     if (!lifecycleActive()) return;
     if (settings.endOfTweetDing) void playEndDing(settings.volume);
-    if (settings.autoplayNext) {
+    if (settings.autoplayNext && !readingPrivateConversation) {
       runtimeScheduler.timeout(() => {
         if (lifecycleActive()) playAdjacentAutoplay();
       }, 150);
@@ -311,13 +313,16 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
 
   addDisposable(observeSettings((next) => {
     const placementChanged = settings.buttonPlacement !== next.buttonPlacement;
+    const targets = currentHighlightTargets;
     clearBodyHighlight();
+    currentHighlightTargets = targets;
     settings = next;
     document.documentElement.dataset.milxdyPostReadingButtonPlacement = settings.buttonPlacement;
-    speech.applySettings(next);
+    speech.applySettings(readingPrivateConversation ? { ...next, ttsEngine: "web-speech", autoplayNext: false } : next);
     wikiSpeech.applySettings(next);
     player.updateSettings(next);
     wikiPlayer.updateSettings(next);
+    updateTweetHighlight(speech.getState());
     if (placementChanged) removeReadButtons();
     runtimeScheduleScan();
   }));
@@ -330,6 +335,12 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   window.addEventListener("keydown", handleKeydown, true);
   addDisposable(() => window.removeEventListener("keydown", handleKeydown, true));
 
+  setupReaderDocumentListeners(addDisposable);
+  addDisposable(setupConversationReadAction(playConversationSnapshot, lifecycleActive, (callback, delay) => runtimeScheduler.timeout(callback, delay)));
+  runtimeScheduleScan();
+}
+
+function setupReaderDocumentListeners(addDisposable: (disposable: () => void) => void): void {
   const readDocumentListener = (event: Event) => {
     const detail = (event as CustomEvent<unknown>).detail;
     if (isWikiReadableDocument(detail)) playReadableDocument(detail);
@@ -346,7 +357,6 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
     document.removeEventListener("post-reading:stop-wiki-document", stopWikiDocumentListener);
   });
 
-  runtimeScheduleScan();
 }
 
 export function onSurface(surface: TwitterSurface): void {
@@ -357,8 +367,34 @@ export function onSurface(surface: TwitterSurface): void {
   scheduleScan();
 }
 
+/** Native Share menu entry opens a review; conversion still requires explicit confirmation. */
+export function onContextualPostAction(context: MilxdyContextualPostActionContext): void {
+  if (!lifecycleActive() || context.signal.aborted || context.actionId !== "reviewMp3") return;
+  closeConversion?.();
+  closeConversion = reviewPostAudio(context, settings, conversionSendMessage);
+}
+
+export function onRouteChange(route: MilxdyRouteChange): void {
+  closeConversion?.(); closeConversion = null;
+  if (!lifecycleActive() || !route.previousHref || route.previousHref === route.href) return;
+  cancelPendingHighlightWork();
+  cancelOcr();
+  clearFullQuotePreview();
+  clearBodyHighlight();
+  clearActiveTweets();
+  speech.stop();
+  currentTweet = null;
+  pendingTweets.clear();
+  readingPrivateConversation = false;
+  speech.applySettings(settings);
+  removeReadButtons();
+  player.setPostNavigationAvailability({ previous: false, next: false });
+}
+
 export function disable(): void {
+  closeConversion?.(); closeConversion = null;
   if (settings) settings = { ...settings, enabled: false };
+  readingPrivateConversation = false;
   cancelOcr();
   clearWikiDocumentSession();
   clearFullQuotePreview();
@@ -449,7 +485,7 @@ function processTweets(): void {
   for (const [tweet, surface] of tweets) {
     if (!lifecycleActive() || !tweet.isConnected) continue;
     const startedAt = performance.now();
-    processTweet(tweet, surface.kind, surface.actionRow, policy, surface.textContainers);
+    processTweet(tweet, surface.kind, surface.actionRow, surface.textContainers);
     recordFeatureTiming("post-reading", "processTweet", startedAt);
   }
   processReservedButtonSlots(policy);
@@ -469,12 +505,13 @@ function processReservedButtonSlots(policy: PostReadingPerformancePolicy): void 
   }
   for (const tweet of tweets) {
     const startedAt = performance.now();
-    processTweet(tweet, "tweet", findLikelyActionRow(tweet), policy);
+    processTweet(tweet, "tweet", findLikelyActionRow(tweet));
     recordFeatureTiming("post-reading", "processReservedButtonSlot", startedAt);
   }
 }
 
 function removeReadButtons(): void {
+  for (const button of Array.from(document.querySelectorAll("[data-post-reading-export-button]"))) button.remove();
   for (const button of Array.from(document.querySelectorAll(POST_READING_BUTTON))) {
     button.remove();
   }
@@ -489,7 +526,6 @@ function processTweet(
   tweet: HTMLElement,
   kind: TwitterSurface["kind"] = "tweet",
   surfaceActionRow: HTMLElement | null = null,
-  policy = postReadingPerformancePolicy(),
   surfaceTextContainers: HTMLElement[] = [],
 ): void {
   const textContainers = surfaceTextContainers.length > 0 && surfaceTextContainers.every((container) => container.isConnected)
@@ -501,23 +537,17 @@ function processTweet(
   const signature = textContainers.map((container) => container.textContent || "").join("\n").trim();
   if (!signature) return;
 
-  const existingButton = tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
+  const existingButton = kind === "xArticle"
+    ? Array.from(tweet.querySelectorAll<HTMLButtonElement>(POST_READING_BUTTON)).find(button => ownsArticleElement(tweet, button))
+    : tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
   const footer = kind === "tweet" ? surfaceActionRow || findLikelyActionRow(tweet) : null;
   const anchor = findButtonAnchor(tweet, footer);
   if (processed.get(tweet) === signature && existingButton) {
     placeReadButton(tweet, existingButton, anchor, footer, kind);
     return;
   }
-  if (!existingButton && signature.length > policy.maxTextCharsForButton) {
-    processed.set(tweet, signature);
-    recordRuntimeDiagnostic("buttonSkipped", {
-      reason: "performanceTextCap",
-      mode: currentPerformanceMode(),
-      textLength: signature.length,
-      updatedAt: Date.now(),
-    });
-    return;
-  }
+  // The reading control is cheap; performance limits apply to highlighting,
+  // not to whether a user can start reading a long post.
   processed.set(tweet, signature);
 
   const button = existingButton || createReadButton(tweet);
@@ -560,50 +590,63 @@ function currentPerformanceMode(): string {
   return document.documentElement.dataset.milxdyPerformanceMode || "balanced";
 }
 
-function postReadingPerformancePolicy(): PostReadingPerformancePolicy {
-  const mode = currentPerformanceMode();
-  if (mode === "fast") {
-    return { batchSize: 2, maxPendingTweets: 16, maxTextCharsForButton: 900, maxHighlightChars: 700, maxHighlightTokens: 96 };
-  }
-  if (mode === "balanced") {
-    return { batchSize: 4, maxPendingTweets: 36, maxTextCharsForButton: 1800, maxHighlightChars: 6000, maxHighlightTokens: 800 };
-  }
-  if (mode === "developer") {
-    return { batchSize: 16, maxPendingTweets: 160, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: Number.POSITIVE_INFINITY, maxHighlightTokens: Number.POSITIVE_INFINITY };
-  }
-  return { batchSize: 8, maxPendingTweets: 96, maxTextCharsForButton: Number.POSITIVE_INFINITY, maxHighlightChars: 9000, maxHighlightTokens: 1200 };
+function ownsArticleElement(article: HTMLElement, element: HTMLElement): boolean {
+  const embeddedPost = element.closest('[data-testid="tweet"], [data-testid="quoteTweet"]');
+  return !embeddedPost || !article.contains(embeddedPost);
 }
 
 function placeArticleReadButton(article: HTMLElement, button: HTMLButtonElement): void {
-  const existingSlot = article.querySelector<HTMLElement>(POST_READING_BUTTON_SLOT);
-  const slot = existingSlot || document.createElement("span");
+  const runtimeSlot = Array.from(article.querySelectorAll<HTMLElement>(RUNTIME_POST_READING_HEADER_SLOT))
+    .find(slot => ownsArticleElement(article, slot));
+  if (runtimeSlot) {
+    const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+    if (button.parentElement !== runtimeSlot) runtimeSlot.replaceChildren(button);
+    runtimeSlot.removeAttribute("aria-hidden");
+    removeEmptyAdHocButtonSlot(previousSlot);
+    markHeaderControlHost(runtimeSlot);
+    return;
+  }
+  const previousSlot = button.closest<HTMLElement>(POST_READING_BUTTON_SLOT);
+  const slot = previousSlot || document.createElement("span");
   slot.dataset.postReadingButtonSlot = "true";
   slot.className = "post-reading-button-slot post-reading-button-slot--header";
   slot.removeAttribute("aria-hidden");
   if (button.parentElement !== slot) slot.append(button);
-  if (!existingSlot) {
-    const anchor = article.querySelector<HTMLElement>('h1, [role="heading"], [data-testid*="article" i], [data-testid*="Article" i]')
-      || article.firstElementChild as HTMLElement | null;
-    if (anchor?.parentElement) anchor.parentElement.insertBefore(slot, anchor.nextSibling);
-    else article.prepend(slot);
+  // The article title is prose, not a control host. Keep the reader beside the
+  // author's native overflow control, excluding overflow buttons in embeds.
+  const caret = Array.from(article.querySelectorAll<HTMLElement>('[data-testid="caret"]'))
+    .find((element) => ownsArticleElement(article, element));
+  if (caret?.parentElement) {
+    if (slot.parentElement !== caret.parentElement || slot.nextSibling !== caret) caret.before(slot);
+    slot.parentElement!.dataset.milxdyPostReadingArticleControls = "true";
+    article.querySelector('[data-post-reading-article-toolbar]:empty')?.remove();
+    return;
   }
+  const actionRow = Array.from(article.querySelectorAll<HTMLElement>('[role="group"]'))
+    .find((element) => element.querySelector('[data-testid="reply"], [data-testid="like"], [data-testid="unlike"]')
+      && ownsArticleElement(article, element));
+  if (actionRow) {
+    if (slot.parentElement !== actionRow) actionRow.append(slot);
+    return;
+  }
+  // X may hydrate its controls later. Keep one bounded fallback toolbar outside
+  // the title/body and move its slot into native controls on the next surface.
+  let toolbar = article.querySelector<HTMLElement>('[data-post-reading-article-toolbar]');
+  if (!toolbar) {
+    toolbar = document.createElement("div");
+    toolbar.dataset.postReadingArticleToolbar = "true";
+    toolbar.setAttribute("role", "toolbar");
+    toolbar.setAttribute("aria-label", "Article reading controls");
+    article.prepend(toolbar);
+  }
+  toolbar.append(slot);
 }
 
 function createReadButton(tweet: HTMLElement): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "post-reading-button";
-  button.dataset.postReadingButton = "true";
-  button.setAttribute("aria-label", "Read aloud");
-  button.title = "Read aloud";
-  button.innerHTML = icon("speaker");
-  button.addEventListener("click", (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+  return createReadAloudButton(() => {
     player?.show();
     playTweet(tweet);
   });
-  return button;
 }
 
 function insertActionOverlayButton(button: HTMLButtonElement, anchor: HTMLElement | null, footer: HTMLElement | null): void {
@@ -669,6 +712,8 @@ function markHeaderControlHost(slot: HTMLElement): void {
 
 async function playTweet(tweet: HTMLElement): Promise<void> {
   if (!lifecycleActive()) return;
+  readingPrivateConversation = false;
+  speech.applySettings(settings);
   wikiSpeech.stop();
   clearWikiDocumentSession();
   clearBodyHighlight();
@@ -681,6 +726,7 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   const readable = extractReadablePost(tweet, settings);
   if (!readable) return;
   currentTweet = tweet;
+  articleSessionIncludesHyperlinks = settings.includeHyperlinks;
   updatePostNavigationAvailability();
   markActiveButton(tweet);
   await enrichFullQuote(readable);
@@ -691,7 +737,27 @@ async function playTweet(tweet: HTMLElement): Promise<void> {
   currentHighlightTargets = findHighlightTargets(tweet, text, readable);
   currentOcrSpeechRanges = findOcrSpeechRanges(text, readable.imageTexts);
   speech.speak(text, readable.authorDisplayName);
-  tweet.scrollIntoView({ block: "nearest", inline: "nearest" });
+  tweet.scrollIntoView({ block: "nearest", inline: "nearest", behavior: readingScrollBehavior(false) });
+}
+
+function playConversationSnapshot(snapshot: ConversationReading): void {
+  if (!lifecycleActive() || !snapshot.text) return;
+  activeReadRunId += 1;
+  cancelOcr();
+  wikiSpeech.stop();
+  clearWikiDocumentSession();
+  clearBodyHighlight();
+  clearFullQuotePreview();
+  clearActiveTweets();
+  currentTweet = null;
+  readingPrivateConversation = true;
+  currentOcrSpeechRanges = [];
+  currentHighlightTargets = snapshot.bodies.map((target) => ({ ...target, kind: "main" }));
+  // Private conversations never leave the browser through a configured HTTP engine.
+  speech.applySettings({ ...settings, ttsEngine: "web-speech", autoplayNext: false });
+  player.setPostNavigationAvailability({ previous: false, next: false });
+  speech.speak(snapshot.text, "Direct messages");
+  player.show();
 }
 
 function playReadableDocument(target: WikiReadableDocument): void {
@@ -797,7 +863,7 @@ function skipActiveOcrSpeechRange(): boolean {
   const target = main?.start ?? activeRange.end + 1;
   speech.jumpToCharIndex(target);
   resyncHighlightAfterSpeechJump();
-  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: readingScrollBehavior(false) });
   return true;
 }
 
@@ -1336,7 +1402,7 @@ function showTransientOcrStatus(status: string): void {
 }
 
 function playAdjacentExplicit(direction: 1 | -1, allowScroll = true): void {
-  if (!lifecycleActive()) return;
+  if (!lifecycleActive() || readingPrivateConversation) return;
   const tweets = timelineTweets();
   const next = findExplicitPostTarget(
     tweets,
@@ -1346,14 +1412,14 @@ function playAdjacentExplicit(direction: 1 | -1, allowScroll = true): void {
   );
   if (next) {
     playTweet(next);
-    next.scrollIntoView({ block: "center", behavior: "smooth" });
+    next.scrollIntoView({ block: "center", behavior: readingScrollBehavior() });
     return;
   }
   if (!allowScroll) {
     updatePostNavigationAvailability();
     return;
   }
-  window.scrollBy({ top: Math.round(window.innerHeight * 0.8) * direction, behavior: "smooth" });
+  window.scrollBy({ top: Math.round(window.innerHeight * 0.8) * direction, behavior: readingScrollBehavior() });
   runtimeScheduler.timeout(() => {
     if (!lifecycleActive()) return;
     scheduleScan();
@@ -1362,7 +1428,7 @@ function playAdjacentExplicit(direction: 1 | -1, allowScroll = true): void {
 }
 
 function playAdjacentAutoplay(): void {
-  if (!lifecycleActive()) return;
+  if (!lifecycleActive() || readingPrivateConversation) return;
   const next = findVisibleAutoplayTarget(
     visibleTweets(),
     currentTweet,
@@ -1373,7 +1439,7 @@ function playAdjacentAutoplay(): void {
     return;
   }
   if (settings.autoplayMode === "autoscroll" && Date.now() - userScrolledAt > 750) {
-    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: "smooth" });
+    window.scrollBy({ top: Math.round(window.innerHeight * 0.8), behavior: readingScrollBehavior() });
     runtimeScheduler.timeout(() => {
       if (!lifecycleActive()) return;
       scheduleScan();
@@ -1388,12 +1454,14 @@ function playAdjacentAutoplay(): void {
 }
 
 function nextTweetOrQuotingText(): void {
+  if (currentTweet && isXArticleContainer(currentTweet)) { jumpArticleParagraph(1); return; }
   if (skipActiveOcrSpeechRange()) return;
   if (jumpFromQuoteToMainText()) return;
   playAdjacentExplicit(1);
 }
 
 function previousTweetOrStart(): void {
+  if (currentTweet && isXArticleContainer(currentTweet)) { jumpArticleParagraph(-1); return; }
   const state = speech.getState();
   const currentIndex = currentSpeechAbsoluteIndex(state);
   if (
@@ -1404,7 +1472,7 @@ function previousTweetOrStart(): void {
     speech.jumpToCharIndex(0);
     resyncHighlightAfterSpeechJump();
     updatePostNavigationAvailability();
-    currentTweet.scrollIntoView({ block: "nearest", inline: "nearest" });
+    currentTweet.scrollIntoView({ block: "nearest", inline: "nearest", behavior: readingScrollBehavior(false) });
     return;
   }
   playAdjacentExplicit(-1);
@@ -1413,6 +1481,14 @@ function previousTweetOrStart(): void {
 function updatePostNavigationAvailability(): void {
   if (!player || !currentTweet) return;
   const state = speech.getState();
+  if (isXArticleContainer(currentTweet)) {
+    const index = currentSpeechAbsoluteIndex(state) ?? 0;
+    player.setArticleNavigationAvailability({
+      previous: currentHighlightTargets.some(target => target.start < index),
+      next: currentHighlightTargets.some(target => target.start > index),
+    });
+    return;
+  }
   const tweets = timelineTweets();
   player.setPostNavigationAvailability(postNavigationAvailability(
     tweets,
@@ -1420,6 +1496,20 @@ function updatePostNavigationAvailability(): void {
     currentSpeechAbsoluteIndex(state),
     (tweet) => !settings.skipPromotedPosts || !isPromotedTweet(tweet),
   ));
+}
+
+function jumpArticleParagraph(direction: 1 | -1): void {
+  const state = speech.getState();
+  if (state.status !== "speaking" && state.status !== "paused") return;
+  const index = currentSpeechAbsoluteIndex(state) ?? 0;
+  const targets = currentHighlightTargets.filter(target => target.body.isConnected);
+  const target = direction === 1
+    ? targets.find(target => target.start > index)
+    : [...targets].reverse().find(target => target.start < index);
+  if (!target) return;
+  speech.jumpToCharIndex(target.start);
+  resyncHighlightAfterSpeechJump();
+  target.body.scrollIntoView({ block: "nearest", behavior: readingScrollBehavior(false) });
 }
 
 function jumpFromQuoteToMainText(): boolean {
@@ -1433,7 +1523,7 @@ function jumpFromQuoteToMainText(): boolean {
   if (!main) return false;
   speech.jumpToCharIndex(main.start);
   resyncHighlightAfterSpeechJump();
-  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  currentTweet?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: readingScrollBehavior(false) });
   return true;
 }
 
@@ -1632,7 +1722,9 @@ function markActiveButton(tweet: HTMLElement): void {
     }
     button.setAttribute("aria-pressed", "false");
   }
-  const activeButton = tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
+  const activeButton = isXArticleContainer(tweet)
+    ? Array.from(tweet.querySelectorAll<HTMLButtonElement>(POST_READING_BUTTON)).find(button => ownsArticleElement(tweet, button))
+    : tweet.querySelector<HTMLButtonElement>(POST_READING_BUTTON);
   if (activeButton) {
     activeButton.setAttribute("aria-pressed", "true");
     activeReadButtons.add(activeButton);
@@ -1645,6 +1737,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   if (state.isPriming) return;
   if (currentTweet) updatePostNavigationAvailability();
   if (state.status === "idle") {
+    conversationHighlight.clear();
     if (deferNextIdleHighlightCleanup) {
       deferNextIdleHighlightCleanup = false;
       cancelPendingHighlightWork();
@@ -1688,7 +1781,7 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
     currentTweet.dataset.postReadingActiveBackground = String(settings.activeTweetHighlight);
     activeTweets.add(currentTweet);
   }
-  if (!currentTweet || settings.bodyHighlightMode === "off") {
+  if ((!currentTweet && !readingPrivateConversation) || settings.bodyHighlightMode === "off") {
     clearEstimatedHighlightLoop();
     return;
   }
@@ -1705,6 +1798,12 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   if (absoluteIndex === null) return;
 
   const target = findActiveHighlightTarget(absoluteIndex);
+  if (readingPrivateConversation) {
+    // React owns message text/markup. Paint original ranges; never tokenize or restore it.
+    if (target) conversationHighlight.paint(target.body, target.text, absoluteIndex - target.start);
+    else conversationHighlight.clear();
+    return;
+  }
   if (!target) {
     recordHighlightPaintDiagnostic("no-active-target", state, null, null, null, null, null, settings.bodyHighlightMode, absoluteIndex);
     return;
@@ -1742,7 +1841,8 @@ function updateTweetHighlight(state: HighlightSpeechState): void {
   activeHighlightSegment = paintTarget.segment;
 
   const tokenizeStartedAt = performance.now();
-  const words = prepareSmoothBody(paintTarget.body, paintTarget.text);
+  const articleBody = currentTweet && isXArticleContainer(currentTweet) && !paintTarget.segment;
+  const words = prepareSmoothBody(paintTarget.body, articleBody ? undefined : paintTarget.text);
   const tokenizeMs = performance.now() - tokenizeStartedAt;
   const highlightJumped = targetChanged || segmentChanged || didHighlightDiscontinuity(paintTarget.relativeIndex, chunkChanged);
   updateBoundaryCalibration(paintTarget.relativeIndex);
@@ -1901,7 +2001,9 @@ function recordHighlightTokenizationSkip(
   });
 }
 
-function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
+export function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
+  const motionMode = reducedMotionHighlightMode(settings.bodyHighlightMode, window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  if (motionMode !== "smooth") return motionMode;
   const performanceMode = document.documentElement.dataset.milxdyPerformanceMode || "balanced";
   const tokenEstimate = cachedHighlightTokenEstimate(target);
   const { mode, reason } = resolveContinuousHighlightMode(
@@ -1927,6 +2029,7 @@ function effectiveHighlightMode(target: HighlightTarget): BodyHighlightMode {
   }
   return mode;
 }
+
 
 function recordHighlightPaintDiagnostic(
   reason: string,
@@ -2031,7 +2134,7 @@ function updateWikiDocumentHighlight(state: { status: string; text?: string; chu
 
 function effectiveWikiHighlightMode(_target: WikiReadableDocument): BodyHighlightMode {
   if (settings.bodyHighlightMode !== "smooth") return settings.bodyHighlightMode;
-  return "smooth";
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "word" : "smooth";
 }
 
 function clearWikiDocumentSession(): void {
@@ -2130,6 +2233,7 @@ function cancelPendingHighlightWork(): void {
 }
 
 function clearHighlightVisuals(): void {
+  conversationHighlight.clear();
   clearEstimatedHighlightLoop();
   clearSmoothAnimation();
   activeWordToken = null;
@@ -2151,20 +2255,6 @@ function clearHighlightVisuals(): void {
   activeHighlightSegment = null;
 }
 
-function scrollFullQuoteWordIntoView(word: HTMLElement | null): void {
-  if (!word) return;
-  const container = word.closest<HTMLElement>(".post-reading-full-quote-body");
-  const preview = container?.closest<HTMLElement>('.post-reading-full-quote[data-mode="scroll"]');
-  if (!container || !preview) return;
-  window.requestAnimationFrame(() => {
-    if (!word.isConnected || !container.isConnected) return;
-    const wordRect = word.getBoundingClientRect();
-    const containerRect = container.getBoundingClientRect();
-    const offset = wordRect.top - containerRect.top - container.clientHeight / 2 + wordRect.height / 2;
-    if (Math.abs(offset) < 2) return;
-    container.scrollTop += offset;
-  });
-}
 
 function saveOriginalBody(body: HTMLElement, bodies: HTMLElement[] = [body]): void {
   for (const item of Array.from(new Set([body, ...bodies]))) {
@@ -2182,22 +2272,11 @@ function prepareSmoothBody(body: HTMLElement, textOverride?: string): HTMLElemen
 }
 
 function isXArticleContainer(element: HTMLElement): boolean {
-  return /^\/i\/article\/\d+/.test(window.location.pathname)
-    && Boolean(element.matches('[data-testid="primaryColumn"], main, article') || element.querySelector(X_ARTICLE_BODY));
+  return isXArticleSurface(element);
 }
 
 function getArticleBodies(article: HTMLElement): HTMLElement[] {
-  const candidates = Array.from(article.querySelectorAll<HTMLElement>(`${X_ARTICLE_BODY}, h1, h2, p`))
-    .filter(isReadableArticleBody);
-  return Array.from(new Set(candidates));
-}
-
-function isReadableArticleBody(element: HTMLElement): boolean {
-  if (element.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
-  const text = (element.innerText || element.textContent || "").replace(/\s+/g, " ").trim();
-  if (text.length < 2) return false;
-  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
-  return true;
+  return extractXArticleTextContainers(article);
 }
 
 function prepareWordBody(body: HTMLElement): HTMLElement[] {
@@ -2211,10 +2290,25 @@ function prepareTokenizedBody(
   textOverride?: string,
 ): HTMLElement[] {
   saveOriginalBody(body);
+  const article = currentTweet && isXArticleContainer(currentTweet);
+  const visible = new WeakMap<Element, boolean>();
+  const rendered = (element: HTMLElement | null): boolean => {
+    if (!element) return true;
+    const cached = visible.get(element);
+    if (cached !== undefined) return cached;
+    const style = getComputedStyle(element);
+    const result = !element.hidden && element.getAttribute("aria-hidden") !== "true"
+      && style.display !== "none" && style.visibility !== "hidden" && style.visibility !== "collapse"
+      && (element === body || rendered(element.parentElement));
+    visible.set(element, result);
+    return result;
+  };
   return highlightEngine.prepareTokens(body, mode, {
-    includeTextNode: (node) => !isSkippedReadableHyperlinkText(node, includeHyperlinks),
+    includeTextNode: (node) => (!article || rendered(node.parentElement))
+      && !isSkippedReadableHyperlinkText(node, article ? articleSessionIncludesHyperlinks : includeHyperlinks),
     textOverride,
     smoothReadableLength: typeof textOverride === "string",
+    spokenText: article ? currentHighlightTargets.find(target => target.body === body)?.text : undefined,
   });
 }
 
@@ -2518,11 +2612,13 @@ function findArticleHighlightTargets(article: HTMLElement, spokenText: string, p
   const targets: HighlightTarget[] = [];
   let cursor = 0;
   for (const body of getArticleBodies(article)) {
-    const text = cleanText(body.innerText || body.textContent || "");
+    const text = extractReadableArticleBlock(body, articleSessionIncludesHyperlinks);
     if (!text) continue;
     const range = findBodyRange(spokenText, text, "first", cursor);
     if (!range) continue;
-    targets.push({ body, kind: "main", ...range });
+    const target: HighlightTarget = { body, kind: "main", ...range };
+    target.segments = buildSmoothHighlightSegments(target);
+    targets.push(target);
     cursor = range.end;
   }
   if (targets.length === 0) {
@@ -2531,41 +2627,6 @@ function findArticleHighlightTargets(article: HTMLElement, spokenText: string, p
     if (body && range) targets.push({ body, kind: "main", ...range });
   }
   return targets.sort((left, right) => left.start - right.start);
-}
-
-function findOcrSpeechRanges(spokenText: string, imageTexts: string[]): OcrSpeechRange[] {
-  const ranges: OcrSpeechRange[] = [];
-  let cursor = 0;
-  for (const [index, text] of imageTexts.entries()) {
-    const clean = text.trim();
-    if (!clean) continue;
-    const quoted = `"${clean}"`;
-    const quotedStart = spokenText.indexOf(quoted, cursor);
-    const start = quotedStart >= 0 ? quotedStart : spokenText.indexOf(clean, cursor);
-    if (start < 0) continue;
-    const textStart = quotedStart >= 0 ? quotedStart + 1 : start;
-    const textEnd = textStart + clean.length;
-    const segmentStart = findOcrSegmentStart(spokenText, start);
-    ranges.push({
-      start: segmentStart,
-      end: textEnd + (quotedStart >= 0 ? 1 : 0),
-      imageIndex: index,
-      imageCount: imageTexts.length,
-    });
-    cursor = textEnd;
-  }
-  return ranges;
-}
-
-function findOcrSegmentStart(spokenText: string, textStart: number): number {
-  const prefixStart = spokenText.lastIndexOf(" image says ", textStart);
-  if (prefixStart < 0) return textStart;
-  const sentenceStart = Math.max(
-    spokenText.lastIndexOf(". ", prefixStart),
-    spokenText.lastIndexOf("! ", prefixStart),
-    spokenText.lastIndexOf("? ", prefixStart),
-  );
-  return sentenceStart >= 0 ? sentenceStart + 2 : prefixStart;
 }
 
 function findActiveHighlightTarget(charIndex: number): HighlightTarget | null {
@@ -2600,37 +2661,6 @@ function restoreInactiveHighlightBodies(activeBody: HTMLElement): void {
 
 function isFullQuoteBody(body: HTMLElement): boolean {
   return Boolean(body.closest('[data-post-reading-full-quote="true"]'));
-}
-
-function findBodyRange(spokenText: string, bodyText: string, occurrence: "first" | "last", fromIndex = 0): { start: number; end: number; text: string } | null {
-  const text = bodyText.trim();
-  if (!text) return null;
-  const quoted = `"${text}"`;
-  const quotedStart = occurrence === "first" ? spokenText.indexOf(quoted, fromIndex) : spokenText.lastIndexOf(quoted);
-  let start = quotedStart >= 0 ? quotedStart + 1 : occurrence === "first" ? spokenText.indexOf(text, fromIndex) : spokenText.lastIndexOf(text);
-  if (start < 0) {
-    start = findNormalizedRangeStart(spokenText, text, occurrence, fromIndex);
-  }
-  if (start < 0) return null;
-  return { start, end: start + text.length, text };
-}
-
-function findNormalizedRangeStart(haystack: string, needle: string, occurrence: "first" | "last", fromIndex = 0): number {
-  const collapsedNeedle = needle.replace(/\s+/g, " ").trim();
-  if (!collapsedNeedle) return -1;
-  const pattern = collapsedNeedle
-    .split(" ")
-    .map((part) => escapeRegExp(part))
-    .join("\\s+");
-  const match = Array.from(haystack.matchAll(new RegExp(pattern, "g")))
-    .filter((item) => occurrence !== "first" || (item.index ?? -1) >= fromIndex);
-  if (!match || match.length === 0) return -1;
-  const selected = occurrence === "first" ? match[0] : match[match.length - 1];
-  return selected.index ?? -1;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function findNearestToken(words: HTMLElement[], relativeIndex: number): HTMLElement | null {

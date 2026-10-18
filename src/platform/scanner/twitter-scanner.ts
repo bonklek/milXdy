@@ -1,4 +1,5 @@
 import { safeLocalGet, safeLocalSet } from "../background/extension-runtime";
+import { extractXArticleTextContainers, isXArticleRoute as isXArticleRoutePath, X_ARTICLE_ROOT } from "./x-article";
 
 export type TwitterSurfaceKind = "tweet" | "xArticle" | "userCell" | "notification" | "directMessage" | "profile";
 
@@ -17,7 +18,7 @@ export type TwitterSurface = {
 type Listener = (surface: TwitterSurface) => void;
 
 const TWEET = 'article[data-testid="tweet"]';
-const X_ARTICLE = '[data-testid="primaryColumn"]';
+const X_ARTICLE = X_ARTICLE_ROOT;
 const USER_CELL = '[data-testid="UserCell"], [data-testid="user-cell"]';
 const NOTIFICATION = 'article[data-testid="notification"]';
 const DIRECT_MESSAGE = '[data-testid^="message-"]:not([data-testid^="message-text-"])';
@@ -33,6 +34,7 @@ const pending = new Map<HTMLElement, TwitterSurfaceKind>();
 let observer: MutationObserver | null = null;
 let scanScheduled = false;
 let fullScanFrame: number | null = null;
+let fullScanCursor = 0;
 let flushTimer: number | null = null;
 let flushFrame: number | null = null;
 let safetyTimer: number | null = null;
@@ -217,6 +219,7 @@ function stopScanner(): void {
   counters.activeObserverCount = 0;
   counters.updatedAt = Date.now();
   pending.clear();
+  fullScanCursor = 0;
   scanScheduled = false;
   removeVisibilityListener?.();
   removeVisibilityListener = null;
@@ -334,21 +337,27 @@ function runFullScan(): void {
     counters.lastFullScanMs = Math.round((performance.now() - startedAt) * 10) / 10;
     return;
   }
-  let queued = 0;
-  let dropped = 0;
-  for (const surface of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
-    if (queued >= maxSurfacesPerFullScan) {
-      dropped += 1;
-      continue;
-    }
-    queueSurface(surface);
-    queued += 1;
-  }
+  const surfaces = Array.from(document.querySelectorAll<HTMLElement>(selector));
+  const scanWindow = selectFullScanWindow(surfaces, maxSurfacesPerFullScan, fullScanCursor);
+  for (const surface of scanWindow.items) queueSurface(surface);
+  fullScanCursor = scanWindow.nextCursor;
+  const queued = scanWindow.items.length;
+  const dropped = Math.max(0, surfaces.length - queued);
   counters.lastFullScanQueued = queued;
   counters.lastFullScanDropped = dropped;
   counters.lastFullScanMs = Math.round((performance.now() - startedAt) * 10) / 10;
   counters.surfacesDropped += dropped;
   scheduleFlush();
+}
+
+export function selectFullScanWindow<T>(surfaces: readonly T[], limit: number, cursor: number): { items: T[]; nextCursor: number } {
+  if (surfaces.length === 0) return { items: [], nextCursor: 0 };
+  const start = Math.max(0, cursor) % surfaces.length;
+  const count = Math.min(Math.max(1, Math.floor(limit)), surfaces.length);
+  return {
+    items: Array.from({ length: count }, (_, index) => surfaces[(start + index) % surfaces.length]!),
+    nextCursor: (start + count) % surfaces.length,
+  };
 }
 
 function queueSurfacesFrom(node: HTMLElement): void {
@@ -496,7 +505,7 @@ function isNotificationsRoute(): boolean {
 }
 
 function isXArticleRoute(): boolean {
-  return /^\/i\/article\/\d+/.test(location.pathname);
+  return isXArticleRoutePath(location.pathname);
 }
 
 function isNotificationPointerTarget(target: EventTarget | null): boolean {
@@ -647,26 +656,7 @@ function extractTextContainers(kind: TwitterSurfaceKind, element: HTMLElement): 
 }
 
 function extractArticleTextContainers(element: HTMLElement): HTMLElement[] {
-  const explicit = Array.from(element.querySelectorAll<HTMLElement>([
-    '[data-testid*="article" i] [dir="auto"]',
-    '[data-testid*="Article" i] [dir="auto"]',
-    '[data-testid*="article" i] p',
-    '[data-testid*="Article" i] p',
-    '[role="article"] [dir="auto"]',
-    'main [dir="auto"]',
-  ].join(","))).filter(isReadableArticleTextNode);
-  const unique = Array.from(new Set(explicit));
-  if (unique.length > 0) return unique;
-  return Array.from(element.querySelectorAll<HTMLElement>('h1, h2, p, [dir="auto"]'))
-    .filter(isReadableArticleTextNode);
-}
-
-function isReadableArticleTextNode(node: HTMLElement): boolean {
-  if (node.closest('[role="navigation"], nav, header[role="banner"], [data-testid="sidebarColumn"], [data-testid="User-Name"], [data-testid="placementTracking"]')) return false;
-  const text = (node.innerText || node.textContent || "").replace(/\s+/g, " ").trim();
-  if (text.length < 2) return false;
-  if (/^(post|reply|repost|like|share|follow|subscribe)$/i.test(text)) return false;
-  return true;
+  return extractXArticleTextContainers(element);
 }
 
 function isReadableNotificationTextNode(node: HTMLElement): boolean {

@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import esbuild from "esbuild";
 
-const packageRoot = "examples/packages/local-dev/tweet-composer-kit";
+const packageRoot = "packages/maintainer/tweet-composer-kit";
 await mkdir(`${packageRoot}/dist`, { recursive: true });
 await esbuild.build({
   entryPoints: [`${packageRoot}/src/content.js`],

@@ -9,7 +9,7 @@ examples, and optional asset metadata for custom milXdy modifications.
 Local custom packages are user-controlled. Authors remain responsible for what
 they choose to copy, modify, or distribute.
 
-The intended official catalog policy is rights-compatible, not VPL-only. VPL
+The official catalog admission policy is rights-compatible, not VPL-only. VPL
 remains supported, and another license or explicit permission can qualify only
 when exact evidence supports the intended copying, modification,
 redistribution, and App SDK use. Every accepted entry retains creator/source
@@ -63,10 +63,10 @@ npm run verify
 
 The verification suite checks schema/fixture behavior, file hashes, local
 links, SVG safety, remote-runtime references, private path leaks, package asset
-alignment, and extension release-archive exclusion. The current candidate's
-`upstream-default` validator is still conservatively VPL-only and must be
-generalized to the evidence-backed rights-compatible policy before this
-candidate is published as the official catalog.
+alignment, exact-file rights compatibility and human review records, and
+extension release-archive exclusion. The production catalog remains empty;
+synthetic fixtures establish validator behavior without granting publication
+approval or substituting for a rights reviewer.
 
 ## Publication boundary
 

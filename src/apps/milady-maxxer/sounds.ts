@@ -1,12 +1,9 @@
+import type { AppStorageArea } from "../../platform/app-sdk/app-platform";
+import { AudioCueVolumes } from "../../lib/audio-cue-volumes";
+const cueVolumes = new AudioCueVolumes(["maxxer"]);
 import {
   MEDIA_ELEMENTS,
   INTERACTIVE_ELEMENT,
-  POST_BUTTONS,
-  TWEET_COMPOSER,
-  DM_CONTAINER,
-  DM_CONVERSATION_PANEL,
-  DM_MESSAGE,
-  DM_COMPOSER_FORM,
   LAYERS,
 } from "./selectors";
 import type { ExtensionSettings } from "./shared/types";
@@ -29,10 +26,8 @@ function isMaxxerActive(): boolean {
 let audioContext: AudioContext | null = null;
 const soundsAttached = new WeakSet<HTMLElement>();
 const soundSurfaces = new WeakSet<HTMLElement>();
-let dmListenersAttached = false;
 let gestureListenersAttached = false;
 let surfaceSoundDelegatesAttached = false;
-let postButtonSoundDelegateAttached = false;
 let globalMediaHoverDelegateAttached = false;
 type SoundDocumentEventMap = {
   click: MouseEvent;
@@ -97,9 +92,10 @@ function ensureAudioContext(): void {
   }
 }
 
-export function initializeSoundRuntime(addDisposable: (disposable: () => void) => void = () => undefined): void {
+export function initializeSoundRuntime(addDisposable: (disposable: () => void) => void = () => undefined, storage?: AppStorageArea): void {
   if (gestureListenersAttached) return;
   gestureListenersAttached = true;
+  if (storage) void cueVolumes.start(addDisposable, storage);
   addSoundDocumentListener("click", ensureAudioContext, { passive: true, capture: true }, addDisposable);
   addSoundDocumentListener("keydown", ensureAudioContext, { passive: true, capture: true }, addDisposable);
   addSoundDocumentListener("mousedown", ensureAudioContext, { passive: true, capture: true }, addDisposable);
@@ -175,6 +171,8 @@ function playTone(
   attack: number = 0.01,
   decay: number = 0.1,
 ): void {
+  volume *= cueVolumes.get("maxxer");
+  if (volume <= 0) return;
   try {
     const ctx = getAudioContext();
     if (!ctx) return;
@@ -231,20 +229,6 @@ function playClickSound(isMilady: boolean): void {
     // Simple click
     playTone(300, 0.06, "triangle", 0.04);
   }
-}
-
-function playSendSound(): void {
-  if (!settings.soundEnabled) return;
-  lastUserInteraction = Date.now();
-  // Thup - tight percussive tap, no resonance
-  playTone(250, 0.025, "square", 0.06, 0, 0.005);
-}
-
-function playMessageBlip(): void {
-  if (!settings.soundEnabled) return;
-  // Pip - subtle high tap
-  playTone(1200, 0.08, "sine", 0.06, 0, 0.02);
-  setTimeout(() => playTone(1500, 0.06, "sine", 0.04, 0, 0.015), 30);
 }
 
 export function playCatchSound(): void {
@@ -322,172 +306,9 @@ export function attachGlobalMediaHoverSounds(addDisposable: (disposable: () => v
         // Very subtle, short pip — quieter and shorter than the milady media hover
 }
 
-export function attachPostButtonSound(addDisposable: (disposable: () => void) => void = () => undefined): void {
-  if (postButtonSoundDelegateAttached) return;
-  postButtonSoundDelegateAttached = true;
-  const clickListener = (event: MouseEvent) => {
-    if (!isMaxxerActive()) return;
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest(POST_BUTTONS)) playSendSound();
-  };
-  addSoundDocumentListener("click", clickListener, { passive: true }, addDisposable);
-  addDisposable(() => {
-    postButtonSoundDelegateAttached = false;
-  });
-  return;
-}
-
 function closestSoundSurface(target: HTMLElement): HTMLElement | null {
   for (let node: HTMLElement | null = target; node; node = node.parentElement) {
     if (soundSurfaces.has(node)) return node;
   }
   return null;
-}
-
-// Global DM sound handlers - set up once
-export function attachDMSounds(addDisposable: (disposable: () => void) => void = () => undefined): void {
-  if (dmListenersAttached) return;
-  dmListenersAttached = true;
-
-  // Document-level click handler for all DM interactions
-  const clickListener = (e: MouseEvent) => {
-    if (!isMaxxerActive()) return;
-
-    const target = e.target as HTMLElement;
-    const button = target.closest("button") as HTMLElement | null;
-
-    // Check for send button (inside dm-composer-form or by aria-label)
-    if (button) {
-      const testId = button.getAttribute("data-testid") || "";
-      const ariaLabel = button.getAttribute("aria-label") || "";
-
-      // DM send: button inside the composer form, or explicit send labels
-      const inComposerForm = button.closest(DM_COMPOSER_FORM);
-      if (inComposerForm && (testId.includes("send") || ariaLabel.includes("Send") ||
-          button.getAttribute("type") === "submit")) {
-        playSendSound();
-        return;
-      }
-
-      // Also catch any send button by testid/aria-label outside composer
-      if (testId.includes("send") || testId.includes("Send") ||
-          ariaLabel.includes("Send") || ariaLabel === "Send") {
-        playSendSound();
-        return;
-      }
-    }
-
-    // No click sounds in DM conversations — too noisy
-  };
-  addSoundDocumentListener("click", clickListener, { passive: true, capture: true }, addDisposable);
-
-  // Document-level keydown for Enter to send in DM composer
-  const keydownListener = (e: KeyboardEvent) => {
-    if (!isMaxxerActive()) return;
-    if (e.key !== "Enter" || e.shiftKey) return;
-
-    const target = e.target as HTMLElement;
-    const testId = target.getAttribute("data-testid") || "";
-
-    // Direct match: dm-composer-textarea
-    if (testId === "dm-composer-textarea") {
-      playSendSound();
-      return;
-    }
-
-    // Fallback: any textbox inside DM page that isn't the tweet composer
-    const inDMPage = window.location.pathname.includes("/messages");
-    const isTextbox = target.getAttribute("role") === "textbox" || target.isContentEditable;
-    const notTweetComposer = !target.closest(TWEET_COMPOSER);
-
-    if (inDMPage && isTextbox && notTweetComposer) {
-      playSendSound();
-    }
-  };
-  addSoundDocumentListener("keydown", keydownListener, { passive: true, capture: true }, addDisposable);
-
-  // Hover sound on chat list items and DM links
-  const mouseoverListener = (e: MouseEvent) => {
-    if (!isMaxxerActive()) return;
-    if (!getAudioContext(true)) return;
-
-    const target = e.target as HTMLElement;
-    const inDMs = window.location.pathname.includes("/messages") ||
-                  window.location.pathname.includes("/i/chat");
-    if (!inDMs) return;
-
-    // Chat list items: links inside dm-container that navigate to a conversation
-    const chatLink = target.closest('a[href*="/messages/"], a[href*="/i/chat/"]') as HTMLElement | null;
-    if (chatLink && !soundsAttached.has(chatLink)) {
-      soundsAttached.add(chatLink);
-      playTone(600, 0.04, "sine", 0.03, 0, 0.01);
-    }
-  };
-  addSoundDocumentListener("mouseover", mouseoverListener, { passive: true }, addDisposable);
-  addDisposable(() => {
-    dmListenersAttached = false;
-  });
-
-}
-
-
-// Track new DM message surfaces delivered by the shared runtime scanner.
-// Suppresses the pip for 2s after user interaction to avoid false positives
-// caused by Twitter regenerating DOM nodes with new UUIDs on re-render.
-const seenMessageIds = new Set<string>();
-let dmPollStarted = false;
-let wasInDMs = false;
-let lastUserInteraction = 0;
-
-export function observeIncomingMessages(addDisposable: (disposable: () => void) => void = () => undefined): void {
-  if (dmPollStarted) return;
-  dmPollStarted = true;
-
-  // Track sends to suppress false pips (Twitter re-renders on send create new UUIDs)
-  const markSend = () => { lastUserInteraction = Date.now(); };
-  const keydownListener = (e: KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) markSend();
-  };
-  addSoundDocumentListener("keydown", keydownListener, { passive: true, capture: true }, addDisposable);
-  addDisposable(() => {
-    dmPollStarted = false;
-    wasInDMs = false;
-    seenMessageIds.clear();
-  });
-}
-
-export function syncIncomingMessageRoute(): void {
-  if (isDmRoute()) return;
-  if (!wasInDMs) return;
-  seenMessageIds.clear();
-  wasInDMs = false;
-}
-
-export function handleIncomingMessageSurface(element: HTMLElement): void {
-  if (!isDmRoute()) {
-    syncIncomingMessageRoute();
-    return;
-  }
-  const id = element.matches(DM_MESSAGE)
-    ? element.getAttribute("data-testid")
-    : element.querySelector<HTMLElement>(DM_MESSAGE)?.getAttribute("data-testid");
-  if (!id) return;
-
-  if (!wasInDMs) {
-    wasInDMs = true;
-    lastUserInteraction = Date.now();
-    seenMessageIds.add(id);
-    return;
-  }
-
-  if (seenMessageIds.has(id)) return;
-  seenMessageIds.add(id);
-  if (!settings.soundEnabled || !isMaxxerActive() || document.hidden) return;
-  if (Date.now() - lastUserInteraction < 2000) return;
-  playMessageBlip();
-}
-
-function isDmRoute(): boolean {
-  return window.location.pathname.includes("/messages") ||
-    window.location.pathname.includes("/i/chat");
 }

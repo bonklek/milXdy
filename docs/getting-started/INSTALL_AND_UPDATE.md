@@ -4,8 +4,17 @@ milXdy is currently distributed as a GitHub beta for local browser testing. It i
 
 ## Install From A GitHub Release
 
-For Chrome, Brave, or Edge, download `milXdy-0.2.4-chromium.zip`. Firefox and
-Waterfox use `milXdy-0.2.4-firefox.zip`.
+The 0.2.5 archives are available from the [experimental prerelease](https://github.com/bonklek/milXdy/releases/tag/v0.2.5-experimental).
+Version 0.2.4 remains the latest stable release.
+
+For Chrome, Brave, or Edge, the experimental archive is `milXdy-0.2.5-chromium.zip`. This is the
+normal Chromium release profile: its pinned public manifest key preserves
+extension ID `idlmhjcedjkmbkndigbiobfjadhlmgki` and the exact registered Remilia
+callback `https://idlmhjcedjkmbkndigbiobfjadhlmgki.chromiumapp.org/remilia-oauth`.
+The packaged public Login client ID is `tpa-milxdy`; it is an identifier, not a
+secret, and no client secret or signing private key is included.
+Firefox and Waterfox use `milXdy-0.2.5-firefox.zip`; that profile is keyless and
+reports Remilia connection as unsupported while retaining non-auth behavior.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install downloads.
 
@@ -16,17 +25,26 @@ Lite, Balanced, and Full are setup choices inside milXdy, not separate install d
 5. Choose **Load unpacked** and select the unzipped extension folder.
 6. Refresh X/Twitter tabs.
 
-## Optional 0.2.4 add-ons
+Keep the Chromium archive on the same extension card. The normal source
+Chromium build uses the registered release identity. Developer QA uses a separate
+identity without Remilia Login; explicit release-identity QA must replace the
+same card rather than being loaded alongside it.
 
-The normal release archive contains the base extension. The checked-in
-[Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) prepares a separate
-Chromium custom build from reviewed local package sources:
+## Optional 0.2.5 add-ons
 
-- **Pets Maker** is the first selectable maintainer add-on and remains disabled after installation until enabled in **Apps & Features**.
-- **Share Kit** is a selectable reviewed first-party replacement that preserves the existing Tweet PNG identity and settings.
-- **Post-Factory** is documented as **Under review** and cannot yet be selected through the catalog Prepare/Apply workflow.
+Full Chromium archives now include the exactly reviewed **Post-Factory** and
+**Share Kit** packages. Factory and Drafts appear in X's composer toolbar on
+startup, with no catalog selection required. An explicit off setting in
+**Apps & Features** remains off. Remote Maker and contribution actions still
+require their declared user consent.
 
-Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.4 source
+The checked-in [Add-ons Catalog](https://bonklek.github.io/milXdy/addons/) supports
+other reviewed custom selections. Pets Maker is selectable after its exact
+source/hash trust checks pass and remains disabled until explicitly enabled.
+Custom selections, including an empty selection, replace the bundled defaults.
+Firefox and smaller build profiles retain their existing package coverage.
+
+Follow [Local Add-ons](../sdk/LOCAL_ADDONS.md) from a matching 0.2.5 source
 checkout. Load `dist/chromium-local-apps/` once and reload that same extension
 card after later successful rebuilds. Do not load the custom build alongside the
 normal build as a second extension.
@@ -34,6 +52,10 @@ normal build as a second extension.
 ## Firefox Beta Install
 
 Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterfox](../contributors/FIREFOX_QA.md) for installation notes and browser-specific limitations.
+
+The 0.2.5 Firefox archive does not include Remilia Login. It must not offer a
+cookie/session fallback; the popup reports the connection as intentionally
+unsupported and leaves unrelated features available.
 
 1. Download the latest `milXdy-<version>-firefox.zip` release archive.
 2. Unzip it into a permanent folder.
@@ -46,18 +68,25 @@ Firefox and Waterfox 140 or newer use the Firefox build. See [Firefox and Waterf
 
 Prerequisites:
 
-- Node.js 20 or newer is recommended.
+- Node.js 24 and npm 11. The npm lockfile and `npm ci` define the supported build environment.
 - Chrome, Brave, Edge, another Chromium browser, or Firefox/Waterfox 140 or newer for beta testing.
 - Git, if cloning directly.
 
 ```powershell
 git clone https://github.com/bonklek/milXdy.git
 cd milXdy
-npm install
+npm ci
 npm run build:profiles
 ```
 
-Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen.
+The normal `npm run build:chromium` command emits the authenticated release
+build in `dist/chromium`; load that directory from `chrome://extensions`.
+There is no separate beta build. The registered public extension identity and
+Remilia Login callback are preserved from the former beta, so update that same
+extension card in place. Developer QA outputs use a separate identity and do
+not replace the normal release.
+Load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's
+temporary add-on screen for Firefox compatibility testing.
 
 ## Safe Manual Updates
 
@@ -73,7 +102,13 @@ When an update is available:
 6. Click **Reload** in the milXdy popup or reload the existing extension card.
 7. Refresh open X/Twitter tabs.
 
-Keeping the same loaded folder preserves extension storage, including settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state. Removing the extension, loading a different folder, or clearing extension storage can reset local data.
+Keeping the same loaded folder preserves persistent extension storage, including
+settings, Maxxer stats, and diagnostics. Remilia credentials use trusted session
+storage and end when the extension reloads or updates, so reconnect from the
+popup if needed. Removing the extension, loading a different folder, or
+clearing extension storage can reset local data. After updating from 0.2.4 or
+earlier, follow the one-time [Remilia account migration](REMILIA_ACCOUNT.md);
+milXdy does not reuse the old browser-session connector.
 
 ## Source Updates
 
@@ -81,8 +116,10 @@ For source installs:
 
 ```powershell
 git pull
-npm install
+npm ci
 npm run build:profiles
 ```
 
-Then reload the same existing milXdy extension card that points to `dist/chromium`, or reload the Firefox temporary add-on from `dist/firefox/manifest.json`.
+Then reload the same existing milXdy extension card that points to
+`dist/chromium`, or reload the Firefox temporary add-on from
+`dist/firefox/manifest.json`.

@@ -1,7 +1,10 @@
+import type { SpotlightState, BoardInfo, ChanUser, ChanImage, ChanPost, ChanThread, BoardPayload, BoardSummary, ViewMode, BoardTheme, PostDraft, WatchedThread } from "./portal-contract";
+import { imageUrl, API_ROOT, DEFAULT_BOARDS, normalizeWatchedThreads, normalizeDrafts, summarizeBoard, emptyBoard, upsertBoard, sortThreads, compactText, relativeTime, boardTheme, nativeDestinationUrl } from "./portal-data";
+import { createPortalComposer, resizePostTextarea } from "./portal-composer";
+import { createPost, emptyState, loadingState } from "./portal-post-view";
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
 import {
   createOverlayAppFrame,
-  type OverlayAppFrame,
 } from "../../platform/overlay/app-frame";
 import {
   clampOverlayPanelBox,
@@ -13,16 +16,16 @@ import {
 } from "../../platform/overlay/panel-base";
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
-import type { OverlayDockSide } from "../../platform/overlay/dock";
 import {
   DEFAULT_MEDIA_DISCOVERY_BOARDS,
   IDENTITY_PROVENANCE_POLICY,
   MEDIA_POST_MARKER,
   parseTaggedMediaPost,
 } from "./media-post-schema";
+import { createPortalStorage, loadPortalBootValues } from "./storage";
 
 const ROOT_ID = "milxdy-miladychan-root";
-const API_ROOT = "https://boards.miladychan.org";
+
 const DOCK_ICON_PATH = "miladychanSpotlight/notification-icon.png";
 const STYLE_THEME_KEY = "milxdy.settings.theme";
 const WIDTH_KEY = "milxdy.miladychan.width";
@@ -30,138 +33,13 @@ const HEIGHT_KEY = "milxdy.miladychan.height";
 const TOP_KEY = "milxdy.miladychan.top";
 const DRAFT_KEY = "milxdy.miladychan.postDraft";
 const WATCHED_THREADS_KEY = "milxdy.miladychan.watchedThreads";
-const DEFAULT_BOARDS = ["milady", "remilio", "a", "ai", "kpop", "pol", "v", "all"];
-const BOARD_THEME_BY_BOARD: Record<string, BoardTheme> = {
-  milady: "tea",
-  all: "tea",
-  remilio: "yotsuba",
-  a: "yots_b",
-  pol: "yots_b",
-  v: "yots_b",
-  ai: "console",
-  kpop: "moon",
-};
-const FILE_TYPES = [
-  "jpg", "png", "gif", "webm", "pdf", "svg", "mp4", "mp3", "ogg", "zip",
-  "7z", "tar.gz", "tar.xz", "flac", "noFile", "txt", "webp", "rar", "cbz", "cbr",
-] as const;
+
 const MEDIA_POST_GROUNDWORK = Object.freeze({
   marker: MEDIA_POST_MARKER,
   defaultBoards: DEFAULT_MEDIA_DISCOVERY_BOARDS,
   identityPolicy: IDENTITY_PROVENANCE_POLICY,
   parse: parseTaggedMediaPost,
 });
-
-type BoardInfo = {
-  id: string;
-  title: string;
-};
-
-type ChanUser = {
-  displayname?: string;
-  username?: string;
-  pfpUrl?: string;
-};
-
-type ChanImage = {
-  spoiler?: boolean;
-  audio?: boolean;
-  video?: boolean;
-  file_type: number;
-  thumb_type: number;
-  dims?: number[];
-  size?: number;
-  sha1: string;
-  name?: string;
-};
-
-type ChanPost = {
-  id: number;
-  time: number;
-  body: string;
-  name?: string;
-  image?: ChanImage | null;
-  user?: ChanUser | null;
-  op?: number;
-  board?: string;
-};
-
-type ChanThread = ChanPost & {
-  abbrev?: boolean;
-  sticky?: boolean;
-  locked?: boolean;
-  post_count: number;
-  image_count: number;
-  update_time: number;
-  bump_time: number;
-  subject: string;
-  board: string;
-  activity?: number;
-  connected?: number;
-  unique_posters?: number;
-  posts?: ChanPost[] | null;
-};
-
-type BoardPayload = {
-  pages?: number;
-  threads: ChanThread[];
-};
-
-type BoardSummary = BoardInfo & {
-  loading: boolean;
-  error: string;
-  threads: ChanThread[];
-  activeScore: number;
-  connected: number;
-  latestUpdate: number;
-};
-
-type ViewMode = "boards" | "threads" | "thread";
-type BoardTheme = "tea" | "yotsuba" | "yots_b" | "console" | "moon";
-
-type PostDraft = {
-  board: string;
-  threadId: number | null;
-  name: string;
-  subject: string;
-  body: string;
-  updatedAt: number;
-};
-
-type WatchedThread = {
-  board: string;
-  threadId: number;
-  title: string;
-  watchedAt: number;
-  seenPostCount: number | null;
-  latestPostCount: number | null;
-};
-
-type SpotlightState = {
-  root: HTMLElement | null;
-  appFrame: OverlayAppFrame | null;
-  open: boolean;
-  minimized: boolean;
-  loadingBoards: boolean;
-  loadingThreads: boolean;
-  loadingThread: boolean;
-  error: string;
-  boards: BoardSummary[];
-  selectedBoard: string;
-  selectedThread: ChanThread | null;
-  view: ViewMode;
-  side: OverlayDockSide;
-  x: number;
-  width: number;
-  height: number;
-  topOffset: number;
-  theme: "light" | "dark" | "system";
-  lastLoadedAt: number;
-  layoutReady: boolean;
-  drafts: PostDraft[];
-  watchedThreads: WatchedThread[];
-  draftNotice: string;
-};
 
 const state: SpotlightState = {
   root: null,
@@ -192,24 +70,35 @@ let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let lifecycleSignal: AbortSignal | null = null;
 let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
+let resolveAssetUrl: MilxdyContentAppContext["resolveAssetUrl"] | null = null;
+let portalStorage: ReturnType<typeof createPortalStorage> | null = null;
 let boardsGeneration = 0;
 let boardGeneration = 0;
 let threadGeneration = 0;
 let highlightedPost: HTMLElement | null = null;
 let postHighlightTimer: number | null = null;
+let activationGeneration = 0;
 
 export function boot(context?: MilxdyContentAppContext): void {
   if (booted) return;
+  if (!context?.storage || !context.resolveAssetUrl) throw new Error("Miladychan Portal requires an SDK app context");
   booted = true;
+  const generation = ++activationGeneration;
   lifecycleSignal = context?.signal || null;
   addRuntimeDisposable = context?.addDisposable || (() => undefined);
   appSdkSendMessage = context?.sendMessage || null;
+  portalStorage = createPortalStorage(context.storage);
+  resolveAssetUrl = context?.resolveAssetUrl || null;
   ensureOverlayAppChromeStyles();
   registerDockItem();
-  void loadLayoutSettings();
-  void loadTheme();
-  void loadDraft();
-  void loadWatchedThreads();
+  void loadLayoutSettings(generation);
+  void loadPortalBootValues({
+    storage: portalStorage,
+    active: () => lifecycleActive() && generation === activationGeneration,
+    theme: { key: STYLE_THEME_KEY, fallback: "system", apply: (value) => { state.theme = normalizeTheme(value); applyTheme(); } },
+    draft: { key: DRAFT_KEY, apply: (value) => { state.drafts = normalizeDrafts(value); render(); } },
+    watched: { key: WATCHED_THREADS_KEY, apply: (value) => { state.watchedThreads = normalizeWatchedThreads(value); render(); } },
+  });
   observeSettings(addRuntimeDisposable);
 }
 
@@ -230,6 +119,7 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  ++activationGeneration;
   boardsGeneration += 1;
   boardGeneration += 1;
   threadGeneration += 1;
@@ -240,6 +130,8 @@ export function dispose(): void {
   state.root = null;
   addRuntimeDisposable = () => undefined;
   appSdkSendMessage = null;
+  portalStorage = null;
+  resolveAssetUrl = null;
   lifecycleSignal = null;
   booted = false;
 }
@@ -273,50 +165,32 @@ function registerDockItem(): void {
 }
 
 function miladyChanDockIcon(): string {
-  return chrome.runtime.getURL(DOCK_ICON_PATH);
+  if (!resolveAssetUrl) throw new Error("Miladychan Portal requires SDK asset resolution");
+  return resolveAssetUrl(DOCK_ICON_PATH);
 }
 
-async function loadLayoutSettings(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY]).catch(() => ({}));
-  if (!lifecycleActive()) return;
-  const width = Number(stored[WIDTH_KEY]);
-  const height = Number(stored[HEIGHT_KEY]);
-  const top = Number(stored[TOP_KEY]);
+const getLocal = (keys: string[] | Record<string, unknown>) => portalStorage!.get(keys);
+const setLocal = (values: Record<string, unknown>) => portalStorage!.set(values);
+const removeLocal = (key: string) => portalStorage!.remove(key);
+
+async function loadLayoutSettings(generation = activationGeneration): Promise<void> {
+  const stored = await getLocal([WIDTH_KEY, HEIGHT_KEY, TOP_KEY]);
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   const layout = await restoreOverlayPanelBox("miladychanSpotlight", {
     side: state.side,
     minWidth: 320,
     minHeight: 340,
     defaultWidth: state.width,
     defaultHeight: state.height,
-    legacy: { width, height, topOffset: top },
+    legacy: { width: Number(stored[WIDTH_KEY]), height: Number(stored[HEIGHT_KEY]), topOffset: Number(stored[TOP_KEY]) },
   });
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   state.x = layout.x ?? state.x;
   state.width = layout.width;
   state.height = layout.height;
   state.topOffset = layout.topOffset;
   state.layoutReady = true;
   applyLayout();
-}
-
-async function loadTheme(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get({ [STYLE_THEME_KEY]: "system" }).catch(() => ({}));
-  if (!lifecycleActive()) return;
-  state.theme = normalizeTheme(stored[STYLE_THEME_KEY]);
-  applyTheme();
-}
-
-async function loadDraft(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get(DRAFT_KEY).catch(() => ({}));
-  if (!lifecycleActive()) return;
-  state.drafts = normalizeDrafts(stored[DRAFT_KEY]);
-  render();
-}
-
-async function loadWatchedThreads(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get(WATCHED_THREADS_KEY).catch(() => ({}));
-  if (!lifecycleActive()) return;
-  state.watchedThreads = normalizeWatchedThreads(stored[WATCHED_THREADS_KEY]);
-  render();
 }
 
 function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]): void {
@@ -327,8 +201,7 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
       applyTheme();
     }
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  addDisposable(portalStorage!.onChanged((changes) => storageListener(changes, "local")));
   addDisposable(observeOverlayPanelTheme(applyTheme));
   const resizeListener = () => {
     state.width = clampWidth(state.width);
@@ -737,7 +610,7 @@ function renderThread(body: HTMLElement): void {
   const posts = [thread, ...(thread.posts || [])];
   const list = document.createElement("div");
   list.className = "milxdy-chan-post-list";
-  for (const post of posts) list.append(createPost(post, thread.board));
+  for (const post of posts) list.append(createPost(post, thread.board, focusReplyComposer, jumpToPost));
   body.append(list);
   body.append(createPostHandoff(thread.board, thread.id, "bottom"));
   const jumpToTop = document.createElement("button");
@@ -756,81 +629,9 @@ function renderThread(body: HTMLElement): void {
 }
 
 function createPostHandoff(board: string, threadId: number | null, position: "top" | "bottom" = "top"): HTMLElement {
-  const form = document.createElement("section");
-  form.className = "milxdy-chan-compose";
-  form.dataset.boardTheme = boardTheme(board);
-  form.dataset.threadId = threadId === null ? "" : String(threadId);
-  form.dataset.composePosition = position;
-  const destination = threadId === null ? `New thread in /${board}/` : `Reply in /${board}/ No. ${threadId}`;
-  const heading = document.createElement("strong");
-  heading.textContent = "Post to Miladychan";
-  const target = document.createElement("span");
-  target.className = "milxdy-chan-compose-target";
-  target.textContent = `Destination: ${destination}`;
-  const note = document.createElement("p");
-  note.textContent = "Submit text anonymously without using a Miladychan, RemiNet, wallet, or extension session. Media, CAPTCHA, and unsupported board requirements stay on native Miladychan.";
-  const name = document.createElement("input");
-  name.type = "text";
-  name.className = "milxdy-chan-compose-subject";
-  name.placeholder = "Poster name";
-  name.value = draftForDestination(board, threadId)?.name || "milXdy";
-  name.maxLength = 100;
-  name.setAttribute("aria-label", `Poster name for ${destination}`);
-  const subject = document.createElement("input");
-  subject.type = "text";
-  subject.className = "milxdy-chan-compose-subject";
-  subject.placeholder = "Thread subject";
-  subject.value = draftForDestination(board, threadId)?.subject || "";
-  subject.maxLength = 200;
-  subject.hidden = threadId !== null;
-  subject.setAttribute("aria-label", `Subject for ${destination}`);
-  const textarea = document.createElement("textarea");
-  textarea.placeholder = "Write a post…";
-  textarea.value = draftForDestination(board, threadId)?.body || "";
-  textarea.rows = 1;
-  textarea.setAttribute("aria-label", `Post for ${destination}`);
-  const actions = document.createElement("div");
-  actions.className = "milxdy-chan-compose-actions";
-  const submit = document.createElement("button");
-  submit.type = "button";
-  submit.className = "milxdy-chan-compose-submit";
-  submit.textContent = "Post";
-  const notice = document.createElement("span");
-  notice.className = "milxdy-chan-compose-notice";
-  notice.textContent = state.draftNotice;
-  const updateActions = () => {
-    submit.disabled = !textarea.value.trim() || (threadId === null && !subject.value.trim());
-  };
-  textarea.addEventListener("input", () => {
-    resizePostTextarea(textarea);
-    updateActions();
+  return createPortalComposer(board, threadId, position, {
+    draft: draftForDestination(board, threadId), notice: state.draftNotice, submit: submitDraft,
   });
-  name.addEventListener("input", updateActions);
-  subject.addEventListener("input", updateActions);
-  submit.addEventListener("click", () => {
-    const poster = name.value.trim() || "anonymous";
-    if (!window.confirm(`Post as ${poster} to ${destination}?`)) return;
-    void submitDraft({ board, threadId, name: name.value, subject: subject.value, body: textarea.value }, submit, notice);
-  });
-  actions.append(submit);
-  form.append(heading, target, note, name, subject, textarea, actions, notice);
-  updateActions();
-  requestAnimationFrame(() => resizePostTextarea(textarea));
-  return form;
-}
-
-function resizePostTextarea(textarea: HTMLTextAreaElement): void {
-  textarea.style.height = "auto";
-  const styles = getComputedStyle(textarea);
-  const lineHeight = Number.parseFloat(styles.lineHeight) || 18;
-  const verticalChrome = Number.parseFloat(styles.paddingTop) + Number.parseFloat(styles.paddingBottom)
-    + Number.parseFloat(styles.borderTopWidth) + Number.parseFloat(styles.borderBottomWidth);
-  const tenLineHeight = Math.ceil((lineHeight * 10) + verticalChrome);
-  const panelHeight = textarea.closest<HTMLElement>(".milxdy-chan-body")?.clientHeight || tenLineHeight;
-  const maxHeight = Math.max(38, Math.min(tenLineHeight, Math.floor(panelHeight * 0.45)));
-  const desiredHeight = Math.max(38, textarea.scrollHeight);
-  textarea.style.height = `${Math.min(desiredHeight, maxHeight)}px`;
-  textarea.style.overflowY = desiredHeight > maxHeight ? "auto" : "hidden";
 }
 
 async function submitDraft(draft: Omit<PostDraft, "updatedAt">, submit: HTMLButtonElement, notice: HTMLElement): Promise<void> {
@@ -866,14 +667,14 @@ function draftForDestination(board: string, threadId: number | null): PostDraft 
 
 async function saveFailedDraft(draft: Omit<PostDraft, "updatedAt">): Promise<void> {
   state.drafts = [...state.drafts.filter((current) => current.board !== draft.board || current.threadId !== draft.threadId), { ...draft, updatedAt: Date.now() }];
-  await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
+  await setLocal({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
 }
 
 async function clearFailedDraft(board: string, threadId: number | null): Promise<void> {
   if (!draftForDestination(board, threadId)) return;
   state.drafts = state.drafts.filter((draft) => draft.board !== board || draft.threadId !== threadId);
-  if (state.drafts.length) await chrome.storage.local.set({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
-  else await chrome.storage.local.remove(DRAFT_KEY).catch(() => undefined);
+  if (state.drafts.length) await setLocal({ [DRAFT_KEY]: { version: 1, drafts: state.drafts } }).catch(() => undefined);
+  else await removeLocal(DRAFT_KEY).catch(() => undefined);
 }
 
 function watchedThread(board: string, threadId: number): WatchedThread | null {
@@ -905,38 +706,10 @@ async function unwatchThread(board: string, threadId: number): Promise<void> {
 
 async function saveWatchedThreads(): Promise<void> {
   if (state.watchedThreads.length) {
-    await chrome.storage.local.set({ [WATCHED_THREADS_KEY]: { version: 1, threads: state.watchedThreads } }).catch(() => undefined);
+    await setLocal({ [WATCHED_THREADS_KEY]: { version: 1, threads: state.watchedThreads } }).catch(() => undefined);
   } else {
-    await chrome.storage.local.remove(WATCHED_THREADS_KEY).catch(() => undefined);
+    await removeLocal(WATCHED_THREADS_KEY).catch(() => undefined);
   }
-}
-
-function normalizeWatchedThreads(value: unknown): WatchedThread[] {
-  const candidates = value && typeof value === "object" && Array.isArray((value as { threads?: unknown }).threads)
-    ? (value as { threads: unknown[] }).threads
-    : [];
-  const seen = new Set<string>();
-  return candidates.flatMap((candidate) => {
-    if (!candidate || typeof candidate !== "object") return [];
-    const raw = candidate as Partial<WatchedThread>;
-    const threadId = raw.threadId;
-    if (typeof raw.board !== "string" || !DEFAULT_BOARDS.includes(raw.board) || !Number.isInteger(threadId) || threadId === undefined || threadId <= 0) return [];
-    const key = `${raw.board}/${threadId}`;
-    if (seen.has(key)) return [];
-    seen.add(key);
-    return [{
-      board: raw.board,
-      threadId,
-      title: typeof raw.title === "string" ? raw.title.slice(0, 200) : `No. ${threadId}`,
-      watchedAt: Number.isFinite(raw.watchedAt) ? Number(raw.watchedAt) : 0,
-      seenPostCount: nonNegativeInteger(raw.seenPostCount),
-      latestPostCount: nonNegativeInteger(raw.latestPostCount),
-    }];
-  }).sort((left, right) => right.watchedAt - left.watchedAt);
-}
-
-function nonNegativeInteger(value: unknown): number | null {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 function reconcileWatchedThreads(threads: ChanThread[]): boolean {
@@ -971,85 +744,6 @@ function freshWatchedPostCount(): number {
   return state.watchedThreads.reduce((total, watched) => total + Math.max(0, (watched.latestPostCount ?? 0) - (watched.seenPostCount ?? 0)), 0);
 }
 
-function nativeDestinationUrl(board: string, threadId: number | null): string {
-  return threadId === null ? `${API_ROOT}/${board}/` : `${API_ROOT}/${board}/${threadId}`;
-}
-
-function normalizeDrafts(value: unknown): PostDraft[] {
-  if (Array.isArray(value)) return value.map(normalizeDraft).filter((draft): draft is PostDraft => draft !== null);
-  if (value && typeof value === "object" && Array.isArray((value as { drafts?: unknown }).drafts)) {
-    return (value as { drafts: unknown[] }).drafts.map(normalizeDraft).filter((draft): draft is PostDraft => draft !== null);
-  }
-  const legacyDraft = normalizeDraft(value);
-  return legacyDraft ? [legacyDraft] : [];
-}
-
-function normalizeDraft(value: unknown): PostDraft | null {
-  if (!value || typeof value !== "object") return null;
-  const raw = value as Partial<PostDraft>;
-  if (typeof raw.board !== "string" || !raw.board || typeof raw.body !== "string") return null;
-  const candidateThreadId = raw.threadId;
-  const threadId: number | null = candidateThreadId === null
-    ? null
-    : typeof candidateThreadId === "number" && Number.isInteger(candidateThreadId) && candidateThreadId > 0
-      ? candidateThreadId
-      : null;
-  return {
-    board: raw.board,
-    threadId,
-    name: typeof raw.name === "string" ? raw.name.slice(0, 100) : "milXdy",
-    subject: typeof raw.subject === "string" ? raw.subject.slice(0, 200) : "",
-    body: raw.body,
-    updatedAt: Number.isFinite(raw.updatedAt) ? Number(raw.updatedAt) : 0,
-  };
-}
-
-function createPost(post: ChanPost, fallbackBoard: string): HTMLElement {
-  const article = document.createElement("div");
-  article.className = "milxdy-chan-post";
-  article.dataset.boardTheme = boardTheme(post.board || fallbackBoard);
-  article.dataset.postId = String(post.id);
-  const meta = document.createElement("header");
-  const author = document.createElement("strong");
-  author.textContent = post.user?.displayname || post.name || "milady";
-  const id = document.createElement("button");
-  id.type = "button";
-  id.className = "milxdy-chan-post-reply";
-  id.textContent = `No. ${post.id} · ${relativeTime(post.time)}`;
-  id.setAttribute("aria-label", `Reply to post ${post.id}`);
-  id.addEventListener("click", () => focusReplyComposer(post.id));
-  meta.append(author, id);
-  article.append(meta);
-  const media = createMedia(post.image, post.board || fallbackBoard, post.id);
-  if (media) article.append(media);
-  if (post.body) {
-    article.append(createPostBody(post.body));
-  }
-  return article;
-}
-
-function createPostBody(body: string): HTMLElement {
-  const text = document.createElement("p");
-  const referencePattern = /(?<!>)>>(\d+)/gu;
-  let cursor = 0;
-  for (const match of body.matchAll(referencePattern)) {
-    const index = match.index ?? cursor;
-    if (index > cursor) text.append(document.createTextNode(body.slice(cursor, index)));
-    const postId = Number(match[1]);
-    const reference = document.createElement("button");
-    reference.type = "button";
-    reference.className = "milxdy-chan-post-reference";
-    reference.textContent = match[0];
-    reference.title = `Jump to No. ${postId}`;
-    reference.setAttribute("aria-label", `Jump to post ${postId}`);
-    reference.addEventListener("click", () => jumpToPost(postId));
-    text.append(reference);
-    cursor = index + match[0].length;
-  }
-  if (cursor < body.length) text.append(document.createTextNode(body.slice(cursor)));
-  return text;
-}
-
 function jumpToPost(postId: number): void {
   if (!Number.isSafeInteger(postId) || postId <= 0) return;
   const post = state.root?.querySelector<HTMLElement>(`.milxdy-chan-post[data-post-id="${postId}"]`);
@@ -1082,76 +776,6 @@ function focusReplyComposer(postId: number): void {
   textarea.focus();
 }
 
-function createMedia(image: ChanImage | null | undefined, board: string, postId: number): HTMLElement | null {
-  const thumb = imageUrl(image, "thumb");
-  const src = imageUrl(image, "src");
-  if (!thumb && !src) return null;
-  const link = document.createElement("a");
-  link.className = "milxdy-chan-media";
-  link.href = src || `${API_ROOT}/${board}/${postId}`;
-  link.target = "_blank";
-  link.rel = "noreferrer";
-  const fileType = fileExtension(image?.file_type);
-  if (thumb && fileType !== "mp3" && fileType !== "flac") {
-    const img = document.createElement("img");
-    img.src = thumb;
-    img.alt = "";
-    img.loading = "lazy";
-    link.append(img);
-  } else {
-    const fallback = document.createElement("span");
-    fallback.textContent = fileType ? fileType.toUpperCase() : "FILE";
-    link.append(fallback);
-  }
-  return link;
-}
-
-function emptyState(text: string): HTMLElement {
-  const node = document.createElement("div");
-  node.className = "milxdy-chan-empty";
-  node.textContent = text;
-  return node;
-}
-
-function loadingState(text: string): HTMLElement {
-  const node = document.createElement("div");
-  node.className = "milxdy-chan-loading";
-  const indicator = document.createElement("span");
-  indicator.setAttribute("aria-hidden", "true");
-  const label = document.createElement("strong");
-  label.textContent = text;
-  node.append(indicator, label);
-  return node;
-}
-
-function summarizeBoard(board: BoardSummary): BoardSummary {
-  return {
-    ...board,
-    activeScore: board.threads.reduce((sum, thread) => sum + (thread.activity || 0), 0),
-    connected: board.threads.reduce((sum, thread) => sum + (thread.connected || 0), 0),
-    latestUpdate: Math.max(0, ...board.threads.map((thread) => thread.update_time || 0)),
-  };
-}
-
-function emptyBoard(id: string, title: string): BoardSummary {
-  return { id, title, loading: false, error: "", threads: [], activeScore: 0, connected: 0, latestUpdate: 0 };
-}
-
-function upsertBoard(boards: BoardSummary[], next: BoardSummary): BoardSummary[] {
-  const found = boards.some((board) => board.id === next.id);
-  return found ? boards.map((board) => board.id === next.id ? next : board) : [...boards, next];
-}
-
-function sortThreads(threads: ChanThread[]): ChanThread[] {
-  return [...threads].sort((a, b) => {
-    const stickyDelta = Number(Boolean(b.sticky)) - Number(Boolean(a.sticky));
-    if (stickyDelta) return stickyDelta;
-    return (b.activity || 0) - (a.activity || 0)
-      || (b.connected || 0) - (a.connected || 0)
-      || (b.update_time || 0) - (a.update_time || 0);
-  });
-}
-
 async function fetchJson<T>(url: string): Promise<T> {
   if (!appSdkSendMessage) throw new Error("Extension fetch unavailable.");
   const response = await appSdkSendMessage<{ ok?: boolean; status?: number; error?: string; data?: unknown }>({
@@ -1161,34 +785,6 @@ async function fetchJson<T>(url: string): Promise<T> {
   if (!response) throw new Error("Extension fetch unavailable.");
   if (!response.ok) throw new Error(response.error || `HTTP ${response.status || 0}`);
   return response.data as T;
-}
-
-function imageUrl(image: ChanImage | null | undefined, kind: "thumb" | "src"): string {
-  if (!image?.sha1) return "";
-  const type = kind === "thumb" ? image.thumb_type : image.file_type;
-  const extension = fileExtension(type);
-  if (!extension || extension === "noFile") return "";
-  return `${API_ROOT}/assets/images/${kind}/${image.sha1}.${extension}`;
-}
-
-function fileExtension(type: number | undefined): string {
-  if (type === undefined || type < 0 || type >= FILE_TYPES.length) return "";
-  return FILE_TYPES[type] || "";
-}
-
-function compactText(value: string): string {
-  return value.replace(/\s+/g, " ").trim().slice(0, 160) || "No body";
-}
-
-function relativeTime(seconds: number): string {
-  if (!seconds) return "unknown";
-  const delta = Math.max(0, Math.floor(Date.now() / 1000) - seconds);
-  if (delta < 60) return "now";
-  const minute = Math.floor(delta / 60);
-  if (minute < 60) return `${minute}m`;
-  const hour = Math.floor(minute / 60);
-  if (hour < 24) return `${hour}h`;
-  return `${Math.floor(hour / 24)}d`;
 }
 
 function statusText(): string {
@@ -1204,10 +800,6 @@ function activeBoardTheme(): BoardTheme {
   if (state.view === "thread" && state.selectedThread) return boardTheme(state.selectedThread.board);
   if (state.view === "threads") return boardTheme(state.selectedBoard);
   return "tea";
-}
-
-function boardTheme(boardId: string): BoardTheme {
-  return BOARD_THEME_BY_BOARD[boardId] || "tea";
 }
 
 function errorMessage(error: unknown): string {
@@ -1260,7 +852,7 @@ function startDrag(event: PointerEvent): void {
     disabled: () => state.minimized,
     persist: (box) => {
       root.dataset.dragging = "false";
-      void chrome.storage.local.set({ [TOP_KEY]: box.topOffset });
+      void setLocal({ [TOP_KEY]: box.topOffset });
     },
   });
 }
@@ -1275,7 +867,7 @@ function startResize(event: PointerEvent): void {
     root,
     disabled: () => state.minimized,
     persist: (box) => {
-      void chrome.storage.local.set({ [WIDTH_KEY]: box.width, [HEIGHT_KEY]: box.height });
+      void setLocal({ [WIDTH_KEY]: box.width, [HEIGHT_KEY]: box.height });
     },
   }, axis);
 }

@@ -4,6 +4,17 @@ import { withReleaseArtifactLock } from "./release-artifact-lock.mjs";
 const gates = [
   ["TypeScript", ["node_modules/typescript/bin/tsc", "--noEmit"]],
   ["Current release docs/contracts", ["scripts/release/verify-release-current.mjs"]],
+  ["Reviewed creation defaults", ["--test", "scripts/verify/creation-defaults.test.mjs"]],
+  ["Chromium release identity", ["scripts/verify/chromium-identity.mjs"]],
+  ["Remilia migration docs/evidence contracts", ["scripts/verify/remilia-api-migration.mjs"]],
+  ["Remilia migration artifact scan fixtures", ["scripts/verify/remilia-migration-artifact-scan.mjs"]],
+  ["Stylesheet build validation fixtures", ["--test", "scripts/build/validated-css-text.test.mjs"]],
+  ["Reader speaker and Share export controls", ["scripts/verify/reader-controls-browser.mjs"]],
+  ["X Article playback and word tracking", ["scripts/verify/x-article-reader-browser.mjs"]],
+  ["Legacy and modern DM reader discovery", ["scripts/verify/direct-messages-browser.mjs"]],
+  ["Quick replies and bounded maker panel", ["scripts/verify/quick-replies-browser.mjs"]],
+  ["Author identity and badge layout", ["scripts/verify/author-header-browser.mjs"]],
+  ["Native page reskin layout", ["scripts/verify/reskin-layout-browser.mjs"]],
   ["Build Chromium/Firefox profiles", ["scripts/build/build-profiles.mjs"]],
   ["Filesystem layout", ["scripts/verify/filesystem-layout.mjs"]],
   ["Localization metadata", ["scripts/verify/locales.mjs"]],
@@ -27,8 +38,10 @@ const gates = [
   ["Extension smoke", ["scripts/smoke/extension-smoke-020.mjs"]],
   ["App smoke", ["scripts/smoke/app-smoke.mjs"]],
   ["Package release archives", ["scripts/release/package-release.mjs"]],
+  ["Remilia migration artifact scan", ["scripts/release/verify-remilia-migration-artifacts.mjs"]],
   ["Release archive checksums", ["scripts/release/verify-release-checksums.mjs"]],
   ["Release archive reproducibility", ["scripts/release/verify-reproducible-release.mjs"]],
+  ["Fresh build reproducibility", ["scripts/release/verify-reproducible-build.mjs"]],
 ];
 
 await withReleaseArtifactLock("verify release gates", async () => {

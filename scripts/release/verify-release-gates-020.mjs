@@ -9,7 +9,7 @@ const gates = [
   ["Platform contracts", ["scripts/verify/platform.mjs"]],
   ["URL allowlist contracts", ["scripts/verify/url-allowlist.mjs"]],
   ["Music build contract", ["scripts/verify/music-build.mjs"]],
-  ["Firefox lint", ["node_modules/web-ext/bin/web-ext.js", "lint", "--source-dir", "dist/firefox"]],
+  ["Firefox lint", ["scripts/verify/firefox-lint.mjs"]],
   ["0.2.0 extension smoke", ["scripts/smoke/extension-smoke-020.mjs"]],
   ["0.2.0 app smoke", ["scripts/smoke/app-smoke-020.mjs"]],
   ["Package release archives", ["scripts/release/package-release.mjs"]],

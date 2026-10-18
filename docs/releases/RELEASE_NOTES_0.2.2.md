@@ -73,7 +73,8 @@ The `release/0.2.2` branch carried the accepted scope for this release. Update o
 - `#64`, `#90`, and `#39`: partially advanced by bounded Root Visuals observers and shared runtime guidance; deeper visual controls, Max long-task work, and scanner rewrites remain follow-up work.
 - `#66` RemiNet Chat in X Messages: covered by placement fixes and route-scope declarations.
 - `#74` Multi-site app runtime direction: advanced by site-scope metadata and privacy disclosure, while broad non-X content-runtime expansion remains future work.
-- `#94` and `#96` Wiki sidebar dark-mode polish: covered by the dark-mode setting and footer styling fix.
+- `#96` Remilia Wiki sidebar polish: covered by the sidebar dark-mode setting and footer styling fix.
+- Correction to the historical `#94` coverage claim: Wikipedia pop-out dark mode is not implemented by the Remilia Wiki sidebar setting. The available release source contains no Wikipedia reader/theme bridge; a scoped Wikipedia integration remains unresolved.
 - `#101` Local app composer/custom build: substantially advanced by the composer, build integration, and trust gates; marketplace discovery, signatures, and install/update UI remain follow-up work.
 - `#102` Custom app authoring developer experience: advanced by the schema, novel verifier command, example package, and empty-folder-to-build docs.
 

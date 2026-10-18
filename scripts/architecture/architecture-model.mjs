@@ -82,6 +82,7 @@ function inspectFile(root, absolutePath, coverage) {
   return {
     path: relativePath,
     scope: classifyArchitecturePath(relativePath),
+    declaration: sourceFile.isDeclarationFile,
     test: TEST_FILE.test(relativePath),
     checked: coverage.get(relativePath)?.checked === true,
     projects: Array.from(coverage.get(relativePath)?.projects || []).sort(),

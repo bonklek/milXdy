@@ -1,15 +1,37 @@
 // examples/packages/local-dev/tweet-composer-kit/src/content.js
 var context = null;
 var makers = [
-  { label: "#CHEESEWORLD Meme Maker", asset: "assets/makers/cheeseworld.png", theme: "cheeseworld", handoffId: "cheeseworld-deepfry" },
-  { label: "Milady Maker", asset: "assets/makers/milady.png", theme: "milady", handoffId: "milady-maker" },
-  { label: "Redacted Remilio Babies Maker", asset: "assets/makers/remilio.png", theme: "remilio", handoffId: "remilio-maker" },
-  { label: "Bonkler Factory", asset: "assets/makers/bonkler.png", theme: "bonkler", handoffId: "bonkler-maker" },
-  { label: "Kagami Academy Maker", asset: "assets/makers/kagami.png", theme: "kagami", handoffId: "kagami-maker" }
+  { label: "#CHEESEWORLD Meme Maker", asset: "assets/makers/cheeseworld.png", theme: "cheeseworld", handoffId: "cheeseworld-deepfry", modes: ["captioned"] },
+  { label: "Milady Maker", asset: "assets/makers/milady.png", theme: "milady", handoffId: "milady-maker", modes: ["captioned", "randomMeme"] },
+  { label: "Redacted Remilio Babies Maker", asset: "assets/makers/remilio.png", theme: "remilio", handoffId: "remilio-maker", modes: ["captioned", "randomMeme"] },
+  { label: "Bonkler Factory", asset: "assets/makers/bonkler.png", theme: "bonkler", handoffId: "bonkler-maker", modes: ["captioned", "randomMeme"] },
+  { label: "Kagami Academy Maker", asset: "assets/makers/kagami.png", theme: "kagami", handoffId: "kagami-maker", modes: ["captioned", "randomMeme"] }
 ];
+var makerControlSequence = 0;
+function resolveMakerDispatch(selection, externalHandoffs) {
+  const maker = makers.find((candidate) => candidate.handoffId === selection?.handoffId);
+  if (!maker) return { ok: false, error: "Choose a maker before generating." };
+  const mode = selection?.mode;
+  if (mode !== "captioned" && mode !== "randomMeme") return { ok: false, error: "Choose Captioned or Random meme before generating." };
+  if (!maker.modes.includes(mode)) return { ok: false, error: `${maker.label} does not support the selected mode.` };
+  const available = new Set(Array.isArray(externalHandoffs) ? externalHandoffs.map((action) => action && action.id) : []);
+  if (!available.has(maker.handoffId)) return { ok: false, error: `${maker.label} is not available in this build.` };
+  return { ok: true, handoffId: maker.handoffId, label: maker.label, mode };
+}
 function boot(nextContext) {
   context = nextContext;
-  context.recordDiagnostic("tweet-composer-kit.ready", { capability: "composer-adjacent-panel" });
+  const remiliaProfileAvailable = Array.isArray(context.remiliaCapabilities) && context.remiliaCapabilities.some((declaration) => declaration?.id === "remilia.profile.public" && Array.isArray(declaration.operations) && declaration.operations.includes("getUserProfile"));
+  context.recordDiagnostic("tweet-composer-kit.ready", {
+    capability: "composer-adjacent-panel",
+    remiliaProfileCapability: remiliaProfileAvailable
+  });
+}
+async function resolvePublicRemiliaProfile(username) {
+  const normalized = String(username || "").trim().replace(/^~/u, "");
+  if (!normalized || normalized.length > 128 || typeof context?.invokeRemiliaCapability !== "function") {
+    return { ok: false, error: { category: "broker", code: "invalid_request", message: "A public Remilia username is required.", status: 400 } };
+  }
+  return context.invokeRemiliaCapability("getUserProfile", { username: normalized });
 }
 async function onComposerAction({ panel, externalHandoffs, launchExternalHandoff, queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal }) {
   if (!context || signal.aborted) return;
@@ -70,11 +92,9 @@ function buildControls({ externalHandoffs, launchExternalHandoff, queryRemoteSer
   const root = el("section", { className: "tweet-composer-kit tweet-composer-kit__composer-panel", ariaLabel: "Post-Factory" });
   const topInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Top text", ariaLabel: "Top text", autocomplete: "off" });
   const bottomInput = el("input", { className: "tweet-composer-kit__caption-input", type: "text", maxLength: 280, placeholder: "Bottom text", ariaLabel: "Bottom text", autocomplete: "off" });
-  const random = el("input", { id: "tweet-composer-kit-random-meme", className: "tweet-composer-kit__random-toggle", type: "checkbox" });
   root.append(
     el("div", { className: "tweet-composer-kit__caption-fields" }, topInput, bottomInput),
-    buildMemeControls(random),
-    buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }),
+    buildMakerControls({ externalHandoffs, launchExternalHandoff, topInput, bottomInput, signal }),
     buildMediaPicker({ queryRemoteService, suggestRemoteQueryFacets, attachRemoteQueryResult, signal })
   );
   return root;
@@ -86,8 +106,11 @@ function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, ope
     return;
   }
   const tags = [];
+  let publishing = false;
+  let published = false;
   const root = el("section", { className: "tweet-composer-kit__contribution", ariaLabel: "Publish to public Remibooru" });
   const title = el("strong", { className: "tweet-composer-kit__contribution-title", textContent: "Publish to public Remibooru" });
+  const destination = el("p", { className: "tweet-composer-kit__contribution-copy", textContent: "Public destination: remibooru.com" });
   const dimensions = Number.isFinite(media.width) && Number.isFinite(media.height) ? ` \xB7 ${media.width} \xD7 ${media.height}` : "";
   const details = el("p", { className: "tweet-composer-kit__contribution-copy", textContent: `Selected image \xB7 ${media.mimeType || "image"}${dimensions}` });
   const input = el("input", { className: "tweet-composer-kit__contribution-input", type: "text", maxLength: 64, placeholder: "Add a tag", ariaLabel: "Add a Remibooru tag", autocomplete: "off" });
@@ -100,18 +123,28 @@ function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, ope
   const renderTags = () => {
     tagList.replaceChildren(...tags.map((tag) => {
       const remove = el("button", { className: "tweet-composer-kit__contribution-tag", type: "button", textContent: `\xD7 ${tag}`, ariaLabel: `Remove tag ${tag}` });
+      remove.disabled = publishing || published;
       remove.addEventListener("click", () => {
-        tags.splice(tags.indexOf(tag), 1);
-        renderTags();
+        if (!publishing && !published) {
+          tags.splice(tags.indexOf(tag), 1);
+          renderTags();
+        }
       }, { signal });
       return remove;
     }));
-    contribute.disabled = tags.length === 0;
+    input.disabled = publishing || published;
+    add.disabled = publishing || published;
+    assistant.disabled = publishing || published;
+    contribute.disabled = publishing || published || tags.length === 0;
   };
   const addTag = () => {
     const tag = input.value.trim().replace(/\s+/gu, " ");
     if (!tag) return;
-    if (tags.includes(tag)) {
+    if (!/^[\p{L}\p{N}][\p{L}\p{N} _.-]*$/u.test(tag)) {
+      status.textContent = "Use letters, numbers, spaces, periods, underscores, or hyphens in tags.";
+      return;
+    }
+    if (tags.some((candidate) => candidate.toLowerCase() === tag.toLowerCase())) {
       status.textContent = "That tag is already listed.";
       return;
     }
@@ -140,12 +173,14 @@ function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, ope
     } catch {
       status.textContent = "The tag helper is unavailable.";
     } finally {
-      if (!signal.aborted) assistant.disabled = false;
+      if (!signal.aborted) assistant.disabled = publishing || published;
     }
   }, { signal });
   contribute.addEventListener("click", async () => {
-    if (signal.aborted || typeof submitMediaContribution !== "function") return;
-    contribute.disabled = true;
+    if (signal.aborted || publishing || published || typeof submitMediaContribution !== "function") return;
+    publishing = true;
+    root.setAttribute("aria-busy", "true");
+    renderTags();
     status.textContent = "Publishing to public Remibooru\u2026";
     try {
       const result = await submitMediaContribution({ id: "remibooru-contribute", mediaHandle, tags: [...tags] });
@@ -153,15 +188,22 @@ function onContextMediaAction({ actionId, panel, signal, mediaHandle, media, ope
         status.textContent = result?.error || "The contribution could not be completed.";
         return;
       }
+      if (!result.canonicalUrl) {
+        status.textContent = "Remibooru did not return a canonical post link. Use the native uploader to review the contribution.";
+        return;
+      }
+      published = true;
       status.replaceChildren("Contribution published.");
-      if (result.canonicalUrl) status.append(" ", el("a", { className: "tweet-composer-kit__contribution-link", href: result.canonicalUrl, target: "_blank", rel: "noopener noreferrer", textContent: "View on Remibooru" }));
+      status.append(" ", el("a", { className: "tweet-composer-kit__contribution-link", href: result.canonicalUrl, target: "_blank", rel: "noopener noreferrer", textContent: "View on Remibooru" }));
     } catch {
-      status.textContent = "The contribution could not be completed.";
+      status.textContent = "The contribution could not be completed. Retry or use the native uploader.";
     } finally {
-      if (!signal.aborted) contribute.disabled = tags.length === 0;
+      publishing = false;
+      root.removeAttribute("aria-busy");
+      if (!signal.aborted) renderTags();
     }
   }, { signal });
-  root.append(title, details, el("div", { className: "tweet-composer-kit__contribution-entry" }, input, add), tagList, el("div", { className: "tweet-composer-kit__contribution-actions" }, assistant, contribute, nativeFallback), status);
+  root.append(title, destination, details, el("div", { className: "tweet-composer-kit__contribution-entry" }, input, add), tagList, el("div", { className: "tweet-composer-kit__contribution-actions" }, assistant, contribute, nativeFallback), status);
   renderTags();
   panel.replaceChildren(root);
   signal.addEventListener("abort", () => panel.replaceChildren(), { once: true });
@@ -317,64 +359,108 @@ function parseRemibooruFacets(value) {
 function isRemibooruResult(item) {
   return Boolean(item && typeof item.id === "string" && item.id.length > 0 && typeof item.postUrl === "string" && item.postUrl.startsWith("https://remibooru.com/posts/") && typeof item.thumbnailUrl === "string" && item.thumbnailUrl.startsWith("https://remibooru.com/media/thumbs/"));
 }
-function buildMemeControls(random) {
-  const tooltipId = "tweet-composer-kit-meme-help";
+function buildMakerControls({ externalHandoffs, launchExternalHandoff, topInput, bottomInput, signal }) {
+  const selection = { handoffId: null, mode: null };
+  const controlId = ++makerControlSequence;
+  const tooltipId = `tweet-composer-kit-meme-help-${controlId}`;
   const info = el(
     "button",
     { className: "tweet-composer-kit__info", type: "button", ariaLabel: "How meme this post works", ariaDescribedBy: tooltipId, textContent: "i" },
-    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Choose a maker. Captioned sends the Top text and Bottom text you enter; random meme permits both fields to be empty and asks for an uncaptioned random output. Clicking CHEESEWORLD sends one composer image and its captions for replacement; milXdy never posts." })
+    el("span", { id: tooltipId, className: "tweet-composer-kit__tooltip", role: "tooltip", textContent: "Select one maker and one mode, then generate. Captioned sends the Top text and Bottom text you enter; Random meme permits both fields to be empty. CHEESEWORLD supports Captioned only and replaces one composer image; milXdy never posts." })
   );
-  return el(
+  const root = el("div", { className: "tweet-composer-kit__maker-group" });
+  const captioned = el("input", { id: `tweet-composer-kit-captioned-${controlId}`, className: "tweet-composer-kit__mode-radio", type: "radio", name: `tweet-composer-kit-mode-${controlId}`, value: "captioned" });
+  const random = el("input", { id: `tweet-composer-kit-random-meme-${controlId}`, className: "tweet-composer-kit__mode-radio", type: "radio", name: `tweet-composer-kit-mode-${controlId}`, value: "randomMeme" });
+  const modes = el(
     "div",
-    { className: "tweet-composer-kit__meme-controls" },
-    el("label", { className: "tweet-composer-kit__random-label", htmlFor: random.id }, random, el("span", { textContent: "random meme?" })),
+    { className: "tweet-composer-kit__meme-controls", role: "group", ariaLabel: "Maker mode" },
+    el("label", { className: "tweet-composer-kit__mode-label", htmlFor: captioned.id }, captioned, el("span", { textContent: "Captioned" })),
+    el("label", { className: "tweet-composer-kit__mode-label", htmlFor: random.id }, random, el("span", { textContent: "Random meme" })),
     info
   );
-}
-function buildMakerRow({ externalHandoffs, launchExternalHandoff, random, topInput, bottomInput, signal }) {
-  const root = el("div", { className: "tweet-composer-kit__maker-group" });
-  const list = el("div", { className: "tweet-composer-kit__maker-row", ariaLabel: "Maker destinations" });
+  const list = el("div", { className: "tweet-composer-kit__maker-row", role: "group", ariaLabel: "Maker destinations" });
   const status = el("p", { className: "tweet-composer-kit__maker-status", role: "status", ariaLive: "polite", ariaAtomic: "true" });
   const available = new Set(Array.isArray(externalHandoffs) ? externalHandoffs.map((action) => action && action.id) : []);
+  const actions = /* @__PURE__ */ new Map();
+  const generate = el("button", { className: "tweet-composer-kit__generate", type: "button", disabled: true, textContent: "Generate selected maker" });
+  const syncSelection = () => {
+    const selectedMaker = makers.find((maker) => maker.handoffId === selection.handoffId) || null;
+    if (selection.mode && selectedMaker && !selectedMaker.modes.includes(selection.mode)) {
+      selection.mode = null;
+      captioned.checked = false;
+      random.checked = false;
+    }
+    random.disabled = selectedMaker?.modes.includes("randomMeme") === false;
+    for (const [handoffId, action] of actions) action.setAttribute("aria-pressed", String(handoffId === selection.handoffId));
+    const dispatch = resolveMakerDispatch(selection, externalHandoffs);
+    generate.disabled = typeof launchExternalHandoff !== "function" || !dispatch.ok;
+    generate.textContent = dispatch.ok ? `Generate with ${dispatch.label}` : "Generate selected maker";
+  };
+  captioned.addEventListener("change", () => {
+    if (!captioned.checked) return;
+    selection.mode = "captioned";
+    syncSelection();
+    status.textContent = selection.handoffId ? "Captioned mode selected. Generate when ready." : "Captioned mode selected. Choose a maker.";
+  }, { signal });
+  random.addEventListener("change", () => {
+    if (!random.checked) return;
+    selection.mode = "randomMeme";
+    syncSelection();
+    status.textContent = selection.handoffId ? "Random meme mode selected. Generate when ready." : "Random meme mode selected. Choose a compatible maker.";
+  }, { signal });
   for (const maker of makers) {
     const className = `tweet-composer-kit__maker tweet-composer-kit__maker--${maker.theme}`;
     const image = el("img", { className: "tweet-composer-kit__maker-thumb", src: context.resolveAssetUrl(maker.asset), alt: "", ariaHidden: "true" });
-    const action = el("button", { className, type: "button", ariaLabel: maker.label, title: maker.label, disabled: typeof launchExternalHandoff !== "function" || !available.has(maker.handoffId) }, image);
-    action.addEventListener("click", async () => {
+    const action = el("button", { className, type: "button", ariaLabel: `Select ${maker.label}`, title: maker.label, ariaPressed: "false", disabled: typeof launchExternalHandoff !== "function" || !available.has(maker.handoffId) }, image);
+    actions.set(maker.handoffId, action);
+    action.addEventListener("click", () => {
       if (signal.aborted || action.disabled) return;
-      setMakerBusy(list, action, true);
-      setMakerStatus(status, "busy", `${maker.label} is preparing an image\u2026`);
-      try {
-        if (maker.handoffId === "cheeseworld-deepfry") {
-          const { ok, error } = await launchExternalHandoff("cheeseworld-deepfry", {
-            mode: "captioned",
-            captions: { topText: topInput.value, bottomText: bottomInput.value }
-          });
-          if (!signal.aborted && !ok) {
-            const detail = typeof error === "string" && error.trim() ? ` ${error.trim()}` : " Try again.";
-            setMakerStatus(status, "error", `${maker.label} could not replace the composer image.${detail}`);
-          } else if (!signal.aborted) {
-            setMakerStatus(status, "success", `${maker.label} replaced the initiating composer image.`);
-          }
-        } else {
-          await launchExternalHandoff(maker.handoffId, {
-            mode: random.checked ? "randomMeme" : "captioned",
-            captions: { topText: topInput.value, bottomText: bottomInput.value }
-          });
-          if (!signal.aborted) setMakerStatus(status, "success", `${maker.label} handoff complete. Check the active composer.`);
-        }
-      } catch (error) {
-        if (!signal.aborted) {
-          const detail = maker.handoffId === "cheeseworld-deepfry" && error instanceof Error && error.message.trim() ? ` ${error.message.trim()}` : " Try again.";
-          setMakerStatus(status, "error", `${maker.label} could not open.${detail}`);
-        }
-      } finally {
-        if (!signal.aborted) setMakerBusy(list, action, false);
-      }
+      selection.handoffId = maker.handoffId;
+      syncSelection();
+      status.textContent = selection.mode ? `${maker.label} selected in ${selection.mode === "randomMeme" ? "Random meme" : "Captioned"} mode. Generate when ready.` : `${maker.label} selected. Choose a mode, then generate.`;
     }, { signal });
     list.append(action);
   }
-  root.append(list, status);
+  generate.addEventListener("click", async () => {
+    if (signal.aborted || generate.disabled) return;
+    const dispatch = resolveMakerDispatch(selection, externalHandoffs);
+    if (!dispatch.ok) {
+      setMakerStatus(status, "error", dispatch.error);
+      return;
+    }
+    const selectedAction = actions.get(dispatch.handoffId);
+    if (!selectedAction) {
+      setMakerStatus(status, "error", "The selected maker is unavailable.");
+      return;
+    }
+    setMakerBusy(list, selectedAction, true);
+    generate.disabled = true;
+    setMakerStatus(status, "busy", `${dispatch.label} is preparing an image\u2026`);
+    try {
+      const { ok, error } = await launchExternalHandoff(dispatch.handoffId, {
+        mode: dispatch.mode,
+        captions: { topText: topInput.value, bottomText: bottomInput.value }
+      });
+      if (!signal.aborted && !ok) {
+        const detail = typeof error === "string" && error.trim() ? ` ${error.trim().slice(0, 160)}` : " Try again.";
+        const verb = dispatch.handoffId === "cheeseworld-deepfry" ? "replace the composer image" : "generate an image";
+        setMakerStatus(status, "error", `${dispatch.label} could not ${verb}.${detail}`);
+      } else if (!signal.aborted) {
+        const result = dispatch.handoffId === "cheeseworld-deepfry" ? "replaced the initiating composer image" : "added the generated image to the active composer";
+        setMakerStatus(status, "success", `${dispatch.label} ${result}.`);
+      }
+    } catch {
+      if (!signal.aborted) setMakerStatus(status, "error", `${dispatch.label} could not open. Try again.`);
+    } finally {
+      if (!signal.aborted) {
+        setMakerBusy(list, selectedAction, false);
+        syncSelection();
+      }
+    }
+  }, { signal });
+  status.textContent = "Choose a maker and mode to generate.";
+  root.append(modes, list, generate, status);
+  syncSelection();
   return root;
 }
 function setMakerStatus(status, state, message) {
@@ -425,5 +511,7 @@ export {
   boot,
   onComposerAction,
   onContextMediaAction,
-  onReplyAction
+  onReplyAction,
+  resolveMakerDispatch,
+  resolvePublicRemiliaProfile
 };

@@ -7,49 +7,46 @@ This roadmap is a public planning guide for beta work. It is intentionally not a
 - `0.1.x` releases were early integrated-extension beta releases.
 - `0.2.x` releases are platform beta releases. They can change architecture, app surfaces, packaging expectations, and public product framing without implying final product stability.
 
-## Most Recent Release
+## Current Release Candidate
 
-`0.2.4` is the current release. See its [release notes](../releases/RELEASE_NOTES_0.2.4.md) and the descending [changelog](../../CHANGELOG.md) for shipped details.
+`0.2.5` is the current release candidate. See its [release notes](../releases/RELEASE_NOTES_0.2.5.md) and the descending [changelog](../../CHANGELOG.md) for candidate scope and acceptance boundaries.
 
 ## Coming Platform Direction: Composable App/Mod System
 
 The long-term goal remains a reviewed composable app system where packages declare surfaces, permissions, assets, settings, privacy notes, performance cost, background services, and lifecycle hooks while sharing milXdy's scanners, schedulers, overlays, and network infrastructure. External installation and stable third-party compatibility remain future work.
 
-## Released: 0.2.4 - Post-Factory
+## Upcoming: 0.2.5 - Speaking Special
 
-Theme: reviewed sharing, Milady posting, reply media, phrase helpers, maker integrations, optional custom pets, and a usable local add-on pipeline.
+Theme: official Remilia connection and API migration, Reader Voice, reviewed
+audio export, richer local sharing, and stronger package boundaries.
 
-- Post-Factory ships quick replies, native X Drafts, bounded Remibooru browsing and attachment, and reviewed Maker/CHEESEWORLD handoffs.
-- Share Kit ships reviewed local Tweet PNG controls, watermarking, link-card/quote handling, and deliberate RemiNet Chat staging without automatic send.
-- Miladychan Portal ships explicit pseudonymous text posting, final destination confirmation, local failed-submit recovery, watched threads, and native fallback.
-- Pets Maker becomes the first selectable maintainer-catalog add-on and remains disabled by default until enabled in Apps & Features.
-- Pets Maker ships versioned Maker request bundles and a local Codex handoff.
-- App SDK 0.2.4 ships reviewed external and multi-package composition, explicit host callbacks, catalog selection, transactional recovery, and sanitized provenance.
-- RemiNet/Beetol, side-rail, visual, lifecycle, security, and documentation refinements complete the release.
-
-## Planned: 0.2.5 - Reader Voice
-
-- Add reviewed Remibooru contribution from Post-Factory (#24).
-- Publish the rights-compatible App SDK visual-elements repository and author guide (#183).
-- Complete the Maker pet-import adapter, reusable motion templates, envelope QA, and cache/resume (#192/#193).
-
-Theme: Post-reading companion voice experiments and long-form audio export.
-
-- Multi-site app runtime ([#74](https://github.com/bonklek/milXdy/issues/74)).
-  - define site-aware app metadata, routes, surfaces, permissions, privacy notes, load triggers, and fallback behavior for RemiliaNET, Miladychan, Remilia Wiki, X/Twitter, and explicitly reviewed related hosts
-  - keep X-only apps X-only, preserve least-privilege content-script matching, and decide whether each non-X host receives a full rail, a smaller launcher, or only declared feature modules
-  - add cross-host QA without treating existing background host permissions as evidence that the full runtime already injects on those sites
-- Post-reading TTS side package.
-  - document install instructions for a local TTS companion package
-  - link to the external repo when ready
-  - keep milXdy functional without the side package
-  - decide whether this remains a Post-reading companion or becomes its own package
-- Long-form Post-reading audio export.
-  - let users invoke Post-reading on wiki articles, X articles/long posts, Substack, Medium, blogs, RSS item pages, and other long-form pages
-  - use hard-coded extractors for known sources first, with a generic readable-text fallback for unrecognized pages
-  - open extracted text in a review editor before generation
-  - export through the selected TTS path, preferring MP3 or M4A when the backend can return those formats
-  - keep source metadata with the generated audio result
+- Replaced website-session and cookie adoption with explicit Remilia Login PKCE,
+  background-only credential custody, visible migration, and connect, reconnect,
+  disconnect, and revoke controls.
+- Moved profiles, directory resolution, RemiStats, notifications, pokes, Beetle
+  reads, and global RemiNet Chat history and text replies to typed, scope-gated
+  Remilia API-v1 services.
+- Kept temporary RemiNet realtime/media and Beetle action adapters explicitly
+  separated from official coverage and removed hidden session fallbacks.
+- Added native X Article reading. DM reading requires the external Post-reading
+  package and separate acceptance; browser Web Speech may use remote voices.
+- Added external Post-reading package support for review-first long-form audio
+  export with editable text and metadata,
+  local-loopback TTS, cancellation, labeled format fallbacks, and a JSON sidecar.
+- Added Unicode-aware Share Kit layout and accessible local rich-text editing
+  with same-blob preview, copy, download, and RemiNet staging.
+- Added explicit Remibooru contribution from Post-Factory with one-use
+  short-lived media custody, reviewed tags, and native-uploader fallback.
+- Added site-aware runtime declarations and reviewed page-context actions while
+  preserving exact host, sender, frame, and privilege boundaries.
+- Completed the Milady, Remilio, Bonkler, and Kagami Maker pet-import templates,
+  deterministic envelope QA, cache/resume, and recovery tooling.
+- Added the host capability broker and reviewed Post-reading, Post-Factory, and
+  Share Kit custom-composition support without exposing credentials or arbitrary authenticated
+  fetch to packages.
+- Added deterministic Chromium and Firefox archives, checksum and
+  reproducibility gates, package-trust evidence, and source-and-built privacy
+  scans.
 
 ## Planned: 0.2.6 - Social Tuning
 
@@ -73,7 +70,8 @@ Theme: Maxxer collection behavior, classifier research, like-button presets, fol
   - distinguish local-only possibilities from anything requiring an external service
 - RemiNet friend affordances on X profiles.
   - show whether the viewed profile is already a RemiNet friend when the identity can be resolved
-  - offer an explicit add-friend action only after RemiNet endpoint and browser-session behavior are confirmed
+  - offer an explicit add-friend action only after a documented Remilia endpoint,
+    delegated scope, and consent behavior are confirmed
   - keep RemiNet friendship visually distinct from native X following and avoid automatic relationship changes
 
 ## Planned: 0.2.7 - Activity Arcade

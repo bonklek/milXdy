@@ -36,8 +36,6 @@ const GROK_OPEN_CONVERSATION_SELECTORS = [
   '[aria-label="Open conversation" i]',
   '[title="Open conversation" i]',
 ].join(",");
-const WIKI_SIDEBAR_LAST_URL_KEY = "milxdy.wikiSidebar.lastUrl";
-const WIKI_SIDEBAR_PENDING_URL_KEY = "__milxdyPendingWikiSidebarUrl";
 const GROK_SEND_BUTTON_SELECTORS = [
   '[data-testid="sendButton"]',
   '[aria-label="Send" i]',
@@ -67,7 +65,7 @@ const perfStats = {
   skippedPerformanceMode: 0,
 };
 let recordRuntimeDiagnostic: MilxdyContentAppContext["recordDiagnostic"] = () => undefined;
-let loadRuntimeAppById: MilxdyContentAppContext["loadAppById"] = () => Promise.resolve(null);
+let openRuntimeWikiPage: MilxdyContentAppContext["openWikiPage"] | null = null;
 let lastScrollAt = 0;
 let lastWikiModeDiagnosticSignature = "";
 let cachedDocumentActionControls: HTMLElement[] = [];
@@ -75,22 +73,26 @@ let cachedDocumentActionControlsAt = 0;
 let lifecycleSignal: AbortSignal | null = null;
 let grokWorkflowAbort: AbortController | null = null;
 let cancelGrokOneShot: (() => void) | null = null;
+let activationGeneration = 0;
 
 export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
+  const generation = ++activationGeneration;
   runtimeScheduleScan = context?.scheduleScan || runtimeScheduleScan;
   runtimeScheduler = context?.scheduler || runtimeScheduler;
   recordRuntimeDiagnostic = context?.recordDiagnostic || recordRuntimeDiagnostic;
-  loadRuntimeAppById = context?.loadAppById || loadRuntimeAppById;
+  openRuntimeWikiPage = context?.openWikiPage || null;
   lifecycleSignal = context?.signal || null;
   const addDisposable = context?.addDisposable || (() => undefined);
   injectStyles();
   configurePreviewSidebarOpener(openWikiSidebarUrl);
   addDisposable(() => configurePreviewSidebarOpener(null));
   addDisposable(installPreviewDismissHandlers());
-  settings = await loadSettings();
-  await reloadLocalMatcher();
+  const [initialSettings, initialMatcher] = await Promise.all([loadSettings(), loadLocalMatcher()]);
+  if (!booted || lifecycleSignal?.aborted || generation !== activationGeneration) return;
+  settings = initialSettings;
+  matchWikiText = initialMatcher;
   applySettings(settings);
   addDisposable(observeSettings((next) => {
     settings = next;
@@ -101,7 +103,9 @@ export async function boot(context?: MilxdyContentAppContext): Promise<void> {
   const aliasListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local") return;
     if (changes["remiliaWikiHyperlink.localAliases"] || changes["remiliaWikiHyperlink.denyTerms"]) {
-      void reloadLocalMatcher().then(() => {
+      void loadLocalMatcher().then((matcher) => {
+        if (!booted || lifecycleSignal?.aborted || generation !== activationGeneration) return;
+        matchWikiText = matcher;
         processed = new WeakMap<HTMLElement, string>();
         runtimeScheduleScan();
       });
@@ -164,6 +168,7 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  ++activationGeneration;
   disable();
   cancelPendingScan?.();
   cancelPendingScan = null;
@@ -174,7 +179,7 @@ export function dispose(): void {
   }
   booted = false;
   lifecycleSignal = null;
-  loadRuntimeAppById = () => Promise.resolve(null);
+  openRuntimeWikiPage = null;
   cachedDocumentActionControls = [];
   cachedDocumentActionControlsAt = 0;
 }
@@ -995,9 +1000,9 @@ function normalizePromptLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
 }
 
-async function reloadLocalMatcher(): Promise<void> {
+async function loadLocalMatcher(): Promise<ReturnType<typeof createMatcher>> {
   const [aliases, denyTerms] = await Promise.all([loadLocalAliases(), loadDenyTerms()]);
-  matchWikiText = createMatcher(localAliasesToEntries(aliases), denyTerms);
+  return createMatcher(localAliasesToEntries(aliases), denyTerms);
 }
 
 function applySettings(next: Settings): void {
@@ -1252,28 +1257,10 @@ function createWikiLink(match: WikiMatch): HTMLAnchorElement {
 
 async function openWikiSidebarUrl(url: string): Promise<boolean> {
   try {
-    (window as unknown as Record<string, unknown>)[WIKI_SIDEBAR_PENDING_URL_KEY] = url;
-    await chrome.storage.local.set({ [WIKI_SIDEBAR_LAST_URL_KEY]: url }).catch(() => undefined);
-    document.dispatchEvent(new CustomEvent("milxdy:wiki-sidebar-open", { detail: { url } }));
-    const loaded = await loadRuntimeAppById("wikiSidebar", "wikiLink");
-    if (await openWithWikiSidebarModule(loaded, url)) return true;
-    const directModule = await import(chrome.runtime.getURL("features/wikiSidebar.js")) as unknown;
-    if (await openWithWikiSidebarModule(directModule, url)) return true;
-    return false;
+    return (await openRuntimeWikiPage?.(url))?.ok === true;
   } catch {
     return false;
   }
-}
-
-async function openWithWikiSidebarModule(module: unknown, url: string): Promise<boolean> {
-  const sidebar = module as {
-    boot?: () => Promise<void> | void;
-    openWikiUrl?: (value?: string) => Promise<void> | void;
-  } | null;
-  if (typeof sidebar?.openWikiUrl !== "function") return false;
-  await Promise.resolve(sidebar.boot?.());
-  await Promise.resolve(sidebar.openWikiUrl(url));
-  return true;
 }
 
 function shouldUseNativeLink(event: MouseEvent): boolean {

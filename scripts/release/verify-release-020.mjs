@@ -224,7 +224,7 @@ function verifyDocsCoverage() {
   assert(files.liveSmokeProbeLogVerifier.includes("extractLatestProbe") && files.liveSmokeProbeLogVerifier.includes('status === "passed"') && files.liveSmokeProbeLogVerifier.includes('version === "0.2.0"'), "live probe log verifier must parse QA log and require a passed 0.2.0 probe");
   assert(!files.liveSmokeProbeLogVerifier.includes("appHubRuntime === true") && !files.liveSmokeProbeLogVerifier.includes("counts?.appHubRuntime"), "live probe log verifier must not require Apps Hub panel-only markers for baseline runtime proof");
   assert(files.releaseGateVerifier.includes("node_modules/typescript/bin/tsc") && files.releaseGateVerifier.includes("scripts/build/build-profiles.mjs"), "0.2.0 gate runner must typecheck and rebuild profile outputs");
-  assert(files.releaseGateVerifier.includes("node_modules/web-ext/bin/web-ext.js") && files.releaseGateVerifier.includes('"dist/firefox"'), "0.2.0 gate runner must run Firefox lint through the local web-ext dependency");
+  assert(files.releaseGateVerifier.includes("scripts/verify/firefox-lint.mjs"), "0.2.0 gate runner must run the shared Firefox lint verifier");
   assert(files.updateCheck.includes("expectedReleaseAssetName") && files.updateCheck.includes("MILXDY_BUILD_TARGET") && !files.updateCheck.includes("MILXDY_BUILD_PROFILE"), "update checker must derive browser-specific release archive names from build metadata");
   assert(files.updateCheck.includes("matchedExpectedAsset") && files.updateCheck.includes("expectedAssetName"), "update checker must report whether it found the exact browser archive");
   assert(files.popup.includes("matchedExpectedAsset") && files.popup.includes("Expected archive"), "popup update UI must disclose browser archive matching");

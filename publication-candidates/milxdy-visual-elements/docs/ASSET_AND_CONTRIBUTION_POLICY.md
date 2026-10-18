@@ -96,9 +96,9 @@ incompatible, the asset remains outside default/upstream inclusion. That is a
 distribution decision, not a claim that local use is automatically lawful or a
 failure of the local package validator.
 
-The current publication candidate's strict validator still implements the
-earlier VPL-only `upstream-default` rule. It must be updated and re-reviewed
-before this policy or the candidate can be published as the official catalog.
+The strict validator checks evidence-backed rights compatibility. The candidate
+still requires human review and publication approval before it can become an
+official catalog.
 
 ## AI-assisted work
 
@@ -108,7 +108,7 @@ output does not establish ownership or licensing and cannot approve upstream
 promotion.
 
 For upstream promotion, retain the parent graph, tool/model disclosure where
-available, publication-safe edit notes, VPL continuity, and human reviews.
+available, publication-safe edit notes, compatible source/derivative rights, and human reviews.
 
 ## Technical safety
 
@@ -125,3 +125,27 @@ Local authors may replace their own files and update their manifests. Published
 upstream hashes remain immutable: replacement receives a new version, and a
 removal advisory keeps the affected ID/version/hash and migration guidance
 visible.
+
+## Machine-checked compatibility records
+
+For an `upstream-default` manifest, `license.compatibility` must identify the
+exact source SHA-256, a `compatible` decision, `license` or
+`explicit-permission` basis, human reviewer/date and rationale. The
+`permissions` object must explicitly cover `copy`, `modify`, `redistribute`,
+and `appSdkUse`. Unknown/incompatible decisions, missing grants, or a decision
+for different source bytes fail closed even when the license ID says VPL.
+
+The license or permission text and publication proof are stored locally with
+exact hashes. `compatibility.notices` hashes the complete terms and every
+required attribution notice. Each additional restriction requires a matching
+`obligations` record with fulfilment notes and hashed evidence. Recording an
+obligation does not establish its legal compatibility: the human rights review
+must assess all terms together and document the decision.
+
+Parents and dependencies retain independent manifests and rights evidence.
+Production review decisions bind the asset ID/version, source hash, and full
+manifest hash, and require every technical, visual/cultural, accessibility,
+rights and release reviewer to approve. Machine checks verify evidence identity
+and review-record consistency; they cannot determine whether a stated grant is
+authentic or legally sufficient. Synthetic fixtures never enter the production
+catalog or count as human approval.

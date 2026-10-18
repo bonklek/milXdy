@@ -8,18 +8,21 @@ milXdy is a beta Manifest V3 browser extension for X/Twitter. It combines severa
 
 This project is intended for GitHub beta distribution and local browser testing. It is not currently packaged through the Chrome Web Store or Firefox Add-ons.
 
-The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes](docs/releases/RELEASE_NOTES_0.2.4.md).
+The latest stable release is **0.2.4**. [Version 0.2.5 is available as an experimental prerelease](https://github.com/bonklek/milXdy/releases/tag/v0.2.5-experimental).
 
 ## Features
 
 - **Remilia Wiki**: inline Remilia Wiki concept links, hover previews, a docked Wiki side-rail app, Link Later, and Grok-assisted wiki drafting workflows.
 - **Post-reading**: read-aloud controls for X/Twitter posts with optional quote, link, image alt text, OCR, and custom local TTS support.
+- **Reader Voice and audio export**: native X Article reading, reviewed browser-voice DM playback, and review-first long-form audio export through a configured local speech backend.
 - **Apps & Features and side rail**: shared management surface for first-party app panels, feature modules, app enablement, rail pinning, and first-run Lite/Balanced/Full setup.
 - **Post-Factory**: quick replies, native X Drafts routing, Remibooru reaction search and attachment, and explicit Remilia Maker/CHEESEWORLD handoffs from composer and reply controls.
 - **Share Kit**: reviewed Tweet PNG previews, visual controls, copy/download/browser sharing, optional watermarking, and deliberate RemiNet Chat staging.
 - **Pets Maker**: optional, disabled-by-default catalog add-on that can fetch public Maker traits by family and NFT number, then turns an explicitly selected Maker PNG and reviewed traits into a validated local pet-request ZIP.
 - **RemiNet Connector**: RemiStats badges, score/beetle/poke icons, RemiliaNET pokes with sound, incoming poke indicators, optional RemiNet Chat, and tooltip/sound options.
-- **Beetol Game**: Beetol hunter panel and RemiliaNET login shared with RemiNet actions.
+- **Remilia account connection**: explicit Remilia Login in the Chromium release, background-only credentials, and typed API-v1 access for supported account, stats, poke, Beetle, and chat features. Firefox remains keyless and fails closed for authenticated features. During the temporary dual-auth holdover, native Beetle actions use a separate RemiliaNET website sign-in; see [account access](docs/getting-started/REMILIA_ACCOUNT.md).
+- **Beetol Game**: official Beetle state/card reads plus clearly separated
+  temporary legacy game actions, using the shared Remilia account connection.
 - **Maxxer**: local avatar classification, Milady effects, tiered card themes, level badges, and legacy Miladymaxxer import.
 - **Miladychan Portal**: docked Miladychan board, thread, post, and media browsing with local watched threads, explicit `milXdy`-pseudonymous text-only posting, and native-site fallback.
 - **Music**: docked local music library, playlists, ISRC enrichment, QR import/export, and metadata-based local radio sessions.
@@ -27,7 +30,7 @@ The current release is **0.2.4 — Post-Factory**. See the [0.2.4 release notes]
 
 ## Quick Install
 
-Quickest Chrome install: [download `milXdy-0.2.4-chromium.zip`](https://github.com/bonklek/milXdy/releases/latest), unzip it, then load the folder from `chrome://extensions`.
+Download the browser-specific archive for the published version from [GitHub Releases](https://github.com/bonklek/milXdy/releases), unzip it, then load the folder from `chrome://extensions`.
 
 Lite, Balanced, and Full are setup choices inside milXdy, not separate install decisions.
 
@@ -42,18 +45,18 @@ For release builds:
 
 Firefox or Waterfox 140 or newer users should use the Firefox zip and follow the temporary add-on flow in [Install and update](docs/getting-started/INSTALL_AND_UPDATE.md#firefox-beta-install) and [Firefox QA](docs/contributors/FIREFOX_QA.md).
 
-For source builds:
+For source builds, use Node.js 24 and npm 11 with the canonical npm lockfile:
 
 ```powershell
 git clone https://github.com/bonklek/milXdy.git
 cd milXdy
-npm install
+npm ci
 npm run build:profiles
 ```
 
 Then load `dist/chromium` from `chrome://extensions`, or load `dist/firefox/manifest.json` from Firefox or Waterfox 140 or newer's temporary add-on screen.
 
-Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, diagnostics, and RemiNet/Beetol login state.
+Important: keep the same loaded extension folder when updating. Removing the extension or loading a different folder can reset local settings, Maxxer stats, and diagnostics. Reloading or updating clears the milXdy Remilia connection and requires an explicit reconnect; the RemiliaNET website sign-in is separate.
 
 ## Documentation
 
@@ -89,15 +92,15 @@ Start with the general docs, or jump directly to the guide for the app or featur
 | <img src="assets/apps/post-reading/post-reading-logo.png" alt="" width="20"> [Post-reading](docs/guides/post-reading.md) | Read-aloud controls, voices, quote reading, OCR, link previews, and docked playback. |
 | <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiStats](docs/guides/remistats.md) | RemiStats badges, score context, beetle icons, poke icons, tooltips, sounds, and cooldowns. |
 | <img src="assets/apps/milady-maxxer/milady-logo.png" alt="" width="20"> [Milady Maxxer](docs/guides/milady-maxxer.md) | Maxxer effects, local detection, card themes, XP behavior, whitelist handles, and manual handles. |
-| <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/guides/beetol.md) | Beetol panel setup, RemiliaNET login, hunt panel styling, and shared RemiNet auth. |
-| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/guides/reminet-chat.md) | Docked RemiliaNET chat, X Messages integration, reactions, attachments, live updates, and login checks. |
+| <img src="assets/apps/beetol/icons/hunt-beetle.png" alt="" width="20"> [Beetol](docs/guides/beetol.md) | Beetol panel setup, official state/card reads, legacy-action labels, and shared Remilia account abilities. |
+| <img src="assets/apps/remistats/star.svg" alt="" width="20"> [RemiNet Chat](docs/guides/reminet-chat.md) | Official REST history/text posting, X Messages integration, reactions, attachments, and temporary legacy realtime/media adapters. |
 | <img src="assets/apps/miladychan-portal/notification-icon.png" alt="" width="20"> [Miladychan Portal](docs/guides/miladychan-portal.md) | Board browsing, thread reading, local watched threads, explicit `milXdy`-pseudonymous text-only posting, media previews, and native Miladychan links. |
 | <img src="assets/apps/music/milxdy-music-logo.png" alt="" width="20"> [Music](docs/guides/music.md) | Local library indexing, playback queue, playlists, QR metadata sharing, ISRC enrichment, and radio sessions. |
 
 ## Development
 
 ```powershell
-npm install
+npm ci
 npm run typecheck
 npm run build:profiles
 ```
@@ -116,3 +119,7 @@ Other integrated or local feature areas include Remilia Wiki linking, Post-readi
 ## License
 
 VPL for this repository unless otherwise noted. Upstream and bundled dependencies retain their own license terms. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+## Experimental 0.2.5
+
+[Download the experimental prerelease](https://github.com/bonklek/milXdy/releases/tag/v0.2.5-experimental). Version 0.2.4 remains the latest stable release.

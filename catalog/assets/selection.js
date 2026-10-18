@@ -12,6 +12,12 @@ export function isSelectable(pkg, target = "chromium") {
     && target === "chromium";
 }
 
+// Fresh selections start with the reviewed first-party creation tools. User
+// changes to the checkboxes remain authoritative; unavailable records stay off.
+export function isDefaultSelected(pkg, target = "chromium") {
+  return ["tweetPng", "tweet-composer-kit"].includes(pkg?.id) && Boolean(isSelectable(pkg, target));
+}
+
 export function resolveSelection(catalog, requestedIds, target = "chromium") {
   const packages = byId(catalog);
   const ids = [...new Set(requestedIds)].sort((left, right) => left.localeCompare(right));

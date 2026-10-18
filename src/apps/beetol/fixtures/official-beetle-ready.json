@@ -1,0 +1,21 @@
+{
+  "xp": 4200,
+  "level": 12,
+  "inventory": {
+    "green": 3,
+    "pollen_common": 2
+  },
+  "hammers": {
+    "hammer_t1": {
+      "durability": 7,
+      "max_durability": 10,
+      "count": 1
+    }
+  },
+  "cooldowns": {
+    "beetle_hunt": 0,
+    "catch_beetle": 0
+  },
+  "hunt_charges": 3,
+  "can_hunt": true
+}

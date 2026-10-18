@@ -1,0 +1,16 @@
+@font-face{font-family:RemiliaMincho;src:url("fonts/RemiliaMincho-Regular.woff2") format("woff2");font-display:swap;font-weight:400}
+.rmn-account{--account-bg:#fff;--account-fg:#1f2a2c;--account-muted:#50575e;--account-border:#b0b0b0;--account-action:#2c3382;--account-focus:#385788;--account-hover:#eeeeF6;box-sizing:border-box;display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:16px;border:1px solid var(--account-border);border-radius:6px;background:var(--account-bg);color:var(--account-fg);font-family:system-ui,sans-serif;min-width:0}
+.rmn-account[data-theme="dark"]{--account-bg:#141b2c;--account-fg:#fff;--account-muted:#c7cedc;--account-border:#67718a;--account-action:#c4caff;--account-focus:#b8c5ff;--account-hover:#273083}
+.rmn-account__identity{display:flex;align-items:center;gap:12px;flex:1 1 240px;min-width:0}
+.rmn-account__mark{box-sizing:content-box;width:28px;height:28px;padding:6px;flex:none;border-radius:6px;background:#fff;object-fit:contain}
+.rmn-account__text{min-width:0;flex:1}
+.rmn-account__status{display:block;font-family:RemiliaMincho,"Times New Roman",serif;font-size:16px;line-height:1.5;overflow-wrap:anywhere}
+.rmn-account__name{display:block;font-size:14px;font-weight:600;line-height:1.5;overflow-wrap:anywhere;unicode-bidi:plaintext}
+.rmn-account__handle{display:block;font-size:13px;line-height:1.5;color:var(--account-muted);overflow-wrap:anywhere;unicode-bidi:plaintext}
+.rmn-account__disconnect{box-sizing:border-box;flex:none;font:500 14px/1.5 system-ui,sans-serif;min-height:44px;padding:10px 14px;border:1px solid var(--account-border);border-radius:6px;color:var(--account-action);background:transparent;cursor:pointer}
+.rmn-account__disconnect:hover:enabled{background:var(--account-hover)}
+.rmn-account__disconnect:focus-visible{outline:2px solid var(--account-focus);outline-offset:3px}
+.rmn-account__disconnect:disabled{cursor:default;opacity:.65}
+.rmn-status{display:inline-flex;align-items:center;gap:8px;color:#1f2a2c;font:400 16px/1.5 RemiliaMincho,"Times New Roman",serif}
+.rmn-status[data-theme="dark"]{color:#fff}
+.rmn-status img{box-sizing:content-box;width:22px;height:22px;padding:4px;background:#fff;border-radius:4px;flex:none}

@@ -3,17 +3,24 @@
   "reviews": [
     {
       "id": "pets-maker",
-      "version": "0.1.1-pilot",
-      "packageSha256": "9e835e324bed1784bd184b4ac4e23f03734dd612832a9ac58103004243291b4f",
-      "reviewedBy": "milxdy-maintainer-pets-maker",
-      "reviewedAt": "2026-08-03"
+      "version": "0.1.2-pilot",
+      "packageSha256": "5028d15f4c8a5f95ac1029b86d6e9d359fec4522e9bcbe1331d97c9debf369ab",
+      "reviewedBy": "milxdy-automated-review",
+      "reviewedAt": "2026-10-05"
     },
     {
       "id": "tweetPng",
-      "version": "0.2.4",
-      "packageSha256": "000079e70475e856a7f39f944e89dbc51dbdf0a633c0f644cf894f2e27d9fe48",
-      "reviewedBy": "milxdy-first-party-share-kit",
-      "reviewedAt": "2026-08-03"
+      "version": "0.2.5",
+      "packageSha256": "ad4f6673801cfd347f0bb27baf857a9c2c885d295bde9f4ffa80061270ab5031",
+      "reviewedBy": "milXdy release code review",
+      "reviewedAt": "2026-10-17"
+    },
+    {
+      "id": "tweet-composer-kit",
+      "version": "0.2.0-pilot",
+      "packageSha256": "37061f80c7eb40db531f70bdce08bce582390d4358bcd65b6a11e640f5af0d41",
+      "reviewedBy": "milXdy release code review",
+      "reviewedAt": "2026-10-17"
     }
   ]
 }

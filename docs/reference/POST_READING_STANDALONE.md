@@ -73,3 +73,41 @@ If Post-reading is ever split into its own repository, move or package these pat
 - `scripts/verify/post-reading-distribution.mjs`
 
 The current extraction intentionally keeps source shared inside this repo, avoiding a separate implementation for the focused distribution.
+
+## External SDK package and compatibility
+
+The focused distribution above is distinct from the separately versioned
+`bonklek/post-reading` SDK replacement. See
+[`POST_READING_SDK_REFERENCE.md`](../sdk/POST_READING_SDK_REFERENCE.md) for that
+package's public SDK contracts, pinned version pair, composition, lifecycle
+matrix, and synchronization policy. Built-in reader changes do not silently
+update that external replacement. A supported external update requires a new
+reviewed source commit and package hash and the cross-repository verifier.
+
+The SDK reference gate must be reproducible from the published source URL. If
+its pinned commit cannot be fetched, do not substitute the repository's current
+HEAD or weaken the pin: retain the built-in browser reader and report the
+external integration as unavailable until the exact source is published.
+
+## Direct messages
+
+On an open X conversation, select **Read visible messages aloud**, review the
+snapshot, then select **Read with browser voice**. Browser speech is mandatory
+for private conversations even when custom HTTP TTS is selected for public
+posts. Browser voices may use local or remote browser-managed services. Review this
+disclosure before starting. No message text is saved or sent to the configured
+HTTP TTS export service.
+Pause, resume, stop, speed, voice, and available text highlighting use the
+existing player. Navigating away stops the reading. Only currently rendered
+message bodies are included; opening review again captures messages loaded
+later. Inbox previews, timestamps, reactions, and composer text are excluded.
+Repeated virtualized entries are deduplicated by message identity. Distinct
+messages with identical text remain distinct. Explicit incoming/outgoing
+metadata provides speaker labels; otherwise separate `Message` labels preserve
+boundaries without guessing a sender.
+
+The conversation selector contract is conservative: `DmActivityViewport`,
+`messageEntry`, and `messageText`. If X does not expose these containers, no
+conversation control is shown. Live Chromium and Firefox checks are still
+required to confirm current X rendering and direction metadata; fixture checks
+alone do not prove that all conversation layouts are supported.

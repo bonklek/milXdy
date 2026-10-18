@@ -11,9 +11,11 @@
 
 - [ ] `npm run verify` passes from a clean checkout.
 - [ ] Local-custom schemas accept declared, unknown, and non-VPL metadata.
-- [ ] Upstream-default fixtures fail unless VPL evidence and approvals exist.
+- [ ] Upstream-default fixtures fail unless compatible exact-file license or
+      permission evidence, all four grants, notices, obligations, and approvals exist.
 - [ ] Human pages match the machine-readable local/upstream scope.
-- [ ] Every bundled repository/default file follows the repository VPL.
+- [ ] Repository-owned guide/code files retain VPL; catalog assets retain their
+      reviewed compatible terms and all required notices.
 - [ ] No private path, private planning text, credential, or personal data is
       present.
 - [ ] No page claims that local package acceptance is project endorsement.

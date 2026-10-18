@@ -41,6 +41,17 @@ npm run build
 
 4. Update docs when behavior changes.
 
+For Remilia API, authentication, broker, Beetle, poke, notifications, or chat
+changes, also run:
+
+```powershell
+npm.cmd run verify:remilia-migration
+```
+
+Keep official API-v1 coverage distinct from temporary legacy adapters and
+update the [migration contract](REMILIA_API_MIGRATION.md) when either boundary
+changes.
+
 For app UI changes, follow the [Contributor UI Style Guide](CONTRIBUTOR_UI_STYLE_GUIDE.md).
 
 ## Performance Expectations

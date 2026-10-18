@@ -1,3 +1,4 @@
+import { generatedPopupMirrors } from "./popup-generated-mirrors.mjs";
 import { readFile } from "node:fs/promises";
 import { ignoredProfilePackSections } from "../../src/platform/settings/profile-pack-sections.ts";
 
@@ -16,6 +17,8 @@ const notes = [];
 const popupBindings = parsePopupBindings(popupSource);
 const popupControls = new Set(Array.from(popupHtml.matchAll(/data-control="([^"]+)"/g), (match) => match[1]));
 const visualEditorProperties = parseVisualEditorProperties(popupSource);
+const bundledSource = await readFile("src/extension/popup/bundled-app-settings.ts", "utf8");
+const generatedMirrors = generatedPopupMirrors(registry, { popupSource, popupHtml, bundledSource });
 const popupBindingAliases = new Map([
   ["remistats.sounds.enabled", "remistats.soundsEnabled"],
   ["remistats.sounds.volume", "remistats.soundVolume"],
@@ -84,6 +87,11 @@ function verifyGeneratedFeatureMirror(app, setting) {
     return;
   }
 
+  if (generatedMirrors.has(setting.id)) {
+    compareStorage(setting, generatedMirrors.get(setting.id), `${app.id}:${setting.id} generated popup mirror`);
+    return;
+  }
+
   if (setting.role === "enablement") {
     requireSourceIncludes(firstPartyAppsSource, "genericEnablementAdapter", `${app.id}:${setting.id}: generic Apps & Features enablement adapter is missing`);
     notes.push(`${setting.id}: enablement is owned by the generated Apps & Features control.`);
@@ -132,7 +140,10 @@ function verifyAppEnablement(entry) {
   } else {
     if (popupBindings.has(entry.settingId)) fail(`${entry.settingId}: Apps & Features-only enablement must not have a popup binding`);
     if (popupControls.has(entry.settingId)) fail(`${entry.settingId}: Apps & Features-only enablement must not have a popup control`);
-    notes.push(`${entry.settingId}: no popup mirror is expected; Apps & Features adapter/storage path was checked.`);
+    if (generatedMirrors.has(entry.settingId)) {
+      compareStorage(setting, generatedMirrors.get(entry.settingId), `${entry.settingId} generated popup mirror`);
+      notes.push(`${entry.settingId}: mirrored by the manifest-owned popup renderer; Apps & Features adapter/storage was also checked.`);
+    } else notes.push(`${entry.settingId}: no popup mirror is expected; Apps & Features adapter/storage path was checked.`);
   }
   requireSetEnabledStorage(entry, setting);
   requireDistinctEnablementStorage(entry, setting);
@@ -200,7 +211,9 @@ function verifyPostReadingFullQuoteOptInDefaults() {
 }
 
 function requirePopupControl(controlId, label) {
-  if (!popupControls.has(controlId)) fail(`${label}: popup.html lacks data-control="${controlId}"`);
+  if (popupControls.has(controlId)) return;
+  const settingId = Array.from(popupBindingAliases).find(([, alias]) => alias === controlId)?.[0] || controlId;
+  if (!generatedMirrors.has(settingId)) fail(`${label}: no static data-control="${controlId}" or wired generated popup mirror`);
 }
 
 function requireSourceIncludes(source, needle, message) {
@@ -277,6 +290,7 @@ function fail(message) {
 
 function printResults() {
   console.log("App settings mirror verification");
+  console.log(`  manifest-owned popup controls recognized: ${generatedMirrors.size}`);
   console.log(`  generated feature settings checked: ${generatedFeatureSettings.length}`);
   console.log(`  app enablement settings checked: ${appEnablementCases.length}`);
   console.log(`  app-surface popup mirrors checked: ${appSurfacePopupMirrorCases.length}`);

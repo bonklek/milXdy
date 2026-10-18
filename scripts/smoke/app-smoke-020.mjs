@@ -4,7 +4,7 @@ import path from "node:path";
 
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const files = {
-  miladychanSource: await readFile("src/apps/miladychan-portal/content.ts", "utf8"),
+  miladychanSource: (await Promise.all(["content.ts", "portal-data.ts", "portal-post-view.ts"].map((file) => readFile(`src/apps/miladychan-portal/${file}`, "utf8")))).join("\n"),
   musicSource: await readFile("src/apps/music/content.ts", "utf8"),
   background: await readFile("src/extension/background/index.ts", "utf8"),
   docsReleaseNotes: await readFile("docs/releases/RELEASE_NOTES_0.2.0.md", "utf8"),

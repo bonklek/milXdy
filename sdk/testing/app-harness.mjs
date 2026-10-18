@@ -2,6 +2,8 @@
  * In-memory harness for testing a public milXdy content app module without an
  * extension build. It intentionally implements only the documented SDK facade.
  */
+import { createHarnessWindowService } from "./app-harness-window.mjs";
+import { createHarnessCapabilities } from "./app-harness-capabilities.mjs";
 
 /** @typedef {import("../types/index.d.ts").MilxdyContentAppModule} MilxdyContentAppModule */
 /** @typedef {import("../types/index.d.ts").MilxdyRouteChange} MilxdyRouteChange */
@@ -14,10 +16,14 @@
  *   id?: string,
  *   name?: string,
  *   version?: string,
+ *   site?: {id: "x"|"remiliaNet"|"remiliaWiki"|"miladychan", origin: string, mode: "fullRail"|"appLauncher"|"featureOnly"|"bridgeOnly"},
  *   surfaces?: import("../types/index.d.ts").MilxdyAppSurface[],
  *   loadTriggers?: import("../types/index.d.ts").PublicAppManifest["loadTriggers"],
  *   storageKeys?: {local?: string[], sync?: string[]},
  *   assets?: string[],
+ *   messageTypes?: string[],
+ *   hostActions?: Array<"wiki.openPage">,
+ *   openWikiPage?: (url: string) => {ok: boolean, reason?: "disabled"|"unavailable"|"invalid-url"|"cancelled"|"failed"} | Promise<{ok: boolean, reason?: "disabled"|"unavailable"|"invalid-url"|"cancelled"|"failed"}>,
  *   initialStorage?: {local?: Record<string, unknown>, sync?: Record<string, unknown>},
  *   messageHandler?: (message: unknown, label?: string) => unknown | Promise<unknown>,
  * }} [options]
@@ -33,23 +39,19 @@ export function createAppHarness(options = {}) {
   const disposables = [];
   /** @type {{kind: string, callback: () => void, cancelled: boolean}[]} */
   const scheduled = [];
+  const harnessWindows = createHarnessWindowService(controller.signal);
   let rescans = 0;
 
   /** @type {import("../types/index.d.ts").MilxdyContentAppContext} */
   const context = {
-    manifest: Object.freeze({
-      id: options.id ?? "test-app",
-      name: options.name ?? "Test App",
-      version: options.version ?? "0.0.0",
-      description: "App SDK harness fixture",
-      surfaces: options.surfaces ?? /** @type {import("../types/index.d.ts").MilxdyAppSurface[]} */ (["route"]),
-      loadTriggers: options.loadTriggers ?? /** @type {import("../types/index.d.ts").PublicAppManifest["loadTriggers"]} */ (["startup"]),
-    }),
+    manifest: createHarnessManifest(options),
+    site: Object.freeze(options.site ?? { id: "x", origin: "https://x.com", mode: "fullRail" }),
     signal: controller.signal,
     scheduler: {
       idle: (callback, _options) => schedule("idle", callback),
       timeout: (callback, _delayMs) => schedule("timeout", callback),
     },
+    windows: harnessWindows.service,
     storage: {
       local: createStorageArea("local", options.storageKeys?.local ?? [], options.initialStorage?.local ?? {}),
       sync: createStorageArea("sync", options.storageKeys?.sync ?? [], options.initialStorage?.sync ?? {}),
@@ -62,10 +64,7 @@ export function createAppHarness(options = {}) {
     requestSurfaceRescan() {
       rescans += 1;
     },
-    async sendMessage(message, label) {
-      messages.push({ message, label });
-      return /** @type {any} */ (options.messageHandler ? await options.messageHandler(message, label) : null);
-    },
+    ...createHarnessCapabilities(options, controller.signal, diagnostics, messages),
     recordDiagnostic(key, value) {
       diagnostics.set(key, value);
     },
@@ -76,6 +75,7 @@ export function createAppHarness(options = {}) {
 
   /** @param {string} kind @param {() => void} callback */
   function schedule(kind, callback) {
+    if (controller.signal.aborted) throw new DOMException("App activation has ended", "AbortError");
     const task = { kind, callback, cancelled: false };
     scheduled.push(task);
     return () => {
@@ -161,7 +161,11 @@ export function createAppHarness(options = {}) {
     async close(module) { await invoke(module, "close"); },
     /** @param {MilxdyContentAppModule} module */
     async disable(module) { await invoke(module, "disable"); },
-    abort() { controller.abort(); },
+    abort() {
+      controller.abort();
+      for (const task of scheduled) task.cancelled = true;
+      harnessWindows.dispose();
+    },
     flushScheduled() {
       for (const task of scheduled.splice(0)) if (!task.cancelled && !controller.signal.aborted) task.callback();
     },
@@ -181,4 +185,20 @@ function assertSafeRelativePath(path) {
   if (!path || path.startsWith("/") || path.startsWith("\\") || /^[A-Za-z]:/.test(path) || path.split(/[\\/]/).includes("..")) {
     throw new Error(`Unsafe app asset path: ${path}`);
   }
+}
+
+/**
+ * @param {Partial<Pick<import("../types/index.d.ts").PublicAppManifest, "id" | "name" | "version" | "surfaces" | "loadTriggers" | "hostActions">>} options
+ * @returns {Readonly<import("../types/index.d.ts").PublicAppManifest>}
+ */
+function createHarnessManifest(options) {
+  return Object.freeze({
+      id: options.id ?? "test-app",
+      name: options.name ?? "Test App",
+      version: options.version ?? "0.0.0",
+      description: "App SDK harness fixture",
+      surfaces: options.surfaces ?? /** @type {import("../types/index.d.ts").MilxdyAppSurface[]} */ (["route"]),
+      loadTriggers: options.loadTriggers ?? /** @type {import("../types/index.d.ts").PublicAppManifest["loadTriggers"]} */ (["startup"]),
+      hostActions: options.hostActions ?? [],
+    });
 }

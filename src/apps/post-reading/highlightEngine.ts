@@ -18,6 +18,7 @@ type PrepareTokenOptions = {
   includeTextNode?: (node: Text) => boolean;
   textOverride?: string;
   smoothReadableLength?: boolean;
+  spokenText?: string;
 };
 
 type SmoothPaintOptions = {
@@ -91,6 +92,7 @@ export class TextHighlightEngine {
     const tokens: HTMLElement[] = [];
     const textNodes = collectTextNodes(element);
     let tokenIndex = 0;
+    let spokenCursor = 0;
     const layouts = layoutHighlightTextSegments(textNodes.map((node) => ({
       text: node.textContent || "",
       included: options.includeTextNode?.(node) !== false,
@@ -107,7 +109,19 @@ export class TextHighlightEngine {
           fragment.appendChild(document.createTextNode(part.text));
           continue;
         }
-        const span = createHighlightToken(part.text, mode, tokenIndex++, part.start, options.smoothReadableLength === true);
+        let start = part.start;
+        if (options.spokenText !== undefined) {
+          const visible = part.text.trim();
+          const matched = visible ? options.spokenText.indexOf(visible, spokenCursor) : spokenCursor;
+          if (matched < 0) {
+            // A display-only fragment has no position in the spoken sequence.
+            fragment.appendChild(document.createTextNode(part.text));
+            continue;
+          }
+          start = matched;
+          spokenCursor = matched + visible.length;
+        }
+        const span = createHighlightToken(part.text, mode, tokenIndex++, start, options.smoothReadableLength === true);
         tokens.push(span);
         fragment.appendChild(span);
       }

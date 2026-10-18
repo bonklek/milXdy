@@ -1,0 +1,511 @@
+{
+  "$schema": "https://milxdy.local/schemas/local-app-package.schema.json",
+  "manifestVersion": 1,
+  "id": "tweet-composer-kit",
+  "name": "Post-Factory",
+  "version": "0.2.0-pilot",
+  "description": "A local-only composer companion pilot with local reply phrases, host-owned Drafts, reviewed Maker handoffs, and Remibooru tools.",
+  "packageKind": "app",
+  "sdk": {
+    "minVersion": "0.2.5",
+    "targetVersion": "0.2.5",
+    "notes": [
+      "Built only against the published App SDK declarations and authoring guides.",
+      "Uses the reviewed composer and reply callback contracts only; it does not access X's DOM, caret, clipboard, media, or post controls."
+    ]
+  },
+  "contentEntry": "dist/content.js",
+  "css": [
+    {
+      "id": "tweet-composer-kit.styles",
+      "path": "styles/composer-kit.css"
+    }
+  ],
+  "composerAction": {
+    "label": "Factory",
+    "presentation": "anchoredPanel",
+    "icon": {
+      "light": "assets/composer-factory-light.svg",
+      "dark": "assets/composer-factory-dark.svg"
+    }
+  },
+  "hostComposerActions": [
+    "nativeDrafts"
+  ],
+  "externalHandoffs": [
+    {
+      "id": "milady-maker",
+      "label": "Milady Maker",
+      "adapter": "remilia-maker",
+      "target": "milady",
+      "modes": [
+        "captioned",
+        "randomMeme"
+      ],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280
+    },
+    {
+      "id": "remilio-maker",
+      "label": "Redacted Remilio Babies Maker",
+      "adapter": "remilia-maker",
+      "target": "remilio",
+      "modes": [
+        "captioned",
+        "randomMeme"
+      ],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280
+    },
+    {
+      "id": "bonkler-maker",
+      "label": "Bonkler Factory",
+      "adapter": "remilia-maker",
+      "target": "bonkler",
+      "modes": [
+        "captioned",
+        "randomMeme"
+      ],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280
+    },
+    {
+      "id": "kagami-maker",
+      "label": "Kagami Academy Maker",
+      "adapter": "remilia-maker",
+      "target": "kagami",
+      "modes": [
+        "captioned",
+        "randomMeme"
+      ],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280
+    },
+    {
+      "id": "cheeseworld-deepfry",
+      "label": "#CHEESEWORLD Meme Maker",
+      "adapter": "cheeseworld",
+      "target": "deepfry",
+      "modes": [
+        "captioned"
+      ],
+      "captionSource": "packageFields",
+      "captionMaxLength": 280,
+      "mediaTransfer": {
+        "source": "initiatingComposerImage",
+        "result": "replaceSameAttachment",
+        "consent": "perInvocation",
+        "maxBytes": 10485760,
+        "allowedMimeTypes": [
+          "image/png",
+          "image/jpeg",
+          "image/gif",
+          "image/webp"
+        ]
+      }
+    }
+  ],
+  "remoteQueries": [
+    {
+      "id": "remibooru-reactions",
+      "label": "Remibooru reactions",
+      "adapter": "remibooru",
+      "resources": [
+        "posts",
+        "facets"
+      ],
+      "maxPageSize": 12,
+      "minIntervalMs": 750,
+      "cache": {
+        "policy": "none"
+      },
+      "composerSuggestions": {
+        "source": "visibleDraftKeywords",
+        "maxItems": 5,
+        "maxLength": 64
+      },
+      "resultActions": [
+        "attachToInitiatingComposer"
+      ]
+    }
+  ],
+  "remiliaCapabilities": [
+    {
+      "id": "remilia.profile.public",
+      "operations": [
+        "getUserProfile"
+      ],
+      "scopes": [],
+      "consent": "enablement",
+      "reason": "Resolve an explicitly supplied public Remilia username through the reviewed host broker."
+    }
+  ],
+  "contextMediaActions": [
+    {
+      "id": "remibooru-contribute",
+      "label": "Upload to Remibooru",
+      "site": "x",
+      "eligibleMedia": [
+        "image"
+      ],
+      "presentation": "hostPanel"
+    }
+  ],
+  "mediaContributions": [
+    {
+      "id": "remibooru-contribute",
+      "label": "Contribute to Remibooru",
+      "adapter": "remibooru",
+      "contextMediaActionId": "remibooru-contribute",
+      "maxTags": 12,
+      "maxTagLength": 64
+    }
+  ],
+  "replyAction": {
+    "templates": [
+      {
+        "id": "milady",
+        "label": "milady",
+        "text": "milady",
+        "sendAfterInsert": true,
+        "sendAfterInsertStorageKey": "milxdy.local.tweet-composer-kit.sendAfterInsert.milady"
+      },
+      {
+        "id": "remilio",
+        "label": "remilio",
+        "text": "remilio",
+        "sendAfterInsert": true,
+        "sendAfterInsertStorageKey": "milxdy.local.tweet-composer-kit.sendAfterInsert.remilio"
+      },
+      {
+        "id": "custom",
+        "label": "Custom",
+        "storageListKey": "milxdy.local.tweet-composer-kit.customPhrases",
+        "sendAfterInsert": true,
+        "sendAfterInsertStorageKey": "milxdy.local.tweet-composer-kit.sendAfterInsert.custom"
+      }
+    ]
+  },
+  "defaultEnabled": true,
+  "storageKeys": {
+    "local": [
+      "milxdy.local.tweet-composer-kit.enabled",
+      "milxdy.local.tweet-composer-kit.customPhrases",
+      "milxdy.local.tweet-composer-kit.sendAfterInsert.milady",
+      "milxdy.local.tweet-composer-kit.sendAfterInsert.remilio",
+      "milxdy.local.tweet-composer-kit.sendAfterInsert.custom"
+    ]
+  },
+  "settings": [
+    {
+      "id": "tweet-composer-kit.enabled",
+      "label": "Post-Factory",
+      "description": "Enable the local Post-Factory pilot.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "role": "enablement",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.tweet-composer-kit.enabled"
+      },
+      "defaultValue": true,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      },
+      "presets": [
+        "firstRun"
+      ]
+    },
+    {
+      "id": "tweet-composer-kit.customPhrases",
+      "label": "Custom reply phrases",
+      "description": "Manage up to 20 local quick-reply phrases. Rows insert text only unless the separate Custom saved phrases Insert and send setting is enabled.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.tweet-composer-kit.customPhrases"
+      },
+      "defaultValue": [],
+      "control": {
+        "type": "textList",
+        "maxItems": 20,
+        "maxLength": 280,
+        "placeholder": "Add a local reply phrase"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      }
+    },
+    {
+      "id": "tweet-composer-kit.sendAfterInsert.milady",
+      "label": "Insert and send: milady",
+      "description": "Allow the milady template to submit immediately after you explicitly choose its Insert and send row. Off by default; turn off to insert text without posting.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.tweet-composer-kit.sendAfterInsert.milady"
+      },
+      "defaultValue": false,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      }
+    },
+    {
+      "id": "tweet-composer-kit.sendAfterInsert.remilio",
+      "label": "Insert and send: remilio",
+      "description": "Allow the remilio template to submit immediately after you explicitly choose its Insert and send row. Off by default; turn off to insert text without posting.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.tweet-composer-kit.sendAfterInsert.remilio"
+      },
+      "defaultValue": false,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      }
+    },
+    {
+      "id": "tweet-composer-kit.sendAfterInsert.custom",
+      "label": "Insert and send: Custom saved phrases",
+      "description": "Allow every saved Custom phrase to submit immediately after you explicitly choose its Insert and send row. Off by default; turn off to insert text without posting.",
+      "scope": "app",
+      "location": "appsAndFeatures",
+      "storage": {
+        "area": "local",
+        "key": "milxdy.local.tweet-composer-kit.sendAfterInsert.custom"
+      },
+      "defaultValue": false,
+      "control": {
+        "type": "toggle"
+      },
+      "reset": {
+        "behavior": "restoreDefault"
+      }
+    }
+  ],
+  "surfaces": [
+    "composerAction",
+    "replyAction"
+  ],
+  "lifecycle": {
+    "mode": "runtime",
+    "localOnly": true,
+    "notes": [
+      "Uses only documented composer, reply, gallery, and host-owned context-media callbacks, declared maker modes, and declared local storage."
+    ]
+  },
+  "siteScopes": [
+    {
+      "site": "x",
+      "hosts": [
+        "https://x.com/*",
+        "https://twitter.com/*"
+      ],
+      "integration": "contentScript",
+      "surfaces": [
+        "composerAction",
+        "replyAction"
+      ],
+      "presentation": "userAction",
+      "notes": [
+        "No direct composer injection, DOM selectors, or background service is used."
+      ]
+    }
+  ],
+  "permissions": {
+    "hosts": [
+      "https://maker.remilia.org/*",
+      "https://remibooru.com/*",
+      "https://cult.inc/*"
+    ]
+  },
+  "cost": {
+    "startup": "cheap",
+    "perSurface": "cheap",
+    "network": "batched",
+    "worker": "none",
+    "domWrite": "small"
+  },
+  "loadTriggers": [
+    "userAction"
+  ],
+  "hub": {
+    "category": "social",
+    "shortDescription": "Local reply list, Drafts, reviewed Maker handoffs, and Remibooru tools.",
+    "rail": {
+      "supported": false,
+      "defaultPinned": false
+    },
+    "presets": [
+      "full"
+    ],
+    "permissionNotes": [
+      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. Only after the user explicitly selects one Post-Factory maker, selects Captioned or Random meme, and activates Generate does the host transfer bounded captions to that named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
+      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
+      "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. Only after the user explicitly selects CHEESEWORLD, selects Captioned, activates Generate, and grants per-invocation host consent may the host transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
+    ],
+    "dataNotes": [
+      "Stores enablement, up to 20 custom reply phrases and three independent default-off send-consent toggles in browser-local storage.",
+      "The host-owned D action opens native X Drafts; this package cannot inspect X drafts.",
+      "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. Default reply rows insert text only. Only after you separately enable Insert and send for a declared template and choose its visibly labeled row does the host verify exact insertion and submit once. The Custom setting covers all saved Custom phrases.",
+      "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.",
+      "Only after an explicit Milady, Remilio, Bonkler, or Kagami selection, an explicit Captioned or Random meme selection, and activation of Generate are the user-entered Top text and Bottom text captions transferred to that named reviewed maker. Random meme permits both caption fields to be empty; no empty-caption or maker fallback chooses a mode or destination. This package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.",
+      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
+      "After an explicit X image context-menu selection and explicit Publish to Remibooru click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed public Remibooru contribution flow. The host retains image bytes and session data and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
+      "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
+      "Only after explicit CHEESEWORLD and Captioned selection followed by Generate are the Top text and Bottom text captions transferred to CULT/IN CheeseWorld. With per-invocation consent, the host transfers exactly one bounded initiating-composer image and replaces that same attachment with the result. The host never posts, and this package receives no image bytes, URLs, DOM, tabs, file handles, or browser APIs.",
+      "The reviewed Remilia public-profile capability accepts only an explicit username. The host retains OAuth credentials, authorization headers, and cookies; Post-Factory receives only a normalized result and has no URL, token, cookie, direct-authentication, or authenticated-fetch access."
+    ],
+    "remoteServices": [
+      "The reviewed Remilia-maker adapter opens only after explicit maker and mode selection followed by Generate. The host validates the exact declared captioned or randomMeme mode before transferring bounded captions to the selected named maker; no maker or mode is defaulted.",
+      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or publishes an explicitly requested reviewed media contribution after the package's visible Publish to Remibooru action.",
+      "The reviewed CULT/IN CheeseWorld adapter runs only after explicit CHEESEWORLD and Captioned selection followed by Generate and per-invocation host consent. The host transfers the entered captions and exactly one initiating-composer PNG, JPEG, GIF, or WebP image up to 10 MiB, then replaces only that same attachment with the CheeseWorld result; the host never posts.",
+      "The host-owned Remilia capability broker exposes only the declared public-profile operation and returns normalized results without credentials, authorization headers, cookies, direct authentication, or arbitrary fetch."
+    ],
+    "localStorageNotes": [
+      "Stores enablement, up to 20 local custom phrases, and three independent default-off send-consent toggles for milady, remilio, and all saved Custom phrases."
+    ],
+    "privacyLabels": [
+      "local-only",
+      "remote-api"
+    ]
+  },
+  "privacy": {
+    "permissionNotes": [
+      "The https://maker.remilia.org/* host permission is used only by the host-owned reviewed Remilia-maker adapter. Only after the user explicitly selects one Post-Factory maker, selects Captioned or Random meme, and activates Generate does the host transfer bounded captions to that named maker in an inactive tab; this package does not read maker/X DOM, tabs, or browser APIs.",
+      "The https://remibooru.com/* host permission is used only by host-owned reviewed Remibooru gallery and contribution flows. This package has no raw fetch, image URL/byte, tab, or browser-message access.",
+      "The https://cult.inc/* host permission is used only by the host-owned reviewed CULT/IN CheeseWorld adapter. Only after the user explicitly selects CHEESEWORLD, selects Captioned, activates Generate, and grants per-invocation host consent may the host transfer exactly one initiating-composer image of at most 10 MiB in PNG, JPEG, GIF, or WebP format."
+    ],
+    "dataNotes": [
+      "Custom reply phrases remain in declared browser-local storage, bounded to 20 entries of at most 280 characters.",
+      "The host-owned D action opens native X Drafts; this package cannot inspect X drafts.",
+      "The reviewed host contract expands validated local custom phrases into ephemeral reply rows. Default reply rows insert text only. Only after you separately enable Insert and send for a declared template and choose its visibly labeled row does the host verify exact insertion and submit once. The Custom setting covers all saved Custom phrases.",
+      "This package does not access X's DOM or send posts itself; the plain Send a reply row opens X's native reply without submitting.",
+      "Only after an explicit Milady, Remilio, Bonkler, or Kagami selection, an explicit Captioned or Random meme selection, and activation of Generate are the user-entered Top text and Bottom text captions transferred to that named reviewed maker. Random meme permits both caption fields to be empty; no empty-caption or maker fallback chooses a mode or destination. This package receives no draft or image bytes and cannot inspect X/maker DOM, tabs, or browser APIs. The package never posts.",
+      "An explicit Search, Tags, or pagination click queries the reviewed Remibooru thumbnail gallery. On Tags click only, the host may derive up to five sanitized matching facet IDs from the initiating visible composer and immediately discards its raw text; this package receives no draft text or DOM. An explicit result click lets the host attach the recently returned sanitized Remibooru thumbnail to the initiating composer; it never posts and this package receives no extra URL or image bytes.",
+      "After an explicit X image context-menu selection and explicit Publish to Remibooru click, this package submits only the host-issued opaque media handle and up to 12 user-entered tags to the reviewed public Remibooru contribution flow. The host retains image bytes and session data and returns only a result or canonical link. This package never receives image URLs or bytes and never posts to X.",
+      "After an explicit Get tag ideas in Grok click, the host visibly sends the selected X image URL to X/Grok for tag suggestions. No Grok result is returned or inserted automatically; the user may manually copy suggestions into the package tag field.",
+      "Only after explicit CHEESEWORLD and Captioned selection followed by Generate are the Top text and Bottom text captions transferred to CULT/IN CheeseWorld. With per-invocation consent, the host transfers exactly one bounded initiating-composer image and replaces that same attachment with the result. The host never posts, and this package receives no image bytes, URLs, DOM, tabs, file handles, or browser APIs.",
+      "The reviewed Remilia public-profile capability accepts only an explicit username. The host retains OAuth credentials, authorization headers, and cookies; Post-Factory receives only a normalized result and has no URL, token, cookie, direct-authentication, or authenticated-fetch access."
+    ],
+    "localStorageNotes": [
+      "Stores enablement, up to 20 local custom phrases, and three independent default-off send-consent toggles for milady, remilio, and all saved Custom phrases."
+    ],
+    "remoteServices": [
+      "The reviewed Remilia-maker adapter opens only after explicit maker and mode selection followed by Generate. The host validates the exact declared captioned or randomMeme mode before transferring bounded captions to the selected named maker; no maker or mode is defaulted.",
+      "The host-owned reviewed Remibooru service returns only sanitized thumbnail gallery/search results after an explicit package control click, can attach a recently returned reviewed thumbnail to the initiating composer only after its explicit result click, or publishes an explicitly requested reviewed media contribution after the package's visible Publish to Remibooru action.",
+      "The reviewed CULT/IN CheeseWorld adapter runs only after explicit CHEESEWORLD and Captioned selection followed by Generate and per-invocation host consent. The host transfers the entered captions and exactly one initiating-composer PNG, JPEG, GIF, or WebP image up to 10 MiB, then replaces only that same attachment with the CheeseWorld result; the host never posts.",
+      "The host-owned Remilia capability broker exposes only the declared public-profile operation and returns normalized results without credentials, authorization headers, cookies, direct authentication, or arbitrary fetch."
+    ],
+    "privacyLabels": [
+      "local-only",
+      "remote-api"
+    ],
+    "consentRequired": true
+  },
+  "package": {
+    "assets": [
+      {
+        "id": "tweet-composer-kit.styles",
+        "path": "styles/composer-kit.css",
+        "kind": "style",
+        "webAccessible": false
+      },
+      {
+        "id": "tweet-composer-kit.reply-arrow",
+        "path": "assets/reply-arrow.svg",
+        "kind": "icon",
+        "webAccessible": true,
+        "sha256": "b776d89ea7c6ae7cafa658adba808350a97e075a66130d17b66665ed6ae75b94"
+      },
+      {
+        "id": "tweet-composer-kit.reply-lightning",
+        "path": "assets/reply-lightning.svg",
+        "kind": "icon",
+        "webAccessible": true,
+        "sha256": "311afb3a95ce5661c82f062e139e569f259140cc593790f8885b5a7b39c9d5cd"
+      },
+      {
+        "id": "tweet-composer-kit.composer-factory-light",
+        "path": "assets/composer-factory-light.svg",
+        "kind": "icon",
+        "webAccessible": true,
+        "sha256": "734a8c643fc28635b61d02f8254226021c3c0ee624f704140045a999bb03eb67"
+      },
+      {
+        "id": "tweet-composer-kit.composer-factory-dark",
+        "path": "assets/composer-factory-dark.svg",
+        "kind": "icon",
+        "webAccessible": true,
+        "sha256": "2df108a717d1530ee4a4f720163bdeda75ca88e5d60ed87dee969e853c44b22f"
+      },
+      {
+        "id": "tweet-composer-kit.maker-cheeseworld",
+        "path": "assets/makers/cheeseworld.png",
+        "kind": "image",
+        "webAccessible": true,
+        "sha256": "8d6a8be68bc6944bdc7b5a363f67d50b217ba98e22edb138ccb833aa721f5aa3"
+      },
+      {
+        "id": "tweet-composer-kit.maker-milady",
+        "path": "assets/makers/milady.png",
+        "kind": "image",
+        "webAccessible": true,
+        "sha256": "f9f15d9b15acf715c2562be8886d3462b64be0e0de03a7906fc0ef61274c0d59"
+      },
+      {
+        "id": "tweet-composer-kit.maker-remilio",
+        "path": "assets/makers/remilio.png",
+        "kind": "image",
+        "webAccessible": true,
+        "sha256": "b3ef1bb408a9ded4c4f4b9218b9f9aadd0589449304085d858f76f7cb73c74f4"
+      },
+      {
+        "id": "tweet-composer-kit.maker-bonkler",
+        "path": "assets/makers/bonkler.png",
+        "kind": "image",
+        "webAccessible": true,
+        "sha256": "f3f82c367fd9b8a695c8574a4672978be6e60b1f5aa12ffd65cc76526406dbef"
+      },
+      {
+        "id": "tweet-composer-kit.maker-kagami",
+        "path": "assets/makers/kagami.png",
+        "kind": "image",
+        "webAccessible": true,
+        "sha256": "886ee8e0025b34ee8cc5919e161478ac4c2ece666725dc93ec7b90ecf3b98c1b"
+      }
+    ],
+    "webAccessibleAssets": [
+      "assets/reply-arrow.svg",
+      "assets/reply-lightning.svg",
+      "assets/composer-factory-light.svg",
+      "assets/composer-factory-dark.svg",
+      "assets/makers/cheeseworld.png",
+      "assets/makers/milady.png",
+      "assets/makers/remilio.png",
+      "assets/makers/bonkler.png",
+      "assets/makers/kagami.png"
+    ]
+  },
+  "review": {
+    "status": "reviewed",
+    "reviewedBy": "milXdy maintainers",
+    "reviewedAt": "2026-08-13",
+    "notes": [
+      "External-author SDK capability pilot reviewed for the declared host-only Remilia public-profile operation; package consent remains mandatory.",
+      "Maker images are package-local with source and derivative records in AUTHORING_LOG.md. Their source origin does not assert VPL, copyright, redistribution, or other licence approval."
+    ]
+  }
+}

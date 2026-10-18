@@ -364,34 +364,84 @@
   color: #ffffff;
 }
 
-.beetol-action {
-  width: 100%;
-  border: 0;
-  border-radius: 6px;
-  background: var(--beetol-accent);
+.beetol-read-only {
+  display: grid;
+  gap: 7px;
+  margin: 8px 8px 0;
+  padding: 9px;
+  border: 1px solid var(--beetol-border);
+  border-radius: 5px;
+  background: var(--beetol-surface-2);
   color: var(--beetol-text);
-  font: 800 12px/1 inherit;
-  cursor: pointer;
+  font: 600 10px/1.35 var(--milxdy-font-ui, "Milxdy Remilia Hei", ui-monospace, monospace);
 }
 
-#beetol-hunter-root[data-mode="dark"] .beetol-action {
+.beetol-read-only > strong {
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.beetol-read-only > span {
+  color: var(--beetol-muted);
+}
+
+.beetol-read-only[hidden],
+.beetol-footer[hidden] {
+  display: none !important;
+}
+
+.beetol-status-list {
+  display: grid;
+  gap: 3px;
+  padding-block: 2px;
+  border-block: 1px solid var(--beetol-border);
+}
+
+.beetol-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 20px;
+}
+
+.beetol-status-row strong {
+  color: var(--beetol-muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.beetol-native-game {
+  display: inline-grid;
+  place-items: center;
+  min-height: 30px;
+  padding: 5px 8px;
+  border: 1px solid var(--beetol-border);
+  border-right: 3px solid #adadad;
+  border-bottom: 3px solid #adadad;
+  border-radius: 5px;
+  background: var(--beetol-accent);
+  color: var(--beetol-text);
+  font-weight: 800;
+  text-align: center;
+  text-decoration: none;
+}
+
+.beetol-native-game:hover,
+.beetol-native-game:focus-visible {
+  filter: brightness(0.97);
+  text-decoration: underline;
+}
+
+#beetol-hunter-root[data-mode="dark"] .beetol-read-only {
+  border-color: #555b73;
+  background: #242632;
+}
+
+#beetol-hunter-root[data-mode="dark"] .beetol-native-game {
   border-right-color: #393d59;
   border-bottom-color: #393d59;
   box-shadow: inset 2px 2px 1px rgba(255, 255, 255, 0.1);
-}
-
-.beetol-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  padding: 8px 8px 0;
-}
-
-.beetol-actions[hidden],
-.beetol-crunch-junk[hidden],
-.beetol-crunch-progress[hidden],
-.beetol-footer[hidden] {
-  display: none !important;
 }
 
 .beetol-action {

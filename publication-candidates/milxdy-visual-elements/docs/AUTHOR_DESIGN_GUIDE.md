@@ -316,7 +316,7 @@ record hashes/transformations when reproducibility matters. Catalog IDs,
 license proof, and maintainer approval are optional locally.
 
 For default/upstream inclusion, promote the same local record through the
-project review lane: exact source evidence, VPL continuity, parent hashes,
+project review lane: exact source evidence, rights compatibility, parent hashes,
 material changes, author/tool/date, accessibility review, and a final upstream
 decision become mandatory.
 

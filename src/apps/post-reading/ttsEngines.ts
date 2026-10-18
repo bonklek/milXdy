@@ -43,6 +43,23 @@ export type TtsEngine = {
 
 const primedVoiceUris = new Set<string>();
 
+// Tweet, Wiki, priming and voice checks share one native queue in this window.
+// Generation guards protect controller state; this lease also protects queue operations.
+const nativeSpeechOwners = new WeakMap<SpeechSynthesis, symbol>();
+function ownNativeSpeech(synthesis: SpeechSynthesis) {
+  const token = Symbol("post-reading speech owner");
+  const replacingOwnedSpeech = nativeSpeechOwners.has(synthesis);
+  nativeSpeechOwners.set(synthesis, token);
+  if (replacingOwnedSpeech) synthesis.cancel();
+  const owns = () => nativeSpeechOwners.get(synthesis) === token;
+  const release = () => { if (owns()) nativeSpeechOwners.delete(synthesis); };
+  return {
+    owns, release,
+    cancel() { if (!owns()) return; release(); synthesis.cancel(); },
+  };
+}
+
+
 type CustomSpeechResponse = {
   audioUrl?: unknown;
   audioBase64?: unknown;
@@ -76,30 +93,30 @@ export class WebSpeechEngine implements TtsEngine {
     }
 
     const utterance = new SpeechSynthesisUtterance(request.text);
-    const speechSynthesis = window.speechSynthesis;
     utterance.rate = request.settings.speed;
     utterance.volume = request.settings.volume;
     const voice = this.chooseVoice(this.getVoices(), request.settings.voiceURI, request.settings.autoVoice);
     if (voice) utterance.voice = voice;
+    const synthesis = window.speechSynthesis;
+    const ownership = ownNativeSpeech(synthesis);
     let stopped = false;
     let started = false;
-    let startFallback: number | null = null;
     const acknowledgeStart = () => {
-      if (stopped || started) return;
+      if (stopped || started || !ownership.owns()) return;
       started = true;
-      if (startFallback !== null) window.clearTimeout(startFallback);
-      startFallback = null;
       request.onStart();
     };
     const abortPlayback = () => {
+      if (stopped) return;
       stopped = true;
-      if (startFallback !== null) window.clearTimeout(startFallback);
-      window.speechSynthesis.cancel();
+      request.signal?.removeEventListener("abort", abortPlayback);
+      ownership.cancel();
     };
     request.signal?.addEventListener("abort", abortPlayback, { once: true });
     utterance.onboundary = (event) => {
-      if (stopped) return;
+      if (stopped || !ownership.owns()) return;
       if (!Number.isFinite(event.charIndex) || event.charIndex < 0) return;
+      acknowledgeStart();
       request.onBoundary({
         charIndex: event.charIndex,
         charLength: typeof event.charLength === "number" && event.charLength > 0 ? event.charLength : null,
@@ -109,34 +126,36 @@ export class WebSpeechEngine implements TtsEngine {
     utterance.onstart = acknowledgeStart;
     utterance.onend = () => {
       request.signal?.removeEventListener("abort", abortPlayback);
-      if (!stopped) request.onEnd();
+      if (stopped || !ownership.owns()) return;
+      stopped = true;
+      ownership.release();
+      if (!started) {
+        request.onError("The browser voice ended before playback started. Choose another voice in Settings and retry.");
+        return;
+      }
+      request.onEnd();
     };
-    utterance.onerror = () => {
+    utterance.onerror = (event) => {
       request.signal?.removeEventListener("abort", abortPlayback);
-      if (!stopped) request.onError("Speech playback failed.");
+      if (stopped || !ownership.owns()) return;
+      stopped = true;
+      ownership.release();
+      request.onError(`Browser voice failed (${event?.error || "unknown"}). Choose another voice in Settings and retry.`);
     };
 
     // Chrome can preserve the global paused flag after canceling an utterance.
     // A newly queued utterance then remains pending forever while the controller
     // optimistically reports "speaking". Clear that stale state before enqueueing.
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(utterance);
-    // Some Chromium voices speak without dispatching onstart. The synthesizer's
-    // own live state is a bounded fallback acknowledgement, never a boundary.
-    startFallback = window.setTimeout(() => {
-      if (!stopped && speechSynthesis.speaking) acknowledgeStart();
-    }, 120);
+    synthesis.resume();
+    synthesis.speak(utterance);
+    // Queue-wide `speaking` can describe another utterance. Only this utterance's
+    // start or boundary events acknowledge playback; the controller bounds startup.
 
     return {
       hasSyncedBoundaries: false,
-      pause: () => window.speechSynthesis.pause(),
-      resume: () => window.speechSynthesis.resume(),
-      stop: () => {
-        stopped = true;
-        if (startFallback !== null) window.clearTimeout(startFallback);
-        request.signal?.removeEventListener("abort", abortPlayback);
-        window.speechSynthesis.cancel();
-      },
+      pause: () => { if (!stopped && ownership.owns()) synthesis.pause(); },
+      resume: () => { if (!stopped && ownership.owns()) synthesis.resume(); },
+      stop: abortPlayback,
     };
   }
 
@@ -154,42 +173,53 @@ export class WebSpeechEngine implements TtsEngine {
     const voice = this.chooseVoice(this.getVoices(), settings.voiceURI, settings.autoVoice);
     const key = voice?.voiceURI || "default";
     if (primedVoiceUris.has(key)) return;
-    await new Promise<void>((resolve) => {
+    await new Promise<void>((resolve, reject) => {
       const utterance = new browserWindow.SpeechSynthesisUtterance("one two three four");
       utterance.voice = voice || null;
       // Chromium may not initialize a voice at near-zero volume. This is the
       // lowest level already proven by the manual boundary probe.
       utterance.volume = 0.05;
       utterance.rate = 2.5;
+      const synthesis = browserWindow.speechSynthesis;
+      const ownership = ownNativeSpeech(synthesis);
       let settled = false;
+      let observedPlayback = false;
       let boundaries = 0;
       let lastIndex = -1;
       const schedule = globalThis.window?.setTimeout || globalThis.setTimeout;
       const cancelSchedule = globalThis.window?.clearTimeout || globalThis.clearTimeout;
-      const finish = () => {
+      const finish = (cancelOwned = true) => {
         if (settled) return;
         settled = true;
         cancelSchedule(timeout);
-        signal?.removeEventListener("abort", finish);
-        browserWindow.speechSynthesis.cancel();
+        signal?.removeEventListener("abort", abort);
+        const wasOwner = ownership.owns();
+        if (cancelOwned) ownership.cancel(); else ownership.release();
+        if (!wasOwner && !signal?.aborted) {
+          reject(new DOMException("Voice preparation was superseded by another reading.", "AbortError"));
+          return;
+        }
+        if (observedPlayback && !signal?.aborted) primedVoiceUris.add(key);
         schedule(resolve, 0);
       };
-      const timeout = schedule(finish, 750);
+      const abort = () => finish();
+      const timeout = schedule(() => finish(), 750);
+      utterance.onstart = () => { if (ownership.owns()) observedPlayback = true; };
       utterance.onboundary = (event) => {
+        if (settled || !ownership.owns()) return;
         if (event.charIndex > lastIndex) {
+          observedPlayback = true;
           lastIndex = event.charIndex;
           boundaries += 1;
           if (boundaries >= 2) finish();
         }
       };
-      utterance.onend = finish;
-      utterance.onerror = finish;
-      signal?.addEventListener("abort", finish, { once: true });
-      browserWindow.speechSynthesis.cancel();
-      browserWindow.speechSynthesis.resume();
-      browserWindow.speechSynthesis.speak(utterance);
+      utterance.onend = () => finish(false);
+      utterance.onerror = () => finish(false);
+      signal?.addEventListener("abort", abort, { once: true });
+      synthesis.resume();
+      synthesis.speak(utterance);
     });
-    if (!signal?.aborted) primedVoiceUris.add(key);
   }
 }
 
@@ -351,36 +381,35 @@ export async function probeVoiceBoundarySupport(voice: SpeechSynthesisVoice, sig
     utterance.voice = voice;
     utterance.rate = 1.15;
     utterance.volume = 0.05;
+    const synthesis = window.speechSynthesis;
+    const ownership = ownNativeSpeech(synthesis);
     let wordLikeBoundaries = 0;
     let lastCharIndex = -1;
     let settled = false;
     const hasEnoughBoundaries = () => wordLikeBoundaries >= 3;
-    const finish = (result: boolean) => {
+    const finish = (result: boolean, cancelOwned = true) => {
       if (settled) return;
       settled = true;
       window.clearTimeout(timeout);
       signal?.removeEventListener("abort", onAbort);
-      try {
-        window.speechSynthesis.cancel();
-      } catch {}
+      if (cancelOwned) ownership.cancel(); else ownership.release();
       resolve(result);
     };
     const onAbort = () => finish(false);
     signal?.addEventListener("abort", onAbort);
     const timeout = window.setTimeout(() => finish(hasEnoughBoundaries()), 5000);
     utterance.onboundary = (event) => {
-      if (typeof event.charIndex !== "number" || event.charIndex <= lastCharIndex) return;
+      if (settled || !ownership.owns() || typeof event.charIndex !== "number" || event.charIndex <= lastCharIndex) return;
       lastCharIndex = event.charIndex;
       const name = typeof event.name === "string" ? event.name.toLowerCase() : "";
       if (!name || name === "word" || name === "sentence") {
         wordLikeBoundaries += 1;
       }
     };
-    utterance.onend = () => finish(hasEnoughBoundaries());
-    utterance.onerror = () => finish(false);
-    window.speechSynthesis.cancel();
-    window.speechSynthesis.resume();
-    window.speechSynthesis.speak(utterance);
+    utterance.onend = () => finish(hasEnoughBoundaries(), false);
+    utterance.onerror = () => finish(false, false);
+    synthesis.resume();
+    synthesis.speak(utterance);
   });
 }
 

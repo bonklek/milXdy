@@ -5,7 +5,7 @@
   "asset": {
     "id": "fixture.ui-frame",
     "version": "1.0.0",
-    "manifestSha256": "3790a10e29eead7d1e79eb12376290717af7ae6a75e389d95a5127176ee58b36",
+    "manifestSha256": "1b7ffc33c4a6a280a0d6e32aa946ed8ee9396dee214767142e07f69890f41d9f",
     "sourceSha256": "776edabc744dcea7b369e13912a0f16910e7899b53fe8ccf4ab505435529d45a"
   },
   "outcome": "UPSTREAM_APPROVED",

@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "packages": [
+    {
+      "id": "tweet-composer-kit",
+      "sourceType": "folder",
+      "root": "packages/maintainer/tweet-composer-kit",
+      "packageSha256": "37061f80c7eb40db531f70bdce08bce582390d4358bcd65b6a11e640f5af0d41",
+      "manifestSha256": "0437684e2f933d75cd3dbad100729c979a58fea3394015e56078d0e7a789fda9",
+      "reason": "Maintainer-approved default-on reviewed Post-Factory composition; package consent and all existing privilege gates remain required.",
+      "allowedStagedRootSuffixes": [
+        "catalog/tweet-composer-kit",
+        "catalog-staging/tweet-composer-kit"
+      ]
+    }
+  ]
+}

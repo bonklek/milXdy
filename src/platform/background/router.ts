@@ -23,7 +23,7 @@ export function setupBackgroundMessageRouter(handlers: readonly BackgroundMessag
   chrome.runtime.onMessage.addListener((message: unknown, sender, sendResponse) => {
     const handler = backgroundHandlers.find((candidate) => candidate.matches(message));
     if (!handler) return false;
-    void Promise.resolve(handler.handle(message, sender))
+    void Promise.resolve().then(() => handler.handle(message, sender))
       .then((response) => sendResponse(response))
       .catch((error: unknown) => sendResponse({
         ok: false,
@@ -106,7 +106,7 @@ function drainNetworkQueue(): void {
     networkDiagnostics.updatedAt = Date.now();
     scheduleNetworkDiagnosticsWrite();
     const abort = new AbortController();
-    withNetworkDeadline(entry.task(abort.signal), entry.label, abort)
+    withNetworkDeadline(Promise.resolve().then(() => entry.task(abort.signal)), entry.label, abort)
       .then((value) => {
         recordNetworkTaskFinished(entry, true);
         entry.resolve(value);

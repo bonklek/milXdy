@@ -6,11 +6,12 @@ import {
   startOverlayPanelDrag,
 } from "../../platform/overlay/panel-base";
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
-import { createFallbackRuntimeScheduler } from "../../platform/runtime/scheduler";
-import { BEETLE_HUNT_COOLDOWN_MS, beetleHuntChargesFromUser, beetleHuntCooldownFromUser } from "./hunt-cooldown";
+import { beetleHuntChargesFromUser, beetleHuntCooldownFromUser } from "./hunt-cooldown";
+import { createBeetolSdkServices } from "./sdk-services";
 
 function mountBeetolGame(context = {}) {
-  const ROOT_VERSION = '2026-06-28-settings-dark-signin';
+  const sdkServices = createBeetolSdkServices(context);
+  const ROOT_VERSION = '2026-10-07-native-game-access';
   const existingRoot = document.getElementById('beetol-hunter-root');
   if (existingRoot) {
     if (existingRoot.dataset.version === ROOT_VERSION) return;
@@ -21,33 +22,23 @@ function mountBeetolGame(context = {}) {
     return typeof globalThis.chrome?.runtime?.id === 'string' && chrome.runtime.id.length > 0;
   }
 
-  const ACTIONS = [
-    ['catchBeetle', 'Claim Beetle', 'claim-beetle.png'],
-    ['beetleHunt', 'Hunt Beetle', 'hunt-beetle.png'],
-    ['claimUBC', 'Claim Cheese', 'claim-cheese.png'],
-    ['junkFaucet', 'Junk Faucet', 'junk-faucet.png'],
+  const STATUS_ITEMS = [
+    ['catchBeetle', 'Claim Beetle'],
+    ['beetleHunt', 'Hunt Beetle'],
+    ['claimUBC', 'Claim Cheese'],
+    ['junkFaucet', 'Junk Faucet'],
   ];
-  const TAB_COOLDOWN_KEYS = ['catchBeetle', 'beetleHunt'];
-  const TAB_ICON_URL = chrome.runtime.getURL('beetol/icons/hunt-beetle.png');
-  const ACTION_ICON_URLS = Object.fromEntries(ACTIONS.map(([key, _label, icon]) => [
-    key,
-    chrome.runtime.getURL(`beetol/icons/${icon}`),
-  ]));
-  const CRUNCH_LOOP_URL = chrome.runtime.getURL('beetol/sounds/ticket-crunch-cell.wav');
-  const CRUNCH_CELL_GAIN = 0.624;
+  const TAB_ICON_URL = sdkServices.tabIconUrl;
+  const REMILIANET_ORIGIN = 'https://www.remilia.net';
   const POSITION_KEY = 'beetol.hunterPosition';
   const COOLDOWN_STATE_KEY = 'beetol.cooldownState';
   const COOLDOWN_STATE_VERSION = 3;
-  const FINAL_HUNT_COOLDOWN_MS = BEETLE_HUNT_COOLDOWN_MS;
-  const FINAL_HUNT_RESULT_HOLD_MS = 2400;
   const ENABLED_KEY = 'milxdy.remistats.beetol.enabled';
   const SETTINGS_THEME_KEY = 'milxdy.settings.theme';
   const LEGACY_PREFIX = 'bex' + 'tol';
   const LEGACY_ENABLED_KEY = `milxdy.${LEGACY_PREFIX}.enabled`;
   const SNAP_MARGIN = 10;
-  const runtimeScheduler = context.scheduler || createFallbackRuntimeScheduler();
-  const lifecycleSignal = context.signal || null;
-  const appSdkSendMessage = typeof context.sendMessage === 'function' ? context.sendMessage : null;
+  const { runtimeScheduler, lifecycleSignal, appSdkSendMessage, getLocal, setLocal } = sdkServices;
   const lifecycleActive = () => state.enabled && lifecycleSignal?.aborted !== true;
 
   const state = {
@@ -74,7 +65,6 @@ function mountBeetolGame(context = {}) {
       junkFaucet: null,
     },
     huntCharges: 3,
-    crunchProgress: null,
     message: '',
     messageKind: '',
     menuSoundArmed: false,
@@ -87,8 +77,6 @@ function mountBeetolGame(context = {}) {
     appFrame: null,
   };
   const disposables = [];
-  let cancelFinalHuntDone = null;
-  let messageRevision = 0;
   function addDisposable(disposable) {
     disposables.push(disposable);
   }
@@ -119,22 +107,6 @@ function mountBeetolGame(context = {}) {
     }
   }
 
-  function cancelFinalHuntTransition() {
-    cancelFinalHuntDone?.();
-    cancelFinalHuntDone = null;
-  }
-
-  function scheduleFinalHuntDone() {
-    cancelFinalHuntTransition();
-    const expectedMessageRevision = messageRevision;
-    cancelFinalHuntDone = runtimeScheduler.timeout(() => {
-      cancelFinalHuntDone = null;
-      if (!lifecycleActive() || messageRevision !== expectedMessageRevision) return;
-      setMessage('Done', 'done');
-    }, FINAL_HUNT_RESULT_HOLD_MS);
-  }
-  addDisposable(cancelFinalHuntTransition);
-
   const root = document.createElement('div');
   root.id = 'beetol-hunter-root';
   root.dataset.version = ROOT_VERSION;
@@ -147,22 +119,20 @@ function mountBeetolGame(context = {}) {
       <section class="beetol-panel">
         <div class="beetol-head">
           <div>
-            <div class="beetol-title">Beetol Game</div>
-            <div id="beetol-user" class="beetol-subtitle">Checking session...</div>
+            <div class="beetol-title">Beetol status</div>
+            <div id="beetol-user" class="beetol-subtitle">Checking Remilia authorization...</div>
           </div>
           <button id="beetol-refresh" class="beetol-icon-btn" type="button" title="Refresh">&#8635;</button>
           <button id="beetol-minimize" class="beetol-icon-btn" type="button" title="Minimize" aria-label="Minimize">_</button>
         </div>
         <div id="beetol-signed-out" class="beetol-signed-out-msg">
-          <a href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer">Sign in</a>
-          <span>to RemiliaNET, then retry Beetol.</span>
-          <button id="beetol-retry-session" type="button">Retry session</button>
+          <span>Open the milXdy extension popup, then use Remilia connection &rarr; Connect/Reconnect.</span>
         </div>
-        <div id="beetol-actions" class="beetol-actions"></div>
-        <button id="beetol-crunch-junk" class="beetol-crunch-junk" type="button">Crunch All Junk</button>
-        <div id="beetol-crunch-progress" class="beetol-crunch-progress" hidden>
-          <div class="beetol-crunch-progress-track" aria-hidden="true"><span></span></div>
-          <span id="beetol-crunch-progress-label"></span>
+        <div id="beetol-read-only" class="beetol-read-only">
+          <strong>Official read-only status</strong>
+          <span>Actions run in RemiliaNET's visible Beetle game.</span>
+          <div id="beetol-status-list" class="beetol-status-list" role="list" aria-label="Official Beetle action status"></div>
+          <a id="beetol-native-game" class="beetol-native-game" href="https://www.remilia.net" target="_blank" rel="noopener noreferrer">Play Beetle on RemiliaNET</a>
         </div>
         <div id="beetol-footer" class="beetol-footer">
           <span id="beetol-message" role="status" aria-live="polite" aria-atomic="true"></span>
@@ -182,12 +152,8 @@ function mountBeetolGame(context = {}) {
     next: root.querySelector('#beetol-next'),
     user: root.querySelector('#beetol-user'),
     signedOut: root.querySelector('#beetol-signed-out'),
-    retrySession: root.querySelector('#beetol-retry-session'),
-    actions: root.querySelector('#beetol-actions'),
-    crunchJunk: root.querySelector('#beetol-crunch-junk'),
-    crunchProgress: root.querySelector('#beetol-crunch-progress'),
-    crunchProgressFill: root.querySelector('#beetol-crunch-progress .beetol-crunch-progress-track > span'),
-    crunchProgressLabel: root.querySelector('#beetol-crunch-progress-label'),
+    statusList: root.querySelector('#beetol-status-list'),
+    nativeGame: root.querySelector('#beetol-native-game'),
     footer: root.querySelector('#beetol-footer'),
     message: root.querySelector('#beetol-message'),
     refresh: root.querySelector('#beetol-refresh'),
@@ -268,12 +234,12 @@ function mountBeetolGame(context = {}) {
   function savePosition() {
     if (root.dataset.docked === 'true') return;
     if (!hasExtensionRuntime() || !state.position) return;
-    chrome.storage.local.set({ [POSITION_KEY]: state.position });
+    setLocal({ [POSITION_KEY]: state.position });
   }
 
   function saveCooldownState() {
     if (!hasExtensionRuntime()) return;
-    chrome.storage.local.set({
+    setLocal({
       [COOLDOWN_STATE_KEY]: {
         version: COOLDOWN_STATE_VERSION,
         savedAt: Date.now(),
@@ -306,58 +272,9 @@ function mountBeetolGame(context = {}) {
     }
   }
 
-  [TAB_ICON_URL, ...Object.values(ACTION_ICON_URLS)].forEach(preloadIcon);
+  preloadIcon(TAB_ICON_URL);
 
   let audioContext = null;
-  let crunchCellPromise = null;
-
-  function crunchAudioContext() {
-    const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-    if (!AudioContext) return null;
-    audioContext ||= new AudioContext();
-    return audioContext;
-  }
-
-  async function loadCrunchCell() {
-    if (!crunchCellPromise) {
-      crunchCellPromise = (async () => {
-        const context = crunchAudioContext();
-        if (!context) throw new Error('Audio unavailable.');
-        const response = await fetch(CRUNCH_LOOP_URL);
-        if (!response.ok) throw new Error('Crunch sound asset unavailable.');
-        return context.decodeAudioData(await response.arrayBuffer());
-      })().catch(error => {
-        crunchCellPromise = null;
-        throw error;
-      });
-    }
-    return crunchCellPromise;
-  }
-
-  function warmCrunchAudio() {
-    const context = crunchAudioContext();
-    context?.resume?.();
-    void loadCrunchCell().catch(() => {});
-  }
-
-  async function playCrunchCell() {
-    const context = crunchAudioContext();
-    if (!context) return;
-    try {
-      context.resume?.();
-      const cell = await loadCrunchCell();
-      if (!lifecycleActive()) return;
-      const source = context.createBufferSource();
-      const gain = context.createGain();
-      source.buffer = cell;
-      gain.gain.value = CRUNCH_CELL_GAIN;
-      source.connect(gain);
-      gain.connect(context.destination);
-      source.start();
-    } catch {
-      // The visual progress flow must still work when the audio asset cannot play.
-    }
-  }
 
   function playTone(frequency, duration = 0.08, gain = 0.035, type = 'triangle') {
     try {
@@ -391,165 +308,15 @@ function mountBeetolGame(context = {}) {
     setTimeout(() => playTone(740, 0.08, 0.022), 38);
   }
 
-  function playClaimSound() {
-    playTone(520, 0.045, 0.024);
-    setTimeout(() => playTone(660, 0.055, 0.018), 34);
-    setTimeout(() => playTone(880, 0.05, 0.014), 74);
-  }
-
-  function playHuntSound() {
-    playTone(330, 0.045, 0.038);
-    setTimeout(() => playTone(494, 0.07, 0.03), 38);
-    setTimeout(() => playTone(392, 0.045, 0.02), 88);
-  }
-
-  function playFinalHuntFanfare() {
-    [
-      [523.25, 0, 0.07],
-      [659.25, 62, 0.07],
-      [783.99, 124, 0.09],
-      [1046.5, 210, 0.18],
-    ].forEach(([frequency, delay, duration]) => {
-      setTimeout(() => playTone(frequency, duration, 0.038, 'square'), delay);
-    });
-  }
-
-  function playCheeseClaimSound() {
-    playTone(466.16, 0.1, 0.075, 'sawtooth');
-    setTimeout(() => playTone(349.23, 0.18, 0.065, 'sawtooth'), 96);
-    setTimeout(() => playTone(698.46, 0.15, 0.045, 'triangle'), 232);
-  }
-
-  function playJunkClaimSound() {
-    playTone(146.83, 0.11, 0.05, 'square');
-    playTone(932.33, 0.07, 0.023, 'square');
-    setTimeout(() => playTone(1396.91, 0.11, 0.018, 'square'), 18);
-  }
-
-  function playActionSound(action = '') {
-    if (action === 'catchBeetle' || action === 'claimUBC') {
-      playClaimSound();
-      return;
-    }
-    if (action === 'beetleHunt') {
-      playHuntSound();
-      return;
-    }
-    playDefaultActionSound();
-  }
-
-  function playSuccessfulActionSound(action, finalHunt) {
-    if (finalHunt) {
-      playFinalHuntFanfare();
-      return;
-    }
-    if (action === 'claimUBC') {
-      playCheeseClaimSound();
-      return;
-    }
-    if (action === 'junkFaucet') playJunkClaimSound();
-  }
-
-  function celebrateCheeseClaim() {
-    const button = els.actions.querySelector('[data-action="claimUBC"]');
-    if (!(button instanceof HTMLElement)) return;
-    button.dataset.celebrating = 'true';
-    button.querySelector('.beetol-cheese-celebration')?.remove();
-    const celebration = document.createElement('span');
-    celebration.className = 'beetol-cheese-celebration';
-    celebration.setAttribute('aria-hidden', 'true');
-    for (let index = 0; index < 14; index += 1) {
-      const sparkle = document.createElement('i');
-      sparkle.style.setProperty('--beetol-burst-x', `${(Math.random() * 90 - 45).toFixed(0)}px`);
-      sparkle.style.setProperty('--beetol-burst-y', `${(-28 - Math.random() * 58).toFixed(0)}px`);
-      sparkle.style.setProperty('--beetol-burst-delay', `${(Math.random() * 120).toFixed(0)}ms`);
-      sparkle.style.setProperty('--beetol-burst-color', ['#ffe479', '#ffffff', '#f7a8d5', '#99e6ff'][index % 4]);
-      celebration.append(sparkle);
-    }
-    button.append(celebration);
-    window.setTimeout(() => {
-      celebration.remove();
-      delete button.dataset.celebrating;
-    }, 1500);
-  }
-
-  function playCrunchSuccessSound() {
-    void playCrunchCell();
-  }
-
-  function playCrunchCompleteSound() {
-    try {
-      const AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext;
-      if (!AudioContext) return;
-      audioContext ||= new AudioContext();
-      audioContext.resume?.();
-      const start = audioContext.currentTime;
-
-      const munches = [620, 780, 980, 760, 1080];
-      munches.forEach((frequency, index) => {
-        const offset = index * 0.052;
-        const duration = 0.045;
-        const buffer = audioContext.createBuffer(1, audioContext.sampleRate * duration, audioContext.sampleRate);
-        const data = buffer.getChannelData(0);
-        for (let j = 0; j < data.length; j += 1) {
-          data[j] = (Math.random() * 2 - 1) * (1 - j / data.length);
-        }
-        const source = audioContext.createBufferSource();
-        const filter = audioContext.createBiquadFilter();
-        const gain = audioContext.createGain();
-        filter.type = 'bandpass';
-        filter.frequency.value = frequency;
-        filter.Q.value = 2.2;
-        gain.gain.setValueAtTime(0.0001, start + offset);
-        gain.gain.exponentialRampToValueAtTime(0.2, start + offset + 0.004);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + duration);
-        source.buffer = buffer;
-        source.connect(filter);
-        filter.connect(gain);
-        gain.connect(audioContext.destination);
-        source.start(start + offset);
-      });
-
-      [660, 880, 1320].forEach((frequency, index) => {
-        const offset = 0.285 + index * 0.065;
-        const oscillator = audioContext.createOscillator();
-        const gain = audioContext.createGain();
-        oscillator.type = 'triangle';
-        oscillator.frequency.setValueAtTime(frequency, start + offset);
-        gain.gain.setValueAtTime(0.0001, start + offset);
-        gain.gain.exponentialRampToValueAtTime(0.12, start + offset + 0.006);
-        gain.gain.exponentialRampToValueAtTime(0.0001, start + offset + 0.105);
-        oscillator.connect(gain);
-        gain.connect(audioContext.destination);
-        oscillator.start(start + offset);
-        oscillator.stop(start + offset + 0.115);
-      });
-    } catch {
-      // Best-effort UI sound; audio may be blocked or unavailable.
-    }
-  }
-
   function fmtMs(ms) {
     if (ms === null || Number.isNaN(ms)) return '--';
-    if (ms <= 0) return 'Ready';
+    if (ms <= 0) return 'Available now';
     const seconds = Math.ceil(ms / 1000);
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     if (h) return `${h}h ${String(m).padStart(2, '0')}m`;
     if (m) return `${m}m ${String(s).padStart(2, '0')}s`;
-    return `${s}s`;
-  }
-
-  function fmtBadgeMs(ms) {
-    if (ms === null || Number.isNaN(ms)) return '';
-    if (ms <= 0) return '';
-    const seconds = Math.ceil(ms / 1000);
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h) return m ? `${h}h${m}m` : `${h}h`;
-    if (m) return `${m}m`;
     return `${s}s`;
   }
 
@@ -590,16 +357,13 @@ function mountBeetolGame(context = {}) {
     const now = Date.now();
     return Object.fromEntries(Object.entries(state.cooldownExpiresAt).map(([key, value]) => [
       key,
-      value === null ? 0 : Math.max(0, value - now),
+      value === null
+        ? (state.cooldowns[key] === null ? null : 0)
+        : Math.max(0, value - now),
     ]));
   }
 
-  function itemName(key) {
-    return key.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-  }
-
   function setMessage(text, kind = '') {
-    messageRevision += 1;
     state.message = text;
     state.messageKind = kind;
     render();
@@ -642,6 +406,17 @@ function mountBeetolGame(context = {}) {
       }
     }
     return null;
+  }
+
+  function isCooldownMessage(message) {
+    return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
+  }
+
+  function remiliaNetBeetleUrl(user) {
+    const username = String(user?.username || '').trim().replace(/^@/, '');
+    return username
+      ? `${REMILIANET_ORIGIN}/~${encodeURIComponent(username)}?cartridge=beetle`
+      : REMILIANET_ORIGIN;
   }
 
   function huntStateFromUser(user) {
@@ -817,61 +592,28 @@ function mountBeetolGame(context = {}) {
     root.dataset.dockOpen = String(state.dockOpen);
     root.classList.toggle('beetol-signed-out', !state.signedIn);
     root.classList.toggle('beetol-loading', state.loading);
-    els.head.hidden = !state.signedIn;
     els.signedOut.hidden = state.signedIn;
-    els.actions.hidden = !state.signedIn;
-    els.crunchJunk.hidden = !state.signedIn;
+    els.statusList.hidden = !state.signedIn;
+    els.nativeGame.href = remiliaNetBeetleUrl(state.signedIn ? state.user : null);
     els.footer.hidden = !state.signedIn;
-    els.crunchJunk.disabled = state.loading;
-    const progress = state.crunchProgress;
-    els.crunchProgress.hidden = !progress;
-    if (progress) {
-      const total = Math.max(0, Number(progress.total) || 0);
-      const processed = Math.min(total, Math.max(0, Number(progress.processed) || 0));
-      const percent = total ? Math.round((processed / total) * 100) : 0;
-      els.crunchProgressFill.style.width = `${percent}%`;
-      const active = progress.phase === 'processing' && processed < total ? ` · crunching ${processed + 1}` : '';
-      const skippedPair = progress.lastSkippedPair;
-      const skippedDetail = skippedPair ? ` · last skip: ${itemName(skippedPair.slot1)} + ${itemName(skippedPair.slot2)}` : '';
-      els.crunchProgressLabel.textContent = `Crunching: ${processed} / ${total}${active} — ${progress.made || 0} cube(s), ${progress.skipped || 0} skipped${skippedDetail}`;
-    }
 
     if (!state.signedIn) {
-      els.user.textContent = 'Not signed in';
-      els.next.textContent = 'Sign in';
+      els.user.textContent = 'Remilia connection required';
+      els.next.textContent = 'Connect';
     } else {
       const name = state.user?.username || state.user?.name || state.user?.displayName || 'Signed in';
       els.user.textContent = name;
+      els.next.textContent = 'Read only';
       const cds = currentCooldowns();
-      const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => key === 'beetleHunt' && state.huntCharges <= 0 && cds[key] <= 0 ? null : cds[key]);
-      const ready = tabCooldowns.filter(value => value === 0);
-      if (ready.length) els.next.textContent = ready.length === 2 ? 'Both ready' : 'Ready';
-      else {
-        const next = tabCooldowns.filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
-        els.next.textContent = next ? fmtMs(next) : '--';
-      }
-
-      els.actions.innerHTML = ACTIONS.map(([key, label, icon]) => {
+      els.statusList.innerHTML = STATUS_ITEMS.map(([key, label]) => {
         const cd = cds[key];
-        const readyClass = cd === 0 ? ' is-ready' : '';
-        const cooldownClass = cd > 0 ? ' is-cooldown' : '';
-        const exhaustedClass = key === 'beetleHunt' && cd <= 0 && state.huntCharges <= 0 ? ' is-exhausted' : '';
-        const huntClass = key === 'beetleHunt' ? ' is-hunt' : '';
-        const disabled = state.loading || cd > 0 ? ' disabled' : '';
-        const iconUrl = ACTION_ICON_URLS[key];
-        const cooldownLabel = fmtMs(cd);
-        const huntStatus = cd > 0 ? cooldownLabel : `${state.huntCharges}/3`;
-        const huntChargeAttr = key === 'beetleHunt' ? ` data-hunt-charges="${state.huntCharges}"` : '';
-        const huntFill = key === 'beetleHunt' ? ` style="--beetol-hunt-fill: ${Math.max(0, state.huntCharges) / 3 * 100}%; --beetol-hunt-icon: url('${iconUrl}')"` : '';
+        const huntUnavailable = key === 'beetleHunt' && cd <= 0 && state.huntCharges <= 0;
+        const value = huntUnavailable ? 'Unavailable' : fmtMs(cd);
         return `
-          <button class="beetol-action${readyClass}${cooldownClass}${exhaustedClass}${huntClass}" data-action="${key}" type="button" title="${label}" aria-label="${label}"${disabled}${huntChargeAttr}${huntFill}>
-            <span class="beetol-action-icon">
-              <img src="${iconUrl}" alt="">
-              ${key === 'beetleHunt' ? '<span class="beetol-hunt-fill-icon" aria-hidden="true"></span>' : ''}
-            </span>
-            <span class="beetol-action-label">${label}</span>
-            <strong>${key === 'beetleHunt' ? huntStatus : cooldownLabel}</strong>
-          </button>
+          <div class="beetol-status-row" role="listitem">
+            <span>${label}</span>
+            <strong>${value}</strong>
+          </div>
         `;
       }).join('');
     }
@@ -880,42 +622,36 @@ function mountBeetolGame(context = {}) {
     els.message.className = state.messageKind ? `beetol-${state.messageKind}` : '';
     state.appFrame?.updateDock({
       badgeText: dockBadgeText(),
-      title: state.signedIn ? `Beetol Game: ${els.next.textContent || ''}` : 'Beetol Game: sign in',
+      title: state.signedIn ? `Beetol Game: ${els.next.textContent || ''}` : 'Beetol Game: connect in extension popup',
     });
   }
 
   function dockBadgeText() {
-    if (!state.signedIn) return '';
-    const cds = currentCooldowns();
-    const tabCooldowns = TAB_COOLDOWN_KEYS.map(key => key === 'beetleHunt' && state.huntCharges <= 0 && cds[key] <= 0 ? null : cds[key]);
-    const next = tabCooldowns.filter(value => value !== null && value > 0).sort((a, b) => a - b)[0];
-    return next ? fmtBadgeMs(next) : '';
+    return state.signedIn ? 'READ' : '';
   }
 
   function enterSignedOutState(message) {
-    cancelFinalHuntTransition();
     state.signedIn = false;
     state.user = null;
     state.loading = false;
-    state.crunchProgress = null;
     setMessage(message, 'warn');
   }
 
   async function checkAuthStatus(silent = false) {
     if (!lifecycleActive()) return false;
     state.loading = true;
-    if (!silent) setMessage('Checking session...');
+    if (!silent) setMessage('Checking Remilia authorization...');
     render();
     const response = await send({ type: 'beetol:authStatus' });
     if (!lifecycleActive()) return false;
     state.loading = false;
     if (!response?.signedIn) {
-      enterSignedOutState(response?.error || 'No RemiliaNET browser session detected.');
+      enterSignedOutState(response?.error || 'Remilia authorization is required.');
       render();
       return false;
     }
     state.signedIn = true;
-    setMessage('Session detected.');
+    setMessage('Remilia authorization connected.');
     render();
     await refreshState(true);
     return true;
@@ -932,7 +668,7 @@ function mountBeetolGame(context = {}) {
     state.loading = false;
 
     if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
+      enterSignedOutState(response?.data?.message || 'Remilia authorization expired.');
       render();
       return;
     }
@@ -947,171 +683,10 @@ function mountBeetolGame(context = {}) {
     render();
   }
 
-  function displayedHuntCharges(button) {
-    const value = Number(button?.dataset?.huntCharges);
-    return Number.isFinite(value) ? clamp(Math.floor(value), 0, 3) : state.huntCharges;
-  }
-
-  function isCooldownMessage(message) {
-    return /cool\s*down|try again|not ready|wait/i.test(String(message || ''));
-  }
-
-  async function runAction(action, button = null) {
-    if (!lifecycleActive()) return;
-    cancelFinalHuntTransition();
-    const label = ACTIONS.find(([key]) => key === action)?.[1] || action;
-    const chargesBeforeAction = action === 'beetleHunt' ? displayedHuntCharges(button) : state.huntCharges;
-    if (action === 'beetleHunt') state.huntCharges = chargesBeforeAction;
-    state.loading = true;
-    setMessage(`${label}...`);
-    render();
-
-    const response = await send({ type: 'beetol:action', action });
-    if (!lifecycleActive()) return;
-    state.loading = false;
-    const responseMessage = response?.data?.message || response?.actionResult?.message || response?.error || '';
-
-    if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
-      render();
-      return;
-    }
-    if (!response?.ok) {
-      const cooldownMs = response?.cooldownMs || normalizeCooldownMs(responseMessage);
-      if (action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(responseMessage))) {
-        if (cooldownMs > 0) {
-          setActionCooldown(action, cooldownMs);
-        } else {
-          state.huntCharges = 0;
-        }
-        state.fetchedAt = Date.now();
-        saveCooldownState();
-        setMessage(cooldownMs > 0 ? `${label} ready in ${fmtMs(cooldownMs)}.` : (responseMessage || `${label}: try again after cooldown.`), 'warn');
-      } else {
-        setMessage(responseMessage || `${label} failed.`, 'warn');
-      }
-      render();
-      return;
-    }
-    if (response.actionResult?.success === false) {
-      if (response.user) {
-        state.user = response.user;
-        mergeCooldowns(response.user);
-      }
-      const cooldownMs = response.cooldownMs || response.actionResult.cooldownMs || currentCooldowns()[action] || 0;
-      const message = response.actionResult.message || `${label} failed.`;
-      if (cooldownMs > 0) {
-        setActionCooldown(action, cooldownMs);
-        state.fetchedAt = Date.now();
-        saveCooldownState();
-        setMessage(`${label} ready in ${fmtMs(cooldownMs)}.`, 'warn');
-      } else if (action === 'beetleHunt' && (chargesBeforeAction <= 1 || isCooldownMessage(message))) {
-        state.huntCharges = 0;
-        state.fetchedAt = Date.now();
-        saveCooldownState();
-        setMessage(message, 'warn');
-      } else {
-        setMessage(message, 'warn');
-      }
-      render();
-      if (response.needsRefresh) void reconcileStateAfterAction();
-      return;
-    }
-
-    if (response.user) {
-      state.user = response.user;
-      mergeCooldowns(response.user);
-    }
-    const hasAuthoritativeHuntState = action === 'beetleHunt' && response.user && huntStateFromUser(response.user).hasSignal;
-    if (response.cooldownMs > 0) {
-      setActionCooldown(action, response.cooldownMs);
-    } else if (action === 'beetleHunt' && !hasAuthoritativeHuntState) {
-      const nextCharges = clamp(chargesBeforeAction - 1, 0, 3);
-      state.huntCharges = nextCharges;
-    } else if (action === 'beetleHunt' && chargesBeforeAction <= 1 && currentCooldowns().beetleHunt <= 0) {
-      state.huntCharges = 0;
-    }
-    const finalHunt = action === 'beetleHunt' && state.huntCharges <= 0;
-    if (finalHunt && currentCooldowns().beetleHunt <= 0) {
-      setActionCooldown('beetleHunt', FINAL_HUNT_COOLDOWN_MS);
-    }
-    saveCooldownState();
-
-    const gained = (response.gained || []).map(({ key, diff }) => (
-      diff > 1 ? `${itemName(key)} x${diff}` : itemName(key)
-    ));
-    setMessage(gained.length ? `${label}: ${gained.join(', ')}` : `${label}: done.`);
-    render();
-    playSuccessfulActionSound(action, finalHunt);
-    if (action === 'claimUBC') celebrateCheeseClaim();
-    if (finalHunt) scheduleFinalHuntDone();
-    if (response.needsRefresh) void reconcileStateAfterAction();
-  }
-
-  async function reconcileStateAfterAction() {
-    const response = await send({ type: 'beetol:getState' });
-    if (!lifecycleActive() || !response?.ok || state.loading) return;
-    state.user = response.user;
-    mergeCooldowns(response.user);
-    render();
-  }
-
-  async function crunchJunk() {
-    if (!lifecycleActive()) return;
-    const runId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    state.crunchProgress = { runId, total: 0, processed: 0, made: 0, skipped: 0 };
-    warmCrunchAudio();
-    state.loading = true;
-    setMessage('Crunching all junk...');
-    render();
-
-    const response = await send({ type: 'beetol:crunchJunk', runId });
-    if (!lifecycleActive()) return;
-    state.loading = false;
-
-    if (response?.authRequired) {
-      enterSignedOutState('Session expired.');
-      render();
-      return;
-    }
-    if (!response?.ok) {
-      state.crunchProgress = null;
-      setMessage(response?.data?.message || response?.error || 'Crunch All Junk failed.', 'warn');
-      render();
-      return;
-    }
-    if (response.user) {
-      state.user = response.user;
-      mergeCooldowns(response.user);
-    }
-    state.crunchProgress = null;
-    if (response.pairs > 0) playCrunchCompleteSound();
-    const lastSkippedPair = Array.isArray(response.skippedPairs) ? response.skippedPairs.at(-1) : null;
-    const skipped = response.skipped
-      ? ` (${response.skipped} skipped${lastSkippedPair ? `; last: ${itemName(lastSkippedPair.slot1)} + ${itemName(lastSkippedPair.slot2)}` : ''})`
-      : '';
-    setMessage(`Crunch All Junk: made ${response.made}/${response.pairs} Junk Cube(s)${skipped}.`);
-    render();
-  }
-
-  els.actions.addEventListener('click', event => {
-    const button = event.target.closest('[data-action]');
-    if (!button || state.loading || button.disabled) return;
-    playActionSound(button.dataset.action);
-    runAction(button.dataset.action, button);
-  });
-
   els.refresh.addEventListener('click', () => {
-    playActionSound();
+    playDefaultActionSound();
     if (state.signedIn) refreshState();
     else checkAuthStatus();
-  });
-
-  els.retrySession?.addEventListener('click', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    playActionSound();
-    checkAuthStatus();
   });
 
   els.minimize?.addEventListener('click', () => {
@@ -1119,30 +694,6 @@ function mountBeetolGame(context = {}) {
     applyDockPosition();
     render();
   });
-
-  els.crunchJunk.addEventListener('click', () => {
-    if (state.loading) return;
-    crunchJunk();
-  });
-
-  const crunchProgressListener = message => {
-    if (message?.type !== 'beetol:crunchProgress' || message.runId !== state.crunchProgress?.runId) return;
-    state.crunchProgress = {
-      runId: message.runId,
-      total: Math.max(0, Number(message.total) || 0),
-      processed: Math.max(0, Number(message.processed) || 0),
-      made: Math.max(0, Number(message.made) || 0),
-      skipped: Math.max(0, Number(message.skipped) || 0),
-      phase: message.phase === 'processing' ? 'processing' : '',
-      lastSkippedPair: message.skippedPair?.slot1 && message.skippedPair?.slot2
-        ? { slot1: message.skippedPair.slot1, slot2: message.skippedPair.slot2 }
-        : state.crunchProgress?.lastSkippedPair || null,
-    };
-    if (message.phase === 'processing') playCrunchSuccessSound();
-    render();
-  };
-  chrome.runtime.onMessage.addListener(crunchProgressListener);
-  addDisposable(() => chrome.runtime.onMessage.removeListener(crunchProgressListener));
 
   function startDrag(event) {
     const button = event.target.closest('button');
@@ -1270,8 +821,7 @@ function mountBeetolGame(context = {}) {
     });
     render();
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  addDisposable(sdkServices.observeLocal((changes) => storageListener(changes, 'local')));
 
   const panelThemeListener = () => {
     if (!lifecycleActive()) return;
@@ -1338,7 +888,7 @@ function mountBeetolGame(context = {}) {
     },
   };
 
-  chrome.storage.local.get({
+  getLocal({
     beetolColor: 'red',
     beetolMode: 'settings',
     [SETTINGS_THEME_KEY]: 'system',

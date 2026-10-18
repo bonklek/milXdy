@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { normalizeVisualTheme as normalizeHostVisualTheme } from "../platform/visuals/reskin-profile";
 import { canMountRemiNetChatRoute } from "./reminet-chat/route-policy";
 import {
   extractTweetPngCashtag,
@@ -11,19 +12,28 @@ import {
   shouldCloseTweetPngReview,
   TWEET_PNG_QUOTE_BORDER_WIDTH,
   tweetPngPalette,
+  tweetPngBorderPaletteOptions,
   tweetPngLinkCardLabels,
   tweetPngWatermarkColor,
   tweetPngMediaRemovalKey,
   tweetPngVisibleLineCount,
+  tweetPngFileName,
 } from "../../examples/packages/first-party-replacements/tweetPng/src/content";
 
 describe("Share Kit package compatibility", () => {
   const packageSource = readFileSync("examples/packages/first-party-replacements/tweetPng/src/content.ts", "utf8");
+  const packageBundle = readFileSync("examples/packages/first-party-replacements/tweetPng/dist/content.js", "utf8");
   const packageManifest = readFileSync("examples/packages/first-party-replacements/tweetPng/milxdy.app.json", "utf8");
   const packageIcon = readFileSync("examples/packages/first-party-replacements/tweetPng/assets/tweet-png-icon.svg", "utf8");
   const runtimeSource = readFileSync("src/platform/runtime/content-runtime.ts", "utf8");
   const chatSource = readFileSync("src/apps/reminet-chat/content.ts", "utf8");
   const backgroundSource = readFileSync("src/extension/background/index.ts", "utf8");
+
+  it("keeps dependency labels independent of the dependency install path", () => {
+    expect(packageBundle).toContain("// node_modules/@chenglou/pretext/");
+    expect(packageBundle).not.toMatch(/^\/\/ (?:\.\.\/|\/|[A-Za-z]:[\\/])/mu);
+    expect(packageBundle).not.toMatch(/(?:\.codex|worktrees[\\/])/u);
+  });
 
   it("retains legacy Tweet PNG booleans and normalizes new color defaults", () => {
     const settings = normalizeVisualTheme({
@@ -42,12 +52,23 @@ describe("Share Kit package compatibility", () => {
     expect(settings.tweetPngFontColor).toBe("#20122f");
   });
 
+  it("migrates identity visibility independently without changing stored source metadata", () => {
+    expect(normalizeHostVisualTheme({ tweetPngIncludeDisplayName: false, tweetPngIncludeHandle: false }, "max")).toMatchObject({ tweetPngIncludeDisplayName: false, tweetPngIncludeHandle: false });
+    expect(normalizeVisualTheme({})).toMatchObject({ tweetPngIncludeDisplayName: true, tweetPngIncludeHandle: true });
+    expect(normalizeVisualTheme({ tweetPngIncludeDisplayName: false, tweetPngIncludeHandle: true }))
+      .toMatchObject({ tweetPngIncludeDisplayName: false, tweetPngIncludeHandle: true });
+    expect(normalizeVisualTheme({ tweetPngIncludeDisplayName: true, tweetPngIncludeHandle: false }))
+      .toMatchObject({ tweetPngIncludeDisplayName: true, tweetPngIncludeHandle: false });
+    expect(tweetPngFileName({ handle: "@example" } as Parameters<typeof tweetPngFileName>[0])).toMatch(/^milxdy-example-\d+\.png$/);
+    expect(tweetPngFileName({ handle: "" } as Parameters<typeof tweetPngFileName>[0])).toMatch(/^milxdy-tweet-\d+\.png$/);
+  });
+
   it("defaults the watermark on and exposes a live popout toggle", () => {
     expect(normalizeVisualTheme({}).tweetPngIncludeWatermark).toBe(true);
     expect(packageSource).toContain('data-setting="tweetPngIncludeWatermark"');
     expect(packageSource).toContain("> Include milXdy watermark</label>");
     expect(packageSource).toContain('context.fillText("milXdy", width - 38, height - 8)');
-    expect(packageSource).toContain("drawTweetPngWatermark(context, width, height, visualTheme.tweetPngBackgroundColor)");
+    expect(packageSource).toContain("drawTweetPngWatermark(context, width, height, settings.tweetPngBackgroundColor)");
   });
 
   it("renders a subtle watermark tint derived from light and dark backgrounds", () => {
@@ -62,7 +83,7 @@ describe("Share Kit package compatibility", () => {
       mediaFill: "#000000",
       quoteBorder: "#d5b7ff",
     });
-    expect(packageSource).toContain("const quoteTextColor = visualTheme.tweetPngFontColor");
+    expect(packageSource).toContain("const quoteTextColor = options.settings.tweetPngFontColor");
     expect(tweetPngPalette("blue", "#15202b")).toMatchObject({
       quoteFill: "#15202b",
       mediaFill: "#15202b",
@@ -112,29 +133,32 @@ describe("Share Kit package compatibility", () => {
     ]);
   });
 
-  it("updates color previews and swaps explicit RemiNet recovery for local chat staging", () => {
+  it("keeps export local and explains unavailable RemiNet media sharing honestly", () => {
     expect(packageSource).toContain('input.type === "color" ? "input" : "change"');
-    expect(packageSource).toMatch(/data-action="reconnect"[^>]*>Reconnect<\/button>/u);
-    expect(packageSource).toMatch(/data-action="refresh"[^>]*>Refresh<\/button>/u);
-    expect(packageSource).toMatch(/data-action="reminet"[^>]*hidden>Share to RemiNet<\/button>/u);
-    expect(packageSource).toContain("probeRemiNetConnection()");
-    expect(packageSource).toContain("openRemiNetSession()");
-    expect(packageSource).toContain("stageRemiNetChatPng({");
-    expect(packageSource).toContain("close(false)");
-    expect(packageSource).toContain("setRemiNetConnected(connected)");
-    expect(runtimeSource).toContain("probeRemiNetConnection: async");
-    expect(runtimeSource).toContain('type: "reminetChat:authStatus"');
-    expect(runtimeSource).toContain("stageRemiNetChatPng: async");
-    expect(runtimeSource).toContain('loadApp(chat, "userAction:stageRemiNetChatPng")');
+    expect(packageSource).toContain("RemiNet PNG sharing is unavailable.");
+    expect(packageSource).toContain('href="https://www.remilia.net/" target="_blank" rel="noopener noreferrer"');
+    expect(packageSource).not.toContain('data-action="refresh"');
+    expect(packageSource).not.toContain('data-action="reminet"');
+    expect(packageSource).not.toContain("probeRemiNetConnection()");
+    expect(packageSource).not.toContain("stageRemiNetChatPng({");
     expect(packageSource).not.toContain("window.location.reload()");
-    expect(packageSource).not.toContain('href="https://www.remilia.net/"');
+    expect(packageSource).not.toContain("openRemiNetSession");
+    expect(runtimeSource).not.toContain("milxdy:openRemiNetSession");
   });
 
   it("keeps the review pane free of the redundant sharing caption", () => {
     expect(packageSource).not.toContain("Review before sharing. Nothing is sent automatically.");
   });
 
-  it("keeps RemiNet staging local and constrains reconnect to a fixed inactive tab", () => {
+  it("confirms a successful PNG copy on the button and resets the label", () => {
+    expect(packageSource).toContain('copyButton.textContent = "Copied to clipboard"');
+    expect(packageSource).toContain('setStatus("Copied to clipboard.")');
+    expect(packageSource).toContain('copyButton.textContent = "Copy PNG"');
+    expect(packageSource).toContain("copyButton.disabled = true");
+    expect(packageSource).toContain("if (copyButton.isConnected) updateExportAvailability()");
+  });
+
+  it("keeps RemiNet staging local without a hidden-tab authorization fallback", () => {
     const stageStart = chatSource.indexOf("export async function stageLocalAttachment");
     const stageEnd = chatSource.indexOf("\nexport function close", stageStart);
     const stageSource = chatSource.slice(stageStart, stageEnd);
@@ -151,8 +175,8 @@ describe("Share Kit package compatibility", () => {
     expect(canMountRemiNetChatRoute("/search?q=milady", true)).toBe(true);
     expect(canMountRemiNetChatRoute("/explore", true)).toBe(true);
     expect(canMountRemiNetChatRoute("/compose/post", true)).toBe(true);
-    expect(backgroundSource).toContain("if (!isXContentScriptSender(sender)) return unsupportedSender()");
-    expect(backgroundSource).toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
+    expect(backgroundSource).not.toContain('type: "milxdy:openRemiNetSession"');
+    expect(backgroundSource).not.toContain('chrome.tabs.create({ url: "https://www.remilia.net/", active: false })');
     expect(runtimeSource).toContain('blob.type !== "image/png"');
     expect(runtimeSource).toContain("blob.size > 10 * 1024 * 1024");
   });
@@ -286,5 +310,29 @@ describe("Share Kit package compatibility", () => {
   it("allocates QRT text space", () => {
     expect(measureTweetPngQuoteHeight(1, 0)).toBe(130);
     expect(measureTweetPngQuoteHeight(2, 300)).toBe(482);
+  });
+});
+
+describe("custom export border colors", () => {
+  it("passes the custom color into the actual canvas export palette", () => {
+    const theme = normalizeVisualTheme({ tweetPngBorderPalette: "#e65432" });
+    expect(tweetPngPalette(theme.tweetPngBorderPalette, "#ffffff")).toEqual({ border: "#e65432", mediaBorder: "#e65432", quoteBorder: "#e65432", quoteFill: "#ffffff", mediaFill: "#ffffff" });
+  });
+  it("rejects invalid custom export values", () => {
+    expect(normalizeVisualTheme({ tweetPngBorderPalette: "url(example)" }).tweetPngBorderPalette).toBe("purple");
+  });
+});
+
+
+describe("custom export border selection", () => {
+  it("shows saved custom HEX without losing the named choices", () => {
+    const options = tweetPngBorderPaletteOptions("#e65432");
+    expect(options).toContain('value="#e65432" selected>Custom (#e65432)');
+    for (const color of ["purple", "gray", "blue", "green"]) expect(options).toContain(`value="${color}"`);
+    expect(tweetPngBorderPaletteOptions("green")).not.toContain("Custom (");
+  });
+  it("rejects coerced custom palette values", () => {
+    expect(normalizeVisualTheme({ tweetPngBorderPalette: ["#e65432"] }).tweetPngBorderPalette).toBe("purple");
+    expect(normalizeVisualTheme({ tweetPngBorderPalette: ["green"] }).tweetPngBorderPalette).toBe("purple");
   });
 });

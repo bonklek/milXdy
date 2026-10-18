@@ -16,7 +16,8 @@ The dependency-free command checks:
 3. invalid omission and upstream-policy fixtures;
 4. source/export SHA-256 and byte-size identity;
 5. license metadata shape without imposing VPL on local entries;
-6. strict VPL continuity only for `upstream-default` entries;
+6. exact-file compatible rights evidence for `upstream-default` entries,
+   including copying, modification, redistribution, and App SDK use;
 7. parent/dependency graph integrity;
 8. safe relative paths and SVG active-content rejection;
 9. local Markdown/HTML/CSS/JSON links;
@@ -73,12 +74,13 @@ These are technical safety rules, not licensing gates.
 An upstream proposal additionally verifies:
 
 - `distributionScope` is `upstream-default`;
-- the source and dependencies are explicitly VPL;
-- the complete VPL text and notices are present;
+- source and dependencies have compatible exact-file license or permission decisions;
+- complete terms, proof, hashed notices, and fulfilled obligations are present;
 - exact source/proof hashes resolve;
 - technical, visual/cultural, accessibility, license, and release reviewers
   approved the final bytes; and
-- the decision outcome is `UPSTREAM_APPROVED`.
+- the decision outcome is `UPSTREAM_APPROVED`, every reviewer approved, and
+  decision identity/source/manifest hashes match the catalog entry.
 
 Failure here means “not eligible for default inclusion.” It does not invalidate
 the user's local custom package.

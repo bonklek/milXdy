@@ -14,7 +14,8 @@ describe("content runtime lifecycle failure wiring", () => {
   it("routes disable, route, open, and close through contained lifecycle calls", async () => {
     const source = await runtimeSource();
 
-    expect(source).toContain('.catch((error) => reportAppLifecycleFailure(app, "disable", error))');
+    expect(source).toContain('reportAppLifecycleFailure(app, "disable", error); throw error;');
+    expect(source).toContain("return strict ? task : task.catch(() => undefined)");
     expect(source).toContain('invokeAppLifecycleHook(app, "route", () => lifecycle.route(next)');
     expect(source).toContain('invokeAppLifecycleHook(app, "open", () => lifecycle.open())');
     expect(source).toContain('invokeAppLifecycleHook(app, "close", () => lifecycle.close())');

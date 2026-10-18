@@ -3,7 +3,7 @@
   "manifestVersion": 1,
   "id": "pets-maker",
   "name": "Pets Maker",
-  "version": "0.1.1-pilot",
+  "version": "0.1.2-pilot",
   "description": "An optional catalog-installed side-rail app for preparing validated Remilia Maker pet-request bundles.",
   "packageKind": "app",
   "sdk": {
@@ -113,8 +113,8 @@
   "review": {
     "status": "reviewed",
     "sourceUrl": "https://github.com/bonklek/milXdy/tree/main/packages/maintainer/pets-maker",
-    "reviewedBy": "milxdy-maintainer-pets-maker",
-    "reviewedAt": "2026-08-03",
-    "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, background handlers, or page observers; its only remote call is an explicit read of public Maker metadata."]
+    "reviewedBy": "milxdy-automated-review",
+    "reviewedAt": "2026-10-05",
+    "notes": ["Reviewed optional App SDK package for the maintainer catalog.", "Remy icon provenance and VPL compatibility are recorded in AUTHORING_LOG.md.", "The package uses no private host imports, background handlers, or page observers; its only remote call is an explicit read of public Maker metadata.", "Local adversarial review covers bounded metadata reads, PNG decode limits, stale selections, and close/disable cancellation."]
   }
 }

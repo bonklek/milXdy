@@ -2,6 +2,7 @@ import {
   DEFAULT_RESKIN_PROFILE,
   DEFAULT_VISUAL_THEME,
   RESKIN_PROFILE_KEY,
+  REMILIA_PROFILE_ACCENT_KEY, resolveXProfileAccent,
   VISUAL_THEME_KEY,
   normalizeReskinProfile,
   normalizeVisualTheme,
@@ -51,25 +52,28 @@ async function setupRootVisualStateOnce(): Promise<void> {
   const stored = await chrome.storage.local.get({
     [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
     [VISUAL_THEME_KEY]: DEFAULT_VISUAL_THEME,
+    [REMILIA_PROFILE_ACCENT_KEY]: "",
     [SETTINGS_THEME_KEY]: "system",
   });
   setupXThemeDetection(stored[SETTINGS_THEME_KEY]);
-  applyReskinProfile(stored[RESKIN_PROFILE_KEY], stored[VISUAL_THEME_KEY]);
+  applyReskinProfile(stored[RESKIN_PROFILE_KEY], stored[VISUAL_THEME_KEY], stored[REMILIA_PROFILE_ACCENT_KEY]);
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && (changes[RESKIN_PROFILE_KEY] || changes[VISUAL_THEME_KEY])) {
+    if (area === "local" && (changes[RESKIN_PROFILE_KEY] || changes[VISUAL_THEME_KEY] || changes[REMILIA_PROFILE_ACCENT_KEY])) {
       void chrome.storage.local.get({
         [RESKIN_PROFILE_KEY]: DEFAULT_RESKIN_PROFILE,
         [VISUAL_THEME_KEY]: DEFAULT_VISUAL_THEME,
-      }).then((next) => applyReskinProfile(next[RESKIN_PROFILE_KEY], next[VISUAL_THEME_KEY]));
+    [REMILIA_PROFILE_ACCENT_KEY]: "",
+      }).then((next) => applyReskinProfile(next[RESKIN_PROFILE_KEY], next[VISUAL_THEME_KEY], next[REMILIA_PROFILE_ACCENT_KEY]));
     }
   });
 }
 
-function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
+function applyReskinProfile(profileValue: unknown, visualValue: unknown, profileAccent: unknown = ""): void {
   const profile = normalizeReskinProfile(profileValue);
   const theme = normalizeVisualTheme(visualValue, profile);
   const root = document.documentElement;
-  const signature = visualThemeSignature(theme);
+  const accent = resolveXProfileAccent(theme, profileAccent);
+  const signature = visualThemeSignature(theme) + accent;
   if (signature === lastReskinSignature) {
     rootVisualDiagnostics.profileNoops += 1;
     rootVisualDiagnostics.updatedAt = Date.now();
@@ -81,6 +85,10 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   setDatasetValue(root, "milxdyReskinProfile", theme.profile);
   setDatasetValue(root, "milxdyVisualBackgroundFade", String(theme.backgroundFade));
   setDatasetValue(root, "milxdyVisualSquareMedia", String(theme.squareMedia));
+  setDatasetValue(root, "milxdyVisualMediaAdvanced", String(theme.mediaAdvanced));
+  setStyleValue(root, "--milxdy-pfp-radius", `${theme.pfpRounding / 2}%`);
+  setStyleValue(root, "--milxdy-media-radius", `${theme.mediaRounding / 2}%`);
+  setStyleValue(root, "--milxdy-quote-spacing", `${theme.quoteSpacing}px`);
   setDatasetValue(root, "milxdyVisualPfpShape", theme.pfpShape);
   setDatasetValue(root, "milxdyVisualPfpFeed", String(theme.pfpFeed));
   setDatasetValue(root, "milxdyVisualPfpNotifications", String(theme.pfpNotifications));
@@ -97,6 +105,7 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   setDatasetValue(root, "milxdyVisualNewPostsSound", String(theme.newPostsSound));
   setDatasetValue(root, "milxdyVisualNotificationUnreadTint", String(theme.notificationUnreadTint));
   setDatasetValue(root, "milxdyVisualHideMessageRequestDot", String(theme.hideMessageRequestDot));
+  setDatasetValue(root, "milxdyVisualHideBoostButton", String(theme.hideBoostButton));
   setDatasetValue(root, "milxdyVisualRemistatsBox", String(theme.remistatsBox));
   setDatasetValue(root, "milxdyVisualIncomingPokeGold", String(theme.incomingPokeGold));
   setDatasetValue(root, "milxdyVisualPokePlacement", theme.pokePlacement);
@@ -110,6 +119,14 @@ function applyReskinProfile(profileValue: unknown, visualValue: unknown): void {
   setStyleValue(root, "--milxdy-font-tweet", tweetFontStack(theme.tweetFont));
   setStyleValue(root, "--milxdy-font-ui", uiFontStack(theme.uiFont));
   setStyleValue(root, "--milxdy-font-mono", '"Milxdy Remilia Menlo", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace');
+  setStyleValue(root, "--milxdy-green", accent);
+  setStyleValue(root, "--milxdy-rn-blue", accent);
+  setStyleValue(root, "--milxdy-rn-blue-dark", accent);
+  for (const [property, percent] of [["--milxdy-green-soft", 28], ["--milxdy-mint-bg", 10], ["--milxdy-cream", 12]] as const) {
+    setStyleValue(root, property, accent ? `color-mix(in srgb, ${accent} ${percent}%, var(--milxdy-surface))` : "");
+  }
+  setStyleValue(root, "--milxdy-background-wash-top", accent ? `color-mix(in srgb, ${accent} 24%, transparent)` : "");
+  setStyleValue(root, "--milxdy-background-wash-bottom", accent ? `color-mix(in srgb, ${accent} 8%, transparent)` : "");
   setStyleValue(root, "--milxdy-max-media-height", theme.maxMediaHeight > 0 ? `${theme.maxMediaHeight}px` : "none");
 }
 

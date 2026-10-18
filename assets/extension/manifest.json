@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "__MSG_extensionName__",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "default_locale": "en",
   "description": "__MSG_extensionDescription__",
-  "permissions": ["alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "cookies", "tabs", "scripting"],
+  "permissions": ["activeTab", "alarms", "contextMenus", "storage", "unlimitedStorage", "notifications", "scripting"],
   "host_permissions": [
     "https://api.github.com/*",
     "https://x.com/*",
@@ -23,6 +23,7 @@
     "https://ethereum.publicnode.com/*",
     "https://miladymaker.net/banners/nft/*",
     "https://www.remilia.net/*",
+    "https://remilia.net/*",
     "wss://www.remilia.net/*",
     "https://boards.miladychan.org/*",
     "https://musicbrainz.org/*",
@@ -36,7 +37,15 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*", "https://twitter.com/*"],
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.remilia.net/*",
+        "https://remilia.net/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*",
+        "https://boards.miladychan.org/*"
+      ],
       "js": ["content.js"],
       "run_at": "document_start"
     },
@@ -47,12 +56,12 @@
       "all_frames": true
     },
     {
-      "matches": ["https://www.remilia.net/*"],
+      "matches": ["https://www.remilia.net/*", "https://remilia.net/*"],
       "js": ["reminetChatBridge.js"],
       "run_at": "document_start"
     },
     {
-      "matches": ["https://www.remilia.net/*"],
+      "matches": ["https://www.remilia.net/*", "https://remilia.net/*"],
       "js": ["reminetCraftFastPath.js"],
       "run_at": "document_start",
       "world": "MAIN"
@@ -89,7 +98,15 @@
         "generated/*",
         "models/*"
       ],
-      "matches": ["https://x.com/*", "https://twitter.com/*", "https://remilia.wiki/*", "https://wiki.remilia.org/*"]
+      "matches": [
+        "https://x.com/*",
+        "https://twitter.com/*",
+        "https://www.remilia.net/*",
+        "https://remilia.net/*",
+        "https://remilia.wiki/*",
+        "https://wiki.remilia.org/*",
+        "https://boards.miladychan.org/*"
+      ]
     }
   ],
   "options_page": "popup.html",

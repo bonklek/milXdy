@@ -1,3 +1,6 @@
+import { loadActiveAccountScope, normalizeAccountScope } from "./shared/storage";
+import { readPokeStatistics } from "./shared/poke-statistics";
+import { maxxerPokeStatistics, maxxerPokeStorage } from "./poke-statistics-background";
 // Service worker for Maxxer notifications.
 import { registerBackgroundMessageHandlers } from "../../platform/background/router";
 
@@ -7,6 +10,22 @@ type MiladyLevelUpMessage = {
 };
 
 registerBackgroundMessageHandlers([
+  {
+    type: "milady:readPokeStats",
+    matches: (message: unknown): message is { type: "milady:readPokeStats"; scope: string } => !!message && typeof message === "object" && (message as Record<string, unknown>).type === "milady:readPokeStats" && typeof (message as Record<string, unknown>).scope === "string",
+    handle: async (message, sender) => {
+      if (!isMiladyLevelUpSender(sender) || normalizeAccountScope(message.scope) !== await loadActiveAccountScope()) return { ok: false };
+      return { ok: true, summary: await readPokeStatistics(maxxerPokeStorage, message.scope) };
+    },
+  },
+  {
+    type: "milady:resetPokeStats",
+    matches: (message: unknown): message is { type: "milady:resetPokeStats"; scope: string } => !!message && typeof message === "object" && (message as Record<string, unknown>).type === "milady:resetPokeStats" && typeof (message as Record<string, unknown>).scope === "string",
+    handle: async (message, sender) => {
+      if (!isMiladyLevelUpSender(sender) || normalizeAccountScope(message.scope) !== await loadActiveAccountScope()) return { ok: false };
+      await maxxerPokeStatistics.reset(message.scope); return { ok: true };
+    },
+  },
   {
     type: "milady:levelup",
     matches: isMiladyLevelUpMessage,

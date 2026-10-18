@@ -59,6 +59,62 @@ async function checkFileIdentity(errors, relativePath, expectedHash, expectedByt
   }
 }
 
+export async function validateRightsCompatibility(manifest) {
+  const errors = [];
+  const rights = manifest.license?.compatibility;
+  const prefix = "$.license.compatibility";
+  if (!rights || rights.decision !== "compatible") {
+    return [`${prefix}.decision: exact-file rights must be reviewed compatible`];
+  }
+  if (!["license", "explicit-permission"].includes(rights.basis)) errors.push(`${prefix}.basis: license or explicit permission required`);
+  if (rights.sourceSha256 !== manifest.sha256) errors.push(`${prefix}.sourceSha256: decision does not cover exact source`);
+  for (const permission of ["copy", "modify", "redistribute", "appSdkUse"]) {
+    if (rights.permissions?.[permission] !== true) errors.push(`${prefix}.permissions.${permission}: permission must be explicitly covered`);
+  }
+  for (const field of ["rationale", "reviewedBy", "reviewedAt"]) {
+    if (typeof rights[field] !== "string" || !rights[field].trim()) errors.push(`${prefix}.${field}: documented human review required`);
+  }
+  if (!Array.isArray(rights.notices) || !rights.notices.length) errors.push(`${prefix}.notices: exact notice files required`);
+  const noticePaths = new Set();
+  for (const [index, notice] of (rights.notices ?? []).entries()) {
+    noticePaths.add(notice.path);
+    await checkFileIdentity(errors, notice.path, notice.sha256, undefined, `${prefix}.notices[${index}]`);
+  }
+  if (!noticePaths.has(manifest.license.textPath)) errors.push(`${prefix}.notices: include exact license or permission text`);
+  for (const noticePath of manifest.attribution?.noticePaths ?? []) {
+    if (!noticePaths.has(noticePath)) errors.push(`${prefix}.notices: missing hashed attribution notice ${noticePath}`);
+  }
+  for (const [index, obligation] of (rights.obligations ?? []).entries()) {
+    if (!obligation.requirement?.trim() || !obligation.fulfilment?.trim() || !obligation.evidence?.length) {
+      errors.push(`${prefix}.obligations[${index}]: requirement, fulfilment and hashed evidence required`);
+    }
+    for (const evidence of obligation.evidence ?? []) {
+      await checkFileIdentity(errors, evidence.path, evidence.sha256, undefined, `${prefix}.obligations[${index}].evidence`);
+    }
+  }
+  for (const restriction of manifest.license.additionalRestrictions ?? []) {
+    if (!(rights.obligations ?? []).some((obligation) => obligation.requirement === restriction)) {
+      errors.push(`${prefix}.obligations: unresolved license restriction ${restriction}`);
+    }
+  }
+  return errors;
+}
+
+export function validateReviewDecisionForAsset(decision, manifest, manifestHash) {
+  const errors = [];
+  if (decision.outcome !== "UPSTREAM_APPROVED") errors.push("$.outcome: not UPSTREAM_APPROVED");
+  if (decision.id !== manifest.review?.decisionId) errors.push("$.id: reviewed manifest decision ID mismatch");
+  for (const field of ["id", "version"]) {
+    if (decision.asset?.[field] !== manifest[field]) errors.push(`$.asset.${field}: reviewed asset mismatch`);
+  }
+  if (decision.asset?.manifestSha256 !== manifestHash) errors.push("$.asset.manifestSha256: reviewed manifest hash mismatch");
+  if (decision.asset?.sourceSha256 !== manifest.sha256) errors.push("$.asset.sourceSha256: reviewed source hash mismatch");
+  for (const role of ["technical", "visualCultural", "accessibility", "license", "release"]) {
+    if (decision.reviewers?.[role]?.decision !== "approved") errors.push(`$.reviewers.${role}: human approval required`);
+  }
+  return errors;
+}
+
 export async function validateAssetPolicy(manifest, manifestMap = new Map()) {
   const errors = [];
   pushRequired(errors, manifest, [
@@ -102,14 +158,13 @@ export async function validateAssetPolicy(manifest, manifestMap = new Map()) {
 
     if (manifest.distributionScope === "upstream-default") {
       if (manifest.license.status !== "declared") errors.push("$.license.status: upstream/default assets require a declared license");
-      if (manifest.license.id !== "VPL") errors.push("$.license.id: upstream/default assets require VPL");
+      if (!manifest.license.id?.trim()) errors.push("$.license.id: upstream/default assets require an exact license or permission identifier");
       if (!manifest.license.textPath || !manifest.license.textSha256) errors.push("$.license.textPath: upstream/default assets require verified license text");
       if (!manifest.license.proofUrl || !manifest.license.proofPath || !manifest.license.proofRetrievedAt || !manifest.license.proofSha256) {
         errors.push("$.license.proofPath: upstream/default assets require publication evidence");
       }
-      if ((manifest.license.additionalRestrictions ?? []).length !== 0) {
-        errors.push("$.license.additionalRestrictions: upstream/default assets cannot add restrictions");
-      }
+      errors.push(...(await validateRightsCompatibility(manifest)));
+
     }
   }
 
@@ -142,20 +197,26 @@ export async function validateAssetPolicy(manifest, manifestMap = new Map()) {
     const parentManifest = manifestMap.get(`${parent.id}@${parent.version}`);
     if (!parentManifest) {
       errors.push(`$.parents[${index}]: orphan parent ${parent.id}@${parent.version}`);
-    } else if (parentManifest.sha256 !== parent.sha256) {
-      errors.push(`$.parents[${index}].sha256: parent source hash mismatch`);
+    } else {
+      if (parentManifest.sha256 !== parent.sha256) errors.push(`$.parents[${index}].sha256: parent source hash mismatch`);
+      if (manifest.distributionScope === "upstream-default") {
+        if (parentManifest.distributionScope !== "upstream-default") errors.push(`$.parents[${index}]: upstream parent requires its own rights and review`);
+        errors.push(...(await validateRightsCompatibility(parentManifest)).map((error) => `$.parents[${index}] ${error}`));
+      }
     }
   }
 
   for (const [index, dependency] of (manifest.dependencies ?? []).entries()) {
-    if (manifest.distributionScope === "upstream-default" && dependency.licenseId !== "VPL") {
-      errors.push(`$.dependencies[${index}].licenseId: upstream/default dependency is not VPL`);
-    }
     const dependencyManifest = manifestMap.get(`${dependency.id}@${dependency.version}`);
     if (!dependencyManifest) {
       errors.push(`$.dependencies[${index}]: orphan dependency ${dependency.id}@${dependency.version}`);
-    } else if (dependencyManifest.sha256 !== dependency.sha256) {
-      errors.push(`$.dependencies[${index}].sha256: dependency hash mismatch`);
+    } else {
+      if (dependencyManifest.sha256 !== dependency.sha256) errors.push(`$.dependencies[${index}].sha256: dependency hash mismatch`);
+      if (dependencyManifest.license?.id !== dependency.licenseId) errors.push(`$.dependencies[${index}].licenseId: dependency license differs from manifest`);
+      if (manifest.distributionScope === "upstream-default") {
+        if (dependencyManifest.distributionScope !== "upstream-default") errors.push(`$.dependencies[${index}]: upstream dependency requires its own rights and review`);
+        errors.push(...(await validateRightsCompatibility(dependencyManifest)).map((error) => `$.dependencies[${index}] ${error}`));
+      }
     }
   }
 
@@ -209,6 +270,11 @@ async function validateProductionCatalog(catalog, catalogSchema, assetSchema, de
     "$.repositoryLicense.textPath",
   );
 
+  const manifestMap = new Map();
+  for (const entry of catalog.entries ?? []) {
+    const manifest = await readJson(resolveCandidatePath(entry.manifestPath));
+    manifestMap.set(`${manifest.id}@${manifest.version}`, manifest);
+  }
   for (const [index, entry] of (catalog.entries ?? []).entries()) {
     if (entry.manifestPath.startsWith("fixtures/") || entry.decisionPath?.startsWith("fixtures/")) {
       errors.push(`$.entries[${index}]: production catalog cannot reference fixtures`);
@@ -218,7 +284,7 @@ async function validateProductionCatalog(catalog, catalogSchema, assetSchema, de
     const manifest = await readJson(manifestPath);
 
     errors.push(...validateWithSchema(manifest, assetSchema).map((error) => `$.entries[${index}] manifest ${error}`));
-    errors.push(...(await validateAssetPolicy(manifest)).map((error) => `$.entries[${index}] manifest ${error}`));
+    errors.push(...(await validateAssetPolicy(manifest, manifestMap)).map((error) => `$.entries[${index}] manifest ${error}`));
 
     if (await sha256File(manifestPath) !== entry.manifestSha256) {
       errors.push(`$.entries[${index}].manifestSha256: mismatch`);
@@ -233,8 +299,7 @@ async function validateProductionCatalog(catalog, catalogSchema, assetSchema, de
       const decision = await readJson(decisionPath);
       errors.push(...validateWithSchema(decision, decisionSchema).map((error) => `$.entries[${index}] decision ${error}`));
       if (manifest.lifecycle.status !== "upstream-approved") errors.push(`$.entries[${index}]: manifest is not upstream-approved`);
-      if (decision.outcome !== "UPSTREAM_APPROVED") errors.push(`$.entries[${index}]: decision outcome is not UPSTREAM_APPROVED`);
-      if (decision.id !== manifest.review.decisionId) errors.push(`$.entries[${index}]: decision ID mismatch`);
+      errors.push(...validateReviewDecisionForAsset(decision, manifest, await sha256File(manifestPath)).map((error) => `$.entries[${index}] decision ${error}`));
     }
 
     if (entry.distributionScope === "upstream-default") {
@@ -296,10 +361,14 @@ async function validatePackageIntegration(lockSchema) {
     }
   }
 
-  if (lock.assets.some((asset) => asset.distributionScope === "upstream-default")) {
-    const noticePath = path.join(fixtureDirectory, "LICENSES", "VPL.txt");
-    const repositoryLicenseHash = (await readJson(resolveCandidatePath("catalog.json"))).repositoryLicense.sha256;
-    if (await sha256File(noticePath) !== repositoryLicenseHash) errors.push("package VPL notice hash mismatch");
+  for (const asset of lock.assets.filter((entry) => entry.distributionScope === "upstream-default")) {
+    const manifest = manifests.get(`${asset.assetId}@${asset.assetVersion}`)?.manifest;
+    for (const notice of manifest?.license?.compatibility?.notices ?? []) {
+      const packageNotice = path.join(fixtureDirectory, notice.path);
+      try {
+        if (await sha256File(packageNotice) !== notice.sha256) errors.push(`package notice hash mismatch: ${notice.path}`);
+      } catch { errors.push(`package notice missing: ${notice.path}`); }
+    }
   }
 
   return errors;
@@ -344,6 +413,7 @@ export async function runValidation() {
     decisionErrors.push("$.asset: reviewed manifest fixture is missing");
   } else {
     const reviewedManifestPath = resolveCandidatePath(reviewedManifestRecord.relativePath);
+    decisionErrors.push(...validateReviewDecisionForAsset(decision, reviewedManifestRecord.manifest, await sha256File(reviewedManifestPath)));
     if (await sha256File(reviewedManifestPath) !== decision.asset.manifestSha256) {
       decisionErrors.push("$.asset.manifestSha256: reviewed manifest hash mismatch");
     }

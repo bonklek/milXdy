@@ -39,25 +39,28 @@ actions remain explicit.
 
 ## Post-Factory — package ID `tweet-composer-kit`
 
-- Current package: the `Post-Factory 0.2.0-pilot` package exercised in
-  cumulative QA by issue #188.
-- Current catalog status: `under-review`. The package is maintainer-authored and
-  present in QA, but its source root and exact package hash are not yet checked
-  into an allowlisted catalog artifact path. The catalog must not make it
-  selectable until those bytes and a trusted review record land together.
-- Kind/lifecycle: runtime `app`, disabled by default, opened only from declared
-  composer and reply actions.
+- Current package: the reviewed `Post-Factory 0.2.0-pilot` source at
+  `packages/maintainer/tweet-composer-kit`.
+- Current catalog status: `published`, with exact package hash and the existing
+  maintainer review pinned together in the trusted catalog registry.
+- Kind/lifecycle: runtime `app`, enabled by default in fresh catalog selections
+  and package settings, opened only from declared composer and reply actions.
+  Explicit deselection/disable remains authoritative. Package consent still
+  requires acknowledgement; default-on approval matches exact source, package,
+  and manifest hashes, including specifically allowed catalog staging roots.
 - Capabilities: host-owned native Drafts, local quick-reply phrases, Remibooru
   browse/search, reviewed Milady/Remilio/Bonkler/Kagami maker handoffs, and an
-  explicit CHEESEWORLD link.
+  explicit host-owned CHEESEWORLD caption action with per-invocation consent.
 - Settings/storage: `milxdy.local.tweet-composer-kit.enabled` and up to 20
   phrases in `milxdy.local.tweet-composer-kit.customPhrases`.
 - Site scope: X/Twitter composer and reply action surfaces. The package has no
   direct X DOM, tab, clipboard, cookie, authentication, or raw browser-message
   access.
 - Remote scope: the host-owned adapters may contact
-  `https://maker.remilia.org/*` and `https://remibooru.com/*` only after
-  explicit package actions. Maker handoff sends reviewed caption fields only;
+  `https://maker.remilia.org/*`, `https://remibooru.com/*`, and
+  `https://cult.inc/*` only after explicit package actions. CHEESEWORLD sends
+  captions and exactly one bounded initiating-composer image after per-invocation
+  host consent; it replaces the same attachment and never posts. Maker handoff sends reviewed caption fields only;
   Remibooru queries send bounded public facets, cursor, and page size.
 - BOORU boundary: Remibooru metadata browsing, canonical-source links, an
   explicit host-owned thumbnail attachment action are Post-Factory capabilities

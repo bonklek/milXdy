@@ -89,6 +89,26 @@ const petsManifest = JSON.parse(await readFile(`${addOnsRoot}/catalog/pets-maker
 assert.equal(petsManifest.defaultEnabled, false);
 assert.equal(petsManifest.settings.find((entry) => entry.role === "enablement")?.defaultValue, false);
 
+// Neither unchanged manifest identity nor ordinary consent authorizes new bytes.
+const stableIdentity = await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8");
+const petsCodePath = `${addOnsRoot}/catalog/pets-maker/dist/content.js`;
+const petsCode = await readFile(petsCodePath, "utf8");
+await writeFile(petsCodePath, `${petsCode}\n// harmless staged edit after Prepare\n`);
+const changedApply = spawn(["apply", "--acknowledge-package-consent"]);
+assert.notEqual(changedApply.status, 0);
+assert.match(`${changedApply.stdout}\n${changedApply.stderr}`, /selection-package-mismatch/u);
+assert.equal(await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8"), stableIdentity);
+assert.equal(JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8")).failureClass, "selection-package-mismatch");
+await writeFile(petsCodePath, petsCode);
+
+// Apply also rechecks the current catalog rather than trusting the saved boolean.
+await writeFile(catalogPath, JSON.stringify({ ...catalog, revision: `${catalog.revision}-changed` }));
+const staleApply = spawn(["apply", "--acknowledge-package-consent"]);
+assert.notEqual(staleApply.status, 0);
+assert.match(`${staleApply.stdout}\n${staleApply.stderr}`, /selection-catalog-revision/u);
+assert.equal(await readFile(`${addOnsRoot}/stable/local-addon-status.json`, "utf8"), stableIdentity);
+await writeFile(catalogPath, JSON.stringify(catalog));
+
 const combinedSelectionPath = `${root}/combined-selection.json`;
 await writeFile(combinedSelectionPath, JSON.stringify({
   ...selection,
@@ -102,6 +122,23 @@ run(["prepare", `--selection=${combinedSelectionPath}`]);
 run(["apply", "--acknowledge-package-consent", "--acknowledge-first-party-replacement"]);
 const combinedStatus = JSON.parse(await readFile(`${addOnsRoot}/work/status.json`, "utf8"));
 assert.deepEqual(combinedStatus.packages.map((entry) => entry.id).sort(), ["pets-maker", "tweetPng"]);
+
+const composer = catalog.sections[0].packages.find((pkg) => pkg.id === "tweet-composer-kit");
+const creationSelectionPath = `${root}/creation-selection.json`;
+await writeFile(creationSelectionPath, JSON.stringify({ ...selection, packages: [
+  { id: composer.id, version: composer.version, packageSha256: composer.artifact.packageSha256 },
+  selection.packages[0],
+] }));
+run(["prepare", `--selection=${creationSelectionPath}`]);
+const creationDenied = spawn(["apply"]);
+assert.notEqual(creationDenied.status, 0);
+assert.match(`${creationDenied.stdout}\n${creationDenied.stderr}`, /acknowledge-package-consent/u);
+run(["apply", "--acknowledge-package-consent", "--acknowledge-first-party-replacement"]);
+const creationPlan = JSON.parse(await readFile(`${addOnsRoot}/work/composition/build-plan.json`, "utf8"));
+const creationApps = creationPlan.apps.filter((app) => ["tweetPng", "tweet-composer-kit"].includes(app.id));
+assert.equal(creationApps.length, 2);
+assert.equal(creationApps.every((app) => app.defaultEnabled === true), true);
+assert.equal(creationPlan.diagnostics.find((entry) => entry.packageId === composer.id).trust.defaultEnablementPolicy.allowed, true);
 
 const emptySelectionPath = `${root}/empty-selection.json`;
 await writeFile(emptySelectionPath, JSON.stringify({ ...selection, packages: [] }));

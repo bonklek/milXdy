@@ -1,0 +1,208 @@
+import { readFile } from "node:fs/promises";
+const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
+const externalHandoffContract = await readFile("src/platform/app-sdk/external-handoff.ts", "utf8");
+const contentRuntime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+const nativeReplyInsertion = await readFile("src/platform/runtime/native-reply-insertion.ts", "utf8");
+const replyTemplatePolicy = await readFile("src/platform/runtime/reply-action-templates.ts", "utf8");
+const composerServices = await readFile("src/platform/runtime/composer-action-panel.ts", "utf8");
+const contextMediaPanel = await readFile("src/platform/runtime/context-media-action-panel.ts", "utf8");
+const hubSections = await readFile("src/platform/runtime/hub-section-services.ts", "utf8");
+const hubPanel = await readFile("src/platform/runtime/hub-panel-renderer.ts", "utf8");
+const runtimeStyles = await readFile("src/platform/runtime/tweet-scaffold.css", "utf8");
+const background = await readFile("src/extension/background/index.ts", "utf8");
+const externalHandoffTabs = await readFile("src/extension/background/external-handoff-tabs.ts", "utf8");
+const externalHandoffPageAdapters = await readFile("src/extension/background/external-handoff-page-adapters.ts", "utf8");
+const postFactorySource = await readFile("packages/maintainer/tweet-composer-kit/src/content.js", "utf8");
+const postFactoryBuilt = await readFile("packages/maintainer/tweet-composer-kit/dist/content.js", "utf8");
+const composerSource = await readFile("scripts/packages/compose-local-app-packages.mjs", "utf8");
+const reminetChatContent = await readFile("src/apps/reminet-chat/content.ts", "utf8");
+const reminetChatConnectionView = await readFile("src/apps/reminet-chat/chat-connection-view.ts", "utf8");
+const reminetChatBackground = await readFile("src/apps/reminet-chat/background.ts", "utf8");
+const remiliaAuthRouter = await readFile("src/extension/background/remilia-auth-router.ts", "utf8");
+const publicSdkTypes = await readFile("sdk/types/index.d.ts", "utf8");
+
+export function verifyPlatformContract(validators) {
+  validators.requireIncludes(contentRuntime, "openContextMediaActionPanelService({", "runtime must connect context media services");
+  validators.requireIncludes(contentRuntime, "createHubSectionServices({", "runtime must connect hub section services");
+  validators.requireIncludes(contentRuntime, "currentTheme: currentHubTheme", "runtime must supply the active theme to the hub panel");
+  validators.requireIncludes(contentRuntime, "createComposerActionServices({", "runtime must connect the extracted composer services");
+  validators.requireIncludes(contentRuntime, "safeRuntimeMessage<Result>(message)", "composer services must use the authorized host transport");
+  verifySdkAndMediaContract(validators);
+  verifyComposerAndReplyContract(validators);
+  verifyHandoffAndRemoteContract(validators);
+}
+
+function verifySdkAndMediaContract({ requireIncludes, requireNotIncludes }) {
+  requireIncludes(appPlatform, "boot?:", "App SDK module type must expose boot lifecycle hook");
+  requireIncludes(appPlatform, "enable?:", "App SDK module type must expose enable lifecycle hook");
+  requireIncludes(appPlatform, "disable?:", "App SDK module type must expose disable lifecycle hook");
+  requireIncludes(appPlatform, "onRouteChange?:", "App SDK module type must expose onRouteChange lifecycle hook");
+  requireIncludes(appPlatform, "onSurface?:", "App SDK module type must expose onSurface lifecycle hook");
+  requireIncludes(appPlatform, "dispose?:", "App SDK module type must expose dispose lifecycle hook");
+  requireIncludes(appPlatform, "scheduler: AppRuntimeScheduler", "App SDK context must expose the shared scheduler");
+  requireIncludes(appPlatform, "sendMessage:", "App SDK context must expose routed background messaging");
+  requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
+  requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
+  requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
+  requireIncludes(appPlatform, "openNativeDrafts: () => void", "Composer actions must expose only the host-mediated native Drafts handoff");
+  requireIncludes(appPlatform, "externalHandoffs?: AppExternalHandoff[]", "App SDK must expose declared external handoffs");
+  requireIncludes(appPlatform, "launchExternalHandoff:", "Composer actions must expose the host-mediated external handoff callback");
+  requireIncludes(appPlatform, "remoteQueries?: AppRemoteQuery[]", "App SDK must expose declared reviewed remote queries");
+  requireIncludes(appPlatform, "queryRemoteService:", "Composer actions must expose only the host-mediated remote query callback");
+  requireIncludes(appPlatform, "suggestRemoteQueryFacets:", "Composer actions must expose bounded host-derived remote facet suggestions");
+  requireIncludes(appPlatform, "attachRemoteQueryResult:", "Composer actions must expose only the host-mediated reviewed result attachment callback");
+  requireIncludes(appPlatform, 'resultActions?: Array<"attachToInitiatingComposer">', "Remote result attachment must be an explicit manifest opt-in");
+  requireIncludes(appPlatform, 'source: "visibleDraftKeywords"', "Remote query suggestions must declare their bounded visible-draft source");
+  requireIncludes(composerServices, "deriveComposerKeywordSuggestions", "Composer suggestions must remain host-derived and sanitized");
+  requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
+  requireIncludes(appPlatform, 'result: "replaceSameAttachment"', "Reviewed media handoffs must declare same-attachment replacement");
+  requireIncludes(appPlatform, 'consent: "perInvocation"', "Reviewed media replacement must require consent on every invocation");
+  requireIncludes(appPlatform, "captions?: { topText: string; bottomText: string }", "Composer actions must support bounded explicit caption fields");
+  requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
+  requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
+  requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
+  requireIncludes(appPlatform, "contextualPostActions?: AppContextualPostAction[]", "App SDK manifest must expose contextual post actions");
+  requireIncludes(appPlatform, "pageContextActions?: AppPageContextAction[]", "App SDK manifest must expose explicit active-tab page context actions");
+  requireIncludes(background, "registerPageContextActions", "Page context actions must remain host-registered and manifest-declared");
+  requireIncludes(appPlatform, "onContextualPostAction?:", "App SDK module type must expose the contextual post-action callback");
+  requireIncludes(appPlatform, "contextMediaActions?: AppContextMediaAction[]", "App SDK manifest must expose reviewed contextual media actions");
+  requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
+  requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
+  requireIncludes(publicSdkTypes, "export interface AppContextMediaAction", "Public SDK declarations must expose reviewed contextual media actions");
+  requireIncludes(publicSdkTypes, "export interface AppMediaContribution", "Public SDK declarations must expose reviewed native media contributions");
+  requireIncludes(publicSdkTypes, "contextMediaActions?: AppContextMediaAction[]", "Public SDK manifest declarations must expose contextual media actions");
+  requireIncludes(publicSdkTypes, "mediaContributions?: AppMediaContribution[]", "Public SDK manifest declarations must expose media contributions");
+  requireIncludes(publicSdkTypes, "export interface MilxdyContextMediaActionContext", "Public SDK declarations must expose the host-owned contextual media callback");
+  requireIncludes(publicSdkTypes, "onContextMediaAction?", "Public SDK module declarations must expose the contextual media lifecycle hook");
+  requireIncludes(contextMediaPanel, 'type: "milxdy:contextMediaPrepare"', "Context media selections must be prepared by the host background");
+  requireIncludes(contextMediaPanel, 'type: "milxdy:mediaContributionSubmit"', "Media contributions must remain behind the explicit host-owned publish callback");
+  requireNotIncludes(contentRuntime, "Confirm that you have the right", "Media contributions must not add a rights attestation prompt");
+  requireIncludes(background, "OpaqueMediaHandleStore", "Selected media must remain behind opaque host-owned handles");
+  requireIncludes(background, "validateMediaContributionTags", "Media contribution tags must be bounded by the host");
+  requireIncludes(background, 'credentials: "include"', "Reviewed contributions must use the visible member session without exposing it to packages");
+  requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
+}
+
+function verifyComposerAndReplyContract({ requireIncludes, requireNotIncludes }) {
+  requireIncludes(hubSections, "const nonRailApps = apps.filter((app) => !deps.isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
+  requireIncludes(hubSections, "return [...ordered, ...byId.values(), ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
+  requireIncludes(contentRuntime, "createComposerActionRefreshScheduler", "Composer action DOM mutations must be coalesced before rescanning X");
+  requireIncludes(composerServices, "const shadow = panel.attachShadow({ mode: \"open\" });", "Composer actions must render package content in an isolated host-owned panel root");
+  requireIncludes(contentRuntime, "composerActionBindingToken", "Composer actions must rebind host controls after an extension reload leaves prior DOM in place");
+  requireIncludes(contentRuntime, ".milxdy-composer-action-panel[data-app-id]", "Composer action startup must clear orphaned panels from an earlier content-runtime instance");
+  requireIncludes(contentRuntime, "pendingComposerAction", "Composer action activation must serialize rapid toggle clicks across async module loads");
+  requireIncludes(contentRuntime, "void installComposerActionPackageStyles(app, shadow).catch", "Composer actions must attach declared package CSS without blocking their callback render");
+  requireIncludes(contentRuntime, 'fallback: "host-style"', "Composer actions must retain the host-owned fallback style when a package stylesheet fails");
+  requireIncludes(contentRuntime, "for (const sheet of app.css || [])", "Composer action styling must be limited to declared package stylesheets");
+  requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
+  requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
+  requireIncludes(contentRuntime, "A zero-row pass is an X reconciliation transient", "Composer actions must not disappear while X replaces a drafted editor");
+  requireIncludes(contentRuntime, "const openBelow = spaceBelow >= naturalHeight || spaceBelow >= spaceAbove;", "Composer panels must choose the viewport side with enough reachable space");
+  requireIncludes(contentRuntime, "panel.dataset.placement = openBelow ? \"bottom\" : \"top\";", "Composer panels must record their responsive above/below placement");
+  requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);", "Composer panels must adapt when package content changes size");
+  requireIncludes(contentRuntime, "const openNativeDrafts = () => openNativeDraftsFor(currentButton(), close);", "Composer packages must use the host-owned X Drafts handoff from the current rebound control");
+  requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
+  requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
+  requireIncludes(composerServices, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
+  requireIncludes(composerServices, "handoff.captionSource === \"packageFields\"", "Explicit package captions must not read the X composer");
+  requireIncludes(composerServices, 'type: "milxdy:externalHandoff"', "External handoffs must use a host-routed background request");
+  requireIncludes(composerServices, 'type: "milxdy:remoteQuery"', "Remote galleries must use a host-routed background request");
+  requireIncludes(composerServices, "dependencies.playLaunchSound();", "External handoffs must invoke the injected host loading cue");
+  requireIncludes(contentRuntime, "playLaunchSound: playInterfaceLaunchSound", "External handoffs must use the host-owned, user-preference-respecting loading cue");
+  requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
+  requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
+  requireIncludes(contentRuntime, "gap: 8", "Reply-action menus must open below the X reply control");
+  requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
+  requireIncludes(contentRuntime, "resolveReplyActionPanelPosition", "Reply-action panels must resolve from their initiating control's viewport coordinates");
+  requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(positionReplyActionPanel);", "Reply-action panels must re-anchor after package content changes their measured width");
+  requireIncludes(contentRuntime, "panel.style.visibility = position.hidden ? \"hidden\" : \"visible\"", "Reply-action panels must not draw through X's sticky column header");
+  requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
+  requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
+  requireIncludes(contentRuntime, "openNativeReply(button, text, options)", "Reply opening must use the guarded native invocation helper");
+  requireIncludes(nativeReplyInsertion, "text && unrelatedVisibleComposer", "Preexisting visible composers must never receive a selected template");
+  requireIncludes(replyTemplatePolicy, "setting.defaultValue === false", "Reply send consent must default off");
+  requireIncludes(replyTemplatePolicy, "=== true", "Reply sending must require an exact stored boolean opt-in");
+  requireIncludes(nativeReplyInsertion, "[contenteditable=\"true\"][data-testid^=\"tweetTextarea_\"]", "Reply insertion must target X's actual editable element, not an inherited editable wrapper");
+  requireIncludes(nativeReplyInsertion, "if (normalizedText(editor.innerText || editor.textContent || \"\").trim()) return false;", "Reply insertion must fail closed rather than append to an existing native draft");
+  requireIncludes(nativeReplyInsertion, "new ClipboardEvent(\"paste\"", "Reply insertion must update X's controlled editor through its text-transfer contract");
+  requireIncludes(nativeReplyInsertion, "clipboardData.setData(\"text/plain\", text)", "Reply insertion must transfer only the explicit declared template text");
+  requireIncludes(nativeReplyInsertion, "if (++verificationFrames < 30) window.requestAnimationFrame(verifyControlledInsertion);", "Reply insertion must wait for X's controlled state without a second DOM insertion");
+  requireIncludes(nativeReplyInsertion, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
+  requireIncludes(runtimeStyles, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
+  requireIncludes(hubPanel, "root.dataset.theme = deps.currentTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
+  requireIncludes(contentRuntime, "function currentHubTheme", "Apps & Features must resolve distinct light, dim, and dark host palettes");
+  requireIncludes(contentRuntime, "function appHubLifecycle", "Apps & Features must present package lifecycle state without package-owned UI code");
+  requireIncludes(contentRuntime, "function isRailDiscoverableWhenDisabled", "RemiNet Chat must remain discoverable in the X rail before enablement");
+  requireIncludes(contentRuntime, 'app.id === "reminetChat"', "Disabled rail discovery must remain limited to RemiNet Chat");
+  requireIncludes(contentRuntime, "await app.setEnabled(true)", "Selecting the disabled Chat rail launcher must explicitly enable it before load");
+  verifyChatConnectionContract({ requireIncludes, requireNotIncludes });
+  requireIncludes(contentRuntime, "Ready in composer + reply", "Composer/reply packages must receive a generic ready lifecycle state");
+}
+
+function verifyChatConnectionContract({ requireIncludes, requireNotIncludes }) {
+  requireIncludes(reminetChatContent, 'from "./chat-connection-view"', "Chat must import its connection view owner");
+  requireIncludes(reminetChatContent, "renderChatReconnectState(extensionAuthPhase, state, escapeHtml)", "Chat must wire current auth state to its connection view");
+  requireIncludes(reminetChatConnectionView, "Open the milXdy popup", "Disconnected Chat must direct users to the extension popup");
+  requireIncludes(reminetChatConnectionView, "Remilia connection → Connect/Reconnect", "Disconnected Chat must name the popup connection control");
+  requireIncludes(reminetChatConnectionView, 'data-chat-action="retry-connection"', "Disconnected Chat must offer a REST-only recheck action");
+  requireIncludes(reminetChatContent, 'if (kind === "retry-connection") void refreshAuthAndHistory(true)', "Chat recheck must use its official history reconciler");
+  requireIncludes(reminetChatContent, 'await controller.requestReconciliation("manual")', "Chat recheck must request an official REST reconciliation");
+  requireIncludes(reminetChatConnectionView, 'data-chat-action="login"', "Disconnected Chat must offer an explicit extension login handoff");
+  requireIncludes(reminetChatContent, 'type: "reminetChat:openLogin"', "Chat login must use its narrow routed handoff");
+  requireIncludes(reminetChatBackground, "await chrome.action.openPopup()", "Chat login must first open the extension popup");
+  requireIncludes(reminetChatBackground, 'chrome.runtime.getURL("popup.html?focus=remilia-login")', "Chat login fallback must stay on the extension popup");
+  requireIncludes(remiliaAuthRouter, 'chrome.runtime.getURL("popup.html")', "Auth actions must identify the shipped extension popup");
+  requireIncludes(remiliaAuthRouter, "actual.pathname === expected.pathname", "Popup-tab auth must reject unrelated extension pages");
+  requireIncludes(remiliaAuthRouter, "sender.frameId !== 0", "Popup-tab auth must reject subframe requests");
+  for (const source of [reminetChatContent, reminetChatConnectionView]) {
+    requireNotIncludes(source, '>Open RemiliaNET</a>', "Disconnected Chat must not offer website-session recovery");
+    requireNotIncludes(source, "remilia-auth:", "Chat content/view must not invoke popup-only Remilia auth messages");
+  }
+}
+
+function verifyHandoffAndRemoteContract({ requireIncludes, requireNotIncludes }) {
+  requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
+  requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
+  requireIncludes(background, "renderRemiliaMakerImage", "External maker handoffs must be host-owned adapter code");
+  requireIncludes(composerServices, 'const mode = options?.mode;', "External maker handoffs must require the package to send the selected mode");
+  requireNotIncludes(composerServices, 'options?.mode || "captioned"', "External maker handoffs must not invent a default mode");
+  for (const packageContent of [postFactorySource, postFactoryBuilt]) {
+    requireIncludes(packageContent, "resolveMakerDispatch(selection, externalHandoffs)", "Post-Factory must resolve only its explicit maker and mode selection");
+    requireIncludes(packageContent, "Choose a maker and mode to generate.", "Post-Factory must fail closed before a maker and mode are selected");
+    requireIncludes(packageContent, "launchExternalHandoff(dispatch.handoffId", "Post-Factory must dispatch the resolved selected maker without a default target");
+    requireIncludes(packageContent, "mode: dispatch.mode", "Post-Factory must dispatch the resolved selected mode without a default action");
+    requireNotIncludes(packageContent, '|| (!topInput.value.trim() && !bottomInput.value.trim()) ? "randomMeme"', "Empty captions must not implicitly enable random-meme mode");
+  }
+  requireIncludes(background, "renderCheeseWorldImage", "CheeseWorld deep-fry must remain a reviewed host-owned adapter");
+  requireIncludes(externalHandoffContract, 'new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN)', "CheeseWorld handoff must use its fixed reviewed destination");
+  requireIncludes(background, "validateExternalHandoffImageDataUrl", "CheeseWorld input must be MIME- and size-validated by the host");
+  requireIncludes(background, "withExternalHandoffTimeout", "Generated maker execution must time out so its inactive tab is always cleaned up");
+  requireIncludes(background, "externalHandoffTabs.create(targetUrl.href)", "Reviewed maker handoffs must use host-owned temporary tabs");
+  requireIncludes(externalHandoffTabs, "active:false", "Reviewed maker handoffs must open inactive tabs");
+  requireIncludes(background, "finally {", "Reviewed maker handoffs must clean up generated inactive tabs after success or failure");
+  requireIncludes(background, "externalHandoffTabs.close(generatedMakerTabId)", "Reviewed maker handoffs must clean up only through their custody manager");
+  requireIncludes(externalHandoffTabs, "chrome.tabs.remove(id)", "Reviewed maker handoffs must remove their generated maker tab");
+  requireIncludes(externalHandoffTabs, "tab.active || !ownsLocation(tab, record.href)", "Maker cleanup must preserve activated and navigated tabs");
+  requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
+  requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
+  requireIncludes(externalHandoffPageAdapters, '"#randomButton"', "External maker handoffs must use the maker's reviewed random-token control");
+  requireIncludes(externalHandoffPageAdapters, '"#tokenIDDisplay"', "External maker handoffs must bind completion to the selected token");
+  requireIncludes(externalHandoffPageAdapters, "selectedTokenId !== previousTokenId", "External maker handoffs must not accept the maker's pre-request idle state");
+  requireIncludes(externalHandoffPageAdapters, "display?.currentlyDisplaying === false", "External maker handoffs must wait for the selected token render to finish");
+  requireIncludes(externalHandoffPageAdapters, '"#randomMemeButton"', "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
+  requireIncludes(externalHandoffPageAdapters, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
+  requireIncludes(externalHandoffPageAdapters, "await display.drawSelectedLayers(false, true);", "Random-meme handoffs must render the selected preset before capture");
+  requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
+  requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
+  requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");
+  requireIncludes(composerServices, 'type: "milxdy:remoteQueryAttach"', "Remote result attachments must use the host-routed background bridge");
+  requireIncludes(composerServices, "new File([blob], fileName", "The host must attach reviewed image handoffs through X's existing media control");
+  requireIncludes(composerServices, "prepareComposerImageReplacement", "Composer media replacement must capture and bind the initiating attachment in host code");
+  requireIncludes(composerServices, "removeButtons[0] !== replacement.removeButton", "Composer media replacement must fail closed if the initiating attachment identity changes");
+  requireIncludes(composerServices, "attachmentIdentity", "Composer media replacement must pin the initiating file or preview identity across the handoff");
+  requireIncludes(composerServices, "if (!navigator.userActivation?.isActive)", "Composer media replacement must begin only from an explicit user activation");
+  requireNotIncludes(composerServices, 'window.confirm("Send this composer image', "Composer media consent must not synchronously block the initiating X tab");
+  requireIncludes(composerServices, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
+  requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
+  requireIncludes(contentRuntime, "activeComposerAction.panel.isConnected", "Composer actions must discard stale panels reconciled away by X before reopening");
+}

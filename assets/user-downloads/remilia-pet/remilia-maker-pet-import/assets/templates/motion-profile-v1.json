@@ -149,7 +149,7 @@
         "requiredRegions": ["head-core", "torso-core", "lower-body-core", "foot-contact"],
         "phaseRegionExemptions": {
           "takeoff": ["foot-contact"],
-          "apex": ["foot-contact"],
+          "apex": ["lower-body-core", "foot-contact"],
           "landing": ["foot-contact"]
         }
       }

@@ -23,6 +23,48 @@ type PetRequestWithNftNumber = ReturnType<typeof makePetRequest> & {
   sourceNftNumber: number;
 };
 
+class PetFixtureElement {
+  children: PetFixtureElement[] = [];
+  hidden = false;
+  options: PetFixtureElement[] = [];
+  value = "";
+  dataset: Record<string, string> = {};
+
+  constructor(readonly tagName: string) {}
+
+  append(...children: PetFixtureElement[]): void {
+    this.children.push(...children);
+    if (this.tagName === "select") this.options.push(...children);
+  }
+
+  addEventListener(): void {}
+  querySelectorAll(): PetFixtureElement[] { return []; }
+  focus(): void {}
+  select(): void {}
+}
+
+function petFixtureDocument() {
+  return { createElement: (tagName: string) => new PetFixtureElement(tagName) };
+}
+
+function petFixtureTree(root: PetFixtureElement): unknown {
+  const attributes = Object.fromEntries(Object.entries(root)
+    .filter(([key, value]) => !["children", "options", "dataset"].includes(key) && typeof value !== "function")
+    .sort(([left], [right]) => left.localeCompare(right)));
+  return { tagName: root.tagName, attributes, children: root.children.map(petFixtureTree) };
+}
+
+async function renderPetFixture(): Promise<PetFixtureElement> {
+  const previousDocument = globalThis.document;
+  Object.assign(globalThis, { document: petFixtureDocument() });
+  try {
+    const module = await import("../../packages/maintainer/pets-maker/src/custom-pet-ui.js");
+    return module.buildCustomPetExport({ signal: new AbortController().signal });
+  } finally {
+    Object.assign(globalThis, { document: previousDocument });
+  }
+}
+
 function pngHeader(width = 1024, height = 1024): Uint8Array {
   const bytes = new Uint8Array(33);
   bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -193,14 +235,16 @@ describe("Pets Maker request contract", () => {
 
   it("ships as a disabled, lazy side-rail app and leaves Post-Factory pet-free", () => {
     const source = readFileSync("packages/maintainer/pets-maker/src/custom-pet-ui.js", "utf8");
+    const eventsSource = readFileSync("packages/maintainer/pets-maker/src/custom-pet-export-events.js", "utf8");
     const appSource = readFileSync("packages/maintainer/pets-maker/src/content.js", "utf8");
     const themeSource = readFileSync("packages/maintainer/pets-maker/styles/theme.css", "utf8");
     const overlaySource = readFileSync("packages/maintainer/pets-maker/styles/overlay.css", "utf8");
     const makerStyles = readFileSync("packages/maintainer/pets-maker/styles/maker.css", "utf8");
     const bundled = readFileSync("packages/maintainer/pets-maker/dist/content.js", "utf8");
     const manifest = JSON.parse(readFileSync("packages/maintainer/pets-maker/milxdy.app.json", "utf8"));
-    const composerSource = readFileSync("examples/packages/local-dev/tweet-composer-kit/src/content.js", "utf8");
+    const composerSource = readFileSync("packages/maintainer/tweet-composer-kit/src/content.js", "utf8");
     expect(source).toContain('ariaLabel: "Custom Pet export"');
+    expect(source).toContain("attachPetExportEvents({");
     expect(source).toContain('textContent: "Download remilia-pet-request.zip"');
     expect(source).toContain('ariaLive: "polite"');
     expect(bundled).toContain("Use $remilia-maker-pet-import with the attached Maker export bundle.");
@@ -243,10 +287,27 @@ describe("Pets Maker request contract", () => {
     expect(source).not.toContain("rightsConfirmed");
     expect(source).not.toContain("rightsScope");
     expect(source).not.toContain('blankSelect("Leg color"');
-    expect(source).toContain("legColorForRace(templateFamily, traits.race)");
+    expect(eventsSource).toContain("legColorForRace(templateFamily, traits.race)");
     expect(source).toContain("NFT number (optional)");
     expect(source).toContain('textContent: "Fetch"');
-    expect(source).toContain("fetchMakerTraits(templateFamily, sourceNftNumber");
-    expect(source).toContain("nftNumberRangeForFamily(family.select.value)");
+    expect(eventsSource).toContain("fetchMakerTraits(templateFamily, sourceNftNumber");
+    expect(eventsSource).toContain("nftNumberRangeForFamily(family.select.value)");
+  });
+
+  it("builds the initial Custom Pet DOM with the source controls and disabled trait fetch", async () => {
+    const source = readFileSync("packages/maintainer/pets-maker/src/custom-pet-ui.js", "utf8");
+    const root = await renderPetFixture();
+    expect(petFixtureTree(root)).toMatchObject({
+      tagName: "section",
+      attributes: { ariaLabel: "Custom Pet export", className: "tweet-composer-kit__pet-export" },
+    });
+    const form = root.children.find((child) => child.tagName === "form");
+    expect(petFixtureTree(form!)).toMatchObject({
+      attributes: { className: "tweet-composer-kit__pet-form", noValidate: true },
+    });
+    expect(form?.children).toHaveLength(9);
+    expect(source).toContain('textContent: "Fetch",\n    disabled: true');
+    expect(source).toContain('textContent: "Download remilia-pet-request.zip"');
+    expect(source).toContain('ariaLabel: "Codex handoff instruction"');
   });
 });

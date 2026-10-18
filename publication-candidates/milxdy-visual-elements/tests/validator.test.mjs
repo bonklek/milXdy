@@ -78,3 +78,92 @@ test("declared embedded marks are allowed locally but rejected for upstream defa
   ];
   assert.ok(upstreamErrors.some((error) => error.includes("embeddedMarks")));
 });
+
+async function upstreamFixture() {
+  return readJson(path.join(candidateRoot, "fixtures", "valid", "ui-primitive", "manifest.json"));
+}
+
+test("upstream rights-compatible admission supports exact non-VPL license or explicit permission evidence", async () => {
+  const schema = await readJson(path.join(candidateRoot, "schemas", "asset.schema.json"));
+  for (const basis of ["license", "explicit-permission"]) {
+    // All data is a synthetic reviewer scenario, never an actual permission claim.
+    const manifest = await upstreamFixture();
+    manifest.license.id = "LicenseRef-Synthetic-Rights-Scenario";
+    manifest.license.compatibility.basis = basis;
+    assert.deepEqual([
+      ...validateWithSchema(manifest, schema),
+      ...(await validateAssetPolicy(manifest)),
+    ], []);
+  }
+});
+
+test("upstream rights admission fails closed on unknown, incompatible, missing or wrong-file permission", async () => {
+  const mutations = [
+    ["missing decision", (m) => { delete m.license.compatibility; }],
+    ["unknown", (m) => { m.license.compatibility.decision = "unknown"; }],
+    ["incompatible", (m) => { m.license.compatibility.decision = "incompatible"; }],
+    ["wrong source", (m) => { m.license.compatibility.sourceSha256 = "a".repeat(64); }],
+    ["missing exact license", (m) => { m.license.id = ""; }],
+    ["missing reviewer", (m) => { m.license.compatibility.reviewedBy = ""; }],
+    ["missing explanation", (m) => { m.license.compatibility.rationale = ""; }],
+    ["tampered notice", (m) => { m.license.compatibility.notices[0].sha256 = "a".repeat(64); }],
+    ["unhashed notice", (m) => { m.attribution.noticePaths.push("unreviewed-notice.txt"); }],
+    ["unresolved restriction", (m) => { m.license.additionalRestrictions = ["retain attribution"]; }],
+  ];
+  for (const permission of ["copy", "modify", "redistribute", "appSdkUse"]) {
+    mutations.push([`denied ${permission}`, (m) => { m.license.compatibility.permissions[permission] = false; }]);
+  }
+  for (const [name, mutate] of mutations) {
+    const manifest = await upstreamFixture();
+    mutate(manifest);
+    assert.ok((await validateAssetPolicy(manifest)).length > 0, name);
+  }
+});
+
+test("reviewed notice obligations can qualify but missing obligation evidence cannot", async () => {
+  const manifest = await upstreamFixture();
+  manifest.license.id = "LicenseRef-Synthetic-Attribution-Scenario";
+  manifest.license.additionalRestrictions = ["retain attribution"];
+  manifest.license.compatibility.obligations = [{
+    requirement: "retain attribution", fulfilment: "Synthetic notice retained in package fixture.",
+    evidence: [manifest.license.compatibility.notices[0]],
+  }];
+  assert.deepEqual(await validateAssetPolicy(manifest), []);
+  manifest.license.compatibility.obligations[0].evidence = [];
+  assert.ok((await validateAssetPolicy(manifest)).some((error) => error.includes("obligations")));
+});
+
+test("upstream dependencies require matching hashes and their own exact rights review regardless of license ID", async () => {
+  const manifest = await upstreamFixture();
+  const dependency = await upstreamFixture();
+  dependency.id = "fixture.nonvpl-dependency";
+  dependency.license.id = "LicenseRef-Synthetic-Dependency";
+  manifest.dependencies = [{ id: dependency.id, version: dependency.version, sha256: dependency.sha256, licenseId: dependency.license.id }];
+  const manifests = new Map([[`${dependency.id}@${dependency.version}`, dependency]]);
+  assert.deepEqual(await validateAssetPolicy(manifest, manifests), []);
+  dependency.license.compatibility.permissions.modify = false;
+  assert.ok((await validateAssetPolicy(manifest, manifests)).some((error) => error.includes("dependencies[0]")));
+});
+
+test("production review decisions bind every approval to the exact manifest and source", async () => {
+  const { validateReviewDecisionForAsset } = await import("../tools/validate.mjs");
+  const manifest = await upstreamFixture();
+  const decision = await readJson(path.join(candidateRoot, "fixtures", "valid", "review-decision.json"));
+  const hash = decision.asset.manifestSha256;
+  assert.deepEqual(validateReviewDecisionForAsset(decision, manifest, hash), []);
+  assert.ok(validateReviewDecisionForAsset(decision, manifest, "b".repeat(64)).some((error) => error.includes("manifestSha256")));
+  for (const role of ["technical", "visualCultural", "accessibility", "license", "release"]) {
+    const invalid = structuredClone(decision);
+    invalid.reviewers[role].decision = "not-reviewed";
+    assert.ok(validateReviewDecisionForAsset(invalid, manifest, hash).some((error) => error.includes(role)));
+  }
+});
+
+test("upstream lock schema accepts exact non-VPL identifiers and rejects missing identifiers", async () => {
+  const schema = await readJson(path.join(candidateRoot, "schemas", "package-visual-assets-lock.schema.json"));
+  const lock = await readJson(path.join(candidateRoot, "fixtures", "valid", "package-integration", "visual-assets.lock.json"));
+  lock.assets[0].licenseId = "LicenseRef-Synthetic-Permission";
+  assert.deepEqual(validateWithSchema(lock, schema), []);
+  lock.assets[0].licenseId = null;
+  assert.ok(validateWithSchema(lock, schema).some((error) => error.includes("licenseId")));
+});

@@ -8,9 +8,21 @@ const MENU_GROK_GENERIC = "remilia-create-wiki-with-grok-generic";
 const MENU_DENY = "remilia-deny-term";
 const MENU_DENY_LINK_TEXT = "remilia-deny-link-text";
 const MENU_DENY_LINK_TARGET = "remilia-deny-link-target";
+const MENU_GROK_PROFILE = "remilia-create-wiki-with-grok-profile";
+const OWNED_MENU_IDS = [
+  MENU_ADD_ALIAS,
+  MENU_LINK_LATER,
+  MENU_CREATE_WITH_GROK,
+  MENU_GROK_POST_SEED,
+  MENU_GROK_GENERIC,
+  MENU_GROK_PROFILE,
+  MENU_DENY,
+  MENU_DENY_LINK_TEXT,
+  MENU_DENY_LINK_TARGET,
+];
 
 chrome.runtime.onInstalled.addListener(() => {
-  chrome.contextMenus.removeAll(() => {
+  void Promise.all(OWNED_MENU_IDS.map((id) => chrome.contextMenus.remove(id).catch(() => undefined))).then(() => {
     chrome.contextMenus.create({
       id: MENU_ADD_ALIAS,
       title: "Link selected text to this page",
@@ -43,7 +55,7 @@ chrome.runtime.onInstalled.addListener(() => {
       documentUrlPatterns: ["https://x.com/*", "https://twitter.com/*"],
     });
     chrome.contextMenus.create({
-      id: "remilia-create-wiki-with-grok-profile",
+      id: MENU_GROK_PROFILE,
       parentId: MENU_CREATE_WITH_GROK,
       title: "Create a profile article prompt",
       contexts: ["page", "selection", "link"],
@@ -78,7 +90,7 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     void createWithGrok(tab.id, text, info.linkUrl || tab.url, "post-seed");
   } else if (info.menuItemId === MENU_GROK_GENERIC && tab?.id) {
     void createWithGrok(tab.id, text, info.linkUrl || tab.url, "generic");
-  } else if (info.menuItemId === "remilia-create-wiki-with-grok-profile" && tab?.id) {
+  } else if (info.menuItemId === MENU_GROK_PROFILE && tab?.id) {
     void createWithGrok(tab.id, text, info.linkUrl || tab.url, "profile");
   } else if (info.menuItemId === MENU_DENY && text) {
     void addDeny(text);

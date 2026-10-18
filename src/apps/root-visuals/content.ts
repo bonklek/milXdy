@@ -1,3 +1,10 @@
+import { playXActionSound, disposeXActionSound } from "./x-action-sound";
+import { AudioGroups, migrateXChatSoundPreference } from "../../lib/audio-groups";
+import { XChatSounds } from "./x-chat-sounds";
+const audioGroups = new AudioGroups();
+let xChatSounds: XChatSounds | null = null;
+import { AudioCueVolumes } from "../../lib/audio-cue-volumes";
+const cueVolumes = new AudioCueVolumes(["post", "sidebar", "newPosts", "x", "xChatSend", "xChatMessage"]);
 import {
   DEFAULT_RESKIN_PROFILE,
   DEFAULT_VISUAL_THEME,
@@ -10,7 +17,7 @@ import {
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
 import { parseJsonObject } from "../../platform/browser/json";
 
-let postSoundContext: AudioContext | null = null;
+const playPostSendSound = (volumeScale = 1) => playXActionSound(audioGroups.enabled("x") ? volumeScale * cueVolumes.get("x") : 0);
 let visualTheme: VisualThemeSettings = DEFAULT_VISUAL_THEME;
 const clickedNotificationKeys = new WeakMap<HTMLElement, string>();
 const SHOW_NEW_POSTS_RE = /show\s+\d+\s+posts?/i;
@@ -85,7 +92,9 @@ function setupPageFavicon(context: MilxdyContentAppContext): void {
   };
   ensureFavicon();
   const observer = new MutationObserver(scheduleEnsure);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  // Favicon replacement only mutates <head>; observing the page body makes
+  // every timeline update wake this app without improving favicon recovery.
+  observer.observe(document.head, { childList: true });
   context.addDisposable(() => {
     observer.disconnect();
     document.getElementById(PAGE_FAVICON_ID)?.remove();
@@ -95,14 +104,20 @@ function setupPageFavicon(context: MilxdyContentAppContext): void {
 export async function boot(context: MilxdyContentAppContext): Promise<void> {
   if (booted) return;
   booted = true;
+  await migrateXChatSoundPreference(context.storage.local, context.storage.sync);
+  await audioGroups.start(context.addDisposable, context.storage.local);
+  await cueVolumes.start(context.addDisposable, context.storage.local);
   await loadVisualTheme();
   if (context.signal.aborted) return;
   const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
     if (area !== "local" || (!changes[RESKIN_PROFILE_KEY] && !changes[VISUAL_THEME_KEY])) return;
     void loadVisualTheme().then(() => refreshHomeLogo?.());
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  context.addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  context.addDisposable(context.storage.local.onChanged((changes) => storageListener(changes, "local")));
+  xChatSounds = new XChatSounds(audioGroups, cueVolumes, context.scheduler);
+  xChatSounds.start(context.addDisposable);
+  context.addDisposable(() => { xChatSounds = null; });
+
   setupMaxPostSound(context);
   injectHomeLogoStyles();
   setupPageFavicon(context);
@@ -113,11 +128,13 @@ export async function boot(context: MilxdyContentAppContext): Promise<void> {
 }
 
 export function onSurface(surface: { kind: string; element: HTMLElement }): void {
+  if (surface.kind === "directMessage") xChatSounds?.onSurface(surface.element);
   if (surface.kind === "tweet") queueTweetSurface?.(surface.element);
   if (surface.kind === "notification") queueNotificationSurface?.(surface.element);
 }
 
 export function onRouteChange(): void {
+  xChatSounds?.onRouteChange();
   refreshHomeLogo?.();
 }
 
@@ -125,8 +142,7 @@ export function disable(): void {}
 
 export function dispose(): void {
   disable();
-  postSoundContext?.close?.().catch(() => undefined);
-  postSoundContext = null;
+  disposeXActionSound();
   refreshHomeLogo = null;
   queueTweetSurface = null;
   rootVisualClickHandlers.clear();
@@ -154,18 +170,18 @@ function setupMaxPostSound(context: MilxdyContentAppContext): void {
     if (button === lastPostSoundButton && now - lastPostSoundAt < 250) return;
     lastPostSoundButton = button;
     lastPostSoundAt = now;
-    playPostSendSound();
+    playPostSendSound(cueVolumes.get("post"));
   };
   const postSoundsEnabled = (): boolean => document.documentElement.dataset.milxdyVisualPostSound !== "false";
   const clickListener = (event: MouseEvent) => {
     const target = event.target instanceof Element ? event.target : null;
     if (target?.closest<HTMLElement>('header[role="banner"] nav a, [data-testid^="AppTabBar_"]')) {
-      if (document.documentElement.dataset.milxdyVisualSidebarSound !== "false") playPostSendSound(0.45);
+      if (document.documentElement.dataset.milxdyVisualSidebarSound !== "false") playPostSendSound(0.45 * cueVolumes.get("sidebar"));
       return;
     }
     const newPostsButton = target?.closest<HTMLElement>('[role="button"], button');
     if (newPostsButton && SHOW_NEW_POSTS_RE.test(newPostsButton.textContent || "")) {
-      if (document.documentElement.dataset.milxdyVisualNewPostsSound !== "false") playPostSendSound(0.55);
+      if (document.documentElement.dataset.milxdyVisualNewPostsSound !== "false") playPostSendSound(0.55 * cueVolumes.get("newPosts"));
       return;
     }
     if (!postSoundsEnabled()) return;
@@ -850,36 +866,4 @@ export function isTwitterUnreadBackground(value: string): boolean {
   const darkBlueWash = blue >= green && green >= red && blue - red >= 16 && blue - green >= 6 && blue < 96;
   const twitterBlueAlpha = blue > red + 24 && green > red + 16;
   return lightBlueWash || darkBlueWash || twitterBlueAlpha;
-}
-
-function playPostSendSound(volumeScale = 1): void {
-  const audioWindow = window as Window & typeof globalThis & {
-    webkitAudioContext?: typeof AudioContext;
-  };
-  const AudioContextCtor = audioWindow.AudioContext || audioWindow.webkitAudioContext;
-  if (!AudioContextCtor) return;
-  const context = postSoundContext ?? new AudioContextCtor();
-  postSoundContext = context;
-  if (context.state === "suspended") void context.resume();
-  const start = context.currentTime + 0.005;
-  const gain = context.createGain();
-  gain.gain.setValueAtTime(0.0001, start);
-  gain.gain.exponentialRampToValueAtTime(0.035 * volumeScale, start + 0.012);
-  gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
-  gain.connect(context.destination);
-
-  const first = context.createOscillator();
-  first.type = "square";
-  first.frequency.setValueAtTime(660, start);
-  first.frequency.exponentialRampToValueAtTime(880, start + 0.08);
-  first.connect(gain);
-  first.start(start);
-  first.stop(start + 0.11);
-
-  const second = context.createOscillator();
-  second.type = "triangle";
-  second.frequency.setValueAtTime(1320, start + 0.055);
-  second.connect(gain);
-  second.start(start + 0.055);
-  second.stop(start + 0.18);
 }

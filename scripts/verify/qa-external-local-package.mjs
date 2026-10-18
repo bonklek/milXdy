@@ -54,7 +54,9 @@ try {
     control: { type: "textList", maxItems: 5, maxLength: 120, placeholder: "Add a phrase" },
     reset: { behavior: "restoreDefault" },
   });
-  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply", sendAfterInsert: true }, { id: "custom", label: "Custom", storageListKey: "milxdy.local.dev-note.replyPhrases" }] };
+  manifest.replyAction = { templates: [{ id: "starter", label: "Starter reply", text: "Starter reply", sendAfterInsert: true, sendAfterInsertStorageKey: "milxdy.local.dev-note.sendStarter" }, { id: "custom", label: "Custom", storageListKey: "milxdy.local.dev-note.replyPhrases" }] };
+  manifest.storageKeys.local.push("milxdy.local.dev-note.sendStarter");
+  manifest.settings.push({ id: "developer-note.sendStarter", label: "Insert and send Starter reply", scope: "app", location: "appsAndFeatures", storage: { area: "local", key: "milxdy.local.dev-note.sendStarter" }, defaultValue: false, control: { type: "toggle" }, reset: { behavior: "restoreDefault" } });
   manifest.css = [{ id: "developer-note.styles", path: "dev-note.css" }];
   manifest.package.assets.push({ id: "developer-note.styles", path: "dev-note.css", kind: "style", webAccessible: false });
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
@@ -114,7 +116,7 @@ try {
     "staged external composer app must be compiled into the runtime app registry with its generated enablement control",
   );
   assert.match(runtimeRegistry, /replyAction:\s*\{\s*templates:/u, "staged external reply action must reach the runtime registry");
-  assert.match(runtimeRegistry, /sendAfterInsert:\s*true/u, "staged external reply action must preserve its explicit send opt-in");
+  assert.match(runtimeRegistry, /sendAfterInsertStorageKey:\s*"milxdy\.local\.dev-note\.sendStarter"/u, "staged reply actions must preserve separate default-off user consent");
   assert.match(runtimeRegistry, /hostComposerActions:\s*\["nativeDrafts"\]/u, "staged external apps must preserve declared host companion actions");
   assert.match(runtimeRegistry, /adapter:\s*"cheeseworld"[\s\S]{0,600}?result:\s*"replaceSameAttachment"[\s\S]{0,300}?consent:\s*"perInvocation"/u, "staged external apps must preserve reviewed CheeseWorld media-replacement policy");
   assert.match(runtimeRegistry, /storageListKey:\s*"milxdy\.local\.dev-note\.replyPhrases"/u, "staged external reply actions must preserve bounded storage-list templates");

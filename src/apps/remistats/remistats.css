@@ -48,7 +48,7 @@
 }
 
 .reminet-badge-row > .reminet-badge-slot:not([data-reminet-profile-slot="true"]) {
-  margin-left: 0;
+  margin-left: 0 !important;
 }
 
 .reminet-badge-slot[data-reminet-action-poke="true"] {
@@ -77,10 +77,7 @@
 }
 
 .reminet-badge-slot[data-reminet-state="empty"]:not([data-reminet-profile-slot="true"]) {
-  flex-basis: 0;
-  width: 0;
-  height: 0;
-  margin-left: 0;
+  display: none !important;
 }
 
 .reminet-badge-slot > .reminet-score-badge {
@@ -214,6 +211,7 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
 
 .reminet-poke-button {
   display: inline-flex;
+  position: relative;
   align-items: center;
   justify-content: center;
   width: 22px;
@@ -290,6 +288,27 @@ html[data-reminet-icon-poke="false"] [data-reminet-icon="poke"] {
     inset 0 0 0 1px rgba(255, 255, 255, 0.68),
     0 0 0 1px rgba(227, 93, 93, 0.16);
   opacity: 1;
+}
+
+.reminet-poke-button[data-reminet-poke-state="error"][data-reminet-poke-message]::after {
+  content: attr(data-reminet-poke-message);
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  bottom: calc(100% + 6px);
+  width: max-content;
+  max-width: 220px;
+  padding: 5px 7px;
+  border: 1px solid rgba(227, 93, 93, 0.55);
+  border-radius: 6px;
+  background: #fff1f1;
+  color: #731414;
+  font: 600 11px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 2px 8px rgba(115, 20, 20, 0.18);
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 
 .reminet-profile-badge-group .reminet-poke-button[data-reminet-poke-state="cooldown"],
@@ -1244,3 +1263,79 @@ html[data-milxdy-visual-incoming-poke-gold="true"][data-reminet-poke-mode="dark"
     animation: none;
   }
 }
+
+.milxdy-banner-panel[data-milxdy-banner-overlay="blank"] { background-color:var(--milxdy-surface, #15202b); }
+
+/* Detail posts have no timestamp in the author header. Use the full row,
+   keeping stats outside the display-name link's ellipsis wrappers. */
+article [data-milxdy-detail-author-column],
+article [data-milxdy-detail-author-wrapper] {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+article [data-milxdy-tweet-header="true"][data-milxdy-detail-header][data-testid="User-Name"] {
+  width: 100% !important;
+  align-items: flex-start !important;
+}
+article [data-milxdy-tweet-header="true"][data-milxdy-detail-header][data-testid="User-Name"] [data-milxdy-display-name-cluster="true"] {
+  max-width: 100% !important;
+}
+article [data-milxdy-tweet-header="true"][data-milxdy-detail-header][data-testid="User-Name"] [data-milxdy-display-name-row="true"] {
+  flex-direction: row !important;
+  align-items: center !important;
+}
+article [data-milxdy-tweet-header="true"][data-milxdy-detail-header][data-testid="User-Name"] .reminet-badge-slot,
+article [data-milxdy-tweet-header="true"][data-milxdy-detail-header][data-testid="User-Name"] .reminet-score-badge {
+  flex: 0 0 auto !important;
+  max-width: none !important;
+  overflow: visible !important;
+  white-space: nowrap !important;
+}
+
+/* Only rendered badges occupy space; unknown and absent accounts reserve nothing. */
+[data-reminet-badge-slot]:not([data-reminet-profile-slot="true"]) {
+  box-sizing: border-box;
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  min-width: 0 !important;
+  height: 24px !important;
+  margin-left: 6px !important;
+}
+[data-reminet-badge-slot][data-reminet-action-poke="true"]:not([data-reminet-profile-slot="true"]) {
+  flex: 0 0 auto !important;
+  width: max-content !important;
+  min-width: 0 !important;
+}
+[data-reminet-badge-slot]:not([data-reminet-profile-slot="true"]):not([data-reminet-state="ready"]) { display: none !important; }
+[data-milxdy-tweet-header="true"] [data-milxdy-display-name-row="true"],
+[data-milxdy-tweet-header="true"] [data-milxdy-metadata-row="true"] {
+  min-height: 24px !important;
+}
+
+/* Metrics remain one unbreakable unit, including outside the author header. */
+.reminet-score-badge,
+.reminet-badge-content,
+.reminet-badge-group,
+.reminet-label {
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+/* Padding and the optional border fit inside the badge height. */
+.reminet-score-badge,
+.reminet-badge-content {
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  max-height: 24px;
+}
+
+/* A wrapped metric block floats beside the native body text, not over it. */
+[data-reminet-flow-text] { display:block !important; }
+[data-reminet-flow-text]::after { content:""; display:table; clear:both; }
+.reminet-flow-badge { display:block; float:right; margin:0 0 4px 6px; shape-outside:margin-box; }
+.reminet-flow-badge [data-reminet-badge-slot]:not([data-reminet-profile-slot="true"]) { margin-left:0 !important; }
+[data-reminet-badge-slot][data-reminet-wrapped-right]:not([data-reminet-profile-slot="true"]) { margin-left:auto !important; }
+[data-reminet-flow-text] > [data-testid="tweetText"] { display:block !important; overflow:visible !important; }

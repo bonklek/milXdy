@@ -1,3 +1,7 @@
+import { MUSIC_ENRICHMENT_SERVICES_KEY, musicEnrichmentChoices, createMusicEnrichmentSession, type MusicEnrichmentChoices, type MusicEnrichmentService } from "./enrichment-consent";
+import { bindMusicEnrichmentPreferences } from "./enrichment-preferences";
+import { musicEnrichmentControls, confirmMusicEnrichment, cancelMusicEnrichmentReview } from "./enrichment-controls";
+import { readMetadata } from "./local-metadata";
 import QRCode from "qrcode";
 import jsQR from "jsqr";
 import {
@@ -16,7 +20,10 @@ import {
 import { animateOverlayAppClose, ensureOverlayAppChromeStyles, markOverlayAppLayoutReady, prepareOverlayAppRoot } from "../../platform/overlay/app-chrome";
 import { registerOverlayAppRoot } from "../../platform/overlay/app-layout";
 import type { MilxdyContentAppContext } from "../../platform/app-sdk/app-platform";
+import type { AppStorageChanges } from "../../platform/app-sdk/app-storage";
 import type { OverlayDockSide } from "../../platform/overlay/dock";
+import { createMusicSdkServices, type MusicSdkServices } from "./sdk-services";
+import { loadMusicLayoutSettings } from "./settings-loader";
 
 const ROOT_ID = "milxdy-music-root";
 const MUSIC_LOGO_PATH = "music/milxdy-music-logo.png";
@@ -27,6 +34,9 @@ const TOP_KEY = "milxdy.music.top";
 const LIBRARY_MINIMIZED_KEY = "milxdy.music.libraryMinimized";
 const ACOUSTID_CLIENT_KEY = "milxdy.music.acoustIdClientKey";
 const AUTO_ACCEPT_ISRC_KEY = "milxdy.music.autoAcceptHighConfidenceIsrc";
+const enrichmentSession = createMusicEnrichmentSession();
+let enrichmentReviewPending = false;
+let activeEnrichmentToken = 0;
 const VOLUME_KEY = "milxdy.music.volume";
 const DB_NAME = "milxdy-music";
 const DB_VERSION = 1;
@@ -114,7 +124,7 @@ const DEFAULT_ACHIEVEMENT_TRACK: MusicTrack = {
   artist: "Remilia",
   album: "Achievements",
   durationMs: null,
-  artworkDataUrl: chrome.runtime.getURL("music/achievements-remilia-artwork-square.png"),
+  artworkDataUrl: undefined,
   isrc: null,
   isrcConfidence: 0,
   fileHandleKey: "achievements.remilia.org:gods-remix",
@@ -129,14 +139,6 @@ const DEFAULT_ACHIEVEMENT_TRACK: MusicTrack = {
     nextRetryAt: null,
     candidates: [],
   },
-};
-
-type ParsedAudioMetadata = {
-  title?: string;
-  artist?: string;
-  album?: string;
-  isrc?: string;
-  artworkDataUrl?: string;
 };
 
 type MusicPlaylist = {
@@ -208,6 +210,7 @@ type MusicState = LibraryState & {
   lastQrDataUrl: string;
   acoustIdClientKey: string;
   autoAcceptHighConfidenceIsrc: boolean;
+  enrichmentServices: MusicEnrichmentChoices;
   libraryMinimized: boolean;
   layoutReady: boolean;
   isrcEditor: { trackId: string; draft: string; validation: string; returnFocus: HTMLElement | null } | null;
@@ -253,6 +256,7 @@ const state: MusicState = {
   lastQrDataUrl: "",
   acoustIdClientKey: "",
   autoAcceptHighConfidenceIsrc: true,
+  enrichmentServices: musicEnrichmentChoices(null),
   libraryMinimized: false,
   layoutReady: false,
   isrcEditor: null,
@@ -270,19 +274,25 @@ let booted = false;
 let addRuntimeDisposable: MilxdyContentAppContext["addDisposable"] = () => undefined;
 let appSdkSendMessage: MilxdyContentAppContext["sendMessage"] | null = null;
 let lifecycleSignal: AbortSignal | null = null;
+let sdkServices: MusicSdkServices | null = null;
+let activationGeneration = 0;
 
 export function boot(context?: MilxdyContentAppContext): void {
   if (booted) return;
+  if (!context?.storage || !context.resolveAssetUrl) throw new Error("Music requires an SDK app context");
   booted = true;
+  const generation = ++activationGeneration;
   state.playback.repeatMode = DEFAULT_REPEAT_MODE;
   lifecycleSignal = context?.signal || null;
   addRuntimeDisposable = context?.addDisposable || (() => undefined);
   appSdkSendMessage = context?.sendMessage || null;
+  sdkServices = createMusicSdkServices(context, lifecycleActive);
+  DEFAULT_ACHIEVEMENT_TRACK.artworkDataUrl = sdkServices.assetUrl("music/achievements-remilia-artwork-square.png");
   ensureOverlayAppChromeStyles();
   registerDockItem();
-  void loadLayoutSettings();
-  void loadMusicSettings();
-  void loadTheme();
+  void loadLayoutSettings(generation);
+  void loadMusicSettings(generation);
+  void loadTheme(generation);
   observeSettings(addRuntimeDisposable);
   void loadLibrary();
 }
@@ -301,7 +311,8 @@ export function close(): void {
 export function disable(): void {
   playbackGeneration += 1;
   state.scanCancel = true;
-  state.enrichCancel = true;
+  state.enrichCancel = true; state.enrichActive = false; activeEnrichmentToken = 0;
+  enrichmentSession.stop(); cancelMusicEnrichmentReview();
   closePanel();
   if (audio) {
     audio.pause();
@@ -311,6 +322,7 @@ export function disable(): void {
 }
 
 export function dispose(): void {
+  ++activationGeneration;
   disable();
   state.appFrame?.remove();
   state.appFrame = null;
@@ -322,6 +334,7 @@ export function dispose(): void {
   addRuntimeDisposable = () => undefined;
   appSdkSendMessage = null;
   lifecycleSignal = null;
+  sdkServices = null;
   booted = false;
 }
 
@@ -333,7 +346,7 @@ function registerDockItem(): void {
   state.appFrame = createOverlayAppFrame({
     id: "music",
     label: "Music",
-    icon: chrome.runtime.getURL(MUSIC_LOGO_PATH),
+    icon: sdkServices!.assetUrl(MUSIC_LOGO_PATH),
     initialSide: state.side,
     isOpen: () => Boolean(state.root && state.open),
     onOpen: () => {
@@ -350,59 +363,51 @@ function registerDockItem(): void {
   });
 }
 
-async function loadLayoutSettings(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get([WIDTH_KEY, HEIGHT_KEY, TOP_KEY, LIBRARY_MINIMIZED_KEY]).catch(() => ({}));
-  if (!lifecycleActive()) return;
-  state.libraryMinimized = stored[LIBRARY_MINIMIZED_KEY] === true;
-  const width = Number(stored[WIDTH_KEY]);
-  const height = Number(stored[HEIGHT_KEY]);
-  const top = Number(stored[TOP_KEY]);
-  const minimum = panelMinimums();
-  const layout = await restoreOverlayPanelBox("music", {
-    side: state.side,
-    minWidth: minimum.minWidth,
-    minHeight: minimum.minHeight,
-    defaultWidth: state.width,
-    defaultHeight: state.height,
-    legacy: { width, height, topOffset: top },
+async function loadLayoutSettings(generation = activationGeneration): Promise<void> {
+  await loadMusicLayoutSettings({
+    services: sdkServices!,
+    isCurrent: () => lifecycleActive() && generation === activationGeneration,
+    state,
+    panelMinimums,
+    applyLayout,
+    render,
+    restoreLayout: restoreOverlayPanelBox,
+    keys: { width: WIDTH_KEY, height: HEIGHT_KEY, top: TOP_KEY, libraryMinimized: LIBRARY_MINIMIZED_KEY },
   });
-  state.x = layout.x ?? state.x;
-  state.width = layout.width;
-  state.height = layout.height;
-  state.topOffset = layout.topOffset;
-  state.layoutReady = true;
-  applyLayout();
-  render();
 }
 
-async function loadTheme(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get({ [STYLE_THEME_KEY]: "system" }).catch(() => ({}));
-  if (!lifecycleActive()) return;
+async function loadTheme(generation = activationGeneration): Promise<void> {
+  const stored = await sdkServices!.readLocal({ [STYLE_THEME_KEY]: "system" }).catch((): Record<string, unknown> => ({}));
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   state.theme = normalizeTheme(stored[STYLE_THEME_KEY]);
   applyTheme();
 }
 
-async function loadMusicSettings(): Promise<void> {
-  const stored: Record<string, unknown> = await chrome.storage.local.get({
+async function loadMusicSettings(generation = activationGeneration): Promise<void> {
+  const stored = await sdkServices!.readLocal({
     [ACOUSTID_CLIENT_KEY]: "",
     [AUTO_ACCEPT_ISRC_KEY]: true,
+    [MUSIC_ENRICHMENT_SERVICES_KEY]: null,
     [VOLUME_KEY]: state.playback.volume,
-  }).catch(() => ({}));
-  if (!lifecycleActive()) return;
+  }).catch((): Record<string, unknown> => ({}));
+  if (!lifecycleActive() || generation !== activationGeneration) return;
   state.acoustIdClientKey = typeof stored[ACOUSTID_CLIENT_KEY] === "string" ? stored[ACOUSTID_CLIENT_KEY].trim() : "";
   state.autoAcceptHighConfidenceIsrc = stored[AUTO_ACCEPT_ISRC_KEY] !== false;
+  state.enrichmentServices = musicEnrichmentChoices(stored[MUSIC_ENRICHMENT_SERVICES_KEY]);
+  enrichmentSession.update(state.enrichmentServices);
   const volume = Number(stored[VOLUME_KEY]);
   if (Number.isFinite(volume)) state.playback.volume = Math.max(0, Math.min(1, volume));
 }
 
 function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]): void {
-  const storageListener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+  const storageListener = (changes: AppStorageChanges, area: string) => {
     if (area !== "local") return;
     if (changes[STYLE_THEME_KEY]) {
       state.theme = normalizeTheme(changes[STYLE_THEME_KEY].newValue);
       applyTheme();
     }
     if (changes[ACOUSTID_CLIENT_KEY]) {
+      enrichmentSession.stop(); state.enrichCancel = true;
       state.acoustIdClientKey = typeof changes[ACOUSTID_CLIENT_KEY].newValue === "string"
         ? changes[ACOUSTID_CLIENT_KEY].newValue.trim()
         : "";
@@ -411,6 +416,10 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
     if (changes[AUTO_ACCEPT_ISRC_KEY]) {
       state.autoAcceptHighConfidenceIsrc = changes[AUTO_ACCEPT_ISRC_KEY].newValue !== false;
       render();
+    }
+    if (changes[MUSIC_ENRICHMENT_SERVICES_KEY]) {
+      state.enrichmentServices = musicEnrichmentChoices(changes[MUSIC_ENRICHMENT_SERVICES_KEY].newValue);
+      enrichmentSession.update(state.enrichmentServices); state.enrichCancel = true; render();
     }
     if (changes[VOLUME_KEY]) {
       const volume = Number(changes[VOLUME_KEY].newValue);
@@ -428,8 +437,8 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
       render();
     }
   };
-  chrome.storage.onChanged.addListener(storageListener);
-  addDisposable(() => chrome.storage.onChanged.removeListener(storageListener));
+  const unsubscribe = sdkServices?.observeLocal((changes) => storageListener(changes, "local"));
+  if (unsubscribe) addDisposable(unsubscribe);
   addDisposable(observeOverlayPanelTheme(applyTheme));
   const resizeListener = () => {
     state.width = clampWidth(state.width);
@@ -446,7 +455,7 @@ function observeSettings(addDisposable: MilxdyContentAppContext["addDisposable"]
 function handleKeyboardShortcut(event: KeyboardEvent): void {
   if (!state.open || !state.root) return;
   if (!isMusicKeyboardActive()) return;
-  if (isEditableTarget(event.target)) return;
+  if (isEditableTarget(event.target) || isNativeInteractiveTarget(event.target)) return;
   if (event.altKey || event.ctrlKey || event.metaKey) return;
 
   const key = event.key.toLowerCase();
@@ -522,6 +531,10 @@ function isEditableTarget(target: EventTarget | null): boolean {
   return Boolean(target.closest("input, textarea, select, [contenteditable='true']"));
 }
 
+function isNativeInteractiveTarget(target: EventTarget | null): boolean {
+  return target instanceof Element && Boolean(target.closest("button, a[href], summary, [role='button'], [role='tab'], input, select, textarea"));
+}
+
 function ensureRoot(): void {
   const existing = document.getElementById(ROOT_ID) as HTMLElement | null;
   if (existing) {
@@ -540,7 +553,7 @@ function ensureRoot(): void {
     <div class="milxdy-music-card milxdy-overlay-app-card">
       <header class="milxdy-music-header milxdy-overlay-app-header">
         <div class="milxdy-music-title">
-          <span class="milxdy-music-app-icon" aria-hidden="true"><img src="${chrome.runtime.getURL(MUSIC_LOGO_PATH)}" alt=""></span>
+          <span class="milxdy-music-app-icon" aria-hidden="true"><img src="${sdkServices!.assetUrl(MUSIC_LOGO_PATH)}" alt=""></span>
           <span class="milxdy-music-compact-title" data-role="compact-title"></span>
           <strong>Music</strong>
           <span data-role="status">Ready</span>
@@ -621,7 +634,7 @@ function toggleLibraryMinimized(): void {
     ? clampHeight(Math.min(state.height, COMPACT_DEFAULT_HEIGHT))
     : clampHeight(state.height);
   notePanelInteraction();
-  void chrome.storage.local.set({ [LIBRARY_MINIMIZED_KEY]: state.libraryMinimized, [WIDTH_KEY]: state.width, [HEIGHT_KEY]: state.height });
+  sdkServices?.writeLocal({ [LIBRARY_MINIMIZED_KEY]: state.libraryMinimized, [WIDTH_KEY]: state.width, [HEIGHT_KEY]: state.height });
   applyLayout();
   render();
 }
@@ -770,7 +783,6 @@ async function scanFolder(folder: MusicFolder): Promise<void> {
     state.scanActive = false;
     if (lifecycleActive()) {
       render();
-      void runEnrichmentQueue();
     }
   }
 }
@@ -822,247 +834,48 @@ async function buildTrack(folder: MusicFolder, entry: { file: File; handle: File
   };
 }
 
-async function readMetadata(file: File): Promise<{ title: string; artist: string; album: string; isrc: string | null; durationMs: number | null; artworkDataUrl?: string }> {
-  const lower = file.name.toLowerCase();
-  const tags = lower.endsWith(".mp3")
-    ? await readId3v2(file)
-    : lower.endsWith(".flac")
-      ? await readFlacMetadata(file)
-      : lower.endsWith(".m4a") || lower.endsWith(".mp4") || lower.endsWith(".alac")
-        ? await readMp4Metadata(file)
-        : {};
-  const durationMs = await readDuration(file).catch(() => null);
-  return {
-    title: tags.title || "",
-    artist: tags.artist || "",
-    album: tags.album || "",
-    isrc: tags.isrc || null,
-    durationMs,
-    artworkDataUrl: tags.artworkDataUrl,
-  };
-}
-
-async function readId3v2(file: File): Promise<ParsedAudioMetadata> {
-  const header = new Uint8Array(await file.slice(0, 10).arrayBuffer());
-  if (header[0] !== 0x49 || header[1] !== 0x44 || header[2] !== 0x33) return {};
-  const major = header[3];
-  const tagSize = syncSafe(header.subarray(6, 10));
-  const bytes = new Uint8Array(await file.slice(10, 10 + tagSize).arrayBuffer());
-  const out: ParsedAudioMetadata = {};
-  let offset = 0;
-  while (offset + 10 <= bytes.length) {
-    const id = ascii(bytes.subarray(offset, offset + 4));
-    if (!/^[A-Z0-9]{4}$/.test(id)) break;
-    const size = major === 4 ? syncSafe(bytes.subarray(offset + 4, offset + 8)) : uint32(bytes.subarray(offset + 4, offset + 8));
-    if (size <= 0 || offset + 10 + size > bytes.length) break;
-    const frame = bytes.subarray(offset + 10, offset + 10 + size);
-    const value = id === "APIC" ? "" : decodeTextFrame(frame);
-    if (id === "TIT2") out.title = value;
-    if (id === "TPE1") out.artist = value;
-    if (id === "TALB") out.album = value;
-    if (id === "TSRC") out.isrc = value;
-    if (id === "APIC" && !out.artworkDataUrl) out.artworkDataUrl = parseApicFrame(frame);
-    offset += 10 + size;
-  }
-  return out;
-}
-
-async function readFlacMetadata(file: File): Promise<ParsedAudioMetadata> {
-  const header = new Uint8Array(await file.slice(0, 4).arrayBuffer());
-  if (ascii(header) !== "fLaC") return {};
-  let offset = 4;
-  while (offset + 4 <= file.size && offset < 2_000_000) {
-    const blockHeader = new Uint8Array(await file.slice(offset, offset + 4).arrayBuffer());
-    const isLast = Boolean(blockHeader[0] & 0x80);
-    const type = blockHeader[0] & 0x7f;
-    const size = (blockHeader[1] << 16) | (blockHeader[2] << 8) | blockHeader[3];
-    offset += 4;
-    if (size <= 0 || offset + size > file.size) break;
-    if (type === 6) {
-      const block = new Uint8Array(await file.slice(offset, offset + size).arrayBuffer());
-      const artworkDataUrl = parseFlacPictureBlock(block);
-      if (artworkDataUrl) return { artworkDataUrl };
-    }
-    offset += size;
-    if (isLast) break;
-  }
-  return {};
-}
-
-function parseFlacPictureBlock(bytes: Uint8Array): string | undefined {
-  if (bytes.length < 32) return undefined;
-  let offset = 4;
-  const mimeLength = uint32(bytes.subarray(offset, offset + 4));
-  offset += 4;
-  if (mimeLength <= 0 || offset + mimeLength > bytes.length) return undefined;
-  const mime = ascii(bytes.subarray(offset, offset + mimeLength)).toLowerCase();
-  offset += mimeLength;
-  if (offset + 4 > bytes.length) return undefined;
-  const descriptionLength = uint32(bytes.subarray(offset, offset + 4));
-  offset += 4 + descriptionLength;
-  offset += 16;
-  if (offset + 4 > bytes.length) return undefined;
-  const imageLength = uint32(bytes.subarray(offset, offset + 4));
-  offset += 4;
-  if (imageLength <= 0 || offset + imageLength > bytes.length || imageLength > 1_500_000) return undefined;
-  const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
-  if (!/^image\/(jpeg|png|webp|gif)$/.test(normalizedMime)) return undefined;
-  return `data:${normalizedMime};base64,${base64Bytes(bytes.subarray(offset, offset + imageLength))}`;
-}
-
-async function readMp4Metadata(file: File): Promise<ParsedAudioMetadata> {
-  const bytes = new Uint8Array(await file.slice(0, Math.min(file.size, 4_000_000)).arrayBuffer());
-  const covr = findMp4Atom(bytes, "covr");
-  if (!covr) return {};
-  const data = findMp4Atom(covr, "data");
-  if (!data || data.length <= 16) return {};
-  const typeCode = uint32(data.subarray(8, 12));
-  const mime = typeCode === 13 ? "image/jpeg" : typeCode === 14 ? "image/png" : "image/jpeg";
-  const image = data.subarray(16);
-  if (!image.length || image.length > 1_500_000) return {};
-  return { artworkDataUrl: `data:${mime};base64,${base64Bytes(image)}` };
-}
-
-function findMp4Atom(bytes: Uint8Array, target: string): Uint8Array | null {
-  let offset = 0;
-  while (offset + 8 <= bytes.length) {
-    let size = uint32(bytes.subarray(offset, offset + 4));
-    const type = ascii(bytes.subarray(offset + 4, offset + 8));
-    let headerSize = 8;
-    if (size === 1 && offset + 16 <= bytes.length) {
-      const large = Number(uint64(bytes.subarray(offset + 8, offset + 16)));
-      if (!Number.isSafeInteger(large)) return null;
-      size = large;
-      headerSize = 16;
-    }
-    if (size < headerSize || offset + size > bytes.length) break;
-    const body = bytes.subarray(offset + headerSize, offset + size);
-    if (type === target) return body;
-    const nested = ["moov", "udta", "meta", "ilst", "covr"].includes(type)
-      ? findMp4Atom(type === "meta" ? body.subarray(4) : body, target)
-      : null;
-    if (nested) return nested;
-    offset += size;
-  }
-  return null;
-}
-
-function uint64(bytes: Uint8Array): bigint {
-  let value = 0n;
-  for (const byte of bytes) value = (value << 8n) | BigInt(byte);
-  return value;
-}
-
-function syncSafe(bytes: Uint8Array): number {
-  return ((bytes[0] & 0x7f) << 21) | ((bytes[1] & 0x7f) << 14) | ((bytes[2] & 0x7f) << 7) | (bytes[3] & 0x7f);
-}
-
-function uint32(bytes: Uint8Array): number {
-  return (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
-}
-
-function decodeTextFrame(bytes: Uint8Array): string {
-  if (!bytes.length) return "";
-  const encoding = bytes[0];
-  const data = bytes.subarray(1);
-  const label = encoding === 1 || encoding === 2 ? "utf-16" : "utf-8";
-  return new TextDecoder(label).decode(data).replace(/\0+$/g, "").trim();
-}
-
-function parseApicFrame(bytes: Uint8Array): string | undefined {
-  if (bytes.length < 8) return undefined;
-  let offset = 1;
-  const mimeEnd = bytes.indexOf(0, offset);
-  if (mimeEnd <= offset) return undefined;
-  const mime = ascii(bytes.subarray(offset, mimeEnd)).toLowerCase();
-  offset = mimeEnd + 1;
-  offset += 1;
-  const descriptionEnd = findTextTerminator(bytes, offset, bytes[0]);
-  if (descriptionEnd < 0) return undefined;
-  const imageStart = descriptionEnd + (bytes[0] === 1 || bytes[0] === 2 ? 2 : 1);
-  if (imageStart >= bytes.length) return undefined;
-  const image = bytes.subarray(imageStart);
-  if (!image.length || image.length > 1_500_000) return undefined;
-  const normalizedMime = mime === "image/jpg" ? "image/jpeg" : mime;
-  if (!/^image\/(jpeg|png|webp|gif)$/.test(normalizedMime)) return undefined;
-  return `data:${normalizedMime};base64,${base64Bytes(image)}`;
-}
-
-function findTextTerminator(bytes: Uint8Array, offset: number, encoding: number): number {
-  if (encoding === 1 || encoding === 2) {
-    for (let index = offset; index + 1 < bytes.length; index += 2) {
-      if (bytes[index] === 0 && bytes[index + 1] === 0) return index;
-    }
-    return -1;
-  }
-  return bytes.indexOf(0, offset);
-}
-
-function base64Bytes(bytes: Uint8Array): string {
-  let binary = "";
-  const chunkSize = 0x8000;
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
-  }
-  return btoa(binary);
-}
-
-function ascii(bytes: Uint8Array): string {
-  return Array.from(bytes).map((byte) => String.fromCharCode(byte)).join("");
-}
-
-function readDuration(file: File): Promise<number | null> {
-  return new Promise((resolve) => {
-    const probe = document.createElement("audio");
-    const url = URL.createObjectURL(file);
-    const done = (value: number | null) => {
-      URL.revokeObjectURL(url);
-      probe.removeAttribute("src");
-      probe.load();
-      resolve(value);
-    };
-    probe.preload = "metadata";
-    probe.addEventListener("loadedmetadata", () => done(Number.isFinite(probe.duration) ? Math.round(probe.duration * 1000) : null), { once: true });
-    probe.addEventListener("error", () => done(null), { once: true });
-    probe.src = url;
-  });
-}
-
 async function runEnrichmentQueue(): Promise<void> {
   if (!lifecycleActive()) return;
   if (state.enrichActive) {
-    state.enrichCancel = true;
+    state.enrichCancel = true; enrichmentSession.stop();
     state.status = "Stopping ISRC enrichment...";
     render();
     return;
   }
+  if (enrichmentReviewPending || enrichmentPreferences.pending()) return;
+  enrichmentReviewPending = true;
+  const reviewToken = enrichmentSession.token(), generation = activationGeneration, reviewed = JSON.stringify(state.enrichmentServices), key = state.acoustIdClientKey;
+  const accepted = await confirmMusicEnrichment(state.enrichmentServices, key).finally(() => { enrichmentReviewPending = false; });
+  if (!accepted || !lifecycleActive() || generation !== activationGeneration || reviewToken !== enrichmentSession.token() || reviewed !== JSON.stringify(state.enrichmentServices) || key !== state.acoustIdClientKey) return;
+  const token = enrichmentSession.start(); activeEnrichmentToken = token;
   state.enrichActive = true;
   state.enrichCancel = false;
   try {
     const db = await openDb();
     const pending = state.tracks.filter((track) => shouldEnrich(track)).slice(0, 40);
     for (const track of pending) {
-      if (state.enrichCancel || !lifecycleActive()) break;
+      if (!remoteEnrichmentAllowed(token)) break;
       if (audio && !audio.paused) await sleep(450);
-      if (state.enrichCancel || !lifecycleActive()) break;
-      track.enrichment = await enrichTrack(track);
-      if (state.enrichCancel || !lifecycleActive()) break;
+      if (!remoteEnrichmentAllowed(token)) break;
+      const enrichment = await enrichTrack(track, token);
+      if (!remoteEnrichmentAllowed(token)) break;
+      track.enrichment = enrichment;
       if (track.enrichment.status === "matched" && track.enrichment.candidates[0]) {
         track.isrc = track.enrichment.candidates[0].isrc;
         track.isrcConfidence = track.enrichment.candidates[0].confidence;
       }
       await putItem(db, "tracks", track);
-      if (state.enrichCancel || !lifecycleActive()) break;
+      if (!remoteEnrichmentAllowed(token)) break;
       upsertTrack(track);
       renderSoon();
     }
     if (state.enrichCancel) state.status = "ISRC enrichment stopped";
   } finally {
-    state.enrichActive = false;
-    state.enrichCancel = false;
-    if (lifecycleActive()) render();
+    if (generation === activationGeneration && activeEnrichmentToken === token) { state.enrichActive = false; state.enrichCancel = false; enrichmentSession.stop(); if (lifecycleActive()) render(); }
   }
 }
+
+const remoteEnrichmentAllowed = (token: number, service?: MusicEnrichmentService): boolean => lifecycleActive() && enrichmentSession.allowed(service, token) && !state.enrichCancel;
 
 function shouldEnrich(track: MusicTrack): boolean {
   if (isDefaultAchievementTrack(track)) return false;
@@ -1072,14 +885,17 @@ function shouldEnrich(track: MusicTrack): boolean {
   return true;
 }
 
-async function enrichTrack(track: MusicTrack): Promise<IsrcEnrichmentState> {
+async function enrichTrack(track: MusicTrack, token: number): Promise<IsrcEnrichmentState> {
   const now = Date.now();
   try {
-    const fingerprint = await fingerprintTrack(track);
+    if (!remoteEnrichmentAllowed(token)) return track.enrichment;
+    const fingerprint = remoteEnrichmentAllowed(token, "acoustid") && state.acoustIdClientKey
+      ? await fingerprintTrack(track) : { fingerprint: null, fingerprintHash: await metadataFingerprint(track) };
+    if (!remoteEnrichmentAllowed(token)) return track.enrichment;
     const candidates = [
       ...inferIsrcCandidates(track),
-      ...await lookupAcoustIdCandidates(track, fingerprint.fingerprint),
-      ...await lookupMusicBrainzCandidates(track),
+      ...await lookupAcoustIdCandidates(track, fingerprint.fingerprint, token),
+      ...await lookupMusicBrainzCandidates(track, token),
     ].sort((left, right) => right.confidence - left.confidence);
     if (candidates.length > 0 && candidates[0].confidence >= 0.92 && state.autoAcceptHighConfidenceIsrc) {
       return {
@@ -1167,11 +983,13 @@ async function hashText(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).slice(0, 16).map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string | null): Promise<IsrcCandidate[]> {
+async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string | null, token: number): Promise<IsrcCandidate[]> {
+  if (!remoteEnrichmentAllowed(token, "acoustid")) return [];
   const client = state.acoustIdClientKey.trim();
   if (!client || !fingerprint || !track.durationMs) return [];
   const response = await runtimeMessage<{ ok?: boolean; data?: unknown; error?: string }>({
     type: "music:postForm",
+    authorization: state.enrichmentServices.revision,
     url: "https://api.acoustid.org/v2/lookup",
     form: {
       client,
@@ -1181,7 +999,7 @@ async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string |
       format: "json",
     },
   });
-  if (!response?.ok) return [];
+  if (!remoteEnrichmentAllowed(token, "acoustid") || !response?.ok) return [];
   const data = response.data as Record<string, unknown> | null;
   if (data?.status !== "ok") return [];
   const out: IsrcCandidate[] = [];
@@ -1192,7 +1010,8 @@ async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string |
     for (const recording of objectArray(result.recordings).slice(0, 4)) {
       const musicBrainzRecordingId = typeof recording.id === "string" ? recording.id : undefined;
       if (!musicBrainzRecordingId) continue;
-      const record = await lookupMusicBrainzRecordingById(musicBrainzRecordingId);
+      if (!remoteEnrichmentAllowed(token, "acoustid")) return [];
+      const record = await lookupMusicBrainzRecordingById(musicBrainzRecordingId, token);
       const sourceRecord = record || recording;
       out.push(...candidatesFromMusicBrainzRecord(sourceRecord, track, {
         source: "acoustid",
@@ -1205,18 +1024,21 @@ async function lookupAcoustIdCandidates(track: MusicTrack, fingerprint: string |
   return out;
 }
 
-async function lookupMusicBrainzRecordingById(id: string): Promise<Record<string, unknown> | null> {
+async function lookupMusicBrainzRecordingById(id: string, token: number): Promise<Record<string, unknown> | null> {
+  if (!remoteEnrichmentAllowed(token, "musicbrainz")) return null;
   const elapsed = Date.now() - lastMusicBrainzLookupAt;
   if (elapsed < 1100) await sleep(1100 - elapsed);
+  if (!remoteEnrichmentAllowed(token, "musicbrainz")) return null;
   lastMusicBrainzLookupAt = Date.now();
   const url = new URL(`https://musicbrainz.org/ws/2/recording/${encodeURIComponent(id)}`);
   url.searchParams.set("inc", "isrcs+artists+releases");
   url.searchParams.set("fmt", "json");
   const response = await runtimeMessage<{ ok?: boolean; data?: unknown; error?: string }>({
     type: "music:fetchJson",
+    authorization: state.enrichmentServices.revision,
     url: url.href,
   });
-  if (!response?.ok || !response.data || typeof response.data !== "object" || Array.isArray(response.data)) return null;
+  if (!remoteEnrichmentAllowed(token, "musicbrainz") || !response?.ok || !response.data || typeof response.data !== "object" || Array.isArray(response.data)) return null;
   return response.data as Record<string, unknown>;
 }
 
@@ -1233,10 +1055,12 @@ function inferIsrcCandidates(track: MusicTrack): IsrcCandidate[] {
   }];
 }
 
-async function lookupMusicBrainzCandidates(track: MusicTrack): Promise<IsrcCandidate[]> {
+async function lookupMusicBrainzCandidates(track: MusicTrack, token: number): Promise<IsrcCandidate[]> {
+  if (!remoteEnrichmentAllowed(token, "musicbrainz")) return [];
   if (!track.title || track.title === "Unknown Title") return [];
   const elapsed = Date.now() - lastMusicBrainzLookupAt;
   if (elapsed < 1100) await sleep(1100 - elapsed);
+  if (!remoteEnrichmentAllowed(token, "musicbrainz")) return [];
   lastMusicBrainzLookupAt = Date.now();
   const query = [
     `recording:${quoteLucene(track.title)}`,
@@ -1249,9 +1073,10 @@ async function lookupMusicBrainzCandidates(track: MusicTrack): Promise<IsrcCandi
   url.searchParams.set("limit", "8");
   const response = await runtimeMessage<{ ok?: boolean; data?: unknown; error?: string }>({
     type: "music:fetchJson",
+    authorization: state.enrichmentServices.revision,
     url: url.href,
   });
-  if (!response?.ok) return [];
+  if (!remoteEnrichmentAllowed(token, "musicbrainz") || !response?.ok) return [];
   const records = objectArray((response.data as Record<string, unknown> | null)?.recordings);
   return records.flatMap((record) => candidatesFromMusicBrainzRecord(record, track));
 }
@@ -1371,7 +1196,7 @@ async function playTrack(trackId: string, queueIds?: string[]): Promise<void> {
 
 async function resolveTrackAudioSource(track: MusicTrack): Promise<{ url: string; revoke: boolean } | null> {
   if (track.source === "bundled") {
-    return { url: chrome.runtime.getURL(track.path), revoke: false };
+    return { url: sdkServices!.assetUrl(track.path), revoke: false };
   }
   const folder = state.folders.find((candidate) => candidate.id === track.folderId);
   const allowed = folder ? await requestReadPermission(folder.handle) : false;
@@ -1527,8 +1352,8 @@ function setVolume(value: number): void {
   state.playback.volume = Math.max(0, Math.min(1, value));
   if (state.playback.volume > 0.01) lastAudibleVolume = state.playback.volume;
   if (audio) audio.volume = state.playback.volume;
-  void chrome.storage.local.set({ [VOLUME_KEY]: state.playback.volume });
-  renderPlayer();
+  sdkServices?.writeLocal({ [VOLUME_KEY]: state.playback.volume });
+  updatePlayerOnly();
 }
 
 function toggleMute(): void {
@@ -1861,6 +1686,7 @@ function render(): void {
   const root = state.root;
   updateDockState();
   if (!root) return;
+  const focus = captureMusicFocus(root);
   root.dataset.side = state.side;
   root.dataset.minimized = String(state.libraryMinimized);
   root.dataset.playerSize = compactPlayerSize();
@@ -1906,6 +1732,21 @@ function render(): void {
     if (state.tab === "settings") renderSettings(body);
   }
   renderPlayer();
+  restoreMusicFocus(root, focus);
+}
+
+function captureMusicFocus(root: HTMLElement): { role: string; selectionStart?: number | null; selectionEnd?: number | null } | null {
+  const active = document.activeElement;
+  if (!(active instanceof HTMLInputElement) || !root.contains(active) || !active.dataset.role) return null;
+  return { role: active.dataset.role, selectionStart: active.selectionStart, selectionEnd: active.selectionEnd };
+}
+
+function restoreMusicFocus(root: HTMLElement, focus: ReturnType<typeof captureMusicFocus>): void {
+  if (!focus || document.activeElement !== document.body) return;
+  const input = root.querySelector<HTMLInputElement>(`[data-role="${focus.role}"]`);
+  if (!input) return;
+  input.focus({ preventScroll: true });
+  if (typeof focus.selectionStart === "number" && typeof focus.selectionEnd === "number") input.setSelectionRange(focus.selectionStart, focus.selectionEnd);
 }
 
 function renderSoon(): void {
@@ -1921,6 +1762,7 @@ function renderLibrary(body: HTMLElement): void {
   const toolbar = document.createElement("div");
   toolbar.className = "milxdy-music-toolbar";
   const search = document.createElement("input");
+  search.dataset.role = "library-search";
   search.type = "search";
   search.placeholder = "Search library";
   search.value = state.search;
@@ -2498,6 +2340,8 @@ function renderRadio(body: HTMLElement): void {
   if (state.lastQrDataUrl) body.append(qrPreview());
 }
 
+const enrichmentPreferences = bindMusicEnrichmentPreferences(state, () => sdkServices!, lifecycleActive, enrichmentSession, render);
+
 function renderSettings(body: HTMLElement): void {
   const settings = document.createElement("div");
   settings.className = "milxdy-music-settings";
@@ -2506,8 +2350,11 @@ function renderSettings(body: HTMLElement): void {
     settingLine("Tracks", `${state.tracks.length}`, actionButton("Rescan", () => void rescanFolders())),
     settingLine("Missing files", `${state.tracks.filter((track) => track.unavailable).length}`, actionButton("Repair", () => void repairMissingTracks())),
     settingLine("ISRC matched", `${state.tracks.filter((track) => track.isrc).length}`, actionButton("Enrich", () => void runEnrichmentQueue())),
+    musicEnrichmentControls({ choices: state.enrichmentServices, key: state.acoustIdClientKey, busy: enrichmentPreferences.pending(),
+      update: choices => enrichmentPreferences.save({ choices }),
+      saveKey: key => enrichmentPreferences.save({ key }),
+    }),
     autoAcceptSettingLine(),
-    acoustIdSettingLine(),
     settingLine("Library index", "Local IndexedDB", actionButton("Clear", () => void clearLibrary())),
   );
   body.append(settings);
@@ -2646,16 +2493,7 @@ function renderPlayer(): void {
   seek.addEventListener("input", () => {
     if (audio) audio.currentTime = Number(seek.value) / 1000;
   });
-  const volume = document.createElement("input");
-  volume.type = "range";
-  volume.min = "0";
-  volume.max = "1";
-  volume.step = "0.01";
-  volume.value = String(state.playback.volume);
-  volume.title = "Volume";
-  volume.addEventListener("input", () => {
-    setVolume(Number(volume.value));
-  });
+  const volume = playerVolumeControl();
 
   const progress = document.createElement("div");
   progress.className = "milxdy-music-progress";
@@ -2681,11 +2519,28 @@ function renderPlayer(): void {
   syncTrackRowPlaybackButtons();
 }
 
+function playerVolumeControl(): HTMLInputElement {
+  const volume = document.createElement("input");
+  volume.dataset.role = "player-volume";
+  volume.type = "range";
+  volume.min = "0";
+  volume.max = "1";
+  volume.step = "0.01";
+  volume.value = String(state.playback.volume);
+  volume.title = "Volume";
+  volume.addEventListener("input", () => {
+    setVolume(Number(volume.value));
+  });
+
+  return volume;
+}
+
 function updatePlayerOnly(): void {
   const root = state.root;
   if (!root) return;
   const track = state.tracks.find((candidate) => candidate.id === state.currentTrackId);
   const seek = root.querySelector<HTMLInputElement>('[data-role="player-seek"]');
+  const volume = root.querySelector<HTMLInputElement>('[data-role="player-volume"]');
   const elapsed = root.querySelector<HTMLElement>('[data-role="player-elapsed"]');
   const total = root.querySelector<HTMLElement>('[data-role="player-total"]');
   const meta = root.querySelector<HTMLElement>('[data-role="player-meta"]');
@@ -2694,6 +2549,7 @@ function updatePlayerOnly(): void {
     seek.max = String(track?.durationMs || 1);
     seek.value = String(state.playback.currentTimeMs);
   }
+  if (volume) volume.value = String(state.playback.volume);
   if (elapsed) elapsed.textContent = formatDuration(state.playback.currentTimeMs);
   if (total) total.textContent = formatDuration(track?.durationMs);
   if (compactTitle) {
@@ -2919,37 +2775,9 @@ function autoAcceptSettingLine(): HTMLElement {
   input.checked = state.autoAcceptHighConfidenceIsrc;
   input.addEventListener("change", () => {
     state.autoAcceptHighConfidenceIsrc = input.checked;
-    void chrome.storage.local.set({ [AUTO_ACCEPT_ISRC_KEY]: state.autoAcceptHighConfidenceIsrc });
+    sdkServices?.writeLocal({ [AUTO_ACCEPT_ISRC_KEY]: state.autoAcceptHighConfidenceIsrc });
   });
   row.append(copy, input);
-  return row;
-}
-
-function acoustIdSettingLine(): HTMLElement {
-  const row = document.createElement("div");
-  row.className = "milxdy-music-setting milxdy-music-setting-wide";
-  const copy = document.createElement("span");
-  const strong = document.createElement("strong");
-  strong.textContent = "AcoustID key";
-  const small = document.createElement("small");
-  small.textContent = state.acoustIdClientKey ? "Fingerprint lookup enabled" : "Optional, enables acoustic ISRC lookup";
-  copy.append(strong, small);
-  const controls = document.createElement("div");
-  controls.className = "milxdy-music-setting-controls";
-  const input = document.createElement("input");
-  input.type = "password";
-  input.autocomplete = "off";
-  input.spellcheck = false;
-  input.placeholder = "client key";
-  input.value = state.acoustIdClientKey;
-  const save = actionButton("Save", () => {
-    state.acoustIdClientKey = input.value.trim();
-    void chrome.storage.local.set({ [ACOUSTID_CLIENT_KEY]: state.acoustIdClientKey });
-    state.status = state.acoustIdClientKey ? "AcoustID lookup enabled" : "AcoustID lookup disabled";
-    render();
-  });
-  controls.append(input, save);
-  row.append(copy, controls);
   return row;
 }
 
@@ -3361,7 +3189,7 @@ function startDrag(event: PointerEvent): void {
     root,
     persist: (box) => {
       root.dataset.dragging = "false";
-      void chrome.storage.local.set({ [TOP_KEY]: box.topOffset });
+      sdkServices?.writeLocal({ [TOP_KEY]: box.topOffset });
     },
   });
 }
@@ -3375,7 +3203,7 @@ function startResize(event: PointerEvent): void {
     appId: "music",
     root,
     persist: (box) => {
-      void chrome.storage.local.set({ [WIDTH_KEY]: box.width, [HEIGHT_KEY]: box.height });
+      sdkServices?.writeLocal({ [WIDTH_KEY]: box.width, [HEIGHT_KEY]: box.height });
     },
   }, axis);
 }

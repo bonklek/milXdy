@@ -1,3 +1,4 @@
+import readingControlsStyles from "./reading-controls.css";
 import { icon } from "../post-reading/icons";
 import { TextHighlightEngine } from "../post-reading/highlightEngine";
 
@@ -90,39 +91,80 @@ let baselineCharsPerSecond = 13;
 let calibrationSamples = 0;
 let calibrationLocked = false;
 let frameBooted = false;
+let directReaderEnabled = window.top !== window;
 const CALIBRATION_SAMPLE_LIMIT = 5;
 const highlightEngine = new TextHighlightEngine();
 
-if (window.top !== window) {
-  bootWikiFrame();
+if (WIKI_HOSTS.has(window.location.hostname.toLowerCase())) {
+  bootWikiFrame(window.top !== window);
 }
 
-function bootWikiFrame(): void {
+function bootWikiFrame(embedded: boolean): void {
   if (frameBooted) return;
   frameBooted = true;
-  document.addEventListener("click", handleWikiFrameClick, true);
-  document.addEventListener("mousedown", handleWikiFrameMouseHistoryButton, true);
-  document.addEventListener("auxclick", handleWikiFrameMouseHistoryButton, true);
-  document.addEventListener("submit", handleWikiFrameSubmit, true);
-  window.addEventListener("pageshow", reportCurrentFrameUrl);
-  window.addEventListener("pageshow", installReadAloudButton);
+  document.documentElement.dataset.milxdyWikiSurface = embedded ? "embedded" : "direct";
+  if (embedded) {
+    document.addEventListener("click", handleWikiFrameClick, true);
+    document.addEventListener("mousedown", handleWikiFrameMouseHistoryButton, true);
+    document.addEventListener("auxclick", handleWikiFrameMouseHistoryButton, true);
+    document.addEventListener("submit", handleWikiFrameSubmit, true);
+    window.addEventListener("pageshow", reportCurrentFrameUrl);
+    window.addEventListener("message", handleParentMessage);
+  } else {
+    observeDirectReaderEnablement();
+    document.addEventListener("wikiSidebar:reader-highlight", handleDirectReaderHighlight as EventListener);
+    document.addEventListener("post-reading:wiki-reading-state", handleDirectReaderState as EventListener);
+  }
+  window.addEventListener("pageshow", refreshReadAloudButton);
   window.addEventListener("popstate", () => {
     clearReadHighlight();
-    reportCurrentFrameUrl();
-    installReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    refreshReadAloudButton();
   });
   window.addEventListener("hashchange", () => {
     clearReadHighlight();
-    reportCurrentFrameUrl();
-    installReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    refreshReadAloudButton();
   });
-  window.addEventListener("message", handleParentMessage);
   whenWikiDomReady(() => {
     injectPostReadingStyles();
-    installReadAloudButton();
-    reportCurrentFrameUrl();
-    new MutationObserver(() => installReadAloudButton()).observe(document.documentElement, { childList: true, subtree: true });
+    refreshReadAloudButton();
+    if (embedded) reportCurrentFrameUrl();
+    new MutationObserver(refreshReadAloudButton).observe(document.documentElement, { childList: true, subtree: true });
   });
+}
+
+function refreshReadAloudButton(): void {
+  if (!directReaderEnabled) {
+    document.getElementById(READ_BUTTON_ID)?.remove();
+    document.getElementById(READ_BUTTON_SLOT_ID)?.remove();
+    return;
+  }
+  installReadAloudButton();
+}
+
+function observeDirectReaderEnablement(): void {
+  void chrome.storage.sync.get({ enabled: true }).then((stored) => {
+    directReaderEnabled = stored.enabled !== false;
+    refreshReadAloudButton();
+  }).catch(() => undefined);
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area !== "sync" || !changes.enabled) return;
+    directReaderEnabled = changes.enabled.newValue !== false;
+    if (!directReaderEnabled) clearReadHighlight();
+    refreshReadAloudButton();
+  });
+}
+
+function handleDirectReaderHighlight(event: CustomEvent<unknown>): void {
+  if (!isWikiParentMessage(event.detail) || event.detail.type === "wikiSidebar:theme") return;
+  if (event.detail.type === "wikiSidebar:clearReadHighlight") clearReadHighlight();
+  else applyHighlightBoundary(event.detail);
+}
+
+function handleDirectReaderState(event: CustomEvent<unknown>): void {
+  const detail = event.detail && typeof event.detail === "object" ? event.detail as Record<string, unknown> : null;
+  if (detail?.active === false) clearReadHighlight();
 }
 
 function whenWikiDomReady(callback: () => void): void {
@@ -209,6 +251,12 @@ function requestReadAloud(): void {
     title: article.title,
     text: article.text,
   };
+  if (window.top === window) {
+    document.dispatchEvent(new CustomEvent("post-reading:read-document", {
+      detail: { id: message.articleId, title: message.title, text: message.text, source: "wiki" },
+    }));
+    return;
+  }
   void chrome.runtime.sendMessage(message).catch(() => undefined);
 }
 
@@ -885,95 +933,7 @@ function injectPostReadingStyles(): void {
   }
   const style = document.createElement("style");
   style.id = STYLE_ID;
-  style.textContent = `
-    .milxdy-wiki-read-aloud,
-    .milxdy-wiki-read-aloud-heading-slot .milxdy-wiki-read-aloud {
-      width: 30px;
-      height: 30px;
-      min-width: 30px;
-      border: 1px solid rgba(32, 35, 54, 0.22);
-      border-radius: 7px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: #54595d;
-      background: rgba(255, 255, 255, 0.72);
-      cursor: pointer;
-      padding: 0;
-      vertical-align: middle;
-    }
-    .milxdy-wiki-read-aloud-slot {
-      display: list-item;
-      list-style: none;
-      margin: 0;
-      padding: 0;
-    }
-    .milxdy-wiki-read-aloud:hover,
-    .milxdy-wiki-read-aloud:focus-visible {
-      color: rgb(199, 102, 147);
-      background: rgba(199, 102, 147, 0.12);
-    }
-    .milxdy-wiki-read-aloud:active {
-      transform: translate(1px, 1px);
-      box-shadow: inset 1px 1px 3px rgba(0, 0, 0, 0.2);
-    }
-    .milxdy-wiki-read-aloud:focus-visible {
-      outline: 2px solid rgb(199, 102, 147);
-      outline-offset: 2px;
-    }
-    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud {
-      border-color: #484e69 !important;
-      background: #222533 !important;
-      color: #eef0ff !important;
-    }
-    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:hover,
-    html[data-milxdy-wiki-sidebar-theme="dark"] .milxdy-wiki-read-aloud:focus-visible {
-      border-color: #9d78df !important;
-      background: #342a4a !important;
-    }
-    .milxdy-wiki-read-aloud svg {
-      width: 18px;
-      height: 18px;
-      pointer-events: none;
-    }
-    .milxdy-wiki-read-aloud-heading-slot {
-      display: inline-flex;
-      margin: 4px 0 8px;
-    }
-    @property --post-reading-fill {
-      syntax: "<percentage>";
-      inherits: false;
-      initial-value: 0%;
-    }
-    [data-post-reading-word="true"][data-post-reading-current-word="true"] {
-      background: rgba(199, 102, 147, 0.18);
-      border-radius: 4px;
-      box-decoration-break: clone;
-      -webkit-box-decoration-break: clone;
-    }
-    [data-post-reading-smooth-word="true"] {
-      --post-reading-fill-color: rgba(199, 102, 147, 0.24);
-      --post-reading-fill: 0%;
-      --post-reading-fill-duration: 160ms;
-      display: inline;
-      white-space: pre-wrap;
-      background: linear-gradient(90deg, var(--post-reading-fill-color) var(--post-reading-fill), transparent var(--post-reading-fill));
-      border-radius: 0;
-      box-decoration-break: slice;
-      -webkit-box-decoration-break: slice;
-      margin: -0.1em 0 -0.16em;
-      padding: 0.1em 0 0.16em;
-      transition: --post-reading-fill var(--post-reading-fill-duration) linear;
-    }
-    [data-post-reading-smooth-word="true"][data-post-reading-smooth-filled="true"] {
-      --post-reading-fill: 100%;
-    }
-    [data-post-reading-smooth-word="true"][data-post-reading-token-kind="space"] {
-      border-radius: 0;
-      margin-left: -0.02em;
-      margin-right: -0.02em;
-    }
-  `;
+  style.textContent = readingControlsStyles;
   document.head.append(style);
 }
 

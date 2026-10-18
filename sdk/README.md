@@ -1,6 +1,6 @@
 # milXdy App SDK Starter Kit
 
-This directory is the standalone author kit for milXdy App SDK 0.2.4.
+This directory is the standalone author kit for milXdy App SDK 0.2.5.
 
 The supported distribution path uses the local Add-on Manager to validate and
 compose reviewed packages into a stable custom Chromium build. Package
@@ -10,7 +10,10 @@ declared App SDK contract.
 ## Contents
 
 - `types/index.d.ts`: the supported content-app lifecycle and context facade for
-  App SDK `0.2.4`.
+  App SDK `0.2.5`, including site context, declared host actions, reviewed
+  Remilia operations, composer/reply callbacks, and managed utility windows.
+- `types/public-contract.test.ts`: positive and negative public-consumer
+  compile coverage; it proves private runtime loader/scanner APIs remain absent.
 - `templates/basic-feature/`: a minimal novel feature package with generated
   Apps & Features enablement, cancellation-safe lifecycle hooks, and local-only
   diagnostics.
@@ -43,6 +46,12 @@ From the repository root:
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/basic-feature --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:local-app-package -- --package=sdk/templates/docked-app --allow-local-review --acknowledge-package-consent
 pnpm.cmd run verify:app-sdk-harness
+```
+
+The starter's TypeScript check also compiles the public-consumer contract test:
+
+```powershell
+node node_modules/typescript/bin/tsc -p sdk/tsconfig.json
 ```
 
 These commands validate the templates and public lifecycle contract without
@@ -94,6 +103,12 @@ manager's package placement, transaction recovery, or persistent status flow.
 - Namespace package storage and message types under the package ID.
 - Declare every host, remote service, asset, storage key, and privacy effect.
 - Use host-provided declared services for background work.
+- Use the host-owned Remilia capability broker for declared account operations.
+  Never request tokens, cookies, OAuth callbacks, authentication storage, or an
+  authenticated arbitrary-fetch proxy.
+- Treat the broker as the sole Remilia API path from content/package code. The
+  internal `remiliaApi:request` route and background client singleton are not
+  public SDK capabilities.
 - Treat DOM nodes delivered in `onSurface` as short-lived SPA state.
 - Register cleanup through `context.addDisposable` and check
   `context.signal.aborted` after asynchronous work.

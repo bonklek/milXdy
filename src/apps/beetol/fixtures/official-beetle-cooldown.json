@@ -1,0 +1,17 @@
+{
+  "xp": 4300,
+  "level": 12,
+  "inventory": {
+    "green": 4
+  },
+  "hammer_durabilities": {
+    "hammer_t1": 6
+  },
+  "cooldowns": {
+    "beetle_hunt": {
+      "remaining_seconds": 900
+    }
+  },
+  "hunt_charges": 0,
+  "can_hunt": false
+}

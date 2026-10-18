@@ -83,7 +83,7 @@ function verifyGeneratedPlan(plan) {
       errors.push(`${app.id}: novel local package must declare a toggle setting with role "enablement" so Apps & Features can control it`);
       continue;
     }
-    if (novelPackage && app.defaultEnabled !== false) {
+    if (novelPackage && app.defaultEnabled !== false && (plan.diagnostics || []).find((entry) => entry.packageId === app.id)?.trust?.defaultEnablementPolicy?.allowed !== true) {
       errors.push(`${app.id}: novel local package samples must defaultEnabled false so enablement is an explicit user action`);
     }
     if (!setting) continue;

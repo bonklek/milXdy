@@ -75,9 +75,9 @@ mandatory and changes to:
 
 - `source.kind: "catalog-release"` with an immutable release URL;
 - `distributionScope: "upstream-default"`;
-- `licenseStatus: "declared"` and `licenseId: "VPL"`;
+- `licenseStatus: "declared"` and the exact reviewed license/permission ID;
 - exact manifest and decision hashes; and
-- the complete VPL notice in the proposed package.
+- every hashed notice required by the reviewed compatibility record in the proposed package.
 
 The strict upstream validator verifies those fields. A local asset that cannot
 meet them remains valid for its local package.

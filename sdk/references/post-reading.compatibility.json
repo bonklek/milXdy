@@ -1,31 +1,39 @@
 {
   "schemaVersion": 1,
   "packageId": "post-reading",
-  "packageVersion": "0.2.0-sdk.1",
+  "packageVersion": "0.2.0-sdk.7",
   "sourceRepository": "https://github.com/bonklek/post-reading",
-  "sourceBranch": "codex/milxdy-sdk-integration",
+  "sourceBranch": "codex/18-dark-controls",
   "milxdyRepository": "https://github.com/bonklek/milXdy",
   "appSdk": {
-    "minVersion": "0.2.4",
-    "targetVersion": "0.2.4"
+    "minVersion": "0.2.5",
+    "targetVersion": "0.2.5"
   },
   "manifestVersion": 1,
   "status": "reference-preview",
   "supported": [
     "runtime lifecycle",
     "shared X surface delivery",
+    "native X Article extraction and route reset",
+    "explicit-action browser-local X direct-message reading",
     "bounded rescan requests",
     "shared scheduler and cancellation",
     "routed post-reading background messages",
+    "request-scoped routed audio transport with active cancellation",
     "diagnostics",
-    "existing settings compatibility"
+    "existing settings compatibility",
+    "compact draggable player chrome with host-resolved assets",
+    "idempotent host-scaffolded per-post launcher placement",
+    "native-row-aligned per-post launcher geometry without absolute offsets",
+    "dark-panel light-control contrast scoped to Post-reading settings",
+    "manifest-declared active-tab page context actions"
   ],
   "reviewedExceptions": [
     "host-provided OCR frame and worker assets",
-    "host-provided post-reading background handlers"
+    "host-provided post-reading background handlers for quote, OCR, and bounded loopback audio transport"
   ],
   "unsupported": [
-    "package-owned background module registration",
+    "ambient or package-owned arbitrary-tab injection",
     "public shared overlay/dock primitives",
     "runtime installation into an already-installed extension"
   ]

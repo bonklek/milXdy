@@ -1,3 +1,5 @@
+import { createBuildPlanCases } from "./trust-gate-build-plan-cases.mjs";
+import { runCapabilityDeclarationTrustCases } from "./trust-gate-capability-cases.mjs";
 import { spawnSync } from "node:child_process";
 import { mkdtemp, cp, mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
@@ -15,6 +17,9 @@ await mkdir(workspaceTmpParent, { recursive: true });
 const buildTmpRoot = await mkdtemp(path.join(workspaceTmpParent, "case-"));
 const failures = [];
 const notes = [];
+const { composeBuildPlan, runBuildPlanCase } = createBuildPlanCases({
+  composer, builder, buildTmpRoot, failures, notes, toPosix, safeFixtureName,
+});
 
 try {
   const fixturesDir = path.join(tmpRoot, "fixtures");
@@ -46,6 +51,49 @@ try {
     "--acknowledge-package-consent",
     "--acknowledge-first-party-replacement",
   ], 0, "first-party-id-replacement");
+
+  runCase("reviewed Post-Factory Remilia capability passes exact declarations and consent", [
+    "--check",
+    "--json",
+    "--package=packages/maintainer/tweet-composer-kit",
+    "--acknowledge-package-consent",
+  ], 0, "Maintainer-approved default-on reviewed Post-Factory composition");
+
+  const copiedDefaultOnPackage = await copyLocalPackage("tweet-composer-kit", "copied-default-on-post-factory");
+  await runRejectedComposerCaseWithoutPlan("copied Post-Factory cannot inherit default-on approval", [
+    `--package=${copiedDefaultOnPackage}`,
+    "--acknowledge-package-consent",
+  ], "does not match policy root");
+
+  const remiliaScopeDriftPackage = await copyLocalPackage("tweet-composer-kit", "remilia-scope-drift");
+  const remiliaScopeDriftManifest = await readManifest(remiliaScopeDriftPackage);
+  remiliaScopeDriftManifest.remiliaCapabilities[0].scopes = ["remilia:directory.read"];
+  await writeManifest(remiliaScopeDriftPackage, remiliaScopeDriftManifest);
+  runCase("Remilia capability scope drift fails closed", [
+    "--check",
+    `--package=${remiliaScopeDriftPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "must declare its exact official scopes");
+
+  const unreviewedRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "unreviewed-remilia-capability");
+  const unreviewedRemiliaManifest = await readManifest(unreviewedRemiliaPackage);
+  unreviewedRemiliaManifest.review = { status: "local", notes: ["Synthetic unreviewed Remilia capability fixture."] };
+  await writeManifest(unreviewedRemiliaPackage, unreviewedRemiliaManifest);
+  runCase("unreviewed Remilia capability package fails closed", [
+    "--check",
+    `--package=${unreviewedRemiliaPackage}`,
+    "--allow-local-review",
+    "--acknowledge-package-consent",
+  ], 1, "Remilia capabilities require review.status reviewed");
+
+  const directFetchRemiliaPackage = await copyLocalPackage("tweet-composer-kit", "direct-fetch-remilia-capability");
+  const directFetchEntry = path.join(directFetchRemiliaPackage, "dist", "content.js");
+  await writeFile(directFetchEntry, `${await readFile(directFetchEntry, "utf8")}\nexport const forbiddenDirectFetch = () => fetch("https://www.remilia.net/api/v1/me");\n`);
+  runCase("Remilia capability package cannot add direct authenticated or arbitrary fetch", [
+    "--check",
+    `--package=${directFetchRemiliaPackage}`,
+    "--acknowledge-package-consent",
+  ], 1, "direct-fetch");
   runCase("composer handoff includes required local-app build acknowledgements", [
     "--packages-dir=examples/packages/first-party-replacements",
     "--acknowledge-package-consent",
@@ -80,16 +128,12 @@ try {
     ], 1, "repo-owned first-party replacement policy match");
   }
 
-  const missingEnablementPackage = await copyLocalPackage("dev-note", "missing-enablement-package");
-  const missingEnablementManifest = await readManifest(missingEnablementPackage);
-  delete missingEnablementManifest.settings;
-  missingEnablementManifest.storageKeys = { local: [] };
-  await writeManifest(missingEnablementPackage, missingEnablementManifest);
-  await runRejectedComposerCaseWithoutPlan("novel package without enablement is rejected before plan emission", [
-    `--package=${missingEnablementPackage}`,
-    "--allow-local-review",
-    "--acknowledge-package-consent",
-  ], "novel local package must declare a toggle setting with role \"enablement\"");
+  await runCapabilityDeclarationTrustCases({
+    copyLocalPackage,
+    readManifest,
+    runRejectedComposerCaseWithoutPlan,
+    writeManifest,
+  });
 
   const privilegedDefaultPackage = await copyLocalPackage("dev-note", "privileged-default-package");
   const privilegedDefaultManifest = await readManifest(privilegedDefaultPackage);
@@ -822,7 +866,7 @@ try {
   const absolutePlan = await composeBuildPlan("absolute-package-plan", { packagePath: path.resolve("examples/packages/first-party-replacements/tweetPng") });
   assertGeneratedCopyTargets(absolutePlan);
   assertGeneratedRuntimeMetadata(absolutePlan);
-  if (path.isAbsolute(absolutePlan.packageSources[0].root)) {
+  if (absolutePlan && path.isAbsolute(absolutePlan.packageSources[0].root)) {
     fail("absolute package input should be recorded as a build-plan-safe relative root for workspace-contained packages");
   }
   await runBuildPlanCase("workspace absolute package input composes into a buildable relative plan", absolutePlan, (plan) => {
@@ -942,7 +986,7 @@ async function copyPackage(packageId, fixtureName) {
 async function copyLocalPackage(packageId, fixtureName) {
   const destinationRoot = path.join(tmpRoot, fixtureName);
   const destination = path.join(destinationRoot, packageId);
-  await cp(path.join("examples/packages/local-dev", packageId), destination, { recursive: true });
+  await cp(path.join(packageId === "tweet-composer-kit" ? "packages/maintainer" : "examples/packages/local-dev", packageId), destination, { recursive: true });
   return destination;
 }
 
@@ -1069,62 +1113,6 @@ function assertGeneratedRuntimeMetadata(plan) {
   }
   notes.push("generated runtime metadata strips authoring $schema: ok");
   notes.push("generated WAR resources expose content entries and hide inspection metadata: ok");
-}
-
-async function composeBuildPlan(label, options = {}) {
-  const fixtureRoot = path.join(buildTmpRoot, label, "packages");
-  await mkdir(path.dirname(fixtureRoot), { recursive: true });
-  const packageDir = path.join(fixtureRoot, "tweetPng");
-  const packagePath = options.packagePath || path.join("examples/packages/first-party-replacements", "tweetPng");
-  if (!options.packagePath) {
-    await mkdir(packageDir, { recursive: true });
-  }
-  const planPath = path.join(buildTmpRoot, label, "build-plan.json");
-  const result = spawnSync(process.execPath, [
-    composer,
-    `--package=${toPosix(packagePath)}`,
-    `--plan-out=${toPosix(planPath)}`,
-    "--allow-local-review",
-    "--acknowledge-package-consent",
-    "--acknowledge-first-party-replacement",
-    ...(options.extraArgs || []),
-  ], {
-    encoding: "utf8",
-  });
-  const output = `${result.stdout || ""}${result.stderr || ""}`;
-  if ((result.status ?? 1) !== 0) {
-    failures.push(`${label}: unable to compose build plan\n${output}`);
-    return null;
-  }
-  const plan = JSON.parse(await readFile(planPath, "utf8"));
-  plan.outputDir = toPosix(path.join(buildTmpRoot, label, "out"));
-  return plan;
-}
-
-async function runBuildPlanCase(label, basePlan, mutatePlan, expectedStatus, expectedText) {
-  if (!basePlan) return;
-  const plan = JSON.parse(JSON.stringify(basePlan));
-  mutatePlan(plan);
-  const planPath = path.join(buildTmpRoot, `${safeFixtureName(label).replaceAll("_", "-")}.json`);
-  await writeFile(planPath, `${JSON.stringify(plan, null, 2)}\n`);
-  const build = spawnSync(process.execPath, [
-    builder,
-    "--target=chromium",
-    `--local-app-plan=${toPosix(planPath)}`,
-  ], {
-    encoding: "utf8",
-  });
-  const output = `${build.stdout || ""}${build.stderr || ""}`;
-  const actualStatus = build.status ?? 1;
-  if (actualStatus !== expectedStatus) {
-    failures.push(`${label}: expected exit ${expectedStatus}, got ${actualStatus}\n${output}`);
-    return;
-  }
-  if (expectedText && !output.includes(expectedText)) {
-    failures.push(`${label}: expected output to include ${JSON.stringify(expectedText)}\n${output}`);
-    return;
-  }
-  notes.push(`${label}: ok`);
 }
 
 function toPosix(value) {

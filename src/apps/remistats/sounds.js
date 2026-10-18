@@ -3,6 +3,7 @@
 
 let audioCtx = null;
 let compressor = null;
+let masterGain = null;
 let reverb = null;
 let delayNode = null;
 
@@ -31,7 +32,10 @@ async function ensureContext() {
       // Wire buses
       reverb.connect(compressor);
       delayNode.connect(compressor);
-      compressor.connect(audioCtx.destination);
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = window.reminetSounds?.volume ?? 0.6;
+      compressor.connect(masterGain);
+      masterGain.connect(audioCtx.destination);
     } catch (e) {
       // Silently fail if AudioContext creation fails (autoplay policy)
       console.log('AudioContext creation skipped:', e.message);
@@ -308,19 +312,35 @@ class SoundManager {
     this.lastLogoHoverTime = 0;
     this.cooldowns = new Map();
     this.enabled = true;
-    this.volume = 1.0;
+    this.volume = 0.6;
+    this.enabledRevision = 0;
+    this.volumeRevision = 0;
 
-    this.loadSettings();
+    void this.loadSettings();
   }
 
   async loadSettings() {
-    const settings = await chrome.storage.sync.get(['soundsEnabled', 'soundVolume']);
-    this.enabled = settings.soundsEnabled !== false; // Default to true
-    this.volume = settings.soundVolume || 1.0;
+    const enabledRevision = this.enabledRevision, volumeRevision = this.volumeRevision;
+    let settings;
+    try { settings = await chrome.storage.sync.get(['soundsEnabled', 'soundVolume']); }
+    catch { return; }
+    if (enabledRevision === this.enabledRevision) this.enabled = settings.soundsEnabled !== false;
+    if (volumeRevision === this.volumeRevision) this.applyVolume(settings.soundVolume);
+  }
+
+  applySettings(changes) {
+    if (changes.soundsEnabled) { this.enabledRevision += 1; this.enabled = changes.soundsEnabled.newValue !== false; }
+    if (changes.soundVolume) { this.volumeRevision += 1; this.applyVolume(changes.soundVolume.newValue); }
+  }
+
+  applyVolume(value) {
+    const numeric = Number(value);
+    this.volume = value == null || !Number.isFinite(numeric) ? 0.6 : Math.max(0, Math.min(2, numeric));
+    if (masterGain && audioCtx) masterGain.gain.setTargetAtTime(this.volume, audioCtx.currentTime, 0.015);
   }
 
   canPlaySound(type, cooldownMs) {
-    if (!this.enabled) return false;
+    if (!this.enabled || this.volume <= 0) return false;
     const now = Date.now();
     const last = this.cooldowns.get(type) || 0;
     if (now - last < cooldownMs) return false;
@@ -341,22 +361,22 @@ class SoundManager {
   }
 
   async playClick() {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     await playClickSound();
   }
 
   async playMenuOpen() {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     await playMenuOpenSound();
   }
 
   async playSuccess() {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     await playSuccessSound();
   }
 
   async playNotification() {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     await playNotificationSound();
   }
 
@@ -371,7 +391,7 @@ class SoundManager {
   }
 
   async playLogoHover() {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     await ensureContext();
     if (!audioCtx) return;
     if (audioCtx.state === 'suspended') {
@@ -418,16 +438,27 @@ class SoundManager {
   }
 
   setEnabled(enabled) {
+    this.enabledRevision += 1;
     this.enabled = enabled;
     chrome.storage.sync.set({ soundsEnabled: enabled });
   }
 
   setVolume(volume) {
-    this.volume = Math.max(0, Math.min(1, volume));
+    this.volumeRevision += 1;
+    this.applyVolume(volume);
     chrome.storage.sync.set({ soundVolume: this.volume });
   }
 }
 
-// Global sound manager instance
-window.reminetSounds = new SoundManager();
+export function createSoundManager() {
+  return new SoundManager();
+}
 
+export async function disposeSoundManager() {
+  const context = audioCtx;
+  audioCtx = null;
+  compressor = null;
+  reverb = null;
+  delayNode = null;
+  await context?.close?.().catch(() => {});
+}

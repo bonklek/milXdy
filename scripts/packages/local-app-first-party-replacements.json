@@ -9,8 +9,8 @@
         "catalog/tweetPng",
         "catalog-staging/tweetPng"
       ],
-      "packageSha256": "000079e70475e856a7f39f944e89dbc51dbdf0a633c0f644cf894f2e27d9fe48",
-      "reason": "Reviewed Share Kit replacement preserving the stable tweetPng identity and settings."
+      "packageSha256": "ad4f6673801cfd347f0bb27baf857a9c2c885d295bde9f4ffa80061270ab5031",
+      "reason": "Reviewed Share Kit replacement combining local custom HEX borders with Unicode layout, PNG inspection and explicit export settings."
     },
     {
       "id": "wikiSidebar",
@@ -24,8 +24,8 @@
       "sourceType": "folder",
       "root": "tmp/post-reading-sdk-reference/post-reading",
       "sourceUrl": "https://github.com/bonklek/post-reading",
-      "sourceCommit": "372861b955624a65a5ec6e23fab837f2a21d5924",
-      "packageSha256": "76eb4e1bf37d7d3c8cc67bbab150389ecdccff95b404eb3e8172b223c2b3059f",
+      "sourceCommit": "add0c55b5dfd07c664480cd9d56ca625658abdc7",
+      "packageSha256": "b4fcb5563e954523ba0926dba1dbd39f0c6c1c6752edb9668ba9ccc9ccc2cffc",
       "reason": "Pinned external Post-reading App SDK reference package, staged by the cross-repository verifier."
     },
     {

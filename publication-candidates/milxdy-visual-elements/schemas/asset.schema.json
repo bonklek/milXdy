@@ -107,6 +107,7 @@
       ],
       "properties": {
         "status": { "enum": ["declared", "unknown", "not-applicable"] },
+        "compatibility": { "$ref": "#/$defs/rightsCompatibility" },
         "id": { "type": ["string", "null"] },
         "textPath": {
           "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/relativePath" }]
@@ -257,16 +258,17 @@
       "then": {
         "properties": {
           "license": {
+            "required": ["compatibility"],
             "properties": {
               "status": { "const": "declared" },
-              "id": { "const": "VPL" },
+              "id": { "type": "string", "minLength": 1 },
               "textPath": { "$ref": "#/$defs/relativePath" },
               "textSha256": { "$ref": "#/$defs/sha256" },
               "proofUrl": { "type": "string", "pattern": "^https://" },
               "proofPath": { "$ref": "#/$defs/relativePath" },
               "proofRetrievedAt": { "type": "string", "format": "date" },
               "proofSha256": { "$ref": "#/$defs/sha256" },
-              "additionalRestrictions": { "maxItems": 0 }
+              "compatibility": { "$ref": "#/$defs/rightsCompatibility" }
             }
           },
           "review": {
@@ -285,6 +287,137 @@
     }
   ],
   "$defs": {
+    "rightsCompatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision",
+        "basis",
+        "sourceSha256",
+        "permissions",
+        "rationale",
+        "reviewedBy",
+        "reviewedAt",
+        "notices",
+        "obligations"
+      ],
+      "properties": {
+        "decision": {
+          "enum": [
+            "compatible",
+            "unknown",
+            "incompatible"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "license",
+            "explicit-permission"
+          ]
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "permissions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "copy",
+            "modify",
+            "redistribute",
+            "appSdkUse"
+          ],
+          "properties": {
+            "copy": {
+              "type": "boolean"
+            },
+            "modify": {
+              "type": "boolean"
+            },
+            "redistribute": {
+              "type": "boolean"
+            },
+            "appSdkUse": {
+              "type": "boolean"
+            }
+          }
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewedBy": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notices": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "sha256"
+            ],
+            "properties": {
+              "path": {
+                "$ref": "#/$defs/relativePath"
+              },
+              "sha256": {
+                "$ref": "#/$defs/sha256"
+              }
+            }
+          }
+        },
+        "obligations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "requirement",
+              "fulfilment",
+              "evidence"
+            ],
+            "properties": {
+              "requirement": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fulfilment": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidence": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "properties": {
+                    "path": {
+                      "$ref": "#/$defs/relativePath"
+                    },
+                    "sha256": {
+                      "$ref": "#/$defs/sha256"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "catalogId": { "type": "string", "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)+$" },
     "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },

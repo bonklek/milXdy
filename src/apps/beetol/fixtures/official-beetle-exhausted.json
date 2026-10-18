@@ -1,0 +1,11 @@
+{
+  "xp": 4400,
+  "level": 12,
+  "inventory": {},
+  "hammers": {},
+  "cooldowns": {
+    "beetle_hunt": 0
+  },
+  "hunt_charges": 0,
+  "can_hunt": false
+}

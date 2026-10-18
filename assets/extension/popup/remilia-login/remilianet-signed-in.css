@@ -1,0 +1,179 @@
+@font-face {
+  font-family: "RemiliaMincho";
+  src: url("fonts/RemiliaMincho-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* Light = supplied silver; Dark = supplied platform-navy. System follows OS.
+   These theme mappings and signed-in adaptations await brand approval. */
+.rmn-account {
+  --rmn-face: linear-gradient(180deg, #f0f0f0 0%, #c9c9c9 50%, #7c7a7a 100%);
+  --rmn-face-hover: linear-gradient(180deg, #f0f0f0 0%, #d4d3d3 50%, #959393 100%);
+  --rmn-face-ink: #1f2a2c;
+  --rmn-face-text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
+  --rmn-check: #183d2a;
+  --rmn-ink: #242a32;
+  --rmn-muted: #505965;
+  --rmn-ring: #385788;
+  --rmn-tip-bg: #242a32;
+  --rmn-tip-ink: #fff;
+  --rmn-edge: rgb(80 80 80 / 40%);
+  --rmn-shadow: inset 1px 1px 2px rgb(255 255 255 / 60%),
+    inset -1px -1px 1px rgb(20 32 72 / 20%), 1px 1px 1px rgb(20 32 72 / 30%),
+    1px 2px 4px -1px rgb(20 32 72 / 25%);
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  color: var(--rmn-ink);
+  font: 13px/1.4 system-ui, sans-serif;
+}
+.rmn-account[data-theme="dark"] {
+  --rmn-ink: #f1f3f7;
+  --rmn-muted: #bdc4d0;
+  --rmn-ring: #a9bcff;
+  --rmn-tip-bg: #f1f3f7;
+  --rmn-tip-ink: #242a32;
+  --rmn-face: linear-gradient(180deg, #3b49c7 0%, #273083 50%, #21296c 100%);
+  --rmn-face-hover: linear-gradient(180deg, #5c6ae5 0%, #353f9c 50%, #2b3484 100%);
+  --rmn-face-ink: #ffffff;
+  --rmn-face-text-shadow: 0 -1px 0 rgb(20 32 72 / 50%);
+  --rmn-check: #ffffff;
+  --rmn-edge: rgb(0 100 180 / 40%);
+}
+@media (prefers-color-scheme: dark) {
+  .rmn-account[data-theme="system"] {
+  --rmn-ink: #f1f3f7;
+  --rmn-muted: #bdc4d0;
+  --rmn-ring: #a9bcff;
+  --rmn-tip-bg: #f1f3f7;
+  --rmn-tip-ink: #242a32;
+  --rmn-face: linear-gradient(180deg, #3b49c7 0%, #273083 50%, #21296c 100%);
+  --rmn-face-hover: linear-gradient(180deg, #5c6ae5 0%, #353f9c 50%, #2b3484 100%);
+  --rmn-face-ink: #ffffff;
+  --rmn-face-text-shadow: 0 -1px 0 rgb(20 32 72 / 50%);
+  --rmn-check: #ffffff;
+  --rmn-edge: rgb(0 100 180 / 40%);
+  }
+}
+.rmn-status-wrap { position: relative; }
+.rmn-status {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--rmn-edge);
+  border-radius: 6px;
+  background: var(--rmn-face);
+  box-shadow: var(--rmn-shadow);
+  color: var(--rmn-face-ink);
+  font: 400 13px/1.3 "RemiliaMincho", "Times New Roman", serif;
+  text-shadow: var(--rmn-face-text-shadow);
+  cursor: pointer;
+  margin: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.rmn-status__mark { display: block; width: 20px; height: 20px; flex: none; }
+.rmn-status__labels { display: grid; min-width: 0; text-align: center; }
+.rmn-status__label, .rmn-status__action { grid-area: 1 / 1; }
+.rmn-status__action { visibility: hidden; }
+.rmn-status__icons { display: grid; flex: none; }
+.rmn-status__check, .rmn-status__exit { grid-area: 1 / 1; }
+.rmn-status__exit { width: 14px; height: 14px; visibility: hidden; }
+.rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__label,
+.rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__check { visibility: hidden; }
+.rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__action,
+.rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__exit { visibility: visible; }
+.rmn-status:hover:not(:disabled) {
+  background: var(--rmn-face-hover);
+  box-shadow: inset 1px 1px 2px rgb(255 255 255 / 70%),
+    inset -1px -1px 1px rgb(20 32 72 / 20%), 1px 2px 2px rgb(20 32 72 / 28%),
+    3px 6px 12px -3px rgb(20 32 72 / 30%);
+}
+.rmn-status:active:not(:disabled) {
+  background: var(--rmn-face);
+  box-shadow: inset 1px 2px 3px rgb(20 32 72 / 45%),
+    inset -1px -1px 0 rgb(255 255 255 / 20%), 0 1px 0 rgb(255 255 255 / 55%);
+}
+.rmn-status:disabled { cursor: not-allowed; opacity: .5; }
+.rmn-status[aria-busy="true"] { cursor: wait; }
+/* Touch users see both the confirmed state and the action before tapping. */
+@media (hover: none) {
+  .rmn-status__action { grid-area: 2 / 1; visibility: visible; font: 11px/1.5 system-ui, sans-serif; }
+  .rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__label,
+  .rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__check { visibility: visible; }
+  .rmn-status:is(:hover, :focus-visible):not(:disabled) .rmn-status__exit { visibility: hidden; }
+}
+.rmn-status__check { width: 14px; height: 14px; flex: none; color: var(--rmn-check); }
+.rmn-status:focus-visible {
+  outline: 2px solid var(--rmn-ring);
+  outline-offset: 3px;
+}
+.rmn-account__row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  margin-top: 8px;
+}
+.rmn-account__name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rmn-account__name[data-state="pending"],
+.rmn-account__name[data-state="unavailable"] { color: var(--rmn-muted); }
+.rmn-tooltip {
+  box-sizing: border-box;
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 6px);
+  inset-inline: 0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: var(--rmn-tip-bg);
+  color: var(--rmn-tip-ink);
+  box-shadow: 0 3px 12px rgb(0 0 0 / 20%);
+  font: 12px/1.5 system-ui, sans-serif;
+  visibility: hidden;
+}
+/* Bridge the hover gap so pointer users can move into the details. */
+.rmn-tooltip::before { content: ""; position: absolute; inset: -6px 0 auto; height: 6px; }
+.rmn-status-wrap:hover .rmn-tooltip,
+.rmn-status-wrap:focus-within .rmn-tooltip { visibility: visible; }
+.rmn-status-wrap[data-details-dismissed] .rmn-tooltip { visibility: hidden; }
+@media (forced-colors: active) {
+  .rmn-status, .rmn-tooltip { border: 1px solid CanvasText; }
+  .rmn-status__check { color: CanvasText; }
+}
+
+/* Load the unchanged remilianet-login.css before this file. */
+.rmn-account .rmn-login {
+  --rmn-bg: var(--rmn-face);
+  --rmn-bg-hover: var(--rmn-face-hover);
+  --rmn-bg-active: var(--rmn-face);
+  --rmn-fg: var(--rmn-face-ink);
+  --rmn-border: var(--rmn-edge);
+  --rmn-text-shadow: var(--rmn-face-text-shadow);
+  width: 100%;
+}
+.rmn-account .rmn-login:focus-visible {
+  outline: 2px solid var(--rmn-ring);
+  outline-offset: 3px;
+}
+/* Optional compatibility appearance; this is not an official policy. */
+.rmn-account[data-appearance="silver"] {
+  --rmn-face: linear-gradient(180deg, #f0f0f0 0%, #c9c9c9 50%, #7c7a7a 100%);
+  --rmn-face-hover: linear-gradient(180deg, #f0f0f0 0%, #d4d3d3 50%, #959393 100%);
+  --rmn-face-ink: #1f2a2c;
+  --rmn-face-text-shadow: 0 1px 0 rgb(255 255 255 / 45%);
+  --rmn-check: #183d2a;
+  --rmn-edge: rgb(80 80 80 / 40%);
+}

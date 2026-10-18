@@ -4,6 +4,7 @@ import path from "node:path";
 import { contentScriptMatches, generatedAssetRoots, releaseBuilds, webAccessibleMatches } from "../release/release-builds.mjs";
 import { appsForProfile, featureBundlesForProfile, hostPermissionsForProfile } from "../release/release-registry.mjs";
 
+const hubPanelSource = await readFile("src/platform/runtime/hub-panel-renderer.ts", "utf8");
 const registry = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const firstPartyAdapter = await readFile("src/platform/app-sdk/first-party-registry.ts", "utf8");
 const VALID_PRESETS = new Set(["lite", "balanced", "full"]);
@@ -46,7 +47,7 @@ async function verifyRuntimeOwnership() {
   const overlayAppLayout = await readFile("src/platform/overlay/app-layout.ts", "utf8");
   const overlayPanelBase = await readFile("src/platform/overlay/panel-base.ts", "utf8");
   const maxxerStyles = await readFile("src/apps/milady-maxxer/styles.ts", "utf8");
-  const reskinStyles = await readFile("src/platform/visuals/reskin-styles.ts", "utf8");
+  const reskinStyles = await readFile("src/platform/visuals/reskin.css", "utf8");
   const wikiFrame = await readFile("src/apps/wiki-sidebar/frameContent.ts", "utf8");
 
   assert(runtime.includes("subscribeTwitterSurfaces(handleSurface)"), "runtime must own scanner subscription");
@@ -87,10 +88,7 @@ async function verifyRuntimeOwnership() {
   assert(maxxerStyles.includes("animation: milady-catch-pulse 0.28s ease-out"), "Maxxer catch feedback must remain short and bounded");
   assert(background.includes("chrome.runtime.onInstalled.addListener") && background.includes('"milxdy.apps.firstRun.status": "pending"'), "central background must own fresh-install Apps Hub defaults");
   assert(firstPartyAdapter.includes("defaultEnabledById") && firstPartyAdapter.includes("defaultAppEnabled") && firstPartyAdapter.includes("enabledFromStoredValue"), "first-party enablement adapters must derive fallback defaults from registry defaultEnabled metadata");
-  assert(runtime.includes("const desiredEnabledAppIds = new Set<MilxdyAppId>"), "App presets must compute an exact desired enabled set");
-  assert(runtime.includes("const convergenceTasks = toggleableApps") && runtime.includes("await app.setEnabled?.(enabled)"), "App presets must explicitly enable and disable every toggleable app toward the selected preset");
-  assert(runtime.includes('preset === "lite" ? "fast"') && runtime.includes('preset === "full" ? "full" : "balanced"'), "Lite/Balanced/Full presets must apply matching Performance modes");
-  assert(runtime.includes("disabledTargetApps") && runtime.includes("disabledTargetCount"), "App preset diagnostics must report explicitly disabled preset targets");
+  await verifyAppPresetOwnership(runtime);
   for (const freshInstallDefault of [
     '"milxdy.miladychan.enabled": true',
     '"milxdy.music.enabled": true',
@@ -104,7 +102,7 @@ async function verifyRuntimeOwnership() {
   assert(overlayDock.includes("OverlayDockSettingsAction") && overlayDock.includes("setSettingsAction"), "overlay dock must expose reusable settings actions");
   assert(overlayDock.includes("settingsActionButton") && overlayDock.includes("snapshot.settingsActions"), "overlay dock settings panel must render registered settings actions");
   assert(overlayDock.includes("grid-template-columns: 22px minmax(0, 1fr) 28px 28px"), "overlay dock settings rows must keep icons, labels, and both move controls on one line");
-  assert(runtime.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
+  assert(runtime.includes("createHubPanelRenderer({") && hubPanelSource.includes('excludeActionIds: ["milxdy.addApps"]'), "Apps & Features rail settings must not render a redundant self-link");
   assert(runtime.includes('document.createElement("details")') && runtime.includes('title.textContent = "Change app preset"'), "Apps & Features presets must stay collapsed behind an explicit disclosure");
   assert(overlayAppLayout.includes('OVERLAY_APP_LAYOUTS_KEY = "milxdy.overlayApps.layouts.v1"'), "overlay app layouts must persist through the shared local layout store");
   assert(overlayAppLayout.includes("chrome.storage.local") && !overlayAppLayout.includes("chrome.storage.sync"), "overlay app pixel layouts must use chrome.storage.local only");
@@ -117,8 +115,8 @@ async function verifyRuntimeOwnership() {
   assert(/const finalRect = clampOverlayRectToSafeArea\(snapped\.rect,[\s\S]*?applyFreeformRect\(finalRect, options\)/.test(overlayPanelBase), "freeform resize must re-clamp snapped geometry before applying it");
   const beetolContent = await readFile("src/apps/beetol/content.js", "utf8");
   assert(beetolContent.includes("allowInteractiveDragTarget: true"), "Beetol must explicitly declare its tab drag-handle exception");
-  assert(beetolContent.includes("FINAL_HUNT_COOLDOWN_MS = BEETLE_HUNT_COOLDOWN_MS") && beetolContent.includes("scheduleFinalHuntDone()"), "Beetol final hunts must preserve the result before the authoritative 90-minute cooldown state");
-  assert(beetolContent.includes("messageRevision !== expectedMessageRevision"), "Beetol final-hunt Done transition must not overwrite a newer operation status");
+  assert(beetolContent.includes("Official read-only status") && beetolContent.includes("Play Beetle on RemiliaNET"), "Beetol X/Twitter UI must distinguish official read status from visible native actions");
+  assert(!/type:\s*["']beetol:(?:action|crunchJunk)["']|data-action/.test(beetolContent), "Beetol X/Twitter UI must not render or invoke legacy action controls");
   assert(runtime.includes('setSettingsAction("milxdy.addApps"') && runtime.includes("onActivate: openHubPanel"), "content runtime must link dock settings to the Apps Hub through the dock settings action API");
   assert(runtime.includes('setSettingsAction("milxdy.addApps", null)'), "content runtime must unregister the Apps Hub dock settings action on dispose");
   assert(runtime.includes('setSettingsAction("milxdy.resetAppPositions"') && runtime.includes("resetOverlayAppLayouts"), "content runtime must expose a dock settings action to reset overlay app positions");
@@ -147,15 +145,20 @@ async function verifyRuntimeOwnership() {
   const remistats = await readFile("src/apps/remistats/content.js", "utf8");
   const remistatsStyles = await readFile("src/apps/remistats/remistats.css", "utf8");
   assert(!remistats.includes("for (const [cachedKey, cached] of scoreCache)"), "RemiStats score insertion must not sweep the entire cache for every result");
-  assert(remistats.includes("if (!clean || !isConfirmedPokeIdentity(clean)) return null"), "RemiStats must not render poke controls before confirming a RemiliaNET identity");
-  assert(remistats.includes("confirmedPokeIdentities.size > SCORE_CACHE_LIMIT"), "RemiStats confirmed poke identity caching must remain bounded");
+  assert(remistats.includes("if (!clean || !cleanXHandle || !isConfirmedPokeTarget(clean, cleanXHandle)) return null"), "RemiStats must not render poke controls before confirming an exact X-to-RemiliaNET identity");
+  assert(remistats.includes("confirmedPokeTargets.size > SCORE_CACHE_LIMIT"), "RemiStats confirmed poke target caching must remain bounded");
   assert(remistats.includes("fillProfilePokeSlot(slot, '')"), "RemiStats profile poke slots must remain empty while an X handle is only provisional");
   assert(remistats.includes("remiliaUsername: explicitRemiliaUsername || null"), "RemiStats must preserve explicit missing RemiliaNET identity instead of replacing it with an X handle");
   assert(remistatsStyles.includes(".reminet-profile-action-poke-slot:empty"), "RemiStats must not reserve visible profile action-row space for an unconfirmed poke target");
-  assert(remistats.includes("const confirmedUsername = cleanUsername(existingSlot.querySelector('[data-reminet-badge]')?.dataset.reminetUsername)"), "RemiStats reused profile slots must derive poke eligibility from the confirmed badge, not the X handle");
+  assert(remistats.includes("const confirmedUsername = cleanRemiliaUsername(slotTarget?.remiliaUsername)"), "RemiStats reused profile slots must derive poke eligibility from the exact official directory target, not public badge data or the X handle");
 
+  await verifyFeatureRuntimeBoundaries();
+}
+
+async function verifyFeatureRuntimeBoundaries() {
   const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
-  assert(contentRoot.includes("createContentRuntime(FIRST_PARTY_APPS)"), "root content script must bootstrap the shared runtime");
+  assert(contentRoot.includes("appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)"), "root content script must filter apps by the validated runtime site");
+  assert(contentRoot.includes("createContentRuntime(runtimeApps, runtimeSite)"), "root content script must bootstrap the shared runtime with site context");
   assert(!contentRoot.includes("import("), "root content script must not directly import feature bundles");
 
   for (const file of featureContentFiles("src/apps")) {
@@ -361,4 +364,18 @@ function assertEqualList(actual, expected, message) {
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
+}
+
+async function verifyAppPresetOwnership(runtime) {
+  const appPresets = await readFile("src/platform/settings/app-presets.ts", "utf8");
+  const presetTransaction = await readFile("src/platform/settings/preset-transaction.ts", "utf8");
+  const enablementCoordinator = await readFile("src/platform/runtime/enablement-coordinator.ts", "utf8");
+  assert(appPresets.includes("const enabled = new Set(apps.filter") && appPresets.includes("const desired = enabled.has(app.id)"), "App presets must compute and write the exact desired enabled/disabled target set");
+  assert(appPresets.includes("setting!.storage.property") && appPresets.includes("previous.value.value"), "App preset writes must preserve shared enablement storage properties");
+  assert(appPresets.includes('preset === "lite" ? "fast"') && appPresets.includes('preset === "full" ? "full" : "balanced"'), "Lite/Balanced/Full presets must apply matching Performance modes");
+  assert(presetTransaction.includes("snapshot = changes.map") && presetTransaction.includes("await restoreTargets(storage, snapshot)") && presetTransaction.includes("await verifyTargets(storage, snapshot)"), "Preset transactions must snapshot and verify rollback of affected settings");
+  assert(presetTransaction.includes('choice === "cancel"') && presetTransaction.indexOf('choice === "cancel"') < presetTransaction.indexOf("await writeTargets(storage, changes)"), "Canceled presets must exit before writing");
+  assert(runtime.includes("prepare: () => enablementCoordinator.pause()") && runtime.includes("await enablementCoordinator.reconcile("), "Runtime presets must pause observers and await lifecycle reconciliation");
+  assert(enablementCoordinator.includes("await Promise.all(pending.values())") && enablementCoordinator.includes("await deps.apply(app, await app.isEnabled(), deps.active, true)"), "Preset reconciliation must drain pending work and await desired app lifecycle changes");
+  assert(appPresets.includes("disabledTargetApps") && appPresets.includes("disabledTargetCount") && appPresets.includes("blockedTargetCount") && appPresets.includes("outcome: result.status") && runtime.includes('recordRuntimeDiagnostic("hub.preset", data)'), "App preset diagnostics must report bounded enabled/disabled/blocked targets and transaction outcomes");
 }

@@ -4,7 +4,8 @@ import { describe, expect, it } from "vitest";
 describe("composer companion icon parity", () => {
   it("gives Drafts a tight, centered footprint alongside the Factory icon", async () => {
     const source = await readFile(new URL("./content-runtime.ts", import.meta.url), "utf8");
-    const draftsStyle = source.match(/\.milxdy-composer-drafts-icon \{[^}]+\}/u)?.[0] || "";
+    const stylesheet = await readFile(new URL("./composer-action.css", import.meta.url), "utf8");
+    const draftsStyle = stylesheet.match(/\.milxdy-composer-drafts-icon \{[^}]+\}/u)?.[0] || "";
 
     expect(source).toContain('svg.setAttribute("viewBox", "3 2 18 20")');
     expect(draftsStyle).toContain("width: 20px; height: 20px; margin: 0;");
@@ -14,12 +15,20 @@ describe("composer companion icon parity", () => {
 
   it("labels the companion controls as Factory and Drafts without renaming the app", async () => {
     const manifest = JSON.parse(await readFile(
-      new URL("../../../examples/packages/local-dev/tweet-composer-kit/milxdy.app.json", import.meta.url),
+      new URL("../../../packages/maintainer/tweet-composer-kit/milxdy.app.json", import.meta.url),
       "utf8",
-    )) as { name?: string; composerAction?: { label?: string }; hostComposerActions?: string[] };
+    )) as {
+      name?: string;
+      composerAction?: { label?: string };
+      hostComposerActions?: string[];
+      defaultEnabled?: boolean;
+      settings?: Array<{ role?: string; defaultValue?: unknown }>;
+    };
 
     expect(manifest.name).toBe("Post-Factory");
     expect(manifest.composerAction?.label).toBe("Factory");
     expect(manifest.hostComposerActions).toContain("nativeDrafts");
+    expect(manifest.defaultEnabled).toBe(true);
+    expect(manifest.settings?.find((setting) => setting.role === "enablement")?.defaultValue).toBe(true);
   });
 });

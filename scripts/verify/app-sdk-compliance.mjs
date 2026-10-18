@@ -2,6 +2,8 @@ import { existsSync, readdirSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { verifyAppMessageAuthorizationWiring } from "./app-message-authorization-wiring.mjs";
+import { verifyLifecycleAndSiteMetadata as verifyLifecycleMetadataChecks } from "./app-sdk-lifecycle-metadata.mjs";
+import { verifyPlatformContract as verifyPlatformContractChecks } from "./app-sdk-platform-contract.mjs";
 
 const registryPath = "src/platform/app-sdk/first-party-apps.json";
 const registry = JSON.parse(await readFile(registryPath, "utf8"));
@@ -9,9 +11,13 @@ const packageJson = JSON.parse(await readFile("package.json", "utf8"));
 const appPlatform = await readFile("src/platform/app-sdk/app-platform.ts", "utf8");
 const externalHandoffContract = await readFile("src/platform/app-sdk/external-handoff.ts", "utf8");
 const contentRuntime = await readFile("src/platform/runtime/content-runtime.ts", "utf8");
+const siteRuntime = await readFile("src/platform/runtime/site-runtime.ts", "utf8");
 const backgroundMessagePolicy = await readFile("src/platform/runtime/background-message-policy.ts", "utf8");
 const contentRoot = await readFile("src/extension/content/index.ts", "utf8");
 const background = await readFile("src/extension/background/index.ts", "utf8");
+const externalHandoffPageAdapters = await readFile("src/extension/background/external-handoff-page-adapters.ts", "utf8");
+const postFactorySource = await readFile("packages/maintainer/tweet-composer-kit/src/content.js", "utf8");
+const postFactoryBuilt = await readFile("packages/maintainer/tweet-composer-kit/dist/content.js", "utf8");
 const composerSource = await readFile("scripts/packages/compose-local-app-packages.mjs", "utf8");
 const postReadingDefaults = await readFile("src/apps/post-reading/shared/defaults.ts", "utf8");
 const postReadingContent = await readFile("src/apps/post-reading/content.ts", "utf8");
@@ -19,8 +25,10 @@ const postReadingBackground = await readFile("src/apps/post-reading/background.t
 const postReadingFullQuote = await readFile("src/apps/post-reading/fullQuote.ts", "utf8");
 const postReadingTtsEngines = await readFile("src/apps/post-reading/ttsEngines.ts", "utf8");
 const reminetChatBackground = await readFile("src/apps/reminet-chat/background.ts", "utf8");
+const reminetChatContent = await readFile("src/apps/reminet-chat/content.ts", "utf8");
 const beetolBackground = await readFile("src/apps/beetol/background.js", "utf8");
 const appSdkDocs = await readFile("docs/sdk/APP_SDK.md", "utf8");
+const publicSdkTypes = await readFile("sdk/types/index.d.ts", "utf8");
 const privacyDocs = await readFile("docs/getting-started/PRIVACY_AND_PERMISSIONS.md", "utf8");
 const routedBackgroundTypes = await collectRoutedBackgroundTypes();
 
@@ -28,7 +36,8 @@ const failures = [];
 const warnings = [];
 
 const validPackageKinds = new Set(["app", "feature", "theme"]);
-const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "route", "overlayApp", "composerAction", "replyAction"]);
+const validSurfaces = new Set(["tweet", "xArticle", "userCell", "notification", "directMessage", "profile", "document", "route", "overlayApp", "composerAction", "replyAction"]);
+const validLoadTriggers = new Set(["startup", "surface", "dockOpen", "idle", "userAction"]);
 const validLifecycleModes = new Set(["runtime", "invoked"]);
 const validInvocationTriggers = new Set(["userAction"]);
 const validSites = new Set(["x", "remiliaNet", "remiliaWiki", "miladychan"]);
@@ -61,117 +70,7 @@ printResults();
 if (failures.length > 0) process.exit(1);
 
 function verifyPlatformContract() {
-  requireIncludes(appPlatform, "boot?:", "App SDK module type must expose boot lifecycle hook");
-  requireIncludes(appPlatform, "enable?:", "App SDK module type must expose enable lifecycle hook");
-  requireIncludes(appPlatform, "disable?:", "App SDK module type must expose disable lifecycle hook");
-  requireIncludes(appPlatform, "onRouteChange?:", "App SDK module type must expose onRouteChange lifecycle hook");
-  requireIncludes(appPlatform, "onSurface?:", "App SDK module type must expose onSurface lifecycle hook");
-  requireIncludes(appPlatform, "dispose?:", "App SDK module type must expose dispose lifecycle hook");
-  requireIncludes(appPlatform, "scheduler: AppRuntimeScheduler", "App SDK context must expose the shared scheduler");
-  requireIncludes(appPlatform, "sendMessage:", "App SDK context must expose routed background messaging");
-  requireIncludes(appPlatform, "AppLifecycleMode", "App manifest type must expose lifecycle metadata");
-  requireIncludes(appPlatform, "composerAction?: AppComposerAction", "App SDK must expose the composer-action manifest contract");
-  requireIncludes(appPlatform, "onComposerAction?:", "App SDK module type must expose the composer-action callback");
-  requireIncludes(appPlatform, "openNativeDrafts: () => void", "Composer actions must expose only the host-mediated native Drafts handoff");
-  requireIncludes(appPlatform, "externalHandoffs?: AppExternalHandoff[]", "App SDK must expose declared external handoffs");
-  requireIncludes(appPlatform, "launchExternalHandoff:", "Composer actions must expose the host-mediated external handoff callback");
-  requireIncludes(appPlatform, "remoteQueries?: AppRemoteQuery[]", "App SDK must expose declared reviewed remote queries");
-  requireIncludes(appPlatform, "queryRemoteService:", "Composer actions must expose only the host-mediated remote query callback");
-  requireIncludes(appPlatform, "suggestRemoteQueryFacets:", "Composer actions must expose bounded host-derived remote facet suggestions");
-  requireIncludes(appPlatform, "attachRemoteQueryResult:", "Composer actions must expose only the host-mediated reviewed result attachment callback");
-  requireIncludes(appPlatform, 'resultActions?: Array<"attachToInitiatingComposer">', "Remote result attachment must be an explicit manifest opt-in");
-  requireIncludes(appPlatform, 'source: "visibleDraftKeywords"', "Remote query suggestions must declare their bounded visible-draft source");
-  requireIncludes(contentRuntime, "deriveComposerKeywordSuggestions", "Composer suggestions must remain host-derived and sanitized");
-  requireIncludes(appPlatform, 'captionSource?: "composerDraft" | "packageFields"', "External handoffs must declare the reviewed caption source");
-  requireIncludes(appPlatform, 'result: "replaceSameAttachment"', "Reviewed media handoffs must declare same-attachment replacement");
-  requireIncludes(appPlatform, 'consent: "perInvocation"', "Reviewed media replacement must require consent on every invocation");
-  requireIncludes(appPlatform, "captions?: { topText: string; bottomText: string }", "Composer actions must support bounded explicit caption fields");
-  requireIncludes(appPlatform, "replyAction?: AppReplyAction", "App SDK must expose the reply-action manifest contract");
-  requireIncludes(appPlatform, "sendAfterInsert?: boolean", "App SDK must make reply auto-submit an explicit per-template opt-in");
-  requireIncludes(appPlatform, "onReplyAction?:", "App SDK module type must expose the package-rendered reply-action callback");
-  requireIncludes(appPlatform, "contextualPostActions?: AppContextualPostAction[]", "App SDK manifest must expose contextual post actions");
-  requireIncludes(appPlatform, "onContextualPostAction?:", "App SDK module type must expose the contextual post-action callback");
-  requireIncludes(appPlatform, "contextMediaActions?: AppContextMediaAction[]", "App SDK manifest must expose reviewed contextual media actions");
-  requireIncludes(appPlatform, "mediaContributions?: AppMediaContribution[]", "App SDK manifest must expose reviewed native media contributions");
-  requireIncludes(appPlatform, "onContextMediaAction?:", "App SDK module type must expose the contextual media callback");
-  requireIncludes(contentRuntime, 'type: "milxdy:contextMediaPrepare"', "Context media selections must be prepared by the host background");
-  requireIncludes(contentRuntime, 'type: "milxdy:mediaContributionSubmit"', "Media contributions must remain behind the explicit host-owned publish callback");
-  requireNotIncludes(contentRuntime, "Confirm that you have the right", "Media contributions must not add a rights attestation prompt");
-  requireIncludes(background, "OpaqueMediaHandleStore", "Selected media must remain behind opaque host-owned handles");
-  requireIncludes(background, "validateMediaContributionTags", "Media contribution tags must be bounded by the host");
-  requireIncludes(background, 'credentials: "include"', "Reviewed contributions must use the visible member session without exposing it to packages");
-  requireIncludes(appPlatform, "AppSiteScope", "App manifest type must expose site scope metadata");
-  requireIncludes(contentRuntime, "const nonRailApps = apps.filter((app) => !isHubRailApp(app));", "Apps & Features must keep non-rail app packages visible for generated enablement controls");
-  requireIncludes(contentRuntime, "return [...ordered, ...nonRailApps];", "Apps & Features must append non-rail app packages after rail-ordered apps");
-  requireIncludes(contentRuntime, "createComposerActionRefreshScheduler", "Composer action DOM mutations must be coalesced before rescanning X");
-  requireIncludes(contentRuntime, "const shadow = panel.attachShadow({ mode: \"open\" });", "Composer actions must render package content in an isolated host-owned panel root");
-  requireIncludes(contentRuntime, "composerActionBindingToken", "Composer actions must rebind host controls after an extension reload leaves prior DOM in place");
-  requireIncludes(contentRuntime, ".milxdy-composer-action-panel[data-app-id]", "Composer action startup must clear orphaned panels from an earlier content-runtime instance");
-  requireIncludes(contentRuntime, "pendingComposerAction", "Composer action activation must serialize rapid toggle clicks across async module loads");
-  requireIncludes(contentRuntime, "await installComposerActionPackageStyles(app, shadow);", "Composer actions must load declared package CSS before their callback renders");
-  requireIncludes(contentRuntime, "for (const sheet of app.css || [])", "Composer action styling must be limited to declared package stylesheets");
-  requireIncludes(contentRuntime, "function composerActionRowFor", "Composer actions must resolve X's toolbar row before inserting controls");
-  requireIncludes(contentRuntime, "[data-testid=\"ScrollSnap-List\"]", "Composer actions must join X's toolbar action row instead of the editor body");
-  requireIncludes(contentRuntime, "A zero-row pass is an X reconciliation transient", "Composer actions must not disappear while X replaces a drafted editor");
-  requireIncludes(contentRuntime, "const openBelow = spaceBelow >= naturalHeight || spaceBelow >= spaceAbove;", "Composer panels must choose the viewport side with enough reachable space");
-  requireIncludes(contentRuntime, "panel.dataset.placement = openBelow ? \"bottom\" : \"top\";", "Composer panels must record their responsive above/below placement");
-  requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(scheduleComposerActionPosition);", "Composer panels must adapt when package content changes size");
-  requireIncludes(contentRuntime, "const openNativeDrafts = () => openNativeDraftsFor(currentButton(), close);", "Composer packages must use the host-owned X Drafts handoff from the current rebound control");
-  requireIncludes(contentRuntime, 'a[href*="/compose/tweet/unsent/drafts"]', "Native Drafts handoff must target X's own Drafts control");
-  requireIncludes(contentRuntime, 'window.location.assign(new URL("/compose/tweet/unsent/drafts", window.location.origin).toString())', "Inline composers without a visible Drafts control must open X's native Drafts route");
-  requireIncludes(contentRuntime, "splitExternalHandoffText", "External handoffs must split active composer text only in the host runtime");
-  requireIncludes(contentRuntime, "handoff.captionSource === \"packageFields\"", "Explicit package captions must not read the X composer");
-  requireIncludes(contentRuntime, 'type: "milxdy:externalHandoff"', "External handoffs must use a host-routed background request");
-  requireIncludes(contentRuntime, 'type: "milxdy:remoteQuery"', "Remote galleries must use a host-routed background request");
-  requireIncludes(contentRuntime, "playInterfaceLaunchSound();", "External handoffs must use the host-owned, user-preference-respecting loading cue");
-  requireIncludes(contentRuntime, "function installReplyActionHost", "Reply actions must be hosted by the platform, not package page-DOM code");
-  requireIncludes(contentRuntime, "activeReplyActionButton === button", "Reply-action invokers must toggle their active package panel closed on a second click");
-  requireIncludes(contentRuntime, "gap: 8", "Reply-action menus must open below the X reply control");
-  requireIncludes(contentRuntime, "document.addEventListener(\"scroll\", positionReplyActionPanel, true)", "Reply-action panels must track their X reply control while its post scrolls");
-  requireIncludes(contentRuntime, "resolveReplyActionPanelPosition", "Reply-action panels must resolve from their initiating control's viewport coordinates");
-  requireIncludes(contentRuntime, "panelSizeObserver = new ResizeObserver(positionReplyActionPanel);", "Reply-action panels must re-anchor after package content changes their measured width");
-  requireIncludes(contentRuntime, "panel.style.visibility = position.hidden ? \"hidden\" : \"visible\"", "Reply-action panels must not draw through X's sticky column header");
-  requireIncludes(contentRuntime, "window.addEventListener(\"keydown\", dismissOnEscape, true)", "Package panels must receive Escape before page-level keyboard handlers");
-  requireIncludes(contentRuntime, "module.onReplyAction", "Reply-action UI must be rendered by the declaring package");
-  requireIncludes(contentRuntime, "[contenteditable=\"true\"][data-testid^=\"tweetTextarea_\"]", "Reply insertion must target X's actual editable element, not an inherited editable wrapper");
-  requireIncludes(contentRuntime, "if (normalizedText(editor.innerText || editor.textContent || \"\")) return false;", "Reply insertion must fail closed rather than append to an existing native draft");
-  requireIncludes(contentRuntime, "new ClipboardEvent(\"paste\"", "Reply insertion must update X's controlled editor through its text-transfer contract");
-  requireIncludes(contentRuntime, "clipboardData.setData(\"text/plain\", text)", "Reply insertion must transfer only the explicit declared template text");
-  requireIncludes(contentRuntime, "if (++verificationFrames < 30) window.requestAnimationFrame(verifyControlledInsertion);", "Reply insertion must wait for X's controlled state without a second DOM insertion");
-  requireIncludes(contentRuntime, "normalizedText(editor.innerText || editor.textContent || \"\") !== normalizedText(text)", "Auto-submit must fail closed unless X contains exactly the selected template");
-  requireIncludes(contentRuntime, "[data-tier=\"app\"][data-rail-app=\"true\"]", "Apps & Features must reserve rail ordering affordances for rail-capable apps only");
-  requireIncludes(contentRuntime, "root.dataset.theme = currentHubTheme()", "Apps & Features must bind its host palette to the active X light, dim, or dark theme");
-  requireIncludes(contentRuntime, "function currentHubTheme", "Apps & Features must resolve distinct light, dim, and dark host palettes");
-  requireIncludes(contentRuntime, "function appHubLifecycle", "Apps & Features must present package lifecycle state without package-owned UI code");
-  requireIncludes(contentRuntime, "Ready in composer + reply", "Composer/reply packages must receive a generic ready lifecycle state");
-  requireIncludes(composerSource, "record.css.map((sheet) => sheet.target)", "declared package stylesheets must be exposed to the host-owned composer panel");
-  requireIncludes(composerSource, "supportedExternalHandoffAdapters", "Local package composition must reject undeclared external handoff adapters");
-  requireIncludes(background, "renderRemiliaMakerImage", "External maker handoffs must be host-owned adapter code");
-  requireIncludes(background, "renderCheeseWorldImage", "CheeseWorld deep-fry must remain a reviewed host-owned adapter");
-  requireIncludes(externalHandoffContract, 'new URL("/cheeseworld", CHEESEWORLD_HANDOFF_ORIGIN)', "CheeseWorld handoff must use its fixed reviewed destination");
-  requireIncludes(background, "validateExternalHandoffImageDataUrl", "CheeseWorld input must be MIME- and size-validated by the host");
-  requireIncludes(background, "withExternalHandoffTimeout", "Generated maker execution must time out so its inactive tab is always cleaned up");
-  requireIncludes(background, "active: false", "Reviewed maker handoffs must open inactive tabs");
-  requireIncludes(background, "finally {", "Reviewed maker handoffs must clean up generated inactive tabs after success or failure");
-  requireIncludes(background, "chrome.tabs.remove(generatedMakerTabId)", "Reviewed maker handoffs must remove only their generated maker tab");
-  requireIncludes(background, "world: \"MAIN\"", "The reviewed maker image must be rendered only by its own page runtime");
-  requireIncludes(background, "imageDataUrl", "The host adapter must return only a validated generated image");
-  requireIncludes(background, "#randomMemeButton", "Random-meme handoffs must use the maker's dedicated meme control, not its token selector");
-  requireIncludes(background, "randomMeme.click();", "Random-meme handoffs must explicitly invoke the reviewed meme preset action");
-  requireIncludes(background, "randomMeme.click();\n    await waitForRender();", "Random-meme handoffs must wait for an asynchronous preset render before capture");
-  requireIncludes(background, "sanitizeRemibooruPosts", "Remote galleries must return sanitized reviewed post pages");
-  requireIncludes(background, "remibooruQueryUrl", "Remote galleries must use a fixed reviewed query schema");
-  requireIncludes(background, "RemoteQueryResultStore", "Remote result attachments must resolve only recently sanitized host-owned results");
-  requireIncludes(contentRuntime, 'type: "milxdy:remoteQueryAttach"', "Remote result attachments must use the host-routed background bridge");
-  requireIncludes(contentRuntime, "new File([blob], fileName", "The host must attach reviewed image handoffs through X's existing media control");
-  requireIncludes(contentRuntime, "prepareComposerImageReplacement", "Composer media replacement must capture and bind the initiating attachment in host code");
-  requireIncludes(contentRuntime, "removeButtons[0] !== replacement.removeButton", "Composer media replacement must fail closed if the initiating attachment identity changes");
-  requireIncludes(contentRuntime, "attachmentIdentity", "Composer media replacement must pin the initiating file or preview identity across the handoff");
-  requireIncludes(contentRuntime, "if (!navigator.userActivation?.isActive)", "Composer media replacement must begin only from an explicit user activation");
-  requireNotIncludes(contentRuntime, 'window.confirm("Send this composer image', "Composer media consent must not synchronously block the initiating X tab");
-  requireIncludes(contentRuntime, "input.files = transfer.files", "The host must use the native file-input handoff rather than visual text insertion");
-  requireIncludes(contentRuntime, "A repeated activation of the same action is a toggle", "Composer actions must close on a second activation of the same action");
-  requireIncludes(contentRuntime, "activeComposerAction.panel.isConnected", "Composer actions must discard stale panels reconciled away by X before reopening");
+  verifyPlatformContractChecks({ requireIncludes, requireNotIncludes });
 }
 
 function verifySdkVersionSource() {
@@ -207,15 +106,19 @@ function verifyLocalPackageShapeContract() {
 }
 
 function verifyRootAndRuntimeOwnership() {
-  requireIncludes(contentRoot, "createContentRuntime(FIRST_PARTY_APPS)", "content root must bootstrap the shared content runtime");
+  requireIncludes(contentRoot, "appsForRuntimeSite(FIRST_PARTY_APPS, runtimeSite)", "content root must filter the registry for the resolved runtime site");
+  requireIncludes(contentRoot, "createContentRuntime(runtimeApps, runtimeSite)", "content root must bootstrap the shared content runtime with validated site context");
   if (/from\s+["']\.\/features\//.test(contentRoot) || /import\s*\([^)]*features\//.test(contentRoot)) {
     fail("src/extension/content/index.ts must not import feature bundles directly");
   }
   requireIncludes(contentRuntime, "observeHubGeneratedSettings()", "runtime must own generated settings observation");
-  requireIncludes(contentRuntime, "hubGeneratedFeatureSettings", "runtime must own generated feature settings selection");
+  requireIncludes(contentRuntime, "createHubGeneratedFeatureSettings({", "runtime must own generated feature settings selection");
   requireIncludes(contentRuntime, "subscribeTwitterSurfaces(handleSurface)", "runtime must own shared Twitter/X scanner subscription");
-  requireIncludes(contentRuntime, "currentAppSiteId()", "runtime route scope loading must resolve the current site");
-  requireIncludes(contentRuntime, "siteScopeMatchesCurrentHost", "runtime route scope loading must check host-aware site metadata");
+  requireIncludes(contentRuntime, "routeScopeMatches(app, state.site, route.pathname)", "runtime route scope loading must check validated site metadata");
+  requireIncludes(siteRuntime, "scope.integration === \"contentScript\"", "site runtime must require an explicit content-script integration scope");
+  for (const origin of ["https://x.com", "https://twitter.com", "https://www.remilia.net", "https://remilia.wiki", "https://wiki.remilia.org", "https://boards.miladychan.org"]) {
+    requireIncludes(siteRuntime, origin, `site runtime must declare approved origin ${origin}`);
+  }
   requireIncludes(contentRuntime, "scheduler,", "runtime must provide shared scheduling through context.scheduler");
   requireIncludes(backgroundMessagePolicy, "extractBackgroundMessageType", "runtime policy must extract App SDK background message types before sending");
   requireIncludes(contentRuntime, "dispatchAuthorizedBackgroundMessage", "runtime must enforce App SDK background message capability metadata before queueing");
@@ -266,93 +169,7 @@ function verifyReminetChatDefaults(app) {
 }
 
 function verifyLifecycleAndSiteMetadata(app) {
-  if (!Array.isArray(app.surfaces)) {
-    fail(`${app.id}: surfaces must be an array`);
-  } else {
-    for (const surface of app.surfaces) {
-      if (!validSurfaces.has(surface)) fail(`${app.id}: unsupported surface ${surface}`);
-    }
-  }
-  if (!Array.isArray(app.loadTriggers)) {
-    fail(`${app.id}: loadTriggers must be an array`);
-  }
-
-  const lifecycle = app.lifecycle;
-  if (lifecycle !== undefined) {
-    if (!lifecycle || typeof lifecycle !== "object" || !validLifecycleModes.has(lifecycle.mode)) {
-      fail(`${app.id}: unsupported lifecycle mode ${lifecycle?.mode}`);
-    } else if (lifecycle.mode === "invoked") {
-      if (lifecycle.invokedBy !== undefined && !validInvocationTriggers.has(lifecycle.invokedBy)) {
-        fail(`${app.id}: unsupported invocation trigger ${lifecycle.invokedBy}`);
-      }
-      if (lifecycle.invokedBy !== "userAction") fail(`${app.id}: invoked lifecycle must declare invokedBy userAction`);
-      if (!lifecycle.reason) fail(`${app.id}: invoked lifecycle must declare the platform load reason`);
-      if (!app.loadTriggers?.every((trigger) => trigger === "userAction")) {
-        fail(`${app.id}: invoked lifecycle packages must use only userAction load triggers`);
-      }
-      if ((app.surfaces || []).length > 0) {
-        fail(`${app.id}: invoked lifecycle packages must not declare runtime delivery surfaces`);
-      }
-    }
-  }
-
-  const siteScopes = app.siteScopes || [];
-  if (!Array.isArray(siteScopes)) fail(`${app.id}: siteScopes must be an array when declared`);
-  for (const scope of Array.isArray(siteScopes) ? siteScopes : []) {
-    if (!validSites.has(scope.site)) fail(`${app.id}: unsupported site scope ${scope.site}`);
-    if (!validSiteIntegrations.has(scope.integration)) {
-      fail(`${app.id}: site scope must declare a supported integration mode`);
-    }
-    if (!Array.isArray(scope.hosts) || scope.hosts.length === 0) {
-      fail(`${app.id}: site scope must declare host patterns`);
-    } else {
-      for (const host of scope.hosts) {
-        if (!validSiteHostPattern(host)) fail(`${app.id}: invalid site scope host pattern ${host}`);
-      }
-    }
-    if (!Array.isArray(scope.surfaces) || scope.surfaces.length === 0) {
-      fail(`${app.id}: site scope must declare at least one surface`);
-    } else {
-      for (const surface of scope.surfaces) {
-        if (!validSurfaces.has(surface)) fail(`${app.id}: site scope declares unsupported surface ${surface}`);
-      }
-    }
-    if (scope.presentation !== undefined && !validSitePresentations.has(scope.presentation)) {
-      fail(`${app.id}: unsupported site presentation ${scope.presentation}`);
-    }
-    if (scope.routes !== undefined && !Array.isArray(scope.routes)) fail(`${app.id}: site scope routes must be an array`);
-    for (const route of Array.isArray(scope.routes) ? scope.routes : []) {
-      if (!validRouteMatchTypes.has(route.type)) fail(`${app.id}: unsupported route match type ${route.type}`);
-      if (typeof route.path !== "string" || !route.path.startsWith("/")) {
-        fail(`${app.id}: route pattern must declare an absolute path`);
-      }
-      if (route.surface !== undefined && !validSurfaces.has(route.surface)) {
-        fail(`${app.id}: route pattern declares unsupported surface ${route.surface}`);
-      }
-      if (route.surface !== undefined && !scope.surfaces.includes(route.surface)) {
-        fail(`${app.id}: route pattern surface ${route.surface} must be included in its site scope surfaces`);
-      }
-    }
-  }
-
-  for (const surface of app.surfaces || []) {
-    if (surface === "route" || surface === "overlayApp") continue;
-    if (surfaceSupportedBySiteScope(app, surface)) continue;
-    warn(`${app.id}: surface ${surface} is declared without matching site scope metadata`);
-  }
-
-  if ((app.surfaces || []).includes("directMessage")) {
-    const directMessageScope = directMessageSiteScope(app);
-    if (lifecycle?.mode !== "runtime") {
-      fail(`${app.id}: directMessage packages must declare runtime lifecycle metadata`);
-    }
-    if (!directMessageScope) {
-      fail(`${app.id}: directMessage packages must declare explicit X direct-message site metadata`);
-    }
-    if ((app.surfaces || []).includes("route") && !hasRequiredMessagesRoutes(directMessageScope)) {
-      fail(`${app.id}: directMessage route packages must declare /messages and /i/chat route patterns`);
-    }
-  }
+  verifyLifecycleMetadataChecks(app, { directMessageSiteScope, fail, hasRequiredMessagesRoutes, surfaceSupportedBySiteScope, validInvocationTriggers, validLifecycleModes, validLoadTriggers, validRouteMatchTypes, validSiteHostPattern, validSiteIntegrations, validSitePresentations, validSites, validSurfaces, warn });
 }
 
 function validSiteHostPattern(value) {
@@ -500,7 +317,7 @@ async function verifyContentModules() {
     if (app.surfaces?.includes("route") && !exports.has("onRouteChange")) {
       warn(`${app.id}: route surface is inferred from runtime behavior but onRouteChange() is not exported`);
     }
-    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["overlayApp", "route", "directMessage", "composerAction", "replyAction"].includes(surface));
+    const twitterSurfaces = (app.surfaces || []).filter((surface) => !["document", "overlayApp", "route", "directMessage", "composerAction", "replyAction"].includes(surface));
     if (twitterSurfaces.length > 0 && !exports.has("onSurface")) {
       fail(`${app.id}: declares Twitter/X delivery surfaces but does not export onSurface()`);
     }
@@ -752,7 +569,7 @@ function directRuntimeBridgeWarning(appId, file, source, kind) {
   }
   if (!/chrome\.runtime\.connect\s*\(/.test(source)) return null;
   if (normalized.endsWith("src/apps/reminet-chat/content.ts")) {
-    return `${file}: intentionally internal RemiNet Chat socket bridge; background restricts runtime.connect to same-extension top-frame X/Twitter senders`;
+    return `${file}: intentionally internal RemiNet Chat socket bridge; background restricts runtime.connect to same-extension top-frame X/Twitter and RemiliaNET senders`;
   }
   const label = appId || file;
   return `${label}: transitional/internal chrome.runtime.connect port bypasses App SDK message metadata; keep scoped to documented streaming bridges`;

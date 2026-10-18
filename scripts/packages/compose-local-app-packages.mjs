@@ -1,3 +1,7 @@
+import { verifyReplyAction } from "./reply-send-consent-validation.mjs";
+import { matchesReviewedSourceRoot } from "./reviewed-source-root.mjs";
+import { scanPayloadText, isNonAcknowledgeableSensitiveFinding } from "./local-app-payload-scanner.mjs";
+import { verifyBackgroundCapabilities } from "./local-app-capability-validation.mjs";
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { copyFile, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -45,8 +49,10 @@ const extractionDir = checkOnly
 const registryApps = JSON.parse(await readFile("src/platform/app-sdk/first-party-apps.json", "utf8"));
 const publicManifest = JSON.parse(await readFile("assets/extension/manifest.json", "utf8"));
 const firstPartyReplacementPolicy = JSON.parse(await readFile("scripts/packages/local-app-first-party-replacements.json", "utf8"));
+const defaultEnablementPolicy = JSON.parse(await readFile("scripts/packages/local-app-default-enablement.json", "utf8"));
 const firstPartyById = new Map(registryApps.map((app) => [app.id, app]));
 const firstPartyReplacementPolicyById = new Map((firstPartyReplacementPolicy.replacements || []).map((item) => [item.id, item]));
+const defaultEnablementPolicyById = new Map((defaultEnablementPolicy.packages || []).map((item) => [item.id, item]));
 const baseHostPermissions = publicManifest.host_permissions ?? [];
 const builtInStorageKeys = builtInRegistryStorageKeys(registryApps);
 
@@ -82,6 +88,17 @@ const supportedRemoteQueryAdapters = new Map([
     resources: new Set(["posts", "facets"]),
   }],
 ]);
+const remiliaCapabilityContracts = new Map([
+  ["remilia.profile.public", { operations: ["getUserProfile"], scopes: [], consent: "enablement" }],
+  ["remilia.profile.me", { operations: ["getMe"], scopes: [], consent: "enablement" }],
+  ["remilia.directory.read", { operations: ["resolveDirectory", "listDirectoryUsers"], scopes: ["remilia:directory.read"], consent: "enablement" }],
+  ["remilia.stats.read", { operations: ["getMyStats"], scopes: ["remilia:stats.read"], consent: "enablement" }],
+  ["remilia.notifications.read", { operations: ["listMyNotifications"], scopes: ["remilia:notifications.read"], consent: "enablement" }],
+  ["remilia.pokes.write", { operations: ["pokeUser"], scopes: ["remilia:pokes.write"], consent: "perInvocation" }],
+  ["remilia.beetle.read", { operations: ["getMyBeetle", "getMyBeetleCards"], scopes: ["remilia:beetle.read"], consent: "enablement" }],
+  ["remilia.chat.read", { operations: ["listGlobalChatMessages"], scopes: ["remilia:chat.read"], consent: "enablement" }],
+  ["remilia.chat.write", { operations: ["postGlobalChatMessage"], scopes: ["remilia:chat.write"], consent: "perInvocation" }],
+]);
 const sensitiveStorageNeedles = [
   "auth",
   "cache",
@@ -116,123 +133,6 @@ const sensitiveGeneratedStorageNeedles = [
   "session",
   "token",
 ];
-const nonAcknowledgeablePackageApiRuleIds = new Set([
-  "chrome-runtime-send-message",
-  "chrome-runtime-connect",
-  "browser-runtime-send-message",
-  "browser-runtime-connect",
-  "computed-extension-api-global",
-  "computed-extension-api-global-from-decoder",
-  "computed-extension-api-global-from-char-code",
-  "computed-extension-api-global-from-reflect",
-  "computed-runtime-api-property",
-]);
-const staticSensitiveStringValues = Object.freeze([
-  "chrome",
-  "browser",
-  "runtime",
-  "sendMessage",
-  "connect",
-]);
-const sensitivePackageApiRules = [
-  {
-    id: "chrome-runtime-send-message",
-    severity: "error",
-    pattern: runtimeApiPattern(globalApiPattern("chrome"), "sendMessage"),
-    message: "uses chrome.runtime.sendMessage directly; local packages must use context.sendMessage() so background message authorization can enforce declared message types",
-  },
-  {
-    id: "chrome-runtime-connect",
-    severity: "error",
-    pattern: runtimeApiPattern(globalApiPattern("chrome"), "connect"),
-    message: "uses chrome.runtime.connect directly; port bridges require a reviewed background handler and sender policy",
-  },
-  {
-    id: "browser-runtime-send-message",
-    severity: "error",
-    pattern: runtimeApiPattern(globalApiPattern("browser"), "sendMessage"),
-    message: "uses browser.runtime.sendMessage directly; local packages must use context.sendMessage() so background message authorization can enforce declared message types",
-  },
-  {
-    id: "browser-runtime-connect",
-    severity: "error",
-    pattern: runtimeApiPattern(globalApiPattern("browser"), "connect"),
-    message: "uses browser.runtime.connect directly; port bridges require a reviewed background handler and sender policy",
-  },
-  {
-    id: "extension-runtime-url",
-    severity: "warning",
-    pattern: runtimeApiPattern("(?:chrome|browser)", "getURL"),
-    message: "constructs extension-origin URLs; review web-accessible resources, frame/worker loading, and package asset exposure",
-  },
-  {
-    id: "broad-chrome-api",
-    severity: "warning",
-    pattern: privilegedNamespacePattern(globalApiPattern("chrome")),
-    message: "references a privileged chrome.* API; package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "broad-browser-api",
-    severity: "warning",
-    pattern: privilegedNamespacePattern(globalApiPattern("browser")),
-    message: "references a privileged browser.* API; package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "computed-extension-api-global",
-    severity: "error",
-    pattern: new RegExp(`\\b(?:[A-Za-z_$][\\w$]*|globalThis|window|self)\\s*\\[\\s*(?:${constructedStringExpressionPattern("chrome")}|${constructedStringExpressionPattern("browser")})\\s*\\]`, "g"),
-    message: "constructs chrome/browser globals through computed string access; local package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "computed-extension-api-global-from-decoder",
-    severity: "error",
-    pattern: new RegExp(`\\b(?:[A-Za-z_$][\\w$]*|globalThis|window|self)${jsTriviaPattern()}\\[${jsTriviaPattern()}(?:${atobStringExpressionPattern("chrome")}|${atobStringExpressionPattern("browser")})${jsTriviaPattern()}\\]`, "g"),
-    message: "constructs chrome/browser globals through decoded string access; local package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "computed-extension-api-global-from-char-code",
-    severity: "error",
-    pattern: new RegExp(`\\b(?:[A-Za-z_$][\\w$]*|globalThis|window|self)\\s*\\[\\s*(?:${charCodeStringExpressionPattern("chrome")}|${charCodeStringExpressionPattern("browser")})\\s*\\]`, "g"),
-    message: "constructs chrome/browser globals through character-code string access; local package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "computed-extension-api-global-from-reflect",
-    severity: "error",
-    pattern: reflectGlobalApiPattern(),
-    message: "constructs chrome/browser globals through Reflect.get(); local package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "computed-runtime-api-property",
-    severity: "error",
-    pattern: new RegExp(`\\[\\s*(?:${constructedStringExpressionPattern("runtime")}|${constructedStringExpressionPattern("sendMessage")}|${constructedStringExpressionPattern("connect")})\\s*\\]`, "g"),
-    message: "constructs runtime/sendMessage/connect through computed string access; local package code must not bypass the App SDK capability surface without a reviewed exception",
-  },
-  {
-    id: "unsafe-eval",
-    severity: "error",
-    pattern: /\beval\s*\(/g,
-    message: "uses eval(); local package payloads must not execute dynamically generated code",
-  },
-  {
-    id: "unsafe-new-function",
-    severity: "error",
-    pattern: /\bnew\s+Function\s*\(/g,
-    message: "uses new Function(); local package payloads must not execute dynamically generated code",
-  },
-  {
-    id: "remote-script-loading",
-    severity: "error",
-    pattern: /(?:<script\b[^>]*\bsrc\s*=\s*["']https?:\/\/|importScripts\s*\(\s*["']https?:\/\/|import\s*\(\s*["']https?:\/\/|\.src\s*=\s*["']https?:\/\/[^"']+\.js\b)/gi,
-    message: "loads remote script code; local packages must ship reviewed, declared package files instead",
-  },
-  {
-    id: "dynamic-extension-internals",
-    severity: "warning",
-    pattern: /\b(?:chrome-extension|moz-extension):\/\//g,
-    message: "references extension-origin internals directly; use declared package assets and reviewed platform APIs",
-  },
-];
-
 if (!checkOnly && clean) await rm(outDir, { recursive: true, force: true });
 if (!checkOnly) await mkdir(outDir, { recursive: true });
 const packageSources = await resolvePackageSources();
@@ -504,44 +404,21 @@ async function analyzePackage(source, manifest) {
   if (source.type === "folder" && manifest.id !== path.basename(root)) warnings.push(`${id}: package folder name does not match manifest id; folder packages should be renamed before distribution`);
   if (firstPartyById.has(id)) warnings.push(`${id}: local package declares a built-in app id; replacement requires reviewed status and explicit acknowledgement`);
   verifyNovelPackageEnablement(id, manifest, errors);
-  if (!firstPartyById.has(id) && manifest.defaultEnabled === true && packageRequiresExplicitEnablement(manifest)) {
-    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false`);
-  }
   verifyReviewStatus(id, manifest, errors, warnings);
   verifySdk(id, manifest, errors, warnings);
   verifyExecutableContentEntry(id, manifest, errors);
-  collectFile(source, manifest.contentEntry, "contentEntry", files, errors);
-  for (const sheet of manifest.css || []) {
-    for (const field of Object.keys(sheet)) {
-      if (forbiddenCssFields.has(field)) errors.push(`${id}: css entry must not include first-party build field ${field}`);
-    }
-    collectFile(source, sheet.path, `css ${sheet.id || "<unknown>"}`, files, errors);
-  }
-  for (const asset of manifest.package?.assets || []) {
-    if (!validAssetKinds.has(asset.kind)) errors.push(`${id}: package asset ${asset.path} has unsupported kind ${asset.kind}`);
-    collectFile(source, asset.path, `asset ${asset.id || asset.path}`, files, errors);
-  }
-  for (const assetPath of manifest.package?.webAccessibleAssets || []) {
-    collectFile(source, assetPath, `webAccessibleAsset ${assetPath}`, files, errors);
-  }
-  for (const iconPath of dockIconPaths(manifest.dock?.icon)) {
-    collectFile(source, iconPath, "dock icon", files, errors);
-  }
-  for (const iconPath of dockIconPaths(manifest.composerAction?.icon)) {
-    collectFile(source, iconPath, "composer action icon", files, errors);
-  }
-  for (const action of manifest.contextualPostActions || []) {
-    for (const iconPath of dockIconPaths(action.icon)) collectFile(source, iconPath, `contextual post action ${action.id} icon`, files, errors);
-  }
+  collectPackageFiles(id, source, manifest, files, errors);
   verifyKindRules(id, manifest, errors);
   verifyComposerAction(id, manifest, errors);
   verifyContextualPostActions(id, manifest, errors);
+  verifyPageContextActions(id, manifest, errors);
   verifyContextMediaActions(id, manifest, errors);
   verifyReplyAction(id, manifest, errors);
   verifyExternalHandoffs(id, manifest, errors);
   verifyRemoteQueries(id, manifest, errors);
+  verifyRemiliaCapabilities(id, manifest, errors);
   verifyPermissionsAndPrivacy(id, manifest, errors);
-  verifyBackgroundCapabilities(id, manifest, errors);
+  verifyBackgroundCapabilities(id, manifest, (message) => errors.push(message));
   verifyLifecycleExports(id, root, manifest, errors);
 
   for (const source of unique(files)) {
@@ -558,8 +435,11 @@ async function analyzePackage(source, manifest) {
   const contentSha256 = sha256Files(root, packageFiles);
   const manifestSha256 = sha256File(path.join(root, "milxdy.app.json"));
   const packageSha256 = source.archiveSha256 ?? contentSha256;
+  const defaultEnablementTrust = reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256);
+  verifyPrivilegedDefaultEnablement(id, manifest, defaultEnablementTrust, errors);
   const payloadScan = scanPackagePayloads(id, root, packageFiles);
   const trust = evaluatePackageTrust(id, source, manifest, packageFiles, webAccessibleAssets, payloadScan, packageSha256);
+  trust.trustDecision.defaultEnablementPolicy = defaultEnablementTrust;
   verifySensitivePresetParticipation(id, manifest, errors);
   verifyStorageDeclarations(id, manifest, errors, {
     allowBuiltInStorageKeys: trust.trustDecision.firstPartyReplacementPolicy.allowed
@@ -611,6 +491,35 @@ async function analyzePackage(source, manifest) {
     contentSha256,
     manifestSha256,
   };
+}
+
+function collectPackageFiles(id, source, manifest, files, errors) {
+  collectFile(source, manifest.contentEntry, "contentEntry", files, errors);
+  for (const action of manifest.pageContextActions || []) {
+    collectFile(source, action.entry, `pageContextAction ${action.id || "<unknown>"} entry`, files, errors);
+  }
+  for (const sheet of manifest.css || []) {
+    for (const field of Object.keys(sheet)) {
+      if (forbiddenCssFields.has(field)) errors.push(`${id}: css entry must not include first-party build field ${field}`);
+    }
+    collectFile(source, sheet.path, `css ${sheet.id || "<unknown>"}`, files, errors);
+  }
+  for (const asset of manifest.package?.assets || []) {
+    if (!validAssetKinds.has(asset.kind)) errors.push(`${id}: package asset ${asset.path} has unsupported kind ${asset.kind}`);
+    collectFile(source, asset.path, `asset ${asset.id || asset.path}`, files, errors);
+  }
+  for (const assetPath of manifest.package?.webAccessibleAssets || []) {
+    collectFile(source, assetPath, `webAccessibleAsset ${assetPath}`, files, errors);
+  }
+  for (const iconPath of dockIconPaths(manifest.dock?.icon)) {
+    collectFile(source, iconPath, "dock icon", files, errors);
+  }
+  for (const iconPath of dockIconPaths(manifest.composerAction?.icon)) {
+    collectFile(source, iconPath, "composer action icon", files, errors);
+  }
+  for (const action of manifest.contextualPostActions || []) {
+    for (const iconPath of dockIconPaths(action.icon)) collectFile(source, iconPath, `contextual post action ${action.id} icon`, files, errors);
+  }
 }
 
 function buildGeneratedPlan(records) {
@@ -735,11 +644,17 @@ function toGeneratedRegistryApp(record) {
   const manifest = structuredClone(record.manifest);
   const firstParty = firstPartyById.get(record.id);
   manifest.contentEntry = record.contentEntry.target;
+  manifest.pageContextActions = (manifest.pageContextActions || []).map((action) => ({
+    ...action,
+    entry: packageOutputPath(record.id, action.entry),
+  }));
   manifest.css = record.css.map((sheet) => ({
     id: sheet.id,
     path: sheet.target,
   }));
-  manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  if (manifest.dock) manifest.dock = rewriteDockIcon(manifest.dock, record.id);
+  else delete manifest.dock;
+  manifest.hub = preserveFirstPartyRail(firstParty?.hub, manifest.hub);
   manifest.composerAction = rewriteComposerActionIcon(manifest.composerAction, record.id);
   manifest.contextualPostActions = rewriteContextualPostActionIcons(manifest.contextualPostActions, record.id);
   manifest.available = true;
@@ -773,7 +688,16 @@ function toGeneratedRegistryApp(record) {
       contentSha256: record.contentSha256,
       manifestSha256: record.manifestSha256,
       archiveSha256: record.source.archiveSha256,
+      packageConsentAcknowledged: record.trustDecision.packageConsentAcknowledged === true,
     },
+  };
+}
+
+function preserveFirstPartyRail(firstPartyHub, packageHub) {
+  if (!firstPartyHub?.rail) return packageHub;
+  return {
+    ...(packageHub || {}),
+    rail: structuredClone(firstPartyHub.rail),
   };
 }
 
@@ -934,6 +858,28 @@ function verifyContextualPostActions(id, manifest, errors) {
   }
 }
 
+function verifyPageContextActions(id, manifest, errors) {
+  const actions = manifest.pageContextActions;
+  if (!actions) return;
+  if (!Array.isArray(actions) || actions.length === 0 || actions.length > 4) {
+    errors.push(`${id}: pageContextActions requires between one and four declarations`);
+    return;
+  }
+  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: pageContextActions packages must declare the userAction load trigger`);
+  const ids = new Set();
+  for (const action of actions) {
+    if (!action?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(action.id) || ids.has(action.id)) errors.push(`${id}: pageContextActions ids must be unique safe identifiers`);
+    ids.add(action?.id);
+    if (!action?.label || typeof action.label !== "string") errors.push(`${id}: pageContextActions require labels`);
+    if (typeof action?.entry !== "string" || path.extname(action.entry).toLowerCase() !== ".js") errors.push(`${id}: pageContextActions entries must be executable .js files`);
+    const patterns = action?.documentUrlPatterns;
+    if (!Array.isArray(patterns) || patterns.length === 0 || patterns.length > 2 || new Set(patterns).size !== patterns.length
+      || patterns.some((pattern) => pattern !== "http://*/*" && pattern !== "https://*/*")) {
+      errors.push(`${id}: pageContextActions documentUrlPatterns may contain only unique HTTP/HTTPS active-tab patterns`);
+    }
+  }
+}
+
 function verifyContextMediaActions(id, manifest, errors) {
   const actions = manifest.contextMediaActions;
   const contributions = manifest.mediaContributions;
@@ -966,31 +912,6 @@ function verifyContextMediaActions(id, manifest, errors) {
   const disclosure = [...(manifest.privacy?.dataNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.privacy?.remoteServices || [])].join(" ").toLowerCase();
   if (!/(grok|assistant)/.test(disclosure) || !/tag/.test(disclosure)) errors.push(`${id}: contextMediaActions require visible assistant tag-helper disclosure`);
   if (manifest.privacy?.consentRequired !== true || !manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: mediaContributions require remote-api consent`);
-}
-
-function verifyReplyAction(id, manifest, errors) {
-  const action = manifest.replyAction;
-  if (!action) return;
-  if (!manifest.loadTriggers?.includes("userAction")) errors.push(`${id}: replyAction packages must declare the userAction load trigger`);
-  if (!manifest.surfaces?.includes("replyAction")) errors.push(`${id}: replyAction packages must declare the replyAction surface`);
-  const templates = action.templates;
-  if (!Array.isArray(templates) || templates.length === 0 || templates.length > 6) {
-    errors.push(`${id}: replyAction requires between one and six templates`);
-    return;
-  }
-  const ids = new Set();
-  for (const template of templates) {
-    if (!template?.id || !/^[A-Za-z0-9][A-Za-z0-9._-]*$/u.test(template.id) || ids.has(template.id)) errors.push(`${id}: replyAction template ids must be unique safe identifiers`);
-    ids.add(template?.id);
-    if (!template?.label || typeof template.label !== "string") errors.push(`${id}: replyAction templates require a label`);
-    const hasText = typeof template?.text === "string";
-    const hasStorageKey = typeof template?.storageKey === "string" && template.storageKey.length > 0;
-    const hasStorageListKey = typeof template?.storageListKey === "string" && template.storageListKey.length > 0;
-    if ([hasText, hasStorageKey, hasStorageListKey].filter(Boolean).length !== 1) errors.push(`${id}: replyAction template must declare exactly one of text, storageKey, or storageListKey`);
-    if (hasStorageKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageKey)) errors.push(`${id}: replyAction storageKey must be declared in storageKeys`);
-    if (hasStorageListKey && !Object.values(manifest.storageKeys || {}).flat().includes(template.storageListKey)) errors.push(`${id}: replyAction storageListKey must be declared in storageKeys`);
-    if (template.sendAfterInsert !== undefined && typeof template.sendAfterInsert !== "boolean") errors.push(`${id}: replyAction sendAfterInsert must be boolean when declared`);
-  }
 }
 
 function verifyExternalHandoffs(id, manifest, errors) {
@@ -1203,40 +1124,106 @@ function packageRequiresExplicitEnablement(manifest) {
     || (manifest.permissions?.optional || []).length > 0
     || (manifest.background?.messageTypes || []).length > 0
     || (manifest.background?.services || []).length > 0
+    || (manifest.remiliaCapabilities || []).length > 0
     || (manifest.privacy?.remoteServices || []).length > 0;
 }
 
-function verifyBackgroundCapabilities(id, manifest, errors) {
-  const messageTypes = manifest.background?.messageTypes || [];
-  const services = manifest.background?.services || [];
-  for (const field of Object.keys(manifest.background || {})) {
-    if (field !== "messageTypes" && field !== "services") {
-      errors.push(`${id}: background.${field} is unsupported for local packages; background declarations are metadata-only and do not create handlers`);
-    }
+function reviewedDefaultEnablementTrust(id, source, manifest, packageSha256, manifestSha256) {
+  const requested = manifest.defaultEnabled === true
+    || (manifest.settings || []).some((setting) => setting.role === "enablement" && setting.defaultValue === true);
+  const policy = defaultEnablementPolicyById.get(id);
+  const base = {
+    requested,
+    allowed: false,
+    packageConsentAcknowledged: acknowledgePackageConsent,
+  };
+  if (!requested) return { ...base, reason: "default-on enablement not requested" };
+  if (firstPartyById.has(id)) return { ...base, allowed: true, reason: "built-in app defaults are governed by the first-party registry or replacement policy" };
+  if (!packageRequiresExplicitEnablement(manifest)) return { ...base, allowed: true, reason: "package does not declare a privileged or consent-required surface" };
+  if (!policy) return { ...base, reason: "no repo-owned default-enablement policy entry" };
+
+  const expectedRoot = normalizeInputPath(policy.root);
+  const actualRoot = normalizeInputPath(source.root);
+  if (policy.sourceType && policy.sourceType !== source.type) {
+    return { ...base, root: expectedRoot, reason: `source type ${source.type} does not match policy sourceType ${policy.sourceType}` };
   }
-  for (const type of messageTypes) {
-    if (!validBackgroundMessagePattern(type)) errors.push(`${id}: background message type must be exact namespace:action or trailing namespace:* wildcard: ${type}`);
-    else if (!backgroundMessageOwnedByPackage(id, type)) errors.push(`${id}: background message type ${type} must use the package-owned namespace ${id}:*`);
+  if (!matchesReviewedSourceRoot(policy, actualRoot, expectedRoot, normalizeInputPath)) {
+    return { ...base, root: expectedRoot, reason: `source root ${actualRoot} does not match policy root ${expectedRoot}` };
   }
-  if (new Set(messageTypes).size !== messageTypes.length) errors.push(`${id}: duplicate background message type declaration`);
-  if (services.length > 0) {
-    errors.push(`${id}: background.services is not supported for local packages yet; declare no services until package-owned background handlers are implemented`);
-  }
-  if (messageTypes.length === 0 && services.length === 0) return;
-  if (!Array.isArray(manifest.privacy?.permissionNotes) || manifest.privacy.permissionNotes.length === 0) {
-    errors.push(`${id}: background capabilities require privacy.permissionNotes review disclosure`);
+  if (manifest.review?.status !== "reviewed") {
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages require review.status reviewed" };
   }
   if (manifest.privacy?.consentRequired !== true) {
-    errors.push(`${id}: background capabilities require consent before enablement`);
+    return { ...base, root: expectedRoot, reason: "default-on privileged packages must retain privacy.consentRequired true" };
+  }
+  if (policy.packageSha256 !== packageSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, reason: `package SHA-256 ${packageSha256} does not match policy hash` };
+  }
+  if (policy.manifestSha256 !== manifestSha256) {
+    return { ...base, root: expectedRoot, packageSha256: policy.packageSha256, manifestSha256: policy.manifestSha256, reason: `manifest SHA-256 ${manifestSha256} does not match policy hash` };
+  }
+  return {
+    ...base,
+    allowed: true,
+    root: expectedRoot,
+    packageSha256: policy.packageSha256,
+    manifestSha256: policy.manifestSha256,
+    reason: policy.reason || "repo-owned default-enablement policy matched",
+  };
+}
+
+function verifyPrivilegedDefaultEnablement(id, manifest, trust, errors) {
+  if (firstPartyById.has(id) || !packageRequiresExplicitEnablement(manifest) || trust.allowed) return;
+  if (manifest.defaultEnabled === true) {
+    errors.push(`${id}: novel local packages with host permissions, remote services, background declarations, or consentRequired privacy must set defaultEnabled false unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
+  }
+  for (const setting of (manifest.settings || []).filter((candidate) => candidate.role === "enablement" && candidate.defaultValue === true)) {
+    errors.push(`${id}:${setting.id || "<unknown>"}: privileged or consent-required local packages must not default enablement settings to true unless exact repo-owned default-enablement policy matches; ${trust.reason}`);
   }
 }
 
-function validBackgroundMessagePattern(value) {
-  return typeof value === "string" && /^[a-z][A-Za-z0-9-]*:(?:[A-Za-z0-9._-]+|\*)$/.test(value);
+function verifyRemiliaCapabilities(id, manifest, errors) {
+  const declarations = manifest.remiliaCapabilities;
+  if (declarations === undefined) return;
+  if (!Array.isArray(declarations) || declarations.length < 1 || declarations.length > remiliaCapabilityContracts.size) {
+    errors.push(`${id}: remiliaCapabilities must contain between one and ${remiliaCapabilityContracts.size} declarations`);
+    return;
+  }
+  if (manifest.review?.status !== "reviewed") errors.push(`${id}: Remilia capabilities require review.status reviewed`);
+  if (manifest.privacy?.consentRequired !== true) errors.push(`${id}: Remilia capabilities require privacy.consentRequired true`);
+  if (!manifest.privacy?.privacyLabels?.includes("remote-api")) errors.push(`${id}: Remilia capabilities require the remote-api privacy label`);
+  const disclosure = [...(manifest.privacy?.permissionNotes || []), ...(manifest.privacy?.dataNotes || []), ...(manifest.privacy?.remoteServices || []), ...(manifest.hub?.permissionNotes || []), ...(manifest.hub?.dataNotes || []), ...(manifest.hub?.remoteServices || [])].join(" ").toLowerCase();
+  if (!/credential|token|cookie|authorization/.test(disclosure) || !/remilia/.test(disclosure)) {
+    errors.push(`${id}: Remilia capabilities require explicit Remilia credential-isolation privacy disclosure`);
+  }
+  const ids = new Set();
+  for (const declaration of declarations) {
+    if (!declaration || typeof declaration !== "object" || Array.isArray(declaration)) {
+      errors.push(`${id}: each Remilia capability declaration must be an object`);
+      continue;
+    }
+    for (const field of Object.keys(declaration)) {
+      if (!["id", "operations", "scopes", "consent", "reason"].includes(field)) errors.push(`${id}: Remilia capability ${declaration.id || "<unknown>"} includes unsupported field ${field}`);
+    }
+    const contract = remiliaCapabilityContracts.get(declaration.id);
+    if (!contract) {
+      errors.push(`${id}: unsupported Remilia capability ${declaration.id}`);
+      continue;
+    }
+    if (ids.has(declaration.id)) errors.push(`${id}: duplicate Remilia capability ${declaration.id}`);
+    ids.add(declaration.id);
+    if (!Array.isArray(declaration.operations) || declaration.operations.length === 0 || new Set(declaration.operations).size !== declaration.operations.length
+      || !declaration.operations.every((operation) => contract.operations.includes(operation))) {
+      errors.push(`${id}: Remilia capability ${declaration.id} must declare only its exact reviewed operations`);
+    }
+    if (!sameStringSet(declaration.scopes, contract.scopes)) errors.push(`${id}: Remilia capability ${declaration.id} must declare its exact official scopes`);
+    if (declaration.consent !== contract.consent) errors.push(`${id}: Remilia capability ${declaration.id} consent must be ${contract.consent}`);
+    if (typeof declaration.reason !== "string" || declaration.reason.trim().length < 8 || declaration.reason.length > 280) errors.push(`${id}: Remilia capability ${declaration.id} requires a bounded review reason`);
+  }
 }
 
-function backgroundMessageOwnedByPackage(packageId, value) {
-  return typeof value === "string" && value.startsWith(`${packageId}:`);
+function sameStringSet(value, expected) {
+  return Array.isArray(value) && value.length === expected.length && new Set(value).size === value.length && value.every((item) => expected.includes(item));
 }
 
 function verifySensitivePresetParticipation(id, manifest, errors) {
@@ -1399,6 +1386,11 @@ function privilegedSurfacesFor(manifest, files, webAccessibleAssets) {
   for (const permission of manifest.permissions?.optional || []) surfaces.push(`optionalPermission:${permission}`);
   for (const type of manifest.background?.messageTypes || []) surfaces.push(`backgroundMessage:${type}`);
   for (const service of manifest.background?.services || []) surfaces.push(`backgroundService:${service}`);
+  for (const capability of manifest.remiliaCapabilities || []) {
+    surfaces.push(`remiliaCapability:${capability.id}`);
+    for (const operation of capability.operations || []) surfaces.push(`remiliaOperation:${operation}`);
+    for (const scope of capability.scopes || []) surfaces.push(`remiliaScope:${scope}`);
+  }
   for (const scope of manifest.siteScopes || []) {
     surfaces.push(`siteScope:${scope.site}:${scope.integration}`);
     for (const host of scope.hosts || []) surfaces.push(`siteHost:${host}`);
@@ -1435,69 +1427,6 @@ function scanPackagePayloads(id, root, files) {
   };
 }
 
-function scanPayloadText(id, file, source) {
-  const findings = [];
-  for (const rule of sensitivePackageApiScanRules(source)) {
-    rule.pattern.lastIndex = 0;
-    for (const match of source.matchAll(rule.pattern)) {
-      const location = locationForOffset(source, match.index ?? 0);
-      findings.push({
-        packageId: id,
-        file,
-        line: location.line,
-        column: location.column,
-        ruleId: rule.id,
-        severity: rule.severity,
-        match: trimmedMatch(match[0]),
-        message: rule.message,
-      });
-    }
-  }
-  return findings;
-}
-
-function sensitivePackageApiScanRules(source) {
-  const rules = [...sensitivePackageApiRules];
-  const stringConstants = findStringConstants(source);
-  const chromeAliases = expandSimpleAliasChains(source, [
-    ...findSimpleGlobalAliases(source, "chrome"),
-    ...findReflectGlobalAliases(source, "chrome"),
-  ]);
-  const browserAliases = expandSimpleAliasChains(source, [
-    ...findSimpleGlobalAliases(source, "browser"),
-    ...findReflectGlobalAliases(source, "browser"),
-  ]);
-  const runtimeAliases = expandSimpleAliasChains(source, [
-    ...findRuntimeAliases(source, "chrome"),
-    ...findRuntimeAliases(source, "browser"),
-    ...findRuntimeAliasesForAliases(source, chromeAliases),
-    ...findRuntimeAliasesForAliases(source, browserAliases),
-  ]);
-  for (const alias of chromeAliases) {
-    rules.push(
-      aliasRule("chrome-runtime-send-message", alias, "sendMessage"),
-      aliasRule("chrome-runtime-connect", alias, "connect"),
-      aliasRule("broad-chrome-api", alias),
-    );
-    rules.push(...variableHeldGlobalApiRules("chrome", alias, stringConstants));
-  }
-  for (const alias of browserAliases) {
-    rules.push(
-      aliasRule("browser-runtime-send-message", alias, "sendMessage"),
-      aliasRule("browser-runtime-connect", alias, "connect"),
-      aliasRule("broad-browser-api", alias),
-    );
-    rules.push(...variableHeldGlobalApiRules("browser", alias, stringConstants));
-  }
-  for (const alias of runtimeAliases) {
-    rules.push(
-      runtimeAliasRule("chrome-runtime-send-message", alias, "sendMessage"),
-      runtimeAliasRule("chrome-runtime-connect", alias, "connect"),
-    );
-  }
-  return rules;
-}
-
 function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
   const policy = firstPartyReplacementPolicyById.get(id);
   if (!firstPartyById.has(id)) {
@@ -1508,7 +1437,6 @@ function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
   }
   const expectedRoot = normalizeInputPath(policy.root);
   const actualRoot = normalizeInputPath(source.root);
-  const stagedRootSuffixes = (policy.allowedStagedRootSuffixes || []).map((value) => normalizeInputPath(value));
   if (policy.sourceType && policy.sourceType !== source.type) {
     return {
       allowed: false,
@@ -1517,9 +1445,7 @@ function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
       reason: `source type ${source.type} does not match policy sourceType ${policy.sourceType}`,
     };
   }
-  const rootMatches = expectedRoot === actualRoot
-    || stagedRootSuffixes.some((suffix) => actualRoot === suffix || actualRoot.endsWith(`/${suffix}`));
-  if (!rootMatches) {
+  if (!matchesReviewedSourceRoot(policy, actualRoot, expectedRoot, normalizeInputPath)) {
     return {
       allowed: false,
       root: expectedRoot,
@@ -1553,398 +1479,12 @@ function firstPartyReplacementTrust(id, source, manifest, packageSha256) {
   };
 }
 
-function aliasRule(ruleId, alias, runtimeMethod) {
-  const baseRule = sensitivePackageApiRules.find((rule) => rule.id === ruleId);
-  return {
-    ...baseRule,
-    pattern: runtimeMethod
-      ? runtimeApiPattern(escapeRegExp(alias), runtimeMethod)
-      : privilegedNamespacePattern(escapeRegExp(alias)),
-  };
-}
-
-function variableHeldGlobalApiRules(globalName, alias, stringConstants) {
-  const rules = [];
-  const runtimeKeys = variableNamesForValue(stringConstants, "runtime");
-  const sendMessageKeys = variableNamesForValue(stringConstants, "sendMessage");
-  const connectKeys = variableNamesForValue(stringConstants, "connect");
-  const privilegedNamespaceKeys = variableNamesForValues(stringConstants, [
-    "storage",
-    "tabs",
-    "cookies",
-    "scripting",
-    "permissions",
-    "downloads",
-    "webRequest",
-    "runtime",
-    "extension",
-  ]);
-  const runtimeRulePrefix = globalName === "browser" ? "browser" : "chrome";
-  const broadRuleId = globalName === "browser" ? "broad-browser-api" : "broad-chrome-api";
-
-  for (const runtimeKey of runtimeKeys) {
-    for (const methodKey of sendMessageKeys) {
-      rules.push(variableHeldRuntimeRule(`${runtimeRulePrefix}-runtime-send-message`, alias, runtimeKey, methodKey));
-    }
-    for (const methodKey of connectKeys) {
-      rules.push(variableHeldRuntimeRule(`${runtimeRulePrefix}-runtime-connect`, alias, runtimeKey, methodKey));
-    }
-  }
-  for (const namespaceKey of privilegedNamespaceKeys) {
-    rules.push(variableHeldPrivilegedNamespaceRule(broadRuleId, alias, namespaceKey));
-  }
-  return rules;
-}
-
-function variableHeldRuntimeRule(ruleId, alias, runtimeKey, methodKey) {
-  const baseRule = sensitivePackageApiRules.find((rule) => rule.id === ruleId);
-  return {
-    ...baseRule,
-    pattern: new RegExp(`\\b${escapeRegExp(alias)}${jsTriviaPattern()}\\[${jsTriviaPattern()}${escapeRegExp(runtimeKey)}${jsTriviaPattern()}\\]${jsTriviaPattern()}\\[${jsTriviaPattern()}${escapeRegExp(methodKey)}${jsTriviaPattern()}\\]${jsTriviaPattern()}\\(`, "g"),
-  };
-}
-
-function variableHeldPrivilegedNamespaceRule(ruleId, alias, namespaceKey) {
-  const baseRule = sensitivePackageApiRules.find((rule) => rule.id === ruleId);
-  return {
-    ...baseRule,
-    pattern: new RegExp(`\\b${escapeRegExp(alias)}${jsTriviaPattern()}\\[${jsTriviaPattern()}${escapeRegExp(namespaceKey)}${jsTriviaPattern()}\\]`, "g"),
-  };
-}
-
-function runtimeAliasRule(ruleId, alias, runtimeMethod) {
-  const baseRule = sensitivePackageApiRules.find((rule) => rule.id === ruleId);
-  return {
-    ...baseRule,
-    pattern: new RegExp(`\\b${escapeRegExp(alias)}${jsTriviaPattern()}${propertyAccessPattern(runtimeMethod)}${jsTriviaPattern()}\\(`, "g"),
-  };
-}
-
-function findSimpleGlobalAliases(source, globalName) {
-  const aliases = new Set();
-  const pattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${globalApiPattern(globalName)}(?![\\w$])`, "g");
-  for (const match of source.matchAll(pattern)) {
-    if (match[1] && match[1] !== globalName) aliases.add(match[1]);
-  }
-  return aliases;
-}
-
-function findReflectGlobalAliases(source, globalName) {
-  const aliases = new Set();
-  const pattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${reflectGlobalApiPattern(globalName).source}`, "g");
-  for (const match of source.matchAll(pattern)) {
-    if (match[1]) aliases.add(match[1]);
-  }
-  return aliases;
-}
-
-function findStringConstants(source) {
-  const constants = new Map();
-  const pattern = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(["'])([^"'\\]*(?:\\.[^"'\\]*)*)\2/g;
-  for (const match of source.matchAll(pattern)) {
-    const name = match[1];
-    const value = decodeStaticStringLiteralBody(match[3] || "");
-    if (name && value) constants.set(name, value);
-  }
-  const templatePattern = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*`([^`\\$]*(?:\\[\s\S][^`\\$]*)*)`/g;
-  for (const match of source.matchAll(templatePattern)) {
-    const name = match[1];
-    const value = decodeStaticStringLiteralBody(match[2] || "");
-    if (name && value) constants.set(name, value);
-  }
-  const constructedPattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*(${knownSensitiveStringExpressionPattern()})`, "g");
-  for (const match of source.matchAll(constructedPattern)) {
-    const name = match[1];
-    const value = staticSensitiveStringValue(match[2] || "");
-    if (name && value) constants.set(name, value);
-  }
-  return constants;
-}
-
-function decodeStaticStringLiteralBody(value) {
-  return value.replace(/\\(?:u\{([0-9a-fA-F]+)\}|u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|([0-7]{1,3})|([\s\S]))/g, (_, codePointHex, unicodeHex, hex, octal, escaped) => {
-    if (codePointHex) {
-      const codePoint = Number.parseInt(codePointHex, 16);
-      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : "";
-    }
-    if (unicodeHex || hex) return String.fromCharCode(Number.parseInt(unicodeHex || hex, 16));
-    if (octal) return String.fromCharCode(Number.parseInt(octal, 8));
-    return jsSingleCharacterEscapeValue(escaped);
-  });
-}
-
-function jsSingleCharacterEscapeValue(value) {
-  switch (value) {
-    case "b":
-      return "\b";
-    case "f":
-      return "\f";
-    case "n":
-      return "\n";
-    case "r":
-      return "\r";
-    case "t":
-      return "\t";
-    case "v":
-      return "\v";
-    case "0":
-      return "\0";
-    case "\r":
-    case "\n":
-      return "";
-    default:
-      return value || "";
-  }
-}
-
-function variableNamesForValue(constants, expectedValue) {
-  return [...constants.entries()].filter(([, value]) => value === expectedValue).map(([name]) => name);
-}
-
-function variableNamesForValues(constants, expectedValues) {
-  const allowed = new Set(expectedValues);
-  return [...constants.entries()].filter(([, value]) => allowed.has(value)).map(([name]) => name);
-}
-
-function findRuntimeAliases(source, globalName) {
-  const aliases = new Set();
-  const globalPattern = globalApiPattern(globalName);
-  const directPattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${globalPattern}\\s*${propertyAccessPattern("runtime")}`, "g");
-  for (const match of source.matchAll(directPattern)) {
-    if (match[1]) aliases.add(match[1]);
-  }
-  const destructurePattern = new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]+)\\}\\s*=\\s*${globalPattern}\\b`, "g");
-  for (const match of source.matchAll(destructurePattern)) {
-    for (const alias of destructuredRuntimeAliases(match[1] || "")) aliases.add(alias);
-  }
-  return aliases;
-}
-
-function findRuntimeAliasesForAliases(source, globalAliases) {
-  const aliases = new Set();
-  for (const globalAlias of globalAliases) {
-    const directPattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${escapeRegExp(globalAlias)}\\s*${propertyAccessPattern("runtime")}`, "g");
-    for (const match of source.matchAll(directPattern)) {
-      if (match[1]) aliases.add(match[1]);
-    }
-    const destructurePattern = new RegExp(`\\b(?:const|let|var)\\s*\\{([^}]+)\\}\\s*=\\s*${escapeRegExp(globalAlias)}\\b`, "g");
-    for (const match of source.matchAll(destructurePattern)) {
-      for (const alias of destructuredRuntimeAliases(match[1] || "")) aliases.add(alias);
-    }
-  }
-  return aliases;
-}
-
-function expandSimpleAliasChains(source, initialAliases) {
-  const aliases = new Set(initialAliases);
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const alias of [...aliases]) {
-      const pattern = new RegExp(`\\b(?:const|let|var)\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*${escapeRegExp(alias)}\\b`, "g");
-      for (const match of source.matchAll(pattern)) {
-        if (match[1] && !aliases.has(match[1])) {
-          aliases.add(match[1]);
-          changed = true;
-        }
-      }
-    }
-  }
-  return aliases;
-}
-
-function destructuredRuntimeAliases(bindingSource) {
-  const aliases = [];
-  const runtimeBinding = /(?:^|,)\s*runtime\s*(?::\s*([A-Za-z_$][\w$]*))?(?:\s*=[^,]+)?(?=,|$)/g;
-  for (const match of bindingSource.matchAll(runtimeBinding)) {
-    aliases.push(match[1] || "runtime");
-  }
-  return aliases;
-}
-
-function runtimeApiPattern(objectPattern, methodName) {
-  return new RegExp(`\\b${objectPattern}${jsTriviaPattern()}${propertyAccessPattern("runtime")}${jsTriviaPattern()}${propertyAccessPattern(methodName)}${jsTriviaPattern()}\\(`, "g");
-}
-
-function privilegedNamespacePattern(objectPattern) {
-  return new RegExp(`\\b${objectPattern}${jsTriviaPattern()}${propertyAccessPattern("(?:storage|tabs|cookies|scripting|permissions|downloads|webRequest|runtime|extension)", false)}`, "g");
-}
-
-function propertyAccessPattern(propertyPattern, quoteLiteral = true) {
-  const trivia = jsTriviaPattern();
-  const bracket = quoteLiteral
-    ? `\\[${trivia}${stringExpressionPattern(propertyPattern)}${trivia}\\]`
-    : `\\[${trivia}${staticStringLiteralAlternationPattern(propertyPattern)}${trivia}\\]`;
-  return `(?:\\.${trivia}${propertyPattern}|${bracket})`;
-}
-
-function globalApiPattern(globalName) {
-  const escaped = escapeRegExp(globalName);
-  return `(?:${escaped}|(?:globalThis|window|self)${jsTriviaPattern()}${propertyAccessPattern(escaped)}|${reflectGlobalApiPattern(globalName).source})`;
-}
-
-function reflectGlobalApiPattern(globalName = "(?:chrome|browser)") {
-  const names = globalName === "chrome" || globalName === "browser" ? [globalName] : ["chrome", "browser"];
-  const stringPatterns = names.map((name) => stringExpressionPattern(name));
-  const trivia = jsTriviaPattern();
-  return new RegExp(`\\bReflect${trivia}\\.${trivia}get${trivia}\\(${trivia}(?:globalThis|window|self)${trivia},${trivia}(?:${stringPatterns.join("|")})${trivia}\\)`, "g");
-}
-
-function stringExpressionPattern(value) {
-  const literal = staticStringLiteralPattern(value);
-  return `(?:${literal}|String\\(${jsTriviaPattern()}${literal}${jsTriviaPattern()}\\)|${arrayJoinStringExpressionPattern(value)}|${charCodeStringExpressionPattern(value)}|${atobStringExpressionPattern(value)})`;
-}
-
-function constructedStringExpressionPattern(value) {
-  return `(?:${staticStringLiteralPattern(value)}|${concatenatedStringExpressionPattern(value)}|${arrayJoinStringExpressionPattern(value)}|${charCodeStringExpressionPattern(value)}|${atobStringExpressionPattern(value)})`;
-}
-
-function knownSensitiveStringExpressionPattern() {
-  return staticSensitiveStringValues.map(constructedStringExpressionPattern).join("|");
-}
-
-function staticSensitiveStringValue(expression) {
-  const normalized = expression.replace(/\s+/g, "");
-  for (const value of staticSensitiveStringValues) {
-    const exactPatterns = [
-      staticStringLiteralPattern(value),
-      `String\\(${staticStringLiteralPattern(value)}\\)`,
-      concatenatedStringExpressionPattern(value),
-      arrayJoinStringExpressionPattern(value),
-      charCodeStringExpressionPattern(value),
-      atobStringExpressionPattern(value),
-    ].map((pattern) => new RegExp(`^${pattern}$`));
-    if (exactPatterns.some((pattern) => pattern.test(normalized))) return value;
-  }
-  return null;
-}
-
-function staticStringLiteralPattern(value) {
-  return `(?:${quoteDelimitedStringLiteralPattern(value, "'")}|${quoteDelimitedStringLiteralPattern(value, "\"")}|${quoteDelimitedStringLiteralPattern(value, "`")})`;
-}
-
-function staticStringLiteralAlternationPattern(valuePattern) {
-  const alternatives = valuePattern.startsWith("(?:") && valuePattern.endsWith(")")
-    ? valuePattern.slice(3, -1).split("|")
-    : [valuePattern];
-  return `(?:${alternatives.map(staticStringLiteralPattern).join("|")})`;
-}
-
-function quoteDelimitedStringLiteralPattern(value, quote) {
-  const delimiter = escapeRegExp(quote);
-  return `${delimiter}${[...value].map((char) => staticStringLiteralCharPattern(char, quote)).join("")}${delimiter}`;
-}
-
-function staticStringLiteralCharPattern(char, quote) {
-  const alternatives = [escapeRegExp(char)];
-  const code = char.codePointAt(0);
-  if (code !== undefined) {
-    alternatives.push(`\\\\x${hexDigitPattern(code.toString(16).padStart(2, "0"))}`);
-    alternatives.push(`\\\\u${hexDigitPattern(code.toString(16).padStart(4, "0"))}`);
-    alternatives.push(`\\\\u\\{0*${hexDigitPattern(code.toString(16))}\\}`);
-  }
-  if (char === quote) alternatives.shift();
-  return `(?:${unique(alternatives).join("|")})`;
-}
-
-function hexDigitPattern(value) {
-  return [...value].map((char) => /[a-f]/.test(char) ? `[${char}${char.toUpperCase()}]` : char).join("");
-}
-
-function concatenatedStringExpressionPattern(value) {
-  if (!staticSensitiveStringValues.includes(value)) return `(?!x)x`;
-  const trivia = jsTriviaPattern();
-  return partitionedStringLiteralPattern(value, `${trivia}\\+${trivia}`, { requireSeparator: true });
-}
-
-function arrayJoinStringExpressionPattern(value) {
-  if (!staticSensitiveStringValues.includes(value)) return `(?!x)x`;
-  const trivia = jsTriviaPattern();
-  return `\\[${trivia}${partitionedStringLiteralPattern(value, `${trivia},${trivia}`, { requireSeparator: false })}${trivia}\\]${trivia}\\.${trivia}join${trivia}\\(${trivia}(?:""|'')?${trivia}\\)`;
-}
-
-function charCodeStringExpressionPattern(value) {
-  const trivia = jsTriviaPattern();
-  return `String${trivia}\\.${trivia}fromCharCode${trivia}\\(${trivia}${[...value].map((char) => numericLiteralPattern(char.charCodeAt(0))).join(`${trivia},${trivia}`)}${trivia}\\)`;
-}
-
-function atobStringExpressionPattern(value) {
-  const encoded = Buffer.from(value, "utf8").toString("base64");
-  const encodings = unique([encoded, encoded.replace(/=+$/g, "")]).filter(Boolean);
-  if (encodings.length === 0) return `(?!x)x`;
-  const trivia = jsTriviaPattern();
-  const callee = `(?:atob|(?:globalThis|window|self)(?:${trivia}\\.${trivia}atob|${trivia}\\[${trivia}["']atob["']${trivia}\\]))`;
-  return `${callee}${trivia}\\(${trivia}(?:${encodings.map((item) => `["']${escapeRegExp(item)}["']`).join("|")})${trivia}\\)`;
-}
-
-function jsTriviaPattern() {
-  return `(?:\\s|/\\*[\\s\\S]*?\\*/|//[^\\r\\n]*(?:\\r?\\n|$))*`;
-}
-
-function numericLiteralPattern(value) {
-  const decimalPattern = digitsWithOptionalSeparators(String(value));
-  const hexPattern = digitsWithOptionalSeparators(value.toString(16), true);
-  const binaryPattern = digitsWithOptionalSeparators(value.toString(2));
-  const octalPattern = digitsWithOptionalSeparators(value.toString(8));
-  return `(?:${decimalPattern}|0[xX]${hexPattern}|0[bB]${binaryPattern}|0[oO]${octalPattern})`;
-}
-
-function digitsWithOptionalSeparators(value, caseInsensitive = false) {
-  return [...value].map((char) => {
-    if (caseInsensitive && /[a-f]/.test(char)) return `[${char}${char.toUpperCase()}]`;
-    return char;
-  }).join("_?");
-}
-
-function partitionedStringLiteralPattern(value, separatorPattern, { requireSeparator }) {
-  const chars = [...value].map(escapeRegExp);
-  const optionalSeparator = `(?:["']${separatorPattern}["'])?`;
-  const patternForRequiredBoundary = (requiredBoundary) => {
-    let pattern = `["']`;
-    for (let index = 0; index < chars.length; index += 1) {
-      pattern += chars[index];
-      if (index < chars.length - 1) {
-        pattern += index === requiredBoundary ? `["']${separatorPattern}["']` : optionalSeparator;
-      }
-    }
-    return `${pattern}["']`;
-  };
-  if (!requireSeparator) return patternForRequiredBoundary(-1);
-  return `(?:${chars.slice(0, -1).map((_, index) => patternForRequiredBoundary(index)).join("|")})`;
-}
-
-function isNonAcknowledgeableSensitiveFinding(finding) {
-  return nonAcknowledgeablePackageApiRuleIds.has(finding.ruleId);
-}
-
-function escapeRegExp(value) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function isScannablePackageText(file) {
   return scannableTextExtensions.has(path.extname(file).toLowerCase());
 }
 
 function isExtensionOriginCodePath(file) {
   return [".js", ".mjs", ".cjs", ".html", ".htm", ".wasm"].includes(path.extname(file).toLowerCase());
-}
-
-function locationForOffset(source, offset) {
-  let line = 1;
-  let column = 1;
-  for (let index = 0; index < offset; index += 1) {
-    if (source.charCodeAt(index) === 10) {
-      line += 1;
-      column = 1;
-    } else {
-      column += 1;
-    }
-  }
-  return { line, column };
-}
-
-function trimmedMatch(value) {
-  return value.replace(/\s+/g, " ").slice(0, 120);
 }
 
 function verifyStorageDeclarations(id, manifest, errors, options = {}) {
@@ -2001,10 +1541,6 @@ function verifyNovelPackageEnablement(id, manifest, errors) {
     }
     if (!declared[setting.storage.area]?.includes(setting.storage.key)) {
       errors.push(`${id}:${settingId}: enablement storage key must be declared in storageKeys.${setting.storage.area}`);
-      continue;
-    }
-    if (packageRequiresExplicitEnablement(manifest) && setting.defaultValue === true) {
-      errors.push(`${id}:${settingId}: privileged or consent-required local packages must not default enablement settings to true`);
       continue;
     }
     hasValidEnablement = true;

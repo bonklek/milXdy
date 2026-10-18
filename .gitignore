@@ -1,10 +1,12 @@
-node_modules/
+node_modules
 dist/
 /release/
 _sources/
 .agents/
 .codex/
 tmp/
+ideas/
+internal/
 .env
 .env.*
 !.env.example
@@ -21,3 +23,7 @@ local-addons/
 *.tsbuildinfo
 __pycache__/
 *.pyc
+
+# Local integration evidence and preview experiments
+/docs/evidence/custom-pet-mvp/
+/font-samples/

@@ -3,7 +3,8 @@
   const REQUEST_KEY = "milxdy.qa.reloadRequest";
   const RESULT_KEY = "milxdy.qa.lastReloadResult";
   const RELOAD_GUARD_KEY = "milxdy.qa.reloadGuard";
-  const REFRESH_TAB_PATTERNS = ["https://x.com/*", "https://twitter.com/*", "https://www.remilia.net/*"];
+  const LOADED_BUILD_KEY = "milxdy.qa.loadedBuildId";
+  const REFRESH_TAB_PATTERNS = ["https://x.com/*", "https://twitter.com/*", "https://www.remilia.net/*", "https://remilia.net/*"];
   const POLL_BASE = `http://127.0.0.1:${BUILD.coordinatorPort}/milxdy-qa`;
   const RETRY_MS = 2_000;
 
@@ -16,29 +17,9 @@
   void bootQaRuntime();
 
   async function bootQaRuntime() {
-    await finishRequestedReload();
+    await finishQaBuildReload({ build: BUILD, requestKey: REQUEST_KEY, resultKey: RESULT_KEY,
+      reloadGuardKey: RELOAD_GUARD_KEY, loadedBuildKey: LOADED_BUILD_KEY, tabPatterns: REFRESH_TAB_PATTERNS });
     void pollForBuilds();
-  }
-
-  async function finishRequestedReload() {
-    const stored = await chrome.storage.local.get(REQUEST_KEY).catch(() => ({}));
-    const request = stored[REQUEST_KEY];
-    if (!request || request.desiredBuildId !== BUILD.buildId) return;
-
-    await chrome.storage.local.remove([REQUEST_KEY, RELOAD_GUARD_KEY]).catch(() => undefined);
-    const tabs = await chrome.tabs.query({ url: REFRESH_TAB_PATTERNS }).catch(() => []);
-    const outcomes = await Promise.allSettled(tabs.flatMap((tab) => typeof tab.id === "number" ? [chrome.tabs.reload(tab.id)] : []));
-    const refreshedTabs = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
-    const failedTabs = outcomes.length - refreshedTabs;
-    const result = {
-      buildId: BUILD.buildId,
-      completedAt: new Date().toISOString(),
-      mode: request.mode || "manual",
-      refreshedTabs,
-      failedTabs,
-    };
-    await chrome.storage.local.set({ [RESULT_KEY]: result }).catch(() => undefined);
-    console.info(`[milXdy QA] loaded ${BUILD.buildId}; refreshed ${refreshedTabs} X/Twitter + RemiNet tab(s)`, result);
   }
 
   async function pollForBuilds() {
@@ -55,7 +36,7 @@
             continue;
           }
           const pair = `${BUILD.buildId}->${message.buildId}`;
-          const stored = await chrome.storage.local.get(RELOAD_GUARD_KEY).catch(() => ({}));
+          const stored = await chrome.storage.local.get(RELOAD_GUARD_KEY);
           if (stored[RELOAD_GUARD_KEY]?.pair === pair) {
             console.warn(`[milXdy QA] suppressed repeated automatic reload ${pair}; use the popup fallback if Chrome kept the old worker`);
             await new Promise((resolve) => setTimeout(resolve, RETRY_MS));
@@ -80,3 +61,33 @@
     }
   }
 })();
+
+async function finishQaBuildReload({ build, requestKey, resultKey, reloadGuardKey, loadedBuildKey, tabPatterns }) {
+  let stored;
+  try { stored = await chrome.storage.local.get([requestKey, loadedBuildKey]); }
+  catch { return; }
+  const request = stored[requestKey];
+  const requested = request?.desiredBuildId === build.buildId;
+  if (!requested && stored[loadedBuildKey] === build.buildId) return;
+
+  // Chrome's Extensions-page Reload does not refresh existing content scripts.
+  // Refresh once for a newly loaded QA build, never on ordinary worker restarts.
+  try { await chrome.storage.local.set({ [loadedBuildKey]: build.buildId }); }
+  catch { return; }
+
+  try { if (requested) await chrome.storage.local.remove([requestKey, reloadGuardKey]); }
+  catch { return; }
+  const tabs = await chrome.tabs.query({ url: tabPatterns }).catch(() => []);
+  const outcomes = await Promise.allSettled(tabs.flatMap((tab) => typeof tab.id === "number" ? [chrome.tabs.reload(tab.id)] : []));
+  const refreshedTabs = outcomes.filter((outcome) => outcome.status === "fulfilled").length;
+  const failedTabs = outcomes.length - refreshedTabs;
+  const result = {
+    buildId: build.buildId,
+    completedAt: new Date().toISOString(),
+    mode: requested ? request.mode || "manual" : "extensionReload",
+    refreshedTabs,
+    failedTabs,
+  };
+  await chrome.storage.local.set({ [resultKey]: result }).catch(() => undefined);
+  console.info(`[milXdy QA] loaded ${build.buildId}; refreshed ${refreshedTabs} X/Twitter + RemiNet tab(s)`, result);
+}

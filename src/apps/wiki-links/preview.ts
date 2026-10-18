@@ -317,12 +317,12 @@ function extractFragment(value: string): string | null {
 }
 
 function htmlToText(html: string): string {
-  const element = document.createElement("div");
+  const element = document.createElement("template");
   element.innerHTML = html;
-  for (const removable of Array.from(element.querySelectorAll("style, script, sup.reference, .mw-editsection"))) {
+  for (const removable of Array.from(element.content.querySelectorAll("style, script, sup.reference, .mw-editsection"))) {
     removable.remove();
   }
-  return cleanExtract(element.textContent || "").slice(0, 520);
+  return cleanExtract(element.content.textContent || "").slice(0, 520);
 }
 
 function isDarkTheme(): boolean {
